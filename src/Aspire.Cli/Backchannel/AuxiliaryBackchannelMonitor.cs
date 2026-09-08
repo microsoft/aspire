@@ -168,16 +168,10 @@ internal sealed class AuxiliaryBackchannelMonitor(
         // Check if a specific AppHost was selected
         if (!string.IsNullOrEmpty(selectedAppHostPath))
         {
-            // Hoisted out of the predicate because canonicalization walks the filesystem per
-            // path segment, and every writer of SelectedAppHostPath already stores a canonical
-            // path, so this normally resolves to itself.
-            var selectedCanonicalPath = PathNormalizer.ResolveToFilesystemPath(selectedAppHostPath);
+            var selectedPath = selectedAppHostPath;
             var selectedConnection = candidates.FirstOrDefault(c =>
-                c.AppHostInfo?.AppHostPath != null &&
-                string.Equals(
-                    PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
-                    selectedCanonicalPath,
-                    StringComparisons.FileSystemPath));
+                c.AppHostInfo?.AppHostPath is { } candidatePath &&
+                AppHostPathComparer.PathsEqual(candidatePath, selectedPath));
 
             if (selectedConnection != null)
             {

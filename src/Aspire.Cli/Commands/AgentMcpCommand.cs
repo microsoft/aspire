@@ -9,9 +9,11 @@ using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Mcp;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Hosting.Utils;
 using Aspire.Shared.Mcp;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -28,6 +30,7 @@ internal sealed class AgentMcpCommand : BaseCommand
 {
     private readonly Dictionary<string, CliMcpTool> _knownTools = [];
     private readonly IMcpResourceToolRefreshService _resourceToolRefreshService;
+    private readonly ResourceWaitService _resourceWaitService;
     private McpServer? _server;
     private readonly IAuxiliaryBackchannelMonitor _auxiliaryBackchannelMonitor;
     private readonly IMcpTransportFactory _transportFactory;
@@ -35,12 +38,15 @@ internal sealed class AgentMcpCommand : BaseCommand
     private readonly ILogger<AgentMcpCommand> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IPackagingService _packagingService;
+    private readonly IProjectLocator _projectLocator;
     private readonly IEnvironmentChecker _environmentChecker;
     private readonly IDocsSearchService _docsSearchService;
     private readonly IDocsIndexService _docsIndexService;
     private readonly CliExecutionContext _executionContext;
     private bool _dashboardOnlyMode;
+    private string? _pinnedAppHostPath;
 
+    private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = TelemetryCommandHelpers.CreateAppHostOption();
     private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
     private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
 
@@ -55,10 +61,12 @@ internal sealed class AgentMcpCommand : BaseCommand
         ILoggerFactory loggerFactory,
         ILogger<AgentMcpCommand> logger,
         IPackagingService packagingService,
+        IProjectLocator projectLocator,
         IEnvironmentChecker environmentChecker,
         IDocsSearchService docsSearchService,
         IDocsIndexService docsIndexService,
         IHttpClientFactory httpClientFactory,
+        ResourceWaitService resourceWaitService,
         CommonCommandServices services)
         : base("mcp", AgentCommandStrings.McpCommand_Description, services)
     {
@@ -67,13 +75,16 @@ internal sealed class AgentMcpCommand : BaseCommand
         _loggerFactory = loggerFactory;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
+        _resourceWaitService = resourceWaitService;
         _packagingService = packagingService;
+        _projectLocator = projectLocator;
         _environmentChecker = environmentChecker;
         _docsSearchService = docsSearchService;
         _docsIndexService = docsIndexService;
         _executionContext = services.ExecutionContext;
         _resourceToolRefreshService = new McpResourceToolRefreshService(auxiliaryBackchannelMonitor, loggerFactory.CreateLogger<McpResourceToolRefreshService>());
 
+        Options.Add(s_appHostOption);
         Options.Add(s_dashboardUrlOption);
         Options.Add(s_apiKeyOption);
     }
@@ -89,19 +100,88 @@ internal sealed class AgentMcpCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        // System.CommandLine parses `--apphost --dashboard-url http://localhost:18888` as though
+        // "--dashboard-url" were the AppHost value, so inspect raw token spellings before reading values.
+        var appHostOptionSpecified = parseResult.Tokens.Any(token =>
+            string.Equals(token.Value, s_appHostOption.Name, StringComparison.Ordinal) ||
+            string.Equals(token.Value, s_appHostOption.LegacyOption.Name, StringComparison.Ordinal));
+        var dashboardUrlOptionSpecified = parseResult.Tokens.Any(token =>
+            string.Equals(token.Value, s_dashboardUrlOption.Name, StringComparison.Ordinal));
+
+        if (appHostOptionSpecified &&
+            dashboardUrlOptionSpecified)
+        {
+            return CommandResult.Failure(
+                CliExitCodes.InvalidCommand,
+                TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
+        }
+
+        var appHostProjectFile = parseResult.GetValue(s_appHostOption);
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
+
+        if (appHostProjectFile is not null)
+        {
+            var appHostOptionSpecifiedAsDirectory = Directory.Exists(appHostProjectFile.FullName);
+
+            try
+            {
+                var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(
+                    appHostProjectFile,
+                    MultipleAppHostProjectsFoundBehavior.Throw,
+                    createSettingsFile: false,
+                    cancellationToken).ConfigureAwait(false);
+
+                if (searchResult.SelectedProjectFile is not { } selectedProjectFile)
+                {
+                    return CommandResult.Failure(
+                        CliExitCodes.FailedToFindProject,
+                        appHostOptionSpecifiedAsDirectory
+                            ? InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts
+                            : InteractionServiceStrings.ProjectOptionDoesntExist);
+                }
+
+                var selectedPath = Path.GetFullPath(selectedProjectFile.FullName);
+                if (!PathNormalizer.TryResolveSymlinks(selectedPath, out var symlinkResolvedPath))
+                {
+                    return CommandResult.Failure(
+                        CliExitCodes.FailedToFindProject,
+                        InteractionServiceStrings.ProjectOptionDoesntExist);
+                }
+                _pinnedAppHostPath = PathNormalizer.ResolveToFilesystemPath(symlinkResolvedPath);
+            }
+            catch (ProjectLocatorException ex)
+            {
+                var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(
+                    ex,
+                    appHostOptionSpecifiedAsDirectory);
+                return CommandResult.Failure(exitCode, errorMessage);
+            }
+        }
+        else
+        {
+            _pinnedAppHostPath = null;
+        }
+
+        RestorePinnedAppHostSelection();
 
         if (dashboardUrl is not null)
         {
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
-                _logger.LogError("Invalid --dashboard-url: {DashboardUrl}", dashboardUrl);
-                return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl));
+                _logger.LogError(
+                    "Invalid --dashboard-url: {Reason}",
+                    TelemetryCommandStrings.InvalidDashboardUrlDisplayValue);
+                return CommandResult.Failure(
+                    CliExitCodes.InvalidCommand,
+                    string.Format(
+                        CultureInfo.CurrentCulture,
+                        TelemetryCommandStrings.DashboardUrlInvalid,
+                        TelemetryCommandStrings.InvalidDashboardUrlDisplayValue));
             }
 
             _dashboardOnlyMode = true;
-            var staticProvider = new StaticDashboardInfoProvider(dashboardUrl, apiKey);
+            var staticProvider = new StaticDashboardInfoProvider(dashboardUrl, apiKey, _httpClientFactory, _logger);
 
             _knownTools[KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(staticProvider, null, _httpClientFactory, _loggerFactory.CreateLogger<ListStructuredLogsTool>());
             _knownTools[KnownMcpTools.ListTraces] = new ListTracesTool(staticProvider, null, _httpClientFactory, _loggerFactory.CreateLogger<ListTracesTool>());
@@ -112,16 +192,25 @@ internal sealed class AgentMcpCommand : BaseCommand
             var dashboardInfoProvider = new BackchannelDashboardInfoProvider(_auxiliaryBackchannelMonitor, _logger);
 
             _knownTools[KnownMcpTools.ListResources] = new ListResourcesTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ListResourcesTool>());
+            _knownTools[KnownMcpTools.WaitForResources] = new WaitForResourcesTool(
+                _auxiliaryBackchannelMonitor,
+                _resourceWaitService,
+                _loggerFactory.CreateLogger<WaitForResourcesTool>());
             _knownTools[KnownMcpTools.ListConsoleLogs] = new ListConsoleLogsTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ListConsoleLogsTool>());
             _knownTools[KnownMcpTools.ExecuteResourceCommand] = new ExecuteResourceCommandTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ExecuteResourceCommandTool>());
             _knownTools[KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(dashboardInfoProvider, _auxiliaryBackchannelMonitor, _httpClientFactory, _loggerFactory.CreateLogger<ListStructuredLogsTool>());
             _knownTools[KnownMcpTools.ListTraces] = new ListTracesTool(dashboardInfoProvider, _auxiliaryBackchannelMonitor, _httpClientFactory, _loggerFactory.CreateLogger<ListTracesTool>());
             _knownTools[KnownMcpTools.ListTraceStructuredLogs] = new ListTraceStructuredLogsTool(dashboardInfoProvider, _auxiliaryBackchannelMonitor, _httpClientFactory, _loggerFactory.CreateLogger<ListTraceStructuredLogsTool>());
-            _knownTools[KnownMcpTools.SelectAppHost] = new SelectAppHostTool(_auxiliaryBackchannelMonitor, _executionContext);
-            _knownTools[KnownMcpTools.ListAppHosts] = new ListAppHostsTool(_auxiliaryBackchannelMonitor, _executionContext);
+
+            if (_pinnedAppHostPath is null)
+            {
+                _knownTools[KnownMcpTools.SelectAppHost] = new SelectAppHostTool(_auxiliaryBackchannelMonitor, _executionContext);
+                _knownTools[KnownMcpTools.ListAppHosts] = new ListAppHostsTool(_auxiliaryBackchannelMonitor, _executionContext);
+            }
+
             _knownTools[KnownMcpTools.ListIntegrations] = new ListIntegrationsTool(_packagingService, _executionContext, _auxiliaryBackchannelMonitor);
             _knownTools[KnownMcpTools.Doctor] = new DoctorTool(_environmentChecker);
-            _knownTools[KnownMcpTools.RefreshTools] = new RefreshToolsTool(_resourceToolRefreshService);
+            _knownTools[KnownMcpTools.RefreshTools] = new RefreshToolsTool(_resourceToolRefreshService, () => KnownTools.Count);
             _knownTools[KnownMcpTools.ListDocs] = new ListDocsTool(_docsIndexService);
             _knownTools[KnownMcpTools.SearchDocs] = new SearchDocsTool(_docsSearchService, _docsIndexService);
             _knownTools[KnownMcpTools.GetDoc] = new GetDocTool(_docsIndexService);
@@ -164,6 +253,7 @@ internal sealed class AgentMcpCommand : BaseCommand
     private async ValueTask<ListToolsResult> HandleListToolsAsync(RequestContext<ListToolsRequestParams> request, CancellationToken cancellationToken)
     {
         _logger.LogDebug("MCP ListTools request received");
+        RestorePinnedAppHostSelection();
 
         var tools = new List<Tool>();
 
@@ -171,7 +261,8 @@ internal sealed class AgentMcpCommand : BaseCommand
         {
             Name = tool.Value.Name,
             Description = tool.Value.Description,
-            InputSchema = tool.Value.GetInputSchema()
+            InputSchema = tool.Value.GetInputSchema(),
+            Annotations = tool.Value.Annotations
         }));
 
         try
@@ -184,23 +275,23 @@ internal sealed class AgentMcpCommand : BaseCommand
             else
             {
                 // Refresh resource tools if needed (e.g., AppHost selection changed or invalidated)
-                if (!_resourceToolRefreshService.TryGetResourceToolMap(out var resourceToolMap))
+                var (hasCurrentResourceToolMap, snapshot) = await TryGetResourceToolMapAsync(cancellationToken).ConfigureAwait(false);
+                if (!hasCurrentResourceToolMap)
                 {
                     // Don't send tools/list_changed here — the client already called tools/list
                     // and will receive the up-to-date result. Sending a notification during the
                     // list handler would cause the client to call tools/list again, creating an
                     // infinite loop when tool availability is unstable (e.g., container MCP tools
                     // oscillating between available/unavailable).
-                    (resourceToolMap, _) = await _resourceToolRefreshService.RefreshResourceToolMapAsync(cancellationToken);
+                    (snapshot, _) = await _resourceToolRefreshService.RefreshResourceToolMapAsync(cancellationToken);
                 }
 
-                tools.AddRange(resourceToolMap.Select(x => new Tool
-                {
-                    Name = x.Key,
-                    Description = x.Value.Tool.Description,
-                    InputSchema = x.Value.Tool.InputSchema
-                }));
+                tools.AddRange(snapshot.ToolMap.Select(x => x.Value.ToProtocolTool(x.Key)));
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -218,12 +309,20 @@ internal sealed class AgentMcpCommand : BaseCommand
         var toolName = request.Params?.Name ?? string.Empty;
 
         _logger.LogDebug("MCP CallTool request received for tool: {ToolName}", toolName);
+        RestorePinnedAppHostSelection();
 
         // In dashboard-only mode, only allow tools that were registered
         if (_dashboardOnlyMode && !_knownTools.ContainsKey(toolName))
         {
             throw new McpProtocolException(
                 $"Tool '{toolName}' is not available in dashboard-only mode. Only telemetry tools (list_structured_logs, list_traces, list_trace_structured_logs) are available when using --dashboard-url.",
+                McpErrorCode.MethodNotFound);
+        }
+
+        if (IsToolHiddenByPinnedMode(toolName))
+        {
+            throw new McpProtocolException(
+                $"Tool '{toolName}' is not available because this MCP server is pinned to an AppHost. Start an unpinned MCP server to use AppHost selection tools.",
                 McpErrorCode.MethodNotFound);
         }
 
@@ -245,10 +344,11 @@ internal sealed class AgentMcpCommand : BaseCommand
         var toolsRefreshed = false;
 
         // Refresh resource tools if needed (e.g., AppHost selection changed or invalidated)
-        if (!_resourceToolRefreshService.TryGetResourceToolMap(out var resourceToolMap))
+        var (hasCurrentResourceToolMap, snapshot) = await TryGetResourceToolMapAsync(cancellationToken).ConfigureAwait(false);
+        if (!hasCurrentResourceToolMap)
         {
             bool changed;
-            (resourceToolMap, changed) = await _resourceToolRefreshService.RefreshResourceToolMapAsync(cancellationToken);
+            (snapshot, changed) = await _resourceToolRefreshService.RefreshResourceToolMapAsync(cancellationToken);
             if (changed)
             {
                 await _resourceToolRefreshService.SendToolsListChangedNotificationAsync(cancellationToken).ConfigureAwait(false);
@@ -257,10 +357,9 @@ internal sealed class AgentMcpCommand : BaseCommand
         }
 
         // Resource MCP tools are invoked via the AppHost backchannel (AppHost proxies to the resource MCP endpoint).
-        if (resourceToolMap.TryGetValue(toolName, out var resourceAndTool))
+        if (snapshot.ToolMap.TryGetValue(toolName, out var resourceAndTool))
         {
-            var connection = await GetSelectedConnectionAsync(cancellationToken).ConfigureAwait(false);
-            if (connection == null)
+            if (snapshot.Connection is null)
             {
                 throw new McpProtocolException(
                     "No Aspire AppHost is currently running. To use resource MCP tools, start an Aspire application (e.g. 'aspire run') and then retry.",
@@ -276,7 +375,7 @@ internal sealed class AgentMcpCommand : BaseCommand
                 _logger.LogDebug("Invoking tool {Name} with arguments {Arguments}", toolName, JsonSerializer.Serialize(args, BackchannelJsonSerializerContext.Default.DictionaryStringJsonElement));
             }
 
-            var result = await connection.CallResourceMcpToolAsync(resourceAndTool.ResourceName, resourceAndTool.Tool.Name, args, cancellationToken).ConfigureAwait(false);
+            var result = await snapshot.Connection.CallResourceMcpToolAsync(resourceAndTool.ResourceName, resourceAndTool.Tool.Name, args, cancellationToken).ConfigureAwait(false);
 
             if (result is null)
             {
@@ -304,5 +403,28 @@ internal sealed class AgentMcpCommand : BaseCommand
     private Task<IAppHostAuxiliaryBackchannel?> GetSelectedConnectionAsync(CancellationToken cancellationToken)
     {
         return AppHostConnectionHelper.GetSelectedConnectionAsync(_auxiliaryBackchannelMonitor, _logger, cancellationToken);
+    }
+
+    private async Task<(bool Success, ResourceToolMapSnapshot Snapshot)> TryGetResourceToolMapAsync(
+        CancellationToken cancellationToken)
+    {
+        var connection = await GetSelectedConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+        return _resourceToolRefreshService.TryGetResourceToolMap(connection, out var snapshot)
+            ? (true, snapshot)
+            : (false, null!);
+    }
+
+    private bool IsToolHiddenByPinnedMode(string toolName)
+        => _pinnedAppHostPath is not null &&
+            (string.Equals(toolName, KnownMcpTools.ListAppHosts, StringComparison.Ordinal) ||
+             string.Equals(toolName, KnownMcpTools.SelectAppHost, StringComparison.Ordinal));
+
+    private void RestorePinnedAppHostSelection()
+    {
+        if (_pinnedAppHostPath is not null)
+        {
+            _auxiliaryBackchannelMonitor.SelectedAppHostPath = _pinnedAppHostPath;
+        }
     }
 }

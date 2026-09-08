@@ -1,11 +1,355 @@
 import * as vscode from "vscode";
 import os from "os";
 import { extensionLogOutputChannel } from "../../utils/logging";
-import { aspireDashboard, debugSessionStartTimedOut } from "../../loc/strings";
+import {
+  aspireDashboard,
+  codespacesLink,
+  debugSessionStartTimedOut,
+  directLink,
+  openAspireDashboard,
+  settingsLabel,
+} from "../../loc/strings";
 import { describeStopFailure, startStop, stopSessionInBackground } from "./stopHelpers";
+import { normalizeLaunchFailure, type LaunchFailureMode, type SanitizedLaunchFailure } from "../../services/launchFailureJournal";
 
 export type DashboardLaunchBehavior = 'none' | 'notification' | DashboardBrowserType;
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
+export type DashboardPresentation = 'integratedBrowser' | 'externalBrowser' | 'debugBrowser' | 'notification';
+export type DashboardLaunchBehaviorSource = 'debugConfiguration' | 'globalConfiguration' | 'legacyConfiguration' | 'default';
+export type ResolvedDashboardLaunchBehavior = {
+  readonly behavior: DashboardLaunchBehavior;
+  readonly source: DashboardLaunchBehaviorSource;
+};
+
+const dashboardLaunchIdConfigKey = '__aspireDashboardLaunchId';
+const preOptInDefaultDashboardBrowser: DashboardLaunchBehavior = 'integratedBrowser';
+
+export function normalizeDashboardLaunchBehavior(value: unknown): DashboardLaunchBehavior | undefined {
+  return value === 'none'
+    || value === 'notification'
+    || value === 'openExternalBrowser'
+    || value === 'integratedBrowser'
+    || value === 'debugChrome'
+    || value === 'debugEdge'
+    || value === 'debugFirefox'
+    ? value
+    : undefined;
+}
+
+export function resolveDashboardLaunchBehavior(
+  aspireConfig: vscode.WorkspaceConfiguration,
+  debugConfigurationBehaviorValue?: unknown): ResolvedDashboardLaunchBehavior {
+  const debugConfigurationBehavior = normalizeDashboardLaunchBehavior(debugConfigurationBehaviorValue);
+  if (debugConfigurationBehavior) {
+    return { behavior: debugConfigurationBehavior, source: 'debugConfiguration' };
+  }
+
+  const configuredGlobalBehavior = getConfiguredDashboardLaunchBehavior(aspireConfig);
+  if (configuredGlobalBehavior === 'none' || configuredGlobalBehavior === 'notification') {
+    return { behavior: configuredGlobalBehavior, source: 'globalConfiguration' };
+  }
+
+  // Migration precedence is intentionally conservative:
+  // - per-launch `dashboardBrowser` always wins because it only affects this debug run;
+  // - explicit global `none`/`notification` always wins so users can opt out or opt into the toast;
+  // - legacy `notification`/`off` keeps the less intrusive historical behavior even if a new
+  //   browser preference is also configured;
+  // - legacy `launch` falls through to the new browser preference, or to the pinned pre-opt-in
+  //   integrated-browser default when no new preference exists.
+  const legacyBehavior = getConfiguredLegacyDashboardLaunchBehavior(aspireConfig);
+
+  if (legacyBehavior) {
+    if (legacyBehavior === 'notification' || legacyBehavior === 'none') {
+      return { behavior: legacyBehavior, source: 'legacyConfiguration' };
+    }
+
+    return {
+      behavior: configuredGlobalBehavior ?? preOptInDefaultDashboardBrowser,
+      source: configuredGlobalBehavior ? 'globalConfiguration' : 'legacyConfiguration'
+    };
+  }
+
+  if (configuredGlobalBehavior) {
+    return { behavior: configuredGlobalBehavior, source: 'globalConfiguration' };
+  }
+
+  return {
+    behavior: normalizeDashboardLaunchBehavior(aspireConfig.get<unknown>('dashboardBrowser', 'none')) ?? 'none',
+    source: 'default'
+  };
+}
+
+export function resolveExplicitDashboardLaunchBehavior(
+  aspireConfig: vscode.WorkspaceConfiguration,
+  debugConfigurationBehaviorValue?: unknown): {
+    readonly behavior: Exclude<DashboardLaunchBehavior, 'none'>;
+    readonly source: DashboardLaunchBehaviorSource;
+  } {
+  const debugPreference = normalizeDashboardLaunchBehavior(debugConfigurationBehaviorValue);
+  if (debugPreference && debugPreference !== 'none') {
+    return { behavior: debugPreference, source: 'debugConfiguration' };
+  }
+
+  const configuredPreference = getConfiguredDashboardLaunchBehavior(aspireConfig);
+  if (configuredPreference && configuredPreference !== 'none') {
+    return { behavior: configuredPreference, source: 'globalConfiguration' };
+  }
+
+  const legacyBehavior = getConfiguredLegacyDashboardLaunchBehavior(aspireConfig);
+  if (legacyBehavior === 'notification') {
+    return { behavior: 'notification', source: 'legacyConfiguration' };
+  }
+
+  // `none` suppresses automatic launch; it is not a browser presentation. Explicit
+  // handoff still honors any separately configured browser or notification preference,
+  // then falls back to the external browser rather than the integrated one: the model
+  // asked to open the Dashboard right now, so a user who left the setting unset or
+  // explicitly opted out of the automatic popup should still see a normal, full-featured
+  // browser tab instead of the more constrained Simple Browser. This matches the existing
+  // "open in browser" tree command, which always opens the Dashboard externally and never
+  // routes through this resolver at all.
+  //
+  // `source` here is provenance, not a presentation selector: it names the most specific
+  // layer the user actually configured and this fallback did not honor. The returned
+  // behavior is the same fixed fallback for all four cases, so the source can never change
+  // what is opened. Only a `notification` behavior feeds `source` into
+  // `openDashboardLaunchBehaviorSettings`, and that case has already returned above with the
+  // legacy setting that really selected it, so this fallback cannot send a user to a setting
+  // that does not control what they just saw.
+  return {
+    behavior: 'openExternalBrowser',
+    source: debugPreference === 'none'
+      ? 'debugConfiguration'
+      : configuredPreference === 'none'
+        ? 'globalConfiguration'
+        : legacyBehavior
+          ? 'legacyConfiguration'
+          : 'default',
+  };
+}
+
+export function isWebDashboardUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  }
+  catch {
+    return false;
+  }
+}
+
+export interface DashboardLaunchNotificationOptions {
+  readonly baseUrl: string;
+  readonly codespacesUrl?: string;
+  readonly source: DashboardLaunchBehaviorSource;
+  readonly delayMs?: number;
+}
+
+export async function showDashboardLaunchNotification(options: DashboardLaunchNotificationOptions): Promise<boolean> {
+  if (options.delayMs && options.delayMs > 0) {
+    await new Promise(resolve => setTimeout(resolve, options.delayMs));
+  }
+
+  const actions: vscode.MessageItem[] = [{ title: directLink }];
+  if (options.codespacesUrl) {
+    actions.push({ title: codespacesLink });
+  }
+  actions.push({ title: settingsLabel });
+
+  let selection: Thenable<vscode.MessageItem | undefined>;
+  try {
+    selection = vscode.window.showInformationMessage(openAspireDashboard, ...actions);
+  }
+  catch {
+    extensionLogOutputChannel.error('Failed to show the Aspire Dashboard notification.');
+    return false;
+  }
+
+  const selectionPromise = Promise.resolve(selection);
+  const initialState = await Promise.race([
+    selectionPromise.then(
+      selected => ({ kind: 'selected' as const, selected }),
+      () => ({ kind: 'rejected' as const })),
+    new Promise<{ kind: 'pending' }>(resolve =>
+      setTimeout(() => resolve({ kind: 'pending' }), 0)),
+  ]);
+
+  if (initialState.kind === 'rejected') {
+    extensionLogOutputChannel.error('Failed to show the Aspire Dashboard notification.');
+    return false;
+  }
+
+  if (initialState.kind === 'selected') {
+    void handleDashboardLaunchNotificationSelection(initialState.selected, options)
+      .catch(() => extensionLogOutputChannel.error('Failed to handle the Aspire Dashboard notification.'));
+    return true;
+  }
+
+  void selectionPromise
+    .then(selected => handleDashboardLaunchNotificationSelection(selected, options))
+    .catch(() => extensionLogOutputChannel.error('Failed to handle the Aspire Dashboard notification.'));
+  return true;
+}
+
+async function handleDashboardLaunchNotificationSelection(
+  selected: vscode.MessageItem | undefined,
+  options: DashboardLaunchNotificationOptions): Promise<void> {
+  if (!selected) {
+    return;
+  }
+
+  extensionLogOutputChannel.info(`Selected action: ${selected.title}`);
+  if (selected.title === directLink) {
+    await openDashboardNotificationLink(options.baseUrl);
+  }
+  else if (selected.title === codespacesLink && options.codespacesUrl) {
+    await openDashboardNotificationLink(options.codespacesUrl);
+  }
+  else if (selected.title === settingsLabel) {
+    openDashboardLaunchBehaviorSettings(options.source);
+  }
+}
+
+async function openDashboardNotificationLink(url: string): Promise<void> {
+  try {
+    await vscode.env.openExternal(vscode.Uri.parse(url));
+  }
+  catch {
+    // The notification has already been presented successfully. Keep the launch result tied to that
+    // presentation and avoid logging the URL or the raw error, either of which may contain credentials.
+    extensionLogOutputChannel.error('Failed to open the selected Aspire Dashboard link.');
+  }
+}
+
+export function openDashboardLaunchBehaviorSettings(source: DashboardLaunchBehaviorSource): void {
+  let command: Thenable<unknown>;
+  try {
+    command = source === 'debugConfiguration'
+      ? vscode.commands.executeCommand('workbench.action.debug.configure')
+      : vscode.commands.executeCommand(
+        'workbench.action.openSettings',
+        source === 'legacyConfiguration'
+          ? 'aspire.enableAspireDashboardAutoLaunch'
+          : 'aspire.dashboardBrowser');
+  }
+  catch {
+    extensionLogOutputChannel.error('Failed to open the Aspire Dashboard launch settings.');
+    return;
+  }
+
+  void Promise.resolve(command).catch(
+    () => extensionLogOutputChannel.error('Failed to open the Aspire Dashboard launch settings.'));
+}
+
+type DashboardDebugType = 'pwa-chrome' | 'pwa-msedge' | 'firefox';
+
+interface DashboardBrowserOperations {
+  readonly openIntegrated: () => Promise<boolean>;
+  readonly openExternal: () => Promise<boolean>;
+  readonly openDebug: (debugType: DashboardDebugType) => Promise<DashboardPresentation | undefined>;
+}
+
+async function openDashboardWithOperations(
+  browserType: DashboardBrowserType,
+  operations: DashboardBrowserOperations): Promise<DashboardPresentation | undefined> {
+  switch (browserType) {
+    case 'debugChrome':
+      return operations.openDebug('pwa-chrome');
+    case 'debugEdge':
+      return operations.openDebug('pwa-msedge');
+    case 'debugFirefox':
+      return operations.openDebug('firefox');
+    case 'integratedBrowser':
+      return await operations.openIntegrated() ? 'integratedBrowser' : undefined;
+    case 'openExternalBrowser':
+    default:
+      return await operations.openExternal() ? 'externalBrowser' : undefined;
+  }
+}
+
+export async function openDashboardInBrowser(
+  url: string,
+  browserType: DashboardBrowserType): Promise<DashboardPresentation | undefined> {
+  return openDashboardWithOperations(browserType, {
+    openIntegrated: () => runDashboardOpenOperation(
+      () => vscode.commands.executeCommand('simpleBrowser.show', url)),
+    openExternal: () => runDashboardOpenOperation(
+      () => vscode.env.openExternal(vscode.Uri.parse(url))),
+    openDebug: async debugType => {
+      const didStart = await vscode.debug.startDebugging(
+        undefined,
+        createDashboardDebugConfiguration(url, debugType));
+      if (didStart) {
+        return 'debugBrowser';
+      }
+
+      extensionLogOutputChannel.warn(`Failed to start debug browser (${debugType}), falling back to default browser`);
+      return await runDashboardOpenOperation(
+        () => vscode.env.openExternal(vscode.Uri.parse(url)))
+        ? 'externalBrowser'
+        : undefined;
+    },
+  });
+}
+
+function createDashboardDebugConfiguration(
+  url: string,
+  debugType: DashboardDebugType): vscode.DebugConfiguration {
+  const debugConfig: vscode.DebugConfiguration = {
+    type: debugType,
+    name: aspireDashboard,
+    request: 'launch',
+    url,
+  };
+
+  if (debugType === 'pwa-chrome' || debugType === 'pwa-msedge') {
+    debugConfig.pauseForSourceMap = false;
+  }
+  else {
+    // Firefox requires a webRoot even though the Dashboard sources are not local.
+    debugConfig.webRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
+    debugConfig.pathMappings = [];
+  }
+
+  return debugConfig;
+}
+
+async function runDashboardOpenOperation(operation: () => Thenable<unknown>): Promise<boolean> {
+  return await operation() !== false;
+}
+
+function getConfiguredLegacyDashboardLaunchBehavior(
+  aspireConfig: vscode.WorkspaceConfiguration): 'launch' | 'notification' | 'none' | undefined {
+  const inspection = aspireConfig.inspect<unknown>('enableAspireDashboardAutoLaunch');
+  const configuredValue = inspection?.workspaceFolderValue
+    ?? inspection?.workspaceValue
+    ?? inspection?.globalValue;
+
+  if (configuredValue === undefined) {
+    return undefined;
+  }
+  if (configuredValue === true || configuredValue === 'launch') {
+    return 'launch';
+  }
+  if (configuredValue === false || configuredValue === 'notification') {
+    return 'notification';
+  }
+  if (configuredValue === 'off') {
+    return 'none';
+  }
+
+  return undefined;
+}
+
+function getConfiguredDashboardLaunchBehavior(
+  aspireConfig: vscode.WorkspaceConfiguration): DashboardLaunchBehavior | undefined {
+  const inspection = aspireConfig.inspect<unknown>('dashboardBrowser');
+  const configuredValue = inspection?.workspaceFolderValue
+    ?? inspection?.workspaceValue
+    ?? inspection?.globalValue;
+
+  return normalizeDashboardLaunchBehavior(configuredValue);
+}
 
 /**
  * The slice of the owning Aspire debug session the dashboard launcher needs: the parent session it
@@ -18,9 +362,19 @@ export interface DashboardLauncherHost {
   readonly isShuttingDown: boolean;
   readonly isStopAttemptInProgress: boolean;
   readonly isExtensionShutdownRequested: boolean;
+  readonly dashboardLaunchFailureMode: LaunchFailureMode;
   notifyStateChanged(): void;
+  recordDashboardLaunchFailure(failure: SanitizedLaunchFailure): void;
   stopWithinBudget(operation: () => Thenable<void>, sessionName: string, deadline: number, onTimeout?: () => void): Promise<void>;
   waitWithinBudget(stop: PromiseLike<void>, sessionName: string, deadline: number, onTimeout?: () => void, timeoutMessage?: (sessionName: string, seconds: number) => string): Promise<void>;
+}
+
+interface TrackedDashboardDebugSession {
+  readonly session: vscode.DebugSession;
+  readonly terminationDisposable: vscode.Disposable;
+  readonly terminationPromise: Promise<void>;
+  readonly resolveTermination: () => void;
+  stopPromise?: Promise<void>;
 }
 
 export class DashboardLauncher implements vscode.Disposable {
@@ -33,15 +387,12 @@ export class DashboardLauncher implements vscode.Disposable {
 
   private readonly _host: DashboardLauncherHost;
 
-  private _dashboardDebugSession: vscode.DebugSession | null = null;
-  private _dashboardStopPromise: Promise<void> | undefined;
-  private _dashboardTerminationDisposable: vscode.Disposable | undefined;
-  private _dashboardTerminationPromise: Promise<void> | undefined;
-  private _resolveDashboardTermination: (() => void) | undefined;
+  private readonly _dashboardDebugSessions = new Map<string, TrackedDashboardDebugSession>();
   private readonly _pendingDashboardDebugSessionStarts = new Set<Promise<void>>();
   private readonly _pendingDashboardDebugSessionStartListeners = new Set<vscode.Disposable>();
   private _pendingDashboardDebugSessionStartListenerCleanup: ReturnType<typeof setTimeout> | undefined;
   private _dashboardUrl: string | undefined;
+  private _nextDashboardLaunchId = 0;
 
   constructor(host: DashboardLauncherHost) {
     this._host = host;
@@ -56,7 +407,7 @@ export class DashboardLauncher implements vscode.Disposable {
    * produced its session yet.
    */
   get hasSessionsToStop(): boolean {
-    return this._dashboardDebugSession !== null
+    return this._dashboardDebugSessions.size > 0
       || this._pendingDashboardDebugSessionStarts.size > 0;
   }
 
@@ -65,48 +416,63 @@ export class DashboardLauncher implements vscode.Disposable {
    * For debugChrome/debugEdge/debugFirefox, launches as a child debug session that is stopped by
    * the ordered shutdown or by the late-start handler when shutdown is already in progress.
    */
-  async openDashboard(url: string, browserType: DashboardBrowserType): Promise<void> {
+  async openDashboard(url: string, browserType: DashboardBrowserType): Promise<DashboardPresentation | undefined> {
+    return this.openDashboardInternal(url, browserType, false);
+  }
+
+  /**
+   * Opens the dashboard URL and waits for a debug-browser presentation to be established.
+   * Explicit editor handoffs use this path so their model-facing result reports what was
+   * actually opened without making automatic startup wait on browser debugger activation.
+   */
+  async openDashboardAndWait(
+    url: string,
+    browserType: DashboardBrowserType,
+    token?: vscode.CancellationToken): Promise<DashboardPresentation | undefined> {
+    return this.openDashboardInternal(url, browserType, true, token);
+  }
+
+  private async openDashboardInternal(
+    url: string,
+    browserType: DashboardBrowserType,
+    waitForDebugBrowserStart: boolean,
+    token?: vscode.CancellationToken): Promise<DashboardPresentation | undefined> {
     extensionLogOutputChannel.info(`Opening dashboard in browser: ${browserType}.`);
 
-    if (this._host.isDisposed || this._host.isStopAttemptInProgress || this._host.isExtensionShutdownRequested) {
+    if (this._host.isDisposed
+      || this._host.isShuttingDown
+      || this._host.isStopAttemptInProgress
+      || this._host.isExtensionShutdownRequested) {
       extensionLogOutputChannel.info('Skipping dashboard browser launch because the Aspire session is shutting down.');
-      return;
+      return undefined;
     }
 
     this._dashboardUrl = url;
     this._host.notifyStateChanged();
 
-    switch (browserType) {
-      case 'debugChrome':
-        this.launchDebugBrowserInBackground(url, 'pwa-chrome');
-        break;
+    return openDashboardWithOperations(browserType, {
+      openIntegrated: () => this.openDashboardCore(
+        () => vscode.commands.executeCommand('simpleBrowser.show', url)),
+      openExternal: () => this.openDashboardCore(
+        () => vscode.env.openExternal(vscode.Uri.parse(url))),
+      openDebug: debugType => {
+        if (waitForDebugBrowserStart) {
+          return this.launchDebugBrowser(url, debugType, token);
+        }
 
-      case 'debugEdge':
-        this.launchDebugBrowserInBackground(url, 'pwa-msedge');
-        break;
-
-      case 'debugFirefox':
-        this.launchDebugBrowserInBackground(url, 'firefox');
-        break;
-
-      case 'integratedBrowser':
-        await vscode.commands.executeCommand('simpleBrowser.show', url);
-        break;
-
-      case 'openExternalBrowser':
-      default:
-        // Use VS Code's default external browser handling
-        await vscode.env.openExternal(vscode.Uri.parse(url));
-        break;
-    }
+        this.launchDebugBrowserInBackground(url, debugType);
+        return Promise.resolve('debugBrowser');
+      },
+    });
   }
 
   private launchDebugBrowserInBackground(
     url: string,
     debugType: 'pwa-chrome' | 'pwa-msedge' | 'firefox'): void {
-    void this.launchDebugBrowser(url, debugType).catch(error => {
-      extensionLogOutputChannel.warn(
-        `Failed to launch dashboard debug session (${debugType}): ${describeStopFailure(error)}`);
+    void this.launchDebugBrowser(url, debugType).catch(() => {
+      // Debug-adapter errors can contain the full Dashboard URL, including its login token.
+      // The sanitized launch journal already records a bounded failure category.
+      extensionLogOutputChannel.warn(`Failed to launch dashboard debug session (${debugType}).`);
     });
   }
 
@@ -115,24 +481,19 @@ export class DashboardLauncher implements vscode.Disposable {
    * VS Code does not stop this child session when the parent Aspire session terminates, so the
    * started session is tracked here and stopped explicitly during Aspire session shutdown.
    */
-  private async launchDebugBrowser(url: string, debugType: 'pwa-chrome' | 'pwa-msedge' | 'firefox'): Promise<void> {
-    const debugConfig: vscode.DebugConfiguration = {
-      type: debugType,
-      name: aspireDashboard,
-      request: 'launch',
-      url: url,
-    };
+  private async launchDebugBrowser(
+    url: string,
+    debugType: DashboardDebugType,
+    token?: vscode.CancellationToken): Promise<DashboardPresentation | undefined> {
+    if (token?.isCancellationRequested) {
+      throw new vscode.CancellationError();
+    }
 
-    // Add type-specific options
-    if (debugType === 'pwa-chrome' || debugType === 'pwa-msedge') {
-      // Don't pause on entry for Chrome/Edge
-      debugConfig.pauseForSourceMap = false;
-    }
-    else if (debugType === 'firefox') {
-      // Firefox debugger requires webRoot; resolve to actual workspace path
-      debugConfig.webRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
-      debugConfig.pathMappings = [];
-    }
+    const debugConfig = createDashboardDebugConfiguration(url, debugType);
+    const launchId = ++this._nextDashboardLaunchId;
+    debugConfig[dashboardLaunchIdConfigKey] = launchId;
+    let cancellationRequested = false;
+    let startedSession: vscode.DebugSession | undefined;
 
     // Register listener before starting so we don't miss the event.
     // The started session must be matched to *this* Aspire session: concurrent Aspire
@@ -141,9 +502,22 @@ export class DashboardLauncher implements vscode.Disposable {
     // another session's browser.
     const disposable = vscode.debug.onDidStartDebugSession((session) => {
       if (session.parentSession?.id === this._host.parentSession.id && session.configuration.name === aspireDashboard && session.type === debugType) {
-        this._dashboardDebugSession = session;
+        const startedLaunchId = session.configuration[dashboardLaunchIdConfigKey];
+        if (startedLaunchId !== undefined && startedLaunchId !== launchId) {
+          return;
+        }
+        if (this._dashboardDebugSessions.has(session.id)) {
+          return;
+        }
+
         this.disposeDashboardStartListener(disposable);
-        this.trackDashboardTermination(session);
+        startedSession = session;
+        if (cancellationRequested) {
+          this.stopCanceledDashboardDebugSession(session);
+          return;
+        }
+
+        this.trackDashboardDebugSession(session);
         if (this._host.isShuttingDown) {
           this.closeDashboardInBackground();
         }
@@ -158,16 +532,58 @@ export class DashboardLauncher implements vscode.Disposable {
       this._host.parentSession));
     const completion = start.then(() => undefined, () => undefined);
     this._pendingDashboardDebugSessionStarts.add(completion);
+    start.then(
+      didStart => {
+        if (cancellationRequested) {
+          if (!didStart) {
+            this.disposeDashboardStartListener(disposable);
+          }
+          else if (!startedSession) {
+            // VS Code normally raises the start event before this promise settles. Keep a bounded
+            // late-event window for adapters that reverse that order.
+            this.scheduleDashboardStartListenerCleanup();
+          }
+        }
+      },
+      () => {
+        if (cancellationRequested) {
+          this.disposeDashboardStartListener(disposable);
+        }
+      });
+
+    let cancellationDisposable: vscode.Disposable | undefined;
+    const cancellation = token && new Promise<never>((_, reject) => {
+      cancellationDisposable = token.onCancellationRequested(() => {
+        cancellationRequested = true;
+        if (startedSession) {
+          this.stopCanceledDashboardDebugSession(startedSession);
+        }
+        // The debug API cannot cancel a start request. Keep its listener while the request is
+        // pending so a late child can be identified and stopped, but let the tool return now.
+        reject(new vscode.CancellationError());
+      });
+    });
     try {
       // Start as a child debug session so it is stopped alongside this session in `dispose`.
-      didStart = await start;
+      didStart = cancellation ? await Promise.race([start, cancellation]) : await start;
     }
     catch (error) {
+      if (cancellationRequested || error instanceof vscode.CancellationError) {
+        throw error;
+      }
+
       this.disposeDashboardStartListener(disposable);
+      this.recordDashboardLaunchFailure(error);
       throw error;
     }
     finally {
-      this._pendingDashboardDebugSessionStarts.delete(completion);
+      cancellationDisposable?.dispose();
+      if (cancellationRequested) {
+        void completion.then(() => this._pendingDashboardDebugSessionStarts.delete(completion));
+      }
+      else {
+        this._pendingDashboardDebugSessionStarts.delete(completion);
+      }
     }
 
     if (!didStart) {
@@ -177,11 +593,62 @@ export class DashboardLauncher implements vscode.Disposable {
       // Falling back after disposal would pop an untracked browser window open during
       // teardown, long after the user stopped the session.
       if (this._host.isShuttingDown) {
-        return;
+        return undefined;
+      }
+      if (token?.isCancellationRequested) {
+        throw new vscode.CancellationError();
       }
 
-      await vscode.env.openExternal(vscode.Uri.parse(url));
+      return await this.openDashboardCore(() => vscode.env.openExternal(vscode.Uri.parse(url)))
+        ? 'externalBrowser'
+        : undefined;
     }
+
+    if (token?.isCancellationRequested) {
+      throw new vscode.CancellationError();
+    }
+
+    return 'debugBrowser';
+  }
+
+  private stopCanceledDashboardDebugSession(session: vscode.DebugSession): void {
+    // Cancellation is invocation-scoped. Ignore the close-on-debug-end preference and stop only
+    // the child created by this launch; path-wide cleanup could close an unrelated dashboard.
+    this.clearDashboardDebugSession(session);
+    stopSessionInBackground(
+      () => vscode.debug.stopDebugging(session),
+      'dashboard debug session that started after its launch was canceled');
+  }
+
+  private async openDashboardCore(operation: () => Thenable<unknown>): Promise<boolean> {
+    try {
+      const result = await operation();
+      if (result === false) {
+        this.recordDashboardLaunchFailure();
+        return false;
+      }
+
+      return true;
+    }
+    catch (error) {
+      this.recordDashboardLaunchFailure(error);
+      throw error;
+    }
+  }
+
+  private recordDashboardLaunchFailure(error?: unknown): void {
+    if (this._host.isShuttingDown) {
+      return;
+    }
+
+    this._host.recordDashboardLaunchFailure(normalizeLaunchFailure({
+      stage: 'dashboard',
+      category: error === undefined ? 'unknown' : undefined,
+      controller: 'editor',
+      mode: this._host.dashboardLaunchFailureMode,
+      providerKind: 'browser',
+      error,
+    }));
   }
 
   /**
@@ -191,51 +658,30 @@ export class DashboardLauncher implements vscode.Disposable {
   private closeDashboard(): Promise<void> {
     const aspireConfig = vscode.workspace.getConfiguration('aspire');
     const shouldClose = aspireConfig.get<boolean>('closeDashboardOnDebugEnd', true);
+    const dashboardDebugSessions = [...this._dashboardDebugSessions.values()];
 
     if (!shouldClose) {
-      if (this._dashboardDebugSession) {
-        this.clearDashboardDebugSession(this._dashboardDebugSession);
+      for (const tracked of dashboardDebugSessions) {
+        this.clearDashboardDebugSession(tracked.session);
       }
       return Promise.resolve();
     }
 
-    const dashboardDebugSession = this._dashboardDebugSession;
-    if (!dashboardDebugSession) {
+    if (dashboardDebugSessions.length === 0) {
       return Promise.resolve();
     }
 
-    if (this._dashboardStopPromise) {
-      return this._dashboardStopPromise;
-    }
-
     extensionLogOutputChannel.info('Closing dashboard browser...');
-    const stopRequest = startStop(() => vscode.debug.stopDebugging(dashboardDebugSession));
-    const stop = this._dashboardTerminationPromise
-      ? Promise.race([stopRequest, this._dashboardTerminationPromise])
-      : stopRequest;
-    const attempt = stop.then(
-      () => {
-        this.clearDashboardDebugSession(dashboardDebugSession);
-        if (this._dashboardStopPromise === attempt) {
-          this._dashboardStopPromise = undefined;
+    return Promise.allSettled(
+      dashboardDebugSessions.map(tracked => this.closeDashboardDebugSession(tracked)))
+      .then(results => {
+        const failures = results
+          .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+          .map(result => result.reason);
+        if (failures.length > 0) {
+          throw failures[0];
         }
-        extensionLogOutputChannel.info('Dashboard debug session stopped.');
-      },
-      err => {
-        // A natural termination can race the stop request and remove the session before VS Code
-        // settles the request. The termination event is authoritative: there is nothing left to
-        // retry even if the stale stop request rejects.
-        if (this._dashboardDebugSession !== dashboardDebugSession) {
-          return;
-        }
-        if (this._dashboardStopPromise === attempt) {
-          this._dashboardStopPromise = undefined;
-        }
-        throw err;
       });
-    this._dashboardStopPromise = attempt;
-
-    return attempt;
   }
 
   async stopDashboardWithinBudget(shutdownDeadline: number): Promise<void> {
@@ -263,9 +709,9 @@ export class DashboardLauncher implements vscode.Disposable {
 
     await this._host.stopWithinBudget(
       () => this.closeDashboard(),
-      this._dashboardDebugSession?.name ?? aspireDashboard,
+      this._dashboardDebugSessions.values().next().value?.session.name ?? aspireDashboard,
       deadline,
-      () => { this._dashboardStopPromise = undefined; });
+      () => this.resetDashboardStopAttempts());
   }
 
   private disposeDashboardStartListener(disposable: vscode.Disposable): void {
@@ -293,31 +739,74 @@ export class DashboardLauncher implements vscode.Disposable {
     }, DashboardLauncher._dashboardLateStartListenerTimeoutMs);
   }
 
-  private trackDashboardTermination(session: vscode.DebugSession): void {
-    this._dashboardTerminationDisposable?.dispose();
-    this._dashboardTerminationPromise = new Promise<void>(resolve => {
-      this._resolveDashboardTermination = resolve;
+  private closeDashboardDebugSession(tracked: TrackedDashboardDebugSession): Promise<void> {
+    if (this._dashboardDebugSessions.get(tracked.session.id) !== tracked) {
+      return Promise.resolve();
+    }
+    if (tracked.stopPromise) {
+      return tracked.stopPromise;
+    }
+
+    const stopRequest = startStop(() => vscode.debug.stopDebugging(tracked.session));
+    const attempt = Promise.race([stopRequest, tracked.terminationPromise]).then(
+      () => {
+        this.clearDashboardDebugSession(tracked.session);
+        if (tracked.stopPromise === attempt) {
+          tracked.stopPromise = undefined;
+        }
+        extensionLogOutputChannel.info('Dashboard debug session stopped.');
+      },
+      err => {
+        // A natural termination can race the stop request and remove the session before VS Code
+        // settles the request. The termination event is authoritative: there is nothing left to
+        // retry even if the stale stop request rejects.
+        if (this._dashboardDebugSessions.get(tracked.session.id) !== tracked) {
+          return;
+        }
+        if (tracked.stopPromise === attempt) {
+          tracked.stopPromise = undefined;
+        }
+        throw err;
+      });
+    tracked.stopPromise = attempt;
+
+    return attempt;
+  }
+
+  private trackDashboardDebugSession(session: vscode.DebugSession): void {
+    let resolveTermination!: () => void;
+    const terminationPromise = new Promise<void>(resolve => {
+      resolveTermination = resolve;
     });
     const disposable = vscode.debug.onDidTerminateDebugSession(terminatedSession => {
       if (terminatedSession.id === session.id) {
         this.clearDashboardDebugSession(session);
       }
     });
-    this._dashboardTerminationDisposable = disposable;
+    this._dashboardDebugSessions.set(session.id, {
+      session,
+      terminationDisposable: disposable,
+      terminationPromise,
+      resolveTermination,
+    });
   }
 
   private clearDashboardDebugSession(session: vscode.DebugSession): void {
-    if (this._dashboardDebugSession !== session) {
+    const tracked = this._dashboardDebugSessions.get(session.id);
+    if (!tracked || tracked.session !== session) {
       return;
     }
 
-    this._resolveDashboardTermination?.();
-    this._dashboardDebugSession = null;
-    this._dashboardStopPromise = undefined;
-    this._dashboardTerminationDisposable?.dispose();
-    this._dashboardTerminationDisposable = undefined;
-    this._dashboardTerminationPromise = undefined;
-    this._resolveDashboardTermination = undefined;
+    tracked.resolveTermination();
+    tracked.stopPromise = undefined;
+    tracked.terminationDisposable.dispose();
+    this._dashboardDebugSessions.delete(session.id);
+  }
+
+  private resetDashboardStopAttempts(): void {
+    for (const tracked of this._dashboardDebugSessions.values()) {
+      tracked.stopPromise = undefined;
+    }
   }
 
   private closeDashboardInBackground(): void {
@@ -327,7 +816,7 @@ export class DashboardLauncher implements vscode.Disposable {
       // Once disposal has released this session from the extension context, no later caller can
       // retry a browser that arrived after the ordered shutdown's launch budget. Give that narrow
       // finalization race one fresh VS Code stop request before giving up.
-      if (this._host.isDisposed && this._dashboardDebugSession) {
+      if (this._host.isDisposed && this._dashboardDebugSessions.size > 0) {
         stopSessionInBackground(() => this.closeDashboard(), 'dashboard debug session after finalization');
       }
     });
@@ -338,7 +827,5 @@ export class DashboardLauncher implements vscode.Disposable {
     // fallback for direct finalization during extension shutdown.
     this.closeDashboardInBackground();
     this.scheduleDashboardStartListenerCleanup();
-    this._dashboardTerminationDisposable?.dispose();
-    this._dashboardTerminationDisposable = undefined;
   }
 }

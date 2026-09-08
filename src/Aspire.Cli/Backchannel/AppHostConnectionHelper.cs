@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 
@@ -13,12 +12,19 @@ namespace Aspire.Cli.Backchannel;
 internal static class AppHostConnectionHelper
 {
     /// <summary>
-    /// Gets the appropriate AppHost connection based on the selection logic:
-    /// 1. If a specific AppHost is selected via select_apphost, use that
-    /// 2. Otherwise, look for in-scope connections (AppHosts within the working directory)
-    /// 3. If exactly one in-scope connection exists, use it
-    /// 4. If multiple in-scope connections exist, throw an error listing them
-    /// 5. If no in-scope connections exist, fall back to the first available connection
+    /// Finds the connection whose AppHost project has the same filesystem identity as <paramref name="appHostPath"/>.
+    /// </summary>
+    public static IAppHostAuxiliaryBackchannel? FindConnectionByAppHostPath(
+        IEnumerable<IAppHostAuxiliaryBackchannel> connections,
+        string appHostPath)
+    {
+        return connections.SingleOrDefault(connection =>
+            connection.AppHostInfo?.AppHostPath is { } candidatePath &&
+            AppHostPathComparer.PathsEqual(candidatePath, appHostPath));
+    }
+
+    /// <summary>
+    /// Gets the appropriate AppHost connection for MCP operations.
     /// </summary>
     /// <param name="auxiliaryBackchannelMonitor">The backchannel monitor to get connections from.</param>
     /// <param name="logger">Logger for debug output.</param>
@@ -30,41 +36,46 @@ internal static class AppHostConnectionHelper
         CancellationToken cancellationToken = default)
     {
         var connections = auxiliaryBackchannelMonitor.Connections.ToList();
+        var scannedConnections = false;
 
         if (connections.Count == 0)
         {
             await auxiliaryBackchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+            scannedConnections = true;
             connections = auxiliaryBackchannelMonitor.Connections.ToList();
-            if (connections.Count == 0)
-            {
-                return null;
-            }
         }
 
         // Check if a specific AppHost was selected
         var selectedPath = auxiliaryBackchannelMonitor.SelectedAppHostPath;
         if (!string.IsNullOrEmpty(selectedPath))
         {
-            // Hoisted out of the predicate because canonicalization walks the filesystem per path
-            // segment, and every writer of SelectedAppHostPath already stores a canonical path, so
-            // this normally resolves to itself.
-            var selectedCanonicalPath = PathNormalizer.ResolveToFilesystemPath(selectedPath);
-            var selectedConnection = connections.FirstOrDefault(c =>
-                c.AppHostInfo?.AppHostPath != null &&
-                string.Equals(
-                    PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
-                    selectedCanonicalPath,
-                    StringComparisons.FileSystemPath));
+            var selectedConnection = FindSelectedConnection(connections, selectedPath, logger);
 
-            if (selectedConnection != null)
+            if (selectedConnection is null && !scannedConnections)
+            {
+                // Explicit selections need one fresh scan before we report the pinned AppHost
+                // unavailable. Cached unrelated connections can otherwise hide a newly started
+                // AppHost until the next background scan.
+                await auxiliaryBackchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+                connections = auxiliaryBackchannelMonitor.Connections.ToList();
+                selectedConnection = FindSelectedConnection(connections, selectedPath, logger);
+            }
+
+            if (selectedConnection is not null)
             {
                 logger.LogDebug("Using explicitly selected AppHost: {AppHostPath}", selectedPath);
                 return selectedConnection;
             }
 
-            logger.LogWarning("Selected AppHost at '{SelectedPath}' is no longer running, falling back to selection logic", selectedPath);
-            // Clear the selection since the AppHost is no longer available
-            auxiliaryBackchannelMonitor.SelectedAppHostPath = null;
+            logger.LogWarning("The explicitly selected AppHost is unavailable: {AppHostPath}", selectedPath);
+            throw new McpProtocolException(
+                "The selected AppHost is not available. Start that AppHost and retry.",
+                McpErrorCode.InternalError);
+        }
+
+        if (connections.Count == 0)
+        {
+            return null;
         }
 
         // Get in-scope connections
@@ -78,28 +89,33 @@ internal static class AppHostConnectionHelper
 
         if (inScopeConnections.Count > 1)
         {
-            var paths = inScopeConnections
-                .Where(c => c.AppHostInfo?.AppHostPath != null)
-                .Select(c => c.AppHostInfo!.AppHostPath)
-                .ToList();
-
-            var pathsList = string.Join("\n", paths.Select(p => $"  - {p}"));
-
             throw new McpProtocolException(
-                $"Multiple Aspire AppHosts are running in the scope of the MCP server's working directory. " +
-                $"Use the 'select_apphost' tool to specify which AppHost to use.\n\nRunning AppHosts:\n{pathsList}",
+                "Multiple Aspire AppHosts are running in the MCP server's working directory scope. " +
+                "Use 'select_apphost' to choose the AppHost for this request.",
                 McpErrorCode.InternalError);
         }
 
-        var fallback = connections
-            .OrderBy(c => c.AppHostInfo?.AppHostPath ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(c => c.AppHostInfo?.ProcessId ?? int.MaxValue)
-            .FirstOrDefault();
+        throw new McpProtocolException(
+            "Running Aspire AppHosts were found outside the MCP server's working directory scope. " +
+            "Use 'list_apphosts' to discover available AppHosts, then 'select_apphost' to choose one.",
+            McpErrorCode.InternalError);
+    }
 
-        logger.LogDebug(
-            "No in-scope AppHosts found. Falling back to first available AppHost: {AppHostPath}",
-            fallback?.AppHostInfo?.AppHostPath ?? "N/A");
-
-        return fallback;
+    private static IAppHostAuxiliaryBackchannel? FindSelectedConnection(
+        IEnumerable<IAppHostAuxiliaryBackchannel> connections,
+        string selectedPath,
+        ILogger logger)
+    {
+        try
+        {
+            return FindConnectionByAppHostPath(connections, selectedPath);
+        }
+        catch (InvalidOperationException)
+        {
+            logger.LogWarning("Multiple running AppHost instances match the selected path: {AppHostPath}", selectedPath);
+            throw new McpProtocolException(
+                "Multiple running AppHost instances match the selected path. Stop the extra instance and retry.",
+                McpErrorCode.InternalError);
+        }
     }
 }

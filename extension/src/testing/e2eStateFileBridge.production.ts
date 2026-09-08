@@ -33,6 +33,10 @@ export function createE2eStateFileBridge(
   _appHostTreeProvider: AspireAppHostTreeProvider,
   _terminalProvider: AspireTerminalProvider,
   _onDidChangeState: vscode.Event<AspireExtensionStateSnapshot>,
+  _languageModelTools: ReadonlyMap<string, {
+    readonly tool: vscode.LanguageModelTool<unknown>;
+    readonly registered: boolean;
+  }>,
 ): vscode.Disposable {
   return new vscode.Disposable(() => undefined);
 }

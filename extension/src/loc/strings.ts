@@ -176,6 +176,7 @@ export const workspaceViewSelectedMultipleAppHosts = (count: number) => vscode.l
 export const tooltipType = (type: string) => vscode.l10n.t('Type: {0}', type);
 export const tooltipState = (state: string) => vscode.l10n.t('State: {0}', state);
 export const tooltipHealth = (health: string) => vscode.l10n.t('Health: {0}', health);
+export const tooltipSource = vscode.l10n.t('Source:');
 export const tooltipEndpoints = vscode.l10n.t('Endpoints:');
 export const healthChecksLabel = vscode.l10n.t('Health Checks');
 export const healthCheckDescription = (status: string) => vscode.l10n.t('Status: {0}', status);
@@ -332,6 +333,7 @@ export const appHostLifecycleStopInvocationMessage = (appHostPath: string) => vs
 export const appHostLifecycleUnspecifiedMode = vscode.l10n.t('unspecified');
 export const appHostLifecycleUnresolvedPath = vscode.l10n.t('an unresolved path');
 export const appHostLifecycleBusy = vscode.l10n.t('Another start or stop operation for this Aspire AppHost is still in progress. Wait for it to finish and try again.');
+export const appHostLaunchTargetChanged = vscode.l10n.t('The Aspire AppHost that was selected changed before it could be started. Try again.');
 export const appHostLifecycleIsolationModeNotSupported = vscode.l10n.t('The selected Aspire CLI does not support the requested isolation mode.');
 export const appHostLifecycleIsolationCapabilityCouldNotBeVerified = vscode.l10n.t('The selected Aspire CLI isolation capability could not be verified.');
 export const appHostLifecycleLaunchProfileNotSupported = vscode.l10n.t('The selected Aspire CLI does not support the requested launch profile.');
@@ -339,4 +341,8 @@ export const appHostLifecycleLaunchProfileCapabilityCouldNotBeVerified = vscode.
 export const appHostLifecycleInvalidLaunchProfile = vscode.l10n.t('an invalid launch profile');
 export const appHostLifecycleLaunchProfileRequiresRun = vscode.l10n.t('Launch profiles are only supported for the run command.');
 export const appHostLifecycleLaunchAlreadyClaimed = vscode.l10n.t('This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.');
+export const editorAssistanceOpenDashboardInvocationMessage = (appHostPath: string) => vscode.l10n.t('Opening Aspire Dashboard for {0}...', appHostPath);
+export const editorAssistanceOpenOutputConfirmationTitle = vscode.l10n.t('Open the VS Code Output panel and select the Aspire Extension output channel');
+export const editorAssistanceOpenOutputConfirmationMessage = vscode.l10n.t('This opens the VS Code Output panel and selects the Aspire Extension output channel.');
+export const editorAssistanceOpenOutputInvocationMessage = vscode.l10n.t('Opening the VS Code Output panel and selecting the Aspire Extension output channel...');
 export const appHostOperationAlreadyInProgress = vscode.l10n.t('Another operation is already in progress for this Aspire AppHost. The new operation was cancelled.');

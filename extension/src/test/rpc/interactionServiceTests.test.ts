@@ -250,6 +250,7 @@ suite('InteractionService endpoints', () => {
 					tryReserveExternalLaunch: () => 'reservation-1',
 					validateOrReacquireExternalLaunchReservation: (_appHostPath, reservationId) => reservationId,
 					replaceExternalLaunchReservation: () => 'reservation-1',
+					markLaunchAttemptFailureRecorded: () => { },
 					releaseExternalLaunchReservation: () => { },
 					tryReserveExternalOperation: () => 'operation-1',
 					validateOrReacquireExternalOperationReservation: (_appHostPath, reservationId) => reservationId,
@@ -897,7 +898,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(openDashboardStub.callCount, 1);
-			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://codespaces/login?t=codespaces-secret', 'openExternalBrowser']);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://codespaces/login?t=codespaces-secret', 'openExternalBrowser', false]);
 		}
 		finally {
 			sandbox.restore();
@@ -957,7 +958,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(openDashboardStub.callCount, 1);
-			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser']);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser', false]);
 		}
 		finally {
 			sandbox.restore();
@@ -985,7 +986,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(openDashboardStub.callCount, 1);
-			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser']);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser', false]);
 		}
 		finally {
 			sandbox.restore();

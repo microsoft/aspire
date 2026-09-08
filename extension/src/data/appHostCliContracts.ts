@@ -62,6 +62,7 @@ export interface ResourceJson {
     name: string;
     displayName: string | null;
     resourceType: string;
+    source?: string | null;
     state: string | null;
     stateStyle: string | null;
     healthStatus: string | null;
@@ -71,6 +72,27 @@ export interface ResourceJson {
     urls: ResourceUrlJson[] | null;
     commands: Record<string, ResourceCommandJson> | null;
     properties: Record<string, string | null> | null;
+}
+
+export function isResourceNameMatch(
+    resource: ResourceJson,
+    resourceName: string,
+    includeDisplayName = true): boolean {
+    return equalsIgnoreCase(resource.name, resourceName) ||
+        (includeDisplayName && typeof resource.displayName === 'string' && equalsIgnoreCase(resource.displayName, resourceName));
+}
+
+export function resolveResourceNameMatches(
+    resources: readonly ResourceJson[],
+    resourceName: string): readonly ResourceJson[] {
+    const exactMatches = resources.filter(resource => isResourceNameMatch(resource, resourceName, false));
+    return exactMatches.length > 0
+        ? exactMatches
+        : resources.filter(resource => isResourceNameMatch(resource, resourceName));
+}
+
+function equalsIgnoreCase(left: string, right: string): boolean {
+    return left.toUpperCase() === right.toUpperCase();
 }
 
 export interface AppHostDisplayInfo {

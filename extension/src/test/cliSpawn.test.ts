@@ -10,7 +10,7 @@ import * as sinon from 'sinon';
 import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { getCmdShimSpawnCommandWithoutVerbatimArguments } from '../utils/cmdShim';
+import { canVsCodeQuoteCommandShimLaunch, getCmdShimSpawnCommandWithoutVerbatimArguments } from '../utils/cmdShim';
 import { EnvironmentVariables } from '../utils/environment';
 
 import { removeDirectorySafely } from './testHelpers';
@@ -405,6 +405,43 @@ suite('spawnCliProcess tests', () => {
                 ['agent', ''],
             ),
             /cannot safely quote arguments containing whitespace or quotes/);
+    });
+
+    // cmd.exe strips carets before a batch file splits `%1`..`%9`, so a caret-escaped space in a
+    // forwarded argument would silently become an argument separator. VS Code's own launcher
+    // double-quotes any token containing a space, which is the only construction that survives
+    // that split, so a shim launch whose tokens are all quotable must bypass the wrapper.
+    test('reports a spaced AppHost argument as launchable without the cmd wrapper', () => {
+        assert.ok(canVsCodeQuoteCommandShimLaunch(
+            'C:\\Users\\a\\.dotnet\\tools\\aspire.cmd',
+            ['agent', 'mcp', '--apphost', 'C:\\Users\\a\\src\\My App\\AppHost.csproj'],
+        ));
+        assert.ok(canVsCodeQuoteCommandShimLaunch(
+            'C:\\Program Files\\a&b\\aspire.cmd',
+            ['agent', 'mcp', '--apphost', 'C:\\src\\My Apps (2)\\App Host.csproj'],
+        ));
+    });
+
+    test('reports unquotable command shim launches that still need the cmd wrapper', () => {
+        const cases: [string, string[]][] = [
+            // A metacharacter without whitespace is left unquoted by VS Code and splits the line.
+            ['C:\\tools\\a&b\\aspire.cmd', ['agent', 'mcp']],
+            ['C:\\tools\\aspire.cmd', ['agent', 'mcp', '--apphost', 'C:\\repo\\a&b\\AppHost.csproj']],
+            // Percent pairs expand inside quotes too, so quoting cannot make them literal.
+            ['C:\\tools\\%ASPIRE_HOME%\\aspire.cmd', ['agent', 'mcp']],
+            ['C:\\tools\\aspire.cmd', ['agent', 'mcp', '--apphost', 'C:\\repo\\%NAME%\\AppHost.csproj']],
+            // Control characters are terminal input before they are shell input.
+            ['C:\\tools\\aspire.cmd', ['agent', 'mcp', '--apphost', 'C:\\repo\\a\nb\\AppHost.csproj']],
+            ['C:\\tools\\aspire.cmd', ['agent', '']],
+            ['C:\\tools\\aspire.cmd', ['agent', 'mcp', '--apphost', 'C:\\repo\\a"b\\AppHost.csproj']],
+        ];
+
+        for (const [command, args] of cases) {
+            assert.strictEqual(
+                canVsCodeQuoteCommandShimLaunch(command, args),
+                false,
+                `expected '${command}' with args ${JSON.stringify(args)} to require the cmd wrapper`);
+        }
     });
 
     test('runs non-verbatim cmd wrappers from paths combining spaces and metacharacters', function () {

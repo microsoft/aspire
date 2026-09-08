@@ -13,6 +13,16 @@ import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import * as cliModule from '../utils/process/cliProcess';
 import { deactivate as deactivateExtension } from '../extension';
 import { extensionLogOutputChannel } from '../utils/logging';
+import {
+    __resetLaunchFailureJournalForTests,
+    readLatestLaunchFailures,
+    recordLaunchFailureForAppHostPath,
+} from '../services/launchFailureJournal';
+import {
+    __resetAppHostIdentityRegistryForTests,
+    getOrCreateIdentityForCurrentAppHostTarget,
+} from '../utils/appHostIdentity';
+import { type EditorResourceSessionSnapshot } from '../services/appHostLaunchContracts';
 
 suite('AspireExtensionContext', () => {
     test('extension deactivate returns the AspireExtensionContext shutdown promise', () => {
@@ -25,6 +35,123 @@ suite('AspireExtensionContext', () => {
         }
         finally {
             deactivateStub.restore();
+        }
+    });
+
+    test('deactivation resets editor-assistance window state', async () => {
+        __resetLaunchFailureJournalForTests();
+        __resetAppHostIdentityRegistryForTests();
+        const context = createContext([]);
+
+        try {
+            const firstIdentity = getOrCreateIdentityForCurrentAppHostTarget('/workspace/First/AppHost.csproj');
+            const secondIdentity = getOrCreateIdentityForCurrentAppHostTarget('/workspace/Second/AppHost.csproj');
+            recordLaunchFailureForAppHostPath('/workspace/First/AppHost.csproj', {
+                stage: 'debugSession',
+                category: 'unknown',
+                controller: 'editor',
+            });
+
+            assert.strictEqual(firstIdentity, 'apphost-1');
+            assert.strictEqual(secondIdentity, 'apphost-2');
+            assert.strictEqual(readLatestLaunchFailures().length, 1);
+
+            await deactivateContext(context);
+
+            assert.deepStrictEqual(readLatestLaunchFailures(), []);
+            assert.strictEqual(
+                getOrCreateIdentityForCurrentAppHostTarget('/workspace/Third/AppHost.csproj'),
+                'apphost-1');
+        }
+        finally {
+            __resetLaunchFailureJournalForTests();
+            __resetAppHostIdentityRegistryForTests();
+        }
+    });
+
+    test('returns only safe editor resource session snapshots', () => {
+        const context = createContext([]);
+        const snapshots: readonly EditorResourceSessionSnapshot[] = [{
+            appHostPath: '/workspace/AppHost/AppHost.csproj',
+            targetPath: '/workspace/Api/Api.csproj',
+            resourceExecutablePaths: ['/workspace/.dotnet/dotnet'],
+            state: 'running',
+            mode: 'debug',
+        }];
+        addSession(
+            context,
+            'session',
+            () => Promise.resolve(),
+            () => { },
+            undefined,
+            undefined,
+            undefined,
+            snapshots);
+
+        assert.deepStrictEqual(context.editorResourceSessions, snapshots);
+        assert.deepStrictEqual(
+            Object.keys(context.editorResourceSessions[0]).sort(),
+            ['appHostPath', 'mode', 'resourceExecutablePaths', 'state', 'targetPath']);
+    });
+
+    test('returns only active Aspire sessions with the exact shared AppHost identity', () => {
+        __resetAppHostIdentityRegistryForTests();
+        const context = createContext([]);
+        const exactPath = '/workspace/AppHost/AppHost.csproj';
+        const exactSession = createContextDebugSession('exact', exactPath, exactPath);
+        const resolvedSession = createContextDebugSession('resolved', '/workspace', exactPath);
+        const otherSession = createContextDebugSession(
+            'other',
+            '/workspace/Other/AppHost.csproj',
+            '/workspace/Other/AppHost.csproj');
+        const publishSession = createContextDebugSession('publish', exactPath, exactPath, 'publish');
+        context.addAspireDebugSession(exactSession);
+        context.addAspireDebugSession(resolvedSession);
+        context.addAspireDebugSession(otherSession);
+        context.addAspireDebugSession(publishSession);
+
+        try {
+            const identity = getOrCreateIdentityForCurrentAppHostTarget(exactPath);
+
+            assert.deepStrictEqual(
+                context.getAspireDebugSessionsForAppHostIdentity(identity),
+                [exactSession, resolvedSession]);
+            assert.deepStrictEqual(
+                context.getAspireDebugSessionDashboardOwners(),
+                [
+                    { appHostIdentity: identity, session: exactSession },
+                    { appHostIdentity: identity, session: resolvedSession },
+                    {
+                        appHostIdentity: getOrCreateIdentityForCurrentAppHostTarget('/workspace/Other/AppHost.csproj'),
+                        session: otherSession,
+                    },
+                ]);
+        }
+        finally {
+            __resetAppHostIdentityRegistryForTests();
+        }
+    });
+
+    test('excludes disposed sessions from Dashboard ownership', () => {
+        __resetAppHostIdentityRegistryForTests();
+        const context = createContext([]);
+        const appHostPath = '/workspace/AppHost/AppHost.csproj';
+        const activeSession = createContextDebugSession('active', appHostPath, appHostPath);
+        const disposedSession = createContextDebugSession('disposed', appHostPath, appHostPath);
+        context.addAspireDebugSession(activeSession);
+        context.addAspireDebugSession(disposedSession);
+        disposedSession.finalizeForExtensionShutdown();
+
+        try {
+            assert.deepStrictEqual(
+                context.getAspireDebugSessionDashboardOwners(),
+                [{
+                    appHostIdentity: getOrCreateIdentityForCurrentAppHostTarget(appHostPath),
+                    session: activeSession,
+                }]);
+        }
+        finally {
+            __resetAppHostIdentityRegistryForTests();
         }
     });
 
@@ -796,9 +923,11 @@ function addSession(
     dispose: () => void,
     terminateCliProcessTree: (options?: { force?: boolean }) => unknown = () => { },
     stopDebugging: () => Promise<void> = () => Promise.resolve(),
-    finalizeForExtensionShutdown: () => void = dispose): void {
+    finalizeForExtensionShutdown: () => void = dispose,
+    editorResourceSessions: readonly EditorResourceSessionSnapshot[] = []): void {
     context.addAspireDebugSession({
         debugSessionId,
+        editorResourceSessions,
         onDidChangeState: () => ({ dispose: () => { } }),
         onDidSendDebugConsoleOutput: () => ({ dispose: () => { } }),
         stopDebugging,
@@ -809,6 +938,33 @@ function addSession(
         finalizeForExtensionShutdown,
         dispose,
     } as unknown as AspireDebugSession);
+}
+
+function createContextDebugSession(
+    debugSessionId: string,
+    appHostPath: string,
+    resolvedAppHostPath: string,
+    operationKind: 'run' | 'publish' = 'run'): AspireDebugSession {
+    let disposed = false;
+    return {
+        debugSessionId,
+        appHostPath,
+        resolvedAppHostPath,
+        operationKind,
+        get isDisposed() {
+            return disposed;
+        },
+        editorResourceSessions: [],
+        onDidChangeState: () => ({ dispose: () => { } }),
+        onDidSendDebugConsoleOutput: () => ({ dispose: () => { } }),
+        stopDebugging: () => Promise.resolve(),
+        requestCliStopForExtensionShutdown: () => Promise.resolve(),
+        terminateCliProcessTree: () => { },
+        finalizeForExtensionShutdown: () => {
+            disposed = true;
+        },
+        dispose: () => { },
+    } as unknown as AspireDebugSession;
 }
 
 function deactivateContext(context: AspireExtensionContext): Promise<void> {

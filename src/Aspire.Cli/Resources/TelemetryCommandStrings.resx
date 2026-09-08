@@ -234,6 +234,12 @@
   <data name="DashboardUrlInvalidHint" xml:space="preserve">
     <value>Specify an absolute URL like 'http://localhost:18888'.</value>
   </data>
+  <data name="InvalidDashboardUrlDisplayValue" xml:space="preserve">
+    <value>not an absolute HTTP(S) URL</value>
+  </data>
+  <data name="ConfiguredDashboardDisplayValue" xml:space="preserve">
+    <value>the configured dashboard</value>
+  </data>
   <data name="DashboardLoginTokenFailed" xml:space="preserve">
     <value>Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</value>
   </data>

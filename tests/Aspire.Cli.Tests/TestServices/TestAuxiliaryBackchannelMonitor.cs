@@ -76,9 +76,21 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
         _connectionsBySocketPath[socketPath] = connection;
     }
 
+    public void AddConnection(string hash, string socketPath, IAppHostAuxiliaryBackchannel connection)
+    {
+        _ = hash;
+        AddConnection(socketPath, connection);
+    }
+
     public void RemoveConnection(string socketPath)
     {
         _connectionsBySocketPath.TryRemove(socketPath, out _);
+    }
+
+    public void RemoveConnection(string hash, string socketPath)
+    {
+        _ = hash;
+        RemoveConnection(socketPath);
     }
 
     public void ClearConnections()

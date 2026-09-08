@@ -31,13 +31,17 @@ import { AppHostLogOutputCoordinator } from "./appHostLogOutput";
 import type { AppHostLogEntry } from "./appHostLogOutput";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
+import { getLaunchFailureProviderKindForAppHostPath, recordLaunchFailureForAppHostIdentity, recordLaunchFailureForAppHostPath, recordSanitizedLaunchFailureForAppHostIdentity, recordSanitizedLaunchFailureForAppHostPath, type LaunchFailureMode, type SanitizedLaunchFailure } from "../services/launchFailureJournal";
 import { appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
 import { markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from "./AspireDebugConfigurationProviderInternal";
 import { getAppHostLaunchProfileOptions, getRootLaunchProfileCliArg } from "../utils/launchProfile";
 import { getCliPathTargetForUri, getCliPathTargetKey, windowCliPathTarget } from "../utils/cliPathVariables";
-import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
+import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost, type DashboardPresentation } from "./session/dashboardLauncher";
 import { describeStopFailure, startStop, stopSessionInBackground } from "./session/stopHelpers";
 import { hasRootNoLogoOption } from "../utils/cliCompatibility";
+import { AppHostBuildFailureError } from "./appHostBuildFailureError";
+import type { EditorResourceSessionMode, EditorResourceSessionSnapshot, EditorResourceSessionState } from "../services/appHostLaunchContracts";
+import { getOrCreateIdentityForCurrentAppHostTarget, type OpaqueAppHostIdentity } from "../utils/appHostIdentity";
 
 export type AppHostDebugSessionTracker = (owner: AspireDebugSession, appHostPath: string, debugSession: AspireResourceDebugSession) => void;
 
@@ -169,6 +173,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
   private _appHostDebugSession?: AspireResourceDebugSession = undefined;
   private _resourceDebugSessions: AspireResourceDebugSession[] = [];
+  private readonly _editorResourceSessions = new Map<string, EditorResourceSessionSnapshot>();
   private _trackedDebugAdapters: string[] = [];
   private _rpcClient?: ICliRpcClient;
   private readonly _dashboardLauncher = new DashboardLauncher(this);
@@ -213,6 +218,8 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   private _pendingCliStopWithoutRpcClient: { resolve: () => void; reject: (reason: unknown) => void } | undefined;
   private _stopCliWhenRpcClientConnects: ((client: ICliRpcClient) => void) | undefined;
   private _cliProcess: ChildProcessWithoutNullStreams | undefined;
+  private _cliSpawnErrorRecorded = false;
+  private _cliLaunchErrorHandled = false;
   private _cliTerminationTimer: ReturnType<typeof setTimeout> | undefined;
   private _cliProcessTreeTerminationAttempted = false;
   private _cliProcessTreeTerminationPromise: Promise<void> | undefined;
@@ -230,6 +237,8 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   private _appHostTargetVersionAtLaunch = 'unknown';
   private _appHostTargetVersionAtLaunchPromise: Promise<string> | undefined = undefined;
   private _appHostIsDirectoryAtLaunch: 'true' | 'false' | 'unknown' = 'unknown';
+  private _resolvedAppHostPath: string | undefined;
+  private _appHostIdentity: OpaqueAppHostIdentity | undefined;
   // Mode the AppHost was launched with (`run` | `debug`) — captured for the
   // matching end event.
   private _appHostModeAtLaunch: 'run' | 'debug' = 'run';
@@ -252,8 +261,11 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
    * exact identity rather than a guess.
    */
   get resolvedAppHostPath(): string | undefined {
-    const resolvedPath = this.configuration[appHostTelemetryTargetPathConfigKey];
-    return typeof resolvedPath === 'string' ? resolvedPath : undefined;
+    return this._resolvedAppHostPath;
+  }
+
+  get appHostIdentity(): OpaqueAppHostIdentity | undefined {
+    return this._appHostIdentity;
   }
 
   get dashboardUrl(): string | undefined {
@@ -276,16 +288,46 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     return this._extensionShutdownRequested;
   }
 
+  get editorResourceSessions(): readonly EditorResourceSessionSnapshot[] {
+    return [...this._editorResourceSessions.values()].map(session => ({
+      ...session,
+      ...(session.resourceExecutablePaths === undefined
+        ? {}
+        : { resourceExecutablePaths: [...session.resourceExecutablePaths] }),
+    }));
+  }
+
   get parentSession(): vscode.DebugSession {
     return this._session;
+  }
+
+  get dashboardLaunchFailureMode(): LaunchFailureMode {
+    return getLaunchFailureMode(this.operationKind, this._appHostModeAtLaunch === 'run');
   }
 
   notifyStateChanged(): void {
     this._onDidChangeState.fire();
   }
 
-  openDashboard(url: string, browserType: DashboardBrowserType): Promise<void> {
-    return this._dashboardLauncher.openDashboard(url, browserType);
+  recordDashboardLaunchFailure(failure: SanitizedLaunchFailure): void {
+    const appHostPath = this.resolvedAppHostPath ?? this.appHostPath;
+    if (!this.isShuttingDown && appHostPath) {
+      if (this._appHostIdentity) {
+        recordSanitizedLaunchFailureForAppHostIdentity(this._appHostIdentity, failure);
+      } else {
+        recordSanitizedLaunchFailureForAppHostPath(appHostPath, failure);
+      }
+    }
+  }
+
+  openDashboard(
+    url: string,
+    browserType: DashboardBrowserType,
+    waitForDebugBrowserStart = false,
+    token?: vscode.CancellationToken): Promise<DashboardPresentation | undefined> {
+    return waitForDebugBrowserStart
+      ? this._dashboardLauncher.openDashboardAndWait(url, browserType, token)
+      : this._dashboardLauncher.openDashboard(url, browserType);
   }
 
   get cliProcessId(): number | undefined {
@@ -300,6 +342,12 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     this._trackAppHostDebugSession = trackAppHostDebugSession;
     this._removeAspireDebugSession = removeAspireDebugSession;
     this.configuration = session.configuration as AspireExtendedDebugConfiguration;
+    const resolvedAppHostPath = this.configuration[appHostTelemetryTargetPathConfigKey];
+    this._resolvedAppHostPath = typeof resolvedAppHostPath === 'string' ? resolvedAppHostPath : undefined;
+    const appHostPath = this._resolvedAppHostPath ?? this.appHostPath;
+    this._appHostIdentity = appHostPath
+      ? getOrCreateIdentityForCurrentAppHostTarget(appHostPath)
+      : undefined;
     this.operationKind = operationKind ?? getOperationKind(this.configuration.command);
 
     this.debugSessionId = debugSessionId;
@@ -340,6 +388,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
     this._stopAttemptInProgress = true;
     this._stopping = true;
+    this.markEditorResourceSessionsStopping();
     this.cancelPendingStartWork();
     let resolveAttempt!: () => void;
     let rejectAttempt!: (reason: unknown) => void;
@@ -561,6 +610,63 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         }
       },
     };
+  }
+
+  private trackEditorResourceSession(debugConfig: AspireResourceExtendedDebugConfiguration, state: EditorResourceSessionState): void {
+    if (debugConfig.isApphost === true ||
+      typeof debugConfig.targetPath !== 'string' ||
+      debugConfig.targetPath.trim().length === 0) {
+      return;
+    }
+
+    const appHostPath = this.resolvedAppHostPath ?? this.appHostPath;
+    if (!appHostPath) {
+      return;
+    }
+
+    const resourceExecutablePaths = debugConfig.resourceExecutablePaths?.filter(
+      executablePath => typeof executablePath === 'string' && executablePath.trim().length > 0);
+    this._editorResourceSessions.set(debugConfig.runId, {
+      appHostPath,
+      appHostIdentity: this._appHostIdentity ?? getOrCreateIdentityForCurrentAppHostTarget(appHostPath),
+      targetPath: debugConfig.targetPath,
+      ...(resourceExecutablePaths && resourceExecutablePaths.length > 0
+        ? { resourceExecutablePaths: [...resourceExecutablePaths] }
+        : {}),
+      state,
+      mode: getEditorResourceSessionMode(debugConfig.noDebug),
+    });
+    this._onDidChangeState.fire();
+  }
+
+  private updateEditorResourceSessionState(runId: string, state: EditorResourceSessionState): void {
+    const current = this._editorResourceSessions.get(runId);
+    if (!current || current.state === state) {
+      return;
+    }
+
+    this._editorResourceSessions.set(runId, { ...current, state });
+    this._onDidChangeState.fire();
+  }
+
+  private removeEditorResourceSession(runId: string): void {
+    if (this._editorResourceSessions.delete(runId)) {
+      this._onDidChangeState.fire();
+    }
+  }
+
+  private markEditorResourceSessionsStopping(): void {
+    let changed = false;
+    for (const [runId, session] of this._editorResourceSessions) {
+      if (session.state !== 'stopping') {
+        this._editorResourceSessions.set(runId, { ...session, state: 'stopping' });
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this._onDidChangeState.fire();
+    }
   }
 
   private stopLateResourceSession(session: AspireResourceDebugSession): void {
@@ -1128,6 +1234,8 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       return partial;
     };
 
+    this._cliSpawnErrorRecorded = false;
+    this._cliLaunchErrorHandled = false;
     // Prefer the AppHost path this session actually resolved to, falling back to the raw
     // configured program, then to the working directory when neither identifies an AppHost.
     // A path outside every open workspace folder falls back to the window scope.
@@ -1135,8 +1243,19 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     const cliPathTarget = cliPathTargetSource !== undefined
       ? getCliPathTargetForUri(vscode.Uri.file(cliPathTargetSource))
       : windowCliPathTarget;
-    const cliPath = this.configuration.resolvedCliPath
-      ?? await this._terminalProvider.getAspireCliExecutablePath(cliPathTarget);
+    let cliPath: string;
+    try {
+      cliPath = this.configuration.resolvedCliPath
+        ?? await this._terminalProvider.getAspireCliExecutablePath(cliPathTarget);
+    }
+    catch (error) {
+      this.handleCliLaunchError(error, noDebug, commandLabel);
+      disposable.dispose();
+      this.completePendingCliStopWithoutRpcClient();
+      return;
+    }
+
+
     if (this.isShuttingDown) {
       // CLI resolution can outlive shutdown. Spawning now would create a detached `aspire run`
       // after every teardown owner has already started or completed its cleanup.
@@ -1146,7 +1265,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       return;
     }
 
-    this._cliProcess = spawnCliProcess(
+    const spawn = () => spawnCliProcess(
       this._terminalProvider,
       cliPath,
       args,
@@ -1158,10 +1277,24 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           stderrBuffer = handleChunk(data, stderrBuffer, 'stderr');
         },
         errorCallback: (error) => {
-          extensionLogOutputChannel.error(`Error spawning aspire process: ${error}`);
-          vscode.window.showErrorMessage(processExceptionOccurred(error.message, commandLabel));
+          this.handleCliLaunchError(error, noDebug, commandLabel);
         },
         exitCallback: (code) => {
+          const signal = this._cliProcess?.signalCode;
+          if (!this.isShuttingDown &&
+            !this._startupCompleted &&
+            !this._cliSpawnErrorRecorded &&
+            (code !== 0 || signal !== null)) {
+            this.recordLaunchFailure({
+              stage: 'cliLaunch',
+              category: 'processExited',
+              controller: 'cli',
+              mode: getLaunchFailureMode(this.operationKind, noDebug),
+              providerKind: getLaunchFailureProviderKindForAppHostPath(this.resolvedAppHostPath ?? this.appHostPath),
+              exitCode: code,
+              signal,
+            });
+          }
           // A detached POSIX leader's descendants can keep the process group alive after the
           // leader exits, and the group id can be reused later, so collect that group immediately.
           // Windows taskkill needs the target PID to still identify a live process tree; after the
@@ -1202,6 +1335,15 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         createProcessGroup: true,
       },
     );
+    try {
+      this._cliProcess = spawn();
+    }
+    catch (error) {
+      this.handleCliLaunchError(error, noDebug, commandLabel);
+      disposable.dispose();
+      this.completePendingCliStopWithoutRpcClient();
+      return;
+    }
 
     this._disposables.push({
       dispose: () => {
@@ -1224,6 +1366,41 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
   }
 
+  private recordLaunchFailure(input: Parameters<typeof recordLaunchFailureForAppHostPath>[1]): boolean {
+    const appHostPath = this.resolvedAppHostPath ?? this.appHostPath;
+    if (!appHostPath) {
+      return false;
+    }
+
+    if (this._appHostIdentity) {
+      recordLaunchFailureForAppHostIdentity(this._appHostIdentity, input);
+    } else {
+      recordLaunchFailureForAppHostPath(appHostPath, input);
+    }
+    return true;
+  }
+
+  private handleCliLaunchError(error: unknown, noDebug: boolean, commandLabel: string): void {
+    const firstFailure = !this._cliLaunchErrorHandled;
+    this._cliLaunchErrorHandled = true;
+    if (!this.isShuttingDown && firstFailure) {
+      this._cliSpawnErrorRecorded = this.recordLaunchFailure({
+        stage: 'cliLaunch',
+        controller: 'cli',
+        mode: getLaunchFailureMode(this.operationKind, noDebug),
+        providerKind: getLaunchFailureProviderKindForAppHostPath(this.resolvedAppHostPath ?? this.appHostPath),
+        error,
+      });
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    extensionLogOutputChannel.error(`Error spawning aspire process: ${String(error)}`);
+    void vscode.window.showErrorMessage(processExceptionOccurred(message, commandLabel));
+    if (!this.isShuttingDown && firstFailure) {
+      this.stopDebuggingInBackground('Aspire CLI launch failure');
+    }
+  }
+
   createDebugAdapterTrackerCore(debugAdapter: string, appHostTracker?: AppHostTrackerOptions) {
     if (this._trackedDebugAdapters.includes(debugAdapter)) {
       return;
@@ -1239,10 +1416,17 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   private static readonly _javaAppHostExtensions = ['.java'];
 
   private _appHostRestartRequested = false;
+  private _appHostTerminationRequested = false;
   private _preserveAppHostRestartSourceSessionId = false;
 
   async startAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean, options: StartAppHostOptions): Promise<void> {
     try {
+      // A directory-based parent configuration defers exact AppHost selection to DCP.
+      // Once DCP supplies the concrete project/source path, keep it as the session's
+      // attribution identity for every later build, startup, debugger, and dashboard failure.
+      this._resolvedAppHostPath = projectFile;
+      this._appHostIdentity = getOrCreateIdentityForCurrentAppHostTarget(projectFile);
+      this._appHostTerminationRequested = false;
       this._appHostLogOutput.reset();
       const fileExtension = path.extname(projectFile).toLowerCase();
       const isNodeAppHost = AspireDebugSession._nodeAppHostExtensions.includes(fileExtension);
@@ -1306,8 +1490,13 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           },
           onOutput: isDotNetAppHost
             ? (output, category) => this.sendAppHostMessage(output, category)
-            : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout')
-        },
+            : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout'),
+          onTerminationRequested: debugSessionId => {
+            if (debugSessionId === this.debugSessionId) {
+              this._appHostTerminationRequested = true;
+            }
+          }
+        }
       );
 
       let appHostArgs: string[] | undefined;
@@ -1402,6 +1591,20 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           this._appHostStopped = true;
           this._resourceDebugSessions = this._resourceDebugSessions.filter(resourceSession => resourceSession.id !== session.id);
 
+          if (this.operationKind === 'run' &&
+            !this._startupCompleted &&
+            !this.isShuttingDown &&
+            !this._appHostRestartRequested &&
+            !this._appHostTerminationRequested) {
+            this.recordLaunchFailure({
+              stage: 'dcpStartup',
+              category: 'processExited',
+              controller: 'editor',
+              mode: getLaunchFailureMode(this.operationKind, !debug),
+              providerKind: getLaunchFailureProviderKindForAppHostPath(projectFile),
+            });
+          }
+
           if (!this._appHostRestartRequested) {
             this.sendMessageWithEmoji("ℹ️", applyTextStyle(appHostSessionTerminated, AnsiColors.Yellow));
           }
@@ -1472,6 +1675,17 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       this._disposables.push(disposable);
     }
     catch (err) {
+      if (!this.isShuttingDown) {
+        const buildFailure = err instanceof AppHostBuildFailureError;
+        this.recordLaunchFailure({
+          stage: buildFailure ? 'build' : 'debugSession',
+          category: buildFailure ? 'buildFailed' : undefined,
+          controller: 'editor',
+          mode: getLaunchFailureMode(this.operationKind, !debug),
+          providerKind: getLaunchFailureProviderKindForAppHostPath(projectFile),
+          error: err,
+        });
+      }
       const errorMessage = err instanceof Error ? err.message : String(err);
       const errorDetails = err instanceof Error ? (err.stack ?? err.message) : String(err);
       extensionLogOutputChannel.error(`Error starting AppHost debug session: ${errorDetails}`);
@@ -1507,7 +1721,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       this._dcpServer.sendNotification(notification);
     }
 
+    this.trackEditorResourceSession(debugConfig, 'running');
     void resourceDebugSession.termination.then(exitCode => {
+      this.removeEditorResourceSession(debugConfig.runId);
       if (debugConfig.debugSessionId === null) {
         extensionLogOutputChannel.warn(`Unable to report termination for run ${debugConfig.runId} because the DCP session ID is missing.`);
         return;
@@ -1529,6 +1745,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   }
 
   startAndGetDebugSession(debugConfig: AspireResourceExtendedDebugConfiguration): Promise<AspireResourceDebugSession | undefined> {
+    this.trackEditorResourceSession(debugConfig, 'starting');
     const pendingStart = this.beginPendingDebugSessionStart(debugConfig.name);
     const start = this.startAndGetDebugSessionCore(debugConfig);
     void start.then(() => pendingStart.dispose(), () => pendingStart.dispose());
@@ -1547,6 +1764,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         if (session.configuration.runId === debugConfig.runId) {
           extensionLogOutputChannel.info(`Debug session started: ${session.name} (run id: ${session.configuration.runId})`);
           disposable.dispose();
+          this.updateEditorResourceSessionState(debugConfig.runId, 'running');
 
           let stopSessionPromise: Promise<void> | undefined;
           let runCleanedUp = false;
@@ -1572,6 +1790,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
             // stop that is still waiting for VS Code to confirm the same termination.
             terminated = true;
             this._resourceDebugSessions = this._resourceDebugSessions.filter(resourceSession => resourceSession.id !== session.id);
+            this.removeEditorResourceSession(debugConfig.runId);
             cleanupResource();
             resolveTermination();
             terminationDisposable.dispose();
@@ -1587,6 +1806,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
             }
 
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
+            this.updateEditorResourceSessionState(debugConfig.runId, 'stopping');
             const stop = Promise.race([
               Promise.resolve(vscode.debug.stopDebugging(session)),
               termination,
@@ -1656,7 +1876,17 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       } catch (error) {
         disposable.dispose();
         cleanupRun(debugConfig.runId);
+        this.removeEditorResourceSession(debugConfig.runId);
         extensionLogOutputChannel.error(`Failed to start debug session: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
+        if (!this.isShuttingDown) {
+          this.recordLaunchFailure({
+            stage: 'debugSession',
+            controller: 'editor',
+            mode: debugConfig.noDebug === true ? 'run' : 'debug',
+            providerKind: debugConfig.type,
+            error,
+          });
+        }
         resolved = true;
         resolve(undefined);
         return;
@@ -1665,6 +1895,16 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       if (!started) {
         disposable.dispose();
         cleanupRun(debugConfig.runId);
+        this.removeEditorResourceSession(debugConfig.runId);
+        if (!this.isShuttingDown) {
+          this.recordLaunchFailure({
+            stage: 'debugSession',
+            category: 'unknown',
+            controller: 'editor',
+            mode: debugConfig.noDebug === true ? 'run' : 'debug',
+            providerKind: debugConfig.type,
+          });
+        }
         resolved = true;
         resolve(undefined);
       }
@@ -1673,6 +1913,16 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         if (!resolved) {
           disposable.dispose();
           cleanupRun(debugConfig.runId);
+          this.removeEditorResourceSession(debugConfig.runId);
+          if (!this.isShuttingDown) {
+            this.recordLaunchFailure({
+              stage: 'debugSession',
+              controller: 'editor',
+              mode: debugConfig.noDebug === true ? 'run' : 'debug',
+              providerKind: debugConfig.type,
+              timedOut: true,
+            });
+          }
           resolved = true;
           resolve(undefined);
         }
@@ -1786,6 +2036,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       delete this.configuration[appHostRestartSourceSessionIdConfigKey];
     }
     extensionLogOutputChannel.info('Stopping the Aspire debug session');
+    this._editorResourceSessions.clear();
     this._onDidChangeState.fire();
 
     // Snapshot start-event metadata before we run disposables so the deferred
@@ -1918,6 +2169,25 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   }
 }
 
+function getEditorResourceSessionMode(noDebug: unknown): EditorResourceSessionMode {
+  return noDebug === true
+    ? 'run'
+    : noDebug === false
+      ? 'debug'
+      : 'other';
+}
+
+function getLaunchFailureMode(operationKind: AspireOperationKind, noDebug: boolean): LaunchFailureMode {
+  if (operationKind === 'deploy' || operationKind === 'publish') {
+    return operationKind;
+  }
+  if (operationKind === 'run') {
+    return noDebug ? 'run' : 'debug';
+  }
+
+  return 'other';
+}
+
 export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[], step?: string): string[] {
   const args = [command];
   if (command === 'do' && step) {
@@ -1940,9 +2210,9 @@ export function buildAspireCommandArgs(command: string, commandArgs: string[], e
 }
 
 function isErrorWithStreamedDebugConsoleOutput(err: unknown): boolean {
-  return err instanceof Error && (err as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten === true;
+  return err instanceof AppHostBuildFailureError && err.debugConsoleOutputAlreadyWritten;
 }
 
 export { AppHostParentOutputFilter } from "./appHostLogOutput";
 export type { AppHostParentOutput } from "./appHostLogOutput";
-export type { DashboardLaunchBehavior, DashboardBrowserType } from "./session/dashboardLauncher";
+export type { DashboardLaunchBehavior, DashboardBrowserType, DashboardPresentation } from "./session/dashboardLauncher";

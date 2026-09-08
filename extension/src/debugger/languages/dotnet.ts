@@ -30,6 +30,7 @@ import { createResolvedAspireCliPathProcessEnvironment } from '../../utils/cliPa
 import { resolveCliPath } from '../../utils/cliPath';
 import { getCliPathTargetForUri } from '../../utils/cliPathVariables';
 import { getHotReloadDiagnostics, logHotReloadDiagnostics, showHotReloadDisabledAdvisoryIfNeeded } from '../hotReload';
+import { AppHostBuildFailureError } from '../appHostBuildFailureError';
 import { deleteEnvironmentVariable, getEnvironmentForChildProcess, setEnvironmentVariable } from '../../utils/environment';
 import { getAppHostLaunchProfileOptions } from '../../utils/launchProfile';
 
@@ -113,19 +114,25 @@ export class DotNetService implements IDotNetService {
 
                 buildProcess.on('error', (err) => {
                     extensionLogOutputChannel.error(`dotnet build process error: ${err}`);
-                    reject(new Error(buildFailedForProjectWithError(projectFile, err.message)));
+                    // A spawn failure produces no build transcript, so the message has not been
+                    // streamed to the debug console yet and must still be surfaced by the caller.
+                    reject(new AppHostBuildFailureError(
+                        buildFailedForProjectWithError(projectFile, err.message),
+                        false));
                 });
 
                 buildProcess.on('close', (code) => {
                     if (code === 0) {
                         // if build succeeds, simply return. otherwise throw to trigger error handling
                         if (stderrOutput) {
-                            reject(createErrorWithStreamedDebugConsoleOutput(stderrOutput));
+                            reject(new AppHostBuildFailureError(stderrOutput, true));
                         } else {
                             resolve();
                         }
                     } else {
-                        reject(createErrorWithStreamedDebugConsoleOutput(buildFailedForProjectWithError(projectFile, stdoutOutput || stderrOutput || `Exit code ${code}`)));
+                        reject(new AppHostBuildFailureError(
+                            buildFailedForProjectWithError(projectFile, stdoutOutput || stderrOutput || `Exit code ${code}`),
+                            true));
                     }
                 });
             })().catch(reject);
@@ -422,14 +429,6 @@ function combineRunApiArguments(hostArguments: string | undefined, applicationAr
     }
 
     return `${hostArguments} ${applicationArguments}`;
-}
-
-function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
-    // Mark build errors whose output was already streamed to avoid replaying the transcript in AppHost startup handling.
-    const error = new Error(message) as Error & { debugConsoleOutputAlreadyWritten?: boolean };
-    error.debugConsoleOutputAlreadyWritten = true;
-
-    return error;
 }
 
 async function shouldLaunchProjectWithDotNetRun(outputPath: string): Promise<boolean> {

@@ -318,6 +318,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string InvalidDashboardUrlDisplayValue {
+            get {
+                return ResourceManager.GetString("InvalidDashboardUrlDisplayValue", resourceCulture);
+            }
+        }
+
+        internal static string ConfiguredDashboardDisplayValue {
+            get {
+                return ResourceManager.GetString("ConfiguredDashboardDisplayValue", resourceCulture);
+            }
+        }
+
         internal static string DashboardLoginTokenFailed {
             get {
                 return ResourceManager.GetString("DashboardLoginTokenFailed", resourceCulture);
