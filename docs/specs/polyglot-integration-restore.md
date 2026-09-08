@@ -64,10 +64,10 @@ The overlay can contain:
 - A controlled global packages folder.
 - A `disabledPackageSources` clear when every ambient alias for an explicitly selected source is disabled. Only one selected alias is mapped after the clear; disabled aliases remain excluded when an enabled alias is available.
 
-Mapping both identities supports the two legitimate consumers:
+Mapping both identities supports the generated root regardless of how NuGet identifies a source:
 
-- The generated root uses the ambient source key where one exists.
-- Referenced projects can observe a source-location identity contributed through `RestoreAdditionalProjectSources`.
+- The ambient source key is used where one exists.
+- The effective source location remains valid when the policy introduces a source not present in ambient settings.
 
 The overlay never copies arbitrary user settings. Authentication, trusted signers, fallback folders, audit settings, and unknown sections continue to come from NuGet's native hierarchy loading.
 
@@ -89,24 +89,38 @@ The temporary overlay is deleted after the restore invocation.
 
 The SDK path writes a persistent policy overlay beside `IntegrationRestore.csproj`. Normal SDK discovery loads this file together with the intended ancestor hierarchy.
 
-The generated root project receives `RestoreAdditionalProjectSources` only for effective sources that are not already represented by ambient settings. An empty property is emitted when all effective sources are ambient so the process-level child-project default does not replace the root's authenticated source identity.
+The generated root project receives `RestoreAdditionalProjectSources` only for effective sources that are not already represented by ambient settings. An empty property is emitted when all effective sources are ambient so an inherited environment value does not replace the root's authenticated source identity.
 
 The generated project does not set `RestoreConfigFile`. Using normal discovery preserves NuGet settings that cannot be represented as source arguments or project properties.
 
-## Referenced-project source contribution
+## Referenced-project restore hints
 
-The SDK process receives an invocation-scoped `RestoreAdditionalProjectSources` environment value containing the effective Aspire source locations. Any existing environment value is preserved and the Aspire locations are appended.
+The SDK process exposes two invocation-scoped MSBuild properties:
+
+- `AspireIntegrationHostingVersion` contains the `Aspire.Hosting` version selected by the CLI.
+- `AspireIntegrationPackageSources` contains the credential-free source locations that can resolve Aspire packages, formatted as an MSBuild source list.
+
+The properties are hints for integration authors. They are visible to every project evaluated in the SDK process, including transitive project references, but Aspire does not assign them to NuGet restore properties. An integration can explicitly consume the version through central package management or append the source hint to its own `RestoreAdditionalProjectSources`.
+
+For example, an integration that intentionally aligns its `Aspire.Hosting` dependency with the invoking CLI can use:
+
+```xml
+<Project>
+  <PropertyGroup>
+    <RestoreAdditionalProjectSources Condition="'$(AspireIntegrationPackageSources)' != ''">
+      $(RestoreAdditionalProjectSources);$(AspireIntegrationPackageSources)
+    </RestoreAdditionalProjectSources>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting" Version="$(AspireIntegrationHostingVersion)"
+                    Condition="'$(AspireIntegrationHostingVersion)' != ''" />
+  </ItemGroup>
+</Project>
+```
+
+This keeps referenced projects responsible for their own restore policy. In particular, the CLI-selected source is guaranteed to match the generated root's `Aspire.Hosting` version, but it is not guaranteed to contain older or newer versions independently selected by a referenced project.
 
 When the source policy requires an isolated global packages folder, the SDK process also receives that folder through `NUGET_PACKAGES`. The generated root and every referenced project therefore use the same source-specific package cache.
-
-This is a best-effort default:
-
-- Referenced projects can override the environment-derived property in their own project configuration.
-- Aspire does not inject custom targets into user projects.
-- Aspire does not replace a referenced project's NuGet configuration root.
-- Aspire does not pass a global command-line property that the project cannot override.
-
-The generated root overrides its own value as described above, while referenced projects independently evaluate the environment default.
 
 ## Credentials
 
@@ -121,6 +135,8 @@ Credentials remain in NuGet-owned mechanisms:
 The Aspire overlay contains no copied credential material.
 
 Credential-bearing source URLs are rejected for SDK project-reference restores because the generated project and persistent overlay must remain non-secret. Package-only diagnostics redact credential-bearing source values.
+
+The restore hints are process-wide and therefore never contain credentials. Integrations that consume `AspireIntegrationPackageSources` must rely on NuGet's standard credential mechanisms for authentication.
 
 NuGet-generated restore artifacts are not scrubbed or separately isolated by Aspire. Files such as `project.assets.json`, dependency graph specifications, and `.nupkg.metadata` can retain configured source URLs, including inline URL credentials. Authentication should therefore use NuGet credential mechanisms rather than embedding credentials in source URLs.
 
@@ -142,7 +158,7 @@ SDK restore fingerprints include:
 
 - Generated project content.
 - Ordered configuration paths and file bytes.
-- Effective child-source environment input.
+- Integration hosting-version and package-source hint values.
 - Global and fallback package folder inputs.
 - Referenced project files and their directory-scoped imports.
 
@@ -152,10 +168,10 @@ SDK restore skipping is disabled when a config file references an environment va
 
 | Scenario | Generated root | Referenced projects |
 |---|---|---|
-| Default channel | Uses the effective channel policy and ambient hierarchy | Receives the same effective source locations as an environment default |
-| Internal proxy override | Uses only the proxy selected by the source policy | Receives the proxy location |
-| Ambient authenticated source | Uses the ambient source key and NuGet-owned credentials | Receives the source location as a best-effort default |
-| Explicitly selected disabled source | Clears inherited disabled-source state under the complete mapping policy | Receives the selected source location |
-| Local package hive | Uses an absolute local source and isolated global packages folder | Receives the absolute local source |
+| Default channel | Uses the effective channel policy and ambient hierarchy | Can opt into the selected version and credential-free Aspire source hints |
+| Internal proxy override | Uses only the proxy selected by the source policy | Can opt into the proxy location hint |
+| Ambient authenticated source | Uses the ambient source key and NuGet-owned credentials | Can opt into the credential-free source location and authenticate through NuGet |
+| Explicitly selected disabled source | Clears inherited disabled-source state under the complete mapping policy | Can opt into the selected source location hint |
+| Local package hive | Uses an absolute local source and isolated global packages folder | Can opt into the absolute local source hint |
 | Nested AppHost config | Excluded by the integration-cache discovery boundary | Remains available to projects whose own hierarchy includes it |
-| Referenced project outside the AppHost tree | Uses the generated root hierarchy | Receives the effective source locations without replacing its own config |
+| Referenced project outside the AppHost tree | Uses the generated root hierarchy | Retains its own config and can explicitly consume the hints |

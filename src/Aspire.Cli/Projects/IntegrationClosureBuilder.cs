@@ -60,8 +60,7 @@ internal static class IntegrationClosureBuilder
         projectFile.AddProperty("AspireProjectRefAssemblyNamesFile", Path.Combine(restoreDir, ProjectRefAssemblyNamesFileName));
 
         // The generated root receives only sources that are not already represented by ambient
-        // NuGet settings. Referenced projects independently inherit the process-level best-effort
-        // source default.
+        // NuGet settings. Referenced projects remain responsible for their own restore policy.
         if (additionalSources is not null)
         {
             var effectiveAdditionalSources = additionalSources

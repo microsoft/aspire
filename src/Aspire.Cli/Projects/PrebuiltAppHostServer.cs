@@ -38,7 +38,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     internal const string IntegrationProjectFileName = "IntegrationRestore.csproj";
 
     private const string ProjectAssetsFileName = "project.assets.json";
-    private const string RestoreAdditionalProjectSourcesEnvironmentVariable = "RestoreAdditionalProjectSources";
+    internal const string IntegrationHostingVersionPropertyName = "AspireIntegrationHostingVersion";
+    internal const string IntegrationPackageSourcesPropertyName = "AspireIntegrationPackageSources";
     private const string RestoreStampFileName = "aspire-restore.stamp";
 
     private readonly string _appDirectoryPath;
@@ -183,6 +184,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 var closureManifest = await BuildIntegrationClosureManifestAsync(
                     packageRefs,
                     projectRefs,
+                    sdkVersion,
                     requestedChannel,
                     effectivePackageSourceOverride,
                     cancellationToken).ConfigureAwait(false);
@@ -373,7 +375,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             packageRefs,
             projectRefs,
             nugetConfigPaths: null,
-            restoreAdditionalProjectSources: null,
+            integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             cancellationToken).ConfigureAwait(false);
@@ -383,7 +386,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         IReadOnlyList<IntegrationReference> packageRefs,
         IReadOnlyList<IntegrationReference> projectRefs,
         IReadOnlyList<string>? nugetConfigPaths,
-        string? restoreAdditionalProjectSources,
+        string? integrationHostingVersion,
+        string? integrationPackageSources,
         string? nugetPackagesPath,
         IReadOnlyList<string>? nugetFallbackPackagesPaths,
         CancellationToken cancellationToken)
@@ -405,10 +409,15 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 }
             }
         }
-        if (restoreAdditionalProjectSources is not null)
+        if (integrationHostingVersion is not null)
         {
-            hash.Append("\0RestoreAdditionalProjectSources\0"u8);
-            hash.Append(Encoding.UTF8.GetBytes(restoreAdditionalProjectSources));
+            hash.Append("\0AspireIntegrationHostingVersion\0"u8);
+            hash.Append(Encoding.UTF8.GetBytes(integrationHostingVersion));
+        }
+        if (integrationPackageSources is not null)
+        {
+            hash.Append("\0AspireIntegrationPackageSources\0"u8);
+            hash.Append(Encoding.UTF8.GetBytes(integrationPackageSources));
         }
         if (nugetPackagesPath is not null)
         {
@@ -792,24 +801,27 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         string projectFilePath,
         bool noRestore,
         string? globalPackagesFolder,
-        string? restoreAdditionalProjectSources,
+        string integrationHostingVersion,
+        string? integrationPackageSources,
         bool suppressLogging,
         IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
     {
         var buildOutput = new OutputCollector();
-        Dictionary<string, string>? environmentVariables = null;
-        if (globalPackagesFolder is not null || restoreAdditionalProjectSources is not null)
+        // Environment-backed MSBuild properties are visible during NuGet's restore graph
+        // evaluation, including Directory.Packages.props. They remain opt-in hints: Aspire does
+        // not assign the source list to RestoreAdditionalProjectSources for user projects.
+        var environmentVariables = new Dictionary<string, string>
         {
-            environmentVariables = [];
-            if (globalPackagesFolder is not null)
-            {
-                environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = globalPackagesFolder;
-            }
-            if (restoreAdditionalProjectSources is not null)
-            {
-                environmentVariables[RestoreAdditionalProjectSourcesEnvironmentVariable] = restoreAdditionalProjectSources;
-            }
+            [IntegrationHostingVersionPropertyName] = integrationHostingVersion
+        };
+        if (globalPackagesFolder is not null)
+        {
+            environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = globalPackagesFolder;
+        }
+        if (integrationPackageSources is not null)
+        {
+            environmentVariables[IntegrationPackageSourcesPropertyName] = integrationPackageSources;
         }
 
         var exitCode = await _dotNetCliRunner.BuildAsync(
@@ -819,9 +831,11 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             {
                 StandardOutputCallback = line => buildOutput.AppendOutput(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
                 StandardErrorCallback = line => buildOutput.AppendError(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
-                EnvironmentVariableFilter = globalPackagesFolder is not null
-                    ? static name => string.Equals(name, CliPathHelper.NuGetPackagesEnvironmentVariable, StringComparison.OrdinalIgnoreCase)
-                    : null,
+                EnvironmentVariableFilter = name =>
+                    string.Equals(name, IntegrationHostingVersionPropertyName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(name, IntegrationPackageSourcesPropertyName, StringComparison.OrdinalIgnoreCase) ||
+                    (globalPackagesFolder is not null &&
+                        string.Equals(name, CliPathHelper.NuGetPackagesEnvironmentVariable, StringComparison.OrdinalIgnoreCase)),
                 EnvironmentVariables = environmentVariables,
                 SuppressLogging = suppressLogging
             },
@@ -838,6 +852,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private async Task<AppHostServerClosureManifest> BuildIntegrationClosureManifestAsync(
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
+        string sdkVersion,
         string? requestedChannel,
         string? packageSourceOverride,
         CancellationToken cancellationToken)
@@ -879,19 +894,18 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 configSources).ConfigureAwait(false);
         }
 
-        var channelSources = GetNuGetSources(restoreSources)?.ToArray() ?? [];
         var rootAdditionalSources = restoreSources.PackageSourceMappings is null
             ? null
             : configSources
                 .Where(static source => !source.IsAmbient)
                 .Select(static source => source.Source)
                 .ToArray();
-        var restoreAdditionalProjectSources = IntegrationClosureBuilder.CreateRestoreAdditionalProjectSourcesValue(
-            _environment.GetEnvironmentVariable(RestoreAdditionalProjectSourcesEnvironmentVariable),
-            channelSources);
+        var integrationPackageSources = IntegrationClosureBuilder.CreateRestoreAdditionalProjectSourcesValue(
+            existingValue: null,
+            GetAspirePackageSources(restoreSources));
         var sensitiveRestoreSources = settings.Sources
             .Select(static source => source.Source)
-            .Concat((restoreAdditionalProjectSources ?? string.Empty)
+            .Concat((integrationPackageSources ?? string.Empty)
                 .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
             .Distinct(StringComparer.Ordinal)
@@ -948,7 +962,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             packageRefs,
             projectRefs,
             configPaths,
-            restoreAdditionalProjectSources,
+            sdkVersion,
+            integrationPackageSources,
             globalPackagesFolder ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
             CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment),
             cancellationToken).ConfigureAwait(false);
@@ -974,7 +989,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             projectFilePath,
             noRestore: skipRestore,
             globalPackagesFolder,
-            restoreAdditionalProjectSources,
+            integrationHostingVersion: sdkVersion,
+            integrationPackageSources,
             suppressLogging: sensitiveRestoreSources.Length > 0,
             sensitiveRestoreSources,
             cancellationToken).ConfigureAwait(false);
@@ -986,7 +1002,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 projectFilePath,
                 noRestore: false,
                 globalPackagesFolder,
-                restoreAdditionalProjectSources,
+                integrationHostingVersion: sdkVersion,
+                integrationPackageSources,
                 suppressLogging: sensitiveRestoreSources.Length > 0,
                 sensitiveRestoreSources,
                 cancellationToken).ConfigureAwait(false);
@@ -1089,6 +1106,37 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
     private static IEnumerable<string>? GetNuGetSources(IntegrationRestoreSources restoreSources)
         => restoreSources.AdditionalSources.Count > 0 ? restoreSources.AdditionalSources : null;
+
+    private static string[] GetAspirePackageSources(IntegrationRestoreSources restoreSources)
+    {
+        if (restoreSources.PackageSourceMappings is { Length: > 0 } mappings)
+        {
+            // Prefer mappings that actually select Aspire packages. A catch-all mapping commonly
+            // points at a general dependency feed that integration projects do not need as an
+            // Aspire restore hint.
+            var aspireSpecificSources = mappings
+                .Where(static mapping =>
+                    mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
+                    mapping.PackageFilter != PackageMapping.AllPackages)
+                .Select(static mapping => mapping.Source)
+                .Distinct(PackageSourceIdentity.Comparer)
+                .ToArray();
+            if (aspireSpecificSources.Length > 0)
+            {
+                return aspireSpecificSources;
+            }
+
+            return mappings
+                .Where(static mapping => mapping.PackageFilter == PackageMapping.AllPackages)
+                .Select(static mapping => mapping.Source)
+                .Distinct(PackageSourceIdentity.Comparer)
+                .ToArray();
+        }
+
+        return restoreSources.AdditionalSources
+            .Distinct(PackageSourceIdentity.Comparer)
+            .ToArray();
+    }
 
     private IntegrationRestoreSources NormalizeIntegrationRestoreSources(IntegrationRestoreSources restoreSources)
     {

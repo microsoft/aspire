@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
@@ -147,7 +148,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [],
             [configPath],
-            restoreAdditionalProjectSources: null,
+            integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -160,7 +162,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [],
             [configPath],
-            restoreAdditionalProjectSources: null,
+            integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -191,7 +194,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [],
             [configPath],
-            restoreAdditionalProjectSources: null,
+            integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -207,7 +211,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [],
             nugetConfigPaths: null,
-            restoreAdditionalProjectSources: null,
+            integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: Path.GetFullPath("packages-a"),
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -217,7 +222,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [],
             nugetConfigPaths: null,
-            restoreAdditionalProjectSources: null,
+            integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: Path.GetFullPath("packages-b"),
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -233,7 +239,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [],
             nugetConfigPaths: null,
-            restoreAdditionalProjectSources: null,
+            integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: [Path.GetFullPath("fallback-a")],
             CancellationToken.None);
@@ -243,12 +250,53 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [],
             nugetConfigPaths: null,
-            restoreAdditionalProjectSources: null,
+            integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: [Path.GetFullPath("fallback-b")],
             CancellationToken.None);
 
         Assert.NotEqual(first.Fingerprint, second.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenIntegrationHintsChange()
+    {
+        var initial = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project />",
+            [],
+            [],
+            nugetConfigPaths: null,
+            integrationHostingVersion: "13.4.0",
+            integrationPackageSources: "https://example.invalid/a",
+            nugetPackagesPath: null,
+            nugetFallbackPackagesPaths: null,
+            CancellationToken.None);
+
+        var changedVersion = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project />",
+            [],
+            [],
+            nugetConfigPaths: null,
+            integrationHostingVersion: "13.5.0",
+            integrationPackageSources: "https://example.invalid/a",
+            nugetPackagesPath: null,
+            nugetFallbackPackagesPaths: null,
+            CancellationToken.None);
+
+        var changedSources = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project />",
+            [],
+            [],
+            nugetConfigPaths: null,
+            integrationHostingVersion: "13.4.0",
+            integrationPackageSources: "https://example.invalid/b",
+            nugetPackagesPath: null,
+            nugetFallbackPackagesPaths: null,
+            CancellationToken.None);
+
+        Assert.NotEqual(initial.Fingerprint, changedVersion.Fingerprint);
+        Assert.NotEqual(initial.Fingerprint, changedSources.Fingerprint);
     }
 
     [Fact]
@@ -624,6 +672,87 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CreateClosureProjectFile_BuildEmitsClosureContract()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var integrationDirectory = workspace.CreateDirectory("MyIntegration");
+        var integrationProjectPath = Path.Combine(integrationDirectory.FullName, "MyIntegration.csproj");
+        await File.WriteAllTextAsync(integrationProjectPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        var projectDirectory = workspace.CreateDirectory("generated-project");
+        var restoreDirectory = workspace.CreateDirectory("integration-restore");
+        var projectPath = Path.Combine(projectDirectory.FullName, "GeneratedClosure.csproj");
+        var nuGetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(nuGetConfigPath, """
+            <configuration>
+              <packageSources>
+                <clear />
+              </packageSources>
+            </configuration>
+            """);
+        var projectFile = IntegrationClosureBuilder.CreateClosureProjectFile(
+            restoreDirectory.FullName,
+            additionalSources: null);
+        projectFile.ProjectReferences.Add(new CSharpProjectReference(
+            integrationProjectPath,
+            IsAspireProjectResource: false,
+            ReferenceOutputAssembly: true));
+
+        await File.WriteAllTextAsync(projectPath, projectFile.ToXDocument().ToString());
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory.FullName, "Directory.Build.props"),
+            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
+                restoreDirectory.FullName,
+                Path.Combine(restoreDirectory.FullName, "obj"),
+                globalPackagesFolder: null).ToString());
+
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = projectDirectory.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("build");
+        startInfo.ArgumentList.Add(projectPath);
+        startInfo.ArgumentList.Add("--nologo");
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start dotnet build.");
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+
+        Assert.True(process.ExitCode == 0, $"dotnet build failed:{Environment.NewLine}{stdout}{Environment.NewLine}{stderr}");
+        Assert.True(File.Exists(Path.Combine(restoreDirectory.FullName, "obj", IntegrationClosureBuilder.ProjectAssetsFileName)));
+        Assert.True(File.Exists(Path.Combine(restoreDirectory.FullName, "bin", "Debug", "net10.0", "GeneratedClosure.dll")));
+        Assert.False(Directory.Exists(Path.Combine(projectDirectory.FullName, "obj")));
+        Assert.False(Directory.Exists(Path.Combine(projectDirectory.FullName, "bin")));
+
+        var sourcePaths = await File.ReadAllLinesAsync(
+            Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureSourcesFileName));
+        Assert.Equal(["MyIntegration.dll", "MyIntegration.pdb"], sourcePaths.Select(Path.GetFileName));
+        Assert.All(sourcePaths, path => Assert.True(File.Exists(path)));
+        Assert.Equal(
+            ["|||", "|||"],
+            await File.ReadAllLinesAsync(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureMetadataFileName)));
+        Assert.Equal(
+            ["MyIntegration.dll", "MyIntegration.pdb"],
+            await File.ReadAllLinesAsync(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureTargetsFileName)));
+        Assert.Equal(
+            ["MyIntegration"],
+            await File.ReadAllLinesAsync(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName)));
+    }
+
+    [Fact]
     public void GenerateIntegrationProjectFile_WritesClosureManifestFiles()
     {
         var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/work");
@@ -706,7 +835,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void GenerateIntegrationProjectFile_WithEmptyAdditionalSources_OverridesEnvironmentDefault()
+    public void GenerateIntegrationProjectFile_WithEmptyAdditionalSources_OverridesInheritedEnvironmentValue()
     {
         var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/libs", Enumerable.Empty<string>());
         var doc = XDocument.Parse(xml);
@@ -2405,10 +2534,16 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 Assert.False(options.SuppressLogging);
                 Assert.NotNull(options.EnvironmentVariableFilter);
                 Assert.True(options.EnvironmentVariableFilter(CliPathHelper.NuGetPackagesEnvironmentVariable));
+                Assert.True(options.EnvironmentVariableFilter(PrebuiltAppHostServer.IntegrationHostingVersionPropertyName));
+                Assert.True(options.EnvironmentVariableFilter(PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName));
                 Assert.False(options.EnvironmentVariableFilter("PATH"));
                 Assert.Equal(
+                    "13.4.0-pr.17141.gf142085f",
+                    options.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationHostingVersionPropertyName]);
+                Assert.Equal(
                     channelSource,
-                    options.EnvironmentVariables?["RestoreAdditionalProjectSources"]);
+                    options.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName]);
+                Assert.False(options.EnvironmentVariables?.ContainsKey("RestoreAdditionalProjectSources"));
                 Assert.Equal(
                     generatedPolicyOverlay?
                         .Descendants("config")
@@ -2942,7 +3077,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferencesAndPackageSourceOverride_UsesPolicyOverlayAndEnvironmentDefault()
+    public async Task PrepareAsync_WithProjectReferencesAndPackageSourceOverride_UsesPolicyOverlayAndRestoreHints()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
@@ -2992,9 +3127,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Equal(2, restoreOverlay.Descendants("packageSources").Elements("add").Count());
             Assert.Equal(["Aspire*"], GetPackagePatternsForSource(restoreOverlay, packageSourceOverride));
             Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(restoreOverlay, NuGetOrgSource));
-            var restoreEnvironmentSources = Assert.IsType<string>(
-                buildOptions?.EnvironmentVariables?["RestoreAdditionalProjectSources"]);
-            Assert.Equal([packageSourceOverride, NuGetOrgSource], restoreEnvironmentSources.Split(';'));
+            Assert.Equal(
+                "13.4.0-pr.17166.ga49d604d",
+                buildOptions?.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationHostingVersionPropertyName]);
+            var hintedPackageSources = Assert.IsType<string>(
+                buildOptions?.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName]);
+            Assert.Equal([packageSourceOverride], hintedPackageSources.Split(';'));
+            Assert.False(buildOptions?.EnvironmentVariables?.ContainsKey("RestoreAdditionalProjectSources"));
 
             var packageElements = generatedProject.Descendants("PackageReference").ToList();
             Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "[13.4.0-pr.17166.ga49d604d]");
