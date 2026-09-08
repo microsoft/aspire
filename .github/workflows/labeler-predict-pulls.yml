@@ -11,9 +11,10 @@ on:
   # or steal any secrets you use in your workflow. This event allows your workflow to do things
   # like label or comment on pull requests from forks.
   #
-  # Only automatically predict area labels when pull requests are first opened
+  # Predict area labels when pull requests are first opened. Assignment events keep the
+  # needs-assignee label on Copilot-authored pull requests in sync.
   pull_request_target:
-    types: opened
+    types: [opened, assigned, unassigned]
 
     # Configure the branches that need to have PRs labeled
     branches:
@@ -46,6 +47,67 @@ env:
   EXCLUDED_AUTHORS: "" # Comma-separated list of authors to exclude from training data
 
 jobs:
+  update-copilot-assignee-label:
+    if: ${{ github.event_name == 'pull_request_target' && github.repository_owner == 'microsoft' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: copilot-assignee-label-${{ github.repository }}-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: false
+    permissions:
+      pull-requests: write
+    steps:
+      - name: "Update Copilot PR assignee label"
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const label = 'needs-assignee';
+            const copilotAuthors = new Set([
+              'copilot',
+              'copilot-swe-agent',
+              'copilot-swe-agent[bot]',
+              'github-copilot[bot]',
+            ]);
+            const { owner, repo } = context.repo;
+            const number = context.payload.pull_request.number;
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: number,
+            });
+
+            if (!copilotAuthors.has(pullRequest.user?.login?.toLowerCase())) {
+              return;
+            }
+
+            const hasHumanAssignee = pullRequest.assignees.some((assignee) => assignee.type !== 'Bot');
+            const hasLabel = pullRequest.labels.some((existing) => existing.name.toLowerCase() === label);
+            const needsAssignee = pullRequest.state === 'open' && !hasHumanAssignee;
+
+            if (needsAssignee && !hasLabel) {
+              // This label is pre-created as repository configuration so the job can retain
+              // pull-request-only permissions.
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: number,
+                labels: [label],
+              });
+            } else if (!needsAssignee && hasLabel) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner,
+                  repo,
+                  issue_number: number,
+                  name: label,
+                });
+              } catch (error) {
+                // An assignment or manual label update can remove the label after the refetch.
+                if (error.status !== 404) {
+                  throw error;
+                }
+              }
+            }
+
   poll-pull-requests:
     # Run on schedule trigger or workflow_dispatch without PR numbers, within the 'dotnet' org
     if: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pulls == '')) && github.repository_owner == 'dotnet' }}
@@ -88,7 +150,7 @@ jobs:
   predict-pull-label:
     # The 'if' uses always() so this job runs even when poll-pull-requests is skipped
     # Do not automatically run the workflow on forks outside the 'dotnet' org
-    if: ${{ always() && (github.event_name == 'workflow_dispatch' || github.repository_owner == 'microsoft') }}
+    if: ${{ always() && (github.event_name != 'pull_request_target' || github.event.action == 'opened') && (github.event_name == 'workflow_dispatch' || github.repository_owner == 'microsoft') }}
     needs: [poll-pull-requests]
     runs-on: ubuntu-latest
     permissions:

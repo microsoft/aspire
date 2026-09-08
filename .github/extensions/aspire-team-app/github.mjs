@@ -196,7 +196,7 @@ function isCopilotReviewer(login) {
 }
 function isCopilotLogin(login) {
   const n = String(login || "").toLowerCase();
-  return n === "copilot" || n === "copilot[bot]" || n === "github-copilot[bot]" || n.endsWith("/copilot");
+  return n === "copilot" || n === "copilot-swe-agent" || n === "copilot[bot]" || n === "github-copilot[bot]" || n.endsWith("/copilot");
 }
 
 // Copilot attribution (mirrors GitHubModels.ResolveAuthor): a Copilot-authored PR with
