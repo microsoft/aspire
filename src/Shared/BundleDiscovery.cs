@@ -104,13 +104,6 @@ internal static class BundleDiscovery
     /// </summary>
     public const string ManagedExecutableName = "aspire-managed";
 
-    /// <summary>
-    /// File name of Hex1b's PTY host, staged next to <c>aspire-managed</c> in the bundle's
-    /// <c>managed/</c> directory. Hex1b launches it on Windows when the AppHost, rather than DCP,
-    /// owns the pseudo-terminal. Windows-only, so the extension is part of the name.
-    /// </summary>
-    public const string Hex1bPtyHostFileName = "hex1bpty.exe";
-
     // ═══════════════════════════════════════════════════════════════════════
     // DISCOVERY METHODS
     // ═══════════════════════════════════════════════════════════════════════
@@ -176,57 +169,6 @@ internal static class BundleDiscovery
         if (File.Exists(managedExe))
         {
             managedPath = managedExe;
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Gets the path Hex1b's PTY host is staged at, given a bundle's <c>managed/</c> directory.
-    /// </summary>
-    /// <remarks>
-    /// Callers that already know where <c>aspire-managed</c> lives — a bundled AppHost is itself
-    /// running out of that directory — should use this rather than re-deriving the layout root.
-    /// </remarks>
-    public static string GetWindowsPtyHostPath(string managedDirectory)
-    {
-        return Path.Combine(managedDirectory, Hex1bPtyHostFileName);
-    }
-
-    /// <summary>
-    /// Attempts to discover Hex1b's PTY host from a bundle layout root.
-    /// </summary>
-    /// <param name="baseDirectory">The layout root to search from (the directory holding <c>managed/</c>).</param>
-    /// <param name="ptyHostPath">The full path to the PTY host if found.</param>
-    /// <returns><see langword="true"/> if the PTY host was found; otherwise <see langword="false"/>.</returns>
-    /// <remarks>
-    /// Always returns <see langword="false"/> off Windows: the PTY host is a Windows-only asset, and
-    /// other platforms drive terminals through the termios/ioctl interop shim instead. A separately
-    /// launched C# AppHost reaches the bundle through the layout root the CLI hands it, which is why
-    /// this takes a base directory rather than probing relative to the current process.
-    /// </remarks>
-    public static bool TryDiscoverWindowsPtyHostFromDirectory(
-        string baseDirectory,
-        out string? ptyHostPath)
-    {
-        ptyHostPath = null;
-
-        if (!OperatingSystem.IsWindows())
-        {
-            return false;
-        }
-
-        if (string.IsNullOrEmpty(baseDirectory) || !Directory.Exists(baseDirectory))
-        {
-            return false;
-        }
-
-        var candidate = GetWindowsPtyHostPath(Path.Combine(baseDirectory, ManagedDirectoryName));
-
-        if (File.Exists(candidate))
-        {
-            ptyHostPath = candidate;
             return true;
         }
 
