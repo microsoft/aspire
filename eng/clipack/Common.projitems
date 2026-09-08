@@ -190,7 +190,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <_SharedPackToolProperties Include="CreateRidSpecificToolPackages=true" />
       <_SharedPackToolProperties Include="PreBuiltCliBinaryPath=$(_ExtractedNativeBinaryPath)" />
       <_SharedPackToolProperties Include="PublishAot=true" />
       <_SharedPackToolProperties Include="BundlePayloadPath=" />
@@ -223,6 +222,7 @@
   <Target Name="_PackRidSpecificDotnetTool">
     <ItemGroup>
       <_PackToolProperties Include="@(_SharedPackToolProperties)" />
+      <_PackToolProperties Include="CreateRidSpecificToolPackages=true" />
       <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />
       <_PackToolProperties Include="PublishDir=$(_CliToolPublishDir)" />
     </ItemGroup>
@@ -244,6 +244,8 @@
   <Target Name="_PackPointerDotnetTool">
     <ItemGroup>
       <_PackPointerProperties Include="@(_SharedPackToolProperties)" />
+      <!-- RID-specific packages are packed separately from their matching native archives. -->
+      <_PackPointerProperties Include="CreateRidSpecificToolPackages=false" />
       <_PackPointerProperties Include="PublishDir=$(_CliToolPointerPublishDir)" />
       <_PackPointerProperties Include="NoBuild=true" />
     </ItemGroup>
