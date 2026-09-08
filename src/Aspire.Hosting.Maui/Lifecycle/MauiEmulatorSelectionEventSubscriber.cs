@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREINTERACTION001 // IInteractionService is experimental.
+#pragma warning disable ASPIREPERSISTENCE001 // Persistence annotations are used to reject unsupported persistent implicit target selection.
 
+using System.Collections.Concurrent;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
@@ -27,6 +29,8 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
     internal Func<ILogger, CancellationToken, Task<IReadOnlyList<EmulatorOption>>>? IOSSimulatorEnumeratorOverride { get; set; }
     internal Func<string, ILogger, CancellationToken, Task<string>>? EnsureAndroidEmulatorRunningOverride { get; set; }
 
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _androidEmulatorStartLocks = new(StringComparer.Ordinal);
+
     public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
     {
         if (executionContext.IsRunMode)
@@ -50,6 +54,12 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
 
         var resource = @event.Resource;
         var resourceLogger = loggerService.GetLogger(resource);
+
+        if (HasPersistentLifetime(resource))
+        {
+            ThrowPersistentImplicitSelectionNotSupported(selection.TargetKind);
+        }
+
         var options = await EnumerateTargetsAsync(selection.TargetKind, cancellationToken).ConfigureAwait(false);
 
         if (options.Count == 0)
@@ -136,9 +146,69 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
 
     private async Task<string> EnsureAndroidEmulatorRunningAsync(string avdName, ILogger resourceLogger, CancellationToken cancellationToken)
     {
-        return EnsureAndroidEmulatorRunningOverride is not null
-            ? await EnsureAndroidEmulatorRunningOverride(avdName, resourceLogger, cancellationToken).ConfigureAwait(false)
-            : await AndroidEmulatorEnumerator.EnsureEmulatorRunningAsync(avdName, resourceLogger, cancellationToken).ConfigureAwait(false);
+        var startLock = _androidEmulatorStartLocks.GetOrAdd(avdName, static _ => new SemaphoreSlim(1, 1));
+        await startLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return EnsureAndroidEmulatorRunningOverride is not null
+                ? await EnsureAndroidEmulatorRunningOverride(avdName, resourceLogger, cancellationToken).ConfigureAwait(false)
+                : await AndroidEmulatorEnumerator.EnsureEmulatorRunningAsync(avdName, resourceLogger, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            startLock.Release();
+        }
+    }
+
+    private static void ThrowPersistentImplicitSelectionNotSupported(MauiTargetSelectionKind targetKind)
+    {
+        var (targetName, explicitTarget) = targetKind switch
+        {
+            MauiTargetSelectionKind.AndroidEmulator => ("Android emulator", "adb serial from 'adb devices'"),
+            MauiTargetSelectionKind.IOSSimulator => ("iOS simulator", "simulator UDID"),
+            _ => ("target", "target identifier")
+        };
+
+        throw new DistributedApplicationException(
+            $"Interactive {targetName} selection is not supported for persistent resources because the DCP launch specification is created before the resource starts. " +
+            $"Specify the {explicitTarget} explicitly in the AppHost instead.");
+    }
+
+    private static bool HasPersistentLifetime(IResource resource)
+    {
+        return HasPersistentLifetime(resource, []);
+    }
+
+    private static bool HasPersistentLifetime(IResource resource, HashSet<IResource> visitedResources)
+    {
+        if (!visitedResources.Add(resource))
+        {
+            throw new InvalidOperationException($"A circular lifetime reference was detected for resource '{resource.Name}'.");
+        }
+
+        if (resource.TryGetLastAnnotation<PersistenceAnnotation>(out var persistenceAnnotation))
+        {
+            return persistenceAnnotation.Mode switch
+            {
+                PersistenceMode.Persistent or PersistenceMode.ParentProcess => true,
+                PersistenceMode.Resource => persistenceAnnotation.SourceResource is not null && HasPersistentLifetime(persistenceAnnotation.SourceResource, visitedResources),
+                PersistenceMode.Session => false,
+                _ => throw new InvalidOperationException($"Unknown persistence mode '{Enum.GetName(typeof(PersistenceMode), persistenceAnnotation.Mode)}'.")
+            };
+        }
+
+        if (resource.TryGetLastAnnotation<ContainerLifetimeAnnotation>(out var containerLifetimeAnnotation))
+        {
+            return containerLifetimeAnnotation.Lifetime switch
+            {
+                ContainerLifetime.Persistent => true,
+                ContainerLifetime.Session => false,
+                _ => throw new InvalidOperationException($"Unknown container lifetime '{Enum.GetName(typeof(ContainerLifetime), containerLifetimeAnnotation.Lifetime)}'.")
+            };
+        }
+
+        return false;
     }
 
     private static void ThrowNoTargetsFound(MauiTargetSelectionKind targetKind, ILogger resourceLogger)
@@ -182,9 +252,9 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
     {
         return targetKind switch
         {
-            MauiTargetSelectionKind.AndroidEmulator => "Android emulators",
-            MauiTargetSelectionKind.IOSSimulator => "iOS simulators",
-            _ => "targets"
+            MauiTargetSelectionKind.AndroidEmulator => "Android emulator",
+            MauiTargetSelectionKind.IOSSimulator => "iOS simulator",
+            _ => "target"
         };
     }
 

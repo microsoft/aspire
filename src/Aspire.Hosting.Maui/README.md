@@ -59,6 +59,14 @@ mauiApp.AddAndroidEmulator("pixel-7-emulator", "emulator-5554");
 mauiApp.AddAndroidDevice("my-pixel", "abc12345");
 ```
 
+```typescript
+// Android emulator selected from available Android Virtual Devices when the resource starts
+mauiApp.addAndroidEmulator("android-emulator");
+
+// Android with specific running emulator serial from adb devices
+mauiApp.addAndroidEmulator("pixel-7-emulator", "emulator-5554");
+```
+
 > **Note on Device/Simulator ID Validation**: The iOS methods include validation to help detect common mistakes:
 > - `AddiOSDevice()` will fail at startup if you pass a GUID-format ID (which is typical for Simulator UDIDs)
 > - `AddiOSSimulator()` will fail at startup if you pass a non-GUID format ID (which is typical for device UDIDs)

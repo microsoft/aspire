@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREINTERACTION001 // IInteractionService is experimental.
+#pragma warning disable ASPIREPERSISTENCE001 // WithPersistentLifetime is experimental.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
@@ -333,6 +334,22 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PersistentResource_WithOmittedTarget_ThrowsActionableError()
+    {
+        await using var env = await EmulatorSelectionTestEnvironment.CreateAsync(
+            usePersistentAndroidLifetime: true,
+            androidEmulators: [new("Pixel_5_API_35", "Pixel 5 API 35")]);
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => env.PublishBeforeResourceStartedAsync(env.Android));
+
+        Assert.Contains("Interactive Android emulator selection is not supported for persistent resources", ex.Message);
+        Assert.Contains("adb serial", ex.Message);
+        Assert.Null(env.StartedAndroidAvdName);
+        Assert.False(env.InteractionService.Interactions.Reader.TryRead(out _));
+    }
+
+    [Fact]
     public async Task NonInteractiveMultipleTargets_ThrowsActionableError()
     {
         await using var env = await EmulatorSelectionTestEnvironment.CreateAsync(
@@ -507,6 +524,60 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConcurrentAndroidStartsForSameAvd_AreSerialized()
+    {
+        var concurrentStarts = 0;
+        var maxConcurrentStarts = 0;
+        var startEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseStart = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var env = await EmulatorSelectionTestEnvironment.CreateAsync(
+            addSecondAndroidEmulator: true,
+            androidEmulators: [new("Pixel_5_API_35", "Pixel 5 API 35")],
+            ensureAndroidEmulatorRunning: async (avdName, _, cancellationToken) =>
+            {
+                Assert.Equal("Pixel_5_API_35", avdName);
+                var currentStarts = Interlocked.Increment(ref concurrentStarts);
+                UpdateMaxConcurrentStarts(currentStarts);
+                startEntered.TrySetResult();
+
+                try
+                {
+                    await releaseStart.Task.WaitAsync(cancellationToken);
+                    return "emulator-5556";
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref concurrentStarts);
+                }
+            });
+
+        var firstStart = env.PublishBeforeResourceStartedAsync(env.Android);
+        var secondStart = env.PublishBeforeResourceStartedAsync(env.SecondAndroid);
+
+        await startEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.Delay(100);
+        Assert.Equal(1, Volatile.Read(ref maxConcurrentStarts));
+
+        releaseStart.SetResult();
+        await Task.WhenAll(firstStart, secondStart).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, Volatile.Read(ref maxConcurrentStarts));
+
+        void UpdateMaxConcurrentStarts(int currentStarts)
+        {
+            while (true)
+            {
+                var previous = Volatile.Read(ref maxConcurrentStarts);
+                if (currentStarts <= previous ||
+                    Interlocked.CompareExchange(ref maxConcurrentStarts, currentStarts, previous) == previous)
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task CancellationToken_CancelsBeforePromptCompletes()
     {
         await using var env = await EmulatorSelectionTestEnvironment.CreateAsync(
@@ -553,6 +624,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
         public DistributedApplication App { get; private set; } = null!;
         public TestInteractionService InteractionService { get; private set; } = null!;
         public MauiAndroidEmulatorResource Android { get; private set; } = null!;
+        public MauiAndroidEmulatorResource SecondAndroid { get; private set; } = null!;
         public MauiiOSSimulatorResource IOSSimulator { get; private set; } = null!;
         public string? StartedAndroidAvdName { get; private set; }
         public ResourceNotificationService NotificationService => App.Services.GetRequiredService<ResourceNotificationService>();
@@ -566,8 +638,11 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
         public static async Task<EmulatorSelectionTestEnvironment> CreateAsync(
             bool addExplicitTargets = false,
             bool interactionAvailable = true,
+            bool usePersistentAndroidLifetime = false,
+            bool addSecondAndroidEmulator = false,
             IReadOnlyList<EmulatorOption>? androidEmulators = null,
-            IReadOnlyList<EmulatorOption>? iOSSimulators = null)
+            IReadOnlyList<EmulatorOption>? iOSSimulators = null,
+            Func<string, ILogger, CancellationToken, Task<string>>? ensureAndroidEmulatorRunning = null)
         {
             var env = new EmulatorSelectionTestEnvironment();
             var projectPath = Path.Combine(env.TempDirectory.FullName, "TempMauiProject.csproj");
@@ -579,9 +654,18 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
             });
 
             var maui = appBuilder.AddMauiProject("mauiapp", projectPath);
-            var android = addExplicitTargets
-                ? maui.AddAndroidEmulator("android", "emulator-5554").Resource
-                : maui.AddAndroidEmulator("android").Resource;
+            var androidBuilder = addExplicitTargets
+                ? maui.AddAndroidEmulator("android", "emulator-5554")
+                : maui.AddAndroidEmulator("android");
+            if (usePersistentAndroidLifetime)
+            {
+                androidBuilder.WithPersistentLifetime();
+            }
+
+            var android = androidBuilder.Resource;
+            var secondAndroid = addSecondAndroidEmulator
+                ? maui.AddAndroidEmulator("android-2").Resource
+                : null;
             var iosSimulator = addExplicitTargets
                 ? maui.AddiOSSimulator("ios-simulator", "E25BBE37-69BA-4720-B6FD-D54C97791E79").Resource
                 : maui.AddiOSSimulator("ios-simulator").Resource;
@@ -600,11 +684,11 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
             {
                 AndroidEnumeratorOverride = (_, _) => Task.FromResult(androidEmulators ?? []),
                 IOSSimulatorEnumeratorOverride = (_, _) => Task.FromResult(iOSSimulators ?? []),
-                EnsureAndroidEmulatorRunningOverride = (avdName, _, _) =>
+                EnsureAndroidEmulatorRunningOverride = ensureAndroidEmulatorRunning ?? ((avdName, _, _) =>
                 {
                     env.StartedAndroidAvdName = avdName;
                     return Task.FromResult("emulator-5556");
-                }
+                })
             };
 
             await subscriber.SubscribeAsync(
@@ -615,6 +699,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
             env.App = app;
             env.InteractionService = interactionService;
             env.Android = android;
+            env.SecondAndroid = secondAndroid!;
             env.IOSSimulator = iosSimulator;
 
             return env;
