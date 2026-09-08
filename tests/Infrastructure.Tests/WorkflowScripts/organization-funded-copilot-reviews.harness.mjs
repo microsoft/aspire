@@ -12,10 +12,14 @@ const scenario = process.argv[3];
 const reviewer = { login: 'copilot-pull-request-reviewer[bot]', type: 'Bot' };
 const head = 'a'.repeat(40);
 const previous = 'b'.repeat(40);
+const now = Date.parse('2026-09-08T20:00:00Z');
+const staleCutoff = now - 14 * 24 * 60 * 60 * 1000;
 const pull = {
     number: 42,
     state: 'open',
     draft: false,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: new Date(now).toISOString(),
     base: { ref: 'main', repo: { full_name: 'microsoft/aspire' } },
     head: { sha: head, ref: 'feature', repo: { full_name: 'external/fork' } },
     requested_reviewers: [],
@@ -71,6 +75,44 @@ switch (scenario) {
     case 'pilot-scheduled':
         env.COPILOT_REVIEW_PR_NUMBER = '42';
         context.eventName = 'schedule';
+        expectedWrites = 1;
+        break;
+    case 'scheduled-stale':
+    case 'scheduled-stale-boundary':
+    case 'scheduled-recent':
+    case 'scheduled-stale-dry-run':
+    case 'scheduled-stale-pilot':
+    case 'scheduled-invalid-activity':
+    case 'scheduled-missing-activity':
+        context.eventName = 'schedule';
+        pull.updated_at = new Date(staleCutoff - 1000).toISOString();
+        expectedDecision = 'no PR activity in the last 14 days';
+        if (scenario === 'scheduled-stale-boundary') {
+            pull.updated_at = new Date(staleCutoff).toISOString();
+        } else if (scenario === 'scheduled-recent') {
+            pull.updated_at = new Date(staleCutoff + 1000).toISOString();
+            expectedDecision = '';
+            expectedWrites = 1;
+        } else if (scenario === 'scheduled-stale-dry-run') {
+            env.COPILOT_REVIEW_MODE = 'dry-run';
+        } else if (scenario === 'scheduled-stale-pilot') {
+            env.COPILOT_REVIEW_PR_NUMBER = '42';
+        } else if (scenario === 'scheduled-invalid-activity' || scenario === 'scheduled-missing-activity') {
+            if (scenario === 'scheduled-invalid-activity') {
+                pull.updated_at = 'not-a-timestamp';
+            } else {
+                Reflect.deleteProperty(pull, 'updated_at');
+            }
+            expectedDecision = '';
+            expectedError = 'Invalid updated_at timestamp';
+        }
+        break;
+    case 'stale-push':
+    case 'stale-manual':
+        pull.updated_at = new Date(staleCutoff - 1000).toISOString();
+        if (scenario === 'stale-manual') {
+            context.eventName = 'workflow_dispatch';
+        }
         expectedWrites = 1;
         break;
     case 'external-author':
@@ -265,6 +307,9 @@ async function execute() {
         github: { rest: { pulls }, paginate },
         core: { info: (message) => messages.push(message), summary },
         context,
+        Date: class extends Date {
+            static now() { return now; }
+        },
         process: { env }
     });
 }
@@ -298,6 +343,11 @@ if (scenario === 'disabled' || scenario === 'pilot-other-pr' || scenario === 'in
 }
 if (scenario === 'pilot-scheduled') {
     assert.deepEqual(calls, ['get', 'listReviews', 'get', 'requestReviewers']);
+}
+if (scenario.startsWith('scheduled-') && scenario !== 'scheduled-recent') {
+    // Stale PRs and invalid activity metadata must never reach review-history
+    // lookup or the write endpoint, even when the scan is limited to a pilot.
+    assert.deepEqual(calls, scenario === 'scheduled-stale-pilot' ? ['get'] : ['list', 'get']);
 }
 if (scenario === 'pagination') {
     assert.deepEqual([...getCounts.keys()], [42, 43]);

@@ -33,6 +33,18 @@ including for draft PRs. Reopening a PR or marking a draft ready does not trigge
 an additional run. Manual dispatch on `main` and a scheduled
 scan every 15 minutes reconcile open PRs. GitHub can delay scheduled runs.
 
+Scheduled scans skip PRs with no activity in the last 14 days, using GitHub's
+`updated_at` timestamp (not the PR creation date or latest commit date). The
+cutoff is inclusive: an update exactly 14 days before the run is stale. The
+summary reports `Skipped: no PR activity in the last 14 days.` before fetching
+review history. This applies in dry-run and enabled modes, including a scoped
+pilot. It does not close PRs or dismiss existing reviews.
+
+Activity reflected in `updated_at`, including automated updates, makes an old
+PR eligible again. Missing or invalid timestamps fail the run rather than
+silently treating a PR as active. Push-triggered and manual runs do not apply
+this staleness filter, so a maintainer can still manually reconcile an old PR.
+
 All runs share one concurrency group without canceling the active run. GitHub
 can replace pending runs; scheduled scanning recovers missed events. The scan
 also handles PR retargeting and pushes made while Copilot is still reviewing.

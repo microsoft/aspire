@@ -52,6 +52,7 @@ jobs:
             const repo = 'aspire';
             const reviewer = 'copilot-pull-request-reviewer[bot]';
             const mode = process.env.COPILOT_REVIEW_MODE || 'dry-run';
+            const staleCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
             if (!['disabled', 'dry-run', 'enabled'].includes(mode)) {
               throw new Error('COPILOT_REVIEW_MODE must be disabled, dry-run, or enabled.');
             }
@@ -98,6 +99,18 @@ jobs:
               }
               if (pull.base.ref !== 'main' && !pull.base.ref.startsWith('release/')) {
                 return 'Skipped: target branch is outside main/release.';
+              }
+              if (context.eventName === 'schedule') {
+                // GitHub reports PR activity as an ISO timestamp, e.g.
+                // updated_at: "2026-09-08T19:40:00Z". Use it rather than
+                // creation/commit dates so activity can revive an old PR.
+                const updatedAt = Date.parse(pull.updated_at);
+                if (!Number.isFinite(updatedAt)) {
+                  throw new Error(`Invalid updated_at timestamp for PR #${pull.number}.`);
+                }
+                if (updatedAt <= staleCutoff) {
+                  return 'Skipped: no PR activity in the last 14 days.';
+                }
               }
               return null;
             }
