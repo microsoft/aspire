@@ -71,6 +71,8 @@ prefilter:
 ignore:
   - src/Components/Common/**                            # link-compiled into many components; Layer 1 covers
   - src/Vendoring/OpenTelemetry.Instrumentation.*/**    # glob-compiled into the Redis/Kafka components; Layer 1 covers
+  # Benchmark harnesses have no GitHub PR-CI consumer and are not part of the Aspire.slnx graph.
+  - benchmarks/**
   # These verifiers run in every unconditional native CLI archive build. Selecting a test target for
   # them would add no coverage; accounting for them here avoids an unrelated full test matrix.
   - eng/scripts/verify-cli-npm-package.ps1

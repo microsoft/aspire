@@ -157,14 +157,20 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
-    public void EverySourceProjectIsReachableByLayer1OrACuratedRule()
+    public void EveryProjectOutsideTheSolutionIsCoveredByACuratedRule()
     {
         // The graph closure is owned by the Layer 1 graph (GraphAffectedProjects), which discovers
-        // projects from Aspire.slnx. So a src project is "covered" if it is in the solution (∴ Layer 1 sees it)
-        // OR matched by a curated glob (the deliberately out-of-slnx ones — e.g. the template
-        // placeholders that crash discovery — are covered by loose_file_deps). A new src project
-        // that is neither in the solution nor curated would silently never run any test, so it
-        // must fail here.
+        // projects from Aspire.slnx. Every tracked project outside the solution must therefore be
+        // matched by a curated glob so it is intentionally routed or explicitly ignored. Otherwise,
+        // changing the project falls through to the unattributed-file run-all fallback.
+        var allowList = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["tools/GenerateCITimeline/GenerateCITimeline.csproj"] =
+                "Invoked by the unconditional test-results job after selector-gated work completes.",
+        };
+
+        Assert.All(allowList, entry => Assert.False(string.IsNullOrWhiteSpace(entry.Value)));
+
         var inSolution = LoadSolutionProjectPaths();
 
         var selecting = new Matcher(StringComparison.Ordinal);
@@ -177,13 +183,16 @@ public sealed class TestTriggerMapTests
             .ToHashSet(StringComparer.Ordinal);
 
         var uncovered = s_trackedFiles
-            .Where(f => f.StartsWith("src/", StringComparison.Ordinal) && f.EndsWith(".csproj", StringComparison.Ordinal))
-            .Where(csproj => !inSolution.Contains(csproj) && !curatedCovered.Contains(csproj))
+            .Where(f => f.EndsWith(".csproj", StringComparison.Ordinal))
+            .Where(csproj => !inSolution.Contains(csproj)
+                && !curatedCovered.Contains(csproj)
+                && !allowList.ContainsKey(csproj))
             .Order(StringComparer.Ordinal)
             .ToList();
 
         Assert.True(uncovered.Count == 0,
-            $"src projects neither in Aspire.slnx nor matched by a curated rule: {string.Join(", ", uncovered)}");
+            $"tracked projects neither in Aspire.slnx nor matched by a curated rule " +
+            $"(changes would be reported as unattributed and force ALL): {string.Join(", ", uncovered)}");
     }
 
     // Repo-relative '/'-separated project paths listed in Aspire.slnx (the Layer 1 graph root).
