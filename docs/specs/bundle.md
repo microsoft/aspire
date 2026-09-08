@@ -159,8 +159,8 @@ aspire-{version}-{platform}/
 ├── managed/                            # Unified managed binary (~65 MB)
 │   ├── aspire-managed[.exe]            # Self-contained single-file executable
 │   │                                   # Subcommands: dashboard | server | nuget
-│   └── hex1bpty.exe                    # Windows only (~5 MB): Hex1b PTY host, launched
-│                                       # when Hex1b, not DCP, owns the pseudo-terminal
+│   └── hex1bpty.exe                    # Windows only (~5 MB): Hex1b PTY host, staged
+│                                       # for AppHost-owned terminals
 │
 ├── dcp/                                # Developer Control Plane (~127 MB)
 │   ├── dcp[.exe]                       # Native executable
@@ -736,7 +736,7 @@ The bundle installs components as siblings under `~/.aspire/`, with the CLI bina
 - With self-extracting binaries, the CLI in `bin/` contains the embedded payload; `aspire setup` extracts siblings
 - `.aspire-bundle-version` tracks the extracted version — extraction is skipped when hash matches
 - `aspire-managed` is a single self-contained binary replacing separate runtime, dashboard, aspire-server, and tools directories
-- On Windows, `managed/hex1bpty.exe` ships alongside it — Hex1b's PTY host, needed for AppHost-owned terminals. It is signed separately and stays outside the single-file binary so it can be launched as its own process
+- On Windows, `managed/hex1bpty.exe` ships alongside it — Hex1b's PTY host, staged for AppHost-owned terminals, where Hex1b owns the pseudo-terminal rather than bridging DCP's. It is signed separately and stays outside the single-file binary so it can be launched as its own process
 - Certificate management is native to the CLI (no external tool needed)
 - NuGet hives and settings are preserved across installations and re-extractions
 - `LayoutDiscovery` finds the bundle by checking the CLI's parent directory for components

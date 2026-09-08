@@ -16,13 +16,15 @@
 
   <!--
     Hex1b's win-x64/win-arm64 native assets carry hex1bpty.exe, a ~5 MB PTY host that Hex1b launches
-    only when *it* owns the pseudo-terminal for a child process. Aspire.Managed is the one project that
-    takes that path (see the target below); everywhere else DCP creates and owns every PTY we surface,
-    and Aspire.TerminalHost just proxies the byte stream DCP is already producing (see
-    src/Aspire.TerminalHost/TerminalReplica.cs). So for every other project the helper is dead weight in
-    the Windows CLI archive, and it is also a second executable that downstream stores have to
+    only when *it* owns the pseudo-terminal for a child process. Nothing we ship takes that path: DCP
+    creates and owns every PTY we surface, and Aspire.TerminalHost just proxies the byte stream DCP is
+    already producing (see src/Aspire.TerminalHost/TerminalReplica.cs). So the helper is dead weight in
+    every Windows CLI archive, and it is also a second executable that downstream stores have to
     account for — winget runs executable and malware checks against every binary in the archive, which
     turned it into submission friction on https://github.com/microsoft/winget-pkgs/pull/421219.
+
+    That is still true of every path in the tree today. The one deliberate exception is the bundle
+    build, which stages the helper ahead of the feature that will use it — see the target below.
 
     Unix is unaffected: there the package's native asset is libhex1binterop.{so,dylib}, the
     termios/ioctl shim the TUI does need, and it keeps flowing through.
@@ -39,10 +41,13 @@
   </Target>
 
   <!--
-    Aspire.Managed is that exception. AppHost-owned terminals put Hex1b — running inside the AppHost
-    process, rather than DCP — in charge of the pseudo-terminal, and that is exactly the path where
-    Hex1b launches hex1bpty.exe on Windows. Aspire.Managed sets PublishHex1bPtyHost=true for that
-    reason, which turns the removal above off.
+    Aspire.Managed is that exception, and the reason is sequencing rather than a live code path.
+    No code in this tree launches hex1bpty.exe today — DCP owns every PTY we currently surface, exactly
+    as the comment above says. AppHost-owned terminals (#19887) add the path that does need it: there
+    Hex1b owns the pseudo-terminal itself instead of bridging DCP's. #19976 asks for the helper to be
+    built, signed and bundled before that feature lands, so the pipeline is ready rather than blocking
+    it. Aspire.Managed therefore sets PublishHex1bPtyHost=true, which turns the removal above off for
+    this project only. The CLI archive is unaffected and still strips it.
 
     Once it is back in the publish output it also has to stay a loose file next to aspire-managed.
     hex1bpty.exe is a native asset, so IncludeNativeLibrariesForSelfExtract would otherwise pack it
