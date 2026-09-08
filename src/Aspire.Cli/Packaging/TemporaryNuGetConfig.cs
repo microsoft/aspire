@@ -57,7 +57,8 @@ internal sealed class TemporaryNuGetConfig : IDisposable
         PackageMapping[] mappings,
         bool configureGlobalPackagesFolder = false,
         string? globalPackagesFolderValue = null,
-        IReadOnlyList<NuGetConfigSource>? sources = null)
+        IReadOnlyList<NuGetConfigSource>? sources = null,
+        IReadOnlyList<string>? disabledAmbientSourceKeys = null)
     {
         var tempDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config").FullName;
         try
@@ -68,7 +69,8 @@ internal sealed class TemporaryNuGetConfig : IDisposable
                 configFile,
                 includePackageSources: false,
                 clearPackageSources: false,
-                sources).ConfigureAwait(false);
+                sources,
+                disabledAmbientSourceKeys).ConfigureAwait(false);
             if (configureGlobalPackagesFolder)
             {
                 await AddGlobalPackagesFolderToConfigAsync(configFile, globalPackagesFolderValue).ConfigureAwait(false);
@@ -100,7 +102,8 @@ internal sealed class TemporaryNuGetConfig : IDisposable
         PackageMapping[] mappings,
         string targetPath,
         string? globalPackagesFolderValue,
-        IReadOnlyList<NuGetConfigSource>? sources = null)
+        IReadOnlyList<NuGetConfigSource>? sources = null,
+        IReadOnlyList<string>? disabledAmbientSourceKeys = null)
     {
         var configFile = new FileInfo(targetPath);
         await GenerateNuGetConfigAsync(
@@ -108,7 +111,8 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             configFile,
             includePackageSources: false,
             clearPackageSources: false,
-            sources).ConfigureAwait(false);
+            sources,
+            disabledAmbientSourceKeys).ConfigureAwait(false);
 
         if (globalPackagesFolderValue is not null)
         {
@@ -121,7 +125,8 @@ internal sealed class TemporaryNuGetConfig : IDisposable
         FileInfo configFile,
         bool includePackageSources,
         bool clearPackageSources,
-        IReadOnlyList<NuGetConfigSource>? configuredSources = null)
+        IReadOnlyList<NuGetConfigSource>? configuredSources = null,
+        IReadOnlyList<string>? disabledAmbientSourceKeys = null)
     {
         var distinctSources = mappings
             .Select(static mapping => mapping.Source)
@@ -194,6 +199,24 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             await xmlWriter.WriteStartElementAsync(null, "disabledPackageSources", null);
             await xmlWriter.WriteStartElementAsync(null, "clear", null);
             await xmlWriter.WriteEndElementAsync();
+
+            var enabledSourceKeys = sourcesRequiringEnablement
+                .Select(static source => source.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var disabledSourceKeys = (disabledAmbientSourceKeys ?? [])
+                .Concat(configuredSources?
+                    .Where(static source => source.IsAmbient && !source.IsEnabled)
+                    .Select(static source => source.Key) ?? [])
+                .Where(key => !enabledSourceKeys.Contains(key))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+            foreach (var sourceKey in disabledSourceKeys)
+            {
+                await xmlWriter.WriteStartElementAsync(null, "add", null);
+                await xmlWriter.WriteAttributeStringAsync(null, "key", null, sourceKey);
+                await xmlWriter.WriteAttributeStringAsync(null, "value", null, "true");
+                await xmlWriter.WriteEndElementAsync();
+            }
+
             await xmlWriter.WriteEndElementAsync();
         }
 
