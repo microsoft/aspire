@@ -131,6 +131,15 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(first, second);
     }
 
+    [Fact]
+    public void ComputeStagingCacheIdentityKey_PreservesOpaqueIdentityCasing()
+    {
+        var first = CliPathHelper.ComputeStagingCacheIdentityKey("12:https://example.com/Feed", length: 16);
+        var second = CliPathHelper.ComputeStagingCacheIdentityKey("12:https://example.com/feed", length: 16);
+
+        Assert.NotEqual(first, second);
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(4)]

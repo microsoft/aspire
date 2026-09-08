@@ -8,30 +8,26 @@ using System.Xml.Linq;
 
 namespace Aspire.Cli.Packaging;
 
+internal sealed record NuGetConfigSource(
+    string Key,
+    string Source,
+    bool IsAmbient,
+    bool IsEnabled);
+
 internal sealed class TemporaryNuGetConfig : IDisposable
 {
     private readonly FileInfo _configFile;
     private bool _disposed;
 
-    private TemporaryNuGetConfig(
-        FileInfo configFile,
-        bool containsCredentialMaterial,
-        IReadOnlyList<string> credentialBearingSources,
-        string cacheIdentity)
+    private TemporaryNuGetConfig(FileInfo configFile, string cacheIdentity)
     {
         _configFile = configFile;
-        ContainsCredentialMaterial = containsCredentialMaterial;
-        CredentialBearingSources = credentialBearingSources;
         CacheIdentity = cacheIdentity;
     }
 
     public FileInfo ConfigFile => _configFile;
 
-    public bool ContainsCredentialMaterial { get; }
-
-    public IReadOnlyList<string> CredentialBearingSources { get; }
-
-    public string CacheIdentity { get; }
+    public string CacheIdentity { get; private set; }
 
     public static async Task<TemporaryNuGetConfig> CreateAsync(
         PackageMapping[] mappings,
@@ -41,101 +37,111 @@ internal sealed class TemporaryNuGetConfig : IDisposable
         var tempDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config").FullName;
         try
         {
-            var tempFilePath = Path.Combine(tempDirectory, "nuget.config");
-            var configFile = new FileInfo(tempFilePath);
-            await GenerateNuGetConfigAsync(mappings, configFile);
+            var configFile = new FileInfo(Path.Combine(tempDirectory, "nuget.config"));
+            await GenerateNuGetConfigAsync(mappings, configFile, includePackageSources: true, clearPackageSources: true).ConfigureAwait(false);
             if (configureGlobalPackagesFolder)
             {
-                await AddGlobalPackagesFolderToConfigAsync(configFile, globalPackagesFolderValue);
+                await AddGlobalPackagesFolderToConfigAsync(configFile, globalPackagesFolderValue).ConfigureAwait(false);
             }
-            var document = await LoadAsync(configFile, CancellationToken.None).ConfigureAwait(false);
-            return new TemporaryNuGetConfig(
-                configFile,
-                mappings.Any(static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source)),
-                mappings
-                    .Select(static mapping => mapping.Source)
-                    .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray(),
-                ComputeCacheIdentity(document));
+
+            return new TemporaryNuGetConfig(configFile, await ComputeCacheIdentityAsync(configFile).ConfigureAwait(false));
         }
         catch
         {
-            try
-            {
-                Directory.Delete(tempDirectory, recursive: true);
-            }
-            catch
-            {
-                // Ignore cleanup failures; surface the original exception instead.
-            }
+            TryDeleteDirectory(tempDirectory);
             throw;
         }
     }
 
-    public static async Task<TemporaryNuGetConfig> CreateComposedAsync(
-        IReadOnlyList<string> configPaths,
+    public static async Task<TemporaryNuGetConfig> CreateRestoreOverlayAsync(
         PackageMapping[] mappings,
         bool configureGlobalPackagesFolder = false,
         string? globalPackagesFolderValue = null,
-        CancellationToken cancellationToken = default)
+        IReadOnlyList<NuGetConfigSource>? sources = null)
     {
         var tempDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config").FullName;
         try
         {
             var configFile = new FileInfo(Path.Combine(tempDirectory, "nuget.config"));
-            var document = await NuGetConfigComposer.ComposeAsync(configPaths, cancellationToken).ConfigureAwait(false);
-            await SaveAsync(document, configFile, cancellationToken).ConfigureAwait(false);
-            await NuGetConfigMerger.CreateOrUpdateAsync(
-                configFile.Directory!,
+            await GenerateNuGetConfigAsync(
                 mappings,
-                configureGlobalPackagesFolder: false,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-
+                configFile,
+                includePackageSources: false,
+                clearPackageSources: false,
+                sources).ConfigureAwait(false);
             if (configureGlobalPackagesFolder)
             {
-                await AddGlobalPackagesFolderToConfigAsync(configFile, globalPackagesFolderValue);
+                await AddGlobalPackagesFolderToConfigAsync(configFile, globalPackagesFolderValue).ConfigureAwait(false);
             }
 
-            document = await LoadAsync(configFile, cancellationToken).ConfigureAwait(false);
-            EnableMappedSources(document, mappings);
-            await SaveAsync(document, configFile, cancellationToken).ConfigureAwait(false);
-            return new TemporaryNuGetConfig(
-                configFile,
-                DocumentContainsCredentialMaterial(document),
-                GetCredentialBearingSources(document),
-                ComputeCacheIdentity(document));
+            return new TemporaryNuGetConfig(configFile, await ComputeCacheIdentityAsync(configFile).ConfigureAwait(false));
         }
         catch
         {
-            try
-            {
-                Directory.Delete(tempDirectory, recursive: true);
-            }
-            catch
-            {
-                // Ignore cleanup failures; surface the original exception instead.
-            }
-
+            TryDeleteDirectory(tempDirectory);
             throw;
         }
     }
 
     /// <summary>
-    /// Generates a NuGet.config file at the specified path with the given package mappings.
+    /// Generates a standalone NuGet.config file at the specified path with the given package mappings.
     /// </summary>
-    public static async Task GenerateAsync(PackageMapping[] mappings, string targetPath)
+    public static Task GenerateAsync(PackageMapping[] mappings, string targetPath)
+        => GenerateNuGetConfigAsync(
+            mappings,
+            new FileInfo(targetPath),
+            includePackageSources: true,
+            clearPackageSources: true);
+
+    /// <summary>
+    /// Generates a NuGet.config policy overlay for a generated restore project.
+    /// </summary>
+    public static async Task GenerateRestoreOverlayAsync(
+        PackageMapping[] mappings,
+        string targetPath,
+        string? globalPackagesFolderValue,
+        IReadOnlyList<NuGetConfigSource>? sources = null)
     {
         var configFile = new FileInfo(targetPath);
-        await GenerateNuGetConfigAsync(mappings, configFile);
+        await GenerateNuGetConfigAsync(
+            mappings,
+            configFile,
+            includePackageSources: false,
+            clearPackageSources: false,
+            sources).ConfigureAwait(false);
+
+        if (globalPackagesFolderValue is not null)
+        {
+            await AddGlobalPackagesFolderToConfigAsync(configFile, globalPackagesFolderValue).ConfigureAwait(false);
+        }
     }
 
-    private static async Task GenerateNuGetConfigAsync(PackageMapping[] mappings, FileInfo configFile)
+    private static async Task GenerateNuGetConfigAsync(
+        PackageMapping[] mappings,
+        FileInfo configFile,
+        bool includePackageSources,
+        bool clearPackageSources,
+        IReadOnlyList<NuGetConfigSource>? configuredSources = null)
     {
         var distinctSources = mappings
-            .Select(m => m.Source)
+            .Select(static mapping => mapping.Source)
             .Distinct(PackageSourceIdentity.Comparer)
-            .Select((source, index) => new { Source = source, Key = $"aspire-{index}" })
+            .SelectMany((source, index) =>
+            {
+                var matchingSources = configuredSources?
+                    .Where(configuredSource => PackageSourceIdentity.Comparer.Equals(
+                        configuredSource.Source,
+                        source))
+                    .ToArray();
+                return matchingSources is { Length: > 0 }
+                    ? matchingSources
+                    : [new NuGetConfigSource(
+                        includePackageSources ? $"aspire-{index}" : source,
+                        source,
+                        IsAmbient: !includePackageSources,
+                        IsEnabled: true)];
+            })
+            .DistinctBy(static source => source.Key, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         await using var fileStream = configFile.Create();
@@ -145,65 +151,104 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             Indent = true,
             IndentChars = "  ",
             NewLineChars = Environment.NewLine,
-            Encoding = System.Text.Encoding.UTF8,
+            Encoding = Encoding.UTF8,
             Async = true
         });
 
         await xmlWriter.WriteStartDocumentAsync();
         await xmlWriter.WriteStartElementAsync(null, "configuration", null);
 
-        // Write packageSources section
-        await xmlWriter.WriteStartElementAsync(null, "packageSources", null);
-
-        // <clear />
-        await xmlWriter.WriteStartElementAsync(null, "clear", null);
-        await xmlWriter.WriteEndElementAsync();
-
-        foreach (var sourceInfo in distinctSources)
+        if (includePackageSources || distinctSources.Any(static source => !source.IsAmbient))
         {
-            await xmlWriter.WriteStartElementAsync(null, "add", null);
-            await xmlWriter.WriteAttributeStringAsync(null, "key", null, sourceInfo.Key);
-            await xmlWriter.WriteAttributeStringAsync(null, "value", null, sourceInfo.Source);
-            await xmlWriter.WriteEndElementAsync(); // add
-        }
-        await xmlWriter.WriteEndElementAsync(); // packageSources
+            await xmlWriter.WriteStartElementAsync(null, "packageSources", null);
+            if (clearPackageSources)
+            {
+                await xmlWriter.WriteStartElementAsync(null, "clear", null);
+                await xmlWriter.WriteEndElementAsync();
+            }
 
-        // Add package source mappings for all filters
+            foreach (var sourceInfo in distinctSources)
+            {
+                if (!includePackageSources && sourceInfo.IsAmbient)
+                {
+                    continue;
+                }
+
+                await xmlWriter.WriteStartElementAsync(null, "add", null);
+                await xmlWriter.WriteAttributeStringAsync(null, "key", null, sourceInfo.Key);
+                await xmlWriter.WriteAttributeStringAsync(null, "value", null, sourceInfo.Source);
+                await xmlWriter.WriteEndElementAsync();
+            }
+
+            await xmlWriter.WriteEndElementAsync();
+        }
+
+        var sourcesRequiringEnablement = distinctSources
+            .Where(static source => source.IsAmbient)
+            .GroupBy(static source => source.Source, PackageSourceIdentity.Comparer)
+            .Where(static group => group.All(static source => !source.IsEnabled))
+            .Select(static group => group.First())
+            .ToArray();
+        if (sourcesRequiringEnablement.Length > 0)
+        {
+            await xmlWriter.WriteStartElementAsync(null, "disabledPackageSources", null);
+            await xmlWriter.WriteStartElementAsync(null, "clear", null);
+            await xmlWriter.WriteEndElementAsync();
+            await xmlWriter.WriteEndElementAsync();
+        }
+
         if (mappings.Length > 0)
         {
             await xmlWriter.WriteStartElementAsync(null, "packageSourceMapping", null);
-
-            var groupedBySource = mappings
-                .GroupBy(m => m.Source, PackageSourceIdentity.Comparer);
-
-            foreach (var sourceGroup in groupedBySource)
+            if (!includePackageSources)
             {
-                var sourceInfo = distinctSources.First(s => PackageSourceIdentity.Comparer.Equals(s.Source, sourceGroup.Key));
-
-                await xmlWriter.WriteStartElementAsync(null, "packageSource", null);
-                await xmlWriter.WriteAttributeStringAsync(null, "key", null, sourceInfo.Key);
-
-                foreach (var mapping in sourceGroup)
-                {
-                    await xmlWriter.WriteStartElementAsync(null, "package", null);
-                    await xmlWriter.WriteAttributeStringAsync(null, "pattern", null, mapping.PackageFilter);
-                    await xmlWriter.WriteEndElementAsync(); // package
-                }
-
-                await xmlWriter.WriteEndElementAsync(); // packageSource
+                await xmlWriter.WriteStartElementAsync(null, "clear", null);
+                await xmlWriter.WriteEndElementAsync();
             }
 
-            await xmlWriter.WriteEndElementAsync(); // packageSourceMapping
+            foreach (var sourceGroup in mappings.GroupBy(static mapping => mapping.Source, PackageSourceIdentity.Comparer))
+            {
+                var mappingsForSource = sourceGroup.ToArray();
+                var matchingSources = distinctSources
+                    .Where(source => PackageSourceIdentity.Comparer.Equals(source.Source, sourceGroup.Key))
+                    .ToArray();
+                if (matchingSources.All(static source => source.IsAmbient && !source.IsEnabled))
+                {
+                    matchingSources = [matchingSources[0]];
+                }
+
+                var sourceKeys = matchingSources
+                    .SelectMany(source => includePackageSources ||
+                        string.Equals(source.Key, source.Source, StringComparison.Ordinal)
+                            ? [source.Key]
+                            : new[] { source.Key, source.Source })
+                    .Distinct(StringComparer.OrdinalIgnoreCase);
+                foreach (var sourceKey in sourceKeys)
+                {
+                    await xmlWriter.WriteStartElementAsync(null, "packageSource", null);
+                    await xmlWriter.WriteAttributeStringAsync(null, "key", null, sourceKey);
+
+                    foreach (var mapping in mappingsForSource)
+                    {
+                        await xmlWriter.WriteStartElementAsync(null, "package", null);
+                        await xmlWriter.WriteAttributeStringAsync(null, "pattern", null, mapping.PackageFilter);
+                        await xmlWriter.WriteEndElementAsync();
+                    }
+
+                    await xmlWriter.WriteEndElementAsync();
+                }
+            }
+
+            await xmlWriter.WriteEndElementAsync();
         }
 
-        await xmlWriter.WriteEndElementAsync(); // configuration
+        await xmlWriter.WriteEndElementAsync();
         await xmlWriter.WriteEndDocumentAsync();
     }
 
     private static async Task AddGlobalPackagesFolderToConfigAsync(FileInfo configFile, string? globalPackagesFolderValue)
     {
-        var document = await LoadAsync(configFile, CancellationToken.None).ConfigureAwait(false);
-
+        var document = await LoadAsync(configFile).ConfigureAwait(false);
         var configuration = document.Root ?? new XElement("configuration");
         if (document.Root is null)
         {
@@ -215,16 +260,19 @@ internal sealed class TemporaryNuGetConfig : IDisposable
         var content = document.Declaration is null
             ? document.ToString()
             : $"{document.Declaration}{Environment.NewLine}{document}";
-        await File.WriteAllTextAsync(configFile.FullName, content);
+        await File.WriteAllTextAsync(configFile.FullName, content).ConfigureAwait(false);
     }
 
-    public Task SetGlobalPackagesFolderAsync(string globalPackagesFolderValue)
-        => AddGlobalPackagesFolderToConfigAsync(_configFile, globalPackagesFolderValue);
-
-    private static string ComputeCacheIdentity(XDocument document)
+    public async Task SetGlobalPackagesFolderAsync(string globalPackagesFolderValue)
     {
-        var identityDocument = new XDocument(document);
-        identityDocument
+        await AddGlobalPackagesFolderToConfigAsync(_configFile, globalPackagesFolderValue).ConfigureAwait(false);
+        CacheIdentity = await ComputeCacheIdentityAsync(_configFile).ConfigureAwait(false);
+    }
+
+    private static async Task<string> ComputeCacheIdentityAsync(FileInfo configFile)
+    {
+        var document = await LoadAsync(configFile).ConfigureAwait(false);
+        document
             .Descendants("config")
             .Elements("add")
             .Where(static element => string.Equals(
@@ -232,11 +280,11 @@ internal sealed class TemporaryNuGetConfig : IDisposable
                 "globalPackagesFolder",
                 StringComparison.OrdinalIgnoreCase))
             .Remove();
-        var bytes = Encoding.UTF8.GetBytes(identityDocument.ToString(SaveOptions.DisableFormatting));
+        var bytes = Encoding.UTF8.GetBytes(document.ToString(SaveOptions.DisableFormatting));
         return Convert.ToHexString(XxHash3.Hash(bytes));
     }
 
-    private static async Task<XDocument> LoadAsync(FileInfo configFile, CancellationToken cancellationToken)
+    private static async Task<XDocument> LoadAsync(FileInfo configFile)
     {
         await using var stream = new FileStream(
             configFile.FullName,
@@ -245,125 +293,41 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             FileShare.Read,
             bufferSize: 4096,
             useAsync: true);
-        return await XDocument.LoadAsync(stream, LoadOptions.None, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task SaveAsync(XDocument document, FileInfo configFile, CancellationToken cancellationToken)
-    {
-        await using var stream = new FileStream(
-            configFile.FullName,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None,
-            bufferSize: 4096,
-            useAsync: true);
-        await document.SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
-    }
-
-    internal static bool DocumentContainsCredentialMaterial(XDocument document)
-    {
-        var configuration = document.Root;
-        if (configuration?.Elements().Any(static element =>
-            (string.Equals(element.Name.LocalName, "packageSourceCredentials", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(element.Name.LocalName, "clientCertificates", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(element.Name.LocalName, "apikeys", StringComparison.OrdinalIgnoreCase)) &&
-            element.Elements().Any()) == true)
-        {
-            return true;
-        }
-
-        if (configuration?.Elements()
-            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "config", StringComparison.OrdinalIgnoreCase))
-            ?.Elements()
-            .Any(static element =>
-                string.Equals(element.Name.LocalName, "add", StringComparison.OrdinalIgnoreCase) &&
-                (element.Attributes().Any(attribute =>
-                     string.Equals(attribute.Name.LocalName, "key", StringComparison.OrdinalIgnoreCase) &&
-                     attribute.Value.Contains("password", StringComparison.OrdinalIgnoreCase)) ||
-                 element.Attributes().Any(attribute =>
-                     string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase) &&
-                     PackageSourceOverrideMappings.HasCredentialMaterial(attribute.Value)))) == true)
-        {
-            return true;
-        }
-
-        return configuration?.Elements()
-            .Where(element =>
-                string.Equals(element.Name.LocalName, "packageSources", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(element.Name.LocalName, "auditSources", StringComparison.OrdinalIgnoreCase))
-            .SelectMany(static element => element.Elements())
-            .Select(static element => element.Attributes()
-                .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase))
-                ?.Value)
-            .Any(static source => source is not null && PackageSourceOverrideMappings.HasCredentialMaterial(source)) == true;
-    }
-
-    internal static string[] GetCredentialBearingSources(XDocument document)
-    {
-        return document
-            .Descendants()
-            .SelectMany(static element => element.Attributes())
-            .Where(static attribute =>
-                string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase))
-            .Select(static attribute => attribute.Value)
-            .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    private static void EnableMappedSources(XDocument document, PackageMapping[] mappings)
-    {
-        var configuration = document.Root;
-        var packageSources = configuration?.Elements()
-            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "packageSources", StringComparison.OrdinalIgnoreCase));
-        var mappedSourceKeys = packageSources?.Elements()
-            .Where(element => string.Equals(element.Name.LocalName, "add", StringComparison.OrdinalIgnoreCase))
-            .Where(element =>
-            {
-                var sourceKey = element.Attributes().FirstOrDefault(attribute =>
-                    string.Equals(attribute.Name.LocalName, "key", StringComparison.OrdinalIgnoreCase))?.Value;
-                var sourceValue = element.Attributes().FirstOrDefault(attribute =>
-                    string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase))?.Value;
-                return mappings.Any(mapping =>
-                    PackageSourceIdentity.Comparer.Equals(sourceValue, mapping.Source) ||
-                    PackageSourceIdentity.IsNamedSourceReference(mapping.Source) &&
-                    string.Equals(sourceKey, mapping.Source, StringComparison.OrdinalIgnoreCase));
-            })
-            .Select(element => element.Attributes().FirstOrDefault(attribute =>
-                string.Equals(attribute.Name.LocalName, "key", StringComparison.OrdinalIgnoreCase))?.Value)
-            .Where(static key => !string.IsNullOrEmpty(key))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (mappedSourceKeys is not { Count: > 0 })
-        {
-            return;
-        }
-
-        var disabledSources = configuration?.Elements()
-            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "disabledPackageSources", StringComparison.OrdinalIgnoreCase));
-        disabledSources?.Elements()
-            .Where(element => mappedSourceKeys.Contains(element.Attributes().FirstOrDefault(attribute =>
-                string.Equals(attribute.Name.LocalName, "key", StringComparison.OrdinalIgnoreCase))?.Value))
-            .Remove();
+        return await XDocument.LoadAsync(stream, LoadOptions.None, CancellationToken.None).ConfigureAwait(false);
     }
 
     public void Dispose()
     {
-        if (!_disposed)
+        if (_disposed)
         {
-            try
-            {
-                if (_configFile.Exists)
-                {
-                    _configFile.Delete();
-                    _configFile.Directory?.Delete(true);
-                }
-            }
-            catch
-            {
-                // Ignore exceptions during cleanup
-            }
+            return;
+        }
 
-            _disposed = true;
+        try
+        {
+            if (_configFile.Exists)
+            {
+                _configFile.Delete();
+                _configFile.Directory?.Delete(recursive: true);
+            }
+        }
+        catch
+        {
+            // Temporary configuration cleanup is best effort.
+        }
+
+        _disposed = true;
+    }
+
+    private static void TryDeleteDirectory(string directory)
+    {
+        try
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+        catch
+        {
+            // Preserve the original creation failure.
         }
     }
 }

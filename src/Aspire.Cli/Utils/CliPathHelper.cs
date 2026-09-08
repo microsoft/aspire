@@ -117,21 +117,36 @@ internal static class CliPathHelper
     }
 
     /// <summary>
-    /// Returns the stable per-feed NuGet package cache used by generated staging-channel configs.
+    /// Returns the stable NuGet package cache used by generated staging-channel configs.
     /// </summary>
     /// <remarks>
     /// The default NuGet <c>globalPackagesFolder</c> used by <c>TemporaryNuGetConfig</c> is relative to
     /// the config file, which is unsafe for generated configs that may be copied from or disposed with a
     /// temporary directory. Anchoring staging restores under <c>ASPIRE_HOME</c> keeps package paths alive
-    /// for manifests that reference them and keys the cache by feed URL to avoid sharing the same
-    /// stable-shaped package versions across different staging feeds.
+    /// for manifests that reference them and keys the cache by the complete restore policy to avoid
+    /// sharing the same stable-shaped package versions across different staging feeds.
     /// </remarks>
-    internal static string GetStagingNuGetPackagesFeedDirectory(DirectoryInfo aspireHomeDirectory, string? feedUrl)
+    internal static string GetStagingNuGetPackagesIdentityDirectory(DirectoryInfo aspireHomeDirectory, string? identity)
     {
         ArgumentNullException.ThrowIfNull(aspireHomeDirectory);
 
-        var cacheKey = ComputeStagingFeedCacheKey(feedUrl) ?? "default";
+        var cacheKey = ComputeStagingCacheIdentityKey(identity) ?? "default";
         return Path.Combine(GetStagingNuGetPackagesDirectory(aspireHomeDirectory), cacheKey);
+    }
+
+    /// <summary>
+    /// Returns a stable lowercase hex cache key for an already-normalized restore-policy identity.
+    /// </summary>
+    internal static string? ComputeStagingCacheIdentityKey(string? identity, int length = DefaultStagingFeedCacheKeyLength)
+    {
+        if (string.IsNullOrEmpty(identity) || length <= 0)
+        {
+            return null;
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(identity);
+        var hex = Convert.ToHexString(XxHash3.Hash(bytes)).ToLowerInvariant();
+        return length >= hex.Length ? hex : hex[..length];
     }
 
     /// <summary>

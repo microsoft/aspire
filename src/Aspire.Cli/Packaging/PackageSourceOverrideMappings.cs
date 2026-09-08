@@ -155,7 +155,9 @@ internal static class PackageSourceOverrideMappings
 
     private static PackageSourceKind ClassifySource(string source, out string? localDirectory)
     {
-        if (UrlHelper.IsHttpUrl(source))
+        var trimmedSource = source.Trim();
+        if (trimmedSource.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            trimmedSource.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             localDirectory = null;
             return PackageSourceKind.Http;

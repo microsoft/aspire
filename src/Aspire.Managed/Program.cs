@@ -78,7 +78,7 @@ static async Task<int> RunNuGet(string[] args)
         rootCommand.Subcommands.Add(SearchCommand.Create());
         rootCommand.Subcommands.Add(RestoreCommand.Create());
         rootCommand.Subcommands.Add(ManifestCommand.Create());
-        rootCommand.Subcommands.Add(ConfigPathsCommand.Create());
+        rootCommand.Subcommands.Add(SettingsCommand.Create());
         return await rootCommand.Parse(args).InvokeAsync(cancellationToken: operationCts.Token).ConfigureAwait(false);
     }
     finally

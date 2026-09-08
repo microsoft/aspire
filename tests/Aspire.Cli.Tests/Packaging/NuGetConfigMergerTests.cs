@@ -992,48 +992,5 @@ public class NuGetConfigMergerTests
         Assert.True(File.Exists(targetConfigPath));
     }
 
-    [Fact]
-    public async Task CreateOrUpdateAsync_AlignsNestedSourceKeysWithPackageSourceMappings()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
-        var root = workspace.WorkspaceRoot;
-        var projectDirectory = root.CreateSubdirectory("AppHost");
-        var localSource = root.CreateSubdirectory("packages").FullName;
-        var channel = CreateChannel(
-        [
-            new PackageMapping("Aspire*", localSource),
-            new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
-        ]);
-
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
-        await File.WriteAllTextAsync(
-            Path.Combine(projectDirectory.FullName, "nuget.config"),
-            $$"""
-            <configuration>
-              <packageSources>
-                <add key="{{localSource}}" value="{{localSource}}" />
-              </packageSources>
-            </configuration>
-            """).DefaultTimeout();
-
-        await NuGetConfigMerger.CreateOrUpdateAsync(projectDirectory, channel).DefaultTimeout();
-
-        var composed = await NuGetConfigComposer.ComposeAsync(
-            [
-                Path.Combine(projectDirectory.FullName, "nuget.config"),
-                Path.Combine(root.FullName, "nuget.config")
-            ],
-            CancellationToken.None).DefaultTimeout();
-        var sourceKeys = composed.Root!.Element("packageSources")!
-            .Elements("add")
-            .Select(static element => (string)element.Attribute("key")!)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var mappingKeys = composed.Root.Element("packageSourceMapping")!
-            .Elements("packageSource")
-            .Select(static element => (string)element.Attribute("key")!);
-
-        Assert.All(mappingKeys, key => Assert.Contains(key, sourceKeys));
-    }
-
     private static string NormalizeLineEndings(string text) => text.Replace("\r\n", "\n");
 }

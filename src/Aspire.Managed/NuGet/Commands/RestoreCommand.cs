@@ -66,9 +66,11 @@ public static class RestoreCommand
         };
         command.Options.Add(sourceOption);
 
-        var configOption = new Option<string?>("--nuget-config")
+        var configOption = new Option<string[]>("--nuget-config")
         {
-            Description = "Path to nuget.config file"
+            Description = "NuGet.config path, ordered from highest to lowest precedence",
+            DefaultValueFactory = _ => [],
+            AllowMultipleArgumentsPerToken = true
         };
         command.Options.Add(configOption);
 
@@ -98,7 +100,7 @@ public static class RestoreCommand
             var runtimeIdentifier = parseResult.GetValue(runtimeIdentifierOption);
             var output = parseResult.GetValue(outputOption)!;
             var sources = parseResult.GetValue(sourceOption) ?? [];
-            var nugetConfigPath = parseResult.GetValue(configOption);
+            var nugetConfigPaths = parseResult.GetValue(configOption) ?? [];
             var workingDir = parseResult.GetValue(workingDirOption);
             var noNugetOrg = parseResult.GetValue(noNugetOrgOption);
             var verbose = parseResult.GetValue(verboseOption);
@@ -120,7 +122,7 @@ public static class RestoreCommand
                 packages.Add((parts[0], parts[1]));
             }
 
-            return await ExecuteRestoreAsync(packages, framework, runtimeIdentifier, output, sources, nugetConfigPath, workingDir, noNugetOrg, verbose).ConfigureAwait(false);
+            return await ExecuteRestoreAsync(packages, framework, runtimeIdentifier, output, sources, nugetConfigPaths, workingDir, noNugetOrg, verbose).ConfigureAwait(false);
         });
 
         return command;
@@ -132,7 +134,7 @@ public static class RestoreCommand
         string? runtimeIdentifier,
         string output,
         string[] cliSources,
-        string? nugetConfigPath,
+        string[] nugetConfigPaths,
         string? workingDir,
         bool noNugetOrg,
         bool verbose)
@@ -144,9 +146,10 @@ public static class RestoreCommand
 
         try
         {
-            // Load NuGet settings once — handles working dir, config file, and machine-wide settings.
             var machineWideSettings = new XPlatMachineWideSetting();
-            var settings = Settings.LoadDefaultSettings(workingDir, nugetConfigPath, machineWideSettings);
+            var settings = nugetConfigPaths.Length > 0
+                ? Settings.LoadSettingsGivenConfigPaths(nugetConfigPaths)
+                : Settings.LoadDefaultSettings(workingDir, configFileName: null, machineWideSettings);
 
             if (verbose)
             {
@@ -160,7 +163,7 @@ public static class RestoreCommand
                 {
                     Console.WriteLine($"Working dir: {workingDir}");
                 }
-                if (nugetConfigPath is not null)
+                foreach (var nugetConfigPath in nugetConfigPaths)
                 {
                     Console.WriteLine($"NuGet config: {nugetConfigPath}");
                 }
@@ -241,9 +244,10 @@ public static class RestoreCommand
         // Append CLI --source values (matching NuGet's behavior of merging, not replacing)
         foreach (var cliSource in cliSources)
         {
-            if (!sources.Any(source => AreEquivalentPackageSources(source.Source, cliSource)))
+            var configuredSource = sources.FirstOrDefault(source => AreEquivalentPackageSources(source.Source, cliSource));
+            if (configuredSource is null)
             {
-                sources.Add(new PackageSource(cliSource));
+                sources.Add(new PackageSource(cliSource, cliSource));
             }
         }
 

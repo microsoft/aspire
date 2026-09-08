@@ -33,6 +33,10 @@ public sealed class ProcessInvocationOptionsTests
             DetachedUnixLauncherPathOverride = "detached-launcher-override",
             AppHostArgumentStartIndex = 3,
             EnvironmentVariableFilter = _ => false,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                ["ASPIRE_TEST_VALUE"] = "configured",
+            },
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
             ShutdownService = new TestGracefulShutdownWindow(),
         };

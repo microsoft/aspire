@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Managed.NuGet.Commands;
 using Microsoft.DotNet.RemoteExecutor;
 using NuGet.Configuration;
@@ -115,6 +116,58 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.Contains(JsonEncodedPath(cliSourcePath), assetsContent);
     }
 
+    [Fact]
+    public void RestoreCommand_LoadsExplicitConfigsFromHighestToLowestPrecedence()
+    {
+        var lowerConfigPath = Path.Combine(_workspace.Path, "lower.config");
+        var higherConfigPath = Path.Combine(_workspace.Path, "higher.config");
+        var lowerSourcePath = Path.Combine(_workspace.Path, "lower-source");
+        var higherSourcePath = Path.Combine(_workspace.Path, "higher-source");
+        File.WriteAllText(
+            lowerConfigPath,
+            $"""
+            <configuration>
+              <packageSources>
+                <add key="lower" value="{lowerSourcePath}" />
+              </packageSources>
+            </configuration>
+            """);
+        File.WriteAllText(
+            higherConfigPath,
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="higher" value="{higherSourcePath}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        RemoteExecutor.Invoke(static async (higherConfig, lowerConfig, tempDirPath) =>
+        {
+            var command = RestoreCommand.Create();
+            await command.Parse([
+                "--package", "Fake.Package,1.0.0",
+                "--no-nuget-org",
+                "--nuget-config", higherConfig,
+                "--nuget-config", lowerConfig,
+                "--output", Path.Combine(tempDirPath, "obj"),
+                "--working-dir", tempDirPath]).InvokeAsync();
+        }, higherConfigPath, lowerConfigPath, _workspace.Path).Dispose();
+
+        using var assets = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(_workspace.Path, "obj", "project.assets.json")));
+        var sources = assets.RootElement
+            .GetProperty("project")
+            .GetProperty("restore")
+            .GetProperty("sources")
+            .EnumerateObject()
+            .Select(static source => source.Name)
+            .ToArray();
+
+        Assert.Equal([higherSourcePath], sources);
+    }
+
     [Theory]
     [InlineData("https://example.invalid/Feed/index.json", "https://example.invalid/feed/index.json")]
     [InlineData("https://example.invalid/feed?token=A", "https://example.invalid/feed?token=a")]
@@ -157,7 +210,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
     }
 
     [Fact]
-    public void RestoreCommand_DeduplicatesUriSchemeAndHostCasingWhileRetainingConfiguredCredentials()
+    public void RestoreCommand_ReusesConfiguredSourceIdentityAndCredentials()
     {
         var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.config");
         File.WriteAllText(
@@ -185,6 +238,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
 
         var source = Assert.Single(sources);
         Assert.Equal("HTTPS://HOST.example/Feed/index.json", source.Source);
+        Assert.Equal("private", source.Name);
         Assert.NotNull(source.Credentials);
     }
 
@@ -222,14 +276,28 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
     }
 
     [Fact]
-    public void ConfigPathsCommand_DiscoversWorkspaceNuGetConfig()
+    public void SettingsCommand_DiscoversWorkspaceNuGetConfigAndSourceNames()
     {
         var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.Config");
-        File.WriteAllText(nugetConfigPath, "<configuration />");
+        var sourcePath = Path.Combine(_workspace.Path, "packages");
+        File.WriteAllText(
+            nugetConfigPath,
+            $"""
+            <configuration>
+              <packageSources>
+                <add key="private" value="{sourcePath}" />
+              </packageSources>
+            </configuration>
+            """);
 
-        var configPaths = ConfigPathsCommand.GetConfigFilePaths(_workspace.Path);
+        var settings = SettingsCommand.GetSettings(_workspace.Path);
 
-        Assert.Contains(nugetConfigPath, configPaths, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(nugetConfigPath, settings.ConfigPaths, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(
+            settings.Sources,
+            source => source.Name == "private" &&
+                source.Source == sourcePath &&
+                source.IsEnabled);
     }
 
     /// <summary>

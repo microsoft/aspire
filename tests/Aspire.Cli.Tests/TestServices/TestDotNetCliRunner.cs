@@ -71,17 +71,15 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     {
         return GetNuGetConfigPathsAsyncCallback != null
             ? Task.FromResult(GetNuGetConfigPathsAsyncCallback(workingDirectory, options, cancellationToken))
-            : Task.FromResult((0, GetGlobalNuGetPaths())); // If not overridden, return success with no config paths which will blow up.
+            : Task.FromResult((0, GetGlobalNuGetPaths()));
     }
 
-    private static string[] GetGlobalNuGetPaths()
-    {
-        return Environment.OSVersion.Platform switch
+    private static string[] GetGlobalNuGetPaths() =>
+        Environment.OSVersion.Platform switch
         {
             PlatformID.Win32NT => [Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NuGet", "NuGet.Config")],
-            _ => [Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "NuGet.Config")],
+            _ => [Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "NuGet", "NuGet.Config")],
         };
-    }
 
     public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, string[] targets, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {

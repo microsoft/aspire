@@ -38,6 +38,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     internal const string IntegrationProjectFileName = "IntegrationRestore.csproj";
 
     private const string ProjectAssetsFileName = "project.assets.json";
+    private const string RestoreAdditionalProjectSourcesEnvironmentVariable = "RestoreAdditionalProjectSources";
     private const string RestoreStampFileName = "aspire-restore.stamp";
 
     private readonly string _appDirectoryPath;
@@ -303,20 +304,27 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var packages = packageRefs
             .Select(r => (r.Name, Version: GetRestoreVersion(r.Name, r.Version!, useExactPackageVersions)))
             .ToList();
-        var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
-        var usesAmbientNuGetConfiguration = string.IsNullOrWhiteSpace(packageSourceOverride);
-        using var temporaryNuGetConfig = usesAmbientNuGetConfiguration
-            ? await CreateComposedBundleNuGetConfigAsync(restoreSources, cancellationToken).ConfigureAwait(false)
-            : await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false);
+        var restoreSources = NormalizeIntegrationRestoreSources(
+            await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false));
+        var settings = await _nugetService.GetNuGetSettingsAsync(_workingDirectory, cancellationToken).ConfigureAwait(false);
+        var configSources = ResolveNuGetConfigSources(restoreSources.PackageSourceMappings, settings.Sources);
+        using var temporaryNuGetConfig = await CreateRestoreOverlayAsync(
+            restoreSources,
+            configSources).ConfigureAwait(false);
         var sources = GetNuGetSources(restoreSources)?.ToArray();
+        IReadOnlyList<string> configPaths = temporaryNuGetConfig is null
+            ? settings.ConfigPaths
+            : [temporaryNuGetConfig.ConfigFile.FullName, .. settings.ConfigPaths];
 
         return await _nugetService.RestorePackagesAsync(
             packages,
-            workingDirectory: _appDirectoryPath,
+            workingDirectory: _workingDirectory,
             targetFramework: DotNetBasedAppHostServerProject.TargetFramework,
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
-            nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
+            nugetConfigPaths: configPaths,
+            nugetConfigOverlayCacheIdentity: temporaryNuGetConfig?.CacheIdentity,
+            additionalSensitiveSources: settings.Sources.Select(static source => source.Source),
             globalPackagesFolderOverride: GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryNuGetConfig),
             ct: cancellationToken).ConfigureAwait(false);
     }
@@ -360,35 +368,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         IReadOnlyList<IntegrationReference> packageRefs,
         IReadOnlyList<IntegrationReference> projectRefs,
         CancellationToken cancellationToken)
-        => await ComputeRestoreInputsAsync(projectContent, packageRefs, projectRefs, restoreConfigContent: null, cancellationToken).ConfigureAwait(false);
-
-    internal static async Task<RestoreInputs> ComputeRestoreInputsAsync(
-        string projectContent,
-        IReadOnlyList<IntegrationReference> packageRefs,
-        IReadOnlyList<IntegrationReference> projectRefs,
-        string? restoreConfigContent,
-        CancellationToken cancellationToken)
         => await ComputeRestoreInputsAsync(
             projectContent,
             packageRefs,
             projectRefs,
-            restoreConfigContent,
+            nugetConfigPaths: null,
+            restoreAdditionalProjectSources: null,
             nugetPackagesPath: null,
-            cancellationToken).ConfigureAwait(false);
-
-    internal static async Task<RestoreInputs> ComputeRestoreInputsAsync(
-        string projectContent,
-        IReadOnlyList<IntegrationReference> packageRefs,
-        IReadOnlyList<IntegrationReference> projectRefs,
-        string? restoreConfigContent,
-        string? nugetPackagesPath,
-        CancellationToken cancellationToken)
-        => await ComputeRestoreInputsAsync(
-            projectContent,
-            packageRefs,
-            projectRefs,
-            restoreConfigContent,
-            nugetPackagesPath,
             nugetFallbackPackagesPaths: null,
             cancellationToken).ConfigureAwait(false);
 
@@ -396,16 +382,33 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         string projectContent,
         IReadOnlyList<IntegrationReference> packageRefs,
         IReadOnlyList<IntegrationReference> projectRefs,
-        string? restoreConfigContent,
+        IReadOnlyList<string>? nugetConfigPaths,
+        string? restoreAdditionalProjectSources,
         string? nugetPackagesPath,
         IReadOnlyList<string>? nugetFallbackPackagesPaths,
         CancellationToken cancellationToken)
     {
         var hash = new XxHash3();
         hash.Append(Encoding.UTF8.GetBytes(projectContent));
-        if (restoreConfigContent is not null)
+        var hasDynamicRestoreInput = HasFloatingPackageVersion(packageRefs);
+        if (nugetConfigPaths is not null)
         {
-            hash.Append(Encoding.UTF8.GetBytes(restoreConfigContent));
+            foreach (var nugetConfigPath in nugetConfigPaths)
+            {
+                hash.Append("\0NUGET_CONFIG\0"u8);
+                hash.Append(Encoding.UTF8.GetBytes(nugetConfigPath));
+                hash.Append(await File.ReadAllBytesAsync(nugetConfigPath, cancellationToken).ConfigureAwait(false));
+                if (!hasDynamicRestoreInput)
+                {
+                    var configContent = await File.ReadAllTextAsync(nugetConfigPath, cancellationToken).ConfigureAwait(false);
+                    hasDynamicRestoreInput = NuGetConfigEnvironmentVariables.FindReferencedNames(configContent).Length > 0;
+                }
+            }
+        }
+        if (restoreAdditionalProjectSources is not null)
+        {
+            hash.Append("\0RestoreAdditionalProjectSources\0"u8);
+            hash.Append(Encoding.UTF8.GetBytes(restoreAdditionalProjectSources));
         }
         if (nugetPackagesPath is not null)
         {
@@ -420,8 +423,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 hash.Append(Encoding.UTF8.GetBytes(fallbackPackagesPath));
             }
         }
-
-        var isFloating = HasFloatingPackageVersion(packageRefs);
 
         var pending = new Queue<string>();
         // Ordinal rather than a path-aware comparer: a duplicate spelling of the same path costs one
@@ -472,9 +473,12 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             var projectBytes = await File.ReadAllBytesAsync(projectPath, cancellationToken).ConfigureAwait(false);
             hash.Append(projectBytes);
 
-            if (!isFloating && HasFloatingVersionAttribute(Encoding.UTF8.GetString(projectBytes)))
+            if (!hasDynamicRestoreInput)
             {
-                isFloating = true;
+                var projectText = Encoding.UTF8.GetString(projectBytes);
+                hasDynamicRestoreInput =
+                    HasFloatingVersionAttribute(projectText) ||
+                    HasUnevaluatedRestoreInputs(projectText);
             }
         }
 
@@ -485,13 +489,16 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             var importBytes = await File.ReadAllBytesAsync(importPath, cancellationToken).ConfigureAwait(false);
             hash.Append(importBytes);
 
-            if (!isFloating && HasFloatingVersionAttribute(Encoding.UTF8.GetString(importBytes)))
+            if (!hasDynamicRestoreInput)
             {
-                isFloating = true;
+                var importText = Encoding.UTF8.GetString(importBytes);
+                hasDynamicRestoreInput =
+                    HasFloatingVersionAttribute(importText) ||
+                    HasUnevaluatedRestoreInputs(importText);
             }
         }
 
-        return new RestoreInputs(Convert.ToHexString(hash.GetCurrentHash()), IsEligibleForSkip: !isFloating);
+        return new RestoreInputs(Convert.ToHexString(hash.GetCurrentHash()), IsEligibleForSkip: !hasDynamicRestoreInput);
     }
 
     /// <summary>
@@ -611,14 +618,14 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         return imports;
     }
 
-    // NuGet.config is matched case-insensitively by NuGet itself, but the two spellings below are the
-    // ones it documents and the ones repositories actually use.
+    // NuGet recognizes these filename casings on case-sensitive filesystems.
     private static readonly string[] s_directoryScopedImportFileNames =
     [
         "Directory.Packages.props",
         "Directory.Build.props",
         "Directory.Build.targets",
         "NuGet.config",
+        "NuGet.Config",
         "nuget.config"
     ];
 
@@ -645,8 +652,29 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     internal static bool HasFloatingVersionAttribute(string projectText)
         => FloatingVersionAttributeRegex().IsMatch(projectText);
 
-    [GeneratedRegex("""\b(?:VersionOverride|Version)\s*=\s*"[^"]*[*\[(,]""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex("""\b(?:VersionOverride|Version)\s*=\s*["'][^"']*[*\[(,$]""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex FloatingVersionAttributeRegex();
+
+    private static bool HasUnevaluatedRestoreInputs(string projectText)
+    {
+        try
+        {
+            var document = XDocument.Parse(projectText);
+            if (document.Descendants().Any(static element => element.Name.LocalName == "Import"))
+            {
+                return true;
+            }
+
+            return document.Descendants()
+                .Where(static element => element.Name.LocalName == "ProjectReference")
+                .Select(static element => element.Attribute("Include")?.Value)
+                .Any(static include => include?.Contains("$(", StringComparison.Ordinal) == true);
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// Returns <see langword="true" /> when any package version can resolve to a different package
@@ -763,12 +791,27 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private async Task<(int ExitCode, OutputCollector Output)> BuildIntegrationProjectAsync(
         string projectFilePath,
         bool noRestore,
-        bool configureGlobalPackagesFolder,
+        string? globalPackagesFolder,
+        string? restoreAdditionalProjectSources,
         bool suppressLogging,
         IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
     {
         var buildOutput = new OutputCollector();
+        Dictionary<string, string>? environmentVariables = null;
+        if (globalPackagesFolder is not null || restoreAdditionalProjectSources is not null)
+        {
+            environmentVariables = [];
+            if (globalPackagesFolder is not null)
+            {
+                environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = globalPackagesFolder;
+            }
+            if (restoreAdditionalProjectSources is not null)
+            {
+                environmentVariables[RestoreAdditionalProjectSourcesEnvironmentVariable] = restoreAdditionalProjectSources;
+            }
+        }
+
         var exitCode = await _dotNetCliRunner.BuildAsync(
             new FileInfo(projectFilePath),
             noRestore,
@@ -776,9 +819,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             {
                 StandardOutputCallback = line => buildOutput.AppendOutput(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
                 StandardErrorCallback = line => buildOutput.AppendError(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
-                EnvironmentVariableFilter = configureGlobalPackagesFolder
+                EnvironmentVariableFilter = globalPackagesFolder is not null
                     ? static name => string.Equals(name, CliPathHelper.NuGetPackagesEnvironmentVariable, StringComparison.OrdinalIgnoreCase)
                     : null,
+                EnvironmentVariables = environmentVariables,
                 SuppressLogging = suppressLogging
             },
             cancellationToken).ConfigureAwait(false);
@@ -801,92 +845,66 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
-        var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
-        var usesAmbientNuGetConfiguration = string.IsNullOrWhiteSpace(packageSourceOverride);
-        var hasMappedRestoreSources = restoreSources.PackageSourceMappings is not null;
-        var useComposedRestoreConfig = usesAmbientNuGetConfiguration && hasMappedRestoreSources;
-        var usePersistentRestoreConfig = !usesAmbientNuGetConfiguration && hasMappedRestoreSources;
-        var hasCredentialBearingMappedSource = hasMappedRestoreSources &&
-            restoreSources.PackageSourceMappings!.Any(
-                static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source));
-        var hasCredentialBearingAdditionalSource = !hasMappedRestoreSources &&
-            restoreSources.AdditionalSources.Any(
-                static source => PackageSourceOverrideMappings.HasCredentialMaterial(source));
-
-        if (!usePersistentRestoreConfig || hasCredentialBearingMappedSource)
+        var restoreSources = NormalizeIntegrationRestoreSources(
+            await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false));
+        var selectedSensitiveRestoreSources = restoreSources.AdditionalSources
+            .Concat(restoreSources.PackageSourceMappings?.Select(static mapping => mapping.Source) ?? [])
+            .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (selectedSensitiveRestoreSources.Length > 0)
         {
-            var persistentRestoreConfigFile = new FileInfo(Path.Combine(restoreDir, "nuget.config"));
-            if (persistentRestoreConfigFile.Exists)
-            {
-                persistentRestoreConfigFile.Delete();
-            }
+            throw new InvalidOperationException(
+                "Credential-bearing package source URLs cannot be used when restoring integration project references. Configure credentials through NuGet instead.");
         }
 
-        using var temporaryRestoreConfig = useComposedRestoreConfig
-            ? await CreateComposedNuGetConfigAsync(restoreSources, cancellationToken).ConfigureAwait(false)
-            : hasCredentialBearingMappedSource
-                ? await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false)
-                : null;
-        using var temporaryRestoreSourcesProps = hasCredentialBearingAdditionalSource
-            ? await TemporaryRestoreSourcesProps.CreateAsync(restoreSources.AdditionalSources, cancellationToken).ConfigureAwait(false)
-            : null;
-        var hasCredentialBearingRestoreSource =
-            hasCredentialBearingMappedSource ||
-            hasCredentialBearingAdditionalSource ||
-            temporaryRestoreConfig?.ContainsCredentialMaterial == true;
-        var sensitiveRestoreSources = restoreSources.AdditionalSources
-            .Concat(restoreSources.PackageSourceMappings?.Select(static mapping => mapping.Source) ?? [])
-            .Concat(temporaryRestoreConfig?.CredentialBearingSources ?? [])
+        var globalPackagesFolder = GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryNuGetConfig: null);
+        FileInfo? restoreConfigFile = new(Path.Combine(restoreDir, "NuGet.Config"));
+        if (restoreConfigFile.Exists)
+        {
+            restoreConfigFile.Delete();
+        }
+        var settings = await _nugetService.GetNuGetSettingsAsync(restoreDir, cancellationToken).ConfigureAwait(false);
+        var configSources = ResolveNuGetConfigSources(restoreSources.PackageSourceMappings, settings.Sources);
+        if (restoreSources.PackageSourceMappings is null)
+        {
+            restoreConfigFile = null;
+        }
+        else
+        {
+            await TemporaryNuGetConfig.GenerateRestoreOverlayAsync(
+                restoreSources.PackageSourceMappings,
+                restoreConfigFile!.FullName,
+                globalPackagesFolder,
+                configSources).ConfigureAwait(false);
+        }
+
+        var channelSources = GetNuGetSources(restoreSources)?.ToArray() ?? [];
+        var rootAdditionalSources = restoreSources.PackageSourceMappings is null
+            ? null
+            : configSources
+                .Where(static source => !source.IsAmbient)
+                .Select(static source => source.Source)
+                .ToArray();
+        var restoreAdditionalProjectSources = IntegrationClosureBuilder.CreateRestoreAdditionalProjectSourcesValue(
+            _environment.GetEnvironmentVariable(RestoreAdditionalProjectSourcesEnvironmentVariable),
+            channelSources);
+        var sensitiveRestoreSources = settings.Sources
+            .Select(static source => source.Source)
+            .Concat((restoreAdditionalProjectSources ?? string.Empty)
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var intermediateOutputPath = Path.Combine(restoreDir, "obj");
-
-        FileInfo? restoreConfigFile;
-        string? restoreConfigContent;
-        if (temporaryRestoreConfig is not null)
-        {
-            restoreConfigFile = temporaryRestoreConfig.ConfigFile;
-            restoreConfigContent = temporaryRestoreConfig.CacheIdentity;
-        }
-        else if (!usePersistentRestoreConfig)
-        {
-            // With no single requested channel there is no unambiguous mapping to apply. Preserve
-            // ambient discovery and add every explicit channel source, matching the existing fallback.
-            restoreConfigFile = null;
-            restoreConfigContent = temporaryRestoreSourcesProps?.CacheIdentity;
-        }
-        else
-        {
-            restoreConfigFile = await WriteRestoreNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false);
-            restoreConfigContent = restoreConfigFile is null
-                ? null
-                : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
-        }
-
-        var channelSources = restoreConfigFile is null && temporaryRestoreSourcesProps is null
-            ? GetNuGetSources(restoreSources)
-            : null;
         var projectContent = GenerateIntegrationProjectFile(
             packageRefs,
             projectRefs,
             restoreDir,
-            channelSources,
-            useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
-            restoreConfigFile: restoreConfigFile?.FullName,
-            restoreSourcesPropsFile: temporaryRestoreSourcesProps?.PropsFile.FullName);
+            rootAdditionalSources,
+            useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride));
         var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
         await WriteIfChangedAsync(projectFilePath, projectContent, cancellationToken);
-        var fingerprintProjectContent = temporaryRestoreConfig is null && temporaryRestoreSourcesProps is null
-            ? projectContent
-            : GenerateIntegrationProjectFile(
-                packageRefs,
-                projectRefs,
-                restoreDir,
-                channelSources,
-                useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
-                restoreConfigFile: temporaryRestoreConfig is null ? null : "__temporary_nuget_config__",
-                restoreSourcesPropsFile: temporaryRestoreSourcesProps is null ? null : "__temporary_restore_sources_props__");
 
         // Write a Directory.Packages.props to opt out of Central Package Management
         var directoryPackagesProps = """
@@ -922,22 +940,19 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
         // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
         // restore rather than reported.
-        string? restoreFingerprint = null;
-        var hasCompleteNuGetConfigurationFingerprint =
-            !usesAmbientNuGetConfiguration || useComposedRestoreConfig;
-        if (hasCompleteNuGetConfigurationFingerprint)
-        {
-            var restoreInputs = await ComputeRestoreInputsAsync(
-                fingerprintProjectContent,
-                packageRefs,
-                projectRefs,
-                restoreConfigContent,
-                GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryRestoreConfig) ??
-                    CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
-                CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment),
-                cancellationToken).ConfigureAwait(false);
-            restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
-        }
+        IReadOnlyList<string> configPaths = restoreConfigFile is null
+            ? settings.ConfigPaths
+            : [restoreConfigFile.FullName, .. settings.ConfigPaths];
+        var restoreInputs = await ComputeRestoreInputsAsync(
+            projectContent,
+            packageRefs,
+            projectRefs,
+            configPaths,
+            restoreAdditionalProjectSources,
+            globalPackagesFolder ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
+            CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment),
+            cancellationToken).ConfigureAwait(false);
+        var restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
 
         if (restoreFingerprint is null)
         {
@@ -958,8 +973,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
             projectFilePath,
             noRestore: skipRestore,
-            restoreSources.ConfigureGlobalPackagesFolder,
-            suppressLogging: hasCredentialBearingRestoreSource,
+            globalPackagesFolder,
+            restoreAdditionalProjectSources,
+            suppressLogging: sensitiveRestoreSources.Length > 0,
             sensitiveRestoreSources,
             cancellationToken).ConfigureAwait(false);
         if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
@@ -969,8 +985,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
                 projectFilePath,
                 noRestore: false,
-                restoreSources.ConfigureGlobalPackagesFolder,
-                suppressLogging: hasCredentialBearingRestoreSource,
+                globalPackagesFolder,
+                restoreAdditionalProjectSources,
+                suppressLogging: sensitiveRestoreSources.Length > 0,
                 sensitiveRestoreSources,
                 cancellationToken).ConfigureAwait(false);
         }
@@ -1021,28 +1038,11 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         List<IntegrationReference> projectRefs,
         string restoreDir,
         IEnumerable<string>? additionalSources = null,
-        bool useExactPackageVersions = false,
-        string? restoreConfigFile = null,
-        string? restoreSourcesPropsFile = null)
+        bool useExactPackageVersions = false)
     {
-        IEnumerable<string>? restoreAdditionalSources = additionalSources;
-        if (!string.IsNullOrWhiteSpace(restoreConfigFile))
-        {
-            // RestoreAdditionalProjectSources can add feeds, but it cannot carry package source
-            // mappings. Use the generated NuGet.config so Aspire* packages stay pinned to the
-            // explicit source while non-Aspire dependencies can use fallback sources.
-            restoreAdditionalSources = null;
-        }
-
         var projectFile = IntegrationClosureBuilder.CreateClosureProjectFile(
             restoreDir,
-            restoreAdditionalSources,
-            restoreConfigFile);
-
-        if (!string.IsNullOrWhiteSpace(restoreSourcesPropsFile))
-        {
-            projectFile.Imports.Add(new CSharpProjectImport(restoreSourcesPropsFile));
-        }
+            additionalSources);
 
         foreach (var packageReference in packageRefs)
         {
@@ -1105,11 +1105,84 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private static IEnumerable<string>? GetNuGetSources(IntegrationRestoreSources restoreSources)
         => restoreSources.AdditionalSources.Count > 0 ? restoreSources.AdditionalSources : null;
 
+    private IntegrationRestoreSources NormalizeIntegrationRestoreSources(IntegrationRestoreSources restoreSources)
+    {
+        var appDirectory = new DirectoryInfo(_appDirectoryPath);
+        var normalizedAdditionalSources = restoreSources.AdditionalSources
+            .Select(source => PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, appDirectory))
+            .ToArray();
+        var normalizedMappings = restoreSources.PackageSourceMappings?
+            .Select(mapping => new PackageMapping(
+                mapping.PackageFilter,
+                PackageSourceOverrideMappings.ResolveForWorkingDirectory(mapping.Source, appDirectory)))
+            .ToArray();
+
+        return restoreSources with
+        {
+            AdditionalSources = normalizedAdditionalSources,
+            PackageSourceMappings = normalizedMappings,
+            GlobalPackagesFolderIdentity = restoreSources.ConfigureGlobalPackagesFolder
+                ? IntegrationRestoreSourceResolver.CreateGlobalPackagesFolderIdentity(
+                    normalizedAdditionalSources,
+                    normalizedMappings)
+                : null
+        };
+    }
+
+    private static NuGetConfigSource[] ResolveNuGetConfigSources(
+        PackageMapping[]? mappings,
+        IReadOnlyList<NuGetSourceInfo> ambientSources)
+    {
+        if (mappings is null)
+        {
+            return [];
+        }
+
+        var usedKeys = ambientSources
+            .Select(static source => source.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var nextAspireKey = 0;
+
+        var resolvedSources = new List<NuGetConfigSource>();
+        foreach (var source in mappings
+            .Select(static mapping => mapping.Source)
+            .Distinct(PackageSourceIdentity.Comparer))
+        {
+            var ambientMatches = ambientSources
+                .Where(candidate => PackageSourceIdentity.Comparer.Equals(candidate.Source, source))
+                .ToArray();
+            if (ambientMatches.Length > 0)
+            {
+                foreach (var ambientSource in ambientMatches)
+                {
+                    resolvedSources.Add(new NuGetConfigSource(
+                        ambientSource.Name,
+                        source,
+                        IsAmbient: true,
+                        ambientSource.IsEnabled));
+                }
+
+                continue;
+            }
+
+            string key;
+            do
+            {
+                key = $"aspire-{nextAspireKey++}";
+            }
+            while (!usedKeys.Add(key));
+
+            resolvedSources.Add(new NuGetConfigSource(key, source, IsAmbient: false, IsEnabled: true));
+        }
+
+        return [.. resolvedSources];
+    }
+
     private string? GetIntegrationRestoreGlobalPackagesFolder(
         IntegrationRestoreSources restoreSources,
         TemporaryNuGetConfig? temporaryNuGetConfig)
         => restoreSources.ConfigureGlobalPackagesFolder
-            ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(
+            ? CliPathHelper.GetStagingNuGetPackagesIdentityDirectory(
                 _executionContext.AspireHomeDirectory,
                 temporaryNuGetConfig?.CacheIdentity ?? restoreSources.GlobalPackagesFolderIdentity)
             : null;
@@ -1127,39 +1200,19 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         return await ConfigureGlobalPackagesFolderAsync(config, restoreSources).ConfigureAwait(false);
     }
 
-    private async Task<TemporaryNuGetConfig> CreateComposedBundleNuGetConfigAsync(
+    private async Task<TemporaryNuGetConfig?> CreateRestoreOverlayAsync(
         IntegrationRestoreSources restoreSources,
-        CancellationToken cancellationToken)
+        IReadOnlyList<NuGetConfigSource> sources)
     {
-        var configPaths = await _nugetService.GetNuGetConfigPathsAsync(_appDirectoryPath, cancellationToken).ConfigureAwait(false);
-        var config = await TemporaryNuGetConfig.CreateComposedAsync(
-            configPaths,
-            restoreSources.PackageSourceMappings ?? [],
-            restoreSources.ConfigureGlobalPackagesFolder,
-            globalPackagesFolderValue: null,
-            cancellationToken).ConfigureAwait(false);
-        return await ConfigureGlobalPackagesFolderAsync(config, restoreSources).ConfigureAwait(false);
-    }
-
-    private async Task<TemporaryNuGetConfig> CreateComposedNuGetConfigAsync(
-        IntegrationRestoreSources restoreSources,
-        CancellationToken cancellationToken)
-    {
-        var (exitCode, configPaths) = await _dotNetCliRunner.GetNuGetConfigPathsAsync(
-            new DirectoryInfo(_appDirectoryPath),
-            new ProcessInvocationOptions { SuppressLogging = true },
-            cancellationToken).ConfigureAwait(false);
-        if (exitCode != 0)
+        if (restoreSources.PackageSourceMappings is null)
         {
-            throw new InvalidOperationException($"Unable to discover the NuGet configuration hierarchy for '{_appDirectoryPath}'.");
+            return null;
         }
 
-        var config = await TemporaryNuGetConfig.CreateComposedAsync(
-            configPaths,
-            restoreSources.PackageSourceMappings!,
+        var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+            restoreSources.PackageSourceMappings,
             restoreSources.ConfigureGlobalPackagesFolder,
-            globalPackagesFolderValue: null,
-            cancellationToken).ConfigureAwait(false);
+            sources: sources).ConfigureAwait(false);
         return await ConfigureGlobalPackagesFolderAsync(config, restoreSources).ConfigureAwait(false);
     }
 
@@ -1183,30 +1236,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             config.Dispose();
             throw;
         }
-    }
-
-    private async Task<FileInfo?> WriteRestoreNuGetConfigAsync(string restoreDir, IntegrationRestoreSources restoreSources, CancellationToken cancellationToken)
-    {
-        var restoreConfigFile = new FileInfo(Path.Combine(restoreDir, "nuget.config"));
-        if (restoreSources.PackageSourceMappings is null)
-        {
-            if (restoreConfigFile.Exists)
-            {
-                restoreConfigFile.Delete();
-            }
-
-            return null;
-        }
-
-        using var temporaryConfig = await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false);
-        if (temporaryConfig is null)
-        {
-            return null;
-        }
-
-        var content = await File.ReadAllTextAsync(temporaryConfig.ConfigFile.FullName, cancellationToken).ConfigureAwait(false);
-        await WriteIfChangedAsync(restoreConfigFile.FullName, content, cancellationToken).ConfigureAwait(false);
-        return restoreConfigFile;
     }
 
     private async Task<string?> ResolveLocalPackageSourceOverrideAsync(string? requestedChannel, CancellationToken cancellationToken)
@@ -1523,64 +1552,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private sealed class AppHostServerPrepareFailedException(string message, OutputCollector output) : Exception(message)
     {
         public OutputCollector Output { get; } = output;
-    }
-
-    private sealed class TemporaryRestoreSourcesProps : IDisposable
-    {
-        private readonly DirectoryInfo _directory;
-
-        private TemporaryRestoreSourcesProps(DirectoryInfo directory, FileInfo propsFile, string cacheIdentity)
-        {
-            _directory = directory;
-            PropsFile = propsFile;
-            CacheIdentity = cacheIdentity;
-        }
-
-        public FileInfo PropsFile { get; }
-
-        public string CacheIdentity { get; }
-
-        public static async Task<TemporaryRestoreSourcesProps> CreateAsync(
-            IReadOnlyList<string> sources,
-            CancellationToken cancellationToken)
-        {
-            var directory = Directory.CreateTempSubdirectory("aspire-restore-sources");
-            try
-            {
-                var propsFile = new FileInfo(Path.Combine(directory.FullName, "IntegrationRestoreSources.props"));
-                var document = new XDocument(
-                    new XElement("Project",
-                        new XElement("PropertyGroup",
-                            new XElement("RestoreAdditionalProjectSources", string.Join(";", sources)))));
-                var content = document.ToString();
-                await File.WriteAllTextAsync(propsFile.FullName, content, cancellationToken).ConfigureAwait(false);
-                return new TemporaryRestoreSourcesProps(directory, propsFile, content);
-            }
-            catch
-            {
-                try
-                {
-                    directory.Delete(recursive: true);
-                }
-                catch
-                {
-                    // Ignore cleanup failures; surface the original exception instead.
-                }
-                throw;
-            }
-        }
-
-        public void Dispose()
-        {
-            try
-            {
-                _directory.Delete(recursive: true);
-            }
-            catch
-            {
-                // Temporary source properties are best-effort cleanup after the build completes.
-            }
-        }
     }
 
 }
