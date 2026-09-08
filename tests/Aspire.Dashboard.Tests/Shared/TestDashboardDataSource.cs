@@ -61,6 +61,13 @@ internal sealed class TestDashboardRunStore(
         _runs.Single(candidate => string.Equals(candidate.RunId, run.RunId, StringComparison.Ordinal)).IsPinned = isPinned;
     }
 
+    public void SetRunNote(DashboardRunDescriptor run, string? note)
+    {
+        var storedRun = _runs.Single(candidate => string.Equals(candidate.RunId, run.RunId, StringComparison.Ordinal));
+        storedRun.Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        storedRun.IsPinned |= storedRun.Note is not null;
+    }
+
     public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => tryAcquireRunLease?.Invoke(run);
 
     public void PublishRun()

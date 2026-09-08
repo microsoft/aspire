@@ -159,6 +159,58 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task CurrentRun_NotePersistsAndPinsRunWhenRunBecomesHistorical()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        var startedAt = new DateTimeOffset(2026, 7, 29, 12, 0, 0, TimeSpan.Zero);
+        string annotatedRunId;
+
+        using (var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt)))
+        {
+            await InitializeAndPublishRunAsync(currentRunStore);
+            var currentRun = Assert.Single(currentRunStore.GetRuns());
+
+            currentRunStore.SetRunNote(currentRun, "Investigate the startup latency spike.");
+
+            Assert.Equal("Investigate the startup latency spike.", currentRun.Note);
+            Assert.True(currentRun.IsPinned);
+            using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(currentRunStore.RunDirectory, "run.json")));
+            Assert.Equal("Investigate the startup latency spike.", metadata.RootElement.GetProperty("Note").GetString());
+            Assert.True(metadata.RootElement.GetProperty("IsPinned").GetBoolean());
+            annotatedRunId = currentRun.RunId;
+        }
+
+        using var nextRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(1)));
+        var historicalRun = nextRunStore.GetRuns().Single(run => string.Equals(run.RunId, annotatedRunId, StringComparison.Ordinal));
+        Assert.Equal("Investigate the startup latency spike.", historicalRun.Note);
+        Assert.True(historicalRun.IsPinned);
+    }
+
+    [Fact]
+    public async Task AnnotatedRun_CannotBeUnpinnedUntilNoteIsCleared()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var runStore = CreateRunStore(options);
+        await InitializeAndPublishRunAsync(runStore);
+        var run = Assert.Single(runStore.GetRuns());
+        runStore.SetRunNote(run, "Keep this run.");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => runStore.SetRunPinned(run, isPinned: false));
+
+        Assert.Equal($"Dashboard run '{run.RunId}' cannot be unpinned while it has a note.", exception.Message);
+        Assert.True(run.IsPinned);
+        Assert.Equal("Keep this run.", run.Note);
+
+        runStore.SetRunNote(run, note: null);
+        runStore.SetRunPinned(run, isPinned: false);
+
+        Assert.Null(run.Note);
+        Assert.False(run.IsPinned);
+    }
+
+    [Fact]
     public async Task RunMetadata_SchemaInitializationFailure_DoesNotPublishRun()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);

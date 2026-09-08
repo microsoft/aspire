@@ -27,6 +27,26 @@
         <target state="new">Unpin run</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardRunTimelineNoteLabel">
+        <source>Investigation note</source>
+        <target state="new">Investigation note</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunTimelineNotePlaceholder">
+        <source>Add an annotation...</source>
+        <target state="new">Add an annotation...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunTimelineSelect">
+        <source>Select and annotate {0}</source>
+        <target state="new">Select and annotate {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunTimelineTitle">
+        <source>Dashboard run timeline</source>
+        <target state="new">Dashboard run timeline</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutAspire">
         <source>Aspire</source>
         <target state="translated">Aspire</target>

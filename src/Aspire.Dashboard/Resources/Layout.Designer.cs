@@ -106,6 +106,42 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Investigation note.
+        /// </summary>
+        public static string DashboardRunTimelineNoteLabel {
+            get {
+                return ResourceManager.GetString("DashboardRunTimelineNoteLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Add an annotation....
+        /// </summary>
+        public static string DashboardRunTimelineNotePlaceholder {
+            get {
+                return ResourceManager.GetString("DashboardRunTimelineNotePlaceholder", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Select and annotate {0}.
+        /// </summary>
+        public static string DashboardRunTimelineSelect {
+            get {
+                return ResourceManager.GetString("DashboardRunTimelineSelect", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard run timeline.
+        /// </summary>
+        public static string DashboardRunTimelineTitle {
+            get {
+                return ResourceManager.GetString("DashboardRunTimelineTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>
         public static string MainLayoutAspire {
