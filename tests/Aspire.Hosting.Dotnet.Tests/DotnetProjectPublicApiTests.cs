@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETPROJECT001
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Dotnet.Tests;
@@ -20,6 +22,13 @@ public class DotnetProjectPublicApiTests
 
         Assert.Equal("ASPIREDOTNETPROJECT001", attribute.DiagnosticId);
         Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+    }
+
+    [Fact]
+    public void DotnetProjectResourceImplementsPublishingContracts()
+    {
+        Assert.True(typeof(IDotnetProgramResource).IsAssignableFrom(typeof(DotnetProjectResource)));
+        Assert.True(typeof(IContainerFilesDestinationResource).IsAssignableFrom(typeof(DotnetProjectResource)));
     }
 
     [Fact]

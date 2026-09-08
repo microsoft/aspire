@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
+#pragma warning disable ASPIREDOTNETPROJECT001
 
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
@@ -141,6 +142,31 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         await Verify(File.ReadAllText(composePath), "yaml")
             .AppendContentAsFile(File.ReadAllText(envPath), "env");
+    }
+
+    [Fact]
+    public void DockerComposeWithDotnetProjectUsesImagePlaceholderAndWaitDependency()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose").WithDashboard(false);
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("worker", "worker.csproj", options => options.ExcludeLaunchProfile = true)
+            .WaitFor(api);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var compose = File.ReadAllText(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        var environment = File.ReadAllText(Path.Combine(workspace.Path, ".env"));
+        Assert.Contains("image: \"${API_IMAGE}\"", compose);
+        Assert.Contains("image: \"${WORKER_IMAGE}\"", compose);
+        Assert.Contains("depends_on:", compose);
+        Assert.Contains("api:", compose);
+        Assert.Contains("condition: \"service_started\"", compose);
+        Assert.Contains("API_IMAGE=", environment);
+        Assert.Contains("WORKER_IMAGE=", environment);
     }
 
     [Fact]

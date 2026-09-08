@@ -3,7 +3,9 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREPROJECTS001
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
 using Aspire.Hosting.Pipelines;
@@ -104,7 +106,7 @@ public static class EFResourceBuilderExtensions
     /// </summary>
     [AspireExport("addEFMigrations")]
     internal static IResourceBuilder<EFMigrationResource> AddEFMigrationsForPolyglot(
-        this IResourceBuilder<ProjectResource> builder,
+        this IResourceBuilder<IDotnetProgramResource> builder,
         [ResourceName] string name,
         string? dbContextTypeName = null)
     {
@@ -139,15 +141,97 @@ public static class EFResourceBuilderExtensions
         return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource);
     }
 
+    /// <summary>
+    /// Adds EF Core migration management for a specific DbContext type on a .NET program resource.
+    /// </summary>
+    /// <param name="builder">The startup .NET program resource builder.</param>
+    /// <param name="name">The name of the migration resource.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type.</param>
+    /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
+    public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
+        this IResourceBuilder<IDotnetProgramResource> builder,
+        [ResourceName] string name,
+        string dbContextTypeName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(dbContextTypeName);
+
+        return AddEFMigrationsCore(builder, name, dbContextTypeName, configureToolResource: null);
+    }
+
+    /// <summary>
+    /// Adds EF Core migration management for a specific DbContext type on a .NET program resource.
+    /// </summary>
+    /// <param name="builder">The startup .NET program resource builder.</param>
+    /// <param name="name">The name of the migration resource.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type.</param>
+    /// <param name="configureToolResource">An optional callback that configures the dotnet-ef tool resource.</param>
+    /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
+    public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
+        this IResourceBuilder<IDotnetProgramResource> builder,
+        [ResourceName] string name,
+        string dbContextTypeName,
+        Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(dbContextTypeName);
+
+        return AddEFMigrationsCore(builder, name, dbContextTypeName, configureToolResource);
+    }
+
+    /// <summary>
+    /// Adds EF Core migration management for the only DbContext type in a .NET program resource.
+    /// </summary>
+    /// <param name="builder">The startup .NET program resource builder.</param>
+    /// <param name="name">The name of the migration resource.</param>
+    /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
+    public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
+        this IResourceBuilder<IDotnetProgramResource> builder,
+        [ResourceName] string name)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource: null);
+    }
+
+    /// <summary>
+    /// Adds EF Core migration management for the only DbContext type in a .NET program resource.
+    /// </summary>
+    /// <param name="builder">The startup .NET program resource builder.</param>
+    /// <param name="name">The name of the migration resource.</param>
+    /// <param name="configureToolResource">An optional callback that configures the dotnet-ef tool resource.</param>
+    /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
+    public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
+        this IResourceBuilder<IDotnetProgramResource> builder,
+        [ResourceName] string name,
+        Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource);
+    }
+
     private static IResourceBuilder<EFMigrationResource> AddEFMigrationsCore(
-        IResourceBuilder<ProjectResource> builder,
+        IResourceBuilder<IDotnetProgramResource> builder,
         string name,
         string? dbContextTypeName,
         Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
     {
         var existingMigrationResources = builder.ApplicationBuilder.Resources
             .OfType<EFMigrationResource>()
-            .Where(r => r.ProjectResource == builder.Resource)
+            .Where(r => ReferenceEquals(r.StartupProjectResource, builder.Resource))
             .ToList();
 
         if (dbContextTypeName != null)
@@ -171,9 +255,16 @@ public static class EFResourceBuilderExtensions
                 throw new InvalidOperationException(
                      $"Cannot register migrations without a context type when they have already been registered without a context type on resource '{builder.Resource.Name}'.");
             }
-            
+
             throw new InvalidOperationException(
                 $"Cannot register migrations without a context type when they have already been registered for specific DbContext types on resource '{builder.Resource.Name}'.");
+        }
+
+        var projectMetadata = builder.Resource.GetProjectMetadata();
+        if (projectMetadata.IsFileBasedApp)
+        {
+            throw new InvalidOperationException(
+                $"EF Core migrations require a project file. Resource '{builder.Resource.Name}' is a file-based app.");
         }
 
         var migrationResource = new EFMigrationResource(name, builder.Resource, dbContextTypeName)
@@ -361,7 +452,7 @@ public static class EFResourceBuilderExtensions
 #pragma warning restore ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var executor = new EFCoreOperationExecutor(
-            migrationResource.ProjectResource,
+            migrationResource.StartupProjectResource,
             migrationResource.MigrationsProjectPath,
             migrationResource.DbContextTypeName,
             logger,
@@ -638,7 +729,7 @@ public static class EFResourceBuilderExtensions
 
         // Create hidden DotnetToolResource for running EF commands
         var toolName = $"ef-tool-{migrationResource.Name}";
-        var startupProjectDir = Path.GetDirectoryName(migrationResource.ProjectResource.GetProjectMetadata().ProjectPath)!;
+        var startupProjectDir = Path.GetDirectoryName(migrationResource.StartupProjectResource.GetProjectMetadata().ProjectPath)!;
         var toolBuilder = migrationBuilder.ApplicationBuilder.AddDotnetTool(toolName, EFToolPackageId)
             .WithParentRelationship(migrationBuilder)
             .WithWorkingDirectory(startupProjectDir)
@@ -661,7 +752,7 @@ public static class EFResourceBuilderExtensions
         migrationResource.ConfigureToolResource?.Invoke(toolBuilder);
 
         // Copy environment annotations from project resource to tool resource
-        if (migrationResource.ProjectResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var envCallbacks))
+        if (migrationResource.StartupProjectResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var envCallbacks))
         {
             foreach (var callback in envCallbacks)
             {
@@ -855,7 +946,7 @@ public static class EFResourceBuilderExtensions
             logger.LogInformation("Executing EF Core {Operation} command...", operationDisplayName);
 
             using var executor = new EFCoreOperationExecutor(
-                migrationResource.ProjectResource,
+                migrationResource.StartupProjectResource,
                 migrationResource.MigrationsProjectPath,
                 migrationResource.DbContextTypeName,
                 logger,

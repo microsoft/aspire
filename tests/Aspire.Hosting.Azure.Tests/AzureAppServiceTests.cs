@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE003
+#pragma warning disable ASPIREDOTNETPROJECT001
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
@@ -55,6 +56,24 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAppServiceEnvironmentAddsDeploymentTargetToDotnetProjectResource()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddAzureAppServiceEnvironment("env");
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        Assert.Same(environment.Resource, target.ComputeEnvironment);
+        Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
     }
 
     [Fact]
@@ -896,12 +915,12 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 
         // Add 2 projects with endpoints
         var project1 = builder.AddProject<Project>("project1", launchProfileName: null)
-            .WithHttpsEndpoint(targetPort:8000)
+            .WithHttpsEndpoint(targetPort: 8000)
             .WithHttpEndpoint(targetPort: 8000)
             .WithExternalHttpEndpoints();
 
         var project2 = builder.AddProject<Project>("project2", launchProfileName: null)
-            .WithHttpEndpoint(targetPort:9000)
+            .WithHttpEndpoint(targetPort: 9000)
             .WithExternalHttpEndpoints()
             .WithReference(project1);
 

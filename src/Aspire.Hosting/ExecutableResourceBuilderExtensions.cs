@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -155,10 +157,23 @@ public static class ExecutableResourceBuilderExtensions
         var cb = builder.ApplicationBuilder.AddResource(container);
         // WithImage makes this a container resource (adding the annotation)
         cb.WithImage(builder.Resource.Name);
-        cb.WithDockerfile(contextPath: builder.Resource.WorkingDirectory);
+        var dockerfileContextPath = builder.Resource.WorkingDirectory;
+        if (builder.Resource is IDotnetProgramResource &&
+            builder.Resource.TryGetProjectMetadata(out var projectMetadata))
+        {
+            dockerfileContextPath = Path.GetDirectoryName(projectMetadata.ProjectPath) ?? dockerfileContextPath;
+        }
+
+        cb.WithDockerfile(contextPath: dockerfileContextPath);
         // Arguments to the executable often contain physical paths that are not valid in the container
         // Clear them out so that the container can be set up with the correct arguments
         cb.WithArgs(c => c.Args.Clear());
+
+        if (builder.Resource is IDotnetProgramResource)
+        {
+            cb.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+            cb.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+        }
 
         configure?.Invoke(cb);
 

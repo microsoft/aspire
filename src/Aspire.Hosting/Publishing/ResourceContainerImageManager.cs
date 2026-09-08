@@ -4,13 +4,20 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECONTAINERRUNTIME001
+#pragma warning disable ASPIREPROJECTS001
+#pragma warning disable ASPIREDOCKERFILEBUILDER001
+#pragma warning disable ASPIREFILESYSTEM001
+#pragma warning disable ASPIREEXTENSION001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Internal;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Publishing;
@@ -158,12 +165,49 @@ public interface IResourceContainerImageManager
     Task PushImageAsync(IResource resource, CancellationToken cancellationToken);
 }
 
+internal interface IDotnetProgramContainerImageManager
+{
+    Task<DotnetProgramImageBuildResult> BuildDotnetProgramImageAsync(
+        IResource resource,
+        IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> buildEnvironmentProviders,
+        CancellationToken cancellationToken);
+}
+
+internal sealed class DotnetProgramImageBuildResult(
+    string localImageName,
+    string localImageTag,
+    ContainerTargetPlatform? targetPlatform,
+    ContainerImageDestination? destination,
+    string? outputPath,
+    ContainerImageFormat? imageFormat,
+    string containerWorkingDirectory,
+    IDisposable? buildContext) : IDisposable
+{
+    public string LocalImageName { get; } = localImageName;
+
+    public string LocalImageTag { get; } = localImageTag;
+
+    public ContainerTargetPlatform? TargetPlatform { get; } = targetPlatform;
+
+    public ContainerImageDestination? Destination { get; } = destination;
+
+    public string? OutputPath { get; } = outputPath;
+
+    public ContainerImageFormat? ImageFormat { get; } = imageFormat;
+
+    public string ContainerWorkingDirectory { get; } = containerWorkingDirectory;
+
+    public void Dispose() => buildContext?.Dispose();
+}
+
 internal sealed class ResourceContainerImageManager(
     ILogger<ResourceContainerImageManager> logger,
     IContainerRuntimeResolver containerRuntimeResolver,
     IProcessRunner processRunner,
     IServiceProvider serviceProvider,
-    DistributedApplicationExecutionContext? executionContext = null) : IResourceContainerImageManager
+    DistributedApplicationExecutionContext? executionContext = null) :
+    IResourceContainerImageManager,
+    IDotnetProgramContainerImageManager
 {
     // Disable concurrent builds for project resources to avoid issues with overlapping msbuild projects
     private readonly SemaphoreSlim _throttle = new(1);
@@ -171,7 +215,7 @@ internal sealed class ResourceContainerImageManager(
     private async Task<IContainerRuntime> GetContainerRuntimeAsync(CancellationToken cancellationToken)
         => await containerRuntimeResolver.ResolveAsync(cancellationToken).ConfigureAwait(false);
 
-    private sealed class ResolvedContainerBuildOptions
+    private sealed record ResolvedContainerBuildOptions
     {
         public string? OutputPath { get; set; }
         public ContainerImageFormat? ImageFormat { get; set; }
@@ -239,13 +283,33 @@ internal sealed class ResourceContainerImageManager(
 
     public async Task BuildImageAsync(IResource resource, CancellationToken cancellationToken = default)
     {
+        if (resource.SupportsDotnetProgramPublishing())
+        {
+            using var result = await BuildDotnetProgramImageAsync(
+                resource,
+                resource.Annotations.OfType<IDotnetProgramBuildEnvironmentProvider>().ToArray(),
+                cancellationToken).ConfigureAwait(false);
+
+            if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out _))
+            {
+                await DotnetProgramPublishing.LayerContainerFilesAsync(
+                    resource,
+                    resource.GetProjectMetadata(),
+                    result,
+                    serviceProvider,
+                    logger,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
         var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
         logger.LogInformation("Building container image for resource {ResourceName}", resource.Name);
 
         var options = await ResolveContainerBuildOptionsAsync(resource, cancellationToken).ConfigureAwait(false);
 
-        // Check if this resource needs a container runtime
-        if (await ResourcesRequireContainerRuntimeAsync([resource], cancellationToken).ConfigureAwait(false))
+        if (ResourceRequiresContainerRuntime(resource, options))
         {
             logger.LogDebug("Checking {ContainerRuntimeName} health", containerRuntime.Name);
 
@@ -260,17 +324,7 @@ internal sealed class ResourceContainerImageManager(
             logger.LogDebug("{ContainerRuntimeName} is healthy", containerRuntime.Name);
         }
 
-        if (resource is ProjectResource)
-        {
-            // If it is a project resource we need to build the container image
-            // using the .NET SDK.
-            await BuildProjectContainerImageAsync(
-                resource,
-                options,
-                cancellationToken).ConfigureAwait(false);
-            return;
-        }
-        else if (resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
+        if (resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
         {
             if (!resource.TryGetContainerImageName(out var imageName))
             {
@@ -298,17 +352,88 @@ internal sealed class ResourceContainerImageManager(
         }
     }
 
-    private async Task BuildProjectContainerImageAsync(IResource resource, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
+    async Task<DotnetProgramImageBuildResult> IDotnetProgramContainerImageManager.BuildDotnetProgramImageAsync(
+        IResource resource,
+        IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> buildEnvironmentProviders,
+        CancellationToken cancellationToken) =>
+        await BuildDotnetProgramImageAsync(resource, buildEnvironmentProviders, cancellationToken).ConfigureAwait(false);
+
+    private async Task<DotnetProgramImageBuildResult> BuildDotnetProgramImageAsync(
+        IResource resource,
+        IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> buildEnvironmentProviders,
+        CancellationToken cancellationToken)
     {
+        logger.LogInformation("Building container image for resource {ResourceName}", resource.Name);
+        var options = await ResolveContainerBuildOptionsAsync(resource, cancellationToken).ConfigureAwait(false);
+        if (options.Destination == ContainerImageDestination.Archive &&
+            string.IsNullOrEmpty(options.OutputPath))
+        {
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' has Destination set to Archive but OutputPath is not configured. " +
+                "Please set the OutputPath in the container build options.");
+        }
+
+        var hasContainerFiles = resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out _);
+        var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
+        if (hasContainerFiles || ResourceRequiresContainerRuntime(resource, options))
+        {
+            logger.LogDebug("Checking {ContainerRuntimeName} health", containerRuntime.Name);
+            if (!await containerRuntime.CheckIfRunningAsync(cancellationToken).ConfigureAwait(false))
+            {
+                logger.LogError("Container runtime '{ContainerRuntimeName}' is not running or is unhealthy. Cannot build container image.", containerRuntime.Name);
+                throw new InvalidOperationException($"Container runtime '{containerRuntime.Name}' is not running or is unhealthy.");
+            }
+        }
+
         await _throttle.WaitAsync(cancellationToken).ConfigureAwait(false);
+        DotnetProgramBuildContext? buildContext = null;
 
         try
         {
             logger.LogInformation("Building image: {ResourceName}", resource.Name);
 
-            await ExecuteDotnetPublishAsync(resource, options, cancellationToken).ConfigureAwait(false);
+            var projectMetadata = resource.GetProjectMetadata();
+            buildContext = await CreateDotnetProgramBuildContextAsync(
+                resource,
+                projectMetadata,
+                buildEnvironmentProviders,
+                cancellationToken).ConfigureAwait(false);
+
+            var sdkPublishOptions = hasContainerFiles && options.Destination == ContainerImageDestination.Archive
+                ? options with
+                {
+                    Destination = null,
+                    OutputPath = null,
+                    ImageFormat = null
+                }
+                : options;
+            await ExecuteDotnetPublishAsync(
+                resource,
+                projectMetadata,
+                sdkPublishOptions,
+                buildContext,
+                cancellationToken).ConfigureAwait(false);
+
+            var containerWorkingDirectory = hasContainerFiles
+                ? await GetContainerWorkingDirectoryAsync(
+                    projectMetadata,
+                    options,
+                    buildContext,
+                    cancellationToken).ConfigureAwait(false)
+                : "/app";
 
             logger.LogInformation("Building image for {ResourceName} completed", resource.Name);
+            var result = new DotnetProgramImageBuildResult(
+                options.LocalImageName,
+                options.LocalImageTag,
+                options.TargetPlatform,
+                options.Destination,
+                options.OutputPath,
+                options.ImageFormat,
+                containerWorkingDirectory,
+                buildContext);
+            buildContext = null;
+            return result;
         }
         catch (OperationCanceledException)
         {
@@ -321,30 +446,38 @@ internal sealed class ResourceContainerImageManager(
         }
         finally
         {
+            buildContext?.Dispose();
             _throttle.Release();
         }
     }
 
-    private async Task ExecuteDotnetPublishAsync(IResource resource, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
+    private async Task ExecuteDotnetPublishAsync(
+        IResource resource,
+        IProjectMetadata projectMetadata,
+        ResolvedContainerBuildOptions options,
+        DotnetProgramBuildContext buildContext,
+        CancellationToken cancellationToken)
     {
-        // This is a resource project so we'll use the .NET SDK to build the container image.
-        if (!resource.TryGetProjectMetadata(out var projectMetadata))
-        {
-            throw new DistributedApplicationException($"The resource '{resource.Name}' does not have a project metadata annotation.");
-        }
-
         var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
-        var arguments = $"publish \"{projectMetadata.ProjectPath}\" --configuration Release /t:PublishContainer /p:ContainerRepository=\"{options.LocalImageName}\" /p:ContainerImageTag=\"{options.LocalImageTag}\"";
+        var arguments = new List<string>
+        {
+            "publish",
+            projectMetadata.ProjectPath,
+            "--configuration",
+            "Release",
+            "/t:PublishContainer",
+            $"/p:ContainerRepository={options.LocalImageName}",
+            $"/p:ContainerImageTag={options.LocalImageTag}"
+        };
 
         if (GetLocalRegistryName(containerRuntime) is string localRegistry)
         {
-            arguments += $" /p:LocalRegistry=\"{localRegistry}\"";
+            arguments.Add($"/p:LocalRegistry={localRegistry}");
         }
 
-        // Add additional arguments based on options
         if (!string.IsNullOrEmpty(options.OutputPath))
         {
-            arguments += $" /p:ContainerArchiveOutputPath=\"{options.OutputPath}\"";
+            arguments.Add($"/p:ContainerArchiveOutputPath={options.OutputPath}");
         }
 
         if (options.ImageFormat is not null)
@@ -355,41 +488,27 @@ internal sealed class ResourceContainerImageManager(
                 ContainerImageFormat.Oci => "OCI",
                 _ => throw new ArgumentOutOfRangeException(nameof(options), options.ImageFormat, "Invalid container image format")
             };
-            arguments += $" /p:ContainerImageFormat=\"{format}\"";
+            arguments.Add($"/p:ContainerImageFormat={format}");
         }
 
-        if (options.TargetPlatform is not null)
-        {
-            // Use the appropriate MSBuild properties based on the number of RIDs
-            var runtimeIds = options.TargetPlatform.Value.ToMSBuildRuntimeIdentifierString();
-            var ridArray = runtimeIds.Split(';');
+        AddTargetPlatformArguments(arguments, options.TargetPlatform);
 
-            if (ridArray.Length == 1)
-            {
-                // Single platform - use RuntimeIdentifier/ContainerRuntimeIdentifier
-                arguments += $" /p:RuntimeIdentifier=\"{ridArray[0]}\"";
-                arguments += $" /p:ContainerRuntimeIdentifier=\"{ridArray[0]}\"";
-            }
-            else
-            {
-                // Multiple platforms - use RuntimeIdentifiers/ContainerRuntimeIdentifiers
-                // MSBuild doesn't handle ';' in parameters well, need to escape the double quote. See https://github.com/dotnet/msbuild/issues/471
-                arguments += $" /p:RuntimeIdentifiers=\\\"{runtimeIds}\\\"";
-                arguments += $" /p:ContainerRuntimeIdentifiers=\\\"{runtimeIds}\\\"";
-            }
-        }
-
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
         if (resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation) &&
             baseImageAnnotation.RuntimeImage is string baseImage)
         {
-            arguments += $" /p:ContainerBaseImage=\"{baseImage}\"";
+            arguments.Add($"/p:ContainerBaseImage={baseImage}");
         }
-#pragma warning restore ASPIREDOCKERFILEBUILDER001
+
+        if (buildContext.ResponseFile is not null)
+        {
+            arguments.Add(buildContext.ResponseFile.Argument);
+        }
 
         var spec = new ProcessSpec("dotnet")
         {
-            Arguments = arguments,
+            ArgumentList = arguments,
+            WorkingDirectory = buildContext.WorkingDirectory,
+            EnvironmentVariables = new Dictionary<string, string>(buildContext.Environment, buildContext.Environment.Comparer),
             ThrowOnNonZeroReturnCode = false,
             RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
             OnOutputData = output =>
@@ -404,8 +523,7 @@ internal sealed class ResourceContainerImageManager(
 
         logger.LogDebug(
             "Starting .NET CLI with arguments: {Arguments}",
-            string.Join(" ", spec.Arguments)
-            );
+            string.Join(" ", arguments));
 
         var (pendingProcessResult, processDisposable) = processRunner.Run(spec);
 
@@ -417,8 +535,21 @@ internal sealed class ResourceContainerImageManager(
 
             if (processResult.ExitCode != 0)
             {
+                var message =
+                    $"Failed to build container image for resource '{resource.Name}' from project '{projectMetadata.ProjectPath}' with exit code {processResult.ExitCode}.";
+                var guidance = await GetFileAppAotGuidanceAsync(
+                    projectMetadata,
+                    options,
+                    buildContext,
+                    processResult.ProcessOutput,
+                    cancellationToken).ConfigureAwait(false);
+                if (guidance is not null)
+                {
+                    message = $"{message}{Environment.NewLine}{guidance}";
+                }
+
                 throw new ProcessFailedException(
-                    $"Failed to build container image for resource '{resource.Name}' from project '{projectMetadata.ProjectPath}' with exit code {processResult.ExitCode}.",
+                    message,
                     processResult.ExitCode,
                     processResult.ProcessOutput,
                     processResult.TotalProcessOutputLineCount);
@@ -430,6 +561,294 @@ internal sealed class ResourceContainerImageManager(
                     processResult.ExitCode);
             }
         }
+    }
+
+    private async Task<string?> GetFileAppAotGuidanceAsync(
+            IProjectMetadata projectMetadata,
+            ResolvedContainerBuildOptions options,
+            DotnetProgramBuildContext buildContext,
+            IReadOnlyList<string> processOutput,
+            CancellationToken cancellationToken)
+    {
+        if (!projectMetadata.IsFileBasedApp ||
+            !IsCrossOperatingSystemTarget(options.TargetPlatform))
+        {
+            return null;
+        }
+
+        var crossOsDiagnosticPresent = processOutput.Any(static line =>
+            line.Contains("Cross-OS native compilation is not supported.", StringComparison.Ordinal));
+        if (!crossOsDiagnosticPresent &&
+            !await IsFileAppAotEnabledAsync(projectMetadata, options, buildContext, cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var targetRuntimeIdentifiers = options.TargetPlatform?.ToMSBuildRuntimeIdentifierString() ?? "the configured target";
+        return $"Native AOT cannot publish this file-based app for '{targetRuntimeIdentifiers}' from the current operating system. " +
+            "File-based apps enable PublishAot by default. Add '#:property PublishAot=false' to the C# file, " +
+            "or run Aspire publishing on the target operating system to retain Native AOT.";
+    }
+
+    private async Task<bool> IsFileAppAotEnabledAsync(
+            IProjectMetadata projectMetadata,
+            ResolvedContainerBuildOptions options,
+            DotnetProgramBuildContext buildContext,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var directoryService = serviceProvider.GetRequiredService<IFileSystemService>();
+            using var resultDirectory = directoryService.TempDirectory.CreateTempSubdirectory("aspire-aot-query");
+            var resultPath = Path.Combine(resultDirectory.Path, "properties.json");
+            var arguments = new List<string>
+                {
+                    "build",
+                    projectMetadata.ProjectPath,
+                    "--configuration",
+                    "Release"
+                };
+            AddTargetPlatformArguments(arguments, options.TargetPlatform);
+            arguments.Add("-getProperty:PublishAot,RuntimeIdentifier");
+            arguments.Add($"-getResultOutputFile:{resultPath}");
+            arguments.Add("-v:q");
+            if (buildContext.ResponseFile is not null)
+            {
+                arguments.Add(buildContext.ResponseFile.Argument);
+            }
+
+            var spec = new ProcessSpec("dotnet")
+            {
+                ArgumentList = arguments,
+                WorkingDirectory = buildContext.WorkingDirectory,
+                EnvironmentVariables = new Dictionary<string, string>(buildContext.Environment, buildContext.Environment.Comparer),
+                ThrowOnNonZeroReturnCode = false
+            };
+            var (pendingResult, processDisposable) = processRunner.Run(spec);
+            await using (processDisposable)
+            {
+                var result = await pendingResult.WaitAsync(cancellationToken).ConfigureAwait(false);
+                if (result.ExitCode != 0 || !File.Exists(resultPath))
+                {
+                    return false;
+                }
+            }
+
+            using var document = JsonDocument.Parse(await File.ReadAllTextAsync(resultPath, cancellationToken).ConfigureAwait(false));
+            return document.RootElement.TryGetProperty("Properties", out var properties) &&
+                properties.TryGetProperty("PublishAot", out var publishAot) &&
+                bool.TryParse(publishAot.GetString(), out var enabled) &&
+                enabled;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogDebug(ex, "Failed to evaluate PublishAot for file-based app {ProjectPath}.", projectMetadata.ProjectPath);
+            return false;
+        }
+    }
+
+    private static bool IsCrossOperatingSystemTarget(ContainerTargetPlatform? targetPlatform)
+    {
+        if (targetPlatform is null)
+        {
+            return false;
+        }
+
+        var targetsLinux = (targetPlatform.Value & ContainerTargetPlatform.AllLinux) != 0 ||
+            targetPlatform.Value.HasFlag(ContainerTargetPlatform.LinuxArm) ||
+            targetPlatform.Value.HasFlag(ContainerTargetPlatform.Linux386);
+        var targetsWindows = targetPlatform.Value.HasFlag(ContainerTargetPlatform.WindowsAmd64) ||
+            targetPlatform.Value.HasFlag(ContainerTargetPlatform.WindowsArm64);
+
+        return OperatingSystem.IsWindows()
+            ? targetsLinux
+            : targetsWindows || (OperatingSystem.IsMacOS() && targetsLinux);
+    }
+
+    private async Task<DotnetProgramBuildContext> CreateDotnetProgramBuildContextAsync(
+            IResource resource,
+            IProjectMetadata projectMetadata,
+            IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> providers,
+            CancellationToken cancellationToken)
+    {
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var unresolvedEnvironment = new Dictionary<string, object>(comparer);
+
+        if (providers.Count > 0)
+        {
+            var activeExecutionContext = executionContext ?? throw new InvalidOperationException(
+                $"An execution context is required to evaluate the build environment for resource '{resource.Name}'.");
+            var callbackContext = new EnvironmentCallbackContext(
+                activeExecutionContext,
+                resource,
+                unresolvedEnvironment,
+                cancellationToken)
+            {
+                Logger = logger
+            };
+
+            foreach (var provider in providers)
+            {
+                await provider.ApplyAsync(callbackContext).ConfigureAwait(false);
+            }
+        }
+
+        var environment = new Dictionary<string, string>(unresolvedEnvironment.Count, comparer);
+        foreach (var (name, value) in unresolvedEnvironment)
+        {
+            if (value is not string stringValue)
+            {
+                throw new DistributedApplicationException(
+                    $"The build environment variable '{name}' for .NET program resource '{resource.Name}' " +
+                    $"has unsupported value type '{value?.GetType().Name ?? "null"}'. Build environment values must be strings.");
+            }
+
+            environment[name] = stringValue;
+        }
+
+        var responseFile = await MsBuildResponseFileFactory.CreateAsync(
+            environment,
+            logger,
+            cancellationToken).ConfigureAwait(false);
+        var workingDirectory = projectMetadata.BuildWorkingDirectory ??
+            Path.GetDirectoryName(projectMetadata.ProjectPath);
+
+        return new DotnetProgramBuildContext(environment, workingDirectory, responseFile);
+    }
+
+    private async Task<string> GetContainerWorkingDirectoryAsync(
+            IProjectMetadata projectMetadata,
+            ResolvedContainerBuildOptions options,
+            DotnetProgramBuildContext buildContext,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var outputLines = new List<string>();
+            var command = projectMetadata.IsFileBasedApp ? "build" : "msbuild";
+            var arguments = new List<string>
+                {
+                    command,
+                    projectMetadata.ProjectPath,
+                    "-getProperty:ContainerWorkingDirectory",
+                    "-v:q"
+                };
+            AddTargetPlatformArguments(arguments, options.TargetPlatform);
+            if (buildContext.ResponseFile is not null)
+            {
+                arguments.Add(buildContext.ResponseFile.Argument);
+            }
+
+            var spec = new ProcessSpec("dotnet")
+            {
+                ArgumentList = arguments,
+                WorkingDirectory = buildContext.WorkingDirectory,
+                EnvironmentVariables = new Dictionary<string, string>(buildContext.Environment, buildContext.Environment.Comparer),
+                OnOutputData = output =>
+                {
+                    if (!string.IsNullOrWhiteSpace(output))
+                    {
+                        outputLines.Add(output.Trim());
+                    }
+                },
+                OnErrorData = error => logger.LogDebug("dotnet {Command} (stderr): {Error}", command, error),
+                ThrowOnNonZeroReturnCode = false
+            };
+
+            logger.LogDebug(
+                "Getting ContainerWorkingDirectory for .NET program {ProjectPath}",
+                projectMetadata.ProjectPath);
+            var (pendingResult, processDisposable) = processRunner.Run(spec);
+
+            await using (processDisposable)
+            {
+                var result = await pendingResult.WaitAsync(cancellationToken).ConfigureAwait(false);
+                if (result.ExitCode != 0)
+                {
+                    logger.LogDebug(
+                        "Failed to get ContainerWorkingDirectory for .NET program {ProjectPath}. Exit code: {ExitCode}. Using default /app",
+                        projectMetadata.ProjectPath,
+                        result.ExitCode);
+                    return "/app";
+                }
+
+                var workingDirectory = outputLines.LastOrDefault();
+                if (string.IsNullOrWhiteSpace(workingDirectory))
+                {
+                    logger.LogDebug(
+                        "dotnet {Command} returned an empty ContainerWorkingDirectory for .NET program {ProjectPath}. Using default /app",
+                        command,
+                        projectMetadata.ProjectPath);
+                    return "/app";
+                }
+
+                return workingDirectory;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Error getting ContainerWorkingDirectory. Using default /app");
+            return "/app";
+        }
+    }
+
+    private static void AddTargetPlatformArguments(
+            List<string> arguments,
+            ContainerTargetPlatform? targetPlatform)
+    {
+        if (targetPlatform is null)
+        {
+            return;
+        }
+
+        var runtimeIdentifiers = targetPlatform.Value.ToMSBuildRuntimeIdentifierString();
+        if (runtimeIdentifiers.Contains(';'))
+        {
+            arguments.Add($"/p:RuntimeIdentifiers={runtimeIdentifiers}");
+            arguments.Add($"/p:ContainerRuntimeIdentifiers={runtimeIdentifiers}");
+        }
+        else
+        {
+            arguments.Add($"/p:RuntimeIdentifier={runtimeIdentifiers}");
+            arguments.Add($"/p:ContainerRuntimeIdentifier={runtimeIdentifiers}");
+        }
+    }
+
+    private sealed class DotnetProgramBuildContext(
+            Dictionary<string, string> environment,
+            string? workingDirectory,
+            MsBuildResponseFile? responseFile) : IDisposable
+    {
+        public Dictionary<string, string> Environment { get; } = environment;
+
+        public string? WorkingDirectory { get; } = workingDirectory;
+
+        public MsBuildResponseFile? ResponseFile { get; } = responseFile;
+
+        public void Dispose() => ResponseFile?.Dispose();
+    }
+
+    private static bool ResourceRequiresContainerRuntime(
+        IResource resource,
+        ResolvedContainerBuildOptions options)
+    {
+        if (resource.TryGetLastAnnotation<ContainerImageAnnotation>(out _) &&
+            resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _))
+        {
+            return true;
+        }
+
+        if (options.Destination == ContainerImageDestination.Archive)
+        {
+            return false;
+        }
+
+        return options.ImageFormat is null or ContainerImageFormat.Docker ||
+            options.OutputPath is null;
     }
 
     private static string? GetLocalRegistryName(IContainerRuntime containerRuntime)

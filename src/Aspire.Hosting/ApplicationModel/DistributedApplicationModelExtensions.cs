@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001
+
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
@@ -24,7 +26,7 @@ public static class DistributedApplicationModelExtensions
                 continue;
             }
 
-            if (!r.IsContainer() && !r.IsEmulator() && r is not ProjectResource)
+            if (!r.IsContainer() && !r.IsEmulator() && !r.SupportsDotnetProgramPublishing())
             {
                 continue;
             }
