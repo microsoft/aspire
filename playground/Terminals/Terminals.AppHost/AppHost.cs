@@ -69,9 +69,6 @@ builder.AddDockerfile("notcurses", "../Terminals.Notcurses")
         options.ShowTerminalHost = true;
     });
 
-builder.AddDockerfile("bb", "../Terminals.Bb")
-    .WithTerminal(options => options.ShowTerminalHost = true);
-
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
 // of the dashboard. It is not required in end developer code. Comment out this code
