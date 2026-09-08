@@ -849,109 +849,98 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Equal(externalCacheDirectory.Name, linkedCacheDirectory.Name);
     }
 
-    // PSM-guard cross-product tests.
-    // Guard predicate: the resolved channel.Name == "local" — i.e. the *project requested* the
-    // local pseudo-channel. The local hive has no real mappings, so emitting PSM would just
-    // constrain restore to nothing. For every other channel PSM must emit so restore honours the
-    // channel's package source mappings — regardless of which CLI identity is running.
+    // The local pseudo-channel has no package-source mappings, so it does not require an overlay.
+    // Every other explicit channel emits its mapping policy regardless of the running CLI identity.
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_LocalIdentity_LocalRequested_ReturnsNull()
+    public async Task CreateRestoreOverlay_LocalIdentity_LocalRequested_ReturnsNull()
     {
-        // Locally-built CLI consuming its own local hive — only case the guard should fire.
+        // A local pseudo-channel does not define a package-source mapping policy.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("local");
         var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
 
-        var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "local");
+        var result = await CreateRestoreOverlayAsync(server, "local");
 
         Assert.Null(result);
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_LocalIdentity_PrRequested_EmitsConfig()
+    public async Task CreateRestoreOverlay_LocalIdentity_PrRequested_EmitsOverlay()
     {
-        // Locally-built CLI on a project that requested pr-12345 — the project's request wins,
-        // PSM must emit (this is the scenario that regressed pre-fix).
+        // The project-requested channel determines the overlay independently of the CLI identity.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("local");
         var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "pr-12345");
+        using var result = await CreateRestoreOverlayAsync(server, "pr-12345");
 
         Assert.NotNull(result);
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_StableIdentity_StableRequested_EmitsConfig()
+    public async Task CreateRestoreOverlay_StableIdentity_StableRequested_EmitsOverlay()
     {
-        // Stable-channel CLI on a project that requested 'stable' — PSM emits the stable mappings.
+        // The project-requested stable channel supplies the overlay mappings.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("stable");
         var server = CreateServerWithExplicitChannel(workspace, "stable", executionContext);
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "stable");
+        using var result = await CreateRestoreOverlayAsync(server, "stable");
 
         Assert.NotNull(result);
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_StableIdentity_LocalRequested_ReturnsNull()
+    public async Task CreateRestoreOverlay_StableIdentity_LocalRequested_ReturnsNull()
     {
-        // requested=local always returns null regardless of identity: the guard keys on the
-        // requested/resolved channel name, not on which CLI is running.
+        // Overlay selection depends on the project-requested channel, not the CLI identity.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("stable");
         var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
 
-        var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "local");
+        var result = await CreateRestoreOverlayAsync(server, "local");
 
         Assert.Null(result);
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_DailyIdentity_DailyRequested_EmitsConfig()
+    public async Task CreateRestoreOverlay_DailyIdentity_DailyRequested_EmitsOverlay()
     {
-        // A 'daily' CLI consuming the 'daily' channel must still get a per-channel NuGet config —
-        // the guard only fires when the *requested* channel is 'local'.
+        // An explicit daily channel supplies its package-source mapping overlay.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("daily");
         var server = CreateServerWithExplicitChannel(workspace, "daily", executionContext);
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "daily");
+        using var result = await CreateRestoreOverlayAsync(server, "daily");
 
         Assert.NotNull(result);
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_PrIdentity_DifferentPrRequested_EmitsConfig()
+    public async Task CreateRestoreOverlay_PrIdentity_DifferentPrRequested_EmitsOverlay()
     {
-        // PR-build CLI installing a different PR's hive — guard does not fire (requested != "local").
+        // The requested PR channel supplies the overlay independently of the running PR build.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("pr-67890");
         var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "pr-12345");
+        using var result = await CreateRestoreOverlayAsync(server, "pr-12345");
 
         Assert.NotNull(result);
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_LocalIdentity_StagingRequested_EmitsConfigWithGlobalPackagesFolder()
+    public async Task CreateRestoreOverlay_LocalIdentity_StagingRequested_EmitsOverlayWithGlobalPackagesFolder()
     {
-        // Pins the rubber-duck finding: dropping the temp config also drops the staging-specific
-        // global packages folder. The emitted nuget.config must contain a <config> element with a
-        // globalPackagesFolder setting when the channel was built with configureGlobalPackagesFolder,
-        // AND the value must be an absolute path that lives outside the temp config's own directory
-        // so the cached packages survive the temp config's recursive cleanup (otherwise restore
-        // hands BundleNuGetService manifest paths that the temp dispose just deleted, hanging
-        // aspire-managed during DI / assembly loading on macOS osx-arm64 polyglot staging builds).
+        // The policy overlay is temporary, so the source-specific package cache must use a stable
+        // absolute path that survives overlay cleanup and remains valid for the package manifest.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("local");
@@ -970,7 +959,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             configureGlobalPackagesFolder: true);
         var server = CreateServerWithChannel(workspace, stagingChannel, executionContext);
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "staging");
+        using var result = await CreateRestoreOverlayAsync(server, "staging");
 
         Assert.NotNull(result);
         var doc = XDocument.Load(result.ConfigFile.FullName);
@@ -981,12 +970,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var gpfValue = gpf.Attribute("value")?.Value;
         Assert.False(string.IsNullOrEmpty(gpfValue));
         Assert.True(Path.IsPathFullyQualified(gpfValue), $"globalPackagesFolder value must be an absolute path. Got: {gpfValue}");
-        // The temp config directory is recursively deleted on dispose; the cache must live elsewhere
+        // The overlay directory is recursively deleted on dispose; the cache must live elsewhere
         // so manifest paths produced by BundleNuGetService remain valid for the AppHost's lifetime.
-        var tempConfigDir = result.ConfigFile.Directory!.FullName;
+        var overlayDirectory = result.ConfigFile.Directory!.FullName;
         Assert.False(
-            gpfValue!.StartsWith(tempConfigDir, StringComparison.Ordinal),
-            $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
+            gpfValue!.StartsWith(overlayDirectory, StringComparison.Ordinal),
+            $"globalPackagesFolder must not be under the policy overlay directory '{overlayDirectory}'. Got: {gpfValue}");
         // The cache subdirectory must be keyed by the resolved feed URL so two different staging
         // feeds (e.g. two darc builds or an overrideStagingFeed setting) get distinct caches.
         var expectedCacheKey = CliPathHelper.ComputeStagingCacheIdentityKey(result.CacheIdentity);
@@ -998,16 +987,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_StagingRequested_FromRealPackagingService_EmitsStableGlobalPackagesFolderOutsideTempDir()
+    public async Task CreateRestoreOverlay_StagingRequested_FromRealPackagingService_EmitsStableGlobalPackagesFolderOutsideOverlayDirectory()
     {
-        // End-to-end pin for the staging temp-config hang fix: when the real PackagingService
-        // synthesizes the staging channel (here driven by overrideStagingFeed on a staging
-        // identity so configureGlobalPackagesFolder lands true), the temporary nuget.config used by
-        // PrebuiltAppHostServer must point globalPackagesFolder at an absolute path that survives
-        // the TemporaryNuGetConfig.Dispose recursive delete. Otherwise BundleNuGetService restores
-        // staging assemblies into <temp>/.nugetpackages, bakes those paths into
-        // integration-package-probe-manifest.json, and aspire-managed hangs in DI/assembly loading
-        // when it later probes the (now deleted) paths — observed on macOS osx-arm64.
+        // A staging channel synthesized by the real packaging service must select an absolute
+        // package cache outside the temporary overlay directory. Package manifests retain paths
+        // into this cache after the overlay is disposed.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         const string overrideStagingFeed = "https://pkgs.dev.azure.com/dnceng/internal/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json";
@@ -1029,7 +1013,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         var server = CreateServerWithPackagingService(workspace, packagingService, executionContext);
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, PackageChannelNames.Staging);
+        using var result = await CreateRestoreOverlayAsync(server, PackageChannelNames.Staging);
 
         Assert.NotNull(result);
         var doc = XDocument.Load(result.ConfigFile.FullName);
@@ -1040,10 +1024,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var gpfValue = gpf.Attribute("value")?.Value;
         Assert.False(string.IsNullOrEmpty(gpfValue));
         Assert.True(Path.IsPathFullyQualified(gpfValue), $"globalPackagesFolder value must be an absolute path. Got: {gpfValue}");
-        var tempConfigDir = result.ConfigFile.Directory!.FullName;
+        var overlayDirectory = result.ConfigFile.Directory!.FullName;
         Assert.False(
-            gpfValue!.StartsWith(tempConfigDir, StringComparison.Ordinal),
-            $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
+            gpfValue!.StartsWith(overlayDirectory, StringComparison.Ordinal),
+            $"globalPackagesFolder must not be under the policy overlay directory '{overlayDirectory}'. Got: {gpfValue}");
         // The cache key is derived from the resolved staging feed URL so the same CLI talking to
         // a different overrideStagingFeed gets a different cache bucket.
         var expectedCacheKey = CliPathHelper.ComputeStagingCacheIdentityKey(result.CacheIdentity);
@@ -1059,24 +1043,22 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [InlineData("stable")]
     [InlineData("daily")]
     [InlineData("pr-99")]
-    public async Task TryCreateTemporaryNuGetConfig_LocalRequested_ReturnsNull_RegardlessOfIdentity(string identity)
+    public async Task CreateRestoreOverlay_LocalRequested_ReturnsNull_RegardlessOfIdentity(string identity)
     {
-        // Codifies "the local hive resolution skip is identity-independent". PackagingService
-        // enumerates HivesDirectory subdirs as explicit channels, so a project requesting "local"
-        // resolves to an explicit channel with mappings — but the new guard fires because
-        // channel.Name == "local".
+        // The project-requested local channel never emits a mapping overlay, independently of the
+        // running CLI identity.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel(identity);
         var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
 
-        var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "local");
+        var result = await CreateRestoreOverlayAsync(server, "local");
 
         Assert.Null(result);
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_MapsAspireToOverrideAndAddsNuGetOrgFallback()
+    public async Task CreateRestoreOverlay_WithPackageSourceOverride_MapsAspireToOverrideAndAddsNuGetOrgFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
@@ -1086,7 +1068,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         };
         var server = CreateServerWithPackagingService(workspace, packagingService);
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+        using var result = await CreateRestoreOverlayAsync(
             server,
             requestedChannel: null,
             packageSourceOverride: packageSourceOverride);
@@ -1098,7 +1080,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverrideWithoutRequestedChannel_DoesNotMergeExplicitChannelAspireMappings()
+    public async Task CreateRestoreOverlay_WithPackageSourceOverrideWithoutRequestedChannel_DoesNotIncludeExplicitChannelAspireMappings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
@@ -1115,7 +1097,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, explicitChannel, CreateContextWithIdentityChannel("pr-12345"));
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+        using var result = await CreateRestoreOverlayAsync(
             server,
             requestedChannel: null,
             packageSourceOverride: packageSourceOverride);
@@ -1128,7 +1110,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_PreservesRequestedChannelMappingsAndGlobalPackagesFolder()
+    public async Task CreateRestoreOverlay_WithPackageSourceOverride_PreservesRequestedChannelMappingsAndGlobalPackagesFolder()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
@@ -1144,7 +1126,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var executionContext = CreateContextWithIdentityChannel("pr-12345");
         var server = CreateServerWithChannel(workspace, stagingChannel, executionContext);
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+        using var result = await CreateRestoreOverlayAsync(
             server,
             requestedChannel: "staging",
             packageSourceOverride: packageSourceOverride);
@@ -1158,15 +1140,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             .SelectMany(c => c.Elements("add"))
             .FirstOrDefault(a => string.Equals(a.Attribute("key")?.Value, "globalPackagesFolder", StringComparison.OrdinalIgnoreCase));
         Assert.NotNull(gpf);
-        // Same stability requirement as the channel-only branch: the override path must outlive
-        // the temp nuget.config so BundleNuGetService's manifest paths remain valid after dispose.
+        // The source-specific package cache must outlive the policy overlay so BundleNuGetService's
+        // manifest paths remain valid after disposal.
         var gpfValue = gpf.Attribute("value")?.Value;
         Assert.False(string.IsNullOrEmpty(gpfValue));
         Assert.True(Path.IsPathFullyQualified(gpfValue), $"globalPackagesFolder value must be an absolute path. Got: {gpfValue}");
-        var tempConfigDir = result.ConfigFile.Directory!.FullName;
+        var overlayDirectory = result.ConfigFile.Directory!.FullName;
         Assert.False(
-            gpfValue!.StartsWith(tempConfigDir, StringComparison.Ordinal),
-            $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
+            gpfValue!.StartsWith(overlayDirectory, StringComparison.Ordinal),
+            $"globalPackagesFolder must not be under the policy overlay directory '{overlayDirectory}'. Got: {gpfValue}");
         // The cache key is derived from the --source override, not the channel's own mappings,
         // so users running multiple overrides against the same CLI get distinct cache buckets.
         var expectedCacheKey = CliPathHelper.ComputeStagingCacheIdentityKey(result.CacheIdentity);
@@ -1178,7 +1160,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_DropsRequestedChannelAspireMappings()
+    public async Task CreateRestoreOverlay_WithPackageSourceOverride_DropsRequestedChannelAspireMappings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
@@ -1191,7 +1173,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+        using var result = await CreateRestoreOverlayAsync(
             server,
             requestedChannel: "staging",
             packageSourceOverride: packageSourceOverride);
@@ -1204,7 +1186,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_WithUnknownRequestedChannel_Throws()
+    public async Task CreateRestoreOverlay_WithUnknownRequestedChannel_Throws()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
@@ -1215,7 +1197,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var server = CreateServerWithPackagingService(workspace, packagingService);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            InvokeTryCreateTemporaryNuGetConfigAsync(
+            CreateRestoreOverlayAsync(
                 server,
                 requestedChannel: PackageChannelNames.Staging,
                 packageSourceOverride: packageSourceOverride));
@@ -1225,7 +1207,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_UsesChannelAllPackagesMappingAsFallback()
+    public async Task CreateRestoreOverlay_WithPackageSourceOverride_UsesChannelAllPackagesMappingAsFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
@@ -1238,7 +1220,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+        using var result = await CreateRestoreOverlayAsync(
             server,
             requestedChannel: "staging",
             packageSourceOverride: packageSourceOverride);
@@ -1251,7 +1233,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_WhenChannelLookupFails_StillCreatesOverrideConfigWithFallback()
+    public async Task CreateRestoreOverlay_WithPackageSourceOverride_WhenChannelLookupFails_StillCreatesOverridePolicyWithFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
@@ -1261,7 +1243,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         };
         var server = CreateServerWithPackagingService(workspace, packagingService);
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+        using var result = await CreateRestoreOverlayAsync(
             server,
             requestedChannel: "staging",
             packageSourceOverride: packageSourceOverride);
@@ -1273,7 +1255,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_WithExplicitChannelAndNoOverride_WhenChannelLookupFails_Throws()
+    public async Task CreateRestoreOverlay_WithExplicitChannelAndNoOverride_WhenChannelLookupFails_Throws()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagingService = new TestPackagingService
@@ -1283,7 +1265,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var server = CreateServerWithPackagingService(workspace, packagingService);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            InvokeTryCreateTemporaryNuGetConfigAsync(
+            CreateRestoreOverlayAsync(
                 server,
                 requestedChannel: "staging",
                 packageSourceOverride: null));
@@ -1292,14 +1274,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetNuGetSources_WithPackageSourceOverrideAndMatchedChannel_OmitsChannelAspireFeedFromSources()
+    public async Task ResolveAdditionalSources_WithPackageSourceOverrideAndMatchedChannel_OmitsChannelAspireFeedFromSources()
     {
-        // Regression: the temp NuGet.config drops the matched channel's Aspire* mapping in
-        // the override branch, but the --source argument list passed to the bundled NuGet
-        // tool also has to drop that source URL. The bundled tool treats extra `--source`
-        // CLI args as co-eligible with config mappings, so re-adding the channel's Aspire
-        // feed here would silently let Aspire packages resolve from it and defeat the
-        // override.
+        // Additional sources are co-eligible with mapped sources, so the channel's Aspire feed
+        // must be excluded when an explicit source owns the Aspire package mapping.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
@@ -1311,7 +1289,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
-        var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
+        var sources = await ResolveAdditionalSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
 
         Assert.NotNull(sources);
         Assert.Contains(packageSourceOverride, sources);
@@ -1320,7 +1298,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetNuGetSources_WithPackageSourceOverrideAndMatchedChannelNonAspireMapping_KeepsChannelSourceAndAddsNuGetOrgFallback()
+    public async Task ResolveAdditionalSources_WithPackageSourceOverrideAndMatchedChannelNonAspireMapping_KeepsChannelSourceAndAddsNuGetOrgFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
@@ -1333,18 +1311,17 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
-        var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
+        var sources = await ResolveAdditionalSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
 
         Assert.NotNull(sources);
         Assert.Contains(packageSourceOverride, sources);
         Assert.Contains(channelSource, sources);
-        // Matched channel has no AllPackages mapping, so the temp NuGet.config uses NuGet.org
-        // as catch-all and the sources list must include it too.
+        // The policy adds NuGet.org as the catch-all when the channel does not provide one.
         Assert.Contains(NuGetOrgSource, sources);
     }
 
     [Fact]
-    public async Task GetNuGetSources_WithPackageSourceOverrideAndMatchedChannelAllPackagesMapping_OmitsNuGetOrgFallback()
+    public async Task ResolveAdditionalSources_WithPackageSourceOverrideAndMatchedChannelAllPackagesMapping_OmitsNuGetOrgFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
@@ -1357,14 +1334,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
-        var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
+        var sources = await ResolveAdditionalSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
 
         Assert.NotNull(sources);
         Assert.Contains(packageSourceOverride, sources);
         Assert.Contains(channelSource, sources);
-        // Matched channel supplied its own AllPackages mapping, so NuGet.org should not be
-        // added as a co-eligible source — the channel's catch-all wins in both the temp
-        // config's PSM and the --source argument list.
+        // The channel's catch-all remains authoritative, so NuGet.org is not added as another
+        // co-eligible source.
         Assert.DoesNotContain(NuGetOrgSource, sources);
     }
 
@@ -1382,12 +1358,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_StagingRequested_RefusesWhenPackagingServiceReportsUnavailable()
+    public async Task CreateRestoreOverlay_StagingRequested_RefusesWhenPackagingServiceReportsUnavailable()
     {
-        // Regression for radical's review of #17235: on a daily/local/pr CLI the packaging service
-        // refuses to synthesize a 'staging' channel and surfaces the actionable reason. The bundled
-        // AppHost restore must not silently fall through to a different feed — it must propagate
-        // that reason so the user sees the same message the update/new commands now show.
+        // An unavailable staging channel must fail with the packaging service's actionable reason
+        // instead of allowing restore to use another explicit channel.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("daily");
@@ -1396,12 +1370,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var server = CreateServerWithUnavailableStagingChannel(workspace, executionContext, unavailableReason);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => InvokeTryCreateTemporaryNuGetConfigAsync(server, "staging"));
+            () => CreateRestoreOverlayAsync(server, "staging"));
         Assert.Equal(unavailableReason, ex.Message);
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_StagingRequestedWithSourceOverride_RefusesWhenPackagingServiceReportsUnavailable()
+    public async Task CreateRestoreOverlay_StagingRequestedWithSourceOverride_RefusesWhenPackagingServiceReportsUnavailable()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -1411,17 +1385,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var server = CreateServerWithUnavailableStagingChannel(workspace, executionContext, unavailableReason);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => InvokeTryCreateTemporaryNuGetConfigAsync(server, "staging", "/tmp/aspire-pr-hive/packages"));
+            () => CreateRestoreOverlayAsync(server, "staging", "/tmp/aspire-pr-hive/packages"));
         Assert.Equal(unavailableReason, ex.Message);
     }
 
     [Fact]
-    public async Task GetNuGetSources_StagingRequested_RefusesWhenPackagingServiceReportsUnavailable()
+    public async Task ResolveAdditionalSources_StagingRequested_RefusesWhenPackagingServiceReportsUnavailable()
     {
-        // Companion of the TryCreateTemporaryNuGetConfig test above. Without this guard,
-        // GetNuGetSourcesAsync's "no match -> all explicit channels" fallback hands the
-        // shared daily feed to nuget restore on a daily-identity CLI even though the project
-        // pinned channel: staging.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("daily");
@@ -1430,12 +1400,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var server = CreateServerWithUnavailableStagingChannel(workspace, executionContext, unavailableReason);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => server.GetNuGetSourcesAsync("staging", packageSourceOverride: null, CancellationToken.None));
+            () => ResolveAdditionalSourcesAsync(server, "staging"));
         Assert.Equal(unavailableReason, ex.Message);
     }
 
     [Fact]
-    public async Task GetNuGetSources_NonStagingRequest_NotAffectedByStagingUnavailableReason()
+    public async Task ResolveAdditionalSources_NonStagingRequest_NotAffectedByStagingUnavailableReason()
     {
         // Negative control: the staging refusal must only fire for requestedChannel == "staging".
         // A request for any other channel name must continue to resolve normally even when the
@@ -1457,7 +1427,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         var server = CreatePrebuiltAppHostServer(workspace, packagingService: packagingService, executionContext: executionContext);
 
-        var sources = await server.GetNuGetSourcesAsync("daily", packageSourceOverride: null, CancellationToken.None);
+        var sources = await ResolveAdditionalSourcesAsync(server, "daily");
 
         Assert.NotNull(sources);
         Assert.Contains("https://pkgs.dev.azure.com/fake/v3/index.json", sources);
@@ -1468,10 +1438,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         CliExecutionContext executionContext,
         string unavailableReason)
     {
-        // Mirrors what PackagingService does on a daily/local/pr CLI: omits 'staging' from
-        // GetChannelsAsync and surfaces the actionable reason via GetStagingChannelUnavailableReason.
-        // We hand back the 'daily' channel because that is the shared explicit channel the
-        // pre-fix fallback path would have silently picked up.
+        // PackagingService omits an unavailable staging channel and reports the reason separately.
+        // Returning a daily channel verifies that source resolution does not substitute it.
         var mappings = new[]
         {
             new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
@@ -1585,33 +1553,31 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         return CreatePrebuiltAppHostServer(workspace, packagingService: packagingService, executionContext: executionContext);
     }
 
-    private static async Task<TemporaryNuGetConfig?> InvokeTryCreateTemporaryNuGetConfigAsync(
+    private static async Task<TemporaryNuGetConfig?> CreateRestoreOverlayAsync(
         PrebuiltAppHostServer server,
         string? requestedChannel,
         string? packageSourceOverride = null)
     {
-        var method = typeof(PrebuiltAppHostServer).GetMethod(
-            "TryCreateTemporaryNuGetConfigAsync",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [requestedChannel, packageSourceOverride, CancellationToken.None])!;
-        return await task;
+        var restoreSources = await server.ResolveIntegrationRestoreSourcesAsync(
+            requestedChannel,
+            packageSourceOverride,
+            CancellationToken.None);
+        var configSources = PrebuiltAppHostServer.ResolveNuGetConfigSources(
+            restoreSources.PackageSourceMappings,
+            ambientSources: []);
+        return await server.CreateRestoreOverlayAsync(restoreSources, configSources);
     }
 
-    private static async Task<IReadOnlyList<string>?> InvokeGetNuGetSourcesAsync(
+    private static async Task<IReadOnlyList<string>?> ResolveAdditionalSourcesAsync(
         PrebuiltAppHostServer server,
         string? requestedChannel,
         string? packageSourceOverride = null)
     {
-        var method = typeof(PrebuiltAppHostServer).GetMethod(
-            "GetNuGetSourcesAsync",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        var task = (Task<IEnumerable<string>?>)method.Invoke(server, [requestedChannel, packageSourceOverride, CancellationToken.None])!;
-        var result = await task;
-        return result?.ToList();
+        var restoreSources = await server.ResolveIntegrationRestoreSourcesAsync(
+            requestedChannel,
+            packageSourceOverride,
+            CancellationToken.None);
+        return restoreSources.AdditionalSources.Count > 0 ? restoreSources.AdditionalSources : null;
     }
 
     [Fact]
@@ -2160,12 +2126,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithSourceAndChannelHavingAspireMapping_TempConfigDropsChannelAspireMapping()
+    public async Task PrepareAsync_WithSourceAndChannelHavingAspireMapping_PolicyOverlayDropsChannelAspireMapping()
     {
         // End-to-end check that `aspire new --source <pr> --channel <X>` does not let the channel's
-        // Aspire* feed remain co-eligible with the override at restore time. The unit-level
-        // TryCreateTemporaryNuGetConfig_* cases pin the generator; this case pins that PrepareAsync
-        // wires that same temp config through to the actual restore invocation.
+        // Aspire* feed remain co-eligible with the override at restore time.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
@@ -2193,12 +2157,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         };
 
         var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
-        XDocument? tempConfigDoc = null;
+        XDocument? policyOverlay = null;
         executionFactory.AssertionCallback = (args, _, _, _) =>
         {
             if (args is ["nuget", "restore", ..])
             {
-                // Read the temp NuGet.config while it still exists; it is disposed when
+                // Read the policy overlay while it still exists; it is disposed when
                 // PrepareAsync's inner `using var` exits, which races with our assertions.
                 var argsList = (IReadOnlyList<string>)args;
                 var nugetConfigIndex = -1;
@@ -2213,7 +2177,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
                 if (nugetConfigIndex >= 0)
                 {
-                    tempConfigDoc = XDocument.Load(argsList[nugetConfigIndex + 1]);
+                    policyOverlay = XDocument.Load(argsList[nugetConfigIndex + 1]);
                 }
             }
         };
@@ -2229,13 +2193,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             Assert.True(result.Success);
             Assert.Equal("daily", result.ChannelName);
-            Assert.NotNull(tempConfigDoc);
+            Assert.NotNull(policyOverlay);
 
-            // The temp config is the authoritative PSM gate. Verify the channel's Aspire* mapping
-            // was dropped — only the override serves Aspire packages.
-            Assert.Equal(["Aspire*"], GetPackagePatternsForSource(tempConfigDoc!, packageSourceOverride));
-            Assert.Empty(GetPackagePatternsForSource(tempConfigDoc!, channelSource));
-            Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(tempConfigDoc!, NuGetOrgSource));
+            // The overlay's complete mapping policy makes only the override eligible for Aspire packages.
+            Assert.Equal(["Aspire*"], GetPackagePatternsForSource(policyOverlay!, packageSourceOverride));
+            Assert.Empty(GetPackagePatternsForSource(policyOverlay!, channelSource));
+            Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(policyOverlay!, NuGetOrgSource));
         }
         finally
         {
@@ -2338,7 +2301,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var noRestoreValues = new List<bool>();
         var processOptions = new List<ProcessInvocationOptions>();
         XDocument? generatedProject = null;
-        XDocument? generatedRestoreConfig = null;
+        XDocument? generatedPolicyOverlay = null;
         string? nugetConfigDiscoveryDirectory = null;
 
         var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
@@ -2374,7 +2337,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 noRestoreValues.Add(noRestore);
                 processOptions.Add(options);
                 generatedProject = XDocument.Load(projectFilePath.FullName);
-                generatedRestoreConfig = XDocument.Load(Path.Combine(projectFilePath.DirectoryName!, "NuGet.Config"));
+                generatedPolicyOverlay = XDocument.Load(Path.Combine(projectFilePath.DirectoryName!, "NuGet.Config"));
                 WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
                 return 0;
             }
@@ -2447,7 +2410,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                     channelSource,
                     options.EnvironmentVariables?["RestoreAdditionalProjectSources"]);
                 Assert.Equal(
-                    generatedRestoreConfig?
+                    generatedPolicyOverlay?
                         .Descendants("config")
                         .Elements("add")
                         .Single(element => element.Attribute("key")?.Value == "globalPackagesFolder")
@@ -2467,10 +2430,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Equal(string.Empty, restoreSources);
             Assert.True(File.Exists(Path.Combine(workingDirectory, "integration-restore", "NuGet.Config")));
 
-            Assert.NotNull(generatedRestoreConfig);
-            Assert.Empty(generatedRestoreConfig.Descendants("packageSources"));
-            Assert.Equal(["Aspire*"], GetPackagePatternsForKey(generatedRestoreConfig, "anonymousAlias"));
-            Assert.Equal(["Aspire*"], GetPackagePatternsForKey(generatedRestoreConfig, "private"));
+            Assert.NotNull(generatedPolicyOverlay);
+            Assert.Empty(generatedPolicyOverlay.Descendants("packageSources"));
+            Assert.Equal(["Aspire*"], GetPackagePatternsForKey(generatedPolicyOverlay, "anonymousAlias"));
+            Assert.Equal(["Aspire*"], GetPackagePatternsForKey(generatedPolicyOverlay, "private"));
             Assert.NotNull(XDocument.Load(ambientConfigPath).Descendants("packageSourceCredentials").ElementAtOrDefault(0));
 
             // Aspire package versions remain in their original (non-pinned) form when no override
@@ -2640,7 +2603,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
         XDocument? restoreOverlay = null;
         string[]? restoreConfigPaths = null;
-        string? temporaryConfigPath = null;
+        string? policyOverlayPath = null;
         executionFactory.AsyncAttemptCallback = (_, _, _) =>
         {
             var args = executionFactory.LastArguments!;
@@ -2656,8 +2619,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             if (args is ["nuget", "restore", ..])
             {
                 restoreConfigPaths = GetArgumentValues(args, "--nuget-config");
-                temporaryConfigPath = restoreConfigPaths[0];
-                restoreOverlay = XDocument.Load(temporaryConfigPath);
+                policyOverlayPath = restoreConfigPaths[0];
+                restoreOverlay = XDocument.Load(policyOverlayPath);
             }
 
             return Task.FromResult((0, (string?)null));
@@ -2671,8 +2634,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 requestedChannel: "daily");
 
             Assert.True(result.Success);
-            Assert.NotNull(temporaryConfigPath);
-            Assert.Equal([temporaryConfigPath, ambientConfigPath], Assert.IsType<string[]>(restoreConfigPaths));
+            Assert.NotNull(policyOverlayPath);
+            Assert.Equal([policyOverlayPath, ambientConfigPath], Assert.IsType<string[]>(restoreConfigPaths));
             Assert.NotNull(restoreOverlay);
             Assert.Empty(restoreOverlay.Descendants("packageSources"));
             Assert.Equal(["Aspire*"], GetPackagePatternsForKey(restoreOverlay, "private"));
@@ -2681,7 +2644,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Equal(
                 "require",
                 ambientConfig.Descendants("config").Elements("add").Single().Attribute("value")?.Value);
-            Assert.False(File.Exists(temporaryConfigPath));
+            Assert.False(File.Exists(policyOverlayPath));
             Assert.NotNull(server.IntegrationProbeManifestPath);
             Assert.True(Directory.Exists(Path.GetDirectoryName(server.IntegrationProbeManifestPath)));
         }
@@ -3044,7 +3007,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithStagingPinnedProjectOutsideLaunchDirectory_UsesStagingSourcesAndNuGetConfig()
+    public async Task PrepareAsync_WithStagingPinnedProjectOutsideLaunchDirectory_UsesStagingSourcesAndPolicyOverlay()
     {
         const string stagingFeed = "https://example.com/staging/v3/index.json";
 
@@ -3061,7 +3024,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         string[]? restoreInvocation = null;
         IDictionary<string, string>? restoreEnvironment = null;
-        string? temporaryNuGetConfigContent = null;
+        string? policyOverlayContent = null;
         var inheritedPackagesFolder = Path.Combine(workspace.WorkspaceRoot.FullName, "inherited-packages");
         var executionFactory = new TestProcessExecutionFactory
         {
@@ -3073,7 +3036,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 {
                     restoreInvocation = args.ToArray();
                     restoreEnvironment = environment;
-                    temporaryNuGetConfigContent = File.ReadAllText(GetArgumentValue(args, "--nuget-config"));
+                    policyOverlayContent = File.ReadAllText(GetArgumentValue(args, "--nuget-config"));
                 }
             }
         };
@@ -3135,10 +3098,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                     CliPathHelper.StripMacOSFirmlinkPrefix(workingDirectory),
                     StringComparison.Ordinal));
             Assert.NotNull(restoreEnvironment);
-            Assert.NotNull(temporaryNuGetConfigContent);
-            Assert.Contains(stagingFeed, temporaryNuGetConfigContent!);
-            Assert.Contains("Aspire*", temporaryNuGetConfigContent!);
-            var globalPackagesFolder = XDocument.Parse(temporaryNuGetConfigContent!)
+            Assert.NotNull(policyOverlayContent);
+            Assert.Contains(stagingFeed, policyOverlayContent!);
+            Assert.Contains("Aspire*", policyOverlayContent!);
+            var globalPackagesFolder = XDocument.Parse(policyOverlayContent!)
                 .Descendants("config")
                 .Elements("add")
                 .Single(element => element.Attribute("key")?.Value == "globalPackagesFolder")

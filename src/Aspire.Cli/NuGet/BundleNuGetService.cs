@@ -319,7 +319,7 @@ internal sealed class BundleNuGetService : INuGetService
 
         using var layoutLease = _bundleService is null
             ? null
-            : await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "nuget-config-paths", cancellationToken).ConfigureAwait(false);
+            : await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "nuget-settings", cancellationToken).ConfigureAwait(false);
         var layout = layoutLease?.Layout ?? _layoutDiscovery.DiscoverLayout();
         var managedPath = layout?.GetManagedPath();
         if (managedPath is null || !File.Exists(managedPath))
