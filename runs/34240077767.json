@@ -1,0 +1,38 @@
+{
+  "run_id": 34240077767,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34240077767",
+  "analyzed_at": "2026-09-08T15:41:13Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19383,
+    "title": "Fix MAUI launch queue handoff",
+    "author": "jfversluis",
+    "state": "closed",
+    "head_branch": "jfversluis-minimal-maui-queue-fix",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19383"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.MongoDB.Tests, Hosting.MongoDB, Hosting.MongoDB, tests/... / Hosting.MongoDB (ubuntu-latest)",
+      "id": 102108402353,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34240077767/job/102108402353",
+      "classification": "flaky-test",
+      "reason": "MongoDB replica set container failed to become healthy in time. The PR only modifies Aspire.Hosting.Maui files and MauiBuildQueueTests/MauiPlatformExtensionsTests; it does not touch MongoDB hosting code or tests, so this is an unrelated container startup/health-check timing issue.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.MongoDB.Tests.MongoDbReplicaSetFunctionalTests.VerifyMongoDBMultiNodeReplicaSetAllNodesEndUpHealthy",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.MongoDB.Tests, Hosting.MongoDB, Hosting.MongoDB, tests/... / Hosting.MongoDB (ubuntu-latest)",
+      "error": "Aspire.Hosting.DistributedApplicationException : Stopped waiting for resource 'rs0' to become healthy because it failed to start.",
+      "stack_trace": "at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, WaitBehavior waitBehavior, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 266\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 206\n   at Aspire.Hosting.MongoDB.Tests.MongoDbReplicaSetFunctionalTests.VerifyMongoDBMultiNodeReplicaSetAllNodesEndUpHealthy() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.MongoDB.Tests/ReplicaSet/MongoDbReplicaSetFunctionalTests.cs:line 209",
+      "classification": "flaky",
+      "reason": "MongoDB replica set container health-check timing failure; PR does not touch MongoDB hosting or tests, indicating a container startup/environment timing issue unrelated to the PR changes."
+    }
+  ],
+  "causes": ["aspire-hosting-mongodb-replicaset-healthy-flaky"]
+}

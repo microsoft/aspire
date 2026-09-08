@@ -1,0 +1,17 @@
+{
+  "id": "aspire-hosting-mongodb-replicaset-healthy-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: MongoDbReplicaSetFunctionalTests.VerifyMongoDBMultiNodeReplicaSetAllNodesEndUpHealthy fails to become healthy",
+  "test_name": "Aspire.Hosting.MongoDB.Tests.MongoDbReplicaSetFunctionalTests.VerifyMongoDBMultiNodeReplicaSetAllNodesEndUpHealthy",
+  "error_pattern": "Aspire.Hosting.DistributedApplicationException : Stopped waiting for resource 'rs0' to become healthy because it failed to start.\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, WaitBehavior waitBehavior, CancellationToken cancellationToken)",
+  "occurrences": [
+    {
+      "run_id": 34240077767,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34240077767",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.MongoDB.Tests, Hosting.MongoDB, Hosting.MongoDB, tests/... / Hosting.MongoDB (ubuntu-latest)",
+      "pr_number": 19383,
+      "observed_at": "2026-09-08T15:41:13Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19980"
+}
