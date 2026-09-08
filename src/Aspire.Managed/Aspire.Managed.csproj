@@ -46,9 +46,9 @@
 
   <ItemGroup>
     <!-- Temporary: Aspire.Managed restores Fluent UI transitively through Aspire.Dashboard, but package-specific
-         warning suppressions do not flow across project references. Keep this private direct reference until
-         upstream preview packages are correctly signed. -->
-    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" NoWarn="NU3018;NU3027;NU3042" />
+      warning suppressions do not flow across project references. Exclude compile/runtime assets so the direct
+      reference doesn't displace the Dashboard's runtime asset from the single-file publish. -->
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" ExcludeAssets="compile;runtime" NoWarn="NU3018;NU3027;NU3042" />
     <PackageReference Include="NuGet.Commands" />
     <PackageReference Include="NuGet.Protocol" />
     <PackageReference Include="NuGet.Resolver" />
