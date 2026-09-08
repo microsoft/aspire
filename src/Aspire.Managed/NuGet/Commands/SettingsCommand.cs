@@ -8,11 +8,11 @@ using NuGet.Configuration;
 
 namespace Aspire.Managed.NuGet.Commands;
 
-internal static class ConfigPathsCommand
+internal static class SettingsCommand
 {
     public static Command Create()
     {
-        var command = new Command("config-paths", "Lists the effective NuGet configuration hierarchy");
+        var command = new Command("settings", "Describes the effective NuGet configuration hierarchy");
         var workingDirectoryOption = new Option<string>("--working-dir", "-w")
         {
             Description = "Working directory for NuGet.config discovery",
@@ -24,23 +24,35 @@ internal static class ConfigPathsCommand
         {
             var workingDirectory = parseResult.GetValue(workingDirectoryOption)!;
             Console.WriteLine(JsonSerializer.Serialize(
-                GetConfigFilePaths(workingDirectory),
-                ConfigPathsJsonContext.Default.StringArray));
+                GetSettings(workingDirectory),
+                SettingsJsonContext.Default.NuGetSettingsResult));
             return 0;
         });
 
         return command;
     }
 
-    internal static string[] GetConfigFilePaths(string workingDirectory)
+    internal static NuGetSettingsResult GetSettings(string workingDirectory)
     {
         var settings = Settings.LoadDefaultSettings(
             workingDirectory,
             configFileName: null,
             new XPlatMachineWideSetting());
-        return settings.GetConfigFilePaths().ToArray();
+        var sources = new PackageSourceProvider(settings)
+            .LoadPackageSources()
+            .Select(static source => new NuGetSourceResult(
+                source.Name,
+                source.Source,
+                source.IsEnabled))
+            .ToArray();
+
+        return new NuGetSettingsResult(settings.GetConfigFilePaths().ToArray(), sources);
     }
 }
 
-[JsonSerializable(typeof(string[]))]
-internal sealed partial class ConfigPathsJsonContext : JsonSerializerContext;
+internal sealed record NuGetSettingsResult(string[] ConfigPaths, NuGetSourceResult[] Sources);
+
+internal sealed record NuGetSourceResult(string Name, string Source, bool IsEnabled);
+
+[JsonSerializable(typeof(NuGetSettingsResult))]
+internal sealed partial class SettingsJsonContext : JsonSerializerContext;

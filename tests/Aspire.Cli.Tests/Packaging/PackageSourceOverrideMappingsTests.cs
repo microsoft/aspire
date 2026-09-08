@@ -54,6 +54,19 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ResolveForWorkingDirectory_MalformedHttpSource_ReturnsUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string source = "https://user:p#word@packages.example.com/v3/index.json";
+
+        var result = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workspace.WorkspaceRoot);
+
+        Assert.Equal(source, result);
+        Assert.True(PackageSourceOverrideMappings.HasCredentialMaterial(result));
+        Assert.Null(PackageSourceOverrideMappings.GetMissingLocalDirectory(result));
+    }
+
+    [Fact]
     [PlatformSpecific(TestPlatforms.Windows)]
     public void ResolveForWorkingDirectory_WindowsFullyQualifiedPath_ReturnsUnchanged()
     {

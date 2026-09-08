@@ -4,8 +4,6 @@
 using System.Globalization;
 using System.IO.Hashing;
 using System.Text.Json;
-using System.Xml;
-using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
@@ -16,6 +14,12 @@ using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.NuGet;
+
+internal sealed record NuGetSettingsInfo(
+    IReadOnlyList<string> ConfigPaths,
+    IReadOnlyList<NuGetSourceInfo> Sources);
+
+internal sealed record NuGetSourceInfo(string Name, string Source, bool IsEnabled);
 
 /// <summary>
 /// Service for NuGet operations that works in bundle mode.
@@ -31,7 +35,9 @@ internal interface INuGetService
     /// <param name="runtimeIdentifier">The runtime identifier used to prefer runtime-specific assets in the generated layout.</param>
     /// <param name="sources">Additional NuGet sources.</param>
     /// <param name="workingDirectory">Working directory for nuget.config discovery and for resolving the workspace-local restore cache. Required.</param>
-    /// <param name="nugetConfigPath">An explicit NuGet.config file to use during restore.</param>
+    /// <param name="nugetConfigPaths">NuGet.config paths ordered from highest to lowest precedence.</param>
+    /// <param name="nugetConfigOverlayCacheIdentity">A stable cache identity for the first config path when it is an invocation-scoped overlay.</param>
+    /// <param name="additionalSensitiveSources">Additional source values that must be redacted from restore output.</param>
     /// <param name="globalPackagesFolderOverride">An optional global packages folder override for the restore process.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The path to the package probe manifest.</returns>
@@ -41,7 +47,9 @@ internal interface INuGetService
         string targetFramework = "net10.0",
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
-        string? nugetConfigPath = null,
+        IReadOnlyList<string>? nugetConfigPaths = null,
+        string? nugetConfigOverlayCacheIdentity = null,
+        IEnumerable<string>? additionalSensitiveSources = null,
         string? globalPackagesFolderOverride = null,
         CancellationToken ct = default);
 }
@@ -81,7 +89,9 @@ internal sealed class BundleNuGetService : INuGetService
         string targetFramework = "net10.0",
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
-        string? nugetConfigPath = null,
+        IReadOnlyList<string>? nugetConfigPaths = null,
+        string? nugetConfigOverlayCacheIdentity = null,
+        IEnumerable<string>? additionalSensitiveSources = null,
         string? globalPackagesFolderOverride = null,
         CancellationToken ct = default)
     {
@@ -109,12 +119,15 @@ internal sealed class BundleNuGetService : INuGetService
         }
 
         var sourceList = sources?.ToArray();
-        var nugetConfigInspection = await InspectNuGetConfigAsync(nugetConfigPath, ct).ConfigureAwait(false);
-        var sensitiveSources = sourceList?
+        var nugetConfigCacheIdentity = await ComputeNuGetConfigCacheIdentityAsync(
+            nugetConfigPaths,
+            nugetConfigOverlayCacheIdentity,
+            ct).ConfigureAwait(false);
+        var sensitiveSources = (sourceList ?? [])
+            .Concat(additionalSensitiveSources ?? [])
             .Where(PackageSourceOverrideMappings.HasCredentialMaterial)
-            .Concat(nugetConfigInspection.CredentialBearingSources)
             .Distinct(StringComparer.Ordinal)
-            .ToArray() ?? nugetConfigInspection.CredentialBearingSources;
+            .ToArray();
         var nugetFallbackPackagesPaths = CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment);
 
         var restoreDir = Path.Combine(
@@ -125,7 +138,7 @@ internal sealed class BundleNuGetService : INuGetService
                 runtimeIdentifier,
                 managedPath,
                 sourceList,
-                nugetConfigInspection.CacheIdentity,
+                nugetConfigCacheIdentity,
                 globalPackagesFolderOverride ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
                 nugetFallbackPackagesPaths));
         var objDir = Path.Combine(restoreDir, "obj");
@@ -182,10 +195,13 @@ internal sealed class BundleNuGetService : INuGetService
         restoreArgs.Add("--working-dir");
         restoreArgs.Add(workingDirectory);
 
-        if (!string.IsNullOrEmpty(nugetConfigPath))
+        if (nugetConfigPaths is not null)
         {
-            restoreArgs.Add("--nuget-config");
-            restoreArgs.Add(nugetConfigPath);
+            foreach (var nugetConfigPath in nugetConfigPaths)
+            {
+                restoreArgs.Add("--nuget-config");
+                restoreArgs.Add(nugetConfigPath);
+            }
         }
 
         // Enable verbose output for debugging
@@ -295,7 +311,9 @@ internal sealed class BundleNuGetService : INuGetService
         return manifestPath;
     }
 
-    internal async Task<string[]> GetNuGetConfigPathsAsync(string workingDirectory, CancellationToken cancellationToken)
+    internal async Task<NuGetSettingsInfo> GetNuGetSettingsAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
 
@@ -311,7 +329,7 @@ internal sealed class BundleNuGetService : INuGetService
 
         var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
-            ["nuget", "config-paths", "--working-dir", workingDirectory],
+            ["nuget", "settings", "--working-dir", workingDirectory],
             killOnParentExit: true,
             ct: cancellationToken).ConfigureAwait(false);
         if (exitCode != 0)
@@ -322,20 +340,33 @@ internal sealed class BundleNuGetService : INuGetService
         try
         {
             using var document = JsonDocument.Parse(output);
-            if (document.RootElement.ValueKind is not JsonValueKind.Array)
+            if (document.RootElement.ValueKind is not JsonValueKind.Object)
             {
-                throw new InvalidDataException("The NuGet configuration hierarchy response was not an array.");
+                throw new InvalidDataException("The NuGet settings response was not an object.");
             }
 
-            return document.RootElement
+            var configPaths = document.RootElement
+                .GetProperty("ConfigPaths")
                 .EnumerateArray()
                 .Select(static element => element.GetString()
                     ?? throw new InvalidDataException("The NuGet configuration hierarchy contained a null path."))
                 .ToArray();
+            var sources = document.RootElement
+                .GetProperty("Sources")
+                .EnumerateArray()
+                .Select(static element => new NuGetSourceInfo(
+                    element.GetProperty("Name").GetString()
+                        ?? throw new InvalidDataException("The NuGet settings response contained a source without a name."),
+                    element.GetProperty("Source").GetString()
+                        ?? throw new InvalidDataException("The NuGet settings response contained a source without a location."),
+                    element.GetProperty("IsEnabled").GetBoolean()))
+                .ToArray();
+
+            return new NuGetSettingsInfo(configPaths, sources);
         }
         catch (JsonException ex)
         {
-            throw new InvalidDataException("The NuGet configuration hierarchy response was invalid.", ex);
+            throw new InvalidDataException("The NuGet settings response was invalid.", ex);
         }
     }
 
@@ -412,33 +443,42 @@ internal sealed class BundleNuGetService : INuGetService
         return XxHash3.HashToUInt64(System.Text.Encoding.UTF8.GetBytes(content)).ToString("X16", CultureInfo.InvariantCulture);
     }
 
-    private static async Task<NuGetConfigInspection> InspectNuGetConfigAsync(string? nugetConfigPath, CancellationToken cancellationToken)
+    private async Task<string?> ComputeNuGetConfigCacheIdentityAsync(
+        IReadOnlyList<string>? nugetConfigPaths,
+        string? nugetConfigOverlayCacheIdentity,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(nugetConfigPath))
+        if (nugetConfigPaths is not { Count: > 0 })
         {
-            return NuGetConfigInspection.Empty;
+            return null;
         }
 
-        await using var stream = new FileStream(
-            nugetConfigPath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            bufferSize: 4096,
-            useAsync: true);
-        using var reader = XmlReader.Create(stream, new XmlReaderSettings
+        var hash = new XxHash3();
+        for (var index = 0; index < nugetConfigPaths.Count; index++)
         {
-            Async = true,
-            DtdProcessing = DtdProcessing.Prohibit,
-            XmlResolver = null
-        });
-        var document = await XDocument.LoadAsync(reader, LoadOptions.None, cancellationToken).ConfigureAwait(false);
+            var nugetConfigPath = nugetConfigPaths[index];
+            if (index == 0 && nugetConfigOverlayCacheIdentity is not null)
+            {
+                hash.Append("\0NUGET_CONFIG_OVERLAY\0"u8);
+                hash.Append(System.Text.Encoding.UTF8.GetBytes(nugetConfigOverlayCacheIdentity));
+            }
+            else
+            {
+                hash.Append(System.Text.Encoding.UTF8.GetBytes(nugetConfigPath));
+                hash.Append(await File.ReadAllBytesAsync(nugetConfigPath, cancellationToken).ConfigureAwait(false));
+            }
 
-        var credentialBearingSources = TemporaryNuGetConfig.GetCredentialBearingSources(document);
+            var configContent = await File.ReadAllTextAsync(nugetConfigPath, cancellationToken).ConfigureAwait(false);
+            foreach (var environmentVariableName in NuGetConfigEnvironmentVariables.FindReferencedNames(configContent))
+            {
+                hash.Append("\0NUGET_CONFIG_ENVIRONMENT\0"u8);
+                hash.Append(System.Text.Encoding.UTF8.GetBytes(environmentVariableName));
+                hash.Append(System.Text.Encoding.UTF8.GetBytes(
+                    _environment.GetEnvironmentVariable(environmentVariableName) ?? "\0UNSET\0"));
+            }
+        }
 
-        return new NuGetConfigInspection(
-            document.ToString(SaveOptions.DisableFormatting),
-            credentialBearingSources);
+        return Convert.ToHexString(hash.GetCurrentHash());
     }
 
     private static string GetManagedToolFingerprint(string? managedPath)
@@ -477,12 +517,5 @@ internal sealed class BundleNuGetService : INuGetService
         var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(
             new DirectoryInfo(Path.GetFullPath(workingDirectory)));
         return Path.Combine(integrationCacheDirectory.FullName, "package-restore");
-    }
-
-    private sealed record NuGetConfigInspection(
-        string? CacheIdentity,
-        string[] CredentialBearingSources)
-    {
-        public static NuGetConfigInspection Empty { get; } = new(null, []);
     }
 }

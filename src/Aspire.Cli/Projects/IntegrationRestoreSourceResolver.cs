@@ -151,7 +151,7 @@ internal sealed class IntegrationRestoreSourceResolver(
         return channels.Where(c => c.Type == PackageChannelType.Explicit).ToArray();
     }
 
-    private static string CreateGlobalPackagesFolderIdentity(
+    internal static string CreateGlobalPackagesFolderIdentity(
         IReadOnlyList<string> additionalSources,
         IReadOnlyList<PackageMapping>? mappings)
     {

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
 using System.Text.Json;
@@ -37,8 +38,7 @@ internal static class IntegrationClosureBuilder
     /// </summary>
     public static CSharpProjectFile CreateClosureProjectFile(
         string restoreDir,
-        IEnumerable<string>? additionalSources = null,
-        string? restoreConfigFile = null)
+        IEnumerable<string>? additionalSources = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(restoreDir);
 
@@ -59,19 +59,18 @@ internal static class IntegrationClosureBuilder
         projectFile.AddProperty("AspireClosureTargetsFile", Path.Combine(restoreDir, ClosureTargetsFileName));
         projectFile.AddProperty("AspireProjectRefAssemblyNamesFile", Path.Combine(restoreDir, ProjectRefAssemblyNamesFileName));
 
-        // Restore source/config overrides from the caller.
+        // The generated root receives only sources that are not already represented by ambient
+        // NuGet settings. Referenced projects independently inherit the process-level best-effort
+        // source default.
         if (additionalSources is not null)
         {
-            var sourceList = string.Join(";", additionalSources);
-            if (sourceList.Length > 0)
-            {
-                projectFile.AddProperty("RestoreAdditionalProjectSources", sourceList);
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(restoreConfigFile))
-        {
-            projectFile.AddProperty("RestoreConfigFile", restoreConfigFile);
+            var effectiveAdditionalSources = additionalSources
+                .Where(static source => !string.IsNullOrWhiteSpace(source))
+                .ToArray();
+            var sourceList = CreateRestoreAdditionalProjectSourcesValue(
+                existingValue: null,
+                effectiveAdditionalSources);
+            projectFile.AddProperty("RestoreAdditionalProjectSources", sourceList ?? string.Empty);
         }
 
         // Keep closure targets centralized so every generated integration project emits the
@@ -110,6 +109,46 @@ internal static class IntegrationClosureBuilder
                     new XAttribute("WriteOnlyWhenDifferent", "true"))));
 
         return projectFile;
+    }
+
+    internal static string? CreateRestoreAdditionalProjectSourcesValue(
+        string? existingValue,
+        IEnumerable<string> additionalSources)
+    {
+        ArgumentNullException.ThrowIfNull(additionalSources);
+
+        var escapedSources = additionalSources
+            .Where(static source => !string.IsNullOrWhiteSpace(source))
+            .Select(EscapeMSBuildPropertyValue)
+            .ToArray();
+        if (escapedSources.Length == 0)
+        {
+            return existingValue;
+        }
+
+        var additionalValue = string.Join(";", escapedSources);
+        return string.IsNullOrEmpty(existingValue)
+            ? additionalValue
+            : $"{existingValue};{additionalValue}";
+    }
+
+    private static string EscapeMSBuildPropertyValue(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value)
+        {
+            if (character is '%' or '*' or '?' or '@' or '$' or '(' or ')' or ';' or '\'')
+            {
+                builder.Append('%');
+                builder.Append(((int)character).ToString("X2", CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>
