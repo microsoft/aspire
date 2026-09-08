@@ -8,11 +8,18 @@
 
 .interaction-input-dialog .interaction-input ::deep fluent-text-input,
 .interaction-input-dialog .interaction-input ::deep fluent-dropdown,
-.interaction-input-dialog .interaction-input ::deep .uploaded-files-list,
+.interaction-input-dialog .interaction-input ::deep fluent-field,
+.interaction-input-dialog .interaction-input ::deep .file-input-container,
 .interaction-input-dialog .interaction-input ::deep .interaction-input-label {
     width: 75%;
     /* Prevent long select/combox controls from extending outside the dialog. This can happen when there is very long placeholder text */
     max-width: 500px;
+}
+
+/* Size the Fluent field wrapper, not just its input, so loading rings sit beside the visible control. */
+.interaction-input-dialog .interaction-input ::deep fluent-field > fluent-text-input,
+.interaction-input-dialog .interaction-input ::deep fluent-field > fluent-dropdown {
+    width: 100%;
 }
 
 .interaction-input-dialog .interaction-input ::deep .interaction-input-label {

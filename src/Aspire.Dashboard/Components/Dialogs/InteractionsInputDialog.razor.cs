@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Resources;
@@ -122,39 +123,48 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
         foreach (var inputModel in _inputDialogInputViewModels)
         {
-            var field = GetFieldIdentifier(inputModel);
-            if (IsMissingRequiredValue(inputModel))
-            {
-                _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
-            }
-            foreach (var erroredFile in inputModel.FileReferences.Where(f => f.ErrorMessage is not null))
-            {
-                _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
-            }
+            ValidateInput(inputModel);
         }
 
         _editContext.NotifyValidationStateChanged();
     }
 
+    private void ValidateInput(InputViewModel inputModel)
+    {
+        var field = GetFieldIdentifier(inputModel);
+        _validationMessages.Clear(field);
+
+        if (IsMissingRequiredValue(inputModel))
+        {
+            _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
+        }
+        foreach (var erroredFile in inputModel.FileReferences.Where(f => f.ErrorMessage is not null))
+        {
+            _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
+        }
+    }
+
     private void InputValueChanged(FieldIdentifier field)
     {
-        _validationMessages.Clear(field);
+        // Combobox selection is UI state; UpdateChoiceValueState notifies the actual Value field.
+        // Processing both fields would send the same update to the AppHost twice.
+        if (field.Model is InputViewModel && field.FieldName == nameof(InputViewModel.SelectedOption))
+        {
+            return;
+        }
 
         if (field.Model is InputViewModel inputModel)
         {
-            if (IsMissingRequiredValue(inputModel))
-            {
-                _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
-            }
-            foreach (var erroredFile in inputModel.FileReferences.Where(f => f.ErrorMessage is not null))
-            {
-                _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
-            }
+            ValidateInput(inputModel);
 
             if (inputModel.Input.UpdateStateOnChange)
             {
                 _ = Content.OnSubmitCallback(Content.Interaction, true);
             }
+        }
+        else
+        {
+            _validationMessages.Clear(field);
         }
 
         _editContext.NotifyValidationStateChanged();
@@ -178,17 +188,34 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             string.IsNullOrWhiteSpace(inputModel.Value);
     }
 
-    private void OnChoiceInput(InputViewModel inputModel, ChangeEventArgs e)
+    private void OnChoiceTextChanged(InputViewModel inputModel, string? text)
     {
-        inputModel.SelectedOption = null;
-        inputModel.Value = e.Value?.ToString();
-        _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+        // Fluent also reports the display label after selection. Don't replace the submitted key
+        // with that label (for example, selecting "Blue" must keep the value "blue").
+        if (inputModel.SelectedOption?.Name == text)
+        {
+            return;
+        }
+
+        // Fluent restores the selected option's text on blur. Represent custom text with a
+        // standalone option so losing focus doesn't restore an earlier selection.
+        text ??= string.Empty;
+        inputModel.SelectedOption = inputModel.SelectOptions.FirstOrDefault(option => option.Name == text)
+            ?? new SelectViewModel<string> { Id = text, Name = text };
+        UpdateChoiceValueState(inputModel);
     }
 
-    private void OnChoiceSelected(InputViewModel inputModel)
+    private void UpdateChoiceValueState(InputViewModel inputModel)
     {
-        inputModel.Value = inputModel.SelectedOption?.Id;
-        _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+        // An unmatched native selection isn't a request to clear the typed value.
+        inputModel.SelectedOption ??= inputModel.SelectOptions.FirstOrDefault(option => option.Id == inputModel.Value)
+            ?? new SelectViewModel<string> { Id = inputModel.Value, Name = inputModel.Value };
+
+        if (inputModel.Value != inputModel.SelectedOption.Id)
+        {
+            inputModel.Value = inputModel.SelectedOption.Id;
+            _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+        }
     }
 
     private async Task SubmitAsync()

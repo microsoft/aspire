@@ -27,7 +27,6 @@
     }
 </div>
 @GetDescriptionContent(InputViewModel.Input, descriptionId)
-<ValidationMessage For="@(() => InputViewModel.Value)" />
 
 @code {
     private RenderFragment? GetDescriptionContent(InteractionInput vm, string? id)

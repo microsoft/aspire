@@ -98,8 +98,32 @@ fluent-dropdown {
     --colorNeutralForeground3: var(--colorNeutralForeground2);
 }
 
+/* Restore native text selection colors instead of Fluent v5's inverted theme colors. */
+fluent-text-input::part(control)::selection {
+    color: HighlightText;
+    background-color: Highlight;
+}
+
+fluent-text-input:is([disabled], :disabled),
+fluent-text-input:is([disabled], :disabled)::part(control) {
+    cursor: not-allowed;
+}
+
+fluent-text-input:is([disabled], :disabled)::part(root) {
+    background-color: var(--colorNeutralBackgroundDisabled);
+}
+
+fluent-text-input:is([disabled], :disabled)::part(control) {
+    color: var(--colorNeutralForegroundDisabled);
+}
+
 fluent-dropdown > [slot="control"] {
     align-self: center;
+}
+
+/* Fluent's placeholder state follows option selection, which can be empty even when a combobox has custom text. */
+fluent-dropdown[type="combobox"]:not([disabled]) > input[slot="control"]:not(:placeholder-shown) {
+    color: var(--colorNeutralForeground1);
 }
 
 .aspire-input {
@@ -372,6 +396,7 @@ fluent-field.invalid > [slot="input"] {
     --colorNeutralStroke1: var(--error);
     --colorNeutralStroke1Hover: var(--error);
     --colorNeutralStroke1Pressed: var(--error);
+    --colorNeutralStrokeDisabled: var(--error);
     --colorStrokeFocus1: var(--error);
     --colorStrokeFocus2: var(--error);
     --colorCompoundBrandStroke: var(--error);
@@ -939,7 +964,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     padding-inline-start: 0;
 }
 
-.fluent-data-grid.aspire-spaced-grid > tbody > tr > td {
+.fluent-data-grid.aspire-spaced-grid > tbody > tr:not([row-state="empty-content"]) > td {
     padding: 4px 16px;
 }
 
