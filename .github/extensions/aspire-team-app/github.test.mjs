@@ -100,36 +100,38 @@ test("loadDashboard ranks review-ready PRs by time waiting for review", async ()
   assert.deepEqual(reviewQueue.items.map((item) => item.pr.number), [2, 1]);
 });
 
-test("loadDashboard attributes a copilot-swe-agent PR to its sole human assignee", async () => {
-  const copilotPr = prNode(19893, new Date().toISOString());
-  copilotPr.author = { __typename: "Bot", login: "copilot-swe-agent", avatarUrl: null };
-  copilotPr.assignees.nodes = [{ login: "ellahathaway" }];
+test("loadDashboard attributes copilot-swe-agent identities to their sole human assignee", async () => {
+  for (const login of ["copilot-swe-agent", "copilot-swe-agent[bot]"]) {
+    const copilotPr = prNode(19893, new Date().toISOString());
+    copilotPr.author = { __typename: "Bot", login, avatarUrl: null };
+    copilotPr.assignees.nodes = [{ login: "ellahathaway" }];
 
-  globalThis.fetch = async (_url, options = {}) => {
-    const body = JSON.parse(options.body);
-    if (body.query.includes("pullRequests")) {
-      return jsonResponse({ data: { repository: {
-        isPrivate: false,
-        pullRequests: {
-          nodes: [copilotPr],
-          pageInfo: { hasNextPage: false, endCursor: null },
-        },
-      } } });
-    }
-    throw new Error(`Unexpected query: ${body.query}`);
-  };
+    globalThis.fetch = async (_url, options = {}) => {
+      const body = JSON.parse(options.body);
+      if (body.query.includes("pullRequests")) {
+        return jsonResponse({ data: { repository: {
+          isPrivate: false,
+          pullRequests: {
+            nodes: [copilotPr],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        } } });
+      }
+      throw new Error(`Unexpected query: ${body.query}`);
+    };
 
-  const dashboard = await loadDashboard({
-    accounts: [{ token: "token", login: "davidfowl", repos: ["microsoft/aspire"] }],
-    mode: "review",
-    release: "9.5",
-    prefs: {},
-    dismissed: [],
-  });
+    const dashboard = await loadDashboard({
+      accounts: [{ token: "token", login: "davidfowl", repos: ["microsoft/aspire"] }],
+      mode: "review",
+      release: "9.5",
+      prefs: {},
+      dismissed: [],
+    });
 
-  const pullRequests = dashboard.attention.buckets.flatMap((bucket) => bucket.items.map((item) => item.pr));
-  const attributed = pullRequests.find((pr) => pr.number === copilotPr.number);
-  assert.equal(attributed.author, "ellahathaway/copilot");
+    const pullRequests = dashboard.attention.buckets.flatMap((bucket) => bucket.items.map((item) => item.pr));
+    const attributed = pullRequests.find((pr) => pr.number === copilotPr.number);
+    assert.equal(attributed.author, "ellahathaway/copilot");
+  }
 });
 
 test("loadDashboard paginates open issues for each watched repo", async () => {
