@@ -11,6 +11,13 @@
       "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
       "pr_number": 15671,
       "observed_at": "2026-09-01T01:50:41Z"
+    },
+    {
+      "run_id": 34251319766,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34251319766",
+      "job": "Tests / No-package tests / Hosting-4 (windows-latest)",
+      "pr_number": 19678,
+      "observed_at": "2026-09-08T17:05:57Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19835"

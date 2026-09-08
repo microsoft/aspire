@@ -1,0 +1,133 @@
+{
+  "run_id": 34251319766,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34251319766",
+  "analyzed_at": "2026-09-08T17:05:57Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19678,
+    "title": "Project v2 build",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/project-v2-build",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19678"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests / Hosting-4 (windows-latest)",
+      "id": 102147274902,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34251319766/job/102147274902",
+      "classification": "transient-infra",
+      "reason": "Failed at 'Upload logs, and test results' step due to 403 Forbidden from intermediary during FinalizeArtifact, a known GitHub Actions artifact-service issue unrelated to PR changes.",
+      "failed_steps": ["Upload logs, and test results"]
+    },
+    {
+      "name": "Tests / No-package tests / Hosting.PostgreSQL (ubuntu-latest)",
+      "id": 102147275000,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34251319766/job/102147275000",
+      "classification": "transient-infra",
+      "reason": "Failed at 'Upload logs, and test results' step due to 403 Forbidden from intermediary during FinalizeArtifact.",
+      "failed_steps": ["Upload logs, and test results"]
+    },
+    {
+      "name": "Tests / No-package tests / Infrastructure (ubuntu-latest)",
+      "id": 102147280943,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34251319766/job/102147280943",
+      "classification": "flaky-test",
+      "reason": "ExtensionChangelogFinalizedWorkflowTests.ReleaseBranchWithStaleExtensionBaseAdvanceFails fails due to repo/branch state assumptions unrelated to this PR's changes; matches a known recurring flaky pattern.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / No-package tests / Dashboard.Components (windows-latest)",
+      "id": 102147307455,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34251307455/job/102147307455",
+      "classification": "flaky-test",
+      "reason": "MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared fails with a known intermittent SQLite 'expected 0 columns' error on Windows, unrelated to PR changes (PR does not touch Dashboard SQLite storage code).",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / No-package tests / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 102147307607,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34251319766/job/102147307607",
+      "classification": "transient-infra",
+      "reason": "Failed with 403 Forbidden from intermediary during FinalizeArtifact during log/results upload; no test failures extracted.",
+      "failed_steps": ["Run tests (Windows)", "Upload logs, and test results"]
+    },
+    {
+      "name": "Tests / No-package tests / Hosting.Azure (ubuntu-latest)",
+      "id": 102147307698,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34251319766/job/102147307698",
+      "classification": "transient-infra",
+      "reason": "Failed with 403 Forbidden from intermediary during FinalizeArtifact during log/results upload; no test failures extracted.",
+      "failed_steps": ["Run tests (Linux/macOS)", "Upload logs, and test results"]
+    },
+    {
+      "name": "Tests / Package tests - Linux / Templates-LocalhostTldHostnameTests (ubuntu-latest)",
+      "id": 102148230647,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34251319766/job/102148230647",
+      "classification": "transient-infra",
+      "reason": "Failed at 'Download built nugets' step due to 403 Forbidden from intermediary during ListArtifacts, a known GitHub Actions artifact-service issue.",
+      "failed_steps": ["Download built nugets"]
+    },
+    {
+      "name": "Tests / Package tests - macOS / Templates-AppHostTemplateTests (macos-latest)",
+      "id": 102150218966,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34251319766/job/102150218966",
+      "classification": "transient-infra",
+      "reason": "Failed at 'Upload logs, and test results' step due to 403 Forbidden from intermediary during FinalizeArtifact.",
+      "failed_steps": ["Upload logs, and test results"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 102150750363,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34251319766/job/102150750363",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with no downloadable logs and no TRX test failures; matches a recurring known-flaky pattern for this shard seen across many unrelated PRs.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
+      "id": 102150750399,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34251319766/job/102150750399",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with no downloadable logs and no TRX test failures; matches a recurring known-flaky pattern for this shard seen in unrelated PRs.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Infrastructure.Tests.ExtensionChangelogFinalizedWorkflowTests.ReleaseBranchWithStaleExtensionBaseAdvanceFails",
+      "job": "Tests / No-package tests / Infrastructure (ubuntu-latest)",
+      "error": "Assert.Contains() Failure: Sub-string not found\nString:    \"::error file=extension/CHANGELOG.md,line=3,title=F\"...\nNot found: \"Finalized changelog range ends at\"",
+      "stack_trace": "at Infrastructure.Tests.ExtensionChangelogFinalizedWorkflowTests.ReleaseBranchWithStaleExtensionBaseAdvanceFails() in /_/tests/Infrastructure.Tests/WorkflowScripts/ExtensionChangelogFinalizedWorkflowTests.cs:line 226",
+      "classification": "flaky",
+      "reason": "Test depends on ambient repo/branch state assumptions (changelog history) rather than PR content; previously seen failing on an unrelated PR (#15671) and tracked as a recurring flaky test."
+    },
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared",
+      "job": "Tests / No-package tests / Dashboard.Components (windows-latest)",
+      "error": "Microsoft.Data.Sqlite.SqliteException : SQLite Error 1: 'expected 0 columns for '' but got 18'.",
+      "stack_trace": "at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)\n   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()\n   at Aspire.Dashboard.Otlp.Storage.SqliteTelemetryRepository.MaterializeMetricDimensions(...) in SqliteTelemetryRepository.Metrics.Reads.cs:line 206",
+      "classification": "flaky",
+      "reason": "Known recurring intermittent SQLite in-memory column-count mismatch on Windows, observed across many unrelated PRs (5+ prior occurrences); PR does not modify Dashboard SQLite storage code."
+    }
+  ],
+  "causes": [
+    "artifact-upload-403-forbidden-intermediary",
+    "infrastructure-tests-extensionchangelog-stale-state",
+    "dashboard-components-sqlite-column-count-mismatch",
+    "vscode-e2e-windows-dynamic-debug-configuration-flaky",
+    "vscode-e2e-windows-winui-debug-flaky"
+  ]
+}
