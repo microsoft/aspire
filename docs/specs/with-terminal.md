@@ -119,7 +119,7 @@ stream.
 ### Browser requirements and package pairing
 
 The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
-exactly `0.167.0-alpha.1519.1.b8be265`. HWT1 is experimental state transfer
+exactly `0.167.0-alpha.1522.1.3085d8b`. HWT1 is experimental state transfer
 between these paired packages, not a stable wire contract implemented by
 Aspire. Upgrade both together. The full npm `dist` tree is vendored, including
 module workers, relative imports, fonts and licenses.
@@ -134,6 +134,12 @@ runtime rendering failures remain visible errors; there is no xterm.js fallback.
 Sixel and Kitty Graphics Protocol are rendered
 from server-authoritative state. Historical rendering is text-only. The
 dashboard's independent console-log view remains available.
+
+HMP checkpoints retain uploaded Kitty image data even when an animation
+temporarily removes its placements. They also preserve partially received ANSI
+sequences, so late and reconnected viewers can resume placement-only updates
+without losing pixels or displaying fragments of graphics commands. See the
+[graphics and partial-sequence replay fix](https://github.com/mitchdenny/hex1b/pull/496).
 
 The package handles Ctrl/Cmd+click on authoritative OSC 8 hyperlinks in live
 output and history. HMP state replay preserves link destinations across late

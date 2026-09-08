@@ -14,9 +14,9 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.167.0-alpha.1519.1.b8be265**,
+`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.167.0-alpha.1522.1.3085d8b**,
 paired with the Hex1b NuGet build from commit
-`b8be2654e874efa394b496b1c114edcf75c52c14`. The client and server use the evolving
+`3085d8bd20c7579f27e873e98b740daf8cf57a11`. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
 different client based only on a similar version number.
 

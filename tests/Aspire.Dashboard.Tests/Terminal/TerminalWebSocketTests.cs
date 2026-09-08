@@ -126,6 +126,146 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
         await reconnected.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BrowserView_PreservesKittyImageForLatePeerAndPlacementUpdates(bool alternateScreen, bool nativeSize)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var first = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(first, _ => true, timeout.Token);
+
+        if (alternateScreen)
+        {
+            host.Workload.Write("\u001b[?1049h");
+        }
+
+        // Kitty transmits pixels with a=t, then reuses the image id in a=p
+        // placement commands that contain no image data. Like KgpCloudDemo,
+        // synchronized frames use lowercase d=a to remove placements, not pixels.
+        // https://sw.kovidgoyal.net/kitty/graphics-protocol/#displaying-images-on-screen
+        var sizing = nativeSize ? "" : ",c=2,r=2";
+        host.Workload.Write("\u001b[?2026h\u001b_Ga=t,f=32,t=d,s=1,v=1,i=7300,q=2;/wAA/w==\u001b\\" +
+            "\u001b_Ga=d,d=a,q=2\u001b\\" +
+            $"\u001b[2;3H\u001b_Ga=p,i=7300{sizing},C=1,q=2\u001b\\\u001b[?2026l");
+        var initial = await ReadUntilAsync(first, HasPlacement, timeout.Token);
+        AssertImageIncluded(initial);
+
+        using var second = await host.ConnectBrowserAsync(timeout.Token);
+        var late = await ReadUntilAsync(second, HasPlacement, timeout.Token);
+        AssertImageIncluded(late);
+        Assert.Equal(initial.GetProperty("placements")[0].GetProperty("x").GetDouble(),
+            late.GetProperty("placements")[0].GetProperty("x").GetDouble());
+
+        host.Workload.Write("\u001b[?2026h\u001b_Ga=d,d=a,q=2\u001b\\" +
+            $"\u001b[2;8H\u001b_Ga=p,i=7300{sizing},C=1,q=2\u001b\\\u001b[?2026l");
+        var originalX = initial.GetProperty("placements")[0].GetProperty("x").GetDouble();
+        var updates = await Task.WhenAll(
+            ReadUntilAsync(first, HasMovedPlacement, timeout.Token),
+            ReadUntilAsync(second, HasMovedPlacement, timeout.Token));
+        Assert.Equal(updates[0].GetProperty("placements")[0].GetProperty("x").GetDouble(),
+            updates[1].GetProperty("placements")[0].GetProperty("x").GetDouble());
+
+        await first.CloseAsync(WebSocketCloseStatus.NormalClosure, "Reconnect", timeout.Token);
+        using var reconnected = await host.ConnectBrowserAsync(timeout.Token);
+        var restored = await ReadUntilAsync(reconnected, HasMovedPlacement, timeout.Token);
+        AssertImageIncluded(restored);
+        await reconnected.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+        await second.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+
+        static bool HasPlacement(JsonElement frame) => frame.GetProperty("placements").GetArrayLength() == 1;
+
+        bool HasMovedPlacement(JsonElement frame) =>
+            HasPlacement(frame) && frame.GetProperty("placements")[0].GetProperty("x").GetDouble() > originalX;
+
+        static void AssertImageIncluded(JsonElement frame)
+        {
+            var image = Assert.Single(frame.GetProperty("images").EnumerateArray());
+            Assert.Equal(1, image.GetProperty("width").GetInt32());
+            Assert.Equal(1, image.GetProperty("height").GetInt32());
+            Assert.Equal(4, image.GetProperty("byteLength").GetInt32());
+            Assert.Equal(image.GetProperty("key").GetString(), frame.GetProperty("placements")[0].GetProperty("key").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task BrowserView_AttachingDuringKittyPlacementReplacementRetainsPixels()
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var first = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(first, _ => true, timeout.Token);
+
+        host.Workload.Write("\u001b[?1049h\u001b_Ga=t,f=32,t=d,s=1,v=1,i=7300,q=2;/wAA/w==\u001b\\" +
+            "\u001b[2;3H\u001b_Ga=p,i=7300,C=1,q=2\u001b\\");
+        var initial = await ReadUntilAsync(first, frame => frame.GetProperty("placements").GetArrayLength() == 1, timeout.Token);
+        var originalX = initial.GetProperty("placements")[0].GetProperty("x").GetDouble();
+
+        // An animation can clear placements inside a synchronized-output frame
+        // before emitting replacements. Lowercase d=a must leave the uploaded
+        // pixels available to viewers that attach during that interval.
+        host.Workload.Write("\u001b[?2026h\u001b_Ga=d,d=a,q=2\u001b\\\u001b[Hpalette-cleared");
+        await host.WaitForProducerTextAsync("palette-cleared", timeout.Token);
+        using var late = await host.ConnectBrowserAsync(timeout.Token);
+        await host.WaitForPeerHandshakesAsync(timeout.Token);
+
+        host.Workload.Write("\u001b[2;8H\u001b_Ga=p,i=7300,C=1,q=2\u001b\\\u001b[?2026l");
+        var original = await ReadUntilAsync(first, frame => frame.GetProperty("placements").GetArrayLength() == 1 &&
+            frame.GetProperty("placements")[0].GetProperty("x").GetDouble() > originalX, timeout.Token);
+        var restored = await ReadUntilAsync(late, frame => frame.GetProperty("placements").GetArrayLength() == 1, timeout.Token);
+        var image = Assert.Single(restored.GetProperty("images").EnumerateArray());
+        Assert.Equal(4, image.GetProperty("byteLength").GetInt32());
+        Assert.Equal(original.GetProperty("placements")[0].GetProperty("x").GetDouble(),
+            restored.GetProperty("placements")[0].GetProperty("x").GetDouble());
+        await first.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+        await late.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(12)]
+    [InlineData(27)]
+    public async Task BrowserView_AttachingDuringKittyPlacementCommandReplaysCompleteSequence(int splitIndex)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var first = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(first, _ => true, timeout.Token);
+
+        host.Workload.Write("\u001b[?1049h\u001b_Ga=T,f=32,t=d,s=1,v=1,i=7300,p=11,C=1,q=2;/wAA/w==\u001b\\");
+        var initial = await ReadUntilAsync(first, frame => frame.GetProperty("placements").GetArrayLength() == 1, timeout.Token);
+        var originalX = initial.GetProperty("placements")[0].GetProperty("x").GetDouble();
+
+        // PTY reads can split ESC_Ga=p,...ESC\ within its introducer, fields or
+        // terminator. A new HMP peer needs that incomplete parser prefix as well
+        // as the screen checkpoint, or the suffix becomes ordinary screen text.
+        const string placement = "\u001b_Ga=p,i=7300,p=11,C=1,q=2\u001b\\";
+        host.Workload.Write("\u001b[Hprefix-ready\u001b[2;8H" + placement[..splitIndex]);
+        await host.WaitForProducerTextAsync("prefix-ready", timeout.Token);
+        using var late = await host.ConnectBrowserAsync(timeout.Token);
+        await host.WaitForPeerHandshakesAsync(timeout.Token);
+
+        host.Workload.Write(placement[splitIndex..]);
+        var updates = await Task.WhenAll(
+            ReadUntilAsync(first, HasMovedPlacement, timeout.Token),
+            ReadUntilAsync(late, HasMovedPlacement, timeout.Token));
+        Assert.Equal(updates[0].GetProperty("placements")[0].GetProperty("x").GetDouble(),
+            updates[1].GetProperty("placements")[0].GetProperty("x").GetDouble());
+        await first.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+        await late.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+
+        bool HasMovedPlacement(JsonElement frame) =>
+            frame.GetProperty("placements").GetArrayLength() == 1 &&
+            frame.GetProperty("placements")[0].GetProperty("x").GetDouble() > originalX;
+    }
+
     [Fact]
     public async Task BrowserView_PreservesHyperlinkDestinationChangesAcrossReconnect()
     {

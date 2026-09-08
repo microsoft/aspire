@@ -9,6 +9,7 @@ using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Tests.Integration;
 using Aspire.Hosting;
 using Hex1b;
+using Hex1b.Automation;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -48,6 +49,17 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
     public int ConnectionCount => _connections.Count;
 
     public Task StartAsync(CancellationToken cancellationToken) => _app.StartAsync(cancellationToken);
+
+    public async Task WaitForProducerTextAsync(string text, CancellationToken cancellationToken)
+    {
+        using var snapshot = await new Hex1bTerminalInputSequenceBuilder()
+            .WaitUntil(snapshot => snapshot.ContainsText(text), TimeSpan.FromSeconds(10), "Terminal producer output was not applied.")
+            .Build()
+            .ApplyAsync(_producer, cancellationToken);
+    }
+
+    public Task WaitForPeerHandshakesAsync(CancellationToken cancellationToken) =>
+        Task.WhenAll(_connections).WaitAsync(cancellationToken);
 
     public async Task<ClientWebSocket> ConnectBrowserAsync(CancellationToken cancellationToken)
     {
