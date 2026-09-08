@@ -1,0 +1,489 @@
+{
+  "run_id": 34259343802,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34259343802",
+  "analyzed_at": "2026-09-08T18:48:32Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 17742,
+    "title": "Add Foundry Toolbox resource and deploy pipeline",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "davidfowl/foundry-toolbox",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/17742"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 102173779840,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102173779840",
+      "classification": "transient-infra",
+      "reason": "Windows unit test job fails to produce extension/out/aspire-extension.vsix ('No files were found with the provided path'), causing Install dependencies/Package VSIX/Assert steps to fail with generic exit code 1. Job logs unavailable. Matches known recurring infra pattern vscode-extension-vsix-package-build-failure (issue #19745). PR only changes Aspire.Hosting.Foundry, unrelated to VS Code extension packaging.",
+      "failed_steps": [
+        "Install dependencies",
+        "Package VSIX",
+        "Assert E2E VSIX contains bridge",
+        "Package production VSIX",
+        "Assert production VSIX excludes bridge"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, discovery-configuration)",
+      "id": 102176916157,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916157",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, apphost-lifecycle-tools)",
+      "id": 102176916192,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916192",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, settings-files)",
+      "id": 102176916195,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916195",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "id": 102176916226,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916226",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, command-palette)",
+      "id": 102176916236,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916236",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, apphost-tree)",
+      "id": 102176916260,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916260",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, dynamic-debug-configuration)",
+      "id": 102176916267,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916267",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, diagnostic-logs)",
+      "id": 102176916275,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916275",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, settings-files)",
+      "id": 102176916277,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916277",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 102176916317,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916317",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, zero-to-running)",
+      "id": 102176916332,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916332",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, debug-startup-timeout)",
+      "id": 102176916365,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916365",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug-startup-timeout)",
+      "id": 102176916373,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916373",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, cli-path-rejection)",
+      "id": 102176916395,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916395",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-lifecycle-tools)",
+      "id": 102176916403,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916403",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+      "id": 102176916407,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916407",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 102176916408,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916408",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, command-palette)",
+      "id": 102176916417,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916417",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, tree-actions)",
+      "id": 102176916432,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916432",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, launch-profiles)",
+      "id": 102176916445,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916445",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
+      "id": 102176916446,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916446",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, discovery-configuration)",
+      "id": 102176916450,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916450",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost-debug-startup-timeout)",
+      "id": 102176916459,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916459",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-starter-project-model)",
+      "id": 102176916464,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916464",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, edge-cases)",
+      "id": 102176916481,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916481",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, deno-debugger)",
+      "id": 102176916482,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916482",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug-dashboard)",
+      "id": 102176916489,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916489",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-codelens)",
+      "id": 102176916496,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916496",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-rejection)",
+      "id": 102176916504,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916504",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 102176916508,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916508",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, debug-dashboard)",
+      "id": 102176916524,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916524",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 102176916529,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916529",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-resolution)",
+      "id": 102176916535,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916535",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, package-surface)",
+      "id": 102176916593,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916593",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, diagnostic-logs)",
+      "id": 102176916598,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916598",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, launch-profiles)",
+      "id": 102176916602,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916602",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, coordinated-build)",
+      "id": 102176916626,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916626",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, zero-to-running)",
+      "id": 102176916643,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916643",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "id": 102176916692,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916692",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, coordinated-build)",
+      "id": 102176916741,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916741",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, package-surface)",
+      "id": 102176916791,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34259343802/job/102176916791",
+      "classification": "transient-infra",
+      "reason": "E2E job fails at 'Download VSIX' step: 'Artifact not found for name: aspire-extension' \u2014 a cascading failure from the upstream Windows unit test/VSIX packaging job which never uploaded the artifact. Matches known recurring infra pattern vscode-extension-e2e-vsix-artifact-not-found (issue #19744). PR only changes Aspire.Hosting.Foundry, unrelated to the VS Code extension.",
+      "failed_steps": [
+        "Download VSIX"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-extension-vsix-package-build-failure",
+    "vscode-extension-e2e-vsix-artifact-not-found"
+  ]
+}
