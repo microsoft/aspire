@@ -9,7 +9,7 @@ namespace Aspire.Hosting.Orleans.Tests;
 public class OrleansAdoNetInvariantTests
 {
     [Fact]
-    public void WithOrleansAdoNetInvariantAddsAnnotation()
+    public async Task WithOrleansAdoNetInvariantSetsInvariant()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -18,14 +18,19 @@ public class OrleansAdoNetInvariantTests
             ConnectionString = "connectionString"
         }).WithOrleansAdoNetInvariant("Npgsql");
 
-        var annotation = Assert.Single(provider.Resource.Annotations.OfType<OrleansProviderTypeAnnotation>());
-        var invariant = annotation.Options?["Invariant"];
+        var orleans = builder.AddOrleans("orleans")
+            .WithClustering(provider);
 
-        Assert.Equal("Npgsql", invariant);
+        var silo = builder.AddContainer("silo", "image")
+            .WithReference(orleans);
+
+        var config = await TestUtils.GetEnvironmentVariablesAsync(silo.Resource, builder);
+
+        Assert.True(config.ContainsKey("Orleans__Clustering__Invariant"));
     }
 
     [Fact]
-    public void WithOrleansAdoNetInvariantReplacesPreviousAnnotation()
+    public async Task WithOrleansAdoNetInvariantReplacesPreviousInvariant()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -36,10 +41,15 @@ public class OrleansAdoNetInvariantTests
             .WithOrleansAdoNetInvariant("Npgsql")
             .WithOrleansAdoNetInvariant("Microsoft.Data.SqlClient");
 
-        var annotation = Assert.Single(provider.Resource.Annotations.OfType<OrleansProviderTypeAnnotation>());
-        var invariant = annotation.Options?["Invariant"];
+        var orleans = builder.AddOrleans("orleans")
+            .WithClustering(provider);
 
-        Assert.Equal("Microsoft.Data.SqlClient", invariant);
+        var silo = builder.AddContainer("silo", "image")
+            .WithReference(orleans);
+
+        var config = await TestUtils.GetEnvironmentVariablesAsync(silo.Resource, builder);
+
+        Assert.Equal("Microsoft.Data.SqlClient", config["Orleans__Clustering__Invariant"]);
     }
 
     [Fact]
