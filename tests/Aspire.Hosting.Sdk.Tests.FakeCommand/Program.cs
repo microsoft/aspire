@@ -36,6 +36,14 @@ var setupInstallPath = forwardedArgs switch
 };
 if (setupInstallPath is not null)
 {
+    if (Environment.GetEnvironmentVariable("ASPIRE_TEST_SETUP_EXIT_CODE") is { } setupExitCode)
+    {
+        Console.WriteLine(Environment.GetEnvironmentVariable("ASPIRE_TEST_SETUP_STDOUT"));
+        Console.Error.WriteLine(Environment.GetEnvironmentVariable("ASPIRE_TEST_SETUP_STDERR"));
+        Environment.ExitCode = int.Parse(setupExitCode, CultureInfo.InvariantCulture);
+        return;
+    }
+
     var dcpDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "dcp"));
     var managedDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "managed"));
     File.WriteAllText(Path.Combine(dcpDirectory.FullName, OperatingSystem.IsWindows() ? "dcp.exe" : "dcp"), "");

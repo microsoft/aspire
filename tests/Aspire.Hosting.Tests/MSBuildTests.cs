@@ -549,8 +549,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("ASPIRE009", result.Output);
-        Assert.Contains("failed with exit code 42", result.Output);
-        Assert.Contains($"Run '\"{fakeCliPath}\" setup'", result.Output);
+        Assert.Contains("The command exited with code 42.", result.Output);
+        Assert.Contains($"Command: '\"{fakeCliPath}\" setup'.", result.Output);
     }
 
     [Fact]
@@ -577,7 +577,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             new Dictionary<string, string> { ["ASPIRE_HOME"] = aspireHome });
 
         Assert.Contains("ASPIRE009", output);
-        Assert.Contains("Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.", output);
+        Assert.Contains("Automatic Aspire CLI bundle setup failed.", output);
         Assert.Contains("The command timed out", output, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -640,7 +640,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             ["ASPIRE_LITERAL_SEGMENT"] = "expanded-segment"
         });
 
-        Assert.Contains($"Run '\"{fakeCliPath}\" setup'", output);
+        Assert.Contains($"Command: '\"{fakeCliPath}\" setup'.", output);
         Assert.DoesNotContain("^^%%", output);
         Assert.DoesNotContain("cmd /D /V:OFF", output);
     }
@@ -755,8 +755,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         Assert.Contains(missingBundlePath, output);
         Assert.Contains("ASPIRE009", output);
         Assert.Contains("the bundle could not be resolved", output);
-        Assert.Contains("New features require the Aspire CLI to be installed.", output);
-        Assert.Contains("https://get.aspire.dev", output);
+        Assert.Contains("AspireCliInvocationMode=Dnx", output);
+        Assert.Contains("Set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.", output);
         Assert.DoesNotContain("DCP path could not be resolved", output);
     }
 
@@ -801,10 +801,10 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         Assert.Contains("ASPIRE009", output);
         Assert.Contains("the bundle could not be resolved", output);
-        Assert.Contains("failed with exit code", output);
+        Assert.Contains("The command exited with code", output);
         if (!OperatingSystem.IsWindows())
         {
-            Assert.Contains("failed with exit code 42", output);
+            Assert.Contains("The command exited with code 42.", output);
         }
     }
 

@@ -52,7 +52,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     public bool TimedOut { get; set; }
 
     /// <summary>
-    /// Gets the process launch or timeout failure description.
+    /// Gets the process launch, timeout, or nonzero exit failure description, including output from failed commands.
     /// </summary>
     [Output]
     public string? FailureMessage { get; set; }
@@ -134,6 +134,15 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         LogProcessOutput(standardError);
 
         ExitCode = process.ExitCode;
+        if (ExitCode != 0)
+        {
+            // Defer the error to the targets so a successful fallback can recover the build.
+            // Include both streams because DNX and CLI failures can be written to either one.
+            FailureMessage = string.Join(Environment.NewLine,
+                new[] { $"The command exited with code {ExitCode}.", standardOutput.Trim(), standardError.Trim() }
+                    .Where(static output => output.Length > 0));
+        }
+
         return true;
     }
 

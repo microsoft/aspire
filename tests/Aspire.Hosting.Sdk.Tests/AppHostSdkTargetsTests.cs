@@ -695,6 +695,74 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         AssertCliBundleExists(fakeCliDirectory.FullName, JsonSerializer.Serialize(properties));
     }
 
+    [Theory]
+    [InlineData("DnxPinned", "Restoring aspire.cli", "Package is locked by another process.", 42)]
+    [InlineData("Dnx", "Unable to load the service index.", "", 42)]
+    [InlineData("Path", "", "Response status code: 401 (Unauthorized).", 42)]
+    [InlineData("DnxPinned", "", "", 42)]
+    [InlineData("DnxPinned", "", "", 0)]
+    public async Task ResolveAspireCliBundlePathsReportsSetupFailure(string invocationMode, string standardOutput, string standardError, int exitCode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var dnxPath = await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        if (!OperatingSystem.IsWindows())
+        {
+            await File.WriteAllTextAsync(dnxPath, """
+                #!/bin/sh
+                printf '%s\n' "$ASPIRE_TEST_SETUP_STDOUT"
+                printf '%s\n' "$ASPIRE_TEST_SETUP_STDERR" >&2
+                exit "$ASPIRE_TEST_SETUP_EXIT_CODE"
+                """.ReplaceLineEndings("\n"));
+        }
+
+        if (invocationMode == "Path")
+        {
+            await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, AspireCliVersion);
+        }
+
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-v:q", "-t:ResolveAspireCliBundlePaths", project.ProjectFile],
+            new Dictionary<string, string>
+            {
+                ["ASPIRE_HOME"] = aspireHome,
+                ["ASPIRE_TEST_SETUP_STDOUT"] = standardOutput,
+                ["ASPIRE_TEST_SETUP_STDERR"] = standardError,
+                ["ASPIRE_TEST_SETUP_EXIT_CODE"] = exitCode.ToString(CultureInfo.InvariantCulture),
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        var errorLines = Regex.Matches(result.Output, @"error ASPIRE009: (.*) \[.*\]")
+            .Select(match => match.Groups[1].Value).ToArray();
+        var hostArguments = OperatingSystem.IsWindows()
+            ? $"exec \"{Path.Combine(fakeCliDirectory.FullName, "sdk", AspireCliVersion, "dotnet.dll")}\" dnx "
+            : string.Empty;
+        var packageReference = invocationMode == "Dnx" ? "aspire.cli" : $"aspire.cli@{AspireCliVersion}";
+        var command = $"\"{GetExpectedDnxRunCommand(dnxPath)}\" {hostArguments}--yes {packageReference} -- setup --install-path \"{aspireHome}\"";
+        var expectedError = $"AppHost is configured to use the Aspire CLI bundle (AspireCliInvocationMode={invocationMode}), but the bundle could not be resolved.";
+        if (invocationMode == "Path")
+        {
+            var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
+            expectedError += $" Automatic Aspire CLI bundle setup failed. Command: '\"{cliPath}\" setup'. The command exited with code 42.";
+        }
+
+        expectedError += exitCode == 0
+            ? " Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout."
+            : $" {(invocationMode == "Path" ? "Paired Aspire CLI bundle setup through DNX" : "Automatic Aspire CLI bundle setup")} failed. Command: '{command}'. The command exited with code {exitCode}.";
+        var expectedLines = new[] { expectedError, standardOutput, standardError }.Where(line => line.Length > 0);
+        Assert.Equal(expectedLines, errorLines);
+    }
+
     [Fact]
     public async Task ResolveAspireCliBundlePathsUsesSelectedAspireCliWhenLaterPathCandidateHasBundleWithWarningsAsErrors()
     {
