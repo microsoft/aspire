@@ -142,7 +142,7 @@ Alternatively, set `Expiration` on `DevTunnelOptions` when calling `AddDevTunnel
 ```typescript
 const tunnel = await builder.addDevTunnel("mytunnel")
                     .withExpiration(24 * 60 * 60 * 1000)
-                    .withReference(web);
+                    .withTunnelReferenceAll(web, false);
 ```
 
 TypeScript durations are expressed in milliseconds. Expiration must be a whole number of hours,

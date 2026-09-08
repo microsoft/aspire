@@ -41,5 +41,9 @@ void main() throws Exception {
         // Test 10: Chained configuration
         builder.addDevTunnel("chained-tunnel")
             .withAnonymousAccess();
+        // Test 11: Idle expiration in milliseconds
+        builder.addDevTunnel("expiring-tunnel")
+            .withExpiration(24 * 60 * 60 * 1000)
+            .withTunnelReferenceAll(web, false);
         builder.build().run();
     }
