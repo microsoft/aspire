@@ -205,8 +205,16 @@ when the executable (or container) spec carries a populated `terminal` block:
 process owns the listener). The dimensions are the initial PTY size; both
 sides exchange resize frames over HMP afterwards.
 
-Desktop PTY support is implemented across all three platforms (Unix98 `/dev/ptmx` on Linux and macOS; ConPTY on Windows). Container PTYs are tracked
-as a Phase 3 follow-up on the parent issue.
+Desktop PTY support is implemented across all three platforms (Unix98 `/dev/ptmx` on Linux and macOS; ConPTY on Windows).
+Container PTYs use the container runtime's attach command. DCP currently starts the
+container before attaching, so one-time startup output, including terminal capability
+queries, can be lost. See the [DCP startup ordering](https://github.com/microsoft/dcp/blob/v0.25.13/controllers/container_controller.go#L1843-L1855).
+
+The `notcurses` resource in `playground/Terminals` installs Ubuntu's `notcurses-bin`
+package and starts an interactive Bash shell. Open its dashboard Terminal view, then
+run `notcurses-demo` to exercise graphics, color and Unicode rendering. Starting the
+demo from the attached shell avoids losing its initial capability queries. Press
+`q` to return to the shell; run the command again to repeat the stress workload.
 
 ## Files of interest
 
