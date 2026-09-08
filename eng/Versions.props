@@ -14,12 +14,8 @@
     <DotNetRuntimeNet10VersionForTesting>10.0.8</DotNetRuntimeNet10VersionForTesting>
     <DotNetSdkNet8VersionForTesting>8.0.415</DotNetSdkNet8VersionForTesting>
     <DotNetSdkNet9VersionForTesting>9.0.306</DotNetSdkNet9VersionForTesting>
-    <DotNetSdkNet11VersionForTesting>11.0.100-preview.6.26359.118</DotNetSdkNet11VersionForTesting>
-    <!-- Keep these aliases for global.json and non-template test infrastructure. -->
-    <DotNetRuntimePreviousVersionForTesting>$(DotNetRuntimeNet8VersionForTesting)</DotNetRuntimePreviousVersionForTesting>
-    <DotNetRuntimeCurrentVersionForTesting>$(DotNetRuntimeNet9VersionForTesting)</DotNetRuntimeCurrentVersionForTesting>
-    <DotNetSdkPreviousVersionForTesting>$(DotNetSdkNet8VersionForTesting)</DotNetSdkPreviousVersionForTesting>
-    <DotNetSdkCurrentVersionForTesting>$(DotNetSdkNet9VersionForTesting)</DotNetSdkCurrentVersionForTesting>
+    <DotNetSdkNet10VersionForTesting>10.0.400</DotNetSdkNet10VersionForTesting>
+    <DotNetSdkNet11VersionForTesting>11.0.100-rc.1.26425.128</DotNetSdkNet11VersionForTesting>
     <XunitV3Version>3.2.2</XunitV3Version>
     <XUnitAnalyzersVersion>1.21.0</XUnitAnalyzersVersion>
     <XunitRunnerVisualStudioVersion>3.1.5</XunitRunnerVisualStudioVersion>
@@ -71,11 +67,11 @@
        Versions must be available on the dnceng dotnet-public mirror (originally published to nuget.org). -->
   <PropertyGroup Label="BlazorAssets">
     <MicrosoftAspNetCoreAppInternalAssetsNet10Version>10.0.8</MicrosoftAspNetCoreAppInternalAssetsNet10Version>
-    <MicrosoftAspNetCoreAppInternalAssetsNet11Version>11.0.0-preview.6.26359.118</MicrosoftAspNetCoreAppInternalAssetsNet11Version>
+    <MicrosoftAspNetCoreAppInternalAssetsNet11Version>11.0.0-rc.1.26425.128</MicrosoftAspNetCoreAppInternalAssetsNet11Version>
   </PropertyGroup>
   <!-- .NET 11.0 Package Versions used by project templates -->
   <PropertyGroup Label="Net11Preview">
-    <MicrosoftAspNetCoreOpenApiNet11Version>11.0.0-preview.6.26359.118</MicrosoftAspNetCoreOpenApiNet11Version>
+    <MicrosoftAspNetCoreOpenApiNet11Version>11.0.0-rc.1.26425.128</MicrosoftAspNetCoreOpenApiNet11Version>
   </PropertyGroup>
   <!-- .NET 10.0 Package Versions -->
   <PropertyGroup Label="Preview">

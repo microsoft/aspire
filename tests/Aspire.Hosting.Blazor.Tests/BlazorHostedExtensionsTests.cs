@@ -195,6 +195,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         using var fileSystemService = new TestFileSystemService();
         using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
         var (serverProjectPath, clientProjectPath) = CreateBlazorHostedProjects(tempDirectory);
+        await RestoreProjectAsync(serverProjectPath);
 
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         ConfigureBrowserDebugging(builder);
@@ -224,6 +225,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         using var fileSystemService = new TestFileSystemService();
         using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
         var serverProjectPath = CreateBlazorHostedServerWithoutClient(tempDirectory);
+        await RestoreProjectAsync(serverProjectPath);
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         ConfigureBrowserDebugging(builder);
 
@@ -562,6 +564,20 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             """{"protocols_supported":["2024-03-03"],"supported_launch_configurations":["browser"]}""";
     }
 
+    private static async Task RestoreProjectAsync(string projectPath)
+    {
+        var result = await BlazorDotNetCliRunner.RunAsync(
+            projectPath,
+            "restore",
+            ["--ignore-failed-sources", "-nologo"],
+            machineReadableOutput: false,
+            CancellationToken.None);
+
+        Assert.True(
+            result.Started && result.ExitCode == 0,
+            $"Failed to restore '{projectPath}'.{Environment.NewLine}{result.StandardOutput}{Environment.NewLine}{result.StandardError}");
+    }
+
     private static (string ServerProjectPath, string ClientProjectPath) CreateBlazorHostedProjects(TempDirectory tempDirectory)
     {
         var serverDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "Server"));
@@ -571,27 +587,15 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 
         File.WriteAllText(serverProjectPath, """
             <Project Sdk="Microsoft.NET.Sdk.Web">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="../Client/Client.csproj" />
               </ItemGroup>
-              <Target Name="ResolveWebAssemblyProjectReferences">
-                <MSBuild Projects="@(ProjectReference)"
-                         Targets="GetWebAssemblyProjectReference"
-                         BuildInParallel="true"
-                         SkipNonexistentTargets="true">
-                  <Output TaskParameter="TargetOutputs" ItemName="WebAssemblyProjectReference" />
-                </MSBuild>
-              </Target>
             </Project>
             """);
         File.WriteAllText(clientProjectPath, """
             <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
-              <Target Name="GetWebAssemblyProjectReference"
-                      Returns="@(_WebAssemblyProjectReference)">
-                <ItemGroup>
-                  <_WebAssemblyProjectReference Include="$(MSBuildProjectFullPath)" />
-                </ItemGroup>
-              </Target>
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
             </Project>
             """);
 
@@ -603,7 +607,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var serverProjectPath = Path.Combine(tempDirectory.Path, "Server.csproj");
         File.WriteAllText(serverProjectPath, """
             <Project Sdk="Microsoft.NET.Sdk.Web">
-              <Target Name="ResolveWebAssemblyProjectReferences" />
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
             </Project>
             """);
         return serverProjectPath;

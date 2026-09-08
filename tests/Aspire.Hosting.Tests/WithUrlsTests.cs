@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -975,6 +976,9 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
                     && e.Snapshot.Urls.Length == resourceB.Resource.GetEndpoints().ToArray().Length + 1
                     && e.Snapshot.Urls.All(u => !u.IsInactive),
             default).DefaultTimeout();
+        await Task.WhenAll(
+            app.WaitForTextAsync("Application started.", resourceA.Resource.Name),
+            app.WaitForTextAsync("Application started.", resourceB.Resource.Name)).DefaultTimeout();
 
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
 
@@ -1027,6 +1031,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         // Start resource A. Resource B never changes state itself, but its cross-resource URL should become active.
         var startResult = await app.ResourceCommands.ExecuteCommandAsync(resourceA.Resource, KnownResourceCommands.StartCommand).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
         Assert.True(startResult.Success, startResult.Message);
+        await app.WaitForTextAsync("Application started.", resourceA.Resource.Name).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
 
         resourceEvent = await rns.WaitForResourceAsync(
             resourceB.Resource.Name,
