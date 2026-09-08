@@ -368,7 +368,8 @@ public class DotNetTemplateFactoryTests
             hostEnvironment,
             templateNuGetConfigService,
             appHostInfoResolver,
-            new HostEnvironment());
+            new HostEnvironment(),
+            NullLogger<DotNetTemplateFactory>.Instance);
     }
 
     private sealed class TestInteractionService : IInteractionService

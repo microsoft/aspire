@@ -84,14 +84,16 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(0, "net11.0", null, "net11.0")]
-    [InlineData(0, "net10.0-windows", null, "net10.0-windows")]
-    [InlineData(0, null, "net10.0;net11.0", "net10.0")]
-    [InlineData(0, null, " net11.0 ; net10.0 ", "net11.0")]
-    [InlineData(0, "   ", null, null)]
-    [InlineData(0, null, null, null)]
-    [InlineData(1, null, null, null)]
-    public async Task NewCommand_IntegrationTestTemplateUsesAppHostTargetFrameworkWhenAvailable(
+    [InlineData(false, 0, "net11.0", null, "net11.0")]
+    [InlineData(false, 0, "net10.0-windows", null, "net10.0-windows")]
+    [InlineData(false, 0, null, "net10.0;net11.0", "net10.0")]
+    [InlineData(false, 0, null, " net11.0 ; net10.0 ", "net11.0")]
+    [InlineData(false, 0, "   ", null, null)]
+    [InlineData(false, 0, null, null, null)]
+    [InlineData(false, 1, null, null, null)]
+    [InlineData(true, 0, null, null, null)]
+    public async Task NewCommand_IntegrationTestTemplateUsesAppHostTargetFrameworkWhenAvailableAndFallsBackOtherwise(
+        bool appHostInfoThrows,
         int appHostInfoExitCode,
         string? targetFramework,
         string? targetFrameworks,
@@ -107,6 +109,11 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var runner = CreateTestRunnerWithStandardPackages();
         runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) =>
         {
+            if (appHostInfoThrows)
+            {
+                throw new InvalidOperationException("Simulated AppHost inspection failure.");
+            }
+
             if (appHostInfoExitCode != 0)
             {
                 return (appHostInfoExitCode, null);

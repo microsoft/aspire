@@ -13,6 +13,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Templating;
 
@@ -28,7 +29,8 @@ internal class DotNetTemplateFactory(
     ICliHostEnvironment hostEnvironment,
     TemplateNuGetConfigService templateNuGetConfigService,
     IAppHostInfoResolver appHostInfoResolver,
-    IEnvironment environment)
+    IEnvironment environment,
+    ILogger<DotNetTemplateFactory> logger)
     : ITemplateFactory
 {
     private const string NoTestFramework = "None";
@@ -512,8 +514,18 @@ internal class DotNetTemplateFactory(
             var extraArgs = await extraArgsCallback(parseResult, cancellationToken);
             if (appHostProject is not null)
             {
-                var appHostInfo = await appHostInfoResolver.GetAppHostInfoAsync(appHostProject, cancellationToken);
-                var appHostTargetFramework = GetAppHostTargetFramework(appHostInfo);
+                string? appHostTargetFramework = null;
+                try
+                {
+                    var appHostInfo = await appHostInfoResolver.GetAppHostInfoAsync(appHostProject, cancellationToken);
+                    appHostTargetFramework = GetAppHostTargetFramework(appHostInfo);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Target-framework alignment is best-effort because --apphost only requires an
+                    // existing project path. Preserve scaffolding when optional MSBuild inspection fails.
+                    logger.LogDebug(ex, "Failed to resolve target framework for AppHost project {AppHostProjectPath}. Using the template default.", appHostProject.FullName);
+                }
 
                 extraArgs =
                 [
