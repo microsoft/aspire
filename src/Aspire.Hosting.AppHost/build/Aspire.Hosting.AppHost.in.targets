@@ -404,13 +404,15 @@ namespace Projects%3B
     </PropertyGroup>
 
     <PropertyGroup>
-      <!-- Keep diagnostic properties on one line to avoid emitting blank MSBuild errors in CI logs. -->
+      <!-- Keep each diagnostic sentence on one line to avoid emitting blank MSBuild errors in CI logs.
+           Captured command output is multi-line, so each setup attempt starts on its own line (%0A) to
+           keep the PATH and DNX diagnostics from running together. -->
       <_AspireCliBundleNotFoundError>$(MSBuildProjectName) is configured to use the Aspire CLI bundle (AspireCliInvocationMode=$(_AspireCliInvocationMode)), but the bundle could not be resolved.</_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupExecutable)' == '' and '$(_AspireCliFallbackDnxSetupExecutable)' == ''">$(_AspireCliBundleNotFoundError) Set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.</_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupExecutable)' == '' and '$(_AspireCliFallbackDnxSetupExecutable)' == '' and '$(_AspireUseDnxCliRunHook)' != 'true'">$(_AspireCliBundleNotFoundError) Alternatively, install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH.</_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="('$(_AspireCliSetupExecutable)' != '' or '$(_AspireCliFallbackDnxSetupExecutable)' != '') and '$(_AspireCliSetupFailureMessage)' == '' and '$(_AspireCliFallbackDnxSetupFailureMessage)' == ''">$(_AspireCliBundleNotFoundError) Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.</_AspireCliBundleNotFoundError>
-      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupFailureMessage)' != ''">$(_AspireCliBundleNotFoundError) Automatic Aspire CLI bundle setup failed. Command: '$(_AspireCliSetupDiagnosticCommand)'. $(_AspireCliSetupFailureMessage)</_AspireCliBundleNotFoundError>
-      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupFailureMessage)' != ''">$(_AspireCliBundleNotFoundError) Paired Aspire CLI bundle setup through DNX failed. Command: '$(_AspireCliFallbackDnxSetupDiagnosticCommand)'. $(_AspireCliFallbackDnxSetupFailureMessage)</_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupFailureMessage)' != ''">$(_AspireCliBundleNotFoundError)%0AAutomatic Aspire CLI bundle setup failed. Command: '$(_AspireCliSetupDiagnosticCommand)'. $(_AspireCliSetupFailureMessage)</_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupFailureMessage)' != ''">$(_AspireCliBundleNotFoundError)%0APaired Aspire CLI bundle setup through DNX failed. Command: '$(_AspireCliFallbackDnxSetupDiagnosticCommand)'. $(_AspireCliFallbackDnxSetupFailureMessage)</_AspireCliBundleNotFoundError>
     </PropertyGroup>
 
     <Error Code="ASPIRE009"

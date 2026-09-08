@@ -18,6 +18,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     private const string AspireCliVersion = "13.5.0";
     private const string HangingCommandPidEnvironmentVariable = "ASPIRE_TEST_HANG_PID_PATH";
     private const string SuppressCliRunHookEnvironmentVariable = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
+    private const string PathSetupStandardOutput = "path-setup-stdout";
+    private const string PathSetupStandardError = "path-setup-stderr";
+    private const int SetupOutputLineCount = 200;
+    private const int SurfacedSetupOutputLineCount = 20;
 
     private static readonly string[] s_supportedRids =
     [
@@ -699,6 +703,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     [InlineData("DnxPinned", "Restoring aspire.cli", "Package is locked by another process.", 42)]
     [InlineData("Dnx", "Unable to load the service index.", "", 42)]
     [InlineData("Path", "", "Response status code: 401 (Unauthorized).", 42)]
+    [InlineData("Path", "Restoring aspire.cli", "", 42)]
     [InlineData("DnxPinned", "", "", 42)]
     [InlineData("DnxPinned", "", "", 0)]
     public async Task ResolveAspireCliBundlePathsReportsSetupFailure(string invocationMode, string standardOutput, string standardError, int exitCode)
@@ -718,7 +723,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
         if (invocationMode == "Path")
         {
-            await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, AspireCliVersion);
+            await CreateFakeAspireCliThatFailsSetupWithOutputAsync(fakeCliDirectory.FullName, AspireCliVersion);
         }
 
         var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
@@ -749,17 +754,70 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             : string.Empty;
         var packageReference = invocationMode == "Dnx" ? "aspire.cli" : $"aspire.cli@{AspireCliVersion}";
         var command = $"\"{GetExpectedDnxRunCommand(dnxPath)}\" {hostArguments}--yes {packageReference} -- setup --install-path \"{aspireHome}\"";
-        var expectedError = $"AppHost is configured to use the Aspire CLI bundle (AspireCliInvocationMode={invocationMode}), but the bundle could not be resolved.";
+        var expectedLines = new List<string>
+        {
+            $"AppHost is configured to use the Aspire CLI bundle (AspireCliInvocationMode={invocationMode}), but the bundle could not be resolved."
+        };
+
         if (invocationMode == "Path")
         {
+            // The PATH attempt writes output before the DNX fallback runs, so its diagnostic must stay
+            // on its own lines instead of running into the fallback heading.
             var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
-            expectedError += $" Automatic Aspire CLI bundle setup failed. Command: '\"{cliPath}\" setup'. The command exited with code 42.";
+            expectedLines.Add($"Automatic Aspire CLI bundle setup failed. Command: '\"{cliPath}\" setup'. The command exited with code 42.");
+            expectedLines.Add(PathSetupStandardOutput);
+            expectedLines.Add(PathSetupStandardError);
         }
 
-        expectedError += exitCode == 0
-            ? " Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout."
-            : $" {(invocationMode == "Path" ? "Paired Aspire CLI bundle setup through DNX" : "Automatic Aspire CLI bundle setup")} failed. Command: '{command}'. The command exited with code {exitCode}.";
-        var expectedLines = new[] { expectedError, standardOutput, standardError }.Where(line => line.Length > 0);
+        if (exitCode == 0)
+        {
+            expectedLines[0] += " Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.";
+        }
+        else
+        {
+            expectedLines.Add($"{(invocationMode == "Path" ? "Paired Aspire CLI bundle setup through DNX" : "Automatic Aspire CLI bundle setup")} failed. Command: '{command}'. The command exited with code {exitCode}.");
+            expectedLines.AddRange(new[] { standardOutput, standardError }.Where(line => line.Length > 0));
+        }
+
+        Assert.Equal(expectedLines, errorLines);
+    }
+
+    [Fact]
+    public async Task ResolveAspireCliBundlePathsTruncatesLargeSetupOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var cliPath = await CreateFakeAspireCliThatFailsSetupWithManyOutputLinesAsync(fakeCliDirectory.FullName, SetupOutputLineCount);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>Path</AspireCliInvocationMode>
+                <AspireCliPath>{{cliPath}}</AspireCliPath>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-v:q", "-t:ResolveAspireCliBundlePaths", project.ProjectFile],
+            new Dictionary<string, string>
+            {
+                ["ASPIRE_HOME"] = Path.Combine(workspace.Path, "aspire-home"),
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        var errorLines = Regex.Matches(result.Output, @"error ASPIRE009: (.*) \[.*\]")
+            .Select(match => match.Groups[1].Value).ToArray();
+        var expectedLines = new List<string>
+        {
+            "AppHost is configured to use the Aspire CLI bundle (AspireCliInvocationMode=Path), but the bundle could not be resolved.",
+            $"Automatic Aspire CLI bundle setup failed. Command: '\"{cliPath}\" setup'. The command exited with code 42.",
+            "(output truncated, run the build with '-v:detailed' for the full command output)"
+        };
+        expectedLines.AddRange(Enumerable
+            .Range(SetupOutputLineCount - SurfacedSetupOutputLineCount + 1, SurfacedSetupOutputLineCount)
+            .Select(line => $"setup-line-{line.ToString("D3", CultureInfo.InvariantCulture)}"));
+
         Assert.Equal(expectedLines, errorLines);
     }
 
@@ -1519,6 +1577,70 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 echo "{{version}}"
                 exit 0
             fi
+            exit 42
+            """).ReplaceLineEndings("\n"));
+        File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    private static async Task<string> CreateFakeAspireCliThatFailsSetupWithManyOutputLinesAsync(string fakeCliDirectory, int lineCount)
+    {
+        var cliPath = Path.Combine(fakeCliDirectory, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
+        if (OperatingSystem.IsWindows())
+        {
+            await File.WriteAllTextAsync(cliPath, $$"""
+                @echo off
+                setlocal enabledelayedexpansion
+                for /L %%i in (1,1,{{lineCount}}) do (
+                    set /a padded=1000+%%i
+                    echo setup-line-!padded:~1!
+                )
+                exit /b 42
+                """.ReplaceLineEndings("\r\n"));
+
+            return cliPath;
+        }
+
+        await File.WriteAllTextAsync(cliPath, ($$"""
+            #!/bin/sh
+            i=1
+            while [ "$i" -le {{lineCount}} ]; do
+                printf 'setup-line-%03d\n' "$i"
+                i=$((i + 1))
+            done
+            exit 42
+            """).ReplaceLineEndings("\n"));
+        File.SetUnixFileMode(cliPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        return cliPath;
+    }
+
+    private static async Task CreateFakeAspireCliThatFailsSetupWithOutputAsync(string fakeCliDirectory, string version)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            await File.WriteAllTextAsync(Path.Combine(fakeCliDirectory, "aspire.cmd"), $$"""
+                @echo off
+                if "%~1"=="--version" (
+                    echo {{version}}
+                    exit /b 0
+                )
+                echo {{PathSetupStandardOutput}}
+                echo {{PathSetupStandardError}} 1>&2
+                exit /b 42
+                """);
+
+            return;
+        }
+
+        var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
+        await File.WriteAllTextAsync(aspirePath, ($$"""
+            #!/bin/sh
+            if [ "$1" = "--version" ]; then
+                echo "{{version}}"
+                exit 0
+            fi
+            echo "{{PathSetupStandardOutput}}"
+            echo "{{PathSetupStandardError}}" >&2
             exit 42
             """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);

@@ -19,6 +19,13 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     private const string CommandShimArgumentEnvironmentVariablePrefix = "__ASPIRE_MSBUILD_COMMAND_ARGUMENT_";
     private const int ProcessTerminationTimeoutMilliseconds = 5_000;
 
+    // Failing setup commands (notably a DNX restore) can emit thousands of progress lines, and the
+    // full streams are already logged at low importance. Only a bounded tail is promoted into the
+    // build error so the diagnostic stays readable at any MSBuild verbosity.
+    private const int MaxSurfacedOutputLines = 20;
+    private const int MaxSurfacedOutputCharacters = 2_000;
+    private const string TruncatedOutputPrefix = "(output truncated, run the build with '-v:detailed' for the full command output)";
+
     /// <summary>
     /// Gets or sets the executable or command shim to run.
     /// </summary>
@@ -139,11 +146,42 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
             // Defer the error to the targets so a successful fallback can recover the build.
             // Include both streams because DNX and CLI failures can be written to either one.
             FailureMessage = string.Join(Environment.NewLine,
-                new[] { $"The command exited with code {ExitCode}.", standardOutput.Trim(), standardError.Trim() }
+                new[] { $"The command exited with code {ExitCode}.", SummarizeOutput(standardOutput), SummarizeOutput(standardError) }
                     .Where(static output => output.Length > 0));
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Returns the trailing portion of <paramref name="output"/> that is small enough to surface in a build error.
+    /// </summary>
+    private static string SummarizeOutput(string output)
+    {
+        var trimmed = output.Trim();
+        if (trimmed.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        // Split on '\n' and trim the '\r' so CRLF and LF output produce the same line count.
+        var lines = trimmed.Split('\n');
+        var truncated = false;
+        if (lines.Length > MaxSurfacedOutputLines)
+        {
+            lines = lines.Skip(lines.Length - MaxSurfacedOutputLines).ToArray();
+            truncated = true;
+        }
+
+        var summary = string.Join(Environment.NewLine, lines.Select(static line => line.TrimEnd('\r')));
+        if (summary.Length > MaxSurfacedOutputCharacters)
+        {
+            // A single line can exceed the budget on its own, so cap the characters as well.
+            summary = summary.Substring(summary.Length - MaxSurfacedOutputCharacters);
+            truncated = true;
+        }
+
+        return truncated ? $"{TruncatedOutputPrefix}{Environment.NewLine}{summary}" : summary;
     }
 
     private ProcessStartInfo CreateStartInfo(IReadOnlyList<string> arguments)
