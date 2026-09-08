@@ -44,6 +44,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private bool _initializationFailed;
     private bool _disposed;
     private string? _terminalError;
+    private int _terminalColumns;
+    private int _terminalRows;
     private Task? _initializationTask;
 
     /// <summary>
@@ -62,10 +64,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     /// <summary>
     /// Raised when the JS side pushes a fresh toolbar state snapshot (role,
-    /// dims, font size, etc.). The host page subscribes so the chrome that
-    /// used to live inside the terminal frame — status badge, "Take control"
-    /// button, font controls, size dropdown, dims readout — can be rendered
-    /// in the page's existing toolbar instead.
+    /// dims, font size, etc.). The host page subscribes to render status,
+    /// "Take control", font controls and size options in its toolbar.
     /// </summary>
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
@@ -308,9 +308,11 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             return;
         }
 
-        if (_terminalError != state.Error)
+        if (_terminalError != state.Error || _terminalColumns != state.Cols || _terminalRows != state.Rows)
         {
             _terminalError = state.Error;
+            _terminalColumns = state.Cols;
+            _terminalRows = state.Rows;
             StateHasChanged();
         }
         await OnToolbarStateChanged.InvokeAsync(state);

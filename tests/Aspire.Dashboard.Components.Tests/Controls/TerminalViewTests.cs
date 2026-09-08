@@ -21,6 +21,50 @@ public class TerminalViewTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentUIComponents(this);
     }
 
+    [Fact]
+    public async Task TerminalChrome_DisplaysResourceAndCurrentDimensionsWithoutRemounting()
+    {
+        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
+        var initialization = module.Setup<int>("initTerminal", _ => true);
+        initialization.SetResult(1);
+        var disposal = module.SetupVoid("disposeTerminal", _ => true);
+        disposal.SetVoidResult();
+        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell <worker>"));
+        Assert.Single(cut.FindAll(".terminal-frame > .terminal-body > .terminal-container"));
+
+        Assert.Equal("shell <worker>", cut.Find(".terminal-titlebar .terminal-title").TextContent);
+        Assert.Empty(cut.FindAll(".terminal-dimensions"));
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 2, Cols = 120, Rows = 30, Connected = true
+        }));
+        Assert.Equal("120 \u00d7 30", cut.Find(".terminal-dimensions").TextContent);
+        Assert.Equal(Resources.ConsoleLogs.TerminalToolbarGridSize, cut.Find(".terminal-dimensions").GetAttribute("title"));
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Cols = 80, Rows = 24
+        }));
+        Assert.Equal("120 \u00d7 30", cut.Find(".terminal-dimensions").TextContent);
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 2, Cols = 132, Rows = 50, Connected = true
+        }));
+        Assert.Equal("132 \u00d7 50", cut.Find(".terminal-dimensions").TextContent);
+        Assert.Single(cut.FindAll(".terminal-frame > .terminal-body > .terminal-container"));
+        Assert.Single(initialization.Invocations);
+        Assert.Empty(disposal.Invocations);
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 3
+        }));
+        Assert.Empty(cut.FindAll(".terminal-dimensions"));
+        Assert.Equal("shell <worker>", cut.Find(".terminal-title").TextContent);
+    }
+
     [Theory]
     [InlineData("mount-failed", nameof(Resources.ConsoleLogs.TerminalMountFailed))]
     [InlineData("disconnected", nameof(Resources.ConsoleLogs.TerminalDisconnected))]
