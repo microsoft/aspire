@@ -10,6 +10,13 @@
       "job": "Tests / Templates-NewUpAndBuildStandaloneTemplateTests / Templates-NewUpAndBuildStandaloneTemplateTests (windows-latest)",
       "pr_number": 19313,
       "observed_at": "2026-08-13T01:55:45Z"
+    },
+    {
+      "run_id": 34240101007,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34240101007",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, ...) / Hosting.JavaScript (windows-latest)",
+      "pr_number": 19386,
+      "observed_at": "2026-09-08T16:12:53Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19327"

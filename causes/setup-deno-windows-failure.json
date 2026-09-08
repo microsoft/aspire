@@ -1,0 +1,16 @@
+{
+  "id": "setup-deno-windows-failure",
+  "type": "infra-failure",
+  "title": "Setup Deno step fails on windows-latest, unrelated to PR changes (likely transient download/network issue)",
+  "error_pattern": "Job: Hosting.JavaScript (windows-latest) failed at 'Setup Deno' step; job logs unavailable ('Failed to fetch logs for job'). PR only modifies Aspire.Hosting.Maui, no relation to Deno setup or JavaScript hosting tests.",
+  "occurrences": [
+    {
+      "run_id": 34240101007,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34240101007",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, ...) / Hosting.JavaScript (windows-latest)",
+      "pr_number": 19386,
+      "observed_at": "2026-09-08T16:12:53Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19983"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "hosting-azure-kubernetes-destroypipeline-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: AzureKubernetesInfrastructureTests DestroyPipeline tests time out on windows-latest",
+  "test_name": "Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent",
+  "error_pattern": "System.TimeoutException : The operation has timed out. at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent()/DestroyPipelineUsesPersistedAksOutputAndScopeWithoutProvisioning() in AzureKubernetesInfrastructureTests.cs",
+  "occurrences": [
+    {
+      "run_id": 34240101007,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34240101007",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, ...) / Hosting.JavaScript (windows-latest)",
+      "pr_number": 19386,
+      "observed_at": "2026-09-08T16:12:53Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19982"
+}

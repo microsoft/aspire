@@ -1,0 +1,64 @@
+{
+  "run_id": 34240101007,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34240101007",
+  "analyzed_at": "2026-09-08T16:12:53Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19386,
+    "title": "Fix MAUI OTLP dev tunnel resolution",
+    "author": "jfversluis",
+    "state": "closed",
+    "head_branch": "jfversluis-maui-otlp-tunnels",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19386"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, ...) / Hosting.JavaScript (windows-latest)",
+      "id": 102128645426,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34240101007/job/102128645426",
+      "classification": "transient-infra",
+      "reason": "Failed at 'Setup Deno' step, unrelated to PR which only modifies Aspire.Hosting.Maui files. Job logs unavailable; treated as transient tooling/network setup failure.",
+      "failed_steps": ["Setup Deno"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, ...) / Cli (macos-latest)",
+      "id": 102128645921,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34240101007/job/102128645921",
+      "classification": "transient-infra",
+      "reason": "Failed at 'Upload logs, and test results' step with 'Failed to FinalizeArtifact: Received non-retryable error: (403) Forbidden: Error from intermediary'. This is a GitHub Actions artifact service infrastructure error, unrelated to PR content.",
+      "failed_steps": ["Upload logs, and test results"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, ...) / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 102128651798,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34240101007/job/102128651798",
+      "classification": "flaky-test",
+      "reason": "Two AzureKubernetesInfrastructureTests DestroyPipeline tests timed out (System.TimeoutException). PR only modifies Aspire.Hosting.Maui files, with no relation to Azure Kubernetes destroy pipeline logic, indicating an environment/timing flake.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent",
+      "job": "Hosting.Azure.Kubernetes (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 565",
+      "classification": "flaky",
+      "reason": "PR does not touch Azure Kubernetes hosting code; test timeout appears to be an environment/timing-related flake unrelated to PR changes."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksOutputAndScopeWithoutProvisioning",
+      "job": "Hosting.Azure.Kubernetes (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksOutputAndScopeWithoutProvisioning() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 487",
+      "classification": "flaky",
+      "reason": "PR does not touch Azure Kubernetes hosting code; test timeout appears to be an environment/timing-related flake unrelated to PR changes."
+    }
+  ],
+  "causes": ["artifact-upload-403-forbidden-intermediary", "setup-deno-windows-failure", "hosting-azure-kubernetes-destroypipeline-timeout"]
+}
