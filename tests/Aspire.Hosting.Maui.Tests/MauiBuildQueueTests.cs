@@ -8,7 +8,6 @@ using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Lifecycle;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Utils;
-using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
