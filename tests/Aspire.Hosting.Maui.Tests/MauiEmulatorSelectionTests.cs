@@ -343,7 +343,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
         var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
             () => env.PublishBeforeResourceStartedAsync(env.Android));
 
-        Assert.Contains("Interactive Android emulator selection is not supported for persistent resources", ex.Message);
+        Assert.Contains("Automatic or interactive Android emulator selection is not supported for persistent resources", ex.Message);
         Assert.Contains("adb serial", ex.Message);
         Assert.Null(env.StartedAndroidAvdName);
         Assert.False(env.InteractionService.Interactions.Reader.TryRead(out _));

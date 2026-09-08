@@ -64,7 +64,7 @@ mauiApp.AddAndroidDevice("my-pixel", "abc12345");
 mauiApp.addAndroidEmulator("android-emulator");
 
 // Android with specific running emulator serial from adb devices
-mauiApp.addAndroidEmulator("pixel-7-emulator", "emulator-5554");
+mauiApp.addAndroidEmulator("pixel-7-emulator", { emulatorId: "emulator-5554" });
 ```
 
 > **Note on Device/Simulator ID Validation**: The iOS methods include validation to help detect common mistakes:

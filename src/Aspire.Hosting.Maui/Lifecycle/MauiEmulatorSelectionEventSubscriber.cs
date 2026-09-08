@@ -171,7 +171,7 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
         };
 
         throw new DistributedApplicationException(
-            $"Interactive {targetName} selection is not supported for persistent resources because the DCP launch specification is created before the resource starts. " +
+            $"Automatic or interactive {targetName} selection is not supported for persistent resources because the DCP launch specification is created before the resource starts. " +
             $"Specify the {explicitTarget} explicitly in the AppHost instead.");
     }
 
