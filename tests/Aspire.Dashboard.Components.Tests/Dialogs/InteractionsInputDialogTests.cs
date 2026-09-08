@@ -24,6 +24,75 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 public sealed class InteractionsInputDialogTests : DashboardTestContext
 {
     [Theory]
+    [InlineData(InputType.Text, false)]
+    [InlineData(InputType.SecretText, false)]
+    [InlineData(InputType.Choice, false)]
+    [InlineData(InputType.Choice, true)]
+    [InlineData(InputType.Boolean, false)]
+    [InlineData(InputType.Number, false)]
+    [InlineData(InputType.File, false)]
+    public async Task Render_FieldIds_AreAssociatedUniqueAndStable(InputType inputType, bool allowCustomChoice)
+    {
+        var getCut = SetUpDialog(out var dialogService);
+        var interaction = new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = new InteractionInputsDialog()
+        };
+        foreach (var name in new[] { "first", "second" })
+        {
+            interaction.InputsDialog.InputItems.Add(new InteractionInput
+            {
+                Name = name,
+                Label = name,
+                Description = $"Description for {name}.",
+                InputType = inputType,
+                AllowCustomChoice = allowCustomChoice,
+                Required = true
+            });
+        }
+        var viewModel = new InteractionsInputsDialogViewModel
+        {
+            Interaction = interaction,
+            Message = string.Empty,
+            DashboardClient = new TestDashboardClient(),
+            OnSubmitCallback = (_, _) => Task.CompletedTask
+        };
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters { Title = "Inputs" });
+        var cut = getCut();
+        var fields = cut.FindComponents<InteractionInputField>();
+        Assert.Equal(2, fields.Count);
+
+        foreach (var field in fields)
+        {
+            var fieldId = field.Instance.ForId;
+            Assert.False(string.IsNullOrEmpty(fieldId));
+            var target = Assert.Single(field.FindAll($"[id='{fieldId}']"));
+            var description = field.Find(".input-description");
+            Assert.Equal($"{fieldId}-description", description.Id);
+            Assert.Contains(description.Id, target.GetAttribute("aria-describedby")!.Split(' '));
+
+            if (inputType != InputType.Boolean)
+            {
+                Assert.Equal(fieldId, field.Find("label.interaction-input-label").GetAttribute("for"));
+                Assert.Equal($"{fieldId}-required", field.Find(".input-label-required").Id);
+            }
+            if (inputType == InputType.File)
+            {
+                Assert.Equal(fieldId, field.FindComponent<FluentInputFile>().Instance.AnchorId);
+            }
+        }
+
+        var initialIds = cut.FindAll(".interaction-input [id]").Select(element => element.Id).ToArray();
+        Assert.Equal(initialIds.Length, initialIds.Distinct(StringComparer.Ordinal).Count());
+
+        await cut.InvokeAsync(() => viewModel.OnInteractionUpdated!());
+
+        Assert.Equal(initialIds, cut.FindAll(".interaction-input [id]").Select(element => element.Id).ToArray());
+    }
+
+    [Theory]
     [InlineData(InputType.Text, true)]
     [InlineData(InputType.Text, false)]
     [InlineData(InputType.File, true)]

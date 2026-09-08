@@ -24,7 +24,7 @@
                         @switch (vm.Input.InputType)
                         {
                         case InputType.Text:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            <InteractionInputField ForId="@localItem.ElementId"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
@@ -32,6 +32,7 @@
                                 * Immediate value of true on text input ensures the value is set to the server token with every key press in textbox.
                                 *@
                                 <FluentTextInput @ref="@_elementRefs[input.ViewModel]"
+                                                 Id="@input.ViewModel.ElementId"
                                                  Class="aspire-input"
                                                  @bind-Value="input.ViewModel.Value"
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
@@ -44,7 +45,7 @@
                             </InteractionInputField>
                             break;
                         case InputType.SecretText:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            <InteractionInputField ForId="@localItem.ElementId"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
@@ -53,6 +54,7 @@
                                 * Immediate value of true on text input ensures the value is set to the server token with every key press in textbox.
                                 *@
                                 <FluentTextInput @ref="@_elementRefs[input.ViewModel]"
+                                                 Id="@input.ViewModel.ElementId"
                                                  Class="aspire-input"
                                                  @bind-Value="input.ViewModel.Value"
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
@@ -76,7 +78,7 @@
                             </InteractionInputField>
                             break;
                         case InputType.Choice:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            <InteractionInputField ForId="@localItem.ElementId"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
@@ -87,6 +89,7 @@
                                 @if (!localItem.Input.AllowCustomChoice)
                                 {
                                     <FluentSelect @key="input.ViewModel.InputKey"
+                                                  Id="@input.ViewModel.ElementId"
                                                   TOption="SelectViewModel<string>" TValue="string"
                                                   Class="aspire-input"
                                                   @ref="@_elementRefs[input.ViewModel]"
@@ -107,6 +110,7 @@
                                 {
                                     @* TODO: Restore Immediate/ImmediateDelay when https://github.com/microsoft/fluentui-blazor/issues/5173 is fixed. *@
                                     <FluentCombobox @key="input.ViewModel.InputKey"
+                                                    Id="@input.ViewModel.ElementId"
                                                     TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
                                                     Class="aspire-input"
                                                     @ref="@_elementRefs[input.ViewModel]"
@@ -130,11 +134,12 @@
                             </InteractionInputField>
                             break;
                         case InputType.Boolean:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            <InteractionInputField ForId="@localItem.ElementId"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
                                 <FluentCheckbox @ref="@_elementRefs[input.ViewModel]"
+                                                Id="@input.ViewModel.ElementId"
                                                 Class="aspire-checkbox"
                                                 @bind-Value="input.ViewModel.IsChecked"
                                                 Label="@input.ViewModel.Input.Label"
@@ -145,11 +150,12 @@
                             </InteractionInputField>
                             break;
                         case InputType.Number:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            <InteractionInputField ForId="@localItem.ElementId"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
                                 <FluentNumberInput TValue="int?"
+                                                   Id="@input.ViewModel.ElementId"
                                                    @ref="@_elementRefs[input.ViewModel]"
                                                    Class="aspire-input"
                                                    @bind-Value="input.ViewModel.NumberValue"
@@ -162,12 +168,13 @@
                             </InteractionInputField>
                             break;
                         case InputType.File:
-                            var inputId = $"{_elementRefs[localItem]?.Id}-FileUploadButton";
+                            var inputId = $"{localItem.ElementId}-FileUploadButton";
                             <InteractionInputField ForId="@inputId"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
                                 <FluentInputFile @ref="@_elementRefs[input.ViewModel]"
+                                                 Id="@input.ViewModel.ElementId"
                                                  DragDropZoneVisible="false"
                                                  Mode="InputFileMode.Stream"
                                                  AnchorId="@inputId"

@@ -24,6 +24,11 @@ public sealed class InputViewModel
 
     public InteractionInput Input { get; private set; } = default!;
 
+    /// <summary>
+    /// Identifies the rendered input before component references are populated and across interaction updates.
+    /// </summary>
+    public string ElementId { get; } = $"interaction-input-{Guid.NewGuid():N}";
+
     public InputViewModel(InteractionInput input)
     {
         SetInput(input);
