@@ -37,6 +37,30 @@
     </ItemGroup>
   </Target>
 
+  <!--
+    The bundle is the one place that does need the PTY host. AppHost-owned terminals let the AppHost,
+    rather than DCP, own the pseudo-terminal, and on Windows Hex1b launches hex1bpty.exe to do that.
+    Aspire.Managed sets PublishHex1bPtyHost=true for that reason, which turns the removal above off.
+
+    Once it is back in the publish output it also has to stay a loose file next to aspire-managed.
+    hex1bpty.exe is a native asset, so IncludeNativeLibrariesForSelfExtract would otherwise pack it
+    inside the single-file executable, leaving nothing on disk for Arcade to Authenticode-sign
+    (eng/Signing.props) or for CreateLayout to stage at managed/hex1bpty.exe. ExcludeFromSingleFile
+    keeps it out of the bundle without changing where it lands in the publish directory.
+
+    This has to happen before the SDK computes the single-file contents, hence both attributes:
+    AfterTargets gives us the resolved publish list, BeforeTargets pins us ahead of the bundler.
+  -->
+  <Target Name="KeepHex1bPtyHostOutOfSingleFileBundle"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          BeforeTargets="_ComputeFilesToBundle"
+          Condition="'$(PublishHex1bPtyHost)' == 'true' and '$(PublishSingleFile)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Update="@(ResolvedFileToPublish->WithMetadataValue('Filename', 'hex1bpty'))"
+                             ExcludeFromSingleFile="true" />
+    </ItemGroup>
+  </Target>
+
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))" />
 
   <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('Aspire.Hosting'))
