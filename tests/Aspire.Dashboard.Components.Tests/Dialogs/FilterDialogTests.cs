@@ -31,7 +31,7 @@ public class FilterDialogTests : DashboardTestContext
         });
 
         Assert.Equal("page-dialog-body", Assert.Single(cut.FindComponents<FluentDialogBody>()).Instance.Class);
-        Assert.Equal("aspire-input", Assert.Single(cut.FindComponents<FluentNumberInput<double?>>()).Instance.Class);
+        Assert.Equal("aspire-input", Assert.Single(cut.FindComponents<FluentNumberInput<int?>>()).Instance.Class);
         Assert.DoesNotContain("fluent-combobox", cut.Markup);
 
         var conditionSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<FilterCondition>, SelectViewModel<FilterCondition>>>());
@@ -42,6 +42,26 @@ public class FilterDialogTests : DashboardTestContext
             item => Assert.Equal(FilterCondition.GreaterThan, item.Id),
             item => Assert.Equal(FilterCondition.LessThanOrEqual, item.Id),
             item => Assert.Equal(FilterCondition.LessThan, item.Id));
+    }
+
+    [Theory]
+    [InlineData("50", 50)]
+    [InlineData("50.5", null)]
+    public void Render_DurationFilter_DisplaysOnlyIntegerValues(string value, int? expectedValue)
+    {
+        SetupFilterDialogServices();
+
+        var cut = RenderComponent<FilterDialog>(builder =>
+        {
+            builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.DurationField,
+                Condition = FilterCondition.GreaterThanOrEqual,
+                Value = value
+            }));
+        });
+
+        Assert.Equal(expectedValue, Assert.Single(cut.FindComponents<FluentNumberInput<int?>>()).Instance.Value);
     }
 
     [Fact]
@@ -61,17 +81,12 @@ public class FilterDialogTests : DashboardTestContext
 
         Assert.Empty(cut.FindComponents<FluentNumberInput<double?>>());
         Assert.Contains("fluent-dropdown", cut.Markup);
-        Assert.DoesNotContain("TODO: Restore Immediate/ImmediateDelay", cut.Markup);
+        Assert.Equal("request", Assert.IsType<FilterDialogFormModel>(cut.Instance.EditContext.Model).Value);
 
         var valueOption = cut.Find("fluent-option[text='request']");
         var countBadge = Assert.Single(valueOption.QuerySelectorAll(":scope > fluent-badge[slot='description']"));
         Assert.Same(countBadge, valueOption.LastElementChild);
         Assert.Single(countBadge.QuerySelectorAll("[data-filtercount='1']"));
-
-        Assert.Contains(JSInterop.Invocations, invocation =>
-            invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Select.Initialize" &&
-            invocation.Arguments.Count == 2 &&
-            Equals(invocation.Arguments[1], "request"));
 
         var parameterSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>());
         Assert.Null(parameterSelect.Instance.OptionText!(null));
@@ -249,7 +264,7 @@ public class FilterDialogTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            var options = cut.Find("fluent-dropdown[type='combobox']").QuerySelectorAll("fluent-option");
+            var options = cut.Find("fluent-dropdown[type='combobox']").QuerySelectorAll("fluent-option:not([freeform])");
             var option = Assert.Single(options);
             Assert.Contains("latest-value", option.TextContent, StringComparison.Ordinal);
         });
@@ -393,12 +408,84 @@ public class FilterDialogTests : DashboardTestContext
             }));
         });
 
-        await cut.Find("fluent-dropdown[type='combobox']").InputAsync(new ChangeEventArgs { Value = "response" });
+        await cut.Find("fluent-dropdown[type='combobox']").TriggerEventAsync("ontextimmediate", new ChangeEventArgs { Value = "response" });
 
         var valueCombobox = cut.Find("fluent-dropdown[type='combobox']");
-        var valueOption = Assert.Single(valueCombobox.QuerySelectorAll("fluent-option"));
+        var valueOption = Assert.Single(valueCombobox.QuerySelectorAll("fluent-option:not([freeform])"));
         Assert.Equal("response", valueOption.GetAttribute("text"));
         Assert.Equal("response", Assert.Single(valueOption.QuerySelectorAll("mark")).TextContent);
+    }
+
+    [Theory]
+    [InlineData("", "custom value")]
+    [InlineData("request", "res")]
+    [InlineData("request", "")]
+    public async Task Render_StringFilter_TypingThenLosingFocus_PreservesValue(string initialValue, string typedValue)
+    {
+        SetupFilterDialogServices();
+
+        var cut = RenderComponent<FilterDialog>(builder =>
+        {
+            builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.NameField,
+                Condition = FilterCondition.Contains,
+                Value = initialValue
+            }));
+        });
+
+        Assert.Single(cut.FindAll("#filter-dialog-text-value fluent-option[freeform] output"));
+
+        await cut.Find("#filter-dialog-text-value").FocusInAsync(new());
+        await cut.Find("#filter-dialog-text-value").TriggerEventAsync("ontextimmediate", new ChangeEventArgs { Value = typedValue });
+        await cut.Find("#filter-dialog-text-value").TriggerEventAsync("ondropdownchange", new DropdownEventArgs { SelectedOptions = "" });
+        await cut.Find("#filter-dialog-text-value").FocusOutAsync(new());
+
+        Assert.Equal(typedValue, Assert.IsType<FilterDialogFormModel>(cut.Instance.EditContext.Model).Value);
+    }
+
+    [Fact]
+    public void Render_DateFilterWithInvalidValue_DisplaysSingleValidationMessage()
+    {
+        SetupFilterDialogServices();
+
+        var cut = RenderComponent<FilterDialog>(builder =>
+        {
+            builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.TimestampField,
+                Condition = FilterCondition.GreaterThanOrEqual,
+                Value = "not-a-date"
+            }));
+        });
+
+        Assert.Equal("off", Assert.Single(cut.FindComponents<FluentTextInput>()).Instance.AutoComplete);
+
+        cut.Find("form").Submit();
+
+        var validationMessage = Assert.Single(cut.FindAll(".validation-message, .fluent-validation-message"));
+        Assert.Equal("Invalid date format", validationMessage.TextContent.Trim());
+    }
+
+    [Fact]
+    public void Render_DateFilter_DisplaysDatePickerButton()
+    {
+        SetupFilterDialogServices();
+
+        var cut = RenderComponent<FilterDialog>(builder =>
+        {
+            builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.TimestampField,
+                Condition = FilterCondition.GreaterThanOrEqual,
+                Value = "2024-01-15T09:30:00"
+            }));
+        });
+
+        var datePickerButton = Assert.Single(cut.FindComponents<FluentButton>(), button => button.Instance.Title == "Pick date and time");
+        Assert.True(datePickerButton.Instance.IconOnly);
+        Assert.Equal(ButtonType.Button, datePickerButton.Instance.Type);
+        Assert.Contains("aspire-icon-button", datePickerButton.Instance.Class);
     }
 
     [Fact]
@@ -443,7 +530,7 @@ public class FilterDialogTests : DashboardTestContext
         cut.Find("form").Submit();
         Assert.Single(cut.FindAll(".fluent-validation-message"));
 
-        await cut.Find("#filter-dialog-text-value").InputAsync(new ChangeEventArgs { Value = "response" });
+        await cut.Find("#filter-dialog-text-value").TriggerEventAsync("ontextimmediate", new ChangeEventArgs { Value = "response" });
 
         Assert.Empty(cut.FindAll(".fluent-validation-message"));
         Assert.Equal("my-3-o aspire-input", Assert.Single(cut.FindAll("#filter-dialog-text-value-field")).ClassName);

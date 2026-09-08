@@ -187,7 +187,7 @@ public partial class FilterDialog : IAsyncDisposable
         if (_formModel.ValueIsNumeric)
         {
             _formModel.Value = null;
-            _formModel.NumericValue = double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var numericValue) && double.IsFinite(numericValue)
+            _formModel.NumericValue = int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numericValue)
                 ? numericValue
                 : null;
         }
@@ -324,19 +324,33 @@ public partial class FilterDialog : IAsyncDisposable
         }
     }
 
-    private void OnValueInput(ChangeEventArgs e)
+    private void UpdateValueState()
     {
-        _selectedValue = null;
-        _formModel.Value = e.Value?.ToString();
+        // Fluent copies the selected option's text back into the input on blur. Keep the selection
+        // synchronized with typed text so losing focus doesn't restore a stale value.
+        // Reuse an exact match to retain its metadata, or represent custom text (including an empty
+        // value) with a standalone option that isn't added to the suggestions.
+        if (_selectedValue?.Name != _formModel.Value)
+        {
+            var value = _formModel.Value ?? string.Empty;
+            _selectedValue = _allValues?.FirstOrDefault(vm => vm.Name == value) ?? new SelectViewModel<FieldValue>
+            {
+                Id = new FieldValue { Value = value, Count = 0 },
+                Name = value
+            };
+        }
+
         EditContext.NotifyFieldChanged(new FieldIdentifier(_formModel, nameof(_formModel.Value)));
         ValueChanged();
     }
 
     private void SelectedValueChanged()
     {
-        _formModel.Value = _selectedValue?.Name;
-        EditContext.NotifyFieldChanged(new FieldIdentifier(_formModel, nameof(_formModel.Value)));
-        ValueChanged();
+        if (_selectedValue is not null)
+        {
+            _formModel.Value = _selectedValue.Name;
+        }
+        UpdateValueState();
     }
 
     private void Cancel()
@@ -364,7 +378,7 @@ public partial class FilterDialog : IAsyncDisposable
         string value;
         if (_formModel.ValueIsNumeric)
         {
-            value = _formModel.NumericValue!.Value.ToString("R", CultureInfo.InvariantCulture);
+            value = _formModel.NumericValue!.Value.ToString(CultureInfo.InvariantCulture);
         }
         else
         {

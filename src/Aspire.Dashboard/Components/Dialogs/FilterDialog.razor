@@ -48,7 +48,7 @@
         @if (_formModel.ValueIsNumeric)
         {
             <div class="filter-input-container input-container">
-                <FluentNumberInput TValue="double?"
+                <FluentNumberInput TValue="int?"
                                    Class="aspire-input"
                                    @bind-Value="_formModel.NumericValue"
                                    Min="0"
@@ -57,7 +57,6 @@
                                    Immediate="true"
                                    ImmediateDelay="@FluentUIExtensions.InputDelay"
                                    Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]" />
-                <ValidationMessage For="() => _formModel.NumericValue" />
             </div>
         }
         else if (_formModel.ValueIsDate)
@@ -68,16 +67,22 @@
                     <FluentTextInput @bind-Value="_formModel.Value"
                                     Class="aspire-input"
                                     Style="min-width: 100%"
+                                    AutoComplete="off"
                                     Immediate="true"
                                     ImmediateDelay="@FluentUIExtensions.InputDelay"
                                     Placeholder="@Loc[nameof(Dialogs.FilterDialogDatePlaceholder)]"
                                     Label="@Loc[nameof(Dialogs.FilterDialogDateValueLabel)]">
-                        <FluentIcon slot="end"
-                                    Value="@(new Icons.Regular.Size16.Calendar())"
-                                    Title="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
-                                    OnClick="OpenDatePickerAsync"
-                                    Color="Color.Primary"
-                                    Style="cursor: pointer;" />
+                        <EndTemplate>
+                            <FluentButton Appearance="ButtonAppearance.Transparent"
+                                          IconOnly="true"
+                                          Type="ButtonType.Button"
+                                          Class="aspire-icon-button"
+                                          Title="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
+                                          aria-label="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
+                                          OnClick="OpenDatePickerAsync">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Calendar())" Color="Color.Primary" />
+                            </FluentButton>
+                        </EndTemplate>
                     </FluentTextInput>
                     <input type="datetime-local"
                            @ref="_datePickerInput"
@@ -86,14 +91,12 @@
                            @oninput="OnDateTimePickerChanged"
                            style="position: absolute; right: 0; bottom: 0; height: 0; width: 0; overflow: hidden; border: none; padding: 0; margin: 0; pointer-events: none; opacity: 0;" />
                 </div>
-                <ValidationMessage For="() => _formModel.Value" />
             </div>
         }
         else
         {
             <div class="filter-input-container input-container">
                 <div class="input-line-container aspire-field-row">
-                    @* TODO: Restore Immediate/ImmediateDelay when https://github.com/microsoft/fluentui-blazor/issues/5173 is fixed. *@
                     <FluentField Id="filter-dialog-text-value-field"
                                  Class="aspire-input"
                                  ForId="filter-dialog-text-value"
@@ -106,13 +109,20 @@
                                             slot="input"
                                             @bind-Value="_selectedValue"
                                             @bind-Value:after="SelectedValueChanged"
+                                            @bind-ImmediateText="_formModel.Value"
+                                            @bind-ImmediateText:after="UpdateValueState"
+                                            Immediate="true"
+                                            ImmediateDelay="@FluentUIExtensions.InputDelay"
                                             Items="@_filteredValues"
                                             Width="100%"
                                             Height="400px"
                                             Disabled="@_loadingFieldValues"
                                             OptionText="@((SelectViewModel<FieldValue>? c) => c?.Name)"
-                                            OptionTitle="@((SelectViewModel<FieldValue> c) => DashboardUIHelpers.ResolveTooltip(c.Name))"
-                                            @oninput="OnValueInput">
+                                            OptionTitle="@((SelectViewModel<FieldValue> c) => DashboardUIHelpers.ResolveTooltip(c.Name))">
+                                @* The native dropdown needs a freeform option to retain unmatched text on blur. *@
+                                <FreeOption>
+                                    <FreeOptionOutput />
+                                </FreeOption>
                                 <OptionTemplate Context="optionContext">
                                     <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
                                     <FluentBadge slot="description" Circular="true" Appearance="BadgeAppearance.Tint" Color="BadgeColor.Subtle">

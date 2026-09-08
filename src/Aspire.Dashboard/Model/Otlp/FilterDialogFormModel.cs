@@ -19,7 +19,7 @@ public class FilterDialogFormModel : IValidatableObject
 
     public bool ValueIsDate { get; set; }
 
-    public double? NumericValue { get; set; }
+    public int? NumericValue { get; set; }
 
     /// <summary>
     /// Gets the current value formatted for an HTML datetime-local input element.
@@ -47,7 +47,7 @@ public class FilterDialogFormModel : IValidatableObject
     {
         if (ValueIsNumeric)
         {
-            if (NumericValue is not { } numericValue || !double.IsFinite(numericValue))
+            if (NumericValue is null)
             {
                 yield return new ValidationResult(Dialogs.FieldRequired, [nameof(NumericValue)]);
             }
