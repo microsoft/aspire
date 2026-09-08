@@ -308,13 +308,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false));
         var settings = await _nugetService.GetNuGetSettingsAsync(_workingDirectory, cancellationToken).ConfigureAwait(false);
         var configSources = ResolveNuGetConfigSources(restoreSources.PackageSourceMappings, settings.Sources);
-        using var temporaryNuGetConfig = await CreateRestoreOverlayAsync(
+        using var restoreOverlay = await CreateRestoreOverlayAsync(
             restoreSources,
             configSources).ConfigureAwait(false);
         var sources = GetNuGetSources(restoreSources)?.ToArray();
-        IReadOnlyList<string> configPaths = temporaryNuGetConfig is null
+        IReadOnlyList<string> configPaths = restoreOverlay is null
             ? settings.ConfigPaths
-            : [temporaryNuGetConfig.ConfigFile.FullName, .. settings.ConfigPaths];
+            : [restoreOverlay.ConfigFile.FullName, .. settings.ConfigPaths];
 
         return await _nugetService.RestorePackagesAsync(
             packages,
@@ -323,9 +323,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
             nugetConfigPaths: configPaths,
-            nugetConfigOverlayCacheIdentity: temporaryNuGetConfig?.CacheIdentity,
+            nugetConfigOverlayCacheIdentity: restoreOverlay?.CacheIdentity,
             additionalSensitiveSources: settings.Sources.Select(static source => source.Source),
-            globalPackagesFolderOverride: GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryNuGetConfig),
+            globalPackagesFolderOverride: GetIntegrationRestoreGlobalPackagesFolder(restoreSources, restoreOverlay),
             ct: cancellationToken).ConfigureAwait(false);
     }
 
@@ -858,23 +858,23 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 "Credential-bearing package source URLs cannot be used when restoring integration project references. Configure credentials through NuGet instead.");
         }
 
-        var globalPackagesFolder = GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryNuGetConfig: null);
-        FileInfo? restoreConfigFile = new(Path.Combine(restoreDir, "NuGet.Config"));
-        if (restoreConfigFile.Exists)
+        var globalPackagesFolder = GetIntegrationRestoreGlobalPackagesFolder(restoreSources, restoreOverlay: null);
+        FileInfo? restoreOverlayFile = new(Path.Combine(restoreDir, "NuGet.Config"));
+        if (restoreOverlayFile.Exists)
         {
-            restoreConfigFile.Delete();
+            restoreOverlayFile.Delete();
         }
         var settings = await _nugetService.GetNuGetSettingsAsync(restoreDir, cancellationToken).ConfigureAwait(false);
         var configSources = ResolveNuGetConfigSources(restoreSources.PackageSourceMappings, settings.Sources);
         if (restoreSources.PackageSourceMappings is null)
         {
-            restoreConfigFile = null;
+            restoreOverlayFile = null;
         }
         else
         {
             await TemporaryNuGetConfig.GenerateRestoreOverlayAsync(
                 restoreSources.PackageSourceMappings,
-                restoreConfigFile!.FullName,
+                restoreOverlayFile!.FullName,
                 globalPackagesFolder,
                 configSources).ConfigureAwait(false);
         }
@@ -940,9 +940,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
         // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
         // restore rather than reported.
-        IReadOnlyList<string> configPaths = restoreConfigFile is null
+        IReadOnlyList<string> configPaths = restoreOverlayFile is null
             ? settings.ConfigPaths
-            : [restoreConfigFile.FullName, .. settings.ConfigPaths];
+            : [restoreOverlayFile.FullName, .. settings.ConfigPaths];
         var restoreInputs = await ComputeRestoreInputsAsync(
             projectContent,
             packageRefs,
@@ -1083,22 +1083,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         return channelName;
     }
 
-    /// <summary>
-    /// Gets NuGet sources from the resolved channel for bundled restore.
-    /// </summary>
-    internal async Task<IEnumerable<string>?> GetNuGetSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
-    {
-        var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
-        return GetNuGetSources(restoreSources);
-    }
-
-    internal async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
-    {
-        var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
-        return await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false);
-    }
-
-    private Task<IntegrationRestoreSources> ResolveIntegrationRestoreSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
+    internal Task<IntegrationRestoreSources> ResolveIntegrationRestoreSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
         => new IntegrationRestoreSourceResolver(_packagingService, _logger, _executionContext.NuGetServiceIndexOverride)
             .ResolveAsync(requestedChannel, packageSourceOverride, cancellationToken);
 
@@ -1129,7 +1114,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         };
     }
 
-    private static NuGetConfigSource[] ResolveNuGetConfigSources(
+    internal static NuGetConfigSource[] ResolveNuGetConfigSources(
         PackageMapping[]? mappings,
         IReadOnlyList<NuGetSourceInfo> ambientSources)
     {
@@ -1180,27 +1165,14 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
     private string? GetIntegrationRestoreGlobalPackagesFolder(
         IntegrationRestoreSources restoreSources,
-        TemporaryNuGetConfig? temporaryNuGetConfig)
+        TemporaryNuGetConfig? restoreOverlay)
         => restoreSources.ConfigureGlobalPackagesFolder
             ? CliPathHelper.GetStagingNuGetPackagesIdentityDirectory(
                 _executionContext.AspireHomeDirectory,
-                temporaryNuGetConfig?.CacheIdentity ?? restoreSources.GlobalPackagesFolderIdentity)
+                restoreOverlay?.CacheIdentity ?? restoreSources.GlobalPackagesFolderIdentity)
             : null;
 
-    private async Task<TemporaryNuGetConfig?> CreateTemporaryNuGetConfigAsync(IntegrationRestoreSources restoreSources)
-    {
-        if (restoreSources.PackageSourceMappings is null)
-        {
-            return null;
-        }
-
-        var config = await TemporaryNuGetConfig.CreateAsync(
-            restoreSources.PackageSourceMappings,
-            restoreSources.ConfigureGlobalPackagesFolder).ConfigureAwait(false);
-        return await ConfigureGlobalPackagesFolderAsync(config, restoreSources).ConfigureAwait(false);
-    }
-
-    private async Task<TemporaryNuGetConfig?> CreateRestoreOverlayAsync(
+    internal async Task<TemporaryNuGetConfig?> CreateRestoreOverlayAsync(
         IntegrationRestoreSources restoreSources,
         IReadOnlyList<NuGetConfigSource> sources)
     {
@@ -1261,9 +1233,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         catch (Exception ex)
         {
             // A transient packaging-service failure during auto-discovery must not turn
-            // `aspire new` into a hard failure. Returning null falls through to the existing
-            // ambient + channel-sources path, matching the defensive catches in
-            // TryCreateTemporaryNuGetConfigAsync and GetNuGetSourcesAsync.
+            // `aspire new` into a hard failure. Returning null leaves the resolved channel
+            // sources and ambient NuGet settings unchanged.
             _logger.LogWarning(ex, "Failed to resolve local Aspire package source for channel '{Channel}'.", requestedChannel);
             return null;
         }
