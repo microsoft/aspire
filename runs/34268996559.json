@@ -1,0 +1,38 @@
+{
+  "run_id": 34268996559,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34268996559",
+  "analyzed_at": "2026-09-08T20:21:19Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19985,
+    "title": "Add dry-run organization-funded Copilot review workflow",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-organization-funded-copilot-reviews",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19985"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 102209718095,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34268996559/job/102209718095",
+      "classification": "flaky-test",
+      "reason": "Job logs unavailable and generic exit code 1; matches a known recurring flaky shard (12 prior occurrences) unrelated to this PR, which only adds a new GitHub Actions workflow, docs, and Infrastructure.Tests files, none touching the VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Package tests - macOS / Templates-NewUpAndBuildStandaloneTemplateTests (macos-latest)",
+      "id": 102210971384,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34268996559/job/102210971384",
+      "classification": "flaky-test",
+      "reason": "Job logs unavailable and generic exit code 3 with no TRX test failures extracted; the PR only adds a new GitHub Actions workflow (organization-funded-copilot-reviews.yml), docs, and Infrastructure.Tests workflow-script tests, none of which touch templates or the Aspire.Templates.Tests project, so the failure is unrelated to PR changes.",
+      "failed_steps": ["Run nuget dependent tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky", "templates-newup-standalone-macos-nuget-dependent-tests-unrelated"]
+}

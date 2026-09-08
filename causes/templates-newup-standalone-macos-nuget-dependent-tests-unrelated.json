@@ -1,0 +1,17 @@
+{
+  "id": "templates-newup-standalone-macos-nuget-dependent-tests-unrelated",
+  "type": "flaky-test",
+  "title": "Templates-NewUpAndBuildStandaloneTemplateTests (macos-latest) 'Run nuget dependent tests' step fails with generic exit code 3, unrelated to PR changes",
+  "test_name": "Aspire.Templates.Tests.NewUpAndBuildStandaloneTemplateTests",
+  "error_pattern": "Process completed with exit code 3. (Run nuget dependent tests (Linux/macOS) step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. PR only modifies .github/workflows/organization-funded-copilot-reviews.yml, docs, and Infrastructure.Tests workflow-script tests, unrelated to templates.",
+  "occurrences": [
+    {
+      "run_id": 34268996559,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34268996559",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 19985,
+      "observed_at": "2026-09-08T20:21:19Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19991"
+}
