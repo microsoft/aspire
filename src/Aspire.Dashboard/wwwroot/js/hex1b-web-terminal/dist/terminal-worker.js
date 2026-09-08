@@ -123,7 +123,7 @@ async function drawFrame() {
                 type: "geometry", columns: metadata.columns, rows: metadata.rows,
                 cellWidth: metadata.cellWidth, cellHeight: metadata.cellHeight,
                 mouseTracking: metadata.mouseTracking, peer: metadata.peer,
-                history: metadata.history, revision: frame.revision, text
+                history: metadata.history, revision: frame.revision, text, hyperlinks: metadata.hyperlinks
             });
             send({ type: "ack", revision: frame.revision });
             emitStats(text);
@@ -194,8 +194,8 @@ async function initialize(message) {
     if (typeof self.requestAnimationFrame !== "function") {
         throw new Error("This browser does not support requestAnimationFrame in a dedicated OffscreenCanvas worker");
     }
-    postStatus("Loading terminal font and initializing WebGPU...");
-    renderer = await TerminalRenderer.create(message.canvas, message.scale, fail, message.font);
+    postStatus("Loading terminal font and initializing renderer...");
+    renderer = await TerminalRenderer.create(message.canvas, message.scale, fail, message.font, message.renderer);
     if (failed || stopped) {
         renderer?.dispose();
         return;
@@ -203,7 +203,10 @@ async function initialize(message) {
     stats.gpu = "ready";
     stats.backingScale = message.scale;
     emitStats();
-    postStatus("WebGPU ready. Attaching terminal view...");
+    const rendererName = renderer.backend.kind === "webgpu" ? "WebGPU" : "WebGL2";
+    if (renderer.fallbackReason)
+        postStatus(`Using WebGL2: ${renderer.fallbackReason}`);
+    postStatus(`${rendererName} ready. Attaching terminal view...`);
     const url = new URL(message.url);
     if (!["ws:", "wss:"].includes(url.protocol)) {
         throw new Error("The terminal WebSocket URL must use ws: or wss:");
@@ -215,7 +218,7 @@ async function initialize(message) {
             return;
         stats.connected = true;
         self.postMessage({ type: "connected" });
-        postStatus("Connected · WebGPU worker · server-authoritative cells and graphics", "ready");
+        postStatus(`Connected · ${rendererName} worker · server-authoritative cells and graphics`, "ready");
         emitStats();
     });
     socket.addEventListener("message", event => {

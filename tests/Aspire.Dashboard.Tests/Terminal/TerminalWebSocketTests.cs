@@ -127,6 +127,43 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task BrowserView_PreservesHyperlinkDestinationChangesAcrossReconnect()
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var browser = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(browser, _ => true, timeout.Token);
+
+        // OSC 8: ESC ] 8 ; parameters ; URI ST text ESC ] 8 ; ; ST.
+        // Replacing only the destination must update HWT metadata even when
+        // the visible cells remain identical.
+        host.Workload.Write("\u001b[H\u001b]8;;https://example.com/first\u001b\\link\u001b]8;;\u001b\\");
+        var initial = await ReadUntilAsync(browser, frame => frame.GetProperty("hyperlinks").GetArrayLength() > 0, timeout.Token);
+        AssertLink(initial, "https://example.com/first");
+
+        host.Workload.Write("\u001b[H\u001b]8;;https://example.com/second\u001b\\link\u001b]8;;\u001b\\");
+        var changed = await ReadUntilAsync(browser, frame => frame.GetProperty("hyperlinks").EnumerateArray()
+            .Any(link => link.GetProperty("uri").GetString() == "https://example.com/second"), timeout.Token);
+        AssertLink(changed, "https://example.com/second");
+        await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "Reconnect", timeout.Token);
+
+        using var reconnected = await host.ConnectBrowserAsync(timeout.Token);
+        var restored = await ReadUntilAsync(reconnected, frame => frame.GetProperty("hyperlinks").GetArrayLength() > 0, timeout.Token);
+        AssertLink(restored, "https://example.com/second");
+        await reconnected.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+
+        static void AssertLink(JsonElement frame, string uri)
+        {
+            var link = Assert.Single(frame.GetProperty("hyperlinks").EnumerateArray());
+            Assert.Equal(uri, link.GetProperty("uri").GetString());
+            Assert.Equal(0, link.GetProperty("row").GetInt32());
+            Assert.Equal(0, link.GetProperty("startColumn").GetInt32());
+            Assert.Equal(4, link.GetProperty("endColumn").GetInt32());
+        }
+    }
+
+    [Fact]
     public async Task BrowserView_RequiresAuthenticationBeforeConnectingToProducer()
     {
         await using var host = new TerminalTestHost(output, requireAuthentication: true);

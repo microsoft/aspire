@@ -9,7 +9,7 @@ using Microsoft.JSInterop;
 namespace Aspire.Dashboard.Components.Controls;
 
 /// <summary>
-/// Renders a WebGPU terminal connected to the resource's per-replica session
+/// Renders a GPU terminal connected to the resource's per-replica session
 /// through the dashboard's HWT1 presentation endpoint.
 /// </summary>
 public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
@@ -451,7 +451,6 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     private string GetErrorMessage() => Loc[_terminalError switch
     {
-        "unsupported" => nameof(Resources.ConsoleLogs.TerminalWebGpuUnsupported),
         "disconnected" => nameof(Resources.ConsoleLogs.TerminalDisconnected),
         "input-failed" => nameof(Resources.ConsoleLogs.TerminalInputFailed),
         "sizing-failed" => nameof(Resources.ConsoleLogs.TerminalSizingFailed),

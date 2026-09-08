@@ -1,11 +1,13 @@
 import { captureMouse } from "./mouse-input.js";
 import { normalizeFont } from "./terminal-font.js";
+import { normalizeRenderer } from "./renderer-options.js";
 import { dimensions, normalizeSizing, requestedGrid, fittedScale } from "./terminal-sizing.js";
 import { HistoryState } from "./history-state.js";
 import { terminalThemeCss } from "./terminal-theme.js";
 import { InputPolicy, InputRoute, TerminalAction, inputModifiers } from "./input-policy.js";
 import { assertCommandSize } from "./protocol.js";
 import { SelectionUI } from "./selection-ui.js";
+import { Hyperlinks } from "./hyperlinks.js";
 import { errorMessage, isRecord } from "./validation.js";
 export { InputRoute, TerminalAction, defaultInputBindings } from "./input-policy.js";
 function requiredElement(root, selector, type) {
@@ -21,6 +23,7 @@ function requiredElement(root, selector, type) {
 export class WebTerminal {
     element;
     #options;
+    #renderer;
     // DOM and worker fields are initialized by mount before a handle is returned.
     #worker;
     #surface;
@@ -57,6 +60,7 @@ export class WebTerminal {
     #selectionOverlay;
     #selectionUIError = "";
     #canvasSize = { width: 0, height: 0 };
+    #hyperlinks = new Hyperlinks();
     /** Resolves after a connected terminal frame is presented. Supply signal to cancel mounting. */
     static async mount(container, options) {
         if (!(container instanceof HTMLElement))
@@ -65,8 +69,9 @@ export class WebTerminal {
             throw new TypeError("A terminal WebSocket URL is required");
         if (options.signal?.aborted)
             throw options.signal.reason;
-        if (!window.isSecureContext || !navigator.gpu)
-            throw new Error("WebTerminal requires WebGPU over HTTPS or localhost");
+        if (normalizeRenderer(options.renderer) === "webgpu" && (!window.isSecureContext || !navigator.gpu)) {
+            throw new Error("The requested WebGPU renderer requires WebGPU over HTTPS or localhost");
+        }
         if (!window.Worker || !window.ResizeObserver || !window.OffscreenCanvas ||
             !HTMLCanvasElement.prototype.transferControlToOffscreen) {
             throw new Error("WebTerminal requires module workers, ResizeObserver, and a transferable OffscreenCanvas");
@@ -83,6 +88,7 @@ export class WebTerminal {
     }
     constructor(options) {
         this.#options = options;
+        this.#renderer = normalizeRenderer(options.renderer);
         if (options.workerUrl !== undefined && !(options.workerUrl instanceof URL) &&
             (typeof options.workerUrl !== "string" || !options.workerUrl.trim()))
             throw new TypeError("workerUrl must be a nonempty URL string or URL");
@@ -209,7 +215,16 @@ export class WebTerminal {
             scroll: (delta, endpoint) => inspect(() => this.#history.scroll(delta, endpoint)),
             end: cancelled => this.#history.endGesture(cancelled),
             resolve: input => this.#resolveInput(input),
-            execute: (decision, input) => this.#executeInputAction(decision, input)
+            execute: (decision, input) => this.#executeInputAction(decision, input),
+            hyperlink: point => this.#connected && !this.viewport.pending ? this.#hyperlinks.at(point) : null,
+            openHyperlink: uri => {
+                try {
+                    window.open(uri, "_blank", "noopener,noreferrer");
+                }
+                catch (error) {
+                    this.#actionFailed(error);
+                }
+            }
         });
         this.#bindKeyboard();
         requiredElement(this.#inspection, ".return-live", HTMLButtonElement).addEventListener("click", () => {
@@ -250,7 +265,8 @@ export class WebTerminal {
         });
         this.#worker.addEventListener("messageerror", () => this.#fail(new Error("Terminal worker message could not be decoded")));
         const canvas = this.#canvas.transferControlToOffscreen();
-        this.#post({ type: "init", canvas, url: url.href, scale, font }, [canvas]);
+        this.#post({ type: "init", canvas, url: url.href, scale, font,
+            renderer: this.#renderer }, [canvas]);
     }
     #message(message) {
         if (this.#disposed)
@@ -283,7 +299,7 @@ export class WebTerminal {
             this.#input.disabled = !this.#canInput();
             if (this.#canInput() && document.activeElement === this.element && !this.element.shadowRoot?.activeElement)
                 this.focus();
-            this.#mouse?.update(message.columns, message.rows, message.mouseTracking);
+            this.#hyperlinks.update(message.hyperlinks);
             if (geometryChanged || oldPeer.isPrimary !== this.#peer.isPrimary)
                 this.#fit();
             if (!this.#peer.isPrimary) {
@@ -299,6 +315,7 @@ export class WebTerminal {
                 this.#screenText = message.text;
                 this.#history.accept(message.history, message.revision);
             }
+            this.#mouse?.update(message.columns, message.rows, message.mouseTracking);
             if (geometryChanged)
                 this.#options.onGeometry?.(this.geometry);
             if (first)
@@ -380,6 +397,7 @@ export class WebTerminal {
     #inspectionChanged() {
         const viewport = this.viewport;
         const selection = this.selection;
+        this.#mouse?.refresh();
         if (selection.status === "invalidated")
             this.#mouse?.cancel();
         if (this.#highlights) {
@@ -694,6 +712,7 @@ export class WebTerminal {
     #disconnect() {
         this.#inputSerial++;
         this.#connected = false;
+        this.#hyperlinks.update([]);
         if (this.#input)
             this.#input.disabled = true;
         this.#mouse?.update(1, 1, 0);

@@ -115,8 +115,15 @@ export type TerminalSelection = ({
     copyError: string;
 };
 export type TerminalStatusLevel = "info" | "ready" | "error";
+export type TerminalRendererKind = "webgpu" | "webgl2";
+/** Auto prefers WebGPU and falls back to WebGL2 for capability/device acquisition failures. */
+export type TerminalRendererPreference = "auto" | TerminalRendererKind;
 /** Metrics are initially empty; individual fields appear as initialization and presentation proceed. */
 export interface TerminalStats {
+    /** Active backend; absent until renderer initialization completes. */
+    renderer?: TerminalRendererKind;
+    /** Why auto selected WebGL2 instead of WebGPU; absent for explicit selection or WebGPU. */
+    rendererFallbackReason?: string;
     revision?: number;
     fullFrames?: number;
     frames?: number;
@@ -266,6 +273,8 @@ export interface WebTerminalOptions extends InputPolicyOptions {
     workerUrl?: string | URL;
     signal?: AbortSignal;
     scale?: number | "auto";
+    /** Mount-time backend selection. Defaults to auto; explicit modes never fall back. */
+    renderer?: TerminalRendererPreference;
     font?: TerminalFont;
     sizing?: TerminalSizing;
     label?: string;

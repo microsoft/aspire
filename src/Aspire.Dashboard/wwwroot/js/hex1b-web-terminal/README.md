@@ -1,6 +1,6 @@
 # @hex1b/web-terminal
 
-The first-party WebGPU browser terminal for Hex1b. It renders server-authoritative
+The first-party GPU-rendered browser terminal for Hex1b. It renders server-authoritative
 cells and graphics in a module worker, with local input routing, producer-backed
 history and selection, clipboard actions, and primary/secondary view sizing.
 There are no runtime package dependencies.
@@ -53,10 +53,42 @@ connection, not the container or server-side shared terminal.
 
 ### Browser and deployment requirements
 
-Use HTTPS or localhost and a browser with WebGPU, module workers, transferable
-OffscreenCanvas, worker animation frames, ResizeObserver, and CSS Font Loading.
-Clipboard access also requires browser permission and, for relevant actions, a
-user gesture. There is no Canvas2D terminal-rendering fallback.
+Use a browser with WebGPU or WebGL2, module workers, transferable OffscreenCanvas,
+worker animation frames, ResizeObserver, and CSS Font Loading. WebGPU requires
+HTTPS or localhost; WebGL2 rendering also works on ordinary HTTP origins.
+Clipboard API access still requires a secure context, browser permission and,
+for relevant actions, a user gesture. There is no Canvas2D terminal-rendering fallback.
+Renderer selection does not change transport security: use HTTPS/WSS to protect
+terminal input and output.
+
+### Renderer selection
+
+Set the mount-time `renderer` option to `"auto"` (the default), `"webgpu"`, or
+`"webgl2"`. Auto prefers WebGPU and uses WebGL2 if the secure context, API,
+adapter, device acquisition, or presentation context is unavailable. Explicit
+modes require that backend and report an error rather than falling back.
+Shader, font, validation, and unexpected initialization errors are not
+compatibility fallbacks. Runtime GPU/context loss terminates the view with an
+error; it does not switch backends behind the caller's back.
+
+```ts
+const terminal = await WebTerminal.mount(container, {
+  url: "/ws/terminal",
+  renderer: "webgl2", // Use WebGL2 even if WebGPU is available.
+  onStats(stats) {
+    console.log(stats.renderer, stats.rendererFallbackReason);
+  }
+});
+```
+
+`stats.renderer` identifies the active backend after initialization.
+`stats.rendererFallbackReason` explains an automatic fallback and is absent
+for explicit selections and successful WebGPU initialization. Both backends
+share glyph rasterization, frame preparation, clipping, and image ordering.
+WebGPU preference is not a performance guarantee; compare representative
+workloads on your target browsers and devices.
+
+### Module and worker deployment
 
 The package contains browser ES modules, not a single bundle. For bare static
 hosting, copy **all of `dist/`**, preserving its directory structure, and import
@@ -100,6 +132,7 @@ workers, fonts, and the intended WebSocket endpoint.
 | --- | --- |
 | `workerUrl` | Optional module-worker entry; useful when worker assets are deployed separately. |
 | `scale` | GPU backing scale `0.5`–`3`, or `"auto"` (default, bounded device pixel ratio). |
+| `renderer` | `"auto"` (prefer WebGPU), `"webgpu"`, or `"webgl2"`; selected once per mount. |
 | `font` | One family and optional downloadable font faces; see below. |
 | `sizing` | `{ mode: "auto", fontSize?: number }` or `{ mode: "fixed", columns, rows, fontSize?: number }`. |
 | `readOnly` | Disable application input while retaining history inspection and selection. |
@@ -172,6 +205,20 @@ actions reject if selection/input/focus changes before their asynchronous work
 can be applied safely. Errors are surfaced rather than silently reported as
 successful copies or pastes.
 
+### Hyperlinks
+
+Hold Ctrl or Cmd and click an OSC 8 hyperlink to open its destination in a new
+tab. Hovering shows the destination and activation hint; holding the modifier
+also shows a pointer cursor. Links work in live output, scrollback, and read-only
+views. Plain clicks and drags retain their existing selection/application
+behavior, and explicit input-policy routes or actions take precedence.
+Shift and Alt/Option continue to reserve selection gestures.
+
+Only absolute `http:`, `https:`, and `mailto:` destinations are activated
+(`mailto:` handling depends on the browser). New tabs use `noopener,noreferrer`.
+Script, data, file, relative, and custom-scheme URLs are not activated.
+Plain URL text is not automatically detected; the workload must emit OSC 8.
+
 ## Selection UI hooks
 
 `onSelectionUI` receives a typed `SelectionUIEvent`, also dispatched as the
@@ -239,5 +286,6 @@ Only `dist/`, this README, the MIT license, and package metadata are shipped.
 A prepared tarball is self-contained and can be published with
 `npm publish ./hex1b-web-terminal-<version>.tgz --ignore-scripts`; it does not
 need development sources or build scripts. The package name is always
-`@hex1b/web-terminal`, including GitHub Packages. Registry selection is left to
-the caller; no registry is pinned in `package.json`.
+`@hex1b/web-terminal`. CI publishes main/release builds to npmjs; PR builds
+provide the tarball as the `npm-web-terminal` workflow artifact and do not
+publish it to a registry. No registry is pinned in `package.json`.

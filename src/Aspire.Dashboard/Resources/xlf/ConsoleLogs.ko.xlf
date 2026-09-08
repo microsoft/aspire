@@ -153,8 +153,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TerminalMountFailed">
-        <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU, then reconnect to try again.</source>
-        <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU, then reconnect to try again.</target>
+        <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
+        <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalRetry">
@@ -185,11 +185,6 @@
       <trans-unit id="TerminalToolbarIncreaseFontSize">
         <source>Increase font size</source>
         <target state="new">Increase font size</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalWebGpuUnsupported">
-        <source>This terminal requires a browser with WebGPU, using HTTPS or localhost. You can still view this resource's console logs.</source>
-        <target state="new">This terminal requires a browser with WebGPU, using HTTPS or localhost. You can still view this resource's console logs.</target>
         <note />
       </trans-unit>
     </body>

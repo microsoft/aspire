@@ -22,7 +22,6 @@ public class TerminalViewTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData("unsupported", nameof(Resources.ConsoleLogs.TerminalWebGpuUnsupported))]
     [InlineData("mount-failed", nameof(Resources.ConsoleLogs.TerminalMountFailed))]
     [InlineData("disconnected", nameof(Resources.ConsoleLogs.TerminalDisconnected))]
     [InlineData("input-failed", nameof(Resources.ConsoleLogs.TerminalInputFailed))]
@@ -43,7 +42,7 @@ public class TerminalViewTests : DashboardTestContext
         }));
 
         Assert.Equal(loc[resourceKey].Value, cut.Find("[role=alert]").TextContent);
-        Assert.Equal(error == "unsupported" ? 0 : 1, cut.FindAll("fluent-button").Count);
+        Assert.Single(cut.FindAll("fluent-button"));
     }
 
     [Fact]

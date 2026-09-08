@@ -1,53 +1,14 @@
 import { LIMITS } from "./protocol.js";
 import { loadFont, measureFont, normalizeFont } from "./terminal-font.js";
+import { createRenderBackend } from "./backend-selection.js";
+import { QUAD_STRIDE } from "./render-backend.js";
 const CELL_WIDTH = 10;
 const CELL_HEIGHT = 20;
 const MAX_QUADS = 1024 * 1024;
 const MAX_GLYPHS = 16384;
 const MAX_GLYPH_KEY_UNITS = 1024 * 1024;
-const STRIDE = 16;
+const STRIDE = QUAD_STRIDE;
 const WHITE = [1, 1, 1, 1];
-const shader = /* wgsl */ `
-struct Viewport { size: vec2f, padding: vec2f }
-@group(0) @binding(0) var<uniform> viewport: Viewport;
-@group(0) @binding(1) var image: texture_2d<f32>;
-@group(0) @binding(2) var imageSampler: sampler;
-
-struct VertexOut {
-  @builtin(position) position: vec4f,
-  @location(0) uv: vec2f,
-  @location(1) color: vec4f,
-  @location(2) @interpolate(flat) mode: f32,
-}
-
-@vertex fn vertex(
-  @builtin(vertex_index) index: u32,
-  @location(0) rect: vec4f,
-  @location(1) uvRect: vec4f,
-  @location(2) color: vec4f,
-  @location(3) mode: f32,
-) -> VertexOut {
-  let corners = array<vec2f, 6>(
-    vec2f(0, 0), vec2f(1, 0), vec2f(0, 1),
-    vec2f(0, 1), vec2f(1, 0), vec2f(1, 1)
-  );
-  let corner = corners[index];
-  let position = rect.xy + corner * rect.zw;
-  var out: VertexOut;
-  out.position = vec4f(position / viewport.size * vec2f(2, -2) + vec2f(-1, 1), 0, 1);
-  out.uv = mix(uvRect.xy, uvRect.zw, corner);
-  out.color = color;
-  out.mode = mode;
-  return out;
-}
-
-@fragment fn fragment(in: VertexOut) -> @location(0) vec4f {
-  // Explicit LOD avoids derivative-uniformity requirements across solid/mask/image batches.
-  let texel = textureSampleLevel(image, imageSampler, in.uv, 0);
-  if (in.mode < 0.5) { return in.color; }
-  if (in.mode < 1.5) { return vec4f(in.color.rgb, in.color.a * texel.a); }
-  return texel * in.color;
-}`;
 function rgba(packed) {
     return [
         (packed & 255) / 255,
@@ -81,15 +42,15 @@ function packGlyphs(glyphs, size, scale, initial = { x: 0, y: 0, rowHeight: 0 })
     }
     return { placements, shelf: { x, y, rowHeight } };
 }
-/** WebGPU instanced quads; Canvas2D is used only to rasterize reusable glyphs. */
+/** Shared instanced-quad preparation; Canvas2D rasterizes reusable glyphs for either backend. */
 export class TerminalRenderer {
     canvas;
     scale;
     backingScale;
-    device;
+    backend;
+    fallbackReason;
     fontConfiguration;
     fontMetrics;
-    context;
     images;
     glyphs;
     imageUploadBytes;
@@ -98,17 +59,11 @@ export class TerminalRenderer {
     atlasRebuilds;
     textureBytes;
     instances;
-    instanceBuffer;
-    instanceBufferBytes;
     disposed;
     columns;
     rows;
     // Initialized by create() before the renderer can prepare or submit frames.
     font;
-    format;
-    uniform;
-    sampler;
-    pipeline;
     rasterCanvas;
     raster;
     atlas;
@@ -119,22 +74,13 @@ export class TerminalRenderer {
     height = 0;
     quadCount = 0;
     batches = [];
-    static async create(canvas, scale, onFatal, font) {
+    static async create(canvas, scale, onFatal, font, preference = "auto") {
         const normalizedFont = normalizeFont(font);
-        if (!self.isSecureContext)
-            throw new Error("WebGPU requires HTTPS or localhost");
-        if (!navigator.gpu)
-            throw new Error("WebGPU is unavailable in this browser worker");
-        const adapter = await navigator.gpu.requestAdapter();
-        if (!adapter)
-            throw new Error("No WebGPU adapter is available; check browser GPU support");
-        const device = await adapter.requestDevice();
-        const renderer = new TerminalRenderer(canvas, scale, device, normalizedFont);
-        device.lost.then(info => {
-            if (!renderer.disposed)
-                onFatal(new Error(`WebGPU device lost: ${info.message || info.reason}`));
-        });
-        device.addEventListener("uncapturederror", event => onFatal(event.error));
+        if (!Number.isFinite(scale) || scale < 0.5 || scale > 3)
+            throw new Error("Invalid backing scale");
+        const { backend, fallbackReason } = await createRenderBackend(canvas, onFatal, preference);
+        const renderer = new TerminalRenderer(canvas, scale, backend, normalizedFont);
+        renderer.fallbackReason = fallbackReason;
         try {
             await renderer.initialize();
             return renderer;
@@ -144,19 +90,15 @@ export class TerminalRenderer {
             throw error;
         }
     }
-    constructor(canvas, scale, device, font) {
+    constructor(canvas, scale, backend, font) {
         if (!Number.isFinite(scale) || scale < 0.5 || scale > 3)
             throw new Error("Invalid backing scale");
         this.canvas = canvas;
         this.scale = scale;
         this.backingScale = scale;
-        this.device = device;
+        this.backend = backend;
         this.fontConfiguration = font;
         this.fontMetrics = new Map();
-        const context = canvas.getContext("webgpu");
-        if (!context)
-            throw new Error("Could not create an OffscreenCanvas WebGPU context");
-        this.context = context;
         this.images = new Map();
         this.glyphs = new Map();
         this.imageUploadBytes = 0;
@@ -165,78 +107,24 @@ export class TerminalRenderer {
         this.atlasRebuilds = 0;
         this.textureBytes = 0;
         this.instances = new Float32Array(4096 * STRIDE);
-        this.instanceBuffer = null;
-        this.instanceBufferBytes = 0;
         this.disposed = false;
         this.columns = 0;
         this.rows = 0;
     }
     async initialize() {
         this.font = await loadFont(this.fontConfiguration);
-        const device = this.device;
-        this.format = navigator.gpu.getPreferredCanvasFormat();
-        this.context.configure({ device, format: this.format, alphaMode: "opaque" });
-        this.uniform = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.sampler = device.createSampler({ minFilter: "linear", magFilter: "linear" });
-        const module = device.createShaderModule({ code: shader });
-        this.pipeline = await device.createRenderPipelineAsync({
-            layout: "auto",
-            vertex: {
-                module,
-                entryPoint: "vertex",
-                buffers: [{
-                        arrayStride: STRIDE * 4,
-                        stepMode: "instance",
-                        attributes: [
-                            { shaderLocation: 0, offset: 0, format: "float32x4" },
-                            { shaderLocation: 1, offset: 16, format: "float32x4" },
-                            { shaderLocation: 2, offset: 32, format: "float32x4" },
-                            { shaderLocation: 3, offset: 48, format: "float32" },
-                        ],
-                    }],
-            },
-            fragment: {
-                module,
-                entryPoint: "fragment",
-                targets: [{
-                        format: this.format,
-                        blend: {
-                            color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha" },
-                            alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
-                        },
-                    }],
-            },
-            primitive: { topology: "triangle-list" },
-        });
         this.rasterCanvas = new OffscreenCanvas(1, 1);
         const raster = this.rasterCanvas.getContext("2d", { willReadFrequently: true });
         if (!raster)
             throw new Error("Worker glyph rasterization is unavailable");
         this.raster = raster;
-        this.resetAtlas(Math.min(2048, device.limits.maxTextureDimension2D));
+        this.resetAtlas(Math.min(2048, this.backend.maxTextureDimension2D));
     }
     createTexture(width, height, label) {
-        if (width > this.device.limits.maxTextureDimension2D || height > this.device.limits.maxTextureDimension2D) {
-            throw new Error(`${label} exceeds the GPU texture dimension limit`);
-        }
-        const texture = this.device.createTexture({
-            label,
-            size: [width, height],
-            format: "rgba8unorm",
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-        });
-        const bindGroup = this.device.createBindGroup({
-            layout: this.pipeline.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: { buffer: this.uniform } },
-                { binding: 1, resource: texture.createView() },
-                { binding: 2, resource: this.sampler },
-            ],
-        });
-        return { texture, bindGroup, width, height };
+        return this.backend.createTexture(width, height, label);
     }
     resetAtlas(size) {
-        this.atlas?.texture.destroy();
+        this.atlas?.destroy();
         this.atlas = this.createTexture(size, size, "Glyph atlas");
         this.glyphs.clear();
         this.glyphKeyUnits = 0;
@@ -245,7 +133,7 @@ export class TerminalRenderer {
     resize(columns, rows, viewport) {
         const width = columns * CELL_WIDTH;
         const height = rows * CELL_HEIGHT;
-        const limit = this.device.limits.maxTextureDimension2D;
+        const limit = this.backend.maxCanvasDimension2D;
         const requested = Math.min(this.scale, viewport ? viewport.width / width : Infinity, viewport ? viewport.height / height : Infinity);
         this.canvasLimited = width * requested > limit || height * requested > limit;
         this.backingScale = Math.min(requested, limit / width, limit / height);
@@ -259,7 +147,7 @@ export class TerminalRenderer {
         this.height = height;
         this.canvas.width = backingWidth;
         this.canvas.height = backingHeight;
-        this.device.queue.writeBuffer(this.uniform, 0, new Float32Array([width, height, 0, 0]));
+        this.backend.resize(width, height);
     }
     /** Call only between submissions. Missing/over-budget resources terminate the session. */
     async updateImages(incoming, retainedKeys) {
@@ -276,7 +164,7 @@ export class TerminalRenderer {
             throw new Error("Retained images exceed the 256 MiB texture budget");
         for (const [key, image] of this.images) {
             if (!retained.has(key) || replacements.has(key)) {
-                image.texture.destroy();
+                image.destroy();
                 this.textureBytes -= image.width * image.height * 4;
                 this.images.delete(key);
             }
@@ -285,7 +173,7 @@ export class TerminalRenderer {
             const resource = this.createTexture(image.width, image.height, `Image ${image.key}`);
             try {
                 if (image.format === "rgba") {
-                    this.device.queue.writeTexture({ texture: resource.texture }, image.bytes, { bytesPerRow: image.width * 4, rowsPerImage: image.height }, [image.width, image.height]);
+                    resource.writePixels(image.bytes, image.width, image.height);
                 }
                 else {
                     // Check IHDR before decoding so a tiny PNG cannot claim unbounded decoded dimensions.
@@ -302,7 +190,7 @@ export class TerminalRenderer {
                     try {
                         if (bitmap.width !== image.width || bitmap.height !== image.height)
                             throw new Error("Decoded PNG dimension mismatch");
-                        this.device.queue.copyExternalImageToTexture({ source: bitmap }, { texture: resource.texture, premultipliedAlpha: false }, [image.width, image.height]);
+                        resource.writeBitmap(bitmap);
                     }
                     finally {
                         bitmap.close();
@@ -314,7 +202,7 @@ export class TerminalRenderer {
                 this.imagePayloadBytes += image.byteLength;
             }
             catch (error) {
-                resource.texture.destroy();
+                resource.destroy();
                 throw error;
             }
         }
@@ -338,7 +226,7 @@ export class TerminalRenderer {
         let plan = metadataFits ? packGlyphs(missing, this.atlas.width, this.scale, this.shelf) : null;
         if (!plan) {
             let size = this.atlas.width;
-            const maxSize = Math.min(4096, this.device.limits.maxTextureDimension2D);
+            const maxSize = Math.min(4096, this.backend.maxTextureDimension2D);
             while (!(plan = packGlyphs(visible, size, this.scale)) && size < maxSize) {
                 size = Math.min(size * 2, maxSize);
             }
@@ -378,7 +266,7 @@ export class TerminalRenderer {
                 break;
             }
         }
-        this.device.queue.writeTexture({ texture: this.atlas.texture, origin: [x, y] }, pixels.data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
+        this.atlas.writePixels(pixels.data, width, height, x, y);
         this.glyphUploadBytes += width * height * 4;
         this.glyphs.set(key, {
             colored,
@@ -526,39 +414,14 @@ export class TerminalRenderer {
                 this.solid(x, y, CELL_WIDTH, CELL_HEIGHT, color);
             }
         }
-        const usedBytes = this.quadCount * STRIDE * 4;
-        if (!this.instanceBuffer || usedBytes > this.instanceBufferBytes) {
-            this.instanceBuffer?.destroy();
-            this.instanceBufferBytes = Math.max(256, this.instances.byteLength);
-            this.instanceBuffer = this.device.createBuffer({
-                size: this.instanceBufferBytes,
-                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-            });
-        }
-        if (usedBytes)
-            this.device.queue.writeBuffer(this.instanceBuffer, 0, this.instances, 0, this.quadCount * STRIDE);
-        const encoder = this.device.createCommandEncoder();
         const base = rgba(metadata.defaultBackground ?? cells[0]?.background ?? 0xff000000);
-        const pass = encoder.beginRenderPass({
-            colorAttachments: [{
-                    view: this.context.getCurrentTexture().createView(),
-                    clearValue: { r: base[0], g: base[1], b: base[2], a: 1 },
-                    loadOp: "clear",
-                    storeOp: "store",
-                }],
-        });
-        pass.setPipeline(this.pipeline);
-        pass.setVertexBuffer(0, this.instanceBuffer);
-        for (const batch of this.batches) {
-            pass.setBindGroup(0, batch.resource.bindGroup);
-            pass.draw(6, batch.count, 0, batch.start);
-        }
-        pass.end();
-        this.device.queue.submit([encoder.finish()]);
+        this.backend.submit(this.instances, this.quadCount, this.batches, base);
         return { cpuMs: performance.now() - start, quads: this.quadCount, drawCalls: this.batches.length };
     }
     metrics() {
         return {
+            renderer: this.backend.kind,
+            rendererFallbackReason: this.fallbackReason,
             fontFamily: this.font.family,
             rasterScale: this.scale,
             backingScale: this.backingScale,
@@ -572,24 +435,23 @@ export class TerminalRenderer {
             imageUploadBytes: this.imageUploadBytes,
             imagePayloadBytes: this.imagePayloadBytes,
             glyphUploadBytes: this.glyphUploadBytes,
-            instanceBufferBytes: this.instanceBufferBytes,
+            instanceBufferBytes: this.backend.instanceBufferBytes,
         };
     }
     async idle() {
-        await this.device.queue.onSubmittedWorkDone();
+        await this.backend.idle();
     }
     dispose() {
+        if (this.disposed)
+            return;
         this.disposed = true;
         for (const image of this.images.values())
-            image.texture.destroy();
+            image.destroy();
         this.images.clear();
-        this.atlas?.texture.destroy();
-        this.instanceBuffer?.destroy();
-        this.uniform?.destroy();
+        this.atlas?.destroy();
         this.font?.dispose();
         this.fontMetrics.clear();
-        this.context.unconfigure();
-        this.device.destroy();
+        this.backend.dispose();
     }
 }
 //# sourceMappingURL=renderer.js.map

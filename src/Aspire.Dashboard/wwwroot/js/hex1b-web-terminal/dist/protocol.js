@@ -116,6 +116,20 @@ function validateMetadata(metadata) {
     }
     integer(columns * rows, "cell count", 1, LIMITS.cells);
     validateHistory(metadata.history, columns, rows);
+    array(metadata.hyperlinks, "hyperlinks", columns * rows);
+    let previousLinkEnd = 0;
+    for (const link of metadata.hyperlinks) {
+        if (!isRecord(link))
+            throw new Error("Invalid hyperlink");
+        const row = integer(link.row, "hyperlink row", 0, rows - 1);
+        const start = integer(link.startColumn, "hyperlink start column", 0, columns - 1);
+        const end = integer(link.endColumn, "hyperlink end column", start + 1, columns);
+        if (row * columns + start < previousLinkEnd)
+            throw new Error("Unordered or overlapping hyperlinks");
+        previousLinkEnd = row * columns + end;
+        if (typeof link.uri !== "string" || !link.uri.length || link.uri.length > LIMITS.metadataBytes)
+            throw new Error("Invalid hyperlink URI");
+    }
     if (metadata.cellWidth !== 10 || metadata.cellHeight !== 20) {
         throw new Error("This spike requires server geometry of 10 × 20 logical pixels");
     }

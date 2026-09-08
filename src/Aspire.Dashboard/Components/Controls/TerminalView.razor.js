@@ -126,12 +126,6 @@ function connectClient(state) {
         state.waitingForVisibility = true;
         return;
     }
-    if (!window.isSecureContext || !navigator.gpu) {
-        state.error = "unsupported";
-        notifyToolbar(state);
-        return;
-    }
-
     const controller = new AbortController();
     state.controller = controller;
     // Return the terminal id before awaiting mount: Blazor must be able to
@@ -147,6 +141,11 @@ async function mountClient(state, generation, controller) {
             signal: controller.signal,
             label: state.label,
             sizing: state.sizing,
+            // Let the package fall back to WebGL2 for unavailable WebGPU
+            // capabilities, including ordinary HTTP. Other initialization
+            // errors and runtime GPU loss must still surface as failures.
+            // https://github.com/mitchdenny/hex1b/pull/491
+            renderer: "auto",
             onStatus(message, level) {
                 if (!current() || level !== "error") {
                     return;

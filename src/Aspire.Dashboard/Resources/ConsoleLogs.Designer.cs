@@ -57,12 +57,6 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
-        public static string TerminalWebGpuUnsupported {
-            get {
-                return ResourceManager.GetString("TerminalWebGpuUnsupported", resourceCulture);
-            }
-        }
-
         public static string TerminalMountFailed {
             get {
                 return ResourceManager.GetString("TerminalMountFailed", resourceCulture);

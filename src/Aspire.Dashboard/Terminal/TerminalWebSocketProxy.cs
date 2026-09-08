@@ -181,7 +181,7 @@ internal static class TerminalWebSocketProxy
         // A direct HMP1 workload preserves the producer's confirmed primary role,
         // geometry and graphics checkpoints. The mirror belongs to this browser;
         // disposing it disconnects the peer, not the AppHost-owned terminal.
-        // https://github.com/mitchdenny/hex1b/blob/1f47fd9a/docs/web-terminal.md
+        // https://github.com/mitchdenny/hex1b/blob/b8be2654/docs/web-terminal.md
         var presentation = new Hwt1PresentationAdapter();
         await using var presentationLifetime = presentation.ConfigureAwait(false);
         var terminal = Hex1bTerminal.CreateBuilder()

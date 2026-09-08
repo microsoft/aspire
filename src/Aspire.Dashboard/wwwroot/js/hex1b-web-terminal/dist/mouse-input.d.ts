@@ -14,9 +14,12 @@ interface MouseInspection {
     execute?: (decision: Extract<InputDecision, {
         action: unknown;
     }>, input: TerminalInput) => void;
+    hyperlink?: (point: TerminalPoint) => string | null;
+    openHyperlink?: (uri: string) => void;
 }
 export interface MouseCapture {
     update(columns: number, rows: number, tracking: MouseTrackingMode): void;
+    refresh(): void;
     cancel(): void;
     dispose(): void;
 }

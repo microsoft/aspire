@@ -1,4 +1,4 @@
-import type { InputModifiers, PointerButton, SelectionMode, SelectionRange, TerminalBuffer, TerminalFont, TerminalGeometry, TerminalPeer, TerminalSize, TerminalStats, TerminalStatusLevel } from "./types.js";
+import type { InputModifiers, PointerButton, SelectionMode, SelectionRange, TerminalBuffer, TerminalFont, TerminalGeometry, TerminalPeer, TerminalSize, TerminalStats, TerminalRendererPreference, TerminalStatusLevel } from "./types.js";
 export type SelectionText = {
     status: "valid";
     text: string;
@@ -34,6 +34,12 @@ export interface TerminalCell {
     width: number;
     underlineStyle: number;
     text: string;
+}
+export interface HyperlinkRange {
+    row: number;
+    startColumn: number;
+    endColumn: number;
+    uri: string;
 }
 export interface ImageMetadata {
     key: string;
@@ -81,6 +87,7 @@ export interface FrameMetadata extends TerminalGeometry {
     retainedImages: string[];
     placements: ImagePlacement[];
     warnings: string[];
+    hyperlinks: HyperlinkRange[];
     stats: {
         workloadBytes: number;
         outputBatches: number;
@@ -156,6 +163,7 @@ export type WorkerInputMessage = {
     url: string;
     scale: number;
     font: TerminalFont;
+    renderer: TerminalRendererPreference;
 } | ({
     type: "viewport";
 } & TerminalSize) | {
@@ -205,6 +213,7 @@ export type WorkerOutputMessage = {
     history: HistoryMetadata | null;
     revision: number;
     text: string;
+    hyperlinks: HyperlinkRange[];
 } & TerminalGeometry) | {
     type: "history";
     history: HistoryMetadata | null;

@@ -24,9 +24,26 @@ export function captureMouse(canvas, send, focus, inspection = {}) {
     let completedClick;
     let routedGesture;
     let contextMenuRoute;
+    let hyperlinkClick;
+    let hoverEvent;
+    let hoverModifiers;
+    const originalTitle = canvas.title;
+    const originalCursor = canvas.style.cursor;
     const state = () => ({ tracking, ...inspection.state?.() });
     function point(event, clamp = false) {
         return cellPoint(event, canvas.getBoundingClientRect(), columns, rows, clamp);
+    }
+    function refreshHover(modifiers = hoverModifiers) {
+        if (!inspection.hyperlink)
+            return;
+        hoverModifiers = modifiers;
+        const position = hoverEvent && point(hoverEvent);
+        const uri = position ? inspection.hyperlink(position) : null;
+        canvas.title = uri ? `${uri}\nCtrl/Cmd+click to open link` : originalTitle;
+        canvas.style.cursor = uri && modifiers && (modifiers.ctrlKey || modifiers.metaKey) &&
+            !modifiers.altKey && !modifiers.shiftKey ? "pointer" : originalCursor;
+        if (hyperlinkClick && hyperlinkClick.uri !== uri)
+            hyperlinkClick.dragged = true;
     }
     function updateAutoScroll() {
         clearTimeout(autoScroll);
@@ -83,6 +100,7 @@ export function captureMouse(canvas, send, focus, inspection = {}) {
         pointerEvent = undefined;
         selectionClick = undefined;
         completedClick = undefined;
+        hyperlinkClick = undefined;
         gesture.end();
         routedGesture = undefined;
         if (report)
@@ -115,6 +133,8 @@ export function captureMouse(canvas, send, focus, inspection = {}) {
         if (!position)
             return;
         if (pointerId !== null) {
+            if (hyperlinkClick)
+                hyperlinkClick.dragged = true;
             if (routedGesture !== InputRoute.Browser)
                 event.preventDefault();
             if ((gesture.owner === "app" || routedGesture === InputRoute.Application) && pointerId === event.pointerId)
@@ -125,8 +145,20 @@ export function captureMouse(canvas, send, focus, inspection = {}) {
         const input = { type: "pointer", button: pointerButtons[event.button],
             point: Object.freeze({ ...position }), ...inputModifiers(event) };
         const decision = inspection.resolve?.(input) ?? { route: InputRoute.Continue };
-        const route = decision.action !== undefined ? InputRoute.Consume : decision.route;
+        let route = decision.action !== undefined ? InputRoute.Consume : decision.route;
+        if (route === InputRoute.Continue && event.button === 0 && (event.ctrlKey || event.metaKey) &&
+            !event.altKey && !event.shiftKey) {
+            const uri = inspection.hyperlink?.(position);
+            if (uri) {
+                hyperlinkClick = { uri, x: event.clientX, y: event.clientY, dragged: false };
+                route = InputRoute.Consume;
+            }
+        }
         contextMenuRoute = event.button === 2 ? route : undefined;
+        if (hyperlinkClick)
+            contextMenuRoute = InputRoute.Consume;
+        hoverEvent = event;
+        refreshHover(event);
         if (route !== InputRoute.Continue) {
             completedClick = selectionClick = undefined;
             click.count = 0;
@@ -186,6 +218,10 @@ export function captureMouse(canvas, send, focus, inspection = {}) {
             return;
         if (pointerId !== null && pointerId !== event.pointerId)
             return;
+        hoverEvent = event;
+        refreshHover(event);
+        if (hyperlinkClick && Math.hypot(event.clientX - hyperlinkClick.x, event.clientY - hyperlinkClick.y) >= 4)
+            hyperlinkClick.dragged = true;
         const position = point(event, pointerId !== null);
         if (!position)
             return;
@@ -224,6 +260,21 @@ export function captureMouse(canvas, send, focus, inspection = {}) {
     canvas.addEventListener("pointerup", event => {
         if (pointerId !== event.pointerId)
             return;
+        if (hyperlinkClick) {
+            event.preventDefault();
+            const link = hyperlinkClick;
+            const position = point(event);
+            const activate = event.button === 0 && event.buttons === 0 && !link.dragged &&
+                Math.hypot(event.clientX - link.x, event.clientY - link.y) < 4 &&
+                position && inspection.hyperlink?.(position) === link.uri;
+            if (event.buttons === 0)
+                cancel(false, false);
+            else
+                link.dragged = true;
+            if (activate)
+                inspection.openHyperlink?.(link.uri);
+            return;
+        }
         const position = point(event, true) ?? lastPoint;
         if (routedGesture) {
             if (routedGesture === InputRoute.Application && position)
@@ -262,11 +313,21 @@ export function captureMouse(canvas, send, focus, inspection = {}) {
             inspection.begin?.(completed.point, { mode, extend: false });
     }, options);
     canvas.addEventListener("pointercancel", () => cancel(), options);
+    canvas.addEventListener("pointerleave", () => {
+        hoverEvent = undefined;
+        refreshHover();
+    }, options);
     canvas.addEventListener("lostpointercapture", () => {
         if (pointerId !== null)
             cancel();
     }, options);
-    window.addEventListener("blur", () => cancel(), options);
+    window.addEventListener("blur", () => {
+        cancel();
+        hoverEvent = undefined;
+        refreshHover();
+    }, options);
+    window.addEventListener("keydown", event => refreshHover(event), { ...options, capture: true });
+    window.addEventListener("keyup", event => refreshHover(event), { ...options, capture: true });
     canvas.addEventListener("contextmenu", event => {
         if (contextMenuRoute !== undefined && contextMenuRoute !== InputRoute.Continue) {
             const route = contextMenuRoute;
@@ -279,6 +340,8 @@ export function captureMouse(canvas, send, focus, inspection = {}) {
             event.preventDefault();
     }, options);
     canvas.addEventListener("wheel", event => {
+        if (hyperlinkClick)
+            hyperlinkClick.dragged = true;
         const input = { type: "wheel", deltaX: event.deltaX, deltaY: event.deltaY,
             deltaMode: event.deltaMode, point: point(event), ...inputModifiers(event) };
         const decision = pointerId === null
@@ -345,11 +408,15 @@ export function captureMouse(canvas, send, focus, inspection = {}) {
                 rows = nextRows;
                 tracking = nextTracking;
             }
+            refreshHover();
         },
+        refresh() { refreshHover(); },
         cancel() { cancel(); },
         dispose() {
             cancel(false);
             listeners.abort();
+            canvas.title = originalTitle;
+            canvas.style.cursor = originalCursor;
         }
     };
 }

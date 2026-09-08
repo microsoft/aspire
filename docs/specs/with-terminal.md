@@ -119,16 +119,30 @@ stream.
 ### Browser requirements and package pairing
 
 The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
-exactly `0.167.0-alpha.1509.1.1f47fd9`. HWT1 is experimental state transfer
+exactly `0.167.0-alpha.1519.1.b8be265`. HWT1 is experimental state transfer
 between these paired packages, not a stable wire contract implemented by
 Aspire. Upgrade both together. The full npm `dist` tree is vendored, including
 module workers, relative imports, fonts and licenses.
 
-This release requires a secure context (HTTPS or localhost), WebGPU,
-OffscreenCanvas and module workers. Unsupported browsers display an error;
-there is no xterm.js fallback. Sixel and Kitty Graphics Protocol are rendered
+The dashboard uses the package's automatic renderer selection: WebGPU is
+preferred, with WebGL2 used when WebGPU capabilities or device acquisition are
+unavailable. WebGPU requires a secure context (HTTPS or localhost); WebGL2 can
+render on ordinary HTTP. Clipboard API restrictions still apply, and renderer
+selection does not relax transport security, authorization or origin checks.
+Both backends require OffscreenCanvas and module workers. Initialization and
+runtime rendering failures remain visible errors; there is no xterm.js fallback.
+Sixel and Kitty Graphics Protocol are rendered
 from server-authoritative state. Historical rendering is text-only. The
 dashboard's independent console-log view remains available.
+
+The package handles Ctrl/Cmd+click on authoritative OSC 8 hyperlinks in live
+output and history. HMP state replay preserves link destinations across late
+attachment and reconnect. It only opens absolute HTTP, HTTPS and mailto destinations
+with `noopener,noreferrer`; plain clicks and drags retain selection/application
+behavior. Aspire adds no custom opener or plain-text URL detection. See the
+[hyperlink PR](https://github.com/mitchdenny/hex1b/pull/489),
+[renderer PR](https://github.com/mitchdenny/hex1b/pull/491), and
+[hyperlink replay fix](https://github.com/mitchdenny/hex1b/pull/493).
 
 ### Console / Terminal view toggle
 

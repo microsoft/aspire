@@ -14,9 +14,9 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.167.0-alpha.1509.1.1f47fd9**,
+`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.167.0-alpha.1519.1.b8be265**,
 paired with the Hex1b NuGet build from commit
-`1f47fd9a9f8a4b0c79f3ec6e3f6f9ca8e86fc235`. The client and server use the evolving
+`b8be2654e874efa394b496b1c114edcf75c52c14`. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
 different client based only on a similar version number.
 
@@ -46,12 +46,25 @@ has its own SIL Open Font License and provenance under
 vendored files. `TerminalView.razor.js` imports only the public `dist/index.js`
 entry point, not the package's internal protocol/renderer modules.
 
-The terminal requires WebGPU in a secure context (HTTPS or localhost), module
-workers, transferable OffscreenCanvas, worker animation frames, ResizeObserver,
-and CSS Font Loading. There is no Canvas2D renderer fallback. Serve JavaScript
+The terminal uses `renderer: "auto"`: WebGPU is preferred, with the package's
+WebGL2 compatibility backend used when WebGPU's secure context, API, adapter,
+device acquisition, or presentation context is unavailable. Shader, font,
+validation and unexpected initialization failures remain errors; runtime GPU
+loss ends that view rather than switching renderers. `stats.renderer` and
+`stats.rendererFallbackReason` expose the selection for diagnostics. See
+[the renderer PR](https://github.com/mitchdenny/hex1b/pull/491).
+
+WebGPU requires HTTPS or localhost; WebGL2 rendering also works on ordinary
+HTTP. Clipboard API permissions still require a secure context, and HTTPS/WSS
+is needed to protect terminal traffic. Renderer selection does not relax the
+dashboard's transport, authentication or origin protections.
+
+Both backends require module workers, transferable OffscreenCanvas, worker
+animation frames, ResizeObserver, and CSS Font Loading. There is no Canvas2D
+or xterm renderer fallback. Serve JavaScript
 and WOFF2 with their correct MIME types and allow same-origin workers, fonts,
 and `/api/terminal` WebSockets in the deployment CSP. The dashboard displays a
-localized error if capability checks or mounting fail.
+localized error if mounting fails.
 
 The component import and socket endpoint resolve beneath `NavigationManager.BaseUri`.
 The package import, worker entry, and bundled font resolve relative to their
@@ -75,6 +88,16 @@ The callback does not expose a full peer roster, and the dashboard does not
 infer one from the primary identity.
 
 ### Migration boundaries
+
+Ctrl/Cmd+click opens server-authoritative OSC 8 hyperlinks using the package's
+built-in routing, including links in history and read-only views. Only absolute
+HTTP, HTTPS and mailto destinations are allowed, and tabs use
+`noopener,noreferrer`. Plain clicks and drags retain selection/application
+behavior; Shift and Alt reserve selection gestures. Aspire does not add its own
+opener, custom-scheme support, or plain-text URL detection. HMP state replay
+preserves link destinations when a browser attaches or reconnects. See
+[the hyperlink PR](https://github.com/mitchdenny/hex1b/pull/489) and
+[the replay fix](https://github.com/mitchdenny/hex1b/pull/493).
 
 The public API supports auto/fixed sizing, primary requests, keyboard and mouse
 input, paste/copy, selection, and producer-backed history. It has no terminal
@@ -101,4 +124,4 @@ state, PathBase asset URLs, deployment asset presence, and exact version parity
 between `Directory.Packages.props`, the npm manifest/lockfile, and the vendored
 package. Complete installed-package byte comparison belongs to the separate
 acquisition verification command above. Neither suite substitutes for a browser
-WebGPU rendering test or multi-peer server/CLI integration tests.
+WebGPU/WebGL2 rendering test or multi-peer server/CLI integration tests.

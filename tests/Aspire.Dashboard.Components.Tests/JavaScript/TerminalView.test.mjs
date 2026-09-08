@@ -158,6 +158,7 @@ test("init returns an id while mount waits for its first connected frame", async
     assert.equal(terminal.getToolbarState(id).connected, false);
     assert.equal(attempts[0].options.label, "Localized terminal input");
     assert.equal(attempts[0].options.url, "wss://dashboard/api/terminal?resource=app&replica=1");
+    assert.equal(attempts[0].options.renderer, "auto");
     attempts[0].options.onStatus("Socket open", "ready");
     attempts[0].role(false);
     await settle();
@@ -172,20 +173,28 @@ test("init returns an id while mount waits for its first connected frame", async
     });
     assert.equal(attempts[0].client.primaryRequests, 0);
     assert.equal(attempts[0].options.onInput, undefined);
+    assert.equal(attempts[0].options.inputBindings, undefined);
+    assert.equal(attempts[0].options.actions, undefined);
     assert.equal(attempts[0].options.readOnly, undefined);
 });
 
-test("unsupported WebGPU and insecure origins produce a localizable error without retrying", async () => {
+test("missing WebGPU and ordinary HTTP leave renderer selection to the package", async () => {
     navigator.gpu = undefined;
     const first = mount();
     navigator.gpu = {};
     window.isSecureContext = false;
     const second = mount();
+    assert.equal(attempts.length, 2);
+    for (const attempt of attempts) {
+        assert.equal(attempt.options.renderer, "auto");
+        attempt.resolve();
+    }
     await settle();
-    assert.equal(attempts.length, 0);
     assert.equal(timers.size, 0);
-    assert.equal(terminal.getToolbarState(first.id).error, "unsupported");
-    assert.equal(terminal.getToolbarState(second.id).error, "unsupported");
+    assert.equal(terminal.getToolbarState(first.id).connected, true);
+    assert.equal(terminal.getToolbarState(second.id).connected, true);
+    assert.equal(terminal.getToolbarState(first.id).error, null);
+    assert.equal(terminal.getToolbarState(second.id).error, null);
 });
 
 test("hidden initial mounts wait for visibility without consuming the first-frame timeout", async () => {
@@ -378,7 +387,7 @@ test("frontend manifest, lockfile, vendored package and backend use the exact pa
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
     const vendored = JSON.parse(await readFile(new URL("package.json", assets), "utf8"));
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.167.0-alpha.1509.1.1f47fd9");
+    assert.equal(version, "0.167.0-alpha.1519.1.b8be265");
     assert.equal(vendored.version, version);
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);
@@ -401,6 +410,9 @@ test("checked-in deployment includes the worker and licensed font without npm in
     for (const name of [
         "dist/index.js",
         "dist/terminal-worker.js",
+        "dist/webgpu-backend.js",
+        "dist/webgl2-backend.js",
+        "dist/hyperlinks.js",
         "dist/fonts/cascadia-mono-nf/CascadiaMonoNF.woff2",
         "dist/fonts/cascadia-mono-nf/LICENSE.txt",
         "dist/fonts/cascadia-mono-nf/README.md",
