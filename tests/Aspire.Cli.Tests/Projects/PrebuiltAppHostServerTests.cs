@@ -204,6 +204,36 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ComputeRestoreInputsAsync_ReferencedProjectConfigEnvironmentReferenceDisablesRestoreSkip()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectDirectory = workspace.CreateDirectory("integration");
+        var referencedProject = Path.Combine(projectDirectory.FullName, "MyIntegration.csproj");
+        await File.WriteAllTextAsync(referencedProject, "<Project />");
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory.FullName, "NuGet.Config"),
+            """
+            <configuration>
+              <config>
+                <add key="globalPackagesFolder" value="%INTEGRATION_PACKAGES%" />
+              </config>
+            </configuration>
+            """);
+        var projectRefs = new List<IntegrationReference>
+        {
+            IntegrationReference.FromProject("MyIntegration", referencedProject)
+        };
+
+        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project />",
+            [],
+            projectRefs,
+            CancellationToken.None);
+
+        Assert.False(inputs.IsEligibleForSkip);
+    }
+
+    [Fact]
     public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenGlobalPackagesFolderChanges()
     {
         var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(

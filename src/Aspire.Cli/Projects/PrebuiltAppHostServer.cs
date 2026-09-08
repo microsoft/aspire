@@ -501,9 +501,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             if (!hasDynamicRestoreInput)
             {
                 var importText = Encoding.UTF8.GetString(importBytes);
+                // NuGet expands environment references independently for each project's config.
+                // Restore rather than persist potentially sensitive values in the fingerprint.
                 hasDynamicRestoreInput =
                     HasFloatingVersionAttribute(importText) ||
-                    HasUnevaluatedRestoreInputs(importText);
+                    HasUnevaluatedRestoreInputs(importText) ||
+                    (IsNuGetConfigFile(importPath) &&
+                        NuGetConfigEnvironmentVariables.FindReferencedNames(importText).Length > 0);
             }
         }
 
@@ -627,15 +631,23 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         return imports;
     }
 
+    private static bool IsNuGetConfigFile(string path)
+        => s_nugetConfigFileNames.Contains(Path.GetFileName(path), StringComparer.Ordinal);
+
+    private static readonly string[] s_nugetConfigFileNames =
+    [
+        "NuGet.config",
+        "NuGet.Config",
+        "nuget.config"
+    ];
+
     // NuGet recognizes these filename casings on case-sensitive filesystems.
     private static readonly string[] s_directoryScopedImportFileNames =
     [
         "Directory.Packages.props",
         "Directory.Build.props",
         "Directory.Build.targets",
-        "NuGet.config",
-        "NuGet.Config",
-        "nuget.config"
+        .. s_nugetConfigFileNames
     ];
 
     /// <summary>
