@@ -1,8 +1,24 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCommandInvocationCount, waitForCommandOutcome, waitForRepositoryIdle } from './helpers/assertions';
-import { executeE2eControlCommand, reloadWorkspaceForE2E, removePath, restoreWorkspaceAppHostConfig, runE2eTeardown, writeFileWithRetry, writeWorkspaceAppHostConfigForPath, writeWorkspaceSetting } from './helpers/fixtures';
+import { getCommandInvocationCount, isSamePath, waitForCommandOutcome, waitForRepositoryIdle } from './helpers/assertions';
+import {
+    executeE2eControlCommand,
+    getCliWrapperInvocations,
+    reloadWorkspaceForE2E,
+    removePath,
+    restoreE2eCliPathForE2E,
+    restoreWorkspaceCliPath,
+    restoreWorkspaceAppHostConfig,
+    runE2eTeardown,
+    setE2eCliPathForE2E,
+    waitForCliWrapperCompletion,
+    writeFileWithRetry,
+    writeTrackedForwardingCliWrapper,
+    writeWorkspaceAppHostConfigForPath,
+    writeWorkspaceCliPath,
+    writeWorkspaceSetting,
+} from './helpers/fixtures';
 import { runProcess } from './helpers/process';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
@@ -90,12 +106,14 @@ suite('Aspire auto-restore E2E', function () {
             // through to the manifest default, which this feature flips to `true`, silently
             // changing the fixture's behavior for any other test that reuses this workspace.
             () => writeWorkspaceSetting('aspire.enableAutoRestore', false),
+            () => restoreE2eCliPathForE2E(),
+            () => restoreWorkspaceCliPath(),
             () => restoreWorkspaceAppHostConfig(),
             () => removePath(guestAppHostDirectory, { recursive: true, force: true }),
         ], 'Auto-restore E2E teardown failed.');
     });
 
-    test('automatically restores a stale non-.NET AppHost on activation and force-restores it via the manual command', async function () {
+    test('automatically restores a stale guest AppHost on activation and force-restores it via the manual command', async function () {
         this.timeout(600000);
 
         // ExTester launches VS Code with no workspace folder open, so the extension's
@@ -173,7 +191,7 @@ suite('Aspire auto-restore E2E', function () {
             `manual restore rewriting marker at '${guestMarkerPath}'`);
     });
 
-    test('does not create restore artifacts for a .NET AppHost', async function () {
+    test('does not automatically restore a .NET AppHost but restores it explicitly', async function () {
         this.timeout(300000);
 
         // See the comment in the previous test - the extension only activates once its view
@@ -181,6 +199,10 @@ suite('Aspire auto-restore E2E', function () {
         await openAspireView();
 
         restoreWorkspaceAppHostConfig();
+        await waitForRepositoryIdle();
+
+        const wrapper = writeTrackedForwardingCliWrapper('aspire-auto-restore-dotnet');
+        await setE2eCliPathForE2E(wrapper.cliPath);
 
         // The shared fixture workspace pins `aspire.enableAutoRestore` to `false` (see
         // `prepareWorkspaceFixture` in run-e2e.js). Flip it on so this test actually exercises the
@@ -188,16 +210,11 @@ suite('Aspire auto-restore E2E', function () {
         // `teardown` above restores the fixture's baseline.
         writeWorkspaceSetting('aspire.enableAutoRestore', true);
 
-        // Force a fresh activation pass under this test's control rather than relying on the
-        // one-time pass from suite startup, which ran before this test - and possibly before other
-        // tests mutated the workspace config - so it isn't a reliable, order-independent signal.
-        //
-        // `reloadWorkspaceForE2E()` reads the *current* state file first to capture a baseline
-        // session id before reloading, with no retry - it assumes a prior activation already wrote
-        // one. Wait for that baseline to exist so the read doesn't race a cold start, e.g. if this
-        // test runs first or the harness's own initial activation hasn't finished yet.
-        await waitForRepositoryIdle();
-        await reloadWorkspaceForE2E();
+        // Changing the configured CLI is one of the production triggers for a fresh automatic
+        // restore pass. Use that trigger instead of reloading VS Code: the E2E CLI override is
+        // intentionally process-local and a new extension host would inherit the real CLI path
+        // from the runner, bypassing the wrapper that proves no restore process was launched.
+        await writeWorkspaceCliPath(wrapper.cliPath);
         await waitForRepositoryIdle();
 
         // There is no positive signal to wait on for "nothing happened", so give the (expected to
@@ -206,5 +223,35 @@ suite('Aspire auto-restore E2E', function () {
 
         assert.ok(!fs.existsSync(primaryModulesDirectory), `Expected no '${primaryModulesDirectory}' to be created for a .NET AppHost.`);
         assert.ok(!fs.existsSync(primaryLegacyModulesDirectory), `Expected no '${primaryLegacyModulesDirectory}' to be created for a .NET AppHost.`);
+
+        const automaticRestoreInvocations = getCliWrapperInvocations(wrapper.invocationLogPath)
+            .filter(args => args[0] === 'restore');
+        assert.deepStrictEqual(
+            automaticRestoreInvocations,
+            [],
+            'An automatic restore pass for a .NET AppHost must not invoke aspire restore.');
+
+        const beforeRestoreInvocations = getCommandInvocationCount('aspire-vscode.restoreAppHost');
+        await executeE2eControlCommand({
+            name: 'executeAspireCommand',
+            commandId: 'aspire-vscode.restoreAppHost',
+            args: [{ appHostPath: primaryAppHostPath }],
+        });
+        await waitForCommandOutcome('aspire-vscode.restoreAppHost', 'success', 60000, beforeRestoreInvocations);
+
+        const completion = await waitForCliWrapperCompletion(
+            wrapper.completionLogPath,
+            candidate => candidate.args[0] === 'restore',
+            120000);
+        assert.strictEqual(completion.exitCode, 0, `Explicit .NET restore failed with exit code ${completion.exitCode}.`);
+
+        const restoreInvocations = getCliWrapperInvocations(wrapper.invocationLogPath)
+            .filter(args => args[0] === 'restore');
+        assert.strictEqual(restoreInvocations.length, 1, 'Explicit Restore AppHost must invoke aspire restore exactly once.');
+        const appHostOptionIndex = restoreInvocations[0].indexOf('--apphost');
+        assert.ok(appHostOptionIndex >= 0, 'Explicit Restore AppHost must pass --apphost.');
+        assert.ok(
+            isSamePath(restoreInvocations[0][appHostOptionIndex + 1], primaryAppHostPath),
+            `Explicit Restore AppHost targeted '${restoreInvocations[0][appHostOptionIndex + 1]}' instead of '${primaryAppHostPath}'.`);
     });
 });

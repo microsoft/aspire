@@ -87,11 +87,10 @@ suite('AspirePackageRestoreProvider', () => {
         }
     });
 
-    test('runs and reports a manual restore when auto-restore is disabled', async () => {
+    test('runs and reports a manual .NET restore when auto-restore is disabled', async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-manual-restore-'));
         const folder = createWorkspaceFolder(directory);
-        const configUri = vscode.Uri.file(path.join(folder.uri.fsPath, 'aspire.config.json'));
-        fs.writeFileSync(configUri.fsPath, '{}');
+        const configUri = createDotNetConfig(directory, 'AppHost.csproj');
         sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
         sandbox.stub(vscode.workspace, 'getConfiguration').returns({
             get: <T>() => false as T,
@@ -393,6 +392,63 @@ suite('AspirePackageRestoreProvider', () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-dotnet-stale-marker-restore-'));
         const folder = createWorkspaceFolder(directory);
         const configUri = createDotNetConfig(directory, 'AppHost.csproj', '13.0.0-old');
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
+        sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+            get: <T>() => true as T,
+        } as unknown as vscode.WorkspaceConfiguration);
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider(
+            { getAspireCliExecutablePath } as unknown as AspireTerminalProvider,
+            createConfigInfoProvider('supported', '13.6.0'));
+        const spawnStub = sandbox.stub(cliProcessModule, 'spawnCliProcess');
+
+        try {
+            await (provider as any)._restoreIfNeeded(configUri, false);
+
+            assert.ok(spawnStub.notCalled);
+            assert.ok(getAspireCliExecutablePath.notCalled);
+        } finally {
+            provider.dispose();
+            fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+        }
+    });
+
+    test('skips automatic restore when a .NET AppHost path conflicts with guest language metadata', async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-dotnet-conflicting-language-restore-'));
+        const folder = createWorkspaceFolder(directory);
+        const configUri = createDotNetConfig(directory, 'AppHost.csproj', '13.0.0-old', 'typescript/nodejs');
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
+        sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+            get: <T>() => true as T,
+        } as unknown as vscode.WorkspaceConfiguration);
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider(
+            { getAspireCliExecutablePath } as unknown as AspireTerminalProvider,
+            createConfigInfoProvider('supported', '13.6.0'));
+        const childProcess = createChildProcess();
+        const spawnStub = sandbox.stub(cliProcessModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            queueMicrotask(() => {
+                options?.exitCallback?.(0);
+                childProcess.emit('close', 0);
+            });
+            return childProcess as unknown as ChildProcessWithoutNullStreams;
+        });
+
+        try {
+            await (provider as any)._restoreIfNeeded(configUri, false);
+
+            assert.ok(spawnStub.notCalled);
+            assert.ok(getAspireCliExecutablePath.notCalled);
+        } finally {
+            provider.dispose();
+            fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+        }
+    });
+
+    test('skips automatic restore when known guest path and language metadata conflict', async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-conflicting-guest-language-restore-'));
+        const folder = createWorkspaceFolder(directory);
+        const configUri = createGuestConfig(directory, '13.0.0-old', 'rust');
         sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
         sandbox.stub(vscode.workspace, 'getConfiguration').returns({
             get: <T>() => true as T,
@@ -757,12 +813,12 @@ async function waitForCondition(condition: () => boolean, message: string, timeo
     }
 }
 
-function createGuestConfig(directory: string, generatedVersion?: string | null): vscode.Uri {
+function createGuestConfig(directory: string, generatedVersion?: string | null, configuredLanguage = 'typescript/nodejs'): vscode.Uri {
     const configUri = vscode.Uri.file(path.join(directory, 'aspire.config.json'));
     fs.writeFileSync(configUri.fsPath, JSON.stringify({
         appHost: {
             path: 'apphost.mts',
-            language: 'typescript/nodejs',
+            language: configuredLanguage,
         },
     }));
 
@@ -777,9 +833,19 @@ function createGuestConfig(directory: string, generatedVersion?: string | null):
     return configUri;
 }
 
-function createDotNetConfig(directory: string, appHostFileName: string, generatedVersion?: string | null): vscode.Uri {
+function createDotNetConfig(
+    directory: string,
+    appHostFileName: string,
+    generatedVersion?: string | null,
+    configuredLanguage?: string,
+): vscode.Uri {
     const configUri = vscode.Uri.file(path.join(directory, 'aspire.config.json'));
-    fs.writeFileSync(configUri.fsPath, JSON.stringify({ appHost: { path: appHostFileName } }));
+    fs.writeFileSync(configUri.fsPath, JSON.stringify({
+        appHost: {
+            path: appHostFileName,
+            ...(configuredLanguage ? { language: configuredLanguage } : {}),
+        },
+    }));
 
     if (generatedVersion !== undefined) {
         const modulesDirectory = path.join(directory, '.aspire', 'modules');

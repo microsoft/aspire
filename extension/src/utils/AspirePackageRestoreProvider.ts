@@ -24,8 +24,10 @@ interface ResolvedRestoreCli {
     readonly cliPath: string;
 }
 
+type AutoRestoreAppHostLanguage = 'csharp' | 'typescript' | 'python' | 'go' | 'rust' | 'java';
+
 /**
- * Automatically restores existing generated modules for non-.NET AppHosts when they were produced
+ * Automatically restores existing generated modules for supported guest AppHosts when they were produced
  * by a different Aspire CLI version. Explicit restore commands retain the broader workspace-wide
  * behavior.
  */
@@ -234,8 +236,28 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         if (!appHost || (!configuredPath && !configuredLanguage)) {
             return undefined;
         }
-        if (configuredLanguage === 'csharp'
-            || (!configuredLanguage && classifyAppHostPath(configuredPath) === 'csharp')) {
+
+        const pathLanguage = classifyAutoRestoreAppHostPath(configuredPath);
+        const declaredLanguage = classifyAutoRestoreAppHostLanguage(configuredLanguage);
+        // aspire.config.json is user-editable, so the path and language can disagree. Treat either
+        // .NET signal as authoritative: accidentally restoring one .NET AppHost is substantially
+        // more expensive than deferring a malformed guest config to the explicit restore command.
+        if (pathLanguage === 'csharp' || declaredLanguage === 'csharp') {
+            return undefined;
+        }
+        if (configuredLanguage && !declaredLanguage) {
+            extensionLogOutputChannel.info(
+                `Skipping auto-restore for ${vscode.workspace.asRelativePath(uri)} because appHost.language '${configuredLanguage}' is not recognized.`);
+            return undefined;
+        }
+        if (pathLanguage && declaredLanguage && pathLanguage !== declaredLanguage) {
+            extensionLogOutputChannel.info(
+                `Skipping auto-restore for ${vscode.workspace.asRelativePath(uri)} because appHost.path identifies ${pathLanguage} but appHost.language identifies ${declaredLanguage}.`);
+            return undefined;
+        }
+        if (!pathLanguage && !declaredLanguage) {
+            extensionLogOutputChannel.info(
+                `Skipping auto-restore for ${vscode.workspace.asRelativePath(uri)} because its AppHost language cannot be determined safely.`);
             return undefined;
         }
 
@@ -474,6 +496,47 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
             d.dispose();
         }
         this._disposables.length = 0;
+    }
+}
+
+function classifyAutoRestoreAppHostPath(appHostPath: string | undefined): AutoRestoreAppHostLanguage | undefined {
+    const language = classifyAppHostPath(appHostPath);
+    if (language !== 'unknown') {
+        return language;
+    }
+
+    return path.extname(appHostPath ?? '').toLowerCase() === '.py'
+        ? 'python'
+        : path.extname(appHostPath ?? '').toLowerCase() === '.go'
+            ? 'go'
+            : undefined;
+}
+
+function classifyAutoRestoreAppHostLanguage(language: string | undefined): AutoRestoreAppHostLanguage | undefined {
+    const family = language?.trim().toLowerCase().split('/', 1)[0];
+    switch (family) {
+        case 'csharp':
+        case 'c#':
+        case 'fsharp':
+        case 'f#':
+        case 'visualbasic':
+        case 'visual basic':
+        case 'vb':
+            return 'csharp';
+        case 'typescript':
+        case 'javascript':
+            return 'typescript';
+        case 'python':
+            return 'python';
+        case 'go':
+        case 'golang':
+            return 'go';
+        case 'rust':
+            return 'rust';
+        case 'java':
+            return 'java';
+        default:
+            return undefined;
     }
 }
 
