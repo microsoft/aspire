@@ -1724,7 +1724,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var configSources = PrebuiltAppHostServer.ResolveNuGetConfigSources(
             restoreSources.PackageSourceMappings,
             ambientSources: []);
-        return await server.CreateRestoreOverlayAsync(restoreSources, configSources);
+        return await server.CreateRestoreOverlayAsync(restoreSources, configSources, disabledAmbientSourceKeys: []);
     }
 
     private static async Task<IReadOnlyList<string>?> ResolveAdditionalSourcesAsync(
@@ -2538,7 +2538,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
               <packageSources>
                 <add key="anonymousAlias" value="{{channelSource}}" />
                 <add key="private" value="{{channelSource}}" />
+                <add key="unrelated" value="https://example.com/unrelated" />
               </packageSources>
+              <disabledPackageSources>
+                <add key="anonymousAlias" value="true" />
+                <add key="private" value="true" />
+                <add key="unrelated" value="true" />
+              </disabledPackageSources>
               <packageSourceCredentials>
                 <private>
                   <add key="Username" value="user" />
@@ -2586,8 +2592,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             AttemptCallback = (_, _) => (0, CreateNuGetSettingsResponse(
                 [ambientConfigPath],
                 [
-                    ("anonymousAlias", channelSource, true),
-                    ("private", channelSource, true)
+                    ("anonymousAlias", channelSource, false),
+                    ("private", channelSource, false),
+                    ("unrelated", "https://example.com/unrelated", false)
                 ]))
         };
         var nugetService = new BundleNuGetService(
@@ -2661,7 +2668,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.NotNull(generatedPolicyOverlay);
             Assert.Empty(generatedPolicyOverlay.Descendants("packageSources"));
             Assert.Equal(["Aspire*"], GetPackagePatternsForKey(generatedPolicyOverlay, "anonymousAlias"));
-            Assert.Equal(["Aspire*"], GetPackagePatternsForKey(generatedPolicyOverlay, "private"));
+            Assert.Empty(GetPackagePatternsForKey(generatedPolicyOverlay, "private"));
+            var disabledPackageSources = Assert.Single(generatedPolicyOverlay.Descendants("disabledPackageSources"));
+            Assert.NotNull(disabledPackageSources.Element("clear"));
+            Assert.Equal(
+                ["private", "unrelated"],
+                disabledPackageSources
+                    .Elements("add")
+                    .Select(static source => source.Attribute("key")!.Value));
             Assert.NotNull(XDocument.Load(ambientConfigPath).Descendants("packageSourceCredentials").ElementAtOrDefault(0));
 
             // Aspire package versions remain in their original (non-pinned) form when no override

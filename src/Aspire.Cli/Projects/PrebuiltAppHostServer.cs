@@ -310,9 +310,14 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false));
         var settings = await _nugetService.GetNuGetSettingsAsync(_workingDirectory, cancellationToken).ConfigureAwait(false);
         var configSources = ResolveNuGetConfigSources(restoreSources.PackageSourceMappings, settings.Sources);
+        var disabledAmbientSourceKeys = settings.Sources
+            .Where(static source => !source.IsEnabled)
+            .Select(static source => source.Name)
+            .ToArray();
         using var restoreOverlay = await CreateRestoreOverlayAsync(
             restoreSources,
-            configSources).ConfigureAwait(false);
+            configSources,
+            disabledAmbientSourceKeys).ConfigureAwait(false);
         var sources = GetNuGetSources(restoreSources)?.ToArray();
         IReadOnlyList<string> configPaths = restoreOverlay is null
             ? settings.ConfigPaths
@@ -893,6 +898,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
         var settings = await _nugetService.GetNuGetSettingsAsync(restoreDir, cancellationToken).ConfigureAwait(false);
         var configSources = ResolveNuGetConfigSources(restoreSources.PackageSourceMappings, settings.Sources);
+        var disabledAmbientSourceKeys = settings.Sources
+            .Where(static source => !source.IsEnabled)
+            .Select(static source => source.Name)
+            .ToArray();
         if (restoreSources.PackageSourceMappings is null)
         {
             restoreOverlayFile = null;
@@ -903,7 +912,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 restoreSources.PackageSourceMappings,
                 restoreOverlayFile!.FullName,
                 globalPackagesFolder,
-                configSources).ConfigureAwait(false);
+                configSources,
+                disabledAmbientSourceKeys).ConfigureAwait(false);
         }
 
         var rootAdditionalSources = restoreSources.PackageSourceMappings is null
@@ -1234,7 +1244,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
     internal async Task<TemporaryNuGetConfig?> CreateRestoreOverlayAsync(
         IntegrationRestoreSources restoreSources,
-        IReadOnlyList<NuGetConfigSource> sources)
+        IReadOnlyList<NuGetConfigSource> sources,
+        IReadOnlyList<string> disabledAmbientSourceKeys)
     {
         if (restoreSources.PackageSourceMappings is null)
         {
@@ -1244,7 +1255,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
             restoreSources.PackageSourceMappings,
             restoreSources.ConfigureGlobalPackagesFolder,
-            sources: sources).ConfigureAwait(false);
+            sources: sources,
+            disabledAmbientSourceKeys: disabledAmbientSourceKeys).ConfigureAwait(false);
         return await ConfigureGlobalPackagesFolderAsync(config, restoreSources).ConfigureAwait(false);
     }
 

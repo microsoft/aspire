@@ -130,7 +130,11 @@ public class TemporaryNuGetConfigTests
         var document = XDocument.Load(config.ConfigFile.FullName);
 
         Assert.Empty(document.Descendants("packageSources"));
-        Assert.NotNull(document.Descendants("disabledPackageSources").Single().Element("clear"));
+        var disabledPackageSources = Assert.Single(document.Descendants("disabledPackageSources"));
+        Assert.NotNull(disabledPackageSources.Element("clear"));
+        var disabledSource = Assert.Single(disabledPackageSources.Elements("add"));
+        Assert.Equal("disabledAlias", disabledSource.Attribute("key")?.Value);
+        Assert.Equal("true", disabledSource.Attribute("value")?.Value);
         Assert.Equal(
             ["private", source],
             document.Descendants("packageSourceMapping")
@@ -158,6 +162,51 @@ public class TemporaryNuGetConfigTests
             document.Descendants("packageSourceMapping")
                 .Elements("packageSource")
                 .Select(static mapping => mapping.Attribute("key")!.Value));
+    }
+
+    [Fact]
+    public async Task CreateRestoreOverlayAsync_PreservesOtherDisabledAmbientSources()
+    {
+        const string selectedSource = "https://example.com/aspire";
+        const string fallbackSource = "https://example.com/fallback";
+        using var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+        [
+            new PackageMapping("Aspire*", selectedSource),
+            new PackageMapping(PackageMapping.AllPackages, fallbackSource)
+        ],
+            sources:
+            [
+                new NuGetConfigSource("private", selectedSource, IsAmbient: true, IsEnabled: false),
+                new NuGetConfigSource("selectedDisabledAlias", selectedSource, IsAmbient: true, IsEnabled: false),
+                new NuGetConfigSource("fallbackDisabledAlias", fallbackSource, IsAmbient: true, IsEnabled: false),
+                new NuGetConfigSource("fallback", fallbackSource, IsAmbient: true, IsEnabled: true)
+            ],
+            disabledAmbientSourceKeys:
+            [
+                "private",
+                "selectedDisabledAlias",
+                "fallbackDisabledAlias",
+                "unrelated"
+            ]);
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+
+        var disabledPackageSources = Assert.Single(document.Descendants("disabledPackageSources"));
+        Assert.NotNull(disabledPackageSources.Element("clear"));
+        Assert.Equal(
+            ["selectedDisabledAlias", "fallbackDisabledAlias", "unrelated"],
+            disabledPackageSources
+                .Elements("add")
+                .Select(static source => source.Attribute("key")!.Value));
+        Assert.All(
+            disabledPackageSources.Elements("add"),
+            static source => Assert.Equal("true", source.Attribute("value")?.Value));
+        Assert.Equal(
+            ["private", selectedSource],
+            document.Descendants("packageSourceMapping")
+                .Elements("packageSource")
+                .Where(source => source.Element("package")?.Attribute("pattern")?.Value == "Aspire*")
+                .Select(static source => source.Attribute("key")!.Value));
     }
 
     [Fact]

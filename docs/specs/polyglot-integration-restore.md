@@ -62,7 +62,7 @@ The overlay can contain:
 - A complete `packageSourceMapping` policy with `<clear />`.
 - Mapping entries for both the NuGet source key and the effective source location when they differ.
 - A controlled global packages folder.
-- A `disabledPackageSources` clear when every ambient alias for an explicitly selected source is disabled. Only one selected alias is mapped after the clear; disabled aliases remain excluded when an enabled alias is available.
+- A `disabledPackageSources` override when every ambient alias for an explicitly selected source is disabled. The overlay clears inherited disabled state, enables one selected alias, and re-emits the other disabled ambient aliases.
 
 Mapping both identities supports the generated root regardless of how NuGet identifies a source:
 
