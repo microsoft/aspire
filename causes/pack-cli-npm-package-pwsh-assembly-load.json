@@ -1,0 +1,16 @@
+{
+  "id": "pack-cli-npm-package-pwsh-assembly-load",
+  "type": "infra-failure",
+  "title": "PowerShell script pack-cli-npm-package.ps1 fails with FileLoadException on System.Collections.Specialized (Linux)",
+  "error_pattern": "Infrastructure.Tests.CommandException : Expected 0 exit code but got 134: pwsh ... eng/scripts/pack-cli-npm-package.ps1 ... Unhandled exception. System.IO.FileLoadException: The given assembly name was invalid. File name: 'System.Collections.Specialized, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3' at System.Reflection.AssemblyNameParser.Parse",
+  "occurrences": [
+    {
+      "run_id": 34279845105,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34279845105",
+      "job": "Tests / No-package tests (regular, Infrastructure.Tests, ...) / Infrastructure (ubuntu-latest)",
+      "pr_number": 19990,
+      "observed_at": "2026-09-08T21:51:36Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19992"
+}

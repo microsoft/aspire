@@ -1,0 +1,55 @@
+{
+  "run_id": 34279845105,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34279845105",
+  "analyzed_at": "2026-09-08T21:51:36Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19990,
+    "title": "Skip stale PRs in scheduled Copilot review scans",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-organization-funded-copilot-reviews",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19990"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Infrastructure.Tests, ...) / Infrastructure (ubuntu-latest)",
+      "id": 102242406144,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34279845105/job/102242406144",
+      "classification": "flaky-test",
+      "reason": "PR only changes a GitHub Actions workflow, docs, and a workflow-script harness test, none of which touch pack-cli-npm-package.ps1 or CLI packaging code. Failure is a PowerShell FileLoadException loading System.Collections.Specialized, an environment/runtime issue unrelated to PR changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, ...) / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 102242433780,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34279845105/job/102242433780",
+      "classification": "flaky-test",
+      "reason": "PR does not touch Aspire.Hosting.Azure.Kubernetes.Tests or AKS pipeline code. Matches known recurring flaky test (issue #19982) that times out intermittently on windows-latest.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Infrastructure.Tests.NpmCliPackageTests.PackScriptGeneratesRidPackageMetadataAndReadme(expectation: RidPackageExpectation { Rid = linux-x64, BinaryName = aspire, Os = System.String[], Cpu = System.String[], Libc = System.String[] })",
+      "job": "Infrastructure (ubuntu-latest)",
+      "error": "Infrastructure.Tests.CommandException :  Expected 0 exit code but got 134: pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"/home/runner/work/aspire/aspire/eng/scripts/pack-cli-npm-package.ps1\" -Rid linux-x64 -Version 13.4.0-test.1 ... Unhandled exception. System.IO.FileLoadException: The given assembly name was invalid. File name: 'System.Collections.Specialized, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3'",
+      "stack_trace": "at Infrastructure.Tests.CommandResult.EnsureExitCode(Int32 expectedExitCode, String messagePrefix) in /_/tests/Infrastructure.Tests/PowerShellScripts/PowerShellCommand.cs:line 281\n   at Infrastructure.Tests.CommandResult.EnsureSuccessful(String messagePrefix) in /_/tests/Infrastructure.Tests/PowerShellScripts/PowerShellCommand.cs:line 270\n   at Infrastructure.Tests.NpmCliPackageTests.PackCliNpmPackageAsync(String rid) in /_/tests/Infrastructure.Tests/Pipelines/NpmCliPackageTests.cs:line 660",
+      "classification": "flaky",
+      "reason": "PR changes are limited to a workflow YAML, docs, and workflow-script harness test files; none relate to the npm CLI packaging script. Failure is a pwsh runtime assembly-load crash (exit code 134), an environment issue unrelated to the PR."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent",
+      "job": "Hosting.Azure.Kubernetes (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 565",
+      "classification": "flaky",
+      "reason": "Matches known prior cause 'hosting-azure-kubernetes-destroypipeline-timeout' (issue #19982). PR does not modify AKS-related code."
+    }
+  ],
+  "causes": ["pack-cli-npm-package-pwsh-assembly-load", "hosting-azure-kubernetes-destroypipeline-timeout"]
+}
