@@ -165,6 +165,38 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
         });
     }
 
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task PasswordField_NativeRevealControl_IsSuppressedInsideShadowRoot()
+    {
+        await RunTestAsync(async page =>
+        {
+            await GoToResourcesAndWaitAsync(page);
+
+            await page.EvaluateAsync(
+                """
+                async () => {
+                    const field = document.createElement('fluent-text-field');
+                    field.id = 'password-reveal-test-field';
+                    field.type = 'password';
+                    document.body.appendChild(field);
+                    await customElements.whenDefined('fluent-text-field');
+
+                    const module = await import('./Components/Dialogs/InteractionsInputDialog.razor.js');
+                    module.suppressNativePasswordReveal(field.id);
+                }
+                """);
+
+            var suppressionRule = await page.Locator("#password-reveal-test-field").EvaluateAsync<string?>(
+                """
+                field => field.shadowRoot
+                    ?.querySelector('#aspire-suppress-native-password-reveal')
+                    ?.textContent
+                """);
+            Assert.Equal("input::-ms-reveal { display: none; }", suppressionRule);
+        });
+    }
+
     private static async Task GoToResourcesAndWaitAsync(IPage page)
     {
         await page.GotoAsync("/");

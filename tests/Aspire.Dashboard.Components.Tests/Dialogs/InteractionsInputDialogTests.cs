@@ -71,6 +71,27 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public async Task Render_SecretInput_SuppressesNativeRevealAndRendersOneCustomRevealButton()
+    {
+        var cut = SetUpDialog(out var dialogService);
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(CreateSecretTextViewModel(), new DialogParameters
+        {
+            Title = "Credentials"
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var passwordField = cut.Find("fluent-text-field[type='password']");
+            var suppressNativeRevealInvocation = Assert.Single(
+                JSInterop.Invocations,
+                invocation => invocation.Identifier == "suppressNativePasswordReveal");
+            Assert.Equal(passwordField.Id, Assert.IsType<string>(Assert.Single(suppressNativeRevealInvocation.Arguments)));
+            Assert.Single(cut.FindAll(".secret-text-toggle-button"));
+        });
+    }
+
     [Theory]
     [InlineData(InteractionHelpers.MaxFileCount, true)]
     [InlineData(InteractionHelpers.MaxFileCount + 1, false)]
@@ -130,6 +151,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentInputFile(this);
 
         var module = JSInterop.SetupModule("./Components/Dialogs/InteractionsInputDialog.razor.js");
+        module.SetupVoid("suppressNativePasswordReveal", _ => true);
         module.SetupVoid("togglePasswordVisibility", _ => true);
 
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);

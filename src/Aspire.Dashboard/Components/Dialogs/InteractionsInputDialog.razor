@@ -69,13 +69,16 @@
                                                  Disabled="input.ViewModel.InputDisabled"
                                                  aria-describedby="@input.DescriptionId"
                                                  Maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)">
-                                    <FluentButton Appearance="Appearance.Stealth"
-                                                  Title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
-                                                  OnClick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
-                                                  class="secret-text-toggle-button"
-                                                  slot="end">
-                                        <FluentIcon Value="@GetSecretTextIcon(input.ViewModel)" />
-                                    </FluentButton>
+                                    @if (_initializedSecretTextInputs.Contains(input.ViewModel))
+                                    {
+                                        <FluentButton Appearance="Appearance.Stealth"
+                                                      Title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
+                                                      OnClick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
+                                                      class="secret-text-toggle-button"
+                                                      slot="end">
+                                            <FluentIcon Value="@GetSecretTextIcon(input.ViewModel)" />
+                                        </FluentButton>
+                                    }
                                 </FluentTextField>
                             </InteractionInputField>
                             break;
