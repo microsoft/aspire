@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001
+
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.TestUtilities;
 
@@ -83,13 +86,13 @@ public class RadCliDetectionTests
     }
 
     [Fact]
-    public void DeployStep_RequiredByDeployWellKnownStep()
+    public void DeployStep_RequiredByDeployFinalizeWellKnownStep()
     {
         var environment = new RadiusEnvironmentResource("testenv");
         var step = new RadiusDeploymentPipelineStep(environment);
 
         var pipelineStep = step.CreatePipelineStep();
 
-        Assert.Contains("deploy", pipelineStep.RequiredBySteps);
+        Assert.Contains(WellKnownPipelineSteps.DeployFinalize, pipelineStep.RequiredBySteps);
     }
 }

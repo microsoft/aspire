@@ -12,9 +12,15 @@ namespace Aspire.Hosting.Pipelines;
 public static class WellKnownPipelineSteps
 {
     /// <summary>
-    /// Aggregation step for all publish operations.
-    /// All publish steps should be required by this step.
+    /// The final aggregate step for the publish command.
     /// </summary>
+    /// <remarks>
+    /// Normal publish work should be required by <see cref="PublishFinalize"/>.
+    /// Post-finalize hooks should depend on <see cref="PublishFinalize"/> and be required by this step.
+    /// Existing integrations may continue to attach work directly to this step; those legacy attachments
+    /// remain direct aggregate dependencies. This step completes after the finalizer, post-finalize hooks,
+    /// and legacy direct attachments.
+    /// </remarks>
     [AspireValue("WellKnownPipelineSteps")]
     public const string Publish = "publish";
 
@@ -25,9 +31,25 @@ public static class WellKnownPipelineSteps
     public const string PublishPrereq = "publish-prereq";
 
     /// <summary>
-    /// Aggregation step for all deploy operations.
-    /// All deploy steps should be required by this step.
+    /// The synchronization step that runs after the publish prerequisite and all normal publish operations.
     /// </summary>
+    /// <remarks>
+    /// Normal publish work should be required by this step. The <see cref="Publish"/> aggregate depends on
+    /// this step so post-finalize hooks can run after normal work and before final command completion.
+    /// </remarks>
+    [AspireValue("WellKnownPipelineSteps")]
+    public const string PublishFinalize = "publish-finalize";
+
+    /// <summary>
+    /// The final aggregate step for the deploy command.
+    /// </summary>
+    /// <remarks>
+    /// Normal deploy work should be required by <see cref="DeployFinalize"/>.
+    /// Post-finalize hooks should depend on <see cref="DeployFinalize"/> and be required by this step.
+    /// Existing integrations may continue to attach work directly to this step; those legacy attachments
+    /// remain direct aggregate dependencies. This step completes after the finalizer, post-finalize hooks,
+    /// and legacy direct attachments.
+    /// </remarks>
     [AspireValue("WellKnownPipelineSteps")]
     public const string Deploy = "deploy";
 
@@ -36,6 +58,16 @@ public static class WellKnownPipelineSteps
     /// </summary>
     [AspireValue("WellKnownPipelineSteps")]
     public const string DeployPrereq = "deploy-prereq";
+
+    /// <summary>
+    /// The synchronization step that runs after the deploy prerequisite and all normal deploy operations.
+    /// </summary>
+    /// <remarks>
+    /// Normal deploy work should be required by this step. The <see cref="Deploy"/> aggregate depends on
+    /// this step so post-finalize hooks can run after normal work and before final command completion.
+    /// </remarks>
+    [AspireValue("WellKnownPipelineSteps")]
+    public const string DeployFinalize = "deploy-finalize";
 
     /// <summary>
     /// The step that prompts for parameter values before build, publish, or deployment operations.

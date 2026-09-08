@@ -26,7 +26,7 @@ public class EFMigrationPipelineTests
 
         var generateStep = Assert.Single(steps);
         Assert.Equal("mymigrations-generate-migration-bundle", generateStep.Name);
-        Assert.Contains(WellKnownPipelineSteps.Publish, generateStep.RequiredBySteps);
+        Assert.Contains(WellKnownPipelineSteps.PublishFinalize, generateStep.RequiredBySteps);
         Assert.DoesNotContain(WellKnownPipelineSteps.Build, generateStep.RequiredBySteps);
         Assert.Empty(generateStep.DependsOnSteps);
     }
@@ -43,7 +43,7 @@ public class EFMigrationPipelineTests
 
         var scriptStep = Assert.Single(steps);
         Assert.Equal("mymigrations-generate-migration-script", scriptStep.Name);
-        Assert.Contains(WellKnownPipelineSteps.Publish, scriptStep.RequiredBySteps);
+        Assert.Contains(WellKnownPipelineSteps.PublishFinalize, scriptStep.RequiredBySteps);
     }
 
     [Fact]
@@ -723,7 +723,7 @@ public class EFMigrationPipelineTests
         // step are siblings of the Build aggregation step, so without a direct edge they run in
         // parallel and the image build reads a half-written bundle from the Docker build context.
         Assert.Contains($"build-{migrations.Resource.Name}", generateStep.RequiredBySteps);
-        Assert.Contains(WellKnownPipelineSteps.Publish, generateStep.RequiredBySteps);
+        Assert.Contains(WellKnownPipelineSteps.PublishFinalize, generateStep.RequiredBySteps);
     }
 
     [Fact]

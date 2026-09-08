@@ -69,7 +69,7 @@ internal static class AzureSandboxContainerDeployment
                 Description = $"Deploys compute resource '{resource.TargetResource.Name}' to ACA sandbox '{resource.Name}'.",
                 Action = context => DeployAsync(context, resource),
                 DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName, WellKnownPipelineSteps.DeployPrereq],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy],
+                RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize],
                 Tags = [WellKnownPipelineTags.DeployCompute],
                 Resource = resource
             },

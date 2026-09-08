@@ -82,7 +82,7 @@ public static class RadiusSecretStoreExtensions
             Name = $"validate-radius-app-scoped-store-{name}",
             Description = $"Ensures the application-scoped Radius secret store '{name}' has a Radius environment.",
             Action = Aspire.Hosting.Radius.Secrets.RadiusSecretStoreValidation.ValidateHasEnvironmentAsync,
-            RequiredBySteps = [WellKnownPipelineSteps.Publish, WellKnownPipelineSteps.Deploy],
+            RequiredBySteps = [WellKnownPipelineSteps.PublishFinalize, WellKnownPipelineSteps.DeployFinalize],
         }));
 
         return storeBuilder;

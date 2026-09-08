@@ -84,7 +84,7 @@ public class AzureCognitiveServicesProjectResource :
                 },
                 Resource = this,
                 DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize]
             };
             steps.Add(computeUrls);
             return steps;

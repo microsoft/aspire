@@ -67,7 +67,7 @@ public class AzureContainerAppResource : AzureProvisioningResource
                     }
                 },
                 Tags = ["print-summary"],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize]
             };
 
             var deployStep = new PipelineStep

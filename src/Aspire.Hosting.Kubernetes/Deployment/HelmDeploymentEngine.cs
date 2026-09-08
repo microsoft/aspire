@@ -167,7 +167,7 @@ internal static partial class HelmDeploymentEngine
             Action = ctx => HelmDeployAsync(ctx, environment)
         };
         helmDeployStep.DependsOn($"prepare-{environment.Name}");
-        helmDeployStep.RequiredBy(WellKnownPipelineSteps.Deploy);
+        helmDeployStep.RequiredBy(WellKnownPipelineSteps.DeployFinalize);
         steps.Add(helmDeployStep);
 
         // Step 3: Print deployment instructions (dashboard access, Helm commands)
@@ -179,7 +179,7 @@ internal static partial class HelmDeploymentEngine
             Action = ctx => PrintDeploymentInstructionsAsync(ctx, environment)
         };
         instructionsStep.DependsOn($"helm-deploy-{environment.Name}");
-        instructionsStep.RequiredBy(WellKnownPipelineSteps.Deploy);
+        instructionsStep.RequiredBy(WellKnownPipelineSteps.DeployFinalize);
         steps.Add(instructionsStep);
 
         // Step 4: Destroy confirmation + uninstall (used by aspire destroy)

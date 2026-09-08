@@ -1965,9 +1965,14 @@ pub mod well_known_pipeline_steps {
         serde_json::from_value::<String>(serde_json::json!("check-container-runtime"))
             .expect("generated exported value should deserialize")
     }
-    /// Aggregation step for all deploy operations. All deploy steps should be required by this step.
+    /// The final aggregate step for the deploy command.
     pub fn deploy() -> String {
         serde_json::from_value::<String>(serde_json::json!("deploy"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The synchronization step that runs after the deploy prerequisite and all normal deploy operations.
+    pub fn deploy_finalize() -> String {
+        serde_json::from_value::<String>(serde_json::json!("deploy-finalize"))
             .expect("generated exported value should deserialize")
     }
     /// The prerequisite step that runs before any deploy operations.
@@ -1995,9 +2000,14 @@ pub mod well_known_pipeline_steps {
         serde_json::from_value::<String>(serde_json::json!("process-parameters"))
             .expect("generated exported value should deserialize")
     }
-    /// Aggregation step for all publish operations. All publish steps should be required by this step.
+    /// The final aggregate step for the publish command.
     pub fn publish() -> String {
         serde_json::from_value::<String>(serde_json::json!("publish"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The synchronization step that runs after the publish prerequisite and all normal publish operations.
+    pub fn publish_finalize() -> String {
+        serde_json::from_value::<String>(serde_json::json!("publish-finalize"))
             .expect("generated exported value should deserialize")
     }
     /// The prerequisite step that runs before any publish operations.

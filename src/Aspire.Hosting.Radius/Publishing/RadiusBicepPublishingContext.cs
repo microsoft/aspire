@@ -43,7 +43,7 @@ internal sealed class RadiusBicepPublishingContext
             Description = $"Publish Radius environment '{_environment.Name}' as Bicep",
             Action = ExecuteAsync
         };
-        step.RequiredBy(WellKnownPipelineSteps.Publish);
+        step.RequiredBy(WellKnownPipelineSteps.PublishFinalize);
         return step;
     }
 

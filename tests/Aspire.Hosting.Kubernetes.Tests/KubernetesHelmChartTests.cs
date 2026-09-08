@@ -415,9 +415,9 @@ public class KubernetesHelmChartTests
         var installStep = Assert.Single(steps, s => s.Name == "helm-install-test");
         var uninstallStep = Assert.Single(steps, s => s.Name == "helm-uninstall-test");
 
-        // Install runs after the env's helm-deploy step and is required by the deploy aggregator.
+        // Install runs after the env's helm-deploy step and is required by the deploy finalizer.
         Assert.Contains($"helm-deploy-env", installStep.DependsOnSteps);
-        Assert.Contains(WellKnownPipelineSteps.Deploy, installStep.RequiredBySteps);
+        Assert.Contains(WellKnownPipelineSteps.DeployFinalize, installStep.RequiredBySteps);
 
         // Uninstall slots into the destroy pipeline.
         Assert.Contains(WellKnownPipelineSteps.DestroyPrereq, uninstallStep.DependsOnSteps);

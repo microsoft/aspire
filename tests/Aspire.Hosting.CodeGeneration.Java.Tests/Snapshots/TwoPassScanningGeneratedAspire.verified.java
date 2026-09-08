@@ -29716,8 +29716,11 @@ public final class WellKnownPipelineSteps {
     /** The step that checks whether the container runtime (e.g., Docker or Podman) is running. Build steps that need a container runtime should depend on this step. */
     public static final String CheckContainerRuntime = "check-container-runtime";
 
-    /** Aggregation step for all deploy operations. All deploy steps should be required by this step. */
+    /** The final aggregate step for the deploy command. */
     public static final String Deploy = "deploy";
+
+    /** The synchronization step that runs after the deploy prerequisite and all normal deploy operations. */
+    public static final String DeployFinalize = "deploy-finalize";
 
     /** The prerequisite step that runs before any deploy operations. */
     public static final String DeployPrereq = "deploy-prereq";
@@ -29734,8 +29737,11 @@ public final class WellKnownPipelineSteps {
     /** The step that prompts for parameter values before build, publish, or deployment operations. */
     public static final String ProcessParameters = "process-parameters";
 
-    /** Aggregation step for all publish operations. All publish steps should be required by this step. */
+    /** The final aggregate step for the publish command. */
     public static final String Publish = "publish";
+
+    /** The synchronization step that runs after the publish prerequisite and all normal publish operations. */
+    public static final String PublishFinalize = "publish-finalize";
 
     /** The prerequisite step that runs before any publish operations. */
     public static final String PublishPrereq = "publish-prereq";

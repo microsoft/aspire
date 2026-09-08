@@ -65,7 +65,7 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
                     ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
                 },
                 Tags = ["print-summary"],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize]
             };
 
             var deployStep = new PipelineStep

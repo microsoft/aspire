@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
-using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Publishing;
@@ -913,19 +912,16 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         builder.AddDockerComposeEnvironment("docker-compose");
 
         // ProjectResource triggers AsContainerImagePlaceholder, which creates a CapturedEnvironmentVariable
-        // with Source=ContainerImageReference and DefaultValue="project1:latest".
-        // PrepareAsync should call GetValueAsync() via the IValueProvider branch; with no registry
-        // configured in the test, GetValueAsync() returns null and the entry is written empty —
-        // not "project1:latest". If the IValueProvider branch were skipped, the static default would appear.
+        // with Source=ContainerImageReference and DefaultValue="project1:latest". PrepareAsync should resolve
+        // the IValueProvider. Because this directly targets preparation rather than deployment, DeployPrereq
+        // does not assign a command-specific image tag and the current image reference remains "project1:latest".
         builder.AddProject<TestProjectWithLaunchSettings>("project1");
 
         var app = builder.Build();
         app.Run();
 
         var envFileContent = await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production"));
-        await Verify(envFileContent, "env")
-            // The image tag includes the current time (e.g. "aspire-deploy-20260525182406"); scrub it so the snapshot is stable across runs.
-            .ScrubLinesWithReplace(line => Regex.Replace(line, @"aspire-deploy-\d{14}", "aspire-deploy-TIMESTAMP"));
+        await Verify(envFileContent, "env");
     }
 
     [Fact]

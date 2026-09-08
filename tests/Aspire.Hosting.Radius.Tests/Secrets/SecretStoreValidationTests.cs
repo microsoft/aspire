@@ -130,8 +130,8 @@ public class SecretStoreValidationTests : IDisposable
         })).ToList();
         var gate = Assert.Single(steps);
         Assert.Equal("validate-radius-app-scoped-store-appsecrets", gate.Name);
-        Assert.Contains("publish", gate.RequiredBySteps);
-        Assert.Contains("deploy", gate.RequiredBySteps);
+        Assert.Contains(WellKnownPipelineSteps.PublishFinalize, gate.RequiredBySteps);
+        Assert.Contains(WellKnownPipelineSteps.DeployFinalize, gate.RequiredBySteps);
     }
 
     [Fact]
