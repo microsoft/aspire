@@ -69,11 +69,16 @@ public sealed class LabelerPredictPullsWorkflowTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("Copilot")]
+    [InlineData("copilot[bot]")]
+    [InlineData("copilot-swe-agent")]
+    [InlineData("copilot-swe-agent[bot]")]
+    [InlineData("github-copilot[bot]")]
     [RequiresTools(["node"])]
-    public async Task UnassignedCopilotPullRequestGetsNeedsAssigneeLabel()
+    public async Task UnassignedCopilotPullRequestGetsNeedsAssigneeLabel(string author)
     {
-        var result = await RunScriptAsync(PullRequest(author: "Copilot"));
+        var result = await RunScriptAsync(PullRequest(author));
 
         Assert.Equal(["needs-assignee"], result.Labels);
         Assert.Equal(["pulls.get", "addLabels"], result.Calls);

@@ -63,6 +63,7 @@ jobs:
             const label = 'needs-assignee';
             const copilotAuthors = new Set([
               'copilot',
+              'copilot[bot]',
               'copilot-swe-agent',
               'copilot-swe-agent[bot]',
               'github-copilot[bot]',
