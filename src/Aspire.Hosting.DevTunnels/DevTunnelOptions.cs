@@ -8,6 +8,8 @@ namespace Aspire.Hosting.DevTunnels;
 /// </summary>
 public sealed class DevTunnelOptions
 {
+    private TimeSpan? _expiration;
+
     /// <summary>
     /// Optional description for the tunnel.
     /// </summary>
@@ -32,6 +34,37 @@ public sealed class DevTunnelOptions
     /// </remarks>
     public DevTunnelRegion? Region { get; set; }
 
+    /// <summary>
+    /// Gets or sets how long the tunnel can remain unused or unmodified before it expires.
+    /// </summary>
+    /// <remarks>
+    /// Specify a whole number of hours from one hour through 30 days, inclusive.
+    /// The value applies when creating a tunnel and when updating an existing tunnel.
+    /// When <see langword="null"/>, no expiration override is sent: new tunnels use the service default
+    /// and existing tunnels retain their configured expiration period.
+    /// This is an idle expiration period, not a maximum hosting duration or an access-token lifetime.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The value is outside the supported range or is not a whole number of hours.</exception>
+    public TimeSpan? Expiration
+    {
+        get => _expiration;
+        set
+        {
+            // The CLI accepts durations such as "4h" and "2d". Require whole hours so the
+            // requested period is representable without rounding.
+            // https://learn.microsoft.com/azure/developer/dev-tunnels/cli-commands#advanced-manage-dev-tunnels
+            if (value is { } expiration &&
+                (expiration < TimeSpan.FromHours(1) ||
+                 expiration > TimeSpan.FromDays(30) ||
+                 expiration.Ticks % TimeSpan.TicksPerHour != 0))
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Tunnel expiration must be a whole number of hours from 1 hour through 30 days.");
+            }
+
+            _expiration = value;
+        }
+    }
+
     internal string RegionCode =>
         Region switch
         {
@@ -52,7 +85,7 @@ public sealed class DevTunnelOptions
             _ => throw new ArgumentException("Invalid region specified", nameof(Region)),
         };
 
-    internal string ToLoggerString() => $"{{ Description={Description}, AllowAnonymous={AllowAnonymous}, Labels=[{string.Join(", ", Labels ?? [])}], Region={Region} }}";
+    internal string ToLoggerString() => $"{{ Description={Description}, AllowAnonymous={AllowAnonymous}, Labels=[{string.Join(", ", Labels ?? [])}], Region={Region}, Expiration={Expiration} }}";
 }
 
 /// <summary>
