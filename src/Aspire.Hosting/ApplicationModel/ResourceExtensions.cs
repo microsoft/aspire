@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
@@ -862,14 +863,14 @@ public static class ResourceExtensions
 
                 // Check whether the project views this endpoint as Default (for its scheme).
                 // If so, we don't specify the target port, as it will get one from the deployment tool.
-                (ProjectResource, string uriScheme, null, _) when IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme) => ResolvedPort.None(),
+                (IDotnetProgramResource, string uriScheme, null, _) when IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme) => ResolvedPort.None(),
 
                 // Allocate a dynamic port
                 _ => ResolvedPort.Allocated(portAllocator.AllocatePort())
             };
 
-            // Track HTTP schemes encountered for ProjectResources
-            if (resource is ProjectResource && IsHttpScheme(endpoint.UriScheme))
+            // Track HTTP schemes encountered for .NET program resources.
+            if (resource is IDotnetProgramResource && IsHttpScheme(endpoint.UriScheme))
             {
                 httpSchemesEncountered.Add(endpoint.UriScheme);
             }
@@ -1006,7 +1007,8 @@ public static class ResourceExtensions
             return false;
         }
 
-        return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
+        return resource.SupportsDotnetProgramPublishing() ||
+            resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>

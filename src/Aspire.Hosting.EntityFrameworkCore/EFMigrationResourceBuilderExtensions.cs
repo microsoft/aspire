@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is experimental; used to wire migration-bundle pipeline steps.
+#pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
@@ -272,7 +273,7 @@ public static class EFMigrationResourceBuilderExtensions
     [AspireExport("withMigrationsProject")]
     internal static IResourceBuilder<EFMigrationResource> WithMigrationsProjectForPolyglot(
         this IResourceBuilder<EFMigrationResource> builder,
-        [AspireUnion(typeof(string), typeof(IResourceBuilder<ProjectResource>))] object? migrationsProject = null)
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<IDotnetProgramResource>))] object? migrationsProject = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -280,7 +281,7 @@ public static class EFMigrationResourceBuilderExtensions
         {
             null => builder,
             string projectPath => builder.WithMigrationsProject(projectPath),
-            IResourceBuilder<ProjectResource> projectBuilder => builder.WithMigrationsProject(projectBuilder.Resource.GetProjectMetadata().ProjectPath),
+            IResourceBuilder<IDotnetProgramResource> projectBuilder => builder.WithMigrationsProject(projectBuilder.Resource.GetProjectMetadata().ProjectPath),
             _ => throw new ArgumentException("Migrations project must be omitted, a project path string, or a project resource builder.", nameof(migrationsProject))
         };
     }

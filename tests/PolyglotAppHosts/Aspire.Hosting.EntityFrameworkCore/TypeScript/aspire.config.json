@@ -15,6 +15,7 @@
     }
   },
   "packages": {
-    "Aspire.Hosting.EntityFrameworkCore": ""
+    "Aspire.Hosting.EntityFrameworkCore": "",
+    "Aspire.Hosting.Dotnet": ""
   }
 }
