@@ -1,6 +1,20 @@
 @namespace Aspire.Dashboard.Components.Controls
 
 <div class="terminal-view">
+    <div hidden @ref="_selectionTemplateElement">
+        <div class="terminal-selection-actions">
+            <FluentButton Class="terminal-selection-copy"
+                          Appearance="Appearance.Neutral"
+                          Title="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
+                          aria-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
+                          data-copy-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
+                          data-copied-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopied)]">
+                <span data-copy-icon><FluentIcon Value="new Icons.Regular.Size16.Copy()" Color="Color.Neutral" /></span>
+                <span data-copied-icon hidden><FluentIcon Value="new Icons.Regular.Size16.Checkmark()" Color="Color.Neutral" /></span>
+            </FluentButton>
+            <span class="terminal-selection-status" role="status" aria-live="polite"></span>
+        </div>
+    </div>
     <div class="terminal-frame">
         <div class="terminal-titlebar">
             <span class="terminal-title">@(ResourceName ?? Loc[nameof(Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)].Value)</span>

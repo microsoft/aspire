@@ -108,6 +108,148 @@ function connectionFailed(state, generation, error) {
     scheduleReconnect(state, generation);
 }
 
+function inputFailed(state, error) {
+    console.warn("Dashboard terminal input failed.", error);
+    state.error = "input-failed";
+    notifyToolbar(state);
+}
+
+function selectionCopyPosition(rects, canvasSize, width, height) {
+    let anchor = null;
+    // Public selection rectangles are overlay-local CSS pixels, including
+    // font scaling. Clip before choosing the last visible selected line so
+    // scrollback and reverse/multiline selections anchor on visible text.
+    for (const rect of rects) {
+        const left = Math.max(0, rect.left);
+        const top = Math.max(0, rect.top);
+        const right = Math.min(canvasSize.width, rect.left + rect.width);
+        const bottom = Math.min(canvasSize.height, rect.top + rect.height);
+        if (right > left && bottom > top &&
+            (!anchor || bottom > anchor.bottom || (bottom === anchor.bottom && right > anchor.right))) {
+            anchor = { top, right, bottom };
+        }
+    }
+    if (!anchor) {
+        return null;
+    }
+    const gap = 6;
+    const below = anchor.bottom + gap;
+    const top = below + height <= canvasSize.height ? below : anchor.top - gap - height;
+    return {
+        left: Math.max(0, Math.min(anchor.right + gap, canvasSize.width - width)),
+        top: Math.max(0, Math.min(top, canvasSize.height - height)),
+    };
+}
+
+function createSelectionUI(state, current) {
+    let actions;
+    let button;
+    let copyIcon;
+    let copiedIcon;
+    let status;
+    let detail;
+    let copying = false;
+
+    function updateButtonState() {
+        const busy = copying || detail.selection.copying;
+        button.disabled = !detail.connected || detail.selection.status !== "valid" || detail.viewport.pending;
+        // Native disabling blurs a focused Fluent button. Use aria-disabled
+        // and the click guard while busy so keyboard copying retains focus.
+        button.setAttribute("aria-disabled", String(button.disabled || busy));
+        button.setAttribute("aria-busy", String(busy));
+    }
+
+    function resetFeedback() {
+        copyIcon.hidden = false;
+        copiedIcon.hidden = true;
+        button.title = button.dataset.copyLabel;
+        button.setAttribute("aria-label", button.dataset.copyLabel);
+        status.textContent = "";
+    }
+
+    return event => {
+        // Claim only the built-in Copy button, not highlights, clipboard state
+        // or Return to live. Keep controls inside the public overlay so clicks
+        // do not look like an outside click to the terminal's input handlers.
+        event.preventDefault();
+        if (!current() || event.detail.signal.aborted) {
+            return;
+        }
+        if (!actions) {
+            // Clone inert Fluent markup rather than moving Blazor-owned nodes.
+            // All live control events stay in JS to preserve clipboard user
+            // activation and avoid a server round-trip on selection updates.
+            actions = state.selectionTemplate.firstElementChild.cloneNode(true);
+            button = actions.querySelector("fluent-button");
+            button.removeAttribute("id");
+            copyIcon = actions.querySelector("[data-copy-icon]");
+            copiedIcon = actions.querySelector("[data-copied-icon]");
+            status = actions.querySelector("[role=status]");
+            const signal = event.detail.signal;
+            actions.addEventListener("pointerdown", e => {
+                // Retain terminal focus for pointer copying; keyboard users
+                // can still Tab to the Fluent button and activate it normally.
+                e.preventDefault();
+            }, { signal });
+            button.addEventListener("click", () => {
+                if (!current() || signal.aborted || button.disabled || copying || detail.selection.copying) {
+                    return;
+                }
+                const requestId = detail.selection.requestId;
+                resetFeedback();
+                copying = true;
+                updateButtonState();
+                void detail.runAction("copySelection").then(() => {
+                    if (!current() || signal.aborted || detail.selection.status !== "valid" ||
+                        detail.selection.requestId !== requestId) {
+                        return;
+                    }
+                    copyIcon.hidden = true;
+                    copiedIcon.hidden = false;
+                    button.title = button.dataset.copiedLabel;
+                    button.setAttribute("aria-label", button.dataset.copiedLabel);
+                    status.textContent = button.dataset.copiedLabel;
+                    if (state.error === "input-failed") {
+                        state.error = null;
+                        notifyToolbar(state);
+                    }
+                }).catch(error => {
+                    if (current() && !signal.aborted && detail.selection.requestId === requestId) {
+                        inputFailed(state, error);
+                    }
+                }).finally(() => {
+                    copying = false;
+                    if (current() && !signal.aborted) {
+                        updateButtonState();
+                    }
+                });
+            }, { signal });
+            signal.addEventListener("abort", () => actions.remove(), { once: true });
+            event.detail.overlay.append(actions);
+        }
+        if (!detail || detail.selection.requestId !== event.detail.selection.requestId ||
+            detail.selection.text !== event.detail.selection.text || event.detail.selection.status !== "valid") {
+            resetFeedback();
+        }
+        detail = event.detail;
+        const selectable = detail.connected && ["valid", "pending"].includes(detail.selection.status);
+        const hadFocus = actions.contains(document.activeElement);
+        // Reveal before measuring: hidden controls have zero layout dimensions.
+        actions.hidden = !selectable;
+        const position = selectable
+            ? selectionCopyPosition(detail.rects, detail.canvasSize, actions.offsetWidth, actions.offsetHeight)
+            : null;
+        actions.hidden = !position;
+        updateButtonState();
+        if (position) {
+            actions.style.left = `${position.left}px`;
+            actions.style.top = `${position.top}px`;
+        } else if (hadFocus) {
+            state.client?.focus();
+        }
+    };
+}
+
 function connectClient(state) {
     cancelReconnect(state);
     const generation = ++state.generation;
@@ -141,6 +283,7 @@ async function mountClient(state, generation, controller) {
             signal: controller.signal,
             label: state.label,
             sizing: state.sizing,
+            onSelectionUI: createSelectionUI(state, current),
             // Let the package fall back to WebGL2 for unavailable WebGPU
             // capabilities, including ordinary HTTP. Other initialization
             // errors and runtime GPU loss must still surface as failures.
@@ -183,9 +326,7 @@ async function mountClient(state, generation, controller) {
             },
             onInputError(error) {
                 if (current()) {
-                    console.warn("Dashboard terminal input failed.", error);
-                    state.error = "input-failed";
-                    notifyToolbar(state);
+                    inputFailed(state, error);
                 }
             },
         });
@@ -244,10 +385,10 @@ function changeSizing(state, sizing) {
     }
 }
 
-export function initTerminal(element, wsUrl, dotNetRef, label) {
+export function initTerminal(element, wsUrl, dotNetRef, label, selectionTemplate) {
     const id = nextId++;
     const state = {
-        id, element, wsUrl, dotNetRef, label,
+        id, element, wsUrl, dotNetRef, label, selectionTemplate,
         client: null,
         controller: null,
         disposed: false,

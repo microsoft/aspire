@@ -122,16 +122,63 @@ afterEach(async () => {
     globals.clear();
 });
 
+function selectionControl() {
+    const button = Object.assign(new EventTarget(), {
+        dataset: { copyLabel: "Localized copy", copiedLabel: "Localized copied" },
+        attributes: new Map([["id", "template-button"]]),
+        setAttribute(name, value) { this.attributes.set(name, value); },
+        removeAttribute(name) { this.attributes.delete(name); },
+    });
+    const copyIcon = {};
+    const copiedIcon = {};
+    const status = {};
+    const nodes = { "fluent-button": button, "[data-copy-icon]": copyIcon,
+        "[data-copied-icon]": copiedIcon, "[role=status]": status };
+    const actions = Object.assign(new EventTarget(), {
+        style: {}, offsetWidth: 32, offsetHeight: 32, removed: false,
+        querySelector(selector) { return nodes[selector]; },
+        contains(element) { return element === button; },
+        remove() { this.removed = true; },
+    });
+    return { actions, button, copyIcon, copiedIcon, status };
+}
+
+function selectionEvent(attempt, overrides = {}) {
+    const event = new Event("selectionui", { cancelable: true });
+    attempt.selectionChildren ??= [];
+    Object.defineProperty(event, "detail", { value: {
+        connected: true, readOnly: true,
+        rects: [{ left: 20, top: 10, width: 60, height: 20 }],
+        canvasSize: { width: 800, height: 600 },
+        viewport: { pending: false },
+        signal: attempt.options.signal,
+        overlay: { append: actions => attempt.selectionChildren.push(actions) },
+        runAction: () => Promise.resolve("authoritative selection"),
+        ...overrides,
+        selection: { status: "valid", requestId: 1, text: "authoritative selection", copying: false,
+            ...overrides.selection },
+    } });
+    assert.equal(attempt.options.onSelectionUI(event), undefined, "UI ownership must be synchronous");
+    assert.equal(event.defaultPrevented, true);
+    return event;
+}
+
 function mount({ visible = true, dotNetRef } = {}) {
     const element = {
         clientWidth: visible ? 800 : 0,
         clientHeight: visible ? 600 : 0,
         contains: value => value === element,
     };
+    const controls = [];
+    const template = { firstElementChild: { cloneNode() {
+        const control = selectionControl();
+        controls.push(control);
+        return control.actions;
+    } } };
     const id = terminal.initTerminal(element, "wss://dashboard/api/terminal?resource=app&replica=1",
-        dotNetRef ?? { invokeMethodAsync: (_name, snapshot) => snapshots.push(snapshot) }, "Localized terminal input");
+        dotNetRef ?? { invokeMethodAsync: (_name, snapshot) => snapshots.push(snapshot) }, "Localized terminal input", template);
     ids.push(id);
-    return { id, element };
+    return { id, element, controls };
 }
 
 async function settle() {
@@ -152,6 +199,165 @@ function retry() {
     callback();
     return delay;
 }
+
+for (const [name, rects, position] of [
+    ["single line", [{ left: 20, top: 10, width: 60, height: 20 }], { left: "86px", top: "36px" }],
+    ["last line rather than bounding box", [
+        { left: 10, top: 40, width: 30, height: 20 }, { left: 10, top: 20, width: 300, height: 20 },
+    ], { left: "46px", top: "66px" }],
+    ["bottom edge", [{ left: 100, top: 580, width: 100, height: 20 }], { left: "206px", top: "542px" }],
+    ["right edge", [{ left: 790, top: 10, width: 20, height: 20 }], { left: "768px", top: "36px" }],
+    ["clipped history", [
+        { left: 20, top: -30, width: 600, height: 20 },
+        { left: 20, top: -10, width: 60, height: 20 },
+        { left: 20, top: 610, width: 300, height: 20 },
+    ], { left: "86px", top: "16px" }],
+]) {
+    test(`selection copy control anchors to ${name}`, () => {
+        const { controls } = mount();
+        selectionEvent(attempts[0], { rects });
+        const { actions, button } = controls[0];
+        assert.deepEqual(actions.style, position);
+        assert.equal(actions.hidden, false);
+        assert.equal(button.disabled, false);
+        assert.equal(button.attributes.has("id"), false, "Cloning must not duplicate the template's id");
+        assert.deepEqual(attempts[0].selectionChildren, [actions]);
+    });
+}
+
+test("selection controls update in place and hide when no selected text is visible", async () => {
+    const { controls } = mount();
+    attempts[0].resolve();
+    await settle();
+    selectionEvent(attempts[0]);
+    const { actions, button } = controls[0];
+    selectionEvent(attempts[0], { selection: { status: "pending", text: null } });
+    assert.equal(actions.hidden, false);
+    assert.equal(button.disabled, true);
+    selectionEvent(attempts[0], { viewport: { pending: true } });
+    assert.equal(button.disabled, true);
+    for (const change of [
+        { selection: { status: "none" } },
+        { selection: { status: "invalidated" } },
+        { connected: false },
+        { rects: [{ left: 0, top: 700, width: 80, height: 20 }] },
+        { canvasSize: { width: 0, height: 0 } },
+    ]) {
+        selectionEvent(attempts[0], change);
+        assert.equal(actions.hidden, true);
+    }
+    selectionEvent(attempts[0]);
+    assert.equal(actions.hidden, false);
+    document.activeElement = button;
+    Object.defineProperty(actions, "hidden", {
+        set(value) {
+            if (value) {
+                document.activeElement = document.body;
+            }
+        },
+    });
+    selectionEvent(attempts[0], { selection: { status: "none" } });
+    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(controls.length, 1);
+});
+
+test("copy uses the public authoritative action without claiming primary or clearing selection", async () => {
+    const { controls } = mount();
+    attempts[0].resolve();
+    await settle();
+    const copy = Promise.withResolvers();
+    const calls = [];
+    selectionEvent(attempts[0], { runAction: (...args) => { calls.push(args); return copy.promise; } });
+    const { actions, button, copyIcon, copiedIcon, status } = controls[0];
+    const pointer = new Event("pointerdown", { cancelable: true });
+    actions.dispatchEvent(pointer);
+    assert.equal(pointer.defaultPrevented, true);
+    button.dispatchEvent(new Event("click"));
+    button.dispatchEvent(new Event("click"));
+    assert.deepEqual(calls, [["copySelection"]]);
+    assert.equal(button.disabled, false, "Busy copying must not blur keyboard focus");
+    assert.equal(button.attributes.get("aria-disabled"), "true");
+    assert.equal(button.attributes.get("aria-busy"), "true");
+    assert.equal(attempts[0].client.primaryRequests, 0);
+    copy.resolve("<untrusted selected text>");
+    await settle();
+    assert.equal(button.disabled, false);
+    assert.equal(button.attributes.get("aria-disabled"), "false");
+    assert.equal(button.attributes.get("aria-busy"), "false");
+    assert.equal(copyIcon.hidden, true);
+    assert.equal(copiedIcon.hidden, false);
+    assert.equal(button.attributes.get("aria-label"), "Localized copied");
+    assert.equal(status.textContent, "Localized copied");
+    selectionEvent(attempts[0], { selection: { requestId: 2 } });
+    assert.equal(copyIcon.hidden, false);
+    assert.equal(copiedIcon.hidden, true);
+    assert.equal(status.textContent, "");
+});
+
+test("selection controls clamp within a small canvas and follow updated CSS-pixel geometry", () => {
+    const { controls } = mount();
+    selectionEvent(attempts[0], {
+        rects: [{ left: 0, top: 20, width: 48, height: 20 }],
+        canvasSize: { width: 48, height: 40 },
+    });
+    assert.deepEqual(controls[0].actions.style, { left: "16px", top: "0px" });
+    selectionEvent(attempts[0], {
+        rects: [{ left: 0, top: 0, width: 145.25, height: 32.5 }],
+        canvasSize: { width: 1291.5, height: 775 },
+    });
+    assert.deepEqual(controls[0].actions.style, { left: "151.25px", top: "38.5px" });
+    assert.equal(controls.length, 1);
+});
+
+test("copy failures remain local and a successful retry clears the error", async () => {
+    const { id, controls } = mount();
+    attempts[0].resolve();
+    await settle();
+    selectionEvent(attempts[0], { runAction: () => Promise.reject(new Error("Clipboard denied")) });
+    controls[0].button.dispatchEvent(new Event("click"));
+    await settle();
+    assert.equal(terminal.getToolbarState(id).error, "input-failed");
+    assert.equal(controls[0].button.disabled, false);
+    assert.equal(attempts.length, 1);
+    assert.equal(timers.size, 0);
+    selectionEvent(attempts[0]);
+    controls[0].button.dispatchEvent(new Event("click"));
+    await settle();
+    assert.equal(terminal.getToolbarState(id).error, null);
+});
+
+test("changing selection while copying does not show stale feedback", async () => {
+    const { controls } = mount();
+    const copy = Promise.withResolvers();
+    selectionEvent(attempts[0], { runAction: () => copy.promise });
+    controls[0].button.dispatchEvent(new Event("click"));
+    selectionEvent(attempts[0], { selection: { requestId: 2, text: "new selection" } });
+    copy.resolve("old selection");
+    await settle();
+    assert.equal(controls[0].status.textContent, "");
+    assert.equal(controls[0].copiedIcon.hidden, true);
+});
+
+test("reconnect removes selection controls, listeners and stale clipboard callbacks", async () => {
+    const { id, controls } = mount();
+    const copy = Promise.withResolvers();
+    let calls = 0;
+    selectionEvent(attempts[0], { runAction: () => { calls++; return copy.promise; } });
+    controls[0].button.dispatchEvent(new Event("click"));
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=next");
+    assert.equal(controls[0].actions.removed, true);
+    controls[0].button.disabled = false;
+    controls[0].button.dispatchEvent(new Event("click"));
+    assert.equal(calls, 1);
+    copy.reject(new Error("Old connection"));
+    await settle();
+    assert.equal(terminal.getToolbarState(id).error, null);
+    selectionEvent(attempts[1]);
+    assert.equal(controls.length, 2);
+    assert.equal(controls[1].actions.removed, false);
+    terminal.disposeTerminal(id);
+    assert.equal(controls[1].actions.removed, true);
+});
 
 test("init returns an id while mount waits for its first connected frame", async () => {
     const { id } = mount();

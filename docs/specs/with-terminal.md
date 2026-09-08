@@ -135,6 +135,14 @@ Sixel and Kitty Graphics Protocol are rendered
 from server-authoritative state. Historical rendering is text-only. The
 dashboard's independent console-log view remains available.
 
+Text selections use a translucent Aspire accent highlight. A Fluent copy button
+appears below and to the right of the last visible selected line, clamping to the
+canvas edges and moving above the line when there is not enough room below.
+The dashboard uses Hex1b's public selection overlay and copy action; Hex1b retains
+ownership of authoritative selection text, history and clipboard handling.
+Copying preserves the selection and keyboard focus, with a checkmark and localized
+confirmation on success.
+
 HMP checkpoints retain uploaded Kitty image data even when an animation
 temporarily removes its placements. They also preserve partially received ANSI
 sequences, so late and reconnected viewers can resume placement-only updates

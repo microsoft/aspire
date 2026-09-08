@@ -15,6 +15,7 @@ namespace Aspire.Dashboard.Components.Controls;
 public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 {
     private ElementReference _terminalElement;
+    private ElementReference _selectionTemplateElement;
     private IJSObjectReference? _jsModule;
     private DotNetObjectReference<TerminalView>? _selfRef;
     private int _terminalId;
@@ -78,6 +79,9 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     [Inject]
     public required IStringLocalizer<Resources.ConsoleLogs> Loc { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Resources.ControlsStrings> ControlsLoc { get; init; }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -214,7 +218,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             _connectedGeneration = -1;
             _terminalId = await _jsModule.InvokeAsync<int>(
                 "initTerminal", _terminalElement, BuildWebSocketUrl(resourceName, replicaIndex), _selfRef,
-                Loc[nameof(Resources.ConsoleLogs.TerminalInputLabel)].Value);
+                Loc[nameof(Resources.ConsoleLogs.TerminalInputLabel)].Value, _selectionTemplateElement);
         }
         catch (JSDisconnectedException)
         {

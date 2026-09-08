@@ -22,6 +22,26 @@ public class TerminalViewTests : DashboardTestContext
     }
 
     [Fact]
+    public void SelectionTemplate_ProvidesLocalizedFluentCopyControl()
+    {
+        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
+        var initialization = module.Setup<int>("initTerminal", _ => true);
+        initialization.SetResult(1);
+        module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
+
+        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var button = cut.Find("div[hidden] .terminal-selection-copy");
+        Assert.Equal(Resources.ControlsStrings.GridValueCopyToClipboard, button.GetAttribute("aria-label"));
+        Assert.Equal(Resources.ControlsStrings.GridValueCopyToClipboard, button.GetAttribute("data-copy-label"));
+        Assert.Equal(Resources.ControlsStrings.GridValueCopied, button.GetAttribute("data-copied-label"));
+        Assert.Equal(2, button.QuerySelectorAll("svg").Length);
+        Assert.True(cut.Find("[data-copied-icon]").HasAttribute("hidden"));
+        Assert.Equal("polite", cut.Find(".terminal-selection-status").GetAttribute("aria-live"));
+        var invocation = Assert.Single(initialization.Invocations);
+        Assert.IsType<ElementReference>(invocation.Arguments[4]);
+    }
+
+    [Fact]
     public async Task TerminalChrome_DisplaysResourceAndCurrentDimensionsWithoutRemounting()
     {
         var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
@@ -86,7 +106,7 @@ public class TerminalViewTests : DashboardTestContext
         }));
 
         Assert.Equal(loc[resourceKey].Value, cut.Find("[role=alert]").TextContent);
-        Assert.Single(cut.FindAll("fluent-button"));
+        Assert.Single(cut.FindAll(".terminal-error fluent-button"));
     }
 
     [Fact]
