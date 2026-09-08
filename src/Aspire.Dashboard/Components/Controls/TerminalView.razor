@@ -6,13 +6,9 @@
             <FluentButton Class="terminal-selection-copy"
                           Appearance="Appearance.Neutral"
                           Title="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
-                          aria-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
-                          data-copy-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
-                          data-copied-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopied)]">
-                <span data-copy-icon><FluentIcon Value="new Icons.Regular.Size16.Copy()" Color="Color.Neutral" /></span>
-                <span data-copied-icon hidden><FluentIcon Value="new Icons.Regular.Size16.Checkmark()" Color="Color.Neutral" /></span>
+                          aria-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]">
+                <FluentIcon Value="new Icons.Regular.Size16.Copy()" Color="Color.Neutral" />
             </FluentButton>
-            <span class="terminal-selection-status" role="status" aria-live="polite"></span>
         </div>
     </div>
     <div class="terminal-frame">

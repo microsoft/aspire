@@ -32,11 +32,8 @@ public class TerminalViewTests : DashboardTestContext
         var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
         var button = cut.Find("div[hidden] .terminal-selection-copy");
         Assert.Equal(Resources.ControlsStrings.GridValueCopyToClipboard, button.GetAttribute("aria-label"));
-        Assert.Equal(Resources.ControlsStrings.GridValueCopyToClipboard, button.GetAttribute("data-copy-label"));
-        Assert.Equal(Resources.ControlsStrings.GridValueCopied, button.GetAttribute("data-copied-label"));
-        Assert.Equal(2, button.QuerySelectorAll("svg").Length);
-        Assert.True(cut.Find("[data-copied-icon]").HasAttribute("hidden"));
-        Assert.Equal("polite", cut.Find(".terminal-selection-status").GetAttribute("aria-live"));
+        Assert.Equal(Resources.ControlsStrings.GridValueCopyToClipboard, button.GetAttribute("title"));
+        Assert.Single(button.QuerySelectorAll("svg"));
         var invocation = Assert.Single(initialization.Invocations);
         Assert.IsType<ElementReference>(invocation.Arguments[4]);
     }

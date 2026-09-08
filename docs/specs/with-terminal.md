@@ -140,8 +140,9 @@ appears below and to the right of the last visible selected line, clamping to th
 canvas edges and moving above the line when there is not enough room below.
 The dashboard uses Hex1b's public selection overlay and copy action; Hex1b retains
 ownership of authoritative selection text, history and clipboard handling.
-Copying preserves the selection and keyboard focus, with a checkmark and localized
-confirmation on success.
+After a successful copy, the selection and copy overlay are cleared and focus
+returns to the terminal, ready for Cmd+V or Ctrl+V. A failed copy leaves the
+selection available for retry.
 
 HMP checkpoints retain uploaded Kitty image data even when an animation
 temporarily removes its placements. They also preserve partially received ANSI

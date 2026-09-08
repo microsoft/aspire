@@ -144,9 +144,6 @@ function selectionCopyPosition(rects, canvasSize, width, height) {
 function createSelectionUI(state, current) {
     let actions;
     let button;
-    let copyIcon;
-    let copiedIcon;
-    let status;
     let detail;
     let copying = false;
 
@@ -157,14 +154,6 @@ function createSelectionUI(state, current) {
         // and the click guard while busy so keyboard copying retains focus.
         button.setAttribute("aria-disabled", String(button.disabled || busy));
         button.setAttribute("aria-busy", String(busy));
-    }
-
-    function resetFeedback() {
-        copyIcon.hidden = false;
-        copiedIcon.hidden = true;
-        button.title = button.dataset.copyLabel;
-        button.setAttribute("aria-label", button.dataset.copyLabel);
-        status.textContent = "";
     }
 
     return event => {
@@ -182,9 +171,6 @@ function createSelectionUI(state, current) {
             actions = state.selectionTemplate.firstElementChild.cloneNode(true);
             button = actions.querySelector("fluent-button");
             button.removeAttribute("id");
-            copyIcon = actions.querySelector("[data-copy-icon]");
-            copiedIcon = actions.querySelector("[data-copied-icon]");
-            status = actions.querySelector("[role=status]");
             const signal = event.detail.signal;
             actions.addEventListener("pointerdown", e => {
                 // Retain terminal focus for pointer copying; keyboard users
@@ -196,7 +182,6 @@ function createSelectionUI(state, current) {
                     return;
                 }
                 const requestId = detail.selection.requestId;
-                resetFeedback();
                 copying = true;
                 updateButtonState();
                 void detail.runAction("copySelection").then(() => {
@@ -204,11 +189,11 @@ function createSelectionUI(state, current) {
                         detail.selection.requestId !== requestId) {
                         return;
                     }
-                    copyIcon.hidden = true;
-                    copiedIcon.hidden = false;
-                    button.title = button.dataset.copiedLabel;
-                    button.setAttribute("aria-label", button.dataset.copiedLabel);
-                    status.textContent = button.dataset.copiedLabel;
+                    // Dismiss only the copied selection, after clipboard success,
+                    // and return input focus so the next paste goes to the PTY.
+                    actions.hidden = true;
+                    state.client.clearSelection();
+                    state.client.focus();
                     if (state.error === "input-failed") {
                         state.error = null;
                         notifyToolbar(state);
@@ -226,10 +211,6 @@ function createSelectionUI(state, current) {
             }, { signal });
             signal.addEventListener("abort", () => actions.remove(), { once: true });
             event.detail.overlay.append(actions);
-        }
-        if (!detail || detail.selection.requestId !== event.detail.selection.requestId ||
-            detail.selection.text !== event.detail.selection.text || event.detail.selection.status !== "valid") {
-            resetFeedback();
         }
         detail = event.detail;
         const selectable = detail.connected && ["valid", "pending"].includes(detail.selection.status);

@@ -80,8 +80,7 @@
     pointer-events: auto;
 }
 
-.terminal-view ::deep .terminal-selection-actions[hidden],
-.terminal-view ::deep .terminal-selection-actions [hidden] {
+.terminal-view ::deep .terminal-selection-actions[hidden] {
     display: none;
 }
 
@@ -102,15 +101,6 @@
 .terminal-view ::deep .terminal-selection-copy[aria-busy="true"]::part(control) {
     opacity: 0.6;
     cursor: progress;
-}
-
-.terminal-view ::deep .terminal-selection-status {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
 }
 
 @media (forced-colors: active) {

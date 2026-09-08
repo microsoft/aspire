@@ -73,6 +73,7 @@ beforeEach(() => {
             sizingCalls: [],
             primaryRequests: 0,
             focusCalls: 0,
+            selectionClears: 0,
             selectionRefreshes: 0,
             disposed: false,
             dispose() { this.disposed = true; },
@@ -83,7 +84,8 @@ beforeEach(() => {
                 this.sizingCalls.push(sizing);
                 options.onSizingChange(sizing);
             },
-            focus() { this.focusCalls++; },
+            focus() { this.focusCalls++; document.activeElement = this.element; },
+            clearSelection() { this.selectionClears++; },
             refreshSelectionUI() { this.selectionRefreshes++; },
         };
         const attempt = {
@@ -124,23 +126,18 @@ afterEach(async () => {
 
 function selectionControl() {
     const button = Object.assign(new EventTarget(), {
-        dataset: { copyLabel: "Localized copy", copiedLabel: "Localized copied" },
         attributes: new Map([["id", "template-button"]]),
         setAttribute(name, value) { this.attributes.set(name, value); },
         removeAttribute(name) { this.attributes.delete(name); },
     });
-    const copyIcon = {};
-    const copiedIcon = {};
-    const status = {};
-    const nodes = { "fluent-button": button, "[data-copy-icon]": copyIcon,
-        "[data-copied-icon]": copiedIcon, "[role=status]": status };
+    const nodes = { "fluent-button": button };
     const actions = Object.assign(new EventTarget(), {
         style: {}, offsetWidth: 32, offsetHeight: 32, removed: false,
         querySelector(selector) { return nodes[selector]; },
         contains(element) { return element === button; },
         remove() { this.removed = true; },
     });
-    return { actions, button, copyIcon, copiedIcon, status };
+    return { actions, button };
 }
 
 function selectionEvent(attempt, overrides = {}) {
@@ -261,17 +258,18 @@ test("selection controls update in place and hide when no selected text is visib
     assert.equal(controls.length, 1);
 });
 
-test("copy uses the public authoritative action without claiming primary or clearing selection", async () => {
+test("copy dismisses the copied selection and returns focus for immediate terminal paste", async () => {
     const { controls } = mount();
     attempts[0].resolve();
     await settle();
     const copy = Promise.withResolvers();
     const calls = [];
     selectionEvent(attempts[0], { runAction: (...args) => { calls.push(args); return copy.promise; } });
-    const { actions, button, copyIcon, copiedIcon, status } = controls[0];
+    const { actions, button } = controls[0];
     const pointer = new Event("pointerdown", { cancelable: true });
     actions.dispatchEvent(pointer);
     assert.equal(pointer.defaultPrevented, true);
+    document.activeElement = button;
     button.dispatchEvent(new Event("click"));
     button.dispatchEvent(new Event("click"));
     assert.deepEqual(calls, [["copySelection"]]);
@@ -279,19 +277,20 @@ test("copy uses the public authoritative action without claiming primary or clea
     assert.equal(button.attributes.get("aria-disabled"), "true");
     assert.equal(button.attributes.get("aria-busy"), "true");
     assert.equal(attempts[0].client.primaryRequests, 0);
+    assert.equal(attempts[0].client.selectionClears, 0);
+    assert.equal(attempts[0].client.focusCalls, 0);
+    assert.equal(actions.hidden, false);
     copy.resolve("<untrusted selected text>");
     await settle();
     assert.equal(button.disabled, false);
     assert.equal(button.attributes.get("aria-disabled"), "false");
     assert.equal(button.attributes.get("aria-busy"), "false");
-    assert.equal(copyIcon.hidden, true);
-    assert.equal(copiedIcon.hidden, false);
-    assert.equal(button.attributes.get("aria-label"), "Localized copied");
-    assert.equal(status.textContent, "Localized copied");
+    assert.equal(actions.hidden, true);
+    assert.equal(attempts[0].client.selectionClears, 1);
+    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(document.activeElement, attempts[0].client.element);
     selectionEvent(attempts[0], { selection: { requestId: 2 } });
-    assert.equal(copyIcon.hidden, false);
-    assert.equal(copiedIcon.hidden, true);
-    assert.equal(status.textContent, "");
+    assert.equal(actions.hidden, false);
 });
 
 test("selection controls clamp within a small canvas and follow updated CSS-pixel geometry", () => {
@@ -318,15 +317,21 @@ test("copy failures remain local and a successful retry clears the error", async
     await settle();
     assert.equal(terminal.getToolbarState(id).error, "input-failed");
     assert.equal(controls[0].button.disabled, false);
+    assert.equal(controls[0].actions.hidden, false);
+    assert.equal(attempts[0].client.selectionClears, 0);
+    assert.equal(attempts[0].client.focusCalls, 0);
     assert.equal(attempts.length, 1);
     assert.equal(timers.size, 0);
     selectionEvent(attempts[0]);
     controls[0].button.dispatchEvent(new Event("click"));
     await settle();
     assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(controls[0].actions.hidden, true);
+    assert.equal(attempts[0].client.selectionClears, 1);
+    assert.equal(attempts[0].client.focusCalls, 1);
 });
 
-test("changing selection while copying does not show stale feedback", async () => {
+test("changing selection while copying does not dismiss the new selection or steal focus", async () => {
     const { controls } = mount();
     const copy = Promise.withResolvers();
     selectionEvent(attempts[0], { runAction: () => copy.promise });
@@ -334,8 +339,9 @@ test("changing selection while copying does not show stale feedback", async () =
     selectionEvent(attempts[0], { selection: { requestId: 2, text: "new selection" } });
     copy.resolve("old selection");
     await settle();
-    assert.equal(controls[0].status.textContent, "");
-    assert.equal(controls[0].copiedIcon.hidden, true);
+    assert.equal(controls[0].actions.hidden, false);
+    assert.equal(attempts[0].client.selectionClears, 0);
+    assert.equal(attempts[0].client.focusCalls, 0);
 });
 
 test("reconnect removes selection controls, listeners and stale clipboard callbacks", async () => {
