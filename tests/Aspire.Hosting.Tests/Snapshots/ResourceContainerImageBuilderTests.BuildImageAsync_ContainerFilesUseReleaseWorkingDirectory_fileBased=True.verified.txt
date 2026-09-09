@@ -1,0 +1,7 @@
+﻿ARG ASSETS_IMAGENAME=assets-image:latest
+
+FROM ${ASSETS_IMAGENAME} AS assets_stage
+
+FROM program:temp-
+COPY --from=assets_stage /assets /release-app/wwwroot
+

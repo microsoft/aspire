@@ -11,13 +11,11 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Internal;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Publishing;
@@ -170,6 +168,7 @@ internal interface IDotnetProgramContainerImageManager
     Task<DotnetProgramImageBuildResult> BuildDotnetProgramImageAsync(
         IResource resource,
         IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> buildEnvironmentProviders,
+        Func<IContainerRuntime, CancellationToken, Task> ensureContainerRuntimeRunning,
         CancellationToken cancellationToken);
 }
 
@@ -209,6 +208,8 @@ internal sealed class ResourceContainerImageManager(
     IResourceContainerImageManager,
     IDotnetProgramContainerImageManager
 {
+    private const string CrossOsAotDiagnostic = "Cross-OS native compilation is not supported.";
+
     // Disable concurrent builds for project resources to avoid issues with overlapping msbuild projects
     private readonly SemaphoreSlim _throttle = new(1);
 
@@ -288,6 +289,7 @@ internal sealed class ResourceContainerImageManager(
             using var result = await BuildDotnetProgramImageAsync(
                 resource,
                 resource.Annotations.OfType<IDotnetProgramBuildEnvironmentProvider>().ToArray(),
+                EnsureContainerRuntimeRunningAsync,
                 cancellationToken).ConfigureAwait(false);
 
             if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out _))
@@ -355,12 +357,14 @@ internal sealed class ResourceContainerImageManager(
     async Task<DotnetProgramImageBuildResult> IDotnetProgramContainerImageManager.BuildDotnetProgramImageAsync(
         IResource resource,
         IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> buildEnvironmentProviders,
+        Func<IContainerRuntime, CancellationToken, Task> ensureContainerRuntimeRunning,
         CancellationToken cancellationToken) =>
-        await BuildDotnetProgramImageAsync(resource, buildEnvironmentProviders, cancellationToken).ConfigureAwait(false);
+        await BuildDotnetProgramImageAsync(resource, buildEnvironmentProviders, ensureContainerRuntimeRunning, cancellationToken).ConfigureAwait(false);
 
     private async Task<DotnetProgramImageBuildResult> BuildDotnetProgramImageAsync(
         IResource resource,
         IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> buildEnvironmentProviders,
+        Func<IContainerRuntime, CancellationToken, Task> ensureContainerRuntimeRunning,
         CancellationToken cancellationToken)
     {
         logger.LogInformation("Building container image for resource {ResourceName}", resource.Name);
@@ -377,12 +381,7 @@ internal sealed class ResourceContainerImageManager(
         var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
         if (hasContainerFiles || ResourceRequiresContainerRuntime(resource, options))
         {
-            logger.LogDebug("Checking {ContainerRuntimeName} health", containerRuntime.Name);
-            if (!await containerRuntime.CheckIfRunningAsync(cancellationToken).ConfigureAwait(false))
-            {
-                logger.LogError("Container runtime '{ContainerRuntimeName}' is not running or is unhealthy. Cannot build container image.", containerRuntime.Name);
-                throw new InvalidOperationException($"Container runtime '{containerRuntime.Name}' is not running or is unhealthy.");
-            }
+            await ensureContainerRuntimeRunning(containerRuntime, cancellationToken).ConfigureAwait(false);
         }
 
         await _throttle.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -451,6 +450,16 @@ internal sealed class ResourceContainerImageManager(
         }
     }
 
+    private async Task EnsureContainerRuntimeRunningAsync(IContainerRuntime containerRuntime, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Checking {ContainerRuntimeName} health", containerRuntime.Name);
+        if (!await containerRuntime.CheckIfRunningAsync(cancellationToken).ConfigureAwait(false))
+        {
+            logger.LogError("Container runtime '{ContainerRuntimeName}' is not running or is unhealthy. Cannot build container image.", containerRuntime.Name);
+            throw new InvalidOperationException($"Container runtime '{containerRuntime.Name}' is not running or is unhealthy.");
+        }
+    }
+
     private async Task ExecuteDotnetPublishAsync(
         IResource resource,
         IProjectMetadata projectMetadata,
@@ -504,6 +513,17 @@ internal sealed class ResourceContainerImageManager(
             arguments.Add(buildContext.ResponseFile.Argument);
         }
 
+        // The SDK can emit "error : Cross-OS native compilation is not supported." before
+        // other output. Observe both streams before the retained output tail truncates it.
+        var crossOsAotDiagnosticSeen = 0;
+        void ObserveAotDiagnostic(string line)
+        {
+            if (line.Contains(CrossOsAotDiagnostic, StringComparison.Ordinal))
+            {
+                Interlocked.Exchange(ref crossOsAotDiagnosticSeen, 1);
+            }
+        }
+
         var spec = new ProcessSpec("dotnet")
         {
             ArgumentList = arguments,
@@ -513,10 +533,12 @@ internal sealed class ResourceContainerImageManager(
             RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
             OnOutputData = output =>
             {
+                ObserveAotDiagnostic(output);
                 logger.LogDebug("dotnet publish {ProjectPath} (stdout): {Output}", projectMetadata.ProjectPath, output);
             },
             OnErrorData = error =>
             {
+                ObserveAotDiagnostic(error);
                 logger.LogDebug("dotnet publish {ProjectPath} (stderr): {Error}", projectMetadata.ProjectPath, error);
             }
         };
@@ -537,12 +559,12 @@ internal sealed class ResourceContainerImageManager(
             {
                 var message =
                     $"Failed to build container image for resource '{resource.Name}' from project '{projectMetadata.ProjectPath}' with exit code {processResult.ExitCode}.";
-                var guidance = await GetFileAppAotGuidanceAsync(
+                var crossOsDiagnosticPresent = Volatile.Read(ref crossOsAotDiagnosticSeen) != 0 ||
+                    processResult.ProcessOutput.Any(static line => line.Contains(CrossOsAotDiagnostic, StringComparison.Ordinal));
+                var guidance = GetFileAppAotGuidance(
                     projectMetadata,
                     options,
-                    buildContext,
-                    processResult.ProcessOutput,
-                    cancellationToken).ConfigureAwait(false);
+                    crossOsDiagnosticPresent);
                 if (guidance is not null)
                 {
                     message = $"{message}{Environment.NewLine}{guidance}";
@@ -563,23 +585,14 @@ internal sealed class ResourceContainerImageManager(
         }
     }
 
-    private async Task<string?> GetFileAppAotGuidanceAsync(
+    private static string? GetFileAppAotGuidance(
             IProjectMetadata projectMetadata,
             ResolvedContainerBuildOptions options,
-            DotnetProgramBuildContext buildContext,
-            IReadOnlyList<string> processOutput,
-            CancellationToken cancellationToken)
+            bool crossOsDiagnosticPresent)
     {
         if (!projectMetadata.IsFileBasedApp ||
-            !IsCrossOperatingSystemTarget(options.TargetPlatform))
-        {
-            return null;
-        }
-
-        var crossOsDiagnosticPresent = processOutput.Any(static line =>
-            line.Contains("Cross-OS native compilation is not supported.", StringComparison.Ordinal));
-        if (!crossOsDiagnosticPresent &&
-            !await IsFileAppAotEnabledAsync(projectMetadata, options, buildContext, cancellationToken).ConfigureAwait(false))
+            !IsCrossOperatingSystemTarget(options.TargetPlatform) ||
+            !crossOsDiagnosticPresent)
         {
             return null;
         }
@@ -588,63 +601,6 @@ internal sealed class ResourceContainerImageManager(
         return $"Native AOT cannot publish this file-based app for '{targetRuntimeIdentifiers}' from the current operating system. " +
             "File-based apps enable PublishAot by default. Add '#:property PublishAot=false' to the C# file, " +
             "or run Aspire publishing on the target operating system to retain Native AOT.";
-    }
-
-    private async Task<bool> IsFileAppAotEnabledAsync(
-            IProjectMetadata projectMetadata,
-            ResolvedContainerBuildOptions options,
-            DotnetProgramBuildContext buildContext,
-            CancellationToken cancellationToken)
-    {
-        try
-        {
-            var directoryService = serviceProvider.GetRequiredService<IFileSystemService>();
-            using var resultDirectory = directoryService.TempDirectory.CreateTempSubdirectory("aspire-aot-query");
-            var resultPath = Path.Combine(resultDirectory.Path, "properties.json");
-            var arguments = new List<string>
-                {
-                    "build",
-                    projectMetadata.ProjectPath,
-                    "--configuration",
-                    "Release"
-                };
-            AddTargetPlatformArguments(arguments, options.TargetPlatform);
-            arguments.Add("-getProperty:PublishAot,RuntimeIdentifier");
-            arguments.Add($"-getResultOutputFile:{resultPath}");
-            arguments.Add("-v:q");
-            if (buildContext.ResponseFile is not null)
-            {
-                arguments.Add(buildContext.ResponseFile.Argument);
-            }
-
-            var spec = new ProcessSpec("dotnet")
-            {
-                ArgumentList = arguments,
-                WorkingDirectory = buildContext.WorkingDirectory,
-                EnvironmentVariables = new Dictionary<string, string>(buildContext.Environment, buildContext.Environment.Comparer),
-                ThrowOnNonZeroReturnCode = false
-            };
-            var (pendingResult, processDisposable) = processRunner.Run(spec);
-            await using (processDisposable)
-            {
-                var result = await pendingResult.WaitAsync(cancellationToken).ConfigureAwait(false);
-                if (result.ExitCode != 0 || !File.Exists(resultPath))
-                {
-                    return false;
-                }
-            }
-
-            using var document = JsonDocument.Parse(await File.ReadAllTextAsync(resultPath, cancellationToken).ConfigureAwait(false));
-            return document.RootElement.TryGetProperty("Properties", out var properties) &&
-                properties.TryGetProperty("PublishAot", out var publishAot) &&
-                bool.TryParse(publishAot.GetString(), out var enabled) &&
-                enabled;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogDebug(ex, "Failed to evaluate PublishAot for file-based app {ProjectPath}.", projectMetadata.ProjectPath);
-            return false;
-        }
     }
 
     private static bool IsCrossOperatingSystemTarget(ContainerTargetPlatform? targetPlatform)
@@ -730,6 +686,7 @@ internal sealed class ResourceContainerImageManager(
                 {
                     command,
                     projectMetadata.ProjectPath,
+                    "-p:Configuration=Release",
                     "-getProperty:ContainerWorkingDirectory",
                     "-v:q"
                 };
