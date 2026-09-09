@@ -1069,10 +1069,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             else
             {
                 storageClassName = await ResolveExpressionAsync(storageClassExpression, volumeResource.Name, cancellationToken).ConfigureAwait(false);
-                if (storageClassName is { Length: > 0 } && string.IsNullOrWhiteSpace(storageClassName))
-                {
-                    storageClassName = null;
-                }
+if (storageClassName is { Length: > 0 } && string.IsNullOrWhiteSpace(storageClassName))
+{
+    throw new InvalidOperationException($"The storage class name for persistent volume '{volumeResource.Name}' cannot consist only of whitespace.");
+}
             }
         }
         else if (DefaultStorageClassName == "")
