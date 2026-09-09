@@ -1,9 +1,9 @@
 {
   "id": "dashboard-runstore-writemetadata-windows-access-denied",
   "type": "flaky-test",
-  "title": "Flaky: Dashboard DashboardDataSourceTests.RunMode_DeletesOldestRunWhenLimitIsExceeded fails with UnauthorizedAccessException on Windows during metadata file move",
-  "test_name": "Aspire.Dashboard.Tests.Model.DashboardDataSourceTests.RunMode_DeletesOldestRunWhenLimitIsExceeded",
-  "error_pattern": "System.UnauthorizedAccessException : Access to the path is denied.\n   at System.IO.FileSystem.MoveFile(String sourceFullPath, String destFullPath, Boolean overwrite)\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.WriteMetadata(DashboardRunMetadata metadata, String metadataPath) in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 423\n   at DashboardRunStore.Dispose()",
+  "title": "Flaky: Dashboard DashboardDataSourceTests run-store tests fail with UnauthorizedAccessException on Windows during metadata file move",
+  "test_name": "Aspire.Dashboard.Tests.Model.DashboardDataSourceTests.RunMode_DeleteExpiredRunFails_LogsWarningAndContinues",
+  "error_pattern": "System.UnauthorizedAccessException : Access to the path is denied.\n   at System.IO.FileSystem.MoveFile(String sourceFullPath, String destFullPath, Boolean overwrite)\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.WriteMetadata(DashboardRunMetadata metadata, String metadataPath) in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 423\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.WriteMetadata(DashboardRunMetadata metadata) in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 411\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.Dispose() in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 392",
   "occurrences": [
     {
       "run_id": 32880916910,
@@ -11,6 +11,13 @@
       "job": "Tests / Dashboard / Dashboard (windows-latest)",
       "pr_number": 19620,
       "observed_at": "2026-08-25T18:31:42Z"
+    },
+    {
+      "run_id": 34413952365,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34413952365",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Tests, Dashboard, Dashboard, tests/Aspire.Dashboard.T... / Dashboard (windows-latest)",
+      "pr_number": 20018,
+      "observed_at": "2026-09-09T23:43:35Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19671"

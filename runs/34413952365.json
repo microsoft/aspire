@@ -1,0 +1,38 @@
+{
+  "run_id": 34413952365,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34413952365",
+  "analyzed_at": "2026-09-09T23:43:35Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20018,
+    "title": "Merge release/13.5 back into main",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-merge-release-13-5-to-main",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20018"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Tests, Dashboard, Dashboard, tests/Aspire.Dashboard.T... / Dashboard (windows-latest)",
+      "id": 102675182210,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34413952365/job/102675182210",
+      "classification": "flaky-test",
+      "reason": "The only failing test is Aspire.Dashboard.Tests.Model.DashboardDataSourceTests.RunMode_DeleteExpiredRunFails_LogsWarningAndContinues, which fails with a Windows-only UnauthorizedAccessException during a file move in DashboardRunStore.WriteMetadata. This is a known, previously-tracked flaky pattern (cause dashboard-runstore-writemetadata-windows-access-denied, issue #19671) affecting DashboardRunStore metadata file handling on Windows, unrelated to the PR changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Tests.Model.DashboardDataSourceTests.RunMode_DeleteExpiredRunFails_LogsWarningAndContinues",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Tests, Dashboard, Dashboard, tests/Aspire.Dashboard.T... / Dashboard (windows-latest)",
+      "error": "System.UnauthorizedAccessException : Access to the path is denied.",
+      "stack_trace": "at System.IO.FileSystem.MoveFile(String sourceFullPath, String destFullPath, Boolean overwrite)\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.WriteMetadata(DashboardRunMetadata metadata, String metadataPath) in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 423\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.WriteMetadata(DashboardRunMetadata metadata) in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 411\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.Dispose() in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 392",
+      "classification": "flaky",
+      "reason": "This is a Windows-only UnauthorizedAccessException raised during a temp metadata file rename in DashboardRunStore.Dispose(), a well-known file-locking race condition (antivirus/indexer contention) on Windows CI runners. It matches a prior tracked cause (dashboard-runstore-writemetadata-windows-access-denied, issue #19671) for the same class of run-store metadata write failures, and the PR's changed files do not touch DashboardRunStore or its metadata write path."
+    }
+  ],
+  "causes": ["dashboard-runstore-writemetadata-windows-access-denied"]
+}
