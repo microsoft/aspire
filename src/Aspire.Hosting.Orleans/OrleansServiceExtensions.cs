@@ -398,6 +398,9 @@ public static class OrleansServiceExtensions
     /// <param name="builder">The connection-string resource builder.</param>
     /// <param name="invariant">The Orleans ADO.NET Invariant to use for the resource.</param>
     /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// This method sets the Orleans provider type to "AdoNet", a call to <see cref="WithOrleansProviderType{T}(IResourceBuilder{T}, string)"/> isn't required.
+    /// </remarks>
     /// <example>
     /// Configure a Postgres database resource as the provider for Orleans Clustering and Reminders:
     /// <code>

@@ -40,9 +40,7 @@ internal sealed class ProviderConfiguration(string providerType, string? service
     {
         if (providerType.Equals(AdoNetProviderType, StringComparison.Ordinal))
         {
-            ArgumentNullException.ThrowIfNull(options, nameof(options));
-
-            if (!options.TryGetValue("Invariant", out var invariant))
+            if (options is null || !options.TryGetValue("Invariant", out var invariant))
             {
                 throw new InvalidOperationException("Orleans ADO.NET providers require an invariant. Configure it by calling WithOrleansAdoNetInvariant on the resource builder.");
             }

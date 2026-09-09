@@ -151,6 +151,6 @@ public class OrleansAdoNetInvariantTests
                 .WithReference(orleans);
         };
 
-        Assert.Throws<ArgumentNullException>(action);
+        Assert.Throws<InvalidOperationException>(action);
     }
 }
