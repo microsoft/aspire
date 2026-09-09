@@ -76,8 +76,7 @@ public class DashboardDialogProviderTests : DashboardTestContext
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         var cut = RenderComponent<DashboardDialogProvider>();
-        cut.Instance.Dispose();
-        cut.Dispose();
+        await cut.InvokeAsync(DisposeComponents);
         var plainProvider = RenderComponent<FluentDialogProvider>();
         var result = await OpenAsync(plainProvider, "after-dispose", drawer: false, onStateChange: null);
 
