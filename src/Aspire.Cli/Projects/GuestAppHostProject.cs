@@ -1538,34 +1538,32 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             updateCheckFailure.Throw();
         }
 
-        if (updates.Count == 0 && newSdkVersion is null)
+        var hasVersionUpdates = updates.Count > 0 || newSdkVersion is not null;
+        if (!hasVersionUpdates && !explicitChannelChanged)
         {
-            if (explicitChannelChanged)
-            {
-                config.Channel = explicitChannelName;
-                SaveConfiguration(config, directory);
-            }
-
             _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
-            return new UpdatePackagesResult { UpdatesApplied = explicitChannelChanged };
-        }
-
-        // Display pending updates
-        _interactionService.DisplayEmptyLine();
-        if (newSdkVersion is not null)
-        {
-            _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]Aspire SDK[/] [bold green]{config.SdkVersion.EscapeMarkup()}[/] to [bold green]{newSdkVersion.EscapeMarkup()}[/]", allowMarkup: true);
-        }
-        foreach (var (packageId, currentVersion, newVersion) in updates)
-        {
-            _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]{packageId.EscapeMarkup()}[/] [bold green]{currentVersion.EscapeMarkup()}[/] to [bold green]{newVersion.EscapeMarkup()}[/]", allowMarkup: true);
-        }
-        _interactionService.DisplayEmptyLine();
-
-        // Confirm with user
-        if (!await _interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken))
-        {
             return new UpdatePackagesResult { UpdatesApplied = false };
+        }
+
+        if (hasVersionUpdates)
+        {
+            // Display pending updates
+            _interactionService.DisplayEmptyLine();
+            if (newSdkVersion is not null)
+            {
+                _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]Aspire SDK[/] [bold green]{config.SdkVersion.EscapeMarkup()}[/] to [bold green]{newSdkVersion.EscapeMarkup()}[/]", allowMarkup: true);
+            }
+            foreach (var (packageId, currentVersion, newVersion) in updates)
+            {
+                _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]{packageId.EscapeMarkup()}[/] [bold green]{currentVersion.EscapeMarkup()}[/] to [bold green]{newVersion.EscapeMarkup()}[/]", allowMarkup: true);
+            }
+            _interactionService.DisplayEmptyLine();
+
+            // Confirm with user
+            if (!await _interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken))
+            {
+                return new UpdatePackagesResult { UpdatesApplied = false };
+            }
         }
 
         // Apply updates to settings.json

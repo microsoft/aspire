@@ -182,6 +182,7 @@ internal sealed class BundleNuGetService : INuGetService
         {
             "nuget",
             "restore",
+            "--no-nuget-org",
             "--output", objDir,
             "--framework", targetFramework
         };

@@ -912,8 +912,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
 
         var rootAdditionalSources = restoreSources.PackageSourceMappings is null
-            ? GetNuGetSources(restoreSources)?.ToArray()
-            : null;
+            ? GetNuGetSources(restoreSources)?.ToArray() ?? []
+            : [];
         var sensitiveRestoreSources = settings.Sources
             .Select(static source => source.Source)
             .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))

@@ -2658,7 +2658,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(result.Success);
             Assert.NotNull(generatedProject);
             var ns = generatedProject.Root!.GetDefaultNamespace();
-            Assert.Empty(generatedProject.Descendants(ns + "RestoreAdditionalProjectSources"));
+            Assert.Equal(
+                string.Empty,
+                generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").Single().Value);
             Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "NuGet.Config")));
             Assert.False(File.Exists(Path.Combine(
                 workspace.WorkspaceRoot.FullName,
