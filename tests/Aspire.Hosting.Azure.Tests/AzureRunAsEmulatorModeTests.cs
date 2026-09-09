@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -47,5 +50,41 @@ public class AzureRunAsEmulatorModeTests
         Assert.False(resource.IsEmulator(), $"{resourceType} should not be configured as an emulator in publish mode.");
         Assert.False(resource.IsContainer(), $"{resourceType} should not be configured as a local container in publish mode.");
         Assert.DoesNotContain(builder.Resources, resource => resource.Annotations.OfType<ContainerImageAnnotation>().Any());
+    }
+
+    [Fact]
+    public async Task RunAsEmulator_WhenAllAzureResourcesUseEmulators_HidesAzureEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
+        builder.AddAzureStorage("storage").RunAsEmulator();
+        builder.AddAzureEventHubs("eventhubs").RunAsEmulator();
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var preparer = app.Services.GetRequiredService<AzureResourcePreparer>();
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+
+        var environment = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
+        var hidden = Assert.Single(environment.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
+    public async Task RunAsEmulator_WhenAzureResourceRequiresProvisioning_ShowsAzureEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.AddAzureStorage("emulated-storage").RunAsEmulator();
+        builder.AddAzureStorage("provisioned-storage");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var preparer = app.Services.GetRequiredService<AzureResourcePreparer>();
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+
+        var environment = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
+        Assert.Empty(environment.Annotations.OfType<HiddenAnnotation>());
     }
 }

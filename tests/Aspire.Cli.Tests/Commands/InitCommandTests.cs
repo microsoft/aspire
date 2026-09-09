@@ -164,6 +164,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore")));
 
         var config = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")))!.AsObject();
         var appHost = config["appHost"]!.AsObject();

@@ -230,6 +230,62 @@
     fill: var(--fill-color);
 }
 
+/* Context menu affordance (cog) shown on the lower-right of a node. Hidden until the node is
+   hovered so it doesn't clutter the graph, and non-interactive while hidden (pointer-events: none)
+   so the invisible element can't intercept clicks. */
+::deep .resource-menu-cog {
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease-in-out;
+}
+
+::deep .resource-group-hover .resource-menu-cog,
+::deep .resource-menu-cog:focus {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (hover: none) {
+    ::deep .resource-menu-cog {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+::deep .resource-menu-cog-background {
+    fill: var(--fill-color);
+    stroke: var(--neutral-stroke-rest);
+    stroke-width: 1;
+}
+
+::deep .resource-menu-cog:hover .resource-menu-cog-background {
+    fill: var(--neutral-fill-secondary-hover);
+    stroke: var(--neutral-stroke-hover);
+}
+
+::deep .resource-menu-cog:focus-visible .resource-menu-cog-background {
+    stroke: var(--focus-stroke-outer);
+    stroke-width: calc(var(--focus-stroke-width) * 1px);
+}
+
+::deep .resource-menu-cog[aria-expanded="true"] .resource-menu-cog-background {
+    stroke: transparent;
+}
+
+::deep .resource-menu-cog[aria-expanded="true"] {
+    outline: none;
+}
+
+::deep .resource-menu-cog:active {
+    outline: none;
+}
+
+::deep .resource-menu-cog-icon {
+    fill: var(--accent-fill-rest);
+    pointer-events: none;
+}
+
 ::deep .resource-link {
     stroke: var(--neutral-stroke-rest);
     stroke-width: 1;

@@ -7,12 +7,15 @@
 #pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService/TempDirectory are experimental
 
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
+using Azure.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -209,6 +212,27 @@ public partial class AzureKubernetesEnvironmentResource
     /// </summary>
     private async Task GetAksCredentialsAsync(PipelineStepContext context)
     {
+        // Get the actual provisioned cluster name from the Bicep output.
+        // The Azure.Provisioning SDK may add a unique suffix to the name
+        // (e.g., take('aks-${uniqueString(resourceGroup().id)}', 63)).
+        var clusterName = await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
+            ?? Name;
+
+        await GetAksCredentialsAsync(
+            context,
+            clusterName,
+            savedResourceGroup: null,
+            subscriptionId: null,
+            verifyClusterExists: false).ConfigureAwait(false);
+    }
+
+    private async Task GetAksCredentialsAsync(
+        PipelineStepContext context,
+        string clusterName,
+        string? savedResourceGroup,
+        string? subscriptionId,
+        bool verifyClusterExists)
+    {
         var getCredsTask = await context.ReportingStep.CreateTaskAsync(
             $"Fetching AKS credentials for {Name}",
             context.CancellationToken).ConfigureAwait(false);
@@ -217,28 +241,24 @@ public partial class AzureKubernetesEnvironmentResource
         {
             try
             {
-                // Get the actual provisioned cluster name from the Bicep output.
-                // The Azure.Provisioning SDK may add a unique suffix to the name
-                // (e.g., take('aks-${uniqueString(resourceGroup().id)}', 63)).
-                var clusterName = await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
-                    ?? Name;
-
                 var azPath = (AzCliPathResolverForTesting ?? FindAzCli)();
 
                 // Defense-in-depth: validate that values used as CLI arguments
                 // contain only expected characters (alphanumeric, hyphens, underscores, dots).
                 ValidateAzureResourceName(clusterName, "cluster name");
 
-                // Resolve the scope this cluster actually lives in before touching the CLI. A cluster
-                // adopted via AsExistingInResourceGroup(...) can sit outside the app's own
-                // subscription/resource group, and the provisioner already targets that scope.
-                var (scopedSubscription, scopedResourceGroup) = GetExplicitScopeValues();
-
-                var (subscriptionId, savedResourceGroup) = await ResolveDeploymentScopeAsync(
-                    scopedSubscription,
-                    scopedResourceGroup,
-                    context.Services,
-                    context.CancellationToken).ConfigureAwait(false);
+                if (subscriptionId is null)
+                {
+                    // Resolve the scope this cluster actually lives in before touching the CLI. A cluster
+                    // adopted via AsExistingInResourceGroup(...) can sit outside the app's own
+                    // subscription/resource group, and the provisioner already targets that scope.
+                    var (scopedSubscription, scopedResourceGroup) = GetExplicitScopeValues();
+                    (subscriptionId, savedResourceGroup) = await ResolveDeploymentScopeAsync(
+                        scopedSubscription,
+                        scopedResourceGroup,
+                        context.Services,
+                        context.CancellationToken).ConfigureAwait(false);
+                }
 
                 ValidateAzureResourceName(subscriptionId, "subscription ID");
 
@@ -255,6 +275,28 @@ public partial class AzureKubernetesEnvironmentResource
                     .ConfigureAwait(false);
 
                 ValidateAzureResourceName(resourceGroup, "resource group");
+
+                KubernetesEnvironment.SkipDestroyCleanup = false;
+                if (verifyClusterExists &&
+                    !await AksResourceExistsAsync(
+                        azPath,
+                        subscriptionId,
+                        resourceGroup,
+                        clusterName,
+                        RunAzAsync).ConfigureAwait(false))
+                {
+                    KubernetesEnvironment.KubeConfigPath = null;
+                    KubernetesEnvironment.SkipDestroyCleanup = true;
+
+                    context.Logger.LogInformation(
+                        "AKS cluster '{ClusterName}' no longer exists in resource group '{ResourceGroup}'. Skipping cluster cleanup.",
+                        clusterName,
+                        resourceGroup);
+                    await getCredsTask.SucceedAsync(
+                        $"AKS cluster {clusterName} no longer exists; cluster cleanup will be skipped",
+                        context.CancellationToken).ConfigureAwait(false);
+                    return;
+                }
 
                 // Fetch kubeconfig content to stdout using --file - to avoid az CLI
                 // writing credentials with potentially permissive file permissions.
@@ -317,6 +359,133 @@ public partial class AzureKubernetesEnvironmentResource
                 throw;
             }
         }
+    }
+
+    private async Task GetAksCredentialsForDestroyAsync(PipelineStepContext context)
+    {
+        var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+        var deploymentStateSection = await deploymentStateManager
+            .AcquireSectionAsync($"Azure:Deployments:{Name}", context.CancellationToken)
+            .ConfigureAwait(false);
+
+        if (deploymentStateSection.Data.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"No Azure deployment state was found for AKS environment '{Name}'. " +
+                "Cluster cleanup cannot run without an isolated kubeconfig.");
+        }
+
+        // Azure deployment outputs are persisted as a JSON string with the ARM output shape:
+        //   {
+        //     "id": { "type": "String", "value": "/subscriptions/.../managedClusters/aks-abc123" },
+        //     "name": { "type": "String", "value": "aks-abc123" }
+        //   }
+        // Read it directly because the provisioning step that normally populates Outputs is not
+        // part of a fresh destroy process.
+        ResourceIdentifier? clusterResourceId;
+        try
+        {
+            clusterResourceId = GetPersistedAksResourceId(deploymentStateSection.Data);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidOperationException(
+                $"The Azure deployment state for AKS environment '{Name}' contains invalid outputs.",
+                ex);
+        }
+
+        if (clusterResourceId is null)
+        {
+            throw new InvalidOperationException(
+                $"The Azure deployment state for AKS environment '{Name}' does not contain the deployed cluster identity.");
+        }
+
+        // Scope is persisted as a JSON string using the same shape produced by
+        // BicepUtilities.SetScopeAsync:
+        //   { "resourceGroup": "shared-rg", "subscription": "00000000-..." }
+        // A missing property means the resource did not pin that scope value, so only that value
+        // falls back to global Azure deployment state. Older state without Scope uses the persisted
+        // resource ID so a changed AppHost scope cannot redirect cleanup to another cluster or wait
+        // on provisioning that is not part of the destroy graph.
+        string subscriptionId;
+        string? resourceGroupName;
+        if (deploymentStateSection.Data["Scope"] is not null)
+        {
+            string? scopedSubscription;
+            string? scopedResourceGroup;
+            try
+            {
+                var scopeJson = deploymentStateSection.Data["Scope"]!.GetValue<string>();
+                var scope = JsonNode.Parse(scopeJson)?.AsObject()
+                    ?? throw new InvalidOperationException("The persisted scope is not a JSON object.");
+                scopedSubscription = scope["subscription"]?.GetValue<string>();
+                scopedResourceGroup = scope["resourceGroup"]?.GetValue<string>();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                throw new InvalidOperationException(
+                    $"The Azure deployment state for AKS environment '{Name}' contains an invalid scope.",
+                    ex);
+            }
+
+            (subscriptionId, resourceGroupName) = await ResolveDeploymentScopeAsync(
+                scopedSubscription,
+                scopedResourceGroup,
+                context.Services,
+                context.CancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            subscriptionId = clusterResourceId.SubscriptionId!;
+            resourceGroupName = clusterResourceId.ResourceGroupName!;
+        }
+
+        await GetAksCredentialsAsync(
+            context,
+            clusterResourceId.Name,
+            resourceGroupName,
+            subscriptionId,
+            verifyClusterExists: true).ConfigureAwait(false);
+    }
+
+    private static bool HasPersistedAksIdentity(JsonObject deploymentState)
+    {
+        try
+        {
+            return GetPersistedAksResourceId(deploymentState) is not null;
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
+        {
+            // Malformed or partial state must not prevent the aggregate Azure destroy path from
+            // deleting the containing resource group. A directly targeted Kubernetes cleanup still
+            // invokes the credential step, which reports the invalid state rather than using ambient
+            // Kubernetes credentials.
+            return false;
+        }
+    }
+
+    private static ResourceIdentifier? GetPersistedAksResourceId(JsonObject deploymentState)
+    {
+        var outputsJson = deploymentState["Outputs"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(outputsJson))
+        {
+            return null;
+        }
+
+        var resourceId = JsonNode.Parse(outputsJson)?["id"]?["value"]?.GetValue<string>();
+        if (!ResourceIdentifier.TryParse(resourceId, out var parsedResourceId) ||
+            parsedResourceId is null ||
+            string.IsNullOrEmpty(parsedResourceId.SubscriptionId) ||
+            string.IsNullOrEmpty(parsedResourceId.ResourceGroupName) ||
+            !string.Equals(
+                parsedResourceId.ResourceType.ToString(),
+                "Microsoft.ContainerService/managedClusters",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return parsedResourceId;
     }
 
     /// <summary>
@@ -795,6 +964,35 @@ public partial class AzureKubernetesEnvironmentResource
         return result.StandardOutput;
     }
 
+    internal static async Task<bool> AksResourceExistsAsync(
+        string azPath,
+        string subscriptionId,
+        string resourceGroup,
+        string clusterName,
+        Func<string, string, Task<AzCommandResult>> runAzCommandAsync)
+    {
+        var result = await runAzCommandAsync(
+            azPath,
+            BuildAksResourceExistsArguments(subscriptionId, resourceGroup, clusterName)).ConfigureAwait(false);
+
+        if (result.ExitCode != 0)
+        {
+            // Azure CLI reports an out-of-band deleted resource group as:
+            //   (ResourceGroupNotFound) Resource group 'deployment-rg' could not be found.
+            // This proves the persisted AKS resource is absent, so cluster cleanup can be skipped.
+            if (result.StandardError.Contains("(ResourceGroupNotFound)", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            throw new InvalidOperationException(
+                $"az resource list failed while checking AKS cluster existence " +
+                $"(exit code {result.ExitCode}): {result.StandardError}");
+        }
+
+        return !string.IsNullOrWhiteSpace(result.StandardOutput);
+    }
+
     internal static string BuildGetCredentialsArguments(
         string subscriptionId,
         string resourceGroup,
@@ -803,6 +1001,13 @@ public partial class AzureKubernetesEnvironmentResource
 
     internal static string BuildResourceGroupQueryArguments(string subscriptionId, string clusterName)
         => $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [].resourceGroup -o tsv --subscription \"{subscriptionId}\"";
+
+    internal static string BuildAksResourceExistsArguments(
+        string subscriptionId,
+        string resourceGroup,
+        string clusterName)
+        => $"resource list --resource-group \"{resourceGroup}\" --resource-type Microsoft.ContainerService/managedClusters " +
+           $"--name \"{clusterName}\" --query [0].id -o tsv --subscription \"{subscriptionId}\"";
 
     /// <summary>
     /// Runs an az CLI command using the shared ProcessSpec/ProcessUtil infrastructure.

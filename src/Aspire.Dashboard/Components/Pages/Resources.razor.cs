@@ -127,6 +127,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private bool _contextMenuOpen;
     private readonly List<MenuButtonItem> _contextMenuItems = new();
     private TaskCompletionSource? _contextMenuClosedTcs;
+    private string? _contextMenuFocusElementId;
 
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
@@ -391,7 +392,18 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
             _resourcesInteropReference = DotNetObjectReference.Create(new ResourcesInterop(this));
 
-            await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference);
+            // Static icons used by the graph that aren't tied to a specific resource. Converted to raw
+            // SVG path data here (the same way resource/state icons are) so the JS can render them.
+            var graphIcons = new
+            {
+                menu = new
+                {
+                    path = ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
+                    labelFormat = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value
+                }
+            };
+
+            await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
             await UpdateResourceGraphResourcesAsync();
             await UpdateResourceGraphSelectedAsync();
         }
@@ -425,13 +437,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         [JSInvokable]
-        public async Task ResourceContextMenu(string id, int screenWidth, int screenHeight, int clientX, int clientY)
+        public async Task ResourceContextMenu(string id, int screenWidth, int screenHeight, int clientX, int clientY, string? focusElementId)
         {
             if (resources._resourceByName.TryGetValue(id, out var resource))
             {
                 await resources.InvokeAsync(async () =>
                 {
-                    await resources.ShowContextMenuAsync(resource, screenWidth, screenHeight, clientX, clientY);
+                    await resources.ShowContextMenuAsync(resource, screenWidth, screenHeight, clientX, clientY, focusElementId);
                 });
             }
         }
@@ -616,19 +628,31 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         return false;
     }
 
-    private async Task ShowContextMenuAsync(ResourceViewModel resource, int screenWidth, int screenHeight, int clientX, int clientY)
+    private async Task ShowContextMenuAsync(ResourceViewModel resource, int screenWidth, int screenHeight, int clientX, int clientY, string? focusElementId)
     {
         // This is called when the browser requests to show the context menu for a resource.
         // The method doesn't complete until the context menu is closed so the browser can await
         // it and perform clean up when the context menu is closed.
         if (_contextMenu is { } contextMenu)
         {
+            _contextMenuFocusElementId = focusElementId;
             _contextMenuItems.Clear();
+
+            // The graph context menu is cursor-positioned and detached from the node it targets, so
+            // without a label it's ambiguous which resource the actions apply to. Add a header row
+            // identifying the resource at the top of the menu.
+            _contextMenuItems.Add(new MenuButtonItem
+            {
+                IsHeader = true,
+                Text = ResourceViewModel.GetResourceName(resource, _resourceByName),
+                Icon = ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)
+            });
+
             ResourceMenuBuilder.AddMenuItems(
                 _contextMenuItems,
                 resource,
                 _resourceByName,
-                EventCallback.Factory.Create(this, () => ShowResourceDetailsAsync(resource, focusElementId: null)),
+                EventCallback.Factory.Create(this, () => ShowResourceDetailsAsync(resource, focusElementId)),
                 EventCallback.Factory.Create<CommandViewModel>(this, (command) => ExecuteResourceCommandAsync(resource, command)),
                 (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
                 showViewDetails: true,
@@ -1014,6 +1038,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task CloseContextMenuAsync(bool closeMenu)
     {
         _contextMenuOpen = false;
+        var focusElementId = _contextMenuFocusElementId;
+        _contextMenuFocusElementId = null;
 
         if (_contextMenu is { } menu)
         {
@@ -1021,6 +1047,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             {
                 await menu.CloseAsync();
             }
+        }
+
+        // Restore a keyboard-triggered menu to the graph cog before a selected menu item's
+        // callback can move focus to its destination (for example, the resource details view).
+        if (!string.IsNullOrEmpty(focusElementId))
+        {
+            await JS.InvokeVoidAsync("focusElement", focusElementId);
         }
 
         CompleteContextMenuClosed();

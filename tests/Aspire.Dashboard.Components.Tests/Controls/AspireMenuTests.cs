@@ -86,6 +86,48 @@ public class AspireMenuTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Header_LabelsMenuAndContributesToVerticalThreshold()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var header = new MenuButtonItem
+        {
+            Id = "resource-menu-header",
+            IsHeader = true,
+            Text = "Resource1",
+            Icon = new Icons.Regular.Size16.Info()
+        };
+        var menuHost = RenderComponent<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Anchored, false);
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items,
+            [
+                header,
+                new MenuButtonItem { Text = "View details" }
+            ]);
+        });
+
+        var menuElement = menuHost.Find("fluent-menu");
+        Assert.Equal(header.Id, menuElement.GetAttribute("aria-labelledby"));
+        Assert.Equal(header.Text, menuHost.Find($"#{header.Id}").TextContent.Trim());
+
+        // Two regular 32px items would fit below this pointer (15 + 80 <= 100), but replacing
+        // one with the 44px header requires the menu to flip above the pointer.
+        await menuHost.InvokeAsync(() => menuHost.Instance.OpenAsync(
+            screenWidth: 1920,
+            screenHeight: 100,
+            clientX: 10,
+            clientY: 15));
+
+        Assert.Contains("bottom: 85px", menuHost.Find("fluent-menu").GetAttribute("style"));
+    }
+
+    [Fact]
     public async Task RemoveAspireMenu_UnregistersFluentMenuFromMenuProvider()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);

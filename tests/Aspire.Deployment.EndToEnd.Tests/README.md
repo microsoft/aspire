@@ -87,6 +87,10 @@ Common quota increase requests:
 |----------|----------|-------------|
 | `ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION` | Yes | Azure subscription ID for test deployments |
 | `ASPIRE_DEPLOYMENT_TEST_RG_PREFIX` | No | Prefix for resource group names (default: `aspire-e2e`) |
+| `ASPIRE_DEPLOYMENT_TEST_ENABLE_CONNECTOR_NAMESPACE` | Connector Namespace test only | Set to `true` after the subscription is enrolled in the Connector Namespace preview |
+| `ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_LOCATION` | Connector Namespace test only | Preview-enabled Azure region |
+| `ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_PRINCIPAL_OBJECT_ID` | Connector Namespace test only | Object ID of a tenant user used to validate connection and MCP access policies |
+| `ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_TENANT_ID` | Connector Namespace test only | Tenant ID containing the access-policy user |
 | `AZURE_DEPLOYMENT_TEST_TENANT_ID` | CI only | Azure AD tenant ID for OIDC authentication |
 | `AZURE_DEPLOYMENT_TEST_CLIENT_ID` | CI only | Azure AD app client ID for OIDC authentication |
 | `AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID` | CI only | Azure subscription ID (GitHub variable) |

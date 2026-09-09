@@ -127,7 +127,9 @@ jobs:
       - name: Check out outcome validator
         uses: actions/checkout@v4.3.1
         with:
-          sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
+          sparse-checkout: |
+            .github/workflows/pr-docs-check/resolve_safe_output_target.py
+            .github/workflows/pr-docs-check/validate_outcome.py
           sparse-checkout-cone-mode: false
       - name: Download agent output
         uses: actions/download-artifact@v4.3.0
@@ -174,6 +176,7 @@ jobs:
         run: >-
           python .github/workflows/pr-docs-check/validate_outcome.py
           --agent-output /tmp/gh-aw/agent_output.json
+          --raw-safe-outputs /tmp/gh-aw/safeoutputs.jsonl
           --created-pr-url "${CREATED_PR_URL}"
           --created-pr-base "${CREATED_PR_BASE}"
           --expected-source-pr-number "${EXPECTED_SOURCE_PR_NUMBER}"
@@ -184,67 +187,28 @@ safe-outputs:
     private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
     owner: "microsoft"
     repositories: ["aspire.dev", "aspire"]
-  # gh-aw generates the target-repository checkout required by create-pull-request.
-  # An additional actions/checkout step would trigger https://github.com/github/gh-aw/issues/50905
-  # in v0.85.4 and downgrade the app token from contents: write to contents: read.
   steps:
+    - name: Check out safe-output target resolver
+      if: contains(needs.agent.outputs.output_types, 'create_pull_request')
+      uses: actions/checkout@v4.3.1
+      with:
+        path: _resolver
+        persist-credentials: false
+        sparse-checkout: .github/workflows/pr-docs-check/resolve_safe_output_target.py
+        sparse-checkout-cone-mode: false
     - name: Resolve safe-output patch base from canonical agent output
       id: resolve-target
       if: contains(needs.agent.outputs.output_types, 'create_pull_request')
+      env:
+        EXPECTED_SOURCE_PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
       run: |
         set -euo pipefail
-        python3 - "${GITHUB_OUTPUT}" <<'PY'
-        import json
-        import re
-        import sys
-        from pathlib import Path
-
-        output_path = Path("/tmp/gh-aw/agent_output.json")
-        try:
-            payload = json.loads(output_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise SystemExit(f"Failed to read canonical agent output: {error}")
-
-        items = payload.get("items") if isinstance(payload, dict) else None
-        create_items = [
-            item
-            for item in items if isinstance(item, dict)
-            and item.get("type") == "create_pull_request"
-        ] if isinstance(items, list) else []
-        if len(create_items) != 1:
-            raise SystemExit(
-                "Expected exactly one canonical create_pull_request item, "
-                f"found {len(create_items)}."
-            )
-
-        # gh-aw v0.86.2 records the supported tool input as:
-        #   {"type":"create_pull_request","base":"release/13.5",...}
-        # Older outputs record the normalized value as "base_branch" instead.
-        create_item = create_items[0]
-        has_base = "base" in create_item
-        has_base_branch = "base_branch" in create_item
-        base = create_item.get("base")
-        base_branch = create_item.get("base_branch")
-        if has_base and not isinstance(base, str):
-            raise SystemExit("Canonical create_pull_request base is invalid.")
-        if has_base_branch and not isinstance(base_branch, str):
-            raise SystemExit("Canonical create_pull_request base_branch is invalid.")
-        if has_base and has_base_branch and base != base_branch:
-            raise SystemExit(
-                "Canonical create_pull_request base and base_branch disagree."
-            )
-
-        target_branch = base if has_base else base_branch
-        if (
-            not isinstance(target_branch, str)
-            or re.fullmatch(r"main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?", target_branch)
-            is None
-        ):
-            raise SystemExit("Canonical create_pull_request target branch is invalid.")
-
-        with open(sys.argv[1], "a", encoding="utf-8") as github_output:
-            github_output.write(f"branch={target_branch}\n")
-        PY
+        trap 'rm -rf -- _resolver' EXIT
+        python3 _resolver/.github/workflows/pr-docs-check/resolve_safe_output_target.py \
+          --agent-output /tmp/gh-aw/agent_output.json \
+          --raw-safe-outputs /tmp/gh-aw/safeoutputs.jsonl \
+          --github-output "${GITHUB_OUTPUT}" \
+          --expected-source-pr-number "${EXPECTED_SOURCE_PR_NUMBER}"
   create-pull-request:
     title-prefix: "[docs] "
     labels: [docs-from-code]
@@ -254,9 +218,9 @@ safe-outputs:
     # safe-output job below requests the SME on the drafted PR after creation.
     draft: true
     # Generate the agent-time patch against the aspire.dev branch selected below.
-    # At apply time, the separate safe-outputs job reads that trusted branch back
-    # from the canonical create_pull_request item instead of relying on a model
-    # supplied per-call `base` override.
+    # At apply time, the separate safe-outputs job resolves that trusted branch
+    # from canonical output or the safe-output server metadata retained in raw
+    # JSONL, then cross-checks it against the drafted notification.
     base-branch: ${{ steps.resolve-target.outputs.branch || 'main' }}
     allowed-base-branches:
       - main
@@ -315,7 +279,9 @@ safe-outputs:
           uses: actions/checkout@v4.3.1
           with:
             path: _validator
-            sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
+            sparse-checkout: |
+              .github/workflows/pr-docs-check/resolve_safe_output_target.py
+              .github/workflows/pr-docs-check/validate_outcome.py
             sparse-checkout-cone-mode: false
         - name: Mint aspire-bot token (microsoft/aspire.dev)
           id: aspire-dev-token
@@ -356,6 +322,7 @@ safe-outputs:
           run: >-
             python _validator/.github/workflows/pr-docs-check/validate_outcome.py
             --agent-output "${GH_AW_AGENT_OUTPUT}"
+            --raw-safe-outputs "$(dirname "${GH_AW_AGENT_OUTPUT}")/safeoutputs.jsonl"
             --created-pr-url "${CREATED_PR_URL}"
             --created-pr-base "${CREATED_PR_BASE}"
             --github-event-path "${GITHUB_EVENT_PATH}"

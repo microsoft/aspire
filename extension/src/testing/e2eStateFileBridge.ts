@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
 import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
-import { projectDebuggerExtension } from '../debugger/languages/dotnet';
+import { externalBuildProjectDebuggerExtension, projectDebuggerExtension } from '../debugger/languages/dotnet';
 import { redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
@@ -725,8 +725,13 @@ export async function executeE2eControlCommand(
       markStarted();
       const launchConfig = getE2eLaunchConfiguration(command.launchConfig);
       const isApphost = command.isApphost ?? false;
-      const debuggerExtension = isApphost && launchConfig.type === 'project'
+      const appHostProjectDebuggerExtension = launchConfig.type === 'project'
         ? projectDebuggerExtension
+        : launchConfig.type === 'project-with-external-build.v1'
+          ? externalBuildProjectDebuggerExtension
+          : undefined;
+      const debuggerExtension = isApphost && appHostProjectDebuggerExtension
+        ? appHostProjectDebuggerExtension
         : getResourceDebuggerExtensions().find(extension => extension.resourceType === launchConfig.type);
       if (!debuggerExtension) {
         throw new Error(`No resource debugger extension is registered for launch configuration type '${launchConfig.type}'.`);

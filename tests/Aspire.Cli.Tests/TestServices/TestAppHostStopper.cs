@@ -8,7 +8,7 @@ namespace Aspire.Cli.Tests.TestServices;
 
 /// <summary>
 /// A test <see cref="IAppHostStopper"/> that records stop requests and returns a controllable result,
-/// so <see cref="OrphanedAppHostCollector"/> orchestration can be tested without real process signalling.
+/// so shutdown orchestration can be tested without real process signalling.
 /// </summary>
 internal sealed class TestAppHostStopper : IAppHostStopper
 {
@@ -31,6 +31,22 @@ internal sealed class TestAppHostStopper : IAppHostStopper
     /// Result used when <see cref="StopResultSelector"/> is null or returns null-equivalent.
     /// </summary>
     public bool DefaultResult { get; set; } = true;
+
+    /// <summary>
+    /// Handles direct process-tree stop requests when set.
+    /// </summary>
+    public Func<int, DateTimeOffset?, bool, CancellationToken, Task<bool>>? ProcessTreeStopAsyncCallback { get; set; }
+
+    public Task<bool> StopProcessTreeAsync(
+        int pid,
+        DateTimeOffset? startTime,
+        bool includeStartTimeForDcp,
+        CancellationToken cancellationToken)
+    {
+        return ProcessTreeStopAsyncCallback is not null
+            ? ProcessTreeStopAsyncCallback(pid, startTime, includeStartTimeForDcp, cancellationToken)
+            : Task.FromResult(DefaultResult);
+    }
 
     public Task<bool> StopAppHostAsync(
         AppHostInformation? appHostInfo,

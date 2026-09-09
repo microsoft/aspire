@@ -11,7 +11,8 @@
             OpenChanged="OnOpenChanged"
             Style="@Style"
             VerticalThreshold="@CalculatedVerticalThreshold"
-            HorizontalThreshold="200">
+            HorizontalThreshold="200"
+            aria-labelledby="@HeaderId">
     @foreach (var item in Items)
     {
         @RenderMenuItem(item)
@@ -24,6 +25,20 @@
         if (item.IsDivider)
         {
             return @<FluentDivider />;
+        }
+        else if (item.IsHeader)
+        {
+            // Non-interactive label identifying what the menu is for (e.g. the resource a graph
+            // context menu was opened on). role="presentation" keeps it out of the menu's item
+            // semantics (matching the FluentDivider above) so it isn't announced as a menu item
+            // or reached by keyboard navigation.
+            return @<div id="@item.Id" class="aspire-menu-header" role="presentation">
+                @if (item.Icon is not null)
+                {
+                    <FluentIcon Value="@item.Icon" Width="16px" Class="aspire-menu-header-icon" />
+                }
+                <span class="aspire-menu-header-text" title="@item.Text">@item.Text</span>
+            </div>;
         }
         else
         {

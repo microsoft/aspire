@@ -25,10 +25,6 @@ namespace Aspire.Hosting.Foundry;
 /// </summary>
 public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 {
-    // The "Azure AI User" built-in role (data-plane access to Foundry agents/inference). Granted to
-    // the agent's own instance identity below, and to consumers that reference the agent (see
-    // HostedAgentResourceBuilderExtensions.GrantHostedAgentConsumerRoles).
-    internal const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
     internal const string DefaultResponsesProtocolVersion = "2.0.0";
 
     /// <summary>
@@ -252,13 +248,13 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         var foundryResourceId = await project.Parent.Id.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(foundryResourceId))
         {
-            context.Logger.LogWarning("Could not resolve the Microsoft Foundry resource ID for hosted agent '{Name}'. The agent identity '{PrincipalId}' may need the Cognitive Services User role assigned manually.", Name, principalId);
+            context.Logger.LogWarning("Could not resolve the Microsoft Foundry resource ID for hosted agent '{Name}'. The agent identity '{PrincipalId}' may need the Foundry User role assigned manually.", Name, principalId);
             return;
         }
 
         var subscriptionResourceId = provisioningContext.Subscription.Id.ToString();
         var roleDefinitionId = new ResourceIdentifier(
-            $"{subscriptionResourceId}/providers/Microsoft.Authorization/roleDefinitions/{AzureAIUserRoleDefinitionId}");
+            $"{subscriptionResourceId}/providers/Microsoft.Authorization/roleDefinitions/{FoundryResource.FoundryUserRoleDefinitionId}");
 
         var assignmentName = StableGuid(principalId, roleDefinitionId.ToString(), foundryResourceId);
 
@@ -278,13 +274,13 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 content,
                 context.CancellationToken).ConfigureAwait(false);
 
-            context.Logger.LogInformation("Assigned Cognitive Services User role to hosted agent '{Name}' identity '{PrincipalId}'.", Name, principalId);
+            context.Logger.LogInformation("Assigned Foundry User role to hosted agent '{Name}' identity '{PrincipalId}'.", Name, principalId);
         }
         catch (RequestFailedException ex)
         {
             context.Logger.LogWarning(
                 ex,
-                "Could not create Cognitive Services User role assignment for hosted agent '{Name}' identity '{PrincipalId}' on Foundry resource '{FoundryResourceId}'. Create the role assignment manually.",
+                "Could not create Foundry User role assignment for hosted agent '{Name}' identity '{PrincipalId}' on Foundry resource '{FoundryResourceId}'. Create the role assignment manually.",
                 Name,
                 principalId,
                 foundryResourceId);

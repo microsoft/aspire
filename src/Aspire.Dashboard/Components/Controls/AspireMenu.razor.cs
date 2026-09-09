@@ -61,10 +61,15 @@ public partial class AspireMenu : FluentComponentBase
     [Inject]
     public required IMenuService MenuService { get; init; }
 
-    // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
+    // Each menu item is approximately 32px tall, while a header is 40px tall plus its 4px
+    // bottom margin. Include the full rendered height so cursor-positioned menus flip above
+    // the pointer before they would be clipped by the viewport.
     private const int EstimatedItemHeight = 32;
+    private const int EstimatedHeaderHeight = 44;
     private const int MenuVerticalPadding = 16;
-    private int CalculatedVerticalThreshold => VerticalThreshold ?? (Items.Count * EstimatedItemHeight + MenuVerticalPadding);
+    private int CalculatedVerticalThreshold => VerticalThreshold
+        ?? Items.Sum(item => item.IsHeader ? EstimatedHeaderHeight : EstimatedItemHeight) + MenuVerticalPadding;
+    private string? HeaderId => Items.FirstOrDefault(item => item.IsHeader)?.Id;
 
     protected override void OnParametersSet()
     {

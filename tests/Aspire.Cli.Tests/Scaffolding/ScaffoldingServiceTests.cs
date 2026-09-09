@@ -131,6 +131,22 @@ public class ScaffoldingServiceTests
     }
 
     [Fact]
+    public void AddRootTypeScriptAppHostDelegateScripts_UsesDenoTasks()
+    {
+        var scripts = new JsonObject();
+
+        var preservedScriptNames = ScaffoldingService.AddRootTypeScriptAppHostDelegateScripts(
+            scripts,
+            TypeScriptAppHostToolchain.Deno,
+            "apps/web/aspire-apphost");
+
+        Assert.Empty(preservedScriptNames);
+        Assert.Equal("deno task --cwd apps/web/aspire-apphost aspire:start", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("deno task --cwd apps/web/aspire-apphost aspire:build", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("deno task --cwd apps/web/aspire-apphost aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void AddRootTypeScriptAppHostDelegateScripts_UsesAppHostToolchain()
     {
         var rootDirectory = Directory.CreateTempSubdirectory();

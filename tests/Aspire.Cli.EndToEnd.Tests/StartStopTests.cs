@@ -68,6 +68,45 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
+    public async Task StartSingleFileAppHostDoesNotCountBuildAgainstStartupTimeout()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectName = $"SlowBuild_{Guid.NewGuid():N}";
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+
+        // The pre-build must exceed the startup budget. If dotnet run rebuilds the file after the
+        // budget starts, this target runs a second time and aspire start fails with a timeout.
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "Directory.Build.targets"),
+            """
+            <Project>
+              <Target Name="DelayBuildPastStartupTimeout" BeforeTargets="CoreCompile" Condition="'$(DesignTimeBuild)' != 'true'">
+                <Exec Command="sleep 7" />
+              </Target>
+            </Project>
+            """);
+
+        await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(projectName)}", counter);
+
+        await auto.TypeAsync("ASPIRE_CLI_START_TIMEOUT=5 aspire start --format json");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.AspireStopAsync(counter);
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
     public async Task StartThroughSymlinkCanBeDescribedAndStoppedThroughRealPath()
     {
         const string projectName = "AliasedAppHost";
@@ -79,7 +118,6 @@ public sealed class StartStopTests(ITestOutputHelper output)
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);

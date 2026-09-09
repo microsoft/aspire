@@ -76,6 +76,7 @@ The map stays small by keeping each dependency in the layer that can prove it:
 | `job:winget-installer` | `tests.yml` `prepare_winget_installer_artifacts` |
 | `job:homebrew-installer` | `tests.yml` `prepare_homebrew_installer_artifacts` |
 | `job:nix-package` | `tests.yml` `nix_package` |
+| `job:cli-starter-validation` | `tests.yml` `cli_starter_validation_{linux,windows,macos}_{x64,arm64}` → [`cli-starter-validation.yml`](../../.github/workflows/cli-starter-validation.yml) |
 | `job:deployment-e2e` | [`deployment-tests.yml`](../../.github/workflows/deployment-tests.yml) — *schedule/dispatch-only today* |
 | `ALL` | every selector target; PR CI runs the full PR test matrix and all PR-gated jobs, while independently scheduled, dispatched, or outerloop targets remain advisory |
 | `<GROUP_NAME>` | a named group (see `groups:`) expanding **recursively** to its `test:`/`job:` members |
@@ -98,7 +99,7 @@ set instead of repeating it. Example:
 
 ```yaml
 groups:
-  CLI_BUNDLE: [test:Aspire.Cli.EndToEnd.Tests, job:extension-e2e, job:winget-installer, job:homebrew-installer]
+  CLI_BUNDLE: [test:Aspire.Cli.EndToEnd.Tests, job:cli-starter-validation, job:extension-e2e, job:winget-installer, job:homebrew-installer]
 ```
 
 Group members may themselves be group names; expansion is recursive and
@@ -139,7 +140,8 @@ changes run `ALL`.
 
 Note `eng/OuterPreBuild.proj` (build-wide project-name validation) is here, but
 `eng/Bundle.proj` is **not** — it assembles only the CLI bundle, so it maps to
-`CLI_BUNDLE`, not `ALL`.
+`CLI_BUNDLE`, not `ALL`. The `CreateLayout` project maps to the same group
+through `affected_project_rules` because it performs that bundle assembly.
 
 ### Ignore (`ignore`)
 
@@ -210,6 +212,25 @@ This is how a job fires based on *which tests run*, not on which file changed:
 - tests: [test:Aspire.Acquisition.Tests]
   targets: [job:winget-installer, job:homebrew-installer]
 ```
+
+The CLI starter validation jobs deliberately do not derive from selected test
+projects. Test projects often aggregate dependencies that the starter scenarios
+do not exercise, so a test-derived rule can fan unrelated changes into all six
+platform jobs.
+
+Instead, starter validation tracks the stable direct artifact boundaries:
+
+- Affected-project rules cover the CLI and managed executables, AppHost SDK,
+  TypeScript code generation and JavaScript hosting, and AppHost and PostgreSQL
+  hosting packages, plus the CreateLayout bundle assembly.
+- Exact path rules cover the C# starter template and template package project,
+  executable CLI archive definitions, `eng/Bundle.proj`, and the PR installer
+  used by the validation workflow.
+
+Their closest aggregate test projects also reference Azure, browser, or Npgsql
+client projects, unrelated templates, or test-only utilities and fakes.
+Layer 1 still supplies transitive closure behind each direct production
+boundary, without enumerating every implementation dependency.
 
 ## Maintenance
 

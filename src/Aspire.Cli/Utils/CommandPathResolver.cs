@@ -14,7 +14,8 @@ internal static class CommandPathResolver
         ["npx"] = new("Node.js", "https://nodejs.org/en/download"),
         ["bun"] = new("Bun", "https://bun.sh/docs/installation"),
         ["yarn"] = new("Yarn", "https://yarnpkg.com/getting-started/install"),
-        ["pnpm"] = new("pnpm", "https://pnpm.io/installation")
+        ["pnpm"] = new("pnpm", "https://pnpm.io/installation"),
+        ["deno"] = new("Deno", "https://docs.deno.com/runtime/getting_started/installation/")
     };
 
     /// <summary>

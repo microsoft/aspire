@@ -131,6 +131,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// </remarks>
     public string? KubeConfigPath { get; set; }
 
+    // AKS destroy sets this when persisted state points to a cluster that no longer exists.
+    // Cluster-scoped cleanup must then no-op instead of falling back to ambient credentials.
+    internal bool SkipDestroyCleanup { get; set; }
+
     /// <summary>
     /// Gets or sets the parent compute environment resource that owns this Kubernetes environment.
     /// When set, resources with <c>WithComputeEnvironment</c> targeting the parent will also

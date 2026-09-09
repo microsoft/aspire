@@ -725,7 +725,8 @@ internal static class Hex1bAutomatorTestHelpers
     /// </summary>
     internal static async Task WaitForPipelineSuccessAsync(
         this Hex1bTerminalAutomator auto,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        SequenceCounter? counter = null)
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(5);
         var pipelineSucceeded = false;
@@ -733,6 +734,19 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.WaitUntilAsync(s =>
         {
+            if (counter is not null)
+            {
+                var errorSearcher = new CellPatternSearcher()
+                    .FindPattern(counter.Value.ToString())
+                    .RightText(" ERR:");
+
+                if (errorSearcher.Search(s).Count > 0)
+                {
+                    terminalOutput = s.GetText();
+                    return true;
+                }
+            }
+
             if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed))
             {
                 terminalOutput = s.GetText();
@@ -746,7 +760,9 @@ internal static class Hex1bAutomatorTestHelpers
             }
 
             return false;
-        }, timeout: effectiveTimeout, description: "pipeline succeeded or failed");
+        }, timeout: effectiveTimeout, description: counter is null
+            ? "pipeline succeeded or failed"
+            : $"pipeline succeeded, failed, or error prompt [{counter.Value} ERR:*] $");
 
         if (!pipelineSucceeded)
         {
