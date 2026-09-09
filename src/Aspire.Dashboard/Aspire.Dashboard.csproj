@@ -62,9 +62,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Microsoft.Data.Sqlite.Core" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
-    <!-- Temporary: Daily Fluent UI previews are signed with an untrusted, untimestamped certificate.
-         Remove this suppression when upstream preview packages are correctly signed. -->
-    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" NoWarn="NU3018;NU3027;NU3042" />
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components">
+      <!-- Daily Fluent UI previews are signed with an untrusted, untimestamped certificate. -->
+      <NoWarn Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'">NU3018;NU3027;NU3042</NoWarn>
+    </PackageReference>
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
