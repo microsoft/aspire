@@ -102,6 +102,9 @@
   <data name="LanguageOptionDescription" xml:space="preserve">
     <value>The programming language for the AppHost (csharp, typescript)</value>
   </data>
+  <data name="ForceEmptyOptionDescription" xml:space="preserve">
+    <value>Skip .NET solution discovery and create an empty AppHost. For C#, creates apphost.cs in the current directory.</value>
+  </data>
   <data name="AppHostCreatedRunOne" xml:space="preserve">
     <value>Aspire AppHost created! To complete setup, run:</value>
   </data>

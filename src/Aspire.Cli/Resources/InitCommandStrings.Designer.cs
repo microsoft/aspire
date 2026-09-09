@@ -129,6 +129,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string ForceEmptyOptionDescription {
+            get {
+                return ResourceManager.GetString("ForceEmptyOptionDescription", resourceCulture);
+            }
+        }
+
         internal static string AppHostCreatedRunOne {
             get {
                 return ResourceManager.GetString("AppHostCreatedRunOne", resourceCulture);

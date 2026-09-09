@@ -82,6 +82,11 @@
         <target state="new">Fix or remove {0} and re-run `aspire init`.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ForceEmptyOptionDescription">
+        <source>Skip .NET solution discovery and create an empty AppHost. For C#, creates apphost.cs in the current directory.</source>
+        <target state="new">Skip .NET solution discovery and create an empty AppHost. For C#, creates apphost.cs in the current directory.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InstallingAspireProjectTemplates">
         <source>Installing Aspire project templates...</source>
         <target state="new">Installing Aspire project templates...</target>

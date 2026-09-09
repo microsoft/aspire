@@ -64,6 +64,7 @@ internal sealed class InitCommand : BaseCommand
 
     private readonly Option<string?> _channelOption;
     private readonly Option<string?> _languageOption;
+    private readonly Option<bool> _forceEmptyOption;
 
     public InitCommand(
         ILanguageService languageService,
@@ -100,10 +101,15 @@ internal sealed class InitCommand : BaseCommand
         {
             Description = InitCommandStrings.LanguageOptionDescription
         };
+        _forceEmptyOption = new Option<bool>("--force-empty")
+        {
+            Description = InitCommandStrings.ForceEmptyOptionDescription
+        };
         Options.Add(s_sourceOption);
         Options.Add(s_versionOption);
         Options.Add(_channelOption);
         Options.Add(_languageOption);
+        Options.Add(_forceEmptyOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
         Options.Add(AgentInitCommand.s_skillLocationsOption);
         Options.Add(AgentInitCommand.s_skillsOption);
@@ -124,8 +130,9 @@ internal sealed class InitCommand : BaseCommand
         var workingDirectory = _executionContext.WorkingDirectory;
 
         // Step 2: Detect solution (C# only — determines single-file vs full project).
+        // Force-empty bypasses discovery itself so incidental solutions cannot trigger a prompt.
         FileInfo? solutionFile = null;
-        if (isCSharp)
+        if (isCSharp && !parseResult.GetValue(_forceEmptyOption))
         {
             solutionFile = await _solutionLocator.FindSolutionFileAsync(workingDirectory, cancellationToken);
         }
