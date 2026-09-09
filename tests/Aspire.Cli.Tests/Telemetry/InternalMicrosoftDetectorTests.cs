@@ -940,12 +940,26 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             processFactory: processFactory,
             macPlatformSsoPath: appSsoPath);
 
-        var result = await detector.CheckMacPlatformSsoAsync(CancellationToken.None);
+        var probeResult = await detector.CheckMacPlatformSsoAsync(CancellationToken.None);
+
+        Assert.False(probeResult.IsInternalMicrosoft);
+        Assert.True(timeoutObserved);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.ProcessTimeout, probeResult.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessExit, probeResult.Failure?.Stage);
+
+        var fullDetector = CreateDetector(
+            Path.Combine(workspace.Path, "full-detector-cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("Mac Platform SSO", _ => Task.FromResult(probeResult))]]);
+
+        var result = await fullDetector.IsInternalMicrosoftMachineAsync();
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.True(timeoutObserved);
-        Assert.Equal(InternalMicrosoftProbeFailureCode.ProcessTimeout, result.Failure?.Code);
-        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessExit, result.Failure?.Stage);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, result.Outcome);
+        var diagnostic = Assert.Single(result.ProbeDiagnostics);
+        Assert.Equal(InternalMicrosoftProbeOutcome.TimedOut, diagnostic.Outcome);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.ProcessTimeout, diagnostic.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessExit, diagnostic.Failure?.Stage);
     }
 
     [Fact]

@@ -369,11 +369,13 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 cancellationToken.ThrowIfCancellationRequested();
                 var result = await probe.DetectAsync(cancellationToken).ConfigureAwait(false);
                 stopwatch.Stop();
-                var outcome = result.Failure is not null
-                    ? InternalMicrosoftProbeOutcome.Failed
-                    : result.IsInternalMicrosoft
-                        ? InternalMicrosoftProbeOutcome.Detected
-                        : InternalMicrosoftProbeOutcome.NotDetected;
+                var outcome = result.Failure?.Code == InternalMicrosoftProbeFailureCode.ProcessTimeout
+                    ? InternalMicrosoftProbeOutcome.TimedOut
+                    : result.Failure is not null
+                        ? InternalMicrosoftProbeOutcome.Failed
+                        : result.IsInternalMicrosoft
+                            ? InternalMicrosoftProbeOutcome.Detected
+                            : InternalMicrosoftProbeOutcome.NotDetected;
                 return new InternalMicrosoftProbeRunResult(
                     probe,
                     probe.Name,
