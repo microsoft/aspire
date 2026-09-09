@@ -32,11 +32,15 @@ The policy accounts for:
 - Local package hives.
 - Staging feed overrides.
 - The NuGet service-index override.
-- Global-packages-folder isolation required by mutable sources.
+- Global-packages-folder isolation explicitly requested by the selected channel.
 
 The result contains the effective source locations, package patterns, and cache-isolation requirements. Downstream restore paths consume this result directly and do not reconstruct built-in feed URLs.
 
 Relative local sources are resolved against the AppHost directory before they are used from the integration cache.
+
+Cache isolation is an explicit channel policy rather than something inferred from a local source path. Staging feeds opt into source-specific isolation because distinct feeds can publish different packages under the same stable-shaped version.
+
+Local and PR package hives use [NuGet's normal global-packages behavior](https://learn.microsoft.com/nuget/consume-packages/managing-the-global-packages-and-cache-folders): an existing package with the requested ID and version is reused without consulting the selected source. Replacing package contents under an existing version therefore requires publishing a new version, removing the cached package, or selecting a fresh global packages folder through standard NuGet configuration.
 
 ## Native NuGet settings bridge
 
@@ -172,6 +176,6 @@ SDK restore skipping is disabled when a config file references an environment va
 | Internal proxy override | Uses only the proxy selected by the source policy | Can opt into the proxy location hint |
 | Ambient authenticated source | Uses the ambient source key and NuGet-owned credentials | Can opt into the credential-free source location and authenticate through NuGet |
 | Explicitly selected disabled source | Clears inherited disabled-source state under the complete mapping policy | Can opt into the selected source location hint |
-| Local package hive | Uses an absolute local source and isolated global packages folder | Can opt into the absolute local source hint |
+| Local or PR package hive | Uses an absolute local source and standard NuGet global-packages behavior | Can opt into the absolute local source hint |
 | Nested AppHost config | Excluded by the integration-cache discovery boundary | Remains available to projects whose own hierarchy includes it |
 | Referenced project outside the AppHost tree | Uses the generated root hierarchy | Retains its own config and can explicitly consume the hints |
