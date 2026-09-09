@@ -49,6 +49,15 @@ including for draft PRs. Reopening a PR or marking a draft ready does not trigge
 an additional run. Manual dispatch on `main` and a scheduled
 scan every 15 minutes reconcile open PRs. GitHub can delay scheduled runs.
 
+`pull_request_target` runs initiated by `dependabot[bot]` skip the entire job,
+before App token creation, because [Dependabot PR events can lack Actions
+secrets](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-on-actions#restrictions-when-dependabot-triggers-events).
+Dependabot-authored PRs remain eligible for scheduled scans and maintainer
+manual dispatches, which use their own execution context and credentials.
+Their reviews therefore normally wait for the next scan rather than running
+immediately on creation or push. Do not copy the App private key into Dependabot
+secrets; it is not needed for this recovery path.
+
 Scheduled scans skip PRs with no activity in the last 14 days, using GitHub's
 `updated_at` timestamp (not the PR creation date or latest commit date). The
 cutoff is inclusive: an update exactly 14 days before the run is stale. The

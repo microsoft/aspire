@@ -28,9 +28,13 @@ concurrency:
 
 jobs:
   request-reviews:
+    # Dependabot PR events can lack Actions secrets. Skip before token creation;
+    # scheduled/manual runs still reconcile those PRs using their own credentials.
+    # https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-on-actions#restrictions-when-dependabot-triggers-events
     if: >-
       github.repository == 'microsoft/aspire' &&
       vars.COPILOT_REVIEW_MODE != 'disabled' &&
+      (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') &&
       (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -131,6 +131,12 @@ switch (scenario) {
         }
         expectedWrites = 1;
         break;
+    case 'dependabot-scheduled':
+    case 'dependabot-manual':
+        pull.user = { login: 'dependabot[bot]', type: 'Bot' };
+        context.eventName = scenario === 'dependabot-scheduled' ? 'schedule' : 'workflow_dispatch';
+        expectedWrites = 1;
+        break;
     case 'draft':
     case 'draft-scheduled':
         pull.draft = true;

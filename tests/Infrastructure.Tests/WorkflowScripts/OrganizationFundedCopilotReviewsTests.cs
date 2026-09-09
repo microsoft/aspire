@@ -29,6 +29,7 @@ public sealed class OrganizationFundedCopilotReviewsTests(ITestOutputHelper outp
         var job = Assert.IsType<YamlMappingNode>(Assert.Single(jobs.Children).Value);
         Assert.Equal(
             "github.repository == 'microsoft/aspire' && vars.COPILOT_REVIEW_MODE != 'disabled' && " +
+            "(github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') && " +
             "(github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')",
             Scalar(job, "if"));
         Assert.Equal("ubuntu-latest", Scalar(job, "runs-on"));
@@ -86,6 +87,8 @@ public sealed class OrganizationFundedCopilotReviewsTests(ITestOutputHelper outp
     [InlineData("stale-manual")]
     [InlineData("external-author")]
     [InlineData("bot-author")]
+    [InlineData("dependabot-scheduled")]
+    [InlineData("dependabot-manual")]
     [InlineData("draft")]
     [InlineData("draft-scheduled")]
     [InlineData("closed")]
