@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "MCP configuration made opt-in in agent setup flows; user-facing CLI behavior change",
+  "mergedAt": "2026-09-09T16:49:25Z",
+  "number": 19893,
+  "runDate": "2026-09-09T18:05:48Z",
+  "status": "included",
+  "title": "Update agent setup in aspire new"
+}

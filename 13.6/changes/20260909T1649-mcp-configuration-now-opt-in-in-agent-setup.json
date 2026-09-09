@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The chained agent setup in `aspire new` and `aspire init` no longer offers to install the Aspire MCP server, and non-interactive `aspire agent init` never selects MCP through its default skill set. The standalone `aspire agent init` command still lets you opt in with a new `--mcp` confirm prompt, unselected by default.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-09-09T16:49:25Z",
+  "lastMergedAt": "2026-09-09T16:49:25Z",
+  "name": "MCP configuration now opt-in in agent setup",
+  "owner": "ellahathaway",
+  "prs": [
+    19893
+  ]
+}
