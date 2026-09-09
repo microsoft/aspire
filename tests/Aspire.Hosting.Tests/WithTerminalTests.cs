@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.TerminalHost;
@@ -272,6 +273,54 @@ public class WithTerminalTests : IAsyncLifetime
                 ManifestPublishingCallbackAnnotation.Ignore,
                 host.Annotations.OfType<ManifestPublishingCallbackAnnotation>().Single());
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalHostTelemetryFollowsVisibility(bool showTerminalHost)
+    {
+        using var builder = CreateBuilder();
+        const string otlpEndpoint = "http://localhost:4317";
+        builder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = otlpEndpoint;
+        builder.Configuration[KnownConfigNames.TerminalHostTelemetryEnabled] = "true";
+
+        var resource = builder.AddExecutable("myapp", "myapp", ".")
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .WithOtlpExporter()
+            .WithTerminal(options => options.ShowTerminalHost = showTerminalHost);
+
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        Assert.Equal(2, hosts.Count);
+        foreach (var host in hosts)
+        {
+            var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(host, serviceProvider: app.Services);
+            Assert.Equal(showTerminalHost ? "true" : "false", environment[KnownConfigNames.TerminalHostTelemetryEnabled]);
+
+            if (showTerminalHost)
+            {
+                Assert.Equal(otlpEndpoint, environment["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+                Assert.Equal("grpc", environment["OTEL_EXPORTER_OTLP_PROTOCOL"]);
+            }
+            else
+            {
+                Assert.Equal(
+                    [
+                        KnownConfigNames.TerminalHostParentProcessId,
+                        KnownConfigNames.TerminalHostParentProcessStartedStable,
+                        KnownConfigNames.TerminalHostTelemetryEnabled,
+                    ],
+                    environment.Keys.Order(StringComparer.Ordinal));
+            }
+        }
+
+        var parentEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource.Resource, serviceProvider: app.Services);
+        Assert.Equal(otlpEndpoint, parentEnvironment["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        Assert.False(parentEnvironment.ContainsKey(KnownConfigNames.TerminalHostTelemetryEnabled));
     }
 
     [Fact]
