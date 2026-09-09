@@ -4,9 +4,11 @@
 using System.Collections.Immutable;
 using System.CommandLine;
 using System.Globalization;
+using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -26,6 +28,8 @@ internal sealed class AddCommand : BaseCommand
 
     private readonly IProjectLocator _projectLocator;
     private readonly IntegrationPackageSearchService _integrationPackageSearchService;
+    private readonly BundleNuGetService _bundleNuGetService;
+    private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IAddCommandPrompter _prompter;
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly ICliHostEnvironment _hostEnvironment;
@@ -52,11 +56,13 @@ internal sealed class AddCommand : BaseCommand
         Description = AddCommandStrings.AllArgumentDescription
     };
 
-    public AddCommand(IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, IDotNetSdkInstaller sdkInstaller, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry, CommonCommandServices services)
+    public AddCommand(IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, BundleNuGetService bundleNuGetService, IDotNetCliRunner dotNetCliRunner, IAddCommandPrompter prompter, IDotNetSdkInstaller sdkInstaller, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry, CommonCommandServices services)
         : base("add", AddCommandStrings.Description, services)
     {
         _projectLocator = projectLocator;
         _integrationPackageSearchService = integrationPackageSearchService;
+        _bundleNuGetService = bundleNuGetService;
+        _dotNetCliRunner = dotNetCliRunner;
         _prompter = prompter;
         _sdkInstaller = sdkInstaller;
         _hostEnvironment = hostEnvironment;
@@ -316,9 +322,7 @@ internal sealed class AddCommand : BaseCommand
             // When installing from a PR channel, ensure the project has access to
             // the PR hive as a NuGet source so `dotnet add package` can resolve the
             // PR-version package. We add the hive source to the project's nuget.config
-            // WITHOUT package source mapping restrictions, so that transitive deps
-            // (including RID-specific and stable-versioned packages) can still resolve
-            // from NuGet.org via the normal NuGet source hierarchy.
+            // while preserving the effective package source mapping policy, if present.
             //
             // IsBackedByLocalPackageDirectory (not just the local-build NAME) is required so this
             // also fires when emulating a released build via ASPIRE_CLI_PACKAGES: there the channel
@@ -331,24 +335,18 @@ internal sealed class AddCommand : BaseCommand
                 var mappings = selectedNuGetPackage.Channel.Mappings;
                 if (mappings is { Length: > 0 })
                 {
-                    var hiveSources = mappings
-                        .Select(m => m.Source)
-                        .Where(s => !s.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                        .Distinct(StringComparer.OrdinalIgnoreCase);
-
                     var projectDir = effectiveAppHostProjectFile.Directory!;
+                    projectDir.Create();
                     var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
                     if (!File.Exists(nugetConfigPath))
                     {
-                        projectDir.Create(); // ensure directory exists
-                        var configXml = new System.Xml.Linq.XDocument(
-                            new System.Xml.Linq.XElement("configuration",
-                                new System.Xml.Linq.XElement("packageSources",
-                                    hiveSources.Select(s =>
-                                        new System.Xml.Linq.XElement("add",
-                                            new System.Xml.Linq.XAttribute("key", s),
-                                            new System.Xml.Linq.XAttribute("value", s))))));
-                        configXml.Save(nugetConfigPath);
+                        var packageSourceMappingEnabled = await HasEffectivePackageSourceMappingAsync(
+                            projectDir,
+                            cancellationToken);
+                        CreateAdditiveLocalSourceNuGetConfig(
+                            projectDir,
+                            mappings,
+                            packageSourceMappingEnabled);
                         InteractionService.DisplayMessage(KnownEmojis.Package, Aspire.Cli.Resources.TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
                     }
                 }
@@ -443,6 +441,118 @@ internal sealed class AddCommand : BaseCommand
         {
             addActivity.Dispose();
         }
+    }
+
+    private async Task<bool> HasEffectivePackageSourceMappingAsync(
+        DirectoryInfo projectDirectory,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var settings = await _bundleNuGetService.GetNuGetSettingsAsync(
+                projectDirectory.FullName,
+                cancellationToken);
+            return settings.PackageSourceMappingEnabled;
+        }
+        catch (InvalidOperationException ex) when (ex.Message == BundleNuGetService.ManagedComponentNotFoundMessage)
+        {
+            // Source builds and unit tests do not always have an extracted bundle layout.
+            var (exitCode, configPaths) = await _dotNetCliRunner.GetNuGetConfigPathsAsync(
+                projectDirectory,
+                new ProcessInvocationOptions { SuppressLogging = true },
+                cancellationToken);
+            if (exitCode != 0)
+            {
+                throw new InvalidOperationException($"Unable to discover the NuGet configuration hierarchy for '{projectDirectory.FullName}'.");
+            }
+
+            return await HasPackageSourceMappingAsync(configPaths, cancellationToken);
+        }
+    }
+
+    internal static async Task<bool> HasPackageSourceMappingAsync(
+        IReadOnlyList<string> configPaths,
+        CancellationToken cancellationToken)
+    {
+        // NuGet returns paths from highest to lowest precedence. A clear in a higher-precedence
+        // config prevents lower mapping entries from contributing to the effective settings.
+        foreach (var configPath in configPaths)
+        {
+            await using var stream = File.OpenRead(configPath);
+            var document = await XDocument.LoadAsync(stream, LoadOptions.None, cancellationToken);
+            var section = document.Root?
+                .Elements()
+                .FirstOrDefault(static element => string.Equals(
+                    element.Name.LocalName,
+                    "packageSourceMapping",
+                    StringComparison.OrdinalIgnoreCase));
+            if (section is null)
+            {
+                continue;
+            }
+
+            if (section.Elements().Any(static element => string.Equals(
+                element.Name.LocalName,
+                "packageSource",
+                StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            if (section.Elements().Any(static element => string.Equals(
+                element.Name.LocalName,
+                "clear",
+                StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    internal static void CreateAdditiveLocalSourceNuGetConfig(
+        DirectoryInfo projectDirectory,
+        PackageMapping[] mappings,
+        bool packageSourceMappingEnabled)
+    {
+        var localMappings = mappings
+            .Where(static mapping => !mapping.Source.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var localSources = localMappings
+            .Select(static mapping => mapping.Source)
+            .Distinct(PackageSourceIdentity.Comparer);
+        var configuration = new XElement(
+            "configuration",
+            new XElement(
+                "packageSources",
+                localSources.Select(static source =>
+                    new XElement(
+                        "add",
+                        new XAttribute("key", source),
+                        new XAttribute("value", source)))));
+
+        if (packageSourceMappingEnabled)
+        {
+            // NuGet retains the higher-precedence key when the same source value exists in an
+            // inherited config, so the child mapping must use the exact local key written above.
+            configuration.Add(
+                new XElement(
+                    "packageSourceMapping",
+                    localMappings
+                        .GroupBy(static mapping => mapping.Source, PackageSourceIdentity.Comparer)
+                        .Select(static group =>
+                            new XElement(
+                                "packageSource",
+                                new XAttribute("key", group.Key),
+                                group.Select(static mapping =>
+                                    new XElement(
+                                        "package",
+                                        new XAttribute("pattern", mapping.PackageFilter)))))));
+        }
+
+        new XDocument(configuration).Save(
+            Path.Combine(projectDirectory.FullName, "nuget.config"));
     }
 
     private static async Task<IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> GetAllPackageVersions(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, CancellationToken cancellationToken)
