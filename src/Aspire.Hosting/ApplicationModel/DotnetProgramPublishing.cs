@@ -52,7 +52,7 @@ internal static class DotnetProgramPublishing
                 Action = context => BuildImageAsync(stepResource, buildEnvironmentProviders, context),
                 Tags = [WellKnownPipelineTags.BuildCompute],
                 RequiredBySteps = [WellKnownPipelineSteps.Build],
-                DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq, WellKnownPipelineSteps.CheckContainerRuntime],
+                DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
                 Resource = stepResource
             };
             steps.Add(buildStep);
@@ -123,9 +123,13 @@ internal static class DotnetProgramPublishing
             return;
         }
 
+        // Only the resolved build options determine whether SDK publishing needs a runtime.
+        // Keep interactive recovery for those builds without blocking daemon-free archives.
+        var readiness = context.Services.GetRequiredService<ContainerRuntimeReadiness>();
         using var buildResult = await dotnetProgramImageBuilder.BuildDotnetProgramImageAsync(
             resource,
             buildEnvironmentProviders,
+            readiness.EnsureRunningAsync,
             context.CancellationToken).ConfigureAwait(false);
 
         if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out _))
@@ -279,6 +283,9 @@ internal static class DotnetProgramPublishing
 
     internal static bool IsExplicitArchiveOutputPath(string outputPath)
     {
+        // The SDK accepts arbitrary file extensions, such as "image.custom". A trailing
+        // directory separator makes a dotted path such as "artifacts.v1\" unambiguous.
+        // https://github.com/dotnet/sdk/blob/v10.0.400/src/Containers/Microsoft.NET.Build.Containers/LocalDaemons/ArchiveFileRegistry.cs
         return !Directory.Exists(outputPath) &&
             (File.Exists(outputPath) || Path.HasExtension(outputPath));
     }

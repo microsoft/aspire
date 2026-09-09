@@ -972,7 +972,7 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
     public async Task ProjectResourceWithContainerFilesAndCustomImageManagerDelegatesCompleteBuild()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "build-projectName");
-        var containerRuntime = new FakeContainerRuntime();
+        var containerRuntime = new FakeContainerRuntime(isRunning: false);
         builder.Services.AddSingleton<IContainerRuntime>(containerRuntime);
         builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
@@ -990,6 +990,7 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         var imageManager = (MockImageBuilder)app.Services.GetRequiredService<IResourceContainerImageManager>();
         Assert.True(imageManager.BuildImageCalled);
         Assert.Equal("projectName", Assert.Single(imageManager.BuildImageResources).Name);
+        Assert.False(containerRuntime.WasHealthCheckCalled);
         Assert.False(containerRuntime.WasTagImageCalled);
         Assert.False(containerRuntime.WasBuildImageCalled);
     }

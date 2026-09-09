@@ -7,6 +7,7 @@
 #pragma warning disable ASPIREPROJECTS001
 #pragma warning disable ASPIRECSHARPAPPS001
 
+using System.Text.RegularExpressions;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
@@ -937,15 +938,25 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.Equal("previous archive", await File.ReadAllTextAsync(archivePath));
     }
 
-    [Fact]
-    public async Task BuildImageAsync_CrossOperatingSystemFileAppAotFailureAddsGuidance()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuildImageAsync_CrossOperatingSystemFileAppAotFailureAddsGuidance(bool truncateDiagnostic)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         using var workspace = TemporaryWorkspace.Create(output);
         var processRunner = new TestProcessRunner();
-        processRunner.EnqueueResult(
-            exitCode: 1,
-            error: ["error : Cross-OS native compilation is not supported."]);
+        var outputEvents = new List<TestProcessOutput>
+        {
+            new(IsError: true, "error : Cross-OS native compilation is not supported.")
+        };
+        if (truncateDiagnostic)
+        {
+            outputEvents.AddRange(Enumerable.Range(0, ProcessSpec.DefaultRetainedOutputLineCount)
+                .Select(index => new TestProcessOutput(IsError: false, $"Build output {index}")));
+        }
+
+        processRunner.EnqueueResult(exitCode: 1, outputEvents: outputEvents);
         builder.Services.AddSingleton<IProcessRunner>(processRunner);
         builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime());
 
@@ -969,8 +980,114 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         Assert.Contains("File-based apps enable PublishAot by default.", exception.Message);
         Assert.Contains("#:property PublishAot=false", exception.Message);
-        Assert.Contains("Cross-OS native compilation is not supported.", exception.Message);
+        Assert.Equal(
+            outputEvents.TakeLast(ProcessSpec.DefaultRetainedOutputLineCount).Select(static line => line.Value),
+            exception.ProcessOutput);
+        Assert.Equal(outputEvents.Count, exception.TotalProcessOutputLineCount);
         Assert.Single(processRunner.ProcessSpecs);
+    }
+
+    [Theory]
+    [InlineData(true, true, "error NU1301: Unable to load the service index.")]
+    [InlineData(true, true, "error CS1002: ; expected")]
+    [InlineData(false, true, "error : Cross-OS native compilation is not supported.")]
+    [InlineData(true, false, "error : Cross-OS native compilation is not supported.")]
+    public async Task BuildImageAsync_DoesNotInferAotFailure(bool fileBased, bool crossOperatingSystem, string error)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(exitCode: 42, error: [error]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime());
+
+        ContainerTargetPlatform? targetPlatform = crossOperatingSystem
+            ? OperatingSystem.IsWindows() ? ContainerTargetPlatform.LinuxAmd64 : ContainerTargetPlatform.WindowsAmd64
+            : OperatingSystem.IsWindows() ? ContainerTargetPlatform.WindowsAmd64
+                : OperatingSystem.IsLinux() ? ContainerTargetPlatform.LinuxAmd64 : null;
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, fileBased ? "app.cs" : "app.csproj");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.OutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.tar");
+                context.TargetPlatform = targetPlatform;
+            });
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var exception = await Assert.ThrowsAsync<ProcessFailedException>(
+            () => imageBuilder.BuildImageAsync(resource.Resource));
+
+        Assert.Equal(42, exception.ExitCode);
+        Assert.Equal([error], exception.ProcessOutput);
+        Assert.Equal(
+            $"Failed to build container image for resource 'program' from project '{projectPath}' with exit code 42." +
+            Environment.NewLine + exception.GetFormattedOutput(),
+            exception.Message);
+        Assert.Single(processRunner.ProcessSpecs);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuildImageAsync_ContainerFilesUseReleaseWorkingDirectory(bool fileBased)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["/release-app"]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        var containerRuntime = new FakeContainerRuntime(name: "Docker");
+        builder.Services.AddFakeContainerRuntime(containerRuntime);
+
+        var source = builder.AddContainer("assets", "assets-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, fileBased ? "app.cs" : "app.csproj");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source.Resource,
+                DestinationPath = "wwwroot"
+            });
+        string? dockerfile = null;
+        containerRuntime.BuildImageAsyncCallback = async (_, dockerfilePath, _, _, _, _, cancellationToken) =>
+        {
+            dockerfile = await File.ReadAllTextAsync(dockerfilePath, cancellationToken);
+        };
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource);
+
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            publish => Assert.Equal(
+                [
+                    "publish", projectPath, "--configuration", "Release", "/t:PublishContainer",
+                    "/p:ContainerRepository=program", "/p:ContainerImageTag=latest",
+                    "/p:LocalRegistry=Docker", "/p:RuntimeIdentifier=linux-x64", "/p:ContainerRuntimeIdentifier=linux-x64"
+                ],
+                publish.ArgumentList),
+            query =>
+            {
+                Assert.Equal(Path.GetDirectoryName(projectPath), query.WorkingDirectory);
+                Assert.Equal(
+                    [
+                        fileBased ? "build" : "msbuild", projectPath, "-p:Configuration=Release",
+                        "-getProperty:ContainerWorkingDirectory", "-v:q",
+                        "/p:RuntimeIdentifier=linux-x64", "/p:ContainerRuntimeIdentifier=linux-x64"
+                    ],
+                    query.ArgumentList);
+            });
+        Assert.Single(containerRuntime.BuildImageCalls);
+        Assert.NotNull(dockerfile);
+        await Verify(dockerfile)
+            .UseParameters(fileBased)
+            .ScrubLinesWithReplace(line => Regex.Replace(line, "FROM program:temp-.*", "FROM program:temp-"));
     }
 
     [Fact]

@@ -8,9 +8,11 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREPROJECTS001
 
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
@@ -80,6 +82,66 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.IsAssignableFrom<IResourceWithServiceDiscovery>(app.Resource);
         Assert.IsAssignableFrom<ExecutableResource>(app.Resource);
         Assert.IsAssignableFrom<IComputeResource>(app.Resource);
+    }
+
+    [Theory]
+    [InlineData(1, false, false)]
+    [InlineData(3, false, false)]
+    [InlineData(3, true, false)]
+    [InlineData(1, false, true)]
+    [InlineData(3, false, true)]
+    [InlineData(3, true, true)]
+    public void AddDotnetProject_ReplicasRenderEveryDcpInstance(int replicas, bool polyglot, bool fileBased)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var resource = builder.AddDotnetProject("svc", fileBased ? "service.cs" : "Service.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithExplicitStart();
+        if (polyglot)
+        {
+            resource.WithReplicasForPolyglot(replicas);
+        }
+        else
+        {
+            resource.WithReplicas(replicas);
+        }
+
+        using var app = builder.Build();
+        var rendered = app.Services.GetRequiredService<ExecutableCreator>()
+            .PrepareObjects(TestContext.Current.CancellationToken)
+            .Where(item => ReferenceEquals(item.ModelResource, resource.Resource))
+            .Select(item => item.DcpResource)
+            .OrderBy(static executable => int.Parse(executable.Metadata.Annotations[CustomResource.ResourceReplicaIndex], CultureInfo.InvariantCulture))
+            .ToArray();
+
+        Assert.Equal(replicas, rendered.Length);
+        Assert.True(resource.Resource.TryGetInstances(out var instances));
+        Assert.Equal(instances.Select(instance => instance.Name), rendered.Select(executable => executable.Metadata.Name));
+        Assert.Equal(replicas, rendered.Select(executable => executable.Metadata.Annotations[CustomResource.OtelServiceInstanceIdAnnotation]).Distinct().Count());
+        for (var index = 0; index < replicas; index++)
+        {
+            var executable = rendered[index];
+            Assert.Equal(index.ToString(CultureInfo.InvariantCulture), executable.Metadata.Annotations[CustomResource.ResourceReplicaIndex]);
+            Assert.Equal(replicas.ToString(CultureInfo.InvariantCulture), executable.Metadata.Annotations[CustomResource.ResourceReplicaCount]);
+            Assert.Equal("svc", executable.Metadata.Annotations[CustomResource.OtelServiceNameAnnotation]);
+            Assert.Equal(resource.Resource.Command, executable.Spec.ExecutablePath);
+            Assert.Equal(resource.Resource.WorkingDirectory, executable.Spec.WorkingDirectory);
+            Assert.False(executable.Spec.Start);
+        }
+    }
+
+    [Fact]
+    public void AddDotnetProject_PersistentReplicasRemainUnsupported()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.AddDotnetProject("svc", "Service.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithReplicas(2)
+            .WithPersistentLifetime();
+        using var app = builder.Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            app.Services.GetRequiredService<ExecutableCreator>().PrepareObjects(TestContext.Current.CancellationToken).ToArray());
+
+        Assert.Equal("Resource 'svc' uses multiple replicas and a persistent lifetime. These features do not work together.", exception.Message);
     }
 
     [Fact]
@@ -224,6 +286,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     public async Task AddDotnetProject_FileBasedAppWithContainerFilesBuildsContainerArchive()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var imageName = $"file-app-{Guid.NewGuid():N}";
         var appPath = Path.Combine(workspace.Path, "app.cs");
         await File.WriteAllTextAsync(appPath, """
             #:property PublishAot=false
@@ -238,12 +301,13 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             .WithAnnotation(new ContainerFilesDestinationAnnotation
             {
                 Source = assets.Resource,
-                DestinationPath = "/app/assets"
+                DestinationPath = "assets"
             })
             .WithContainerBuildOptions(context =>
             {
                 context.Destination = ContainerImageDestination.Archive;
                 context.ImageFormat = ContainerImageFormat.Docker;
+                context.LocalImageName = imageName;
                 context.OutputPath = archivePath;
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             });

@@ -115,6 +115,23 @@ To publish a framework-dependent container instead, add this directive to the C#
 Alternatively, run publishing on the target operating system to retain Native AOT. Aspire reports focused
 guidance when it detects this cross-operating-system failure.
 
+### Archive output paths
+
+Set `Destination` to `ContainerImageDestination.Archive` in `WithContainerBuildOptions` to save an SDK-built
+image as an archive. An archive-only SDK build does not require Docker or Podman to be running; layering files
+from another container still requires a container runtime.
+
+For .NET SDK publishing, a non-existent `OutputPath` with any filename extension is an explicit archive
+filename. This includes custom extensions such as `image.custom`, not only `.tar` or `.tar.gz`. A path without
+an extension is interpreted as a directory. End a dotted directory path with the platform's directory separator
+to make its intent explicit, for example `artifacts.v1\` on Windows. Prefer an explicit archive filename when
+configuring output consumed by other tools.
+
+These are the .NET SDK's path conventions; Dockerfile/container-runtime publishing has its own output
+conventions. See the [SDK archive publishing documentation](https://learn.microsoft.com/dotnet/core/containers/sdk-publish#publish-net-app-to-a-tarball).
+
+### Other publishing options
+
 Call `PublishAsDockerFile(...)` or `publishAsDockerFile(...)` to use an explicit Dockerfile instead of .NET SDK
 container publishing. Call `ExcludeFromManifest()` or `excludeFromManifest()` when the resource is intentionally
 available only during local orchestration.
