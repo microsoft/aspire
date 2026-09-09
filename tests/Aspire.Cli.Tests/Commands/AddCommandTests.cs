@@ -3185,10 +3185,11 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandPolyglotAppHostAddsPolyglotIntegration()
+    public async Task AddCommandPolyglotAppHostPassesSelectedRestorePolicy()
     {
         // The polyglot-compatible integration (Redis) survives filtering and installs normally.
-        var addedPackageId = string.Empty;
+        AddPackageContext? addPackageContext = null;
+        const string sourceOverride = "https://example.invalid/aspire";
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
@@ -3205,7 +3206,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var tsFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
         tsFactory.Project.AddPackageAsyncCallback = (context, _) =>
         {
-            addedPackageId = context.PackageId;
+            addPackageContext = context;
             return Task.FromResult(true);
         };
 
@@ -3226,12 +3227,77 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse($"add Aspire.Hosting.Redis --apphost \"{appHostFile.FullName}\"");
+        var result = command.Parse($"add Aspire.Hosting.Redis --apphost \"{appHostFile.FullName}\" --source {sourceOverride}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
-        Assert.Equal("Aspire.Hosting.Redis", addedPackageId);
+        Assert.NotNull(addPackageContext);
+        Assert.Equal("Aspire.Hosting.Redis", addPackageContext.PackageId);
+        Assert.Equal(PackageChannelNames.Stable, addPackageContext.RequestedChannel);
+        Assert.Equal(sourceOverride, addPackageContext.Source);
+    }
+
+    [Fact]
+    public async Task AddCommandPolyglotAppHostWithLocalChannelDoesNotWriteNuGetConfig()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+
+        const string channelName = "pr-12345";
+        const string packageVersion = "13.2.0-pr.12345.gabc";
+        workspace.CreateDirectory(Path.Combine(".aspire", "hives", channelName));
+        var localSource = workspace.CreateDirectory("packages");
+        File.WriteAllText(
+            Path.Combine(localSource.FullName, $"Aspire.Hosting.Redis.{packageVersion}.nupkg"),
+            string.Empty);
+
+        var localChannel = PackageChannel.CreateExplicitChannel(
+            channelName,
+            PackageChannelQuality.Both,
+            [
+                new PackageMapping("Aspire*", localSource.FullName),
+                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+            ],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: packageVersion);
+
+        AddPackageContext? addPackageContext = null;
+        var tsFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        tsFactory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            addPackageContext = context;
+            return Task.FromResult(true);
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([localChannel])
+            };
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(tsFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add Aspire.Hosting.Redis --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(addPackageContext);
+        Assert.Equal(channelName, addPackageContext.RequestedChannel);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
     }
 
     [Fact]

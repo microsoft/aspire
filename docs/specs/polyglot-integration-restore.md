@@ -68,6 +68,8 @@ The policy accounts for:
 
 The result contains the effective source locations, package patterns, and cache-isolation requirements. Downstream restore paths consume this result directly and do not reconstruct built-in feed URLs.
 
+Polyglot `aspire add` passes the channel selected during package discovery and any explicit `--source` value into this same restore policy. It does not create or modify an AppHost-local user NuGet configuration file. The `--source` value remains invocation-scoped, matching the existing command contract; associating a durable restore source with an individual integration reference is follow-up design work.
+
 Relative local sources are resolved against the AppHost directory before they are used from the integration cache.
 
 Cache isolation is an explicit channel policy rather than something inferred from a local source path. Staging feeds opt into a source-specific global packages folder because distinct feeds can publish different packages under the same stable-shaped version. This isolates the writable global cache; it does not disable configured fallback folders.
