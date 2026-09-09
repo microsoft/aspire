@@ -7,7 +7,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using OpenTelemetry.Metrics;
+using OpenTelemetry;
 using OpenTelemetry.Trace;
 using Xunit;
 
@@ -32,7 +32,7 @@ public class OtelTracesTests
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task EnsureTracesAreProducedAsync(bool useKeyed)
     {
-        List<Activity> activities = new();
+        var activityExporter = new TestActivityExporter();
         var builder = Host.CreateEmptyApplicationBuilder(null);
         var key = useKeyed ? "messaging" : null;
         builder.Configuration.AddInMemoryCollection([
@@ -60,7 +60,8 @@ public class OtelTracesTests
             });
         }
 
-        builder.Services.AddOpenTelemetry().WithTracing(traceProviderBuilder => traceProviderBuilder.AddInMemoryExporter(activities));
+        builder.Services.AddOpenTelemetry().WithTracing(traceProviderBuilder =>
+            traceProviderBuilder.AddProcessor(new SimpleActivityExportProcessor(activityExporter)));
 
         using var host = builder.Build();
         await host.StartAsync();
@@ -83,14 +84,15 @@ public class OtelTracesTests
             await producer.FlushAsync();
         }
 
-        Assert.Equal(5, activities.Count);
-        Assert.All(activities, activity =>
+        var sendActivities = activityExporter.GetActivities()
+            .Where(activity => Equals(activity.GetTagItem("messaging.destination.name"), topic))
+            .ToArray();
+        Assert.Equal(5, sendActivities.Length);
+        Assert.All(sendActivities, activity =>
         {
             Assert.Equal($"send {topic}", activity.OperationName);
             Assert.Equal(ActivityKind.Producer, activity.Kind);
         });
-
-        activities.Clear();
 
         using (var consumer = useKeyed
             ? host.Services.GetRequiredKeyedService<IConsumer<string, string>>(key)
@@ -117,8 +119,12 @@ public class OtelTracesTests
             }
         }
 
-        Assert.Equal(5, activities.Count);
-        Assert.All(activities, activity =>
+        var pollActivities = activityExporter.GetActivities()
+            .Where(activity => Equals(activity.GetTagItem("messaging.destination.name"), topic)
+                && Equals(activity.GetTagItem("messaging.operation.name"), "poll"))
+            .ToArray();
+        Assert.Equal(5, pollActivities.Length);
+        Assert.All(pollActivities, activity =>
         {
             Assert.Equal($"poll {topic}", activity.OperationName);
             Assert.Equal(ActivityKind.Client, activity.Kind);

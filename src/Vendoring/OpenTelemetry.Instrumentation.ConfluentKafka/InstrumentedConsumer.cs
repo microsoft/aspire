@@ -50,9 +50,11 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         ConsumeResult consumeResult = default;
         string? errorType = null;
         string? errorMessage = null;
+        var pollCompleted = false;
         try
         {
             result = this.consumer.Consume(millisecondsTimeout);
+            pollCompleted = true;
             consumeResult = ExtractConsumeResult(result);
             return result;
         }
@@ -64,10 +66,10 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         }
         finally
         {
-            if (ShouldInstrument(result, errorType))
+            if (pollCompleted || errorType is not null)
             {
                 var end = DateTimeOffset.UtcNow;
-                this.InstrumentConsumption(start, end, consumeResult, errorType, errorMessage);
+                this.InstrumentConsumption(start, end, consumeResult, errorType, errorMessage, IsEmptyPoll(result, errorType));
             }
         }
     }
@@ -79,9 +81,11 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         ConsumeResult consumeResult = default;
         string? errorType = null;
         string? errorMessage = null;
+        var pollCompleted = false;
         try
         {
             result = this.consumer.Consume(cancellationToken);
+            pollCompleted = true;
             consumeResult = ExtractConsumeResult(result);
             return result;
         }
@@ -93,10 +97,10 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         }
         finally
         {
-            if (ShouldInstrument(result, errorType))
+            if (pollCompleted || errorType is not null)
             {
                 var end = DateTimeOffset.UtcNow;
-                this.InstrumentConsumption(start, end, consumeResult, errorType, errorMessage);
+                this.InstrumentConsumption(start, end, consumeResult, errorType, errorMessage, IsEmptyPoll(result, errorType));
             }
         }
     }
@@ -108,9 +112,11 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         ConsumeResult consumeResult = default;
         string? errorType = null;
         string? errorMessage = null;
+        var pollCompleted = false;
         try
         {
             result = this.consumer.Consume(timeout);
+            pollCompleted = true;
             consumeResult = ExtractConsumeResult(result);
             return result;
         }
@@ -122,10 +128,10 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         }
         finally
         {
-            if (ShouldInstrument(result, errorType))
+            if (pollCompleted || errorType is not null)
             {
                 var end = DateTimeOffset.UtcNow;
-                this.InstrumentConsumption(start, end, consumeResult, errorType, errorMessage);
+                this.InstrumentConsumption(start, end, consumeResult, errorType, errorMessage, IsEmptyPoll(result, errorType));
             }
         }
     }
@@ -207,9 +213,9 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
     public void Close()
         => this.consumer.Close();
 
-    private static bool ShouldInstrument(ConsumeResult<TKey, TValue>? result, string? errorType) =>
-        result is { IsPartitionEOF: false } ||
-        (result is null && errorType is not null);
+    private static bool IsEmptyPoll(ConsumeResult<TKey, TValue>? result, string? errorType) =>
+        result is { IsPartitionEOF: true } ||
+        (result is null && errorType is null);
 
     private static string FormatConsumeException(ConsumeException consumeException) =>
         consumeException.Error.Code.ToString();
@@ -298,9 +304,11 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         DateTimeOffset endTime,
         ConsumeResult consumeResult,
         string? errorType,
-        string? errorMessage)
+        string? errorMessage,
+        bool isEmptyPoll)
     {
-        if (this.options.Traces)
+        // Empty polls contribute to operation duration, but not message counts or spans.
+        if (this.options.Traces && !isEmptyPoll)
         {
             var propagationContext = consumeResult.Headers != null
                 ? OpenTelemetryConsumeResultExtensions.ExtractPropagationContext(consumeResult.Headers)
@@ -325,7 +333,7 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         if (this.options.Metrics)
         {
             var duration = endTime - startTime;
-            var messageConsumed = consumeResult.TopicPartitionOffset is not null;
+            var messageConsumed = !isEmptyPoll && consumeResult.TopicPartitionOffset is not null;
 
             RecordReceive(
                 consumeResult.TopicPartitionOffset?.TopicPartition,
