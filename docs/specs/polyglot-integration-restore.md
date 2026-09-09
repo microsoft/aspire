@@ -97,24 +97,16 @@ The generated root project receives `RestoreAdditionalProjectSources` only for e
 
 The generated project does not set `RestoreConfigFile`. Using normal discovery preserves NuGet settings that cannot be represented as source arguments or project properties.
 
-## Referenced-project restore hints
+## Referenced-project version hint
 
-The SDK process exposes two invocation-scoped MSBuild properties:
+The SDK process exposes the invocation-scoped `AspireIntegrationHostingVersion` MSBuild property. It contains the `Aspire.Hosting` version selected by the CLI.
 
-- `AspireIntegrationHostingVersion` contains the `Aspire.Hosting` version selected by the CLI.
-- `AspireIntegrationPackageSources` contains the credential-free source locations that can resolve Aspire packages, formatted as an MSBuild source list.
-
-The properties are hints for integration authors. They are visible to every project evaluated in the SDK process, including transitive project references, but Aspire does not assign them to NuGet restore properties. An integration can explicitly consume the version through central package management or append the source hint to its own `RestoreAdditionalProjectSources`.
+The property is a hint for integration authors. It is visible to every project evaluated in the SDK process, including transitive project references, and an integration can explicitly consume it through central package management.
 
 For example, an integration that intentionally aligns its `Aspire.Hosting` dependency with the invoking CLI can use:
 
 ```xml
 <Project>
-  <PropertyGroup>
-    <RestoreAdditionalProjectSources Condition="'$(AspireIntegrationPackageSources)' != ''">
-      $(RestoreAdditionalProjectSources);$(AspireIntegrationPackageSources)
-    </RestoreAdditionalProjectSources>
-  </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Aspire.Hosting" Version="$(AspireIntegrationHostingVersion)"
                     Condition="'$(AspireIntegrationHostingVersion)' != ''" />
@@ -122,7 +114,7 @@ For example, an integration that intentionally aligns its `Aspire.Hosting` depen
 </Project>
 ```
 
-This keeps referenced projects responsible for their own restore policy. In particular, the CLI-selected source is guaranteed to match the generated root's `Aspire.Hosting` version, but it is not guaranteed to contain older or newer versions independently selected by a referenced project.
+Referenced projects remain responsible for their own restore policy. A project that explicitly replaces `RestoreSources` must configure every source needed by the version it selects.
 
 When the source policy requires an isolated global packages folder, the SDK process also receives that folder through `NUGET_PACKAGES`. The generated root and every referenced project therefore use the same source-specific package cache.
 
@@ -139,8 +131,6 @@ Credentials remain in NuGet-owned mechanisms:
 The Aspire overlay contains no copied credential material.
 
 Credential-bearing source URLs are rejected for SDK project-reference restores because the generated project and persistent overlay must remain non-secret. Package-only diagnostics redact credential-bearing source values.
-
-The restore hints are process-wide and therefore never contain credentials. Integrations that consume `AspireIntegrationPackageSources` must rely on NuGet's standard credential mechanisms for authentication.
 
 NuGet-generated restore artifacts are not scrubbed or separately isolated by Aspire. Files such as `project.assets.json`, dependency graph specifications, and `.nupkg.metadata` can retain configured source URLs, including inline URL credentials. Authentication should therefore use NuGet credential mechanisms rather than embedding credentials in source URLs.
 
@@ -162,7 +152,7 @@ SDK restore fingerprints include:
 
 - Generated project content.
 - Ordered configuration paths and file bytes.
-- Integration hosting-version and package-source hint values.
+- Integration hosting-version hint value.
 - Global and fallback package folder inputs.
 - Referenced project files and their directory-scoped imports.
 
@@ -172,10 +162,10 @@ SDK restore skipping is disabled when a config file references an environment va
 
 | Scenario | Generated root | Referenced projects |
 |---|---|---|
-| Default channel | Uses the effective channel policy and ambient hierarchy | Can opt into the selected version and credential-free Aspire source hints |
-| Internal proxy override | Uses only the proxy selected by the source policy | Can opt into the proxy location hint |
-| Ambient authenticated source | Uses the ambient source key and NuGet-owned credentials | Can opt into the credential-free source location and authenticate through NuGet |
-| Explicitly selected disabled source | Clears inherited disabled-source state under the complete mapping policy | Can opt into the selected source location hint |
-| Local or PR package hive | Uses an absolute local source and standard NuGet global-packages behavior | Can opt into the absolute local source hint |
+| Default channel | Uses the effective channel policy and ambient hierarchy | Can opt into the selected version |
+| Internal proxy override | Uses only the proxy selected by the source policy | Retains its own restore policy |
+| Ambient authenticated source | Uses the ambient source key and NuGet-owned credentials | Retains its own configuration and credentials |
+| Explicitly selected disabled source | Clears inherited disabled-source state under the complete mapping policy | Retains its own restore policy |
+| Local or PR package hive | Uses an absolute local source and standard NuGet global-packages behavior | Can opt into the selected version |
 | Nested AppHost config | Excluded by the integration-cache discovery boundary | Remains available to projects whose own hierarchy includes it |
-| Referenced project outside the AppHost tree | Uses the generated root hierarchy | Retains its own config and can explicitly consume the hints |
+| Referenced project outside the AppHost tree | Uses the generated root hierarchy | Retains its own config and can explicitly consume the version hint |

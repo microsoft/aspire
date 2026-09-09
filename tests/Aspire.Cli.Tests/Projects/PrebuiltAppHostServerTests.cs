@@ -149,7 +149,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [configPath],
             integrationHostingVersion: null,
-            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -163,7 +162,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [configPath],
             integrationHostingVersion: null,
-            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -195,7 +193,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [configPath],
             integrationHostingVersion: null,
-            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -242,7 +239,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: null,
-            integrationPackageSources: null,
             nugetPackagesPath: Path.GetFullPath("packages-a"),
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -253,7 +249,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: null,
-            integrationPackageSources: null,
             nugetPackagesPath: Path.GetFullPath("packages-b"),
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -270,7 +265,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: null,
-            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: [Path.GetFullPath("fallback-a")],
             CancellationToken.None);
@@ -281,7 +275,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: null,
-            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: [Path.GetFullPath("fallback-b")],
             CancellationToken.None);
@@ -290,7 +283,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenIntegrationHintsChange()
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenIntegrationHostingVersionChanges()
     {
         var initial = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
             "<Project />",
@@ -298,7 +291,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: "13.4.0",
-            integrationPackageSources: "https://example.invalid/a",
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -309,24 +301,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: "13.5.0",
-            integrationPackageSources: "https://example.invalid/a",
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: null,
-            CancellationToken.None);
-
-        var changedSources = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            nugetConfigPaths: null,
-            integrationHostingVersion: "13.4.0",
-            integrationPackageSources: "https://example.invalid/b",
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
 
         Assert.NotEqual(initial.Fingerprint, changedVersion.Fingerprint);
-        Assert.NotEqual(initial.Fingerprint, changedSources.Fingerprint);
     }
 
     [Fact]
@@ -2644,14 +2623,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 Assert.NotNull(options.EnvironmentVariableFilter);
                 Assert.True(options.EnvironmentVariableFilter(CliPathHelper.NuGetPackagesEnvironmentVariable));
                 Assert.True(options.EnvironmentVariableFilter(PrebuiltAppHostServer.IntegrationHostingVersionPropertyName));
-                Assert.True(options.EnvironmentVariableFilter(PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName));
                 Assert.False(options.EnvironmentVariableFilter("PATH"));
                 Assert.Equal(
                     "13.4.0-pr.17141.gf142085f",
                     options.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationHostingVersionPropertyName]);
-                Assert.Equal(
-                    channelSource,
-                    options.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName]);
                 Assert.False(options.EnvironmentVariables?.ContainsKey("RestoreAdditionalProjectSources"));
                 Assert.Equal(
                     generatedPolicyOverlay?
@@ -3249,9 +3224,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Equal(
                 "13.4.0-pr.17166.ga49d604d",
                 buildOptions?.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationHostingVersionPropertyName]);
-            var hintedPackageSources = Assert.IsType<string>(
-                buildOptions?.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName]);
-            Assert.Equal([packageSourceOverride], hintedPackageSources.Split(';'));
             Assert.False(buildOptions?.EnvironmentVariables?.ContainsKey("RestoreAdditionalProjectSources"));
 
             var packageElements = generatedProject.Descendants("PackageReference").ToList();
