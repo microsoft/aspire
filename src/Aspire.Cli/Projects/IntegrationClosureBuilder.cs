@@ -32,7 +32,6 @@ internal static class IntegrationClosureBuilder
     internal const string ClosureTargetsFileName = "closure-targets.txt";
     internal const string ProjectRefAssemblyNamesFileName = "project-ref-assemblies.txt";
     internal const string IntegrationRestoreFolderName = "integration-restore";
-    internal const string IntegrationRestorePolicyFolderName = "integration-restore";
     internal const string ProjectAssetsFileName = "project.assets.json";
 
     /// <summary>
@@ -201,7 +200,7 @@ internal static class IntegrationClosureBuilder
     }
 
     /// <summary>
-    /// Gets the AppHost-owned directory used as the generated restore project's NuGet policy root.
+    /// Gets the AppHost-owned metadata directory used as the generated restore project's NuGet policy root.
     /// </summary>
     public static DirectoryInfo GetAppHostIntegrationPolicyDirectory(DirectoryInfo appHostDirectory)
     {
@@ -209,8 +208,7 @@ internal static class IntegrationClosureBuilder
 
         return new DirectoryInfo(Path.Combine(
             appHostDirectory.FullName,
-            AspireJsonConfiguration.SettingsFolder,
-            IntegrationRestorePolicyFolderName));
+            AspireJsonConfiguration.SettingsFolder));
     }
 
     /// <summary>

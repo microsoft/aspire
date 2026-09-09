@@ -2613,6 +2613,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         XDocument? generatedProject = null;
+        var policyConfigPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            AspireJsonConfiguration.SettingsFolder,
+            "NuGet.Config");
+        Directory.CreateDirectory(Path.GetDirectoryName(policyConfigPath)!);
+        await File.WriteAllTextAsync(policyConfigPath, "<configuration />");
 
         var dotNetCliRunner = new TestDotNetCliRunner
         {
@@ -2662,11 +2668,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 string.Empty,
                 generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").Single().Value);
             Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "NuGet.Config")));
-            Assert.False(File.Exists(Path.Combine(
-                workspace.WorkspaceRoot.FullName,
-                AspireJsonConfiguration.SettingsFolder,
-                IntegrationClosureBuilder.IntegrationRestorePolicyFolderName,
-                "NuGet.Config")));
+            Assert.False(File.Exists(policyConfigPath));
         }
         finally
         {
@@ -2829,8 +2831,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(File.Exists(Path.Combine(
                 workspace.WorkspaceRoot.FullName,
                 AspireJsonConfiguration.SettingsFolder,
-                IntegrationClosureBuilder.IntegrationRestorePolicyFolderName,
                 "NuGet.Config")));
+            var directoryBuildProps = XDocument.Load(Path.Combine(
+                workingDirectory,
+                "integration-restore",
+                "Directory.Build.props"));
+            Assert.Equal(
+                Path.Combine(workspace.WorkspaceRoot.FullName, AspireJsonConfiguration.SettingsFolder),
+                directoryBuildProps.Descendants("RestoreRootConfigDirectory").Single().Value);
 
             Assert.NotNull(generatedPolicyOverlay);
             Assert.Empty(generatedPolicyOverlay.Descendants("packageSources"));
