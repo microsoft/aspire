@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire Dashboard now uses Fluent UI Blazor v5, refreshing dialogs, notifications, menus, grids, tabs, trees, and selectors while keeping familiar navigation and filtering workflows across Resources, Console Logs, Structured Logs, Traces, and Metrics.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-09-09T08:38:11Z",
+  "lastMergedAt": "2026-09-09T08:38:11Z",
+  "name": "Dashboard migrated to Fluent UI Blazor v5",
+  "owner": "JamesNK",
+  "prs": [
+    19431
+  ]
+}

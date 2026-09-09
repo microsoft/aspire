@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fluent UI Blazor v5 migration for the Dashboard; user-facing UI refresh",
+  "mergedAt": "2026-09-09T08:38:11Z",
+  "number": 19431,
+  "runDate": "2026-09-09T12:07:43Z",
+  "status": "included",
+  "title": "Migrate dashboard to Fluent UI Blazor v5"
+}
