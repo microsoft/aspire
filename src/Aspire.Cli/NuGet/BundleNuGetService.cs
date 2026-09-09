@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.IO.Hashing;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
@@ -18,9 +19,23 @@ namespace Aspire.Cli.NuGet;
 internal sealed record NuGetSettingsInfo(
     IReadOnlyList<string> ConfigPaths,
     IReadOnlyList<NuGetSourceInfo> Sources,
-    bool PackageSourceMappingEnabled);
+    bool PackageSourceMappingEnabled,
+    IReadOnlyList<NuGetPackageSourceMappingInfo> PackageSourceMappings,
+    IReadOnlyList<string> DisabledPackageSourceKeys,
+    IReadOnlyList<string> ReservedPackageSourceKeys);
 
 internal sealed record NuGetSourceInfo(string Name, string Source, bool IsEnabled);
+
+internal sealed record NuGetPackageSourceMappingInfo(string SourceKey, string[] Patterns);
+
+internal sealed record NuGetConfigOverlayInfo(
+    NuGetConfigSourceDefinition[] Sources,
+    NuGetPackageSourceMappingInfo[] PackageSourceMappings,
+    bool ClearDisabledPackageSources,
+    string[] DisabledPackageSourceKeys,
+    string? GlobalPackagesFolder);
+
+internal sealed record NuGetConfigSourceDefinition(string Key, string Source);
 
 /// <summary>
 /// Service for NuGet operations that works in bundle mode.
@@ -365,17 +380,103 @@ internal sealed class BundleNuGetService : INuGetService
             var packageSourceMappingEnabled = document.RootElement
                 .GetProperty("PackageSourceMappingEnabled")
                 .GetBoolean();
+            var packageSourceMappings = document.RootElement
+                .GetProperty("PackageSourceMappings")
+                .EnumerateArray()
+                .Select(static mapping => new NuGetPackageSourceMappingInfo(
+                    mapping.GetProperty("SourceKey").GetString()
+                        ?? throw new InvalidDataException("The NuGet settings response contained a mapping without a source key."),
+                    mapping.GetProperty("Patterns")
+                        .EnumerateArray()
+                        .Select(static pattern => pattern.GetString()
+                            ?? throw new InvalidDataException("The NuGet settings response contained a null package pattern."))
+                        .ToArray()))
+                .ToArray();
+            var disabledPackageSourceKeys = ReadStringArray(
+                document.RootElement,
+                "DisabledPackageSourceKeys",
+                "The NuGet settings response contained a null disabled package source key.");
+            var reservedPackageSourceKeys = ReadStringArray(
+                document.RootElement,
+                "ReservedPackageSourceKeys",
+                "The NuGet settings response contained a null reserved package source key.");
 
             return new NuGetSettingsInfo(
                 configPaths,
                 sources,
-                packageSourceMappingEnabled);
+                packageSourceMappingEnabled,
+                packageSourceMappings,
+                disabledPackageSourceKeys,
+                reservedPackageSourceKeys);
         }
         catch (JsonException ex)
         {
             throw new InvalidDataException("The NuGet settings response was invalid.", ex);
         }
     }
+
+    internal async Task WriteNuGetConfigOverlayAsync(
+        NuGetConfigOverlayInfo overlay,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(overlay);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+
+        using var layoutLease = _bundleService is null
+            ? null
+            : await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "nuget-write-config", cancellationToken).ConfigureAwait(false);
+        var layout = layoutLease?.Layout ?? _layoutDiscovery.DiscoverLayout();
+        var managedPath = layout?.GetManagedPath();
+        if (managedPath is null || !File.Exists(managedPath))
+        {
+            throw new InvalidOperationException(ManagedComponentNotFoundMessage);
+        }
+
+        var requestDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config-request");
+        try
+        {
+            var requestPath = Path.Combine(requestDirectory.FullName, "request.json");
+            await using (var requestStream = File.Create(requestPath))
+            {
+                await JsonSerializer.SerializeAsync(
+                    requestStream,
+                    overlay,
+                    BundleNuGetJsonContext.Default.NuGetConfigOverlayInfo,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            var (exitCode, _, error) = await _layoutProcessRunner.RunAsync(
+                managedPath,
+                ["nuget", "write-config", "--request", requestPath, "--output", outputPath],
+                killOnParentExit: true,
+                ct: cancellationToken).ConfigureAwait(false);
+            if (exitCode != 0)
+            {
+                var sensitiveSources = overlay.Sources
+                    .Select(static source => source.Source)
+                    .Where(PackageSourceOverrideMappings.HasCredentialMaterial)
+                    .ToArray();
+                throw new InvalidOperationException(
+                    $"Unable to generate the NuGet configuration overlay: {PackageSourceRedactor.RedactOccurrences(error, sensitiveSources)}");
+            }
+        }
+        finally
+        {
+            requestDirectory.Delete(recursive: true);
+        }
+    }
+
+    private static string[] ReadStringArray(
+        JsonElement parent,
+        string propertyName,
+        string nullElementMessage)
+        => parent
+            .GetProperty(propertyName)
+            .EnumerateArray()
+            .Select(element => element.GetString()
+                ?? throw new InvalidDataException(nullElementMessage))
+            .ToArray();
 
     private static bool TryValidatePackageManifest(string manifestPath, ILogger logger)
     {
@@ -526,3 +627,6 @@ internal sealed class BundleNuGetService : INuGetService
         return Path.Combine(integrationCacheDirectory.FullName, "package-restore");
     }
 }
+
+[JsonSerializable(typeof(NuGetConfigOverlayInfo))]
+internal sealed partial class BundleNuGetJsonContext : JsonSerializerContext;

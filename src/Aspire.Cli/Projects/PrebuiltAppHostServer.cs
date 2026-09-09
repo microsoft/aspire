@@ -25,6 +25,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
 
+internal sealed record NuGetConfigSource(
+    string Key,
+    string Source,
+    bool IsAmbient,
+    bool IsEnabled);
+
 /// <summary>
 /// Manages a pre-built AppHost server from the Aspire bundle layout.
 /// This is used when running in bundle mode (without .NET SDK) to avoid
@@ -307,16 +313,16 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             .ToList();
         var restoreSources = NormalizeIntegrationRestoreSources(
             await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false));
-        var settings = await _nugetService.GetNuGetSettingsAsync(_workingDirectory, cancellationToken).ConfigureAwait(false);
-        var configSources = ResolveNuGetConfigSources(restoreSources.PackageSourceMappings, settings.Sources);
-        var disabledAmbientSourceKeys = settings.Sources
-            .Where(static source => !source.IsEnabled)
-            .Select(static source => source.Name)
-            .ToArray();
+        var settings = await _nugetService.GetNuGetSettingsAsync(_appDirectoryPath, cancellationToken).ConfigureAwait(false);
+        var configSources = ResolveNuGetConfigSources(
+            restoreSources.PackageSourceMappings,
+            settings.Sources,
+            settings.ReservedPackageSourceKeys);
         using var restoreOverlay = await CreateRestoreOverlayAsync(
             restoreSources,
             configSources,
-            disabledAmbientSourceKeys).ConfigureAwait(false);
+            settings,
+            cancellationToken).ConfigureAwait(false);
         var sources = GetNuGetSources(restoreSources)?.ToArray();
         IReadOnlyList<string> configPaths = restoreOverlay is null
             ? settings.ConfigPaths
@@ -324,7 +330,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
         return await _nugetService.RestorePackagesAsync(
             packages,
-            workingDirectory: _workingDirectory,
+            workingDirectory: _appDirectoryPath,
             targetFramework: DotNetBasedAppHostServerProject.TargetFramework,
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
@@ -876,37 +882,38 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
 
         var globalPackagesFolder = GetIntegrationRestoreGlobalPackagesFolder(restoreSources, restoreOverlay: null);
-        FileInfo? restoreOverlayFile = new(Path.Combine(restoreDir, "NuGet.Config"));
+        var policyDirectory = IntegrationClosureBuilder.GetAppHostIntegrationPolicyDirectory(
+            new DirectoryInfo(_appDirectoryPath));
+        FileInfo? restoreOverlayFile = new(Path.Combine(policyDirectory.FullName, "NuGet.Config"));
         if (restoreOverlayFile.Exists)
         {
             restoreOverlayFile.Delete();
         }
-        var settings = await _nugetService.GetNuGetSettingsAsync(restoreDir, cancellationToken).ConfigureAwait(false);
-        var configSources = ResolveNuGetConfigSources(restoreSources.PackageSourceMappings, settings.Sources);
-        var disabledAmbientSourceKeys = settings.Sources
-            .Where(static source => !source.IsEnabled)
-            .Select(static source => source.Name)
-            .ToArray();
+        var settings = await _nugetService.GetNuGetSettingsAsync(_appDirectoryPath, cancellationToken).ConfigureAwait(false);
+        var configSources = ResolveNuGetConfigSources(
+            restoreSources.PackageSourceMappings,
+            settings.Sources,
+            settings.ReservedPackageSourceKeys);
         if (restoreSources.PackageSourceMappings is null)
         {
             restoreOverlayFile = null;
         }
         else
         {
-            await TemporaryNuGetConfig.GenerateRestoreOverlayAsync(
+            var overlay = CreateNuGetConfigOverlay(
                 restoreSources.PackageSourceMappings,
-                restoreOverlayFile!.FullName,
-                globalPackagesFolder,
+                settings,
                 configSources,
-                disabledAmbientSourceKeys).ConfigureAwait(false);
+                globalPackagesFolder);
+            await _nugetService.WriteNuGetConfigOverlayAsync(
+                overlay,
+                restoreOverlayFile!.FullName,
+                cancellationToken).ConfigureAwait(false);
         }
 
         var rootAdditionalSources = restoreSources.PackageSourceMappings is null
             ? GetNuGetSources(restoreSources)?.ToArray()
-            : configSources
-                .Where(static source => !source.IsAmbient)
-                .Select(static source => source.Source)
-                .ToArray();
+            : null;
         var sensitiveRestoreSources = settings.Sources
             .Select(static source => source.Source)
             .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
@@ -940,6 +947,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
                 restoreDir,
                 intermediateOutputPath,
+                restoreOverlayFile?.DirectoryName ?? _appDirectoryPath,
                 globalPackagesFolder: null).ToString(),
             cancellationToken);
 
@@ -1104,7 +1112,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             .ResolveAsync(requestedChannel, packageSourceOverride, cancellationToken);
 
     private static IEnumerable<string>? GetNuGetSources(IntegrationRestoreSources restoreSources)
-        => restoreSources.AdditionalSources.Count > 0 ? restoreSources.AdditionalSources : null;
+        => restoreSources.PackageSourceMappings is null && restoreSources.AdditionalSources.Count > 0
+            ? restoreSources.AdditionalSources
+            : null;
 
     private IntegrationRestoreSources NormalizeIntegrationRestoreSources(IntegrationRestoreSources restoreSources)
     {
@@ -1132,15 +1142,15 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
     internal static NuGetConfigSource[] ResolveNuGetConfigSources(
         PackageMapping[]? mappings,
-        IReadOnlyList<NuGetSourceInfo> ambientSources)
+        IReadOnlyList<NuGetSourceInfo> ambientSources,
+        IReadOnlyList<string> reservedPackageSourceKeys)
     {
         if (mappings is null)
         {
             return [];
         }
 
-        var usedKeys = ambientSources
-            .Select(static source => source.Name)
+        var usedKeys = reservedPackageSourceKeys
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var nextAspireKey = 0;
 
@@ -1154,7 +1164,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 .ToArray();
             if (ambientMatches.Length > 0)
             {
-                foreach (var ambientSource in ambientMatches)
+                var enabledMatches = ambientMatches
+                    .Where(static ambientSource => ambientSource.IsEnabled)
+                    .ToArray();
+                var selectedMatches = enabledMatches.Length > 0
+                    ? enabledMatches
+                    : [ambientMatches[0]];
+                foreach (var ambientSource in selectedMatches)
                 {
                     resolvedSources.Add(new NuGetConfigSource(
                         ambientSource.Name,
@@ -1179,6 +1195,159 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         return [.. resolvedSources];
     }
 
+    internal static NuGetConfigOverlayInfo CreateNuGetConfigOverlay(
+        PackageMapping[] selectedMappings,
+        NuGetSettingsInfo settings,
+        IReadOnlyList<NuGetConfigSource> selectedSources,
+        string? globalPackagesFolder)
+    {
+        ArgumentNullException.ThrowIfNull(selectedMappings);
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(selectedSources);
+
+        var enabledSourceKeys = selectedSources
+            .Where(static source => source.IsAmbient && !source.IsEnabled)
+            .Select(static source => source.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var clearDisabledPackageSources = enabledSourceKeys.Count > 0;
+        var disabledPackageSourceKeys = clearDisabledPackageSources
+            ? settings.DisabledPackageSourceKeys
+                .Where(key => !enabledSourceKeys.Contains(key))
+                .ToArray()
+            : [];
+
+        return new NuGetConfigOverlayInfo(
+            selectedSources
+                .Where(static source => !source.IsAmbient)
+                .Select(static source => new NuGetConfigSourceDefinition(source.Key, source.Source))
+                .ToArray(),
+            ComposePackageSourceMappings(
+                selectedMappings,
+                settings.PackageSourceMappings,
+                settings.Sources,
+                selectedSources),
+            clearDisabledPackageSources,
+            disabledPackageSourceKeys,
+            globalPackagesFolder);
+    }
+
+    internal static NuGetPackageSourceMappingInfo[] ComposePackageSourceMappings(
+        IReadOnlyList<PackageMapping> selectedMappings,
+        IReadOnlyList<NuGetPackageSourceMappingInfo> ambientMappings,
+        IReadOnlyList<NuGetSourceInfo> ambientSources,
+        IReadOnlyList<NuGetConfigSource> selectedSources)
+    {
+        ArgumentNullException.ThrowIfNull(selectedMappings);
+        ArgumentNullException.ThrowIfNull(ambientMappings);
+        ArgumentNullException.ThrowIfNull(ambientSources);
+        ArgumentNullException.ThrowIfNull(selectedSources);
+
+        var patternsBySourceKey = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        if (ambientMappings.Count == 0)
+        {
+            // Enabling package-source mapping changes NuGet from "every enabled source can serve
+            // every package" to deny-by-default. Reproduce that existing eligibility with wildcard
+            // mappings before adding the more-specific Aspire channel policy.
+            foreach (var ambientSource in ambientSources.Where(static source => source.IsEnabled))
+            {
+                AddPattern(patternsBySourceKey, ambientSource.Name, PackageMapping.AllPackages);
+            }
+        }
+        else
+        {
+            foreach (var ambientMapping in ambientMappings)
+            {
+                foreach (var pattern in ambientMapping.Patterns)
+                {
+                    AddPattern(patternsBySourceKey, ambientMapping.SourceKey, pattern);
+                }
+            }
+        }
+
+        var authoritativePatterns = selectedMappings
+            .Select(static mapping => mapping.PackageFilter)
+            .Where(static pattern => pattern != PackageMapping.AllPackages)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        foreach (var patterns in patternsBySourceKey.Values)
+        {
+            patterns.RemoveAll(pattern => authoritativePatterns.Any(
+                authoritativePattern => CompetesWithAuthoritativePattern(pattern, authoritativePattern)));
+        }
+
+        foreach (var mapping in selectedMappings)
+        {
+            if (ambientMappings.Count > 0 &&
+                mapping.PackageFilter == PackageMapping.AllPackages)
+            {
+                // An existing mapping policy already defines eligibility for non-Aspire packages.
+                // Channel fallback sources must not broaden that unrelated ambient policy.
+                continue;
+            }
+
+            foreach (var source in selectedSources.Where(
+                source => PackageSourceIdentity.Comparer.Equals(source.Source, mapping.Source)))
+            {
+                AddPattern(patternsBySourceKey, source.Key, mapping.PackageFilter);
+            }
+        }
+
+        return patternsBySourceKey
+            .Where(static mapping => mapping.Value.Count > 0)
+            .Select(static mapping => new NuGetPackageSourceMappingInfo(
+                mapping.Key,
+                [.. mapping.Value]))
+            .ToArray();
+    }
+
+    private static void AddPattern(
+        Dictionary<string, List<string>> patternsBySourceKey,
+        string sourceKey,
+        string pattern)
+    {
+        if (!patternsBySourceKey.TryGetValue(sourceKey, out var patterns))
+        {
+            patterns = [];
+            patternsBySourceKey.Add(sourceKey, patterns);
+        }
+
+        if (!patterns.Contains(pattern, StringComparer.OrdinalIgnoreCase))
+        {
+            patterns.Add(pattern);
+        }
+    }
+
+    private static bool CompetesWithAuthoritativePattern(
+        string ambientPattern,
+        string authoritativePattern)
+    {
+        if (authoritativePattern == PackageMapping.AllPackages)
+        {
+            return false;
+        }
+
+        if (!authoritativePattern.EndsWith('*'))
+        {
+            return string.Equals(
+                ambientPattern,
+                authoritativePattern,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        var authoritativePrefix = authoritativePattern[..^1];
+        if (ambientPattern == PackageMapping.AllPackages)
+        {
+            return false;
+        }
+
+        var ambientPrefix = ambientPattern.EndsWith('*')
+            ? ambientPattern[..^1]
+            : ambientPattern;
+        return ambientPrefix.Length >= authoritativePrefix.Length &&
+            ambientPrefix.StartsWith(authoritativePrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
     private string? GetIntegrationRestoreGlobalPackagesFolder(
         IntegrationRestoreSources restoreSources,
         TemporaryNuGetConfig? restoreOverlay)
@@ -1191,24 +1360,36 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     internal async Task<TemporaryNuGetConfig?> CreateRestoreOverlayAsync(
         IntegrationRestoreSources restoreSources,
         IReadOnlyList<NuGetConfigSource> sources,
-        IReadOnlyList<string> disabledAmbientSourceKeys)
+        NuGetSettingsInfo settings,
+        CancellationToken cancellationToken)
     {
         if (restoreSources.PackageSourceMappings is null)
         {
             return null;
         }
 
-        var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+        var overlay = CreateNuGetConfigOverlay(
             restoreSources.PackageSourceMappings,
-            restoreSources.ConfigureGlobalPackagesFolder,
-            sources: sources,
-            disabledAmbientSourceKeys: disabledAmbientSourceKeys).ConfigureAwait(false);
-        return await ConfigureGlobalPackagesFolderAsync(config, restoreSources).ConfigureAwait(false);
+            settings,
+            sources,
+            globalPackagesFolder: null);
+        var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+            path => _nugetService.WriteNuGetConfigOverlayAsync(
+                overlay,
+                path,
+                cancellationToken)).ConfigureAwait(false);
+        return await ConfigureGlobalPackagesFolderAsync(
+            config,
+            restoreSources,
+            overlay,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<TemporaryNuGetConfig> ConfigureGlobalPackagesFolderAsync(
         TemporaryNuGetConfig config,
-        IntegrationRestoreSources restoreSources)
+        IntegrationRestoreSources restoreSources,
+        NuGetConfigOverlayInfo overlay,
+        CancellationToken cancellationToken)
     {
         var globalPackagesFolder = GetIntegrationRestoreGlobalPackagesFolder(restoreSources, config);
         if (globalPackagesFolder is null)
@@ -1218,7 +1399,11 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
         try
         {
-            await config.SetGlobalPackagesFolderAsync(globalPackagesFolder).ConfigureAwait(false);
+            await config.RegenerateAsync(
+                path => _nugetService.WriteNuGetConfigOverlayAsync(
+                    overlay with { GlobalPackagesFolder = globalPackagesFolder },
+                    path,
+                    cancellationToken)).ConfigureAwait(false);
             return config;
         }
         catch

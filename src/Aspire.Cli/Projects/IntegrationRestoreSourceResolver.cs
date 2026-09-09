@@ -33,12 +33,13 @@ internal sealed class IntegrationRestoreSourceResolver(
 
         try
         {
-            if (hasOverride && string.IsNullOrEmpty(requestedChannel))
+            if (string.IsNullOrEmpty(requestedChannel))
             {
-                // A source override without an explicit channel should not also add every
-                // built-in Aspire feed; doing so would make those feeds co-eligible and defeat
-                // the override for Aspire packages.
+                // An omitted channel uses the ambient NuGet policy. In particular, stable projects
+                // intentionally do not persist a channel, so they must not inherit every explicit
+                // channel feed registered by the running CLI.
                 matchedChannels = [];
+                channelLookupSucceeded = true;
             }
             else
             {
@@ -51,7 +52,7 @@ internal sealed class IntegrationRestoreSourceResolver(
                 }
             }
 
-            foreach (var channel in matchedChannels)
+            foreach (var channel in matchedChannels.Where(static channel => !UsesAmbientSourcePolicy(channel)))
             {
                 if (channel.Mappings is null)
                 {
@@ -91,10 +92,14 @@ internal sealed class IntegrationRestoreSourceResolver(
         PackageMapping[]? packageSourceMappings = null;
         var configureGlobalPackagesFolder = false;
 
+        var sourcePolicyChannel = matchedChannel is not null && !UsesAmbientSourcePolicy(matchedChannel)
+            ? matchedChannel
+            : null;
+
         if (hasOverride)
         {
-            packageSourceMappings = PackageSourceOverrideMappings.Create(packageSourceOverride!, matchedChannel, nugetServiceIndexOverride);
-            configureGlobalPackagesFolder = matchedChannel?.ConfigureGlobalPackagesFolder == true;
+            packageSourceMappings = PackageSourceOverrideMappings.Create(packageSourceOverride!, sourcePolicyChannel, nugetServiceIndexOverride);
+            configureGlobalPackagesFolder = sourcePolicyChannel?.ConfigureGlobalPackagesFolder == true;
 
             foreach (var mapping in packageSourceMappings.Where(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))
             {
@@ -104,11 +109,11 @@ internal sealed class IntegrationRestoreSourceResolver(
                 }
             }
         }
-        else if (matchedChannel?.Mappings is { Length: > 0 } &&
-            !string.Equals(matchedChannel.Name, PackageChannelNames.Local, StringComparisons.ChannelName))
+        else if (sourcePolicyChannel?.Mappings is { Length: > 0 } &&
+            !string.Equals(sourcePolicyChannel.Name, PackageChannelNames.Local, StringComparisons.ChannelName))
         {
-            packageSourceMappings = matchedChannel.Mappings;
-            configureGlobalPackagesFolder = matchedChannel.ConfigureGlobalPackagesFolder;
+            packageSourceMappings = sourcePolicyChannel.Mappings;
+            configureGlobalPackagesFolder = sourcePolicyChannel.ConfigureGlobalPackagesFolder;
         }
 
         return new IntegrationRestoreSources(
@@ -187,6 +192,9 @@ internal sealed class IntegrationRestoreSourceResolver(
     private static bool IsAspireSpecificMapping(PackageMapping mapping) =>
         mapping.PackageFilter != PackageMapping.AllPackages &&
         mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase);
+
+    private static bool UsesAmbientSourcePolicy(PackageChannel channel) =>
+        string.Equals(channel.Name, PackageChannelNames.Stable, StringComparisons.ChannelName);
 }
 
 internal sealed record IntegrationRestoreSources(

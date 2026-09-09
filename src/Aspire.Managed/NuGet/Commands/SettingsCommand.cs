@@ -45,23 +45,58 @@ internal static class SettingsCommand
                 source.Source,
                 source.IsEnabled))
             .ToArray();
-        var packageSourceMappingEnabled = new PackageSourceMappingProvider(settings)
+        var packageSourceMappings = new PackageSourceMappingProvider(settings)
             .GetPackageSourceMappingItems()
-            .Count > 0;
+            .Select(static mapping => new NuGetPackageSourceMappingResult(
+                mapping.Key,
+                mapping.Patterns.Select(static pattern => pattern.Pattern).ToArray()))
+            .ToArray();
+        var disabledPackageSourceKeys = settings
+            .GetSection(ConfigurationConstants.DisabledPackageSources)?
+            .Items
+            .OfType<AddItem>()
+            .Select(static item => item.Key)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? [];
+        var credentialSourceKeys = settings
+            .GetSection(ConfigurationConstants.CredentialsSectionName)?
+            .Items
+            .OfType<CredentialsItem>()
+            .Select(static item => item.ElementName) ?? [];
+        var clientCertificateSourceKeys = settings
+            .GetSection(ConfigurationConstants.ClientCertificates)?
+            .Items
+            .OfType<ClientCertItem>()
+            .Select(static item => item.PackageSource) ?? [];
+        var reservedPackageSourceKeys = sources
+            .Select(static source => source.Name)
+            .Concat(packageSourceMappings.Select(static mapping => mapping.SourceKey))
+            .Concat(disabledPackageSourceKeys)
+            .Concat(credentialSourceKeys)
+            .Concat(clientCertificateSourceKeys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         return new NuGetSettingsResult(
             settings.GetConfigFilePaths().ToArray(),
             sources,
-            packageSourceMappingEnabled);
+            packageSourceMappings.Length > 0,
+            packageSourceMappings,
+            disabledPackageSourceKeys,
+            reservedPackageSourceKeys);
     }
 }
 
 internal sealed record NuGetSettingsResult(
     string[] ConfigPaths,
     NuGetSourceResult[] Sources,
-    bool PackageSourceMappingEnabled);
+    bool PackageSourceMappingEnabled,
+    NuGetPackageSourceMappingResult[] PackageSourceMappings,
+    string[] DisabledPackageSourceKeys,
+    string[] ReservedPackageSourceKeys);
 
 internal sealed record NuGetSourceResult(string Name, string Source, bool IsEnabled);
 
+[JsonSerializable(typeof(NuGetConfigOverlayRequest))]
 [JsonSerializable(typeof(NuGetSettingsResult))]
 internal sealed partial class SettingsJsonContext : JsonSerializerContext;

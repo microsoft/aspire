@@ -336,6 +336,151 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.False(settings.PackageSourceMappingEnabled);
     }
 
+    [Fact]
+    public void WriteConfigCommand_OverlaysEvaluatedMappingsWithoutFlatteningAmbientConfiguration()
+    {
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "AppHost"));
+        var privateSource = Path.Combine(appHostDirectory.FullName, "private-packages");
+        var rootSource = Path.Combine(_workspace.Path, "root-packages");
+        var unrelatedSource = Path.Combine(appHostDirectory.FullName, "unrelated-packages");
+        var globalPackagesFolder = Path.Combine(_workspace.Path, "global-packages");
+        File.WriteAllText(
+            Path.Combine(_workspace.Path, "NuGet.Config"),
+            """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="private" value="root-private-packages" />
+                <add key="root-only" value="root-packages" />
+              </packageSources>
+              <packageSourceCredentials>
+                <private>
+                  <add key="Username" value="user" />
+                  <add key="ClearTextPassword" value="secret" />
+                </private>
+                <credential-only>
+                  <add key="Username" value="unused" />
+                  <add key="ClearTextPassword" value="credential-only-secret" />
+                </credential-only>
+              </packageSourceCredentials>
+              <clientCertificates>
+                <fileCert packageSource="certificate-only" path="client.pfx" />
+              </clientCertificates>
+              <packageSourceMapping>
+                <packageSource key="private">
+                  <package pattern="Aspire*" />
+                </packageSource>
+                <packageSource key="root-only">
+                  <package pattern="Root.*" />
+                </packageSource>
+              </packageSourceMapping>
+              <config>
+                <add key="globalPackagesFolder" value="global-packages" />
+              </config>
+            </configuration>
+            """);
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "NuGet.Config"),
+            """
+            <configuration>
+              <packageSources>
+                <add key="private" value="private-packages" />
+                <add key="unrelated" value="unrelated-packages" />
+              </packageSources>
+              <disabledPackageSources>
+                <add key="private" value="true" />
+                <add key="unrelated" value="true" />
+                <add key="dormant" value="true" />
+              </disabledPackageSources>
+              <packageSourceMapping>
+                <packageSource key="private">
+                  <package pattern="Aspire.Hosting.*" />
+                  <package pattern="Contoso.*" />
+                </packageSource>
+                <packageSource key="unrelated">
+                  <package pattern="Other.*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        var ambient = SettingsCommand.GetSettings(appHostDirectory.FullName);
+        Assert.Contains("credential-only", ambient.ReservedPackageSourceKeys, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("certificate-only", ambient.ReservedPackageSourceKeys, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("dormant", ambient.ReservedPackageSourceKeys, StringComparer.OrdinalIgnoreCase);
+        var transformedMappings = ambient.PackageSourceMappings
+            .Select(mapping => new NuGetPackageSourceMappingResult(
+                mapping.SourceKey,
+                mapping.Patterns
+                    .Where(static pattern => !pattern.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
+                    .ToArray()))
+            .Where(static mapping => mapping.Patterns.Length > 0)
+            .Append(new NuGetPackageSourceMappingResult("private", ["Aspire*"]))
+            .GroupBy(static mapping => mapping.SourceKey, StringComparer.OrdinalIgnoreCase)
+            .Select(static group => new NuGetPackageSourceMappingResult(
+                group.Key,
+                group.SelectMany(static mapping => mapping.Patterns).ToArray()))
+            .ToArray();
+        var policyDirectory = Directory.CreateDirectory(
+            Path.Combine(appHostDirectory.FullName, ".aspire", "integration-restore"));
+        var overlayPath = Path.Combine(policyDirectory.FullName, "NuGet.Config");
+
+        WriteConfigCommand.Write(
+            new NuGetConfigOverlayRequest(
+                Sources: [],
+                PackageSourceMappings: transformedMappings,
+                ClearDisabledPackageSources: true,
+                DisabledPackageSourceKeys: ["unrelated", "dormant"],
+                GlobalPackagesFolder: null),
+            overlayPath);
+
+        var overlayContent = File.ReadAllText(overlayPath);
+        Assert.DoesNotContain("secret", overlayContent, StringComparison.Ordinal);
+        Assert.DoesNotContain("NuGet.org", overlayContent, StringComparison.OrdinalIgnoreCase);
+
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment.Remove("NUGET_PACKAGES");
+
+        RemoteExecutor.Invoke(static (policyDirectoryPath) =>
+        {
+            var appHostDirectory = Directory.GetParent(Directory.GetParent(policyDirectoryPath)!.FullName)!;
+            var workspaceDirectory = appHostDirectory.Parent!;
+            var effective = Settings.LoadDefaultSettings(
+                policyDirectoryPath,
+                configFileName: null,
+                new XPlatMachineWideSetting());
+            var sources = new PackageSourceProvider(effective)
+                .LoadPackageSources()
+                .ToDictionary(static source => source.Name, StringComparer.OrdinalIgnoreCase);
+
+            Assert.Equal(
+                Path.Combine(appHostDirectory.FullName, "private-packages"),
+                sources["private"].Source);
+            Assert.True(sources["private"].IsEnabled);
+            Assert.Equal("user", sources["private"].Credentials?.Username);
+            Assert.Equal(
+                Path.Combine(workspaceDirectory.FullName, "root-packages"),
+                sources["root-only"].Source);
+            Assert.Equal(
+                Path.Combine(appHostDirectory.FullName, "unrelated-packages"),
+                sources["unrelated"].Source);
+            Assert.False(sources["unrelated"].IsEnabled);
+            Assert.Equal(
+                Path.Combine(workspaceDirectory.FullName, "global-packages"),
+                SettingsUtility.GetGlobalPackagesFolder(effective));
+
+            var mappings = new PackageSourceMappingProvider(effective)
+                .GetPackageSourceMappingItems()
+                .ToDictionary(
+                    static mapping => mapping.Key,
+                    static mapping => mapping.Patterns.Select(static pattern => pattern.Pattern).ToArray(),
+                    StringComparer.OrdinalIgnoreCase);
+            Assert.Equal(["Contoso.*", "Aspire*"], mappings["private"]);
+            Assert.Equal(["Root.*"], mappings["root-only"]);
+            Assert.Equal(["Other.*"], mappings["unrelated"]);
+        }, policyDirectory.FullName, options).Dispose();
+    }
+
     /// <summary>
     /// Converts a file path to its JSON-escaped representation (e.g. backslashes doubled).
     /// </summary>

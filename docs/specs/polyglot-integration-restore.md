@@ -11,12 +11,15 @@ Both paths must apply the same Aspire-selected package source policy while prese
 
 ## Configuration boundary
 
-The generated integration restore is rooted under the AppHost-specific Aspire integration cache. NuGet configuration discovery starts from that directory.
+Both restore paths use the AppHost directory as their NuGet configuration boundary.
+
+The package-only path loads the normal hierarchy from the AppHost directory. The SDK-generated root remains under the AppHost-specific Aspire integration cache, but sets `RestoreRootConfigDirectory` to `.aspire/integration-restore` beneath the AppHost when an Aspire policy overlay is required. Normal discovery applies that overlay before continuing through the Aspire-owned `.aspire` directory, the AppHost directory, and its ancestors. Without an overlay, discovery starts directly from the AppHost directory.
 
 This boundary intentionally:
 
-- Includes configuration inherited from directories above the integration cache.
-- Excludes configuration beneath a nested AppHost directory.
+- Includes configuration contributed by the AppHost directory and its ancestors.
+- Prevents the location of Aspire's integration cache from contributing ambient NuGet policy.
+- Keeps generated projects, intermediate output, and closure artifacts in the centralized integration cache.
 - Keeps referenced projects responsible for their own directory-scoped configuration.
 
 The generated restore project resolves the Aspire server and integration closure. It does not combine the NuGet configuration of every project in the referenced MSBuild graph.
@@ -25,9 +28,36 @@ The generated restore project resolves the Aspire server and integration closure
 
 `IntegrationRestoreSourceResolver` resolves channel and source customization before the package-only and SDK paths diverge.
 
+Channel selection never changes the NuGet configuration discovery model. Every restore loads the AppHost-anchored hierarchy, then applies the same source-precedence rules:
+
+1. An explicit source override is authoritative for Aspire packages.
+2. A selected channel with an Aspire-specific feed is authoritative for the Aspire package patterns owned by that channel.
+3. Otherwise, Aspire packages use the ambient NuGet source and mapping policy.
+
+The absence of a channel and an explicitly selected stable channel therefore have the same source-resolution behavior. Stable packages do not require a dedicated Aspire feed and remain compatible with NuGet's default sources, NuGet.org mirrors, and repository-owned source policy. No AppHost-local `NuGet.Config` is required for a stable restore; when no such file exists, normal NuGet defaults and user or machine configuration apply. Daily, staging, local, and PR channels have channel-specific Aspire feeds, so their Aspire package mappings replace competing ambient Aspire mappings without replacing the rest of the NuGet hierarchy.
+
+### Channel transitions
+
+Changing channels updates package versions and Aspire source policy as one operation. A generated policy overlay is replaced rather than merged with the previous channel policy, and user-owned NuGet configuration is not rewritten.
+
+When a stable project with custom NuGet configuration moves to a source-specific channel:
+
+- The selected channel becomes authoritative for its Aspire package patterns.
+- Competing ambient Aspire mappings are temporarily replaced.
+- Ambient sources and mappings for unrelated packages remain effective.
+- Channel-required global-package-cache isolation prevents packages restored under the previous source policy from satisfying the new restore.
+
+Moving back to stable removes the source-specific Aspire policy. The project's ambient Aspire mappings become effective again without requiring the user to reconstruct their NuGet configuration.
+
+The same transition must also succeed when the project has no `NuGet.Config`. In that case, stable restore uses normal NuGet defaults, staging restore introduces the staging source through the higher-precedence Aspire policy overlay, and returning to stable removes that overlay contribution.
+
+A project configuration is valid for stable restore when its effective sources and package-source mappings can resolve the requested stable Aspire packages and their dependencies. A repository may therefore clear default sources and use an internal mirror without changing the channel-transition model.
+
+Selecting stable must also replace or remove a previously persisted non-stable channel value. Stable and an omitted channel have the same restore-source semantics, but an explicit stable selection must not leave the project logically pinned to daily or staging.
+
 The policy accounts for:
 
-- The requested or identity-selected channel.
+- The requested channel and the default stable behavior when no channel is persisted.
 - Explicit source overrides.
 - Local package hives.
 - Staging feed overrides.
@@ -51,6 +81,8 @@ For a requested discovery directory, the operation:
 1. Loads the normal NuGet hierarchy with `Settings.LoadDefaultSettings`.
 2. Returns configuration paths in highest-to-lowest precedence order.
 3. Returns non-secret source descriptors containing the source name, resolved location, and enabled state.
+4. Returns the effective package-source mapping entries produced by NuGet after applying the configuration hierarchy.
+5. Returns disabled and reserved source keys needed to avoid accidentally inheriting name-bound credentials, certificates, or disabled state when Aspire introduces a source.
 
 The operation does not return credentials, passwords, client certificates, trusted signers, or serialized configuration sections.
 
@@ -60,18 +92,29 @@ The CLI matches effective Aspire source locations to these descriptors using NuG
 
 When the effective policy includes package-source mappings, the CLI writes a small `NuGet.Config` overlay.
 
+The selected channel augments the effective `packageSources` set: its source is introduced when it is not already configured, while ambient sources remain available. Package eligibility is different. The effective `packageSourceMapping` policy selectively replaces ambient mappings that can tie with or outrank the selected channel for channel-owned Aspire package patterns.
+
 The overlay can contain:
 
 - Definitions for effective sources not present in ambient settings.
-- A complete `packageSourceMapping` policy with `<clear />`.
-- Mapping entries for both the NuGet source key and the effective source location when they differ.
+- A complete effective `packageSourceMapping` policy with `<clear />`.
+- Ambient mappings that do not compete with the authoritative Aspire package mappings.
+- Mapping entries that refer only to NuGet source keys.
 - A controlled global packages folder.
 - A `disabledPackageSources` override when every ambient alias for an explicitly selected source is disabled. The overlay clears inherited disabled state, enables one selected alias, and re-emits the other disabled ambient aliases.
 
-Mapping both identities supports the generated root regardless of how NuGet identifies a source:
+When ambient configuration does not enable package-source mapping, introducing an authoritative Aspire mapping must preserve the prior eligibility of ambient sources for non-Aspire packages. Selecting a channel must not implicitly restrict unrelated dependencies to the channel's fallback source.
 
-- The ambient source key is used where one exists.
-- The effective source location remains valid when the policy introduces a source not present in ambient settings.
+Ambient mappings for Aspire package patterns remain effective for stable or default restores. When a source-specific channel or explicit source override is selected, only mappings that compete for those Aspire patterns are replaced.
+
+For a selected `Aspire*` policy:
+
+- An ambient `*` mapping can remain because the longer `Aspire*` prefix wins.
+- An ambient `Aspire*` mapping must be removed because equal patterns make both sources eligible.
+- Longer matching prefixes such as `Aspire.Hosting.*` and exact Aspire package IDs must be removed because they outrank `Aspire*`.
+- Unrelated mappings such as `Contoso.*` remain unchanged.
+
+The CLI composes this policy from NuGet's evaluated mapping model. It does not parse and merge each discovered configuration file independently. `Aspire.Managed` serializes the resulting source, disabled-source, mapping, and global-package-folder entries through NuGet's typed settings APIs.
 
 The overlay never copies arbitrary user settings. Authentication, trusted signers, fallback folders, audit settings, and unknown sections continue to come from NuGet's native hierarchy loading.
 
@@ -79,11 +122,12 @@ The overlay never copies arbitrary user settings. Authentication, trusted signer
 
 The package-only path:
 
-1. Resolves native settings from the integration cache root.
+1. Resolves native settings from the AppHost directory.
 2. Creates a temporary policy overlay at highest precedence.
 3. Passes the ordered overlay and ambient config paths to `Aspire.Managed`.
-4. Adds effective source locations only when NuGet has not already resolved the matching configured source.
-5. Injects the resulting `ISettings` into `DependencyGraphSpecRequestProvider`.
+4. Defines selected sources in the overlay when no ambient source key represents them.
+5. Uses direct source arguments only for source-only policies that do not require a mapping overlay.
+6. Injects the resulting `ISettings` into `DependencyGraphSpecRequestProvider`.
 
 Configured source descriptors are reused so source names, credentials, protocol settings, and credential-provider behavior remain NuGet-owned.
 
@@ -91,9 +135,11 @@ The temporary overlay is deleted after the restore invocation.
 
 ## SDK restore root
 
-The SDK path writes a persistent policy overlay beside `IntegrationRestore.csproj`. Normal SDK discovery loads this file together with the intended ancestor hierarchy.
+The SDK path writes a persistent policy overlay to an Aspire-owned policy directory beneath the AppHost and sets the generated root's `RestoreRootConfigDirectory` to that directory. Normal SDK discovery loads the overlay together with the AppHost hierarchy, while referenced projects continue to discover configuration from their own directories.
 
-The generated root project receives `RestoreAdditionalProjectSources` only for effective sources that are not already represented by ambient settings. An empty property is emitted when all effective sources are ambient so an inherited environment value does not replace the root's authenticated source identity.
+`IntegrationRestore.csproj`, its intermediate output, and closure artifacts remain in the centralized integration cache. Their storage location does not participate in ambient NuGet configuration discovery.
+
+The generated root project receives `RestoreAdditionalProjectSources` only for source-only policies that do not require a mapping overlay. Source-specific channel and explicit override policies define their selected sources and source-key mappings in the overlay.
 
 The generated project does not set `RestoreConfigFile`. Using normal discovery preserves NuGet settings that cannot be represented as source arguments or project properties.
 
@@ -162,10 +208,12 @@ SDK restore skipping is disabled when a config file references an environment va
 
 | Scenario | Generated root | Referenced projects |
 |---|---|---|
-| Default channel | Uses the effective channel policy and ambient hierarchy | Can opt into the selected version |
+| No channel or stable channel | Uses ambient source policy and the AppHost hierarchy | Can opt into the selected version |
+| No AppHost NuGet.Config | Uses normal NuGet default, user, and machine configuration | Uses each project's normal discovery hierarchy |
+| Daily, staging, local, or PR channel | Replaces competing Aspire mappings while retaining unrelated ambient policy | Can opt into the selected version |
 | Internal proxy override | Uses only the proxy selected by the source policy | Retains its own restore policy |
 | Ambient authenticated source | Uses the ambient source key and NuGet-owned credentials | Retains its own configuration and credentials |
 | Explicitly selected disabled source | Clears inherited disabled-source state under the complete mapping policy | Retains its own restore policy |
 | Local or PR package hive | Uses an absolute local source and standard NuGet global-packages behavior | Can opt into the selected version |
-| Nested AppHost config | Excluded by the integration-cache discovery boundary | Remains available to projects whose own hierarchy includes it |
+| Nested AppHost config | Included through AppHost-anchored discovery | Remains available to projects whose own hierarchy includes it |
 | Referenced project outside the AppHost tree | Uses the generated root hierarchy | Retains its own config and can explicitly consume the version hint |

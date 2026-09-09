@@ -6,6 +6,7 @@ using System.IO.Hashing;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
@@ -31,6 +32,7 @@ internal static class IntegrationClosureBuilder
     internal const string ClosureTargetsFileName = "closure-targets.txt";
     internal const string ProjectRefAssemblyNamesFileName = "project-ref-assemblies.txt";
     internal const string IntegrationRestoreFolderName = "integration-restore";
+    internal const string IntegrationRestorePolicyFolderName = "integration-restore";
     internal const string ProjectAssetsFileName = "project.assets.json";
 
     /// <summary>
@@ -157,15 +159,19 @@ internal static class IntegrationClosureBuilder
     public static XDocument CreateClosureDirectoryBuildProps(
         string restoreDir,
         string intermediateOutputPath,
+        string restoreRootConfigDirectory,
         string? globalPackagesFolder)
     {
         ArgumentException.ThrowIfNullOrEmpty(restoreDir);
         ArgumentException.ThrowIfNullOrEmpty(intermediateOutputPath);
+        ArgumentException.ThrowIfNullOrEmpty(restoreRootConfigDirectory);
 
         var propertyGroup = new XElement("PropertyGroup",
             new XElement("BaseOutputPath", CliPathHelper.EnsureTrailingSlash(Path.Combine(restoreDir, "bin"))),
             new XElement("BaseIntermediateOutputPath", CliPathHelper.EnsureTrailingSlash(intermediateOutputPath)),
-            new XElement("MSBuildProjectExtensionsPath", "$(BaseIntermediateOutputPath)"));
+            new XElement("MSBuildProjectExtensionsPath", "$(BaseIntermediateOutputPath)"),
+            new XElement("RestoreRootConfigDirectory", restoreRootConfigDirectory),
+            new XElement("RestoreConfigFile", string.Empty));
 
         if (!string.IsNullOrEmpty(globalPackagesFolder))
         {
@@ -192,6 +198,19 @@ internal static class IntegrationClosureBuilder
         var path = Path.Combine(integrationCacheFullPath, "apphosts", hashFragment);
 
         return new DirectoryInfo(path);
+    }
+
+    /// <summary>
+    /// Gets the AppHost-owned directory used as the generated restore project's NuGet policy root.
+    /// </summary>
+    public static DirectoryInfo GetAppHostIntegrationPolicyDirectory(DirectoryInfo appHostDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(appHostDirectory);
+
+        return new DirectoryInfo(Path.Combine(
+            appHostDirectory.FullName,
+            AspireJsonConfiguration.SettingsFolder,
+            IntegrationRestorePolicyFolderName));
     }
 
     /// <summary>

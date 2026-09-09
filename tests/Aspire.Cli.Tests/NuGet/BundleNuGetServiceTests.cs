@@ -559,7 +559,13 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
                 {
                     new { Name = "private", Source = "https://example.com/feed", IsEnabled = true }
                 },
-                PackageSourceMappingEnabled = true
+                PackageSourceMappingEnabled = true,
+                PackageSourceMappings = new[]
+                {
+                    new { SourceKey = "private", Patterns = new[] { "Aspire*" } }
+                },
+                DisabledPackageSourceKeys = new[] { "disabled" },
+                ReservedPackageSourceKeys = new[] { "private", "disabled", "credentials-only" }
             }))
         };
         var service = new BundleNuGetService(
@@ -575,7 +581,65 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var source = Assert.Single(settings.Sources);
         Assert.Equal(new NuGetSourceInfo("private", "https://example.com/feed", IsEnabled: true), source);
         Assert.True(settings.PackageSourceMappingEnabled);
+        var mapping = Assert.Single(settings.PackageSourceMappings);
+        Assert.Equal("private", mapping.SourceKey);
+        Assert.Equal(["Aspire*"], mapping.Patterns);
+        Assert.Equal(["disabled"], settings.DisabledPackageSourceKeys);
+        Assert.Equal(["private", "disabled", "credentials-only"], settings.ReservedPackageSourceKeys);
         Assert.Equal(["nuget", "settings", "--working-dir", appHostDirectory.FullName], invocation!);
+    }
+
+    [Fact]
+    public async Task WriteNuGetConfigOverlayAsync_UsesBundledHelperAndDeletesRequest()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        string[]? invocation = null;
+        string? requestPath = null;
+        string? requestJson = null;
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (args, _, _, _) =>
+            {
+                invocation = args;
+                requestPath = GetArgumentValue(args, "--request");
+                requestJson = File.ReadAllText(requestPath);
+                File.WriteAllText(GetArgumentValue(args, "--output"), "<configuration />");
+            }
+        };
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+        var overlay = new NuGetConfigOverlayInfo(
+            [new NuGetConfigSourceDefinition("aspire-0", "https://example.com/feed")],
+            [new NuGetPackageSourceMappingInfo("aspire-0", ["Aspire*"])],
+            ClearDisabledPackageSources: true,
+            DisabledPackageSourceKeys: ["unrelated"],
+            GlobalPackagesFolder: "/packages");
+
+        await service.WriteNuGetConfigOverlayAsync(overlay, outputPath, CancellationToken.None);
+
+        Assert.Equal(
+            ["nuget", "write-config", "--request", requestPath!, "--output", outputPath],
+            invocation!);
+        Assert.NotNull(requestJson);
+        using var request = System.Text.Json.JsonDocument.Parse(requestJson);
+        var source = request.RootElement.GetProperty("Sources").EnumerateArray().Single();
+        var mapping = request.RootElement.GetProperty("PackageSourceMappings").EnumerateArray().Single();
+        Assert.Equal("aspire-0", source.GetProperty("Key").GetString());
+        Assert.Equal("Aspire*", mapping.GetProperty("Patterns").EnumerateArray().Single().GetString());
+        Assert.Equal("/packages", request.RootElement.GetProperty("GlobalPackagesFolder").GetString());
+        Assert.True(File.Exists(outputPath));
+        Assert.False(File.Exists(requestPath));
     }
 
     [Fact]
