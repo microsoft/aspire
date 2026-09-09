@@ -1,0 +1,16 @@
+{
+  "id": "npgsql-windows-build-test-project-unrelated-exit1",
+  "type": "infra-failure",
+  "title": "Npgsql (windows-latest) 'Build test project' step fails with generic exit code 1, unrelated to PR changes",
+  "error_pattern": "Process completed with exit code 1. (Build test project step failed for Aspire.Npgsql.Tests on windows-latest; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted for this job. PR only modifies Aspire.Cli agent init code, unrelated to Npgsql test project build.",
+  "occurrences": [
+    {
+      "run_id": 34379133718,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34379133718",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (ubuntu-latest)",
+      "pr_number": 19893,
+      "observed_at": "2026-09-09T17:25:38Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20010"
+}

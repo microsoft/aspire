@@ -1,0 +1,106 @@
+{
+  "run_id": 34379133718,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34379133718",
+  "analyzed_at": "2026-09-09T17:25:38Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19893,
+    "title": "Update agent setup in aspire new",
+    "author": "Copilot",
+    "state": "closed",
+    "head_branch": "copilot/update-aspire-new-agent-flow",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19893"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (ubuntu-latest)",
+      "id": 102560123231,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34379133718/job/102560123231",
+      "classification": "flaky-test",
+      "reason": "Failing test DashboardUrlTests.GetDashboardUrlAsyncAuthenticatesDashboardBrowser is unrelated to the PR's changes (Aspire.Cli agent init commands); the assertion mismatch (expected 'Found' vs actual 'RedirectKeepVerb') looks like an intermittent HTTP-redirect-status assertion, not something touched by this PR.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Npgsql.Tests, Npgsql, Npgsql, tests/Aspire.Npgsql.Tests/Aspire.... / Npgsql (windows-latest)",
+      "id": 102560130444,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34379133718/job/102560130444",
+      "classification": "infra-failure",
+      "reason": "The 'Build test project' step failed with a generic exit code 1 and no job logs were retrievable. The PR does not touch Npgsql test code or the CLI agent init changes touch a completely different component, so this is unrelated to PR content and consistent with prior generic build-step infra flakiness seen for other unrelated projects.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Microsoft.Azure.StackExchangeRedis.Tests, Microsoft.Azure.Stack... / Microsoft.Azure.StackExchangeRedis (windows-latest)",
+      "id": 102560133066,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34379133718/job/102560133066",
+      "classification": "infra-failure",
+      "reason": "Multiple steps failed with exit code -1073741502 (0xC0000142 / STATUS_DLL_INIT_FAILED), a known transient Windows runner process-initialization failure that matches an existing recurring cause (17 prior occurrences) and is unrelated to PR changes.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, Hosti... / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 102560140318,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34379133718/job/102560140318",
+      "classification": "flaky-test",
+      "reason": "Two AzureKubernetesInfrastructureTests DestroyPipeline tests time out on windows-latest, matching an existing recurring flaky-test cause (3 prior occurrences). The PR does not modify Azure Kubernetes hosting infrastructure code.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 102562772560,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34379133718/job/102562772560",
+      "classification": "flaky-test",
+      "reason": "Homebrew cask artifact preparation failed with exit code 1, matching an existing recurring cause with 23 prior occurrences that is unrelated to CLI agent init code changes in this PR.",
+      "failed_steps": ["Prepare Homebrew cask artifact"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-lifecycle-tools)",
+      "id": 102563328243,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34379133718/job/102563328243",
+      "classification": "flaky-test",
+      "reason": "The apphost-lifecycle-tools Windows E2E shard failed with exit code 1, matching an existing recurring flaky-test cause (2 prior occurrences) unrelated to PR changes to the CLI agent init flow.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Testing.Tests.DashboardUrlTests.GetDashboardUrlAsyncAuthenticatesDashboardBrowser",
+      "job": "Hosting.Testing (ubuntu-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: Found\nActual:   RedirectKeepVerb",
+      "stack_trace": "at Aspire.Hosting.Testing.Tests.DashboardUrlTests.GetDashboardUrlAsyncAuthenticatesDashboardBrowser() in /_/tests/Aspire.Hosting.Testing.Tests/DashboardUrlTests.cs:line 49\n   at Aspire.Hosting.Testing.Tests.DashboardUrlTests.GetDashboardUrlAsyncAuthenticatesDashboardBrowser() in /_/tests/Aspire.Hosting.Testing.Tests/DashboardUrlTests.cs:line 58",
+      "classification": "flaky",
+      "reason": "The PR only changes Aspire.Cli agent-init related files; DashboardUrlTests exercises dashboard browser redirect handling, an unrelated area. The mismatch between HTTP 'Found' and 'RedirectKeepVerb' redirect status codes looks like an environment/timing-dependent assertion rather than a code regression from this PR."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent",
+      "job": "Hosting.Azure.Kubernetes (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 565",
+      "classification": "flaky",
+      "reason": "Matches an existing recurring cause (hosting-azure-kubernetes-destroypipeline-timeout) with 3 prior occurrences of timeouts on windows-latest for these exact tests; the PR does not touch Azure Kubernetes hosting infrastructure code."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksOutputAndScopeWithoutProvisioning",
+      "job": "Hosting.Azure.Kubernetes (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksOutputAndScopeWithoutProvisioning() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 487",
+      "classification": "flaky",
+      "reason": "Matches an existing recurring cause (hosting-azure-kubernetes-destroypipeline-timeout) with 3 prior occurrences of timeouts on windows-latest for these exact tests; the PR does not touch Azure Kubernetes hosting infrastructure code."
+    }
+  ],
+  "causes": [
+    "hosting-testing-dashboardurltests-authenticatesdashboardbrowser-flaky",
+    "npgsql-windows-build-test-project-unrelated-exit1",
+    "windows-process-init-failure-0xc0000142",
+    "hosting-azure-kubernetes-destroypipeline-timeout",
+    "cli-smoke-test-homebrew-winget-unrelated",
+    "vscode-e2e-apphost-lifecycle-tools-windows-flaky"
+  ]
+}
