@@ -436,6 +436,76 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WhenCancelledDuringBuild_AwaitsRunCleanupBeforeExit()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var buildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupCanFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                buildStarted.TrySetResult();
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    cleanupStarted.TrySetResult();
+                    await cleanupCanFinish.Task;
+                    cleanupCompleted.TrySetResult();
+                    context.BuildCompletionSource?.TrySetResult(false);
+                }
+
+                return CliExitCodes.Cancelled;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+        var pendingCommand = result.InvokeAsync(cancellationToken: cts.Token);
+
+        await buildStarted.Task.DefaultTimeout();
+        cts.Cancel();
+        await cleanupStarted.Task.DefaultTimeout();
+
+        Assert.False(pendingCommand.IsCompleted, "The CLI exited before build cleanup completed.");
+
+        cleanupCanFinish.TrySetResult();
+
+        var exitCode = await pendingCommand.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(cleanupCompleted.Task.IsCompletedSuccessfully);
+        Assert.Empty(interactionService.DisplayedErrors);
+    }
+
+    [Fact]
     public async Task RunCommand_WhenProjectReturnsCancelledDuringBuild_ExitsSuccessfully()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

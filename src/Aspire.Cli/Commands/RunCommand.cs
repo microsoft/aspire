@@ -250,6 +250,7 @@ internal sealed class RunCommand : BaseCommand
         LauncherLivenessMonitor? launcherMonitor = null;
         Task<int>? runTask = null;
         CancellationTokenSource? runCts = null;
+        var buildWaitCompleted = false;
 
         try
         {
@@ -387,6 +388,7 @@ internal sealed class RunCommand : BaseCommand
                 }
 
                 buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
+                buildWaitCompleted = true;
                 waitForBuildActivity.SetAppHostBuildSuccess(buildSuccess);
             }
             if (!buildSuccess)
@@ -671,6 +673,17 @@ internal sealed class RunCommand : BaseCommand
             (runCts is not null && ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested))
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
+
+            // Extension cancellation can interrupt RunCommand's build wait before the linked run token
+            // has reached the project task. Drain that task while it is still preparing so a late-starting
+            // build cannot outlive the CLI and retain the workspace directory on Windows.
+            if (!buildWaitCompleted &&
+                runCts is not null &&
+                runTask is not null &&
+                !runTask.IsCompleted)
+            {
+                await CancelAppHostStartupAsync(runCts, runTask, CancellationToken.None).ConfigureAwait(false);
+            }
 
             // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
             // Internal failures `return X` directly from GuestAppHostProject.RunAsync rather
