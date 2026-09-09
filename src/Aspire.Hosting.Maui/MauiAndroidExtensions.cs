@@ -229,6 +229,10 @@ public static class MauiAndroidExtensions
     /// provided, Aspire selects from the available AVDs when the resource starts.
     /// </para>
     /// <para>
+    /// Automatic or interactive emulator selection is not supported when the resource has a persistent
+    /// lifetime. Provide an explicit adb serial for persistent Android emulator resources.
+    /// </para>
+    /// <para>
     /// To target a specific running emulator by adb serial, use the overload that accepts an
     /// <c>emulatorId</c> parameter.
     /// </para>
@@ -279,6 +283,10 @@ public static class MauiAndroidExtensions
     /// provided, Aspire selects from the available AVDs when the resource starts.
     /// </para>
     /// <para>
+    /// Automatic or interactive emulator selection is not supported when the resource has a persistent
+    /// lifetime. Provide an explicit adb serial for persistent Android emulator resources.
+    /// </para>
+    /// <para>
     /// To target a specific running emulator by adb serial, use the overload that accepts an
     /// <c>emulatorId</c> parameter.
     /// </para>
@@ -326,6 +334,10 @@ public static class MauiAndroidExtensions
     /// This will run the application on an Android emulator. Make sure you have created one or more
     /// Android Virtual Devices (AVDs) using Android Studio or <c>avdmanager</c>. If no emulator ID is
     /// provided, Aspire selects from the available AVDs when the resource starts.
+    /// </para>
+    /// <para>
+    /// Automatic or interactive emulator selection is not supported when the resource has a persistent
+    /// lifetime. Provide an explicit adb serial for persistent Android emulator resources.
     /// </para>
     /// <para>
     /// To target a specific running emulator, provide the adb serial (for example, <c>emulator-5554</c>).

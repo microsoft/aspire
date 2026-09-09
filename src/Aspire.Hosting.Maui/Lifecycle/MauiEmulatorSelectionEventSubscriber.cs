@@ -55,31 +55,40 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
         var resource = @event.Resource;
         var resourceLogger = loggerService.GetLogger(resource);
 
-        if (HasPersistentLifetime(resource))
+        try
         {
-            ThrowPersistentImplicitSelectionNotSupported(selection.TargetKind);
+            if (HasPersistentLifetime(resource))
+            {
+                ThrowPersistentImplicitSelectionNotSupported(selection.TargetKind);
+            }
+
+            var options = await EnumerateTargetsAsync(selection.TargetKind, cancellationToken).ConfigureAwait(false);
+
+            if (options.Count == 0)
+            {
+                ThrowNoTargetsFound(selection.TargetKind, resourceLogger);
+            }
+
+            var selectedId = options.Count == 1
+                ? options[0].Id
+                : await PromptForTargetAsync(selection, options, cancellationToken).ConfigureAwait(false);
+
+            var selectedOption = options.First(option => string.Equals(option.Id, selectedId, StringComparison.Ordinal));
+            resourceLogger.LogInformation("Selected {DisplayName}.", selectedOption.DisplayName);
+
+            selection.SelectedId = selection.TargetKind switch
+            {
+                MauiTargetSelectionKind.AndroidEmulator => await EnsureAndroidEmulatorRunningAsync(selectedId, resourceLogger, cancellationToken).ConfigureAwait(false),
+                MauiTargetSelectionKind.IOSSimulator => selectedId,
+                _ => selectedId
+            };
         }
-
-        var options = await EnumerateTargetsAsync(selection.TargetKind, cancellationToken).ConfigureAwait(false);
-
-        if (options.Count == 0)
+        catch (OperationCanceledException)
         {
-            ThrowNoTargetsFound(selection.TargetKind, resourceLogger);
+            resourceLogger.LogInformation("{TargetName} selection was canceled.", GetTargetName(selection.TargetKind));
+            _ = OverrideCanceledSelectionStateAsync(resource, selection, attemptId, resourceLogger, CancellationToken.None);
+            throw;
         }
-
-        var selectedId = options.Count == 1
-            ? options[0].Id
-            : await PromptForTargetAsync(resource, selection, attemptId, options, resourceLogger, cancellationToken).ConfigureAwait(false);
-
-        var selectedOption = options.First(option => string.Equals(option.Id, selectedId, StringComparison.Ordinal));
-        resourceLogger.LogInformation("Selected {DisplayName}.", selectedOption.DisplayName);
-
-        selection.SelectedId = selection.TargetKind switch
-        {
-            MauiTargetSelectionKind.AndroidEmulator => await EnsureAndroidEmulatorRunningAsync(selectedId, resourceLogger, cancellationToken).ConfigureAwait(false),
-            MauiTargetSelectionKind.IOSSimulator => selectedId,
-            _ => selectedId
-        };
     }
 
     private async Task<IReadOnlyList<EmulatorOption>> EnumerateTargetsAsync(MauiTargetSelectionKind targetKind, CancellationToken cancellationToken)
@@ -99,11 +108,8 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
     }
 
     private async Task<string> PromptForTargetAsync(
-        IResource resource,
         SelectedEmulatorAnnotation selection,
-        int attemptId,
         IReadOnlyList<EmulatorOption> options,
-        ILogger resourceLogger,
         CancellationToken cancellationToken)
     {
         var targetKind = selection.TargetKind;
@@ -129,8 +135,6 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
 
         if (result.Canceled)
         {
-            resourceLogger.LogInformation("{TargetName} selection was canceled.", GetTargetName(targetKind));
-            _ = OverrideCanceledSelectionStateAsync(resource, selection, attemptId, resourceLogger, CancellationToken.None);
             throw new OperationCanceledException($"{GetTargetName(targetKind)} selection was canceled.", cancellationToken);
         }
 

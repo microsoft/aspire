@@ -257,6 +257,10 @@ public static class MauiiOSExtensions
     /// the overload with the <c>simulatorId</c> parameter.
     /// </para>
     /// <para>
+    /// Automatic or interactive simulator selection is not supported when the resource has a persistent
+    /// lifetime. Provide an explicit simulator UDID for persistent iOS simulator resources.
+    /// </para>
+    /// <para>
     /// This overload is not available in polyglot app hosts. Use <see cref="AddiOSSimulator(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
     /// </para>
     /// </remarks>
@@ -301,6 +305,10 @@ public static class MauiiOSExtensions
     /// the overload with the <c>simulatorId</c> parameter.
     /// </para>
     /// <para>
+    /// Automatic or interactive simulator selection is not supported when the resource has a persistent
+    /// lifetime. Provide an explicit simulator UDID for persistent iOS simulator resources.
+    /// </para>
+    /// <para>
     /// This overload is not available in polyglot app hosts. Use <see cref="AddiOSSimulator(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
     /// </para>
     /// </remarks>
@@ -339,6 +347,10 @@ public static class MauiiOSExtensions
     /// <para>
     /// Multiple iOS simulator resources can be added to the same MAUI project if needed, each with
     /// a unique name.
+    /// </para>
+    /// <para>
+    /// Automatic or interactive simulator selection is not supported when the resource has a persistent
+    /// lifetime. Provide an explicit simulator UDID for persistent iOS simulator resources.
     /// </para>
     /// <para>
     /// To target a specific simulator, provide the simulator UDID. You can find simulator UDIDs in Xcode

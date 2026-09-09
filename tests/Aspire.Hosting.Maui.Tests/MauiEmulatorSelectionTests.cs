@@ -53,6 +53,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
             Pixel_5_API_35
             Pixel.Tablet_API_36
             Pixel Tablet API 36
+            INFO_Phone_API_36
             """);
 
         Assert.Collection(
@@ -63,11 +64,12 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
             {
                 Assert.Equal("Pixel Tablet API 36", option.Id);
                 Assert.Equal("Pixel Tablet API 36", option.DisplayName);
-            });
+            },
+            option => Assert.Equal("INFO_Phone_API_36", option.Id));
     }
 
     [Fact]
-    public void ParseRunningEmulatorSerials_ReturnsOnlyOnlineEmulators()
+    public void ParseRunningEmulatorSerials_ReturnsOnlineAndStartingEmulators()
     {
         var serials = AndroidEmulatorEnumerator.ParseRunningEmulatorSerials("""
             List of devices attached
@@ -77,7 +79,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
             emulator-5558	device product:sdk_gphone64_arm64
             """);
 
-        Assert.Equal(["emulator-5554", "emulator-5558"], serials);
+        Assert.Equal(["emulator-5554", "emulator-5556", "emulator-5558"], serials);
     }
 
     [Fact]
@@ -396,7 +398,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
         var interaction = await env.InteractionService.Interactions.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
         interaction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInput>());
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => publishTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => publishTask);
     }
 
     [Fact]
@@ -413,7 +415,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
         var interaction = await env.InteractionService.Interactions.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
         interaction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInput>());
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => publishTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => publishTask);
         await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
         {
             State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
@@ -445,13 +447,80 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
         var interaction = await env.InteractionService.Interactions.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
         interaction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInput>());
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => publishTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => publishTask);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await env.NotificationService.WaitForResourceAsync(
             env.Android.Name,
             e => string.Equals(e.Snapshot.State?.Text, KnownResourceStates.Exited, StringComparison.Ordinal),
             cts.Token);
+    }
+
+    [Fact]
+    public async Task CancellationDuringEnumeration_OverridesStartingWithExitedState()
+    {
+        var enumerationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var env = await EmulatorSelectionTestEnvironment.CreateAsync(
+            androidEnumerator: async (_, cancellationToken) =>
+            {
+                enumerationStarted.SetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return [];
+            });
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info)
+        });
+
+        using var startCts = new CancellationTokenSource();
+        var publishTask = env.PublishBeforeResourceStartedAsync(env.Android, startCts.Token);
+
+        await enumerationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await startCts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => publishTask);
+
+        using var waitCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await env.NotificationService.WaitForResourceAsync(
+            env.Android.Name,
+            e => string.Equals(e.Snapshot.State?.Text, KnownResourceStates.Exited, StringComparison.Ordinal),
+            waitCts.Token);
+    }
+
+    [Fact]
+    public async Task CancellationDuringSingleTargetAndroidStartup_OverridesStartingWithExitedState()
+    {
+        var startupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var env = await EmulatorSelectionTestEnvironment.CreateAsync(
+            androidEmulators: [new("Pixel_5_API_35", "Pixel 5 API 35")],
+            ensureAndroidEmulatorRunning: async (_, _, cancellationToken) =>
+            {
+                startupStarted.SetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return "emulator-5556";
+            });
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info)
+        });
+
+        using var startCts = new CancellationTokenSource();
+        var publishTask = env.PublishBeforeResourceStartedAsync(env.Android, startCts.Token);
+
+        await startupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await startCts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => publishTask);
+
+        using var waitCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await env.NotificationService.WaitForResourceAsync(
+            env.Android.Name,
+            e => string.Equals(e.Snapshot.State?.Text, KnownResourceStates.Exited, StringComparison.Ordinal),
+            waitCts.Token);
     }
 
     [Fact]
@@ -521,6 +590,77 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("emulator-5554", serial);
         Assert.True(waitedForBoot);
+    }
+
+    [Fact]
+    public async Task PendingRunningAndroidEmulator_WaitsForAvdNameBeforeReturningSerial()
+    {
+        var probeCount = 0;
+
+        var serial = await AndroidEmulatorEnumerator.WaitForPendingRunningEmulatorSerialForAvdAsync(
+            "Pixel_5_API_35",
+            _ =>
+            {
+                probeCount++;
+                return Task.FromResult(probeCount == 1
+                    ? AndroidEmulatorEnumerator.RunningEmulatorSerialProbeResult.Pending()
+                    : AndroidEmulatorEnumerator.RunningEmulatorSerialProbeResult.Found("emulator-5556"));
+            },
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromMilliseconds(1),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal("emulator-5556", serial);
+        Assert.Equal(2, probeCount);
+    }
+
+    [Fact]
+    public async Task PendingRunningAndroidEmulator_AllowsLaunchWhenPendingEmulatorResolvesToDifferentAvd()
+    {
+        var probeCount = 0;
+
+        var serial = await AndroidEmulatorEnumerator.WaitForPendingRunningEmulatorSerialForAvdAsync(
+            "Pixel_5_API_35",
+            _ =>
+            {
+                probeCount++;
+                return Task.FromResult(probeCount == 1
+                    ? AndroidEmulatorEnumerator.RunningEmulatorSerialProbeResult.Pending()
+                    : AndroidEmulatorEnumerator.RunningEmulatorSerialProbeResult.NotFound());
+            },
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromMilliseconds(1),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Null(serial);
+        Assert.Equal(2, probeCount);
+    }
+
+    [Fact]
+    public async Task ExistingAndroidEmulator_RetriesBootProbeFailure()
+    {
+        var probeCount = 0;
+
+        await AndroidEmulatorEnumerator.WaitForEmulatorBootAsync(
+            "emulator-5556",
+            _ =>
+            {
+                probeCount++;
+                if (probeCount == 1)
+                {
+                    throw new DistributedApplicationException("device is offline");
+                }
+
+                return Task.FromResult(true);
+            },
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromMilliseconds(1),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(2, probeCount);
     }
 
     [Fact]
@@ -642,6 +782,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
             bool addSecondAndroidEmulator = false,
             IReadOnlyList<EmulatorOption>? androidEmulators = null,
             IReadOnlyList<EmulatorOption>? iOSSimulators = null,
+            Func<ILogger, CancellationToken, Task<IReadOnlyList<EmulatorOption>>>? androidEnumerator = null,
             Func<string, ILogger, CancellationToken, Task<string>>? ensureAndroidEmulatorRunning = null)
         {
             var env = new EmulatorSelectionTestEnvironment();
@@ -682,7 +823,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
                 app.Services.GetRequiredService<ResourceLoggerService>(),
                 app.Services.GetRequiredService<ILogger<MauiEmulatorSelectionEventSubscriber>>())
             {
-                AndroidEnumeratorOverride = (_, _) => Task.FromResult(androidEmulators ?? []),
+                AndroidEnumeratorOverride = androidEnumerator ?? ((_, _) => Task.FromResult(androidEmulators ?? [])),
                 IOSSimulatorEnumeratorOverride = (_, _) => Task.FromResult(iOSSimulators ?? []),
                 EnsureAndroidEmulatorRunningOverride = ensureAndroidEmulatorRunning ?? ((avdName, _, _) =>
                 {

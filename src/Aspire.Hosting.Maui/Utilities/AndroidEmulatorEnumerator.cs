@@ -60,7 +60,13 @@ internal static class AndroidEmulatorEnumerator
 
         var existingSerial = await GetReadyRunningEmulatorSerialForAvdAsync(
             avdName,
-            token => GetRunningEmulatorSerialForAvdAsync(adbPath, avdName, logger, token),
+            token => WaitForPendingRunningEmulatorSerialForAvdAsync(
+                avdName,
+                probeToken => ProbeRunningEmulatorSerialForAvdAsync(adbPath, avdName, logger, probeToken),
+                s_serialWaitTimeout,
+                s_pollInterval,
+                logger,
+                token),
             (serial, token) => WaitForEmulatorBootAsync(adbPath, serial, logger, token),
             logger,
             cancellationToken).ConfigureAwait(false);
@@ -163,11 +169,10 @@ internal static class AndroidEmulatorEnumerator
         return serial;
     }
 
-    private static async Task WaitForEmulatorBootAsync(string adbPath, string serial, ILogger logger, CancellationToken cancellationToken)
+    private static Task WaitForEmulatorBootAsync(string adbPath, string serial, ILogger logger, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Waiting for Android emulator {Serial} to finish booting.", serial);
-
-        await WaitForAndroidToolingAsync(
+        return WaitForEmulatorBootAsync(
+            serial,
             async token =>
             {
                 var result = await RunToolAsync(
@@ -184,6 +189,35 @@ internal static class AndroidEmulatorEnumerator
             },
             s_bootWaitTimeout,
             s_pollInterval,
+            logger,
+            cancellationToken);
+    }
+
+    internal static async Task WaitForEmulatorBootAsync(
+        string serial,
+        Func<CancellationToken, Task<bool>> isBootCompletedAsync,
+        TimeSpan timeout,
+        TimeSpan pollInterval,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Waiting for Android emulator {Serial} to finish booting.", serial);
+
+        await WaitForAndroidToolingAsync(
+            async token =>
+            {
+                try
+                {
+                    return await isBootCompletedAsync(token).ConfigureAwait(false);
+                }
+                catch (DistributedApplicationException ex)
+                {
+                    logger.LogDebug(ex, "Android emulator {Serial} boot state is not available yet.", serial);
+                    return false;
+                }
+            },
+            timeout,
+            pollInterval,
             $"Timed out waiting for Android emulator '{serial}' to finish booting. Try starting the emulator manually and wait for the home screen before starting the Aspire resource again.",
             cancellationToken).ConfigureAwait(false);
     }
@@ -211,7 +245,53 @@ internal static class AndroidEmulatorEnumerator
         }
     }
 
+    internal static async Task<string?> WaitForPendingRunningEmulatorSerialForAvdAsync(
+        string avdName,
+        Func<CancellationToken, Task<RunningEmulatorSerialProbeResult>> probeRunningEmulatorSerialAsync,
+        TimeSpan timeout,
+        TimeSpan pollInterval,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+
+        try
+        {
+            while (true)
+            {
+                var result = await probeRunningEmulatorSerialAsync(timeoutCts.Token).ConfigureAwait(false);
+                switch (result.State)
+                {
+                    case RunningEmulatorSerialProbeState.Found:
+                        Debug.Assert(result.Serial is not null);
+                        return result.Serial;
+
+                    case RunningEmulatorSerialProbeState.NotFound:
+                        return null;
+
+                    case RunningEmulatorSerialProbeState.Pending:
+                        logger.LogDebug("Waiting for a starting Android emulator to report the AVD name for '{AvdName}'.", avdName);
+                        break;
+                }
+
+                await Task.Delay(pollInterval, timeoutCts.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new DistributedApplicationException(
+                $"Timed out waiting for Android emulator '{avdName}' to report its AVD name. Try waiting for the emulator to finish starting from Android Studio Device Manager and then start the Aspire resource again.");
+        }
+    }
+
     private static async Task<string?> GetRunningEmulatorSerialForAvdAsync(string adbPath, string avdName, ILogger logger, CancellationToken cancellationToken)
+    {
+        var result = await ProbeRunningEmulatorSerialForAvdAsync(adbPath, avdName, logger, cancellationToken).ConfigureAwait(false);
+        return result.State == RunningEmulatorSerialProbeState.Found ? result.Serial : null;
+    }
+
+    private static async Task<RunningEmulatorSerialProbeResult> ProbeRunningEmulatorSerialForAvdAsync(string adbPath, string avdName, ILogger logger, CancellationToken cancellationToken)
     {
         var devices = await RunToolAsync(
             adbPath,
@@ -222,30 +302,39 @@ internal static class AndroidEmulatorEnumerator
             logger,
             cancellationToken).ConfigureAwait(false);
 
+        var hasPendingEmulator = false;
         foreach (var serial in ParseRunningEmulatorSerials(devices.StandardOutput))
         {
             var runningAvdName = await TryGetRunningAvdNameAsync(adbPath, serial, logger, cancellationToken).ConfigureAwait(false);
-            if (string.Equals(runningAvdName, avdName, StringComparison.Ordinal))
+            if (runningAvdName.IsPending)
             {
-                return serial;
+                hasPendingEmulator = true;
+                continue;
+            }
+
+            if (string.Equals(runningAvdName.AvdName, avdName, StringComparison.Ordinal))
+            {
+                return RunningEmulatorSerialProbeResult.Found(serial);
             }
         }
 
-        return null;
+        return hasPendingEmulator ? RunningEmulatorSerialProbeResult.Pending() : RunningEmulatorSerialProbeResult.NotFound();
     }
 
     internal static IReadOnlyList<string> ParseRunningEmulatorSerials(string output)
     {
         var serials = new List<string>();
 
-        // `adb devices` output:
+        // `adb devices` reports an emulator as "offline" while it is still starting:
         //   List of devices attached
         //   emulator-5554	device
         //   emulator-5556	offline
+        // Include both states so an already-starting AVD is not treated as absent and
+        // launched a second time.
         foreach (var line in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var parts = line.Split(['\t', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts is [var serial, "device", ..] && serial.StartsWith("emulator-", StringComparison.Ordinal))
+            if (parts is [var serial, ("device" or "offline"), ..] && serial.StartsWith("emulator-", StringComparison.Ordinal))
             {
                 serials.Add(serial);
             }
@@ -263,7 +352,7 @@ internal static class AndroidEmulatorEnumerator
             .FirstOrDefault(line => !string.Equals(line, "OK", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static async Task<string?> TryGetRunningAvdNameAsync(string adbPath, string serial, ILogger logger, CancellationToken cancellationToken)
+    private static async Task<AvdNameProbeResult> TryGetRunningAvdNameAsync(string adbPath, string serial, ILogger logger, CancellationToken cancellationToken)
     {
         try
         {
@@ -276,26 +365,27 @@ internal static class AndroidEmulatorEnumerator
                 logger,
                 cancellationToken).ConfigureAwait(false);
 
-            return ParseAvdNameForRunningEmulator(result.StandardOutput);
+            return AvdNameProbeResult.Resolved(ParseAvdNameForRunningEmulator(result.StandardOutput));
         }
         catch (DistributedApplicationException ex)
         {
-            logger.LogDebug(ex, "Unable to determine AVD name for emulator {Serial}.", serial);
-            return null;
+            logger.LogDebug(ex, "Unable to determine AVD name for emulator {Serial}; treating it as a starting emulator.", serial);
+            return AvdNameProbeResult.Pending();
         }
     }
 
     private static bool IsAvdName(string line)
     {
-        if (line.Contains('|') ||
-            line.StartsWith("INFO", StringComparison.OrdinalIgnoreCase) ||
-            line.StartsWith("WARNING", StringComparison.OrdinalIgnoreCase) ||
-            line.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
+        var pipeIndex = line.IndexOf('|');
+        if (pipeIndex < 0)
         {
-            return false;
+            return true;
         }
 
-        return true;
+        var prefix = line[..pipeIndex].Trim();
+        return !string.Equals(prefix, "INFO", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(prefix, "WARNING", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(prefix, "ERROR", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static string FindAndroidToolPath(string executableName, string androidSdkRelativePath)
@@ -456,6 +546,45 @@ internal static class AndroidEmulatorEnumerator
         catch (Exception ex)
         {
             logger.LogDebug(ex, "Failed to kill Android emulator tooling process.");
+        }
+    }
+
+    internal readonly record struct RunningEmulatorSerialProbeResult(RunningEmulatorSerialProbeState State, string? Serial)
+    {
+        internal static RunningEmulatorSerialProbeResult Found(string serial)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(serial);
+            return new(RunningEmulatorSerialProbeState.Found, serial);
+        }
+
+        internal static RunningEmulatorSerialProbeResult NotFound()
+        {
+            return new(RunningEmulatorSerialProbeState.NotFound, Serial: null);
+        }
+
+        internal static RunningEmulatorSerialProbeResult Pending()
+        {
+            return new(RunningEmulatorSerialProbeState.Pending, Serial: null);
+        }
+    }
+
+    internal enum RunningEmulatorSerialProbeState
+    {
+        Found,
+        NotFound,
+        Pending
+    }
+
+    private readonly record struct AvdNameProbeResult(string? AvdName, bool IsPending)
+    {
+        public static AvdNameProbeResult Resolved(string? avdName)
+        {
+            return new(avdName, IsPending: false);
+        }
+
+        public static AvdNameProbeResult Pending()
+        {
+            return new(AvdName: null, IsPending: true);
         }
     }
 
