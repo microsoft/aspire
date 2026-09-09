@@ -46,7 +46,7 @@ public static class AzureKubernetesPersistentVolumeExtensions
     ///     .WithCapacity("20Gi");
     ///
     /// builder.AddProject&lt;Projects.Api&gt;("api")
-    ///     .WithPersistentVolume(data, "/data");
+    ///     .WithPersistentVolume(data, "/data", env: "DATA_PATH");
     /// </code>
     /// </example>
     [AspireExport]

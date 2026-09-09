@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import { promises as fs } from "fs";
-import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
+import { createDebugAdapterTracker, AppHostTrackerOptions } from "./adapterTracker";
 import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, JavaLaunchConfiguration, RustLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions, AspireOperationKind } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
@@ -27,11 +27,12 @@ import type { ChildProcessWithoutNullStreams } from "child_process";
 import { sendTelemetryEvent } from "../utils/telemetry";
 import { classifyAppHostPath, classifyAppHostDirectory, type AppHostLanguage } from "../utils/appHostLanguage";
 import { bucketAspireCommand } from "../utils/telemetryBuckets";
+import { AppHostLogOutputCoordinator } from "./appHostLogOutput";
+import type { AppHostLogEntry } from "./appHostLogOutput";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 import { appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
 import { markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from "./AspireDebugConfigurationProviderInternal";
-import { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
 import { getAppHostLaunchProfileOptions, getRootLaunchProfileCliArg } from "../utils/launchProfile";
 import { getCliPathTargetForUri, getCliPathTargetKey, windowCliPathTarget } from "../utils/cliPathVariables";
 import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
@@ -102,6 +103,10 @@ export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtende
 function redactedJavaLaunchFields(debugConfig: AspireResourceExtendedDebugConfiguration): Record<string, unknown> {
   const redacted: Record<string, unknown> = {};
 
+  if (debugConfig.javaExec !== undefined) {
+    redacted.javaExec = '<redacted>';
+  }
+
   if (debugConfig.vmArgs !== undefined) {
     redacted.vmArgs = '<redacted>';
   }
@@ -153,7 +158,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   private readonly _onDidSendMessage = new EventEmitter<any>();
   private readonly _onDidSendDebugConsoleOutput = new EventEmitter<AspireDebugConsoleOutputEvent>();
   private _messageSeq = 1;
-  private readonly _appHostParentOutputFilter = new AppHostParentOutputFilter();
+  private readonly _appHostLogOutput = new AppHostLogOutputCoordinator(output => this.sendMessage(output.output, false, output.category));
 
   private readonly _session: vscode.DebugSession;
   private readonly _rpcServer: AspireRpcServer;
@@ -1219,17 +1224,17 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
   }
 
-  createDebugAdapterTrackerCore(debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler, onAppHostOutput?: AppHostOutputHandler) {
+  createDebugAdapterTrackerCore(debugAdapter: string, appHostTracker?: AppHostTrackerOptions) {
     if (this._trackedDebugAdapters.includes(debugAdapter)) {
       return;
     }
 
     this._trackedDebugAdapters.push(debugAdapter);
-    this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, onAppHostRestartRequested, onAppHostOutput));
+    this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, appHostTracker));
   }
 
   private static readonly _nodeAppHostExtensions = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
-  private static readonly _csharpAppHostExtensions = ['.cs', '.csproj'];
+  private static readonly _dotnetAppHostExtensions = ['.cs', '.csproj', '.fsproj', '.vbproj'];
   private static readonly _rustAppHostExtensions = ['.rs'];
   private static readonly _javaAppHostExtensions = ['.java'];
 
@@ -1238,9 +1243,10 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
   async startAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean, options: StartAppHostOptions): Promise<void> {
     try {
+      this._appHostLogOutput.reset();
       const fileExtension = path.extname(projectFile).toLowerCase();
       const isNodeAppHost = AspireDebugSession._nodeAppHostExtensions.includes(fileExtension);
-      const isCSharpAppHost = AspireDebugSession._csharpAppHostExtensions.includes(fileExtension);
+      const isDotNetAppHost = AspireDebugSession._dotnetAppHostExtensions.includes(fileExtension);
       const isRustAppHost = AspireDebugSession._rustAppHostExtensions.includes(fileExtension);
       const isJavaAppHost = AspireDebugSession._javaAppHostExtensions.includes(fileExtension);
 
@@ -1281,27 +1287,27 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       // we suppress VS Code's automatic child restart and restart the
       // entire Aspire debug session instead.
       //
-      // The output filter is intentionally a positive opt-in for C# AppHosts only.
+      // The output filter is intentionally a positive opt-in for .NET AppHosts only.
       // The .NET debugger (`coreclr`) emits a lot of `console`-category chatter
       // (module loads, exception-thrown notifications, the debugger banner, etc.)
-      // into the parent debug console, and structured `Microsoft.Extensions.Logging`
-      // lines need trce/dbug-level filtering. Other languages (Node, and future
+      // into the parent debug console, and `Microsoft.Extensions.Logging` lines need
+      // correlation and severity styling. Other languages (Node, and future
       // additions like Python/Go) use different debug adapters that don't produce
       // that noise, so we pass their output through unmodified until/unless they
       // explicitly opt in to filtering.
       this.createDebugAdapterTrackerCore(
         debuggerExtension.debugAdapter,
-        (debugSessionId) => {
-          if (debugSessionId === this.debugSessionId) {
+        {
+          debugSessionId: this.debugSessionId,
+          onRestartRequested: () => {
             this._appHostRestartRequested = true;
             this.configuration[appHostRestartSourceSessionIdConfigKey] = this._session.id;
             return true; // suppress VS Code's child restart
-          }
-          return false;
+          },
+          onOutput: isDotNetAppHost
+            ? (output, category) => this.sendAppHostMessage(output, category)
+            : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout')
         },
-        isCSharpAppHost
-          ? (output, category) => this.sendAppHostMessage(output, category)
-          : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout')
       );
 
       let appHostArgs: string[] | undefined;
@@ -1340,6 +1346,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           main_class: javaCommand!.mainClass,
           class_paths: resolveJavaClassPaths(javaCommand!.classPaths, path.dirname(projectFile)),
           working_directory: path.dirname(projectFile),
+          ...(javaCommand!.javaExec ? { java_exec: javaCommand!.javaExec } : {}),
           // build_tool is deliberately absent: it only drives a language server project reimport,
           // and the classpath is sent explicitly here, so the launch never depends on one.
           ...(javaCommand!.vmArgs.length > 0 ? { vm_args: javaCommand!.vmArgs } : {})
@@ -1389,6 +1396,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
       const disposable = vscode.debug.onDidTerminateDebugSession(async session => {
         if (this._appHostDebugSession && session.id === this._appHostDebugSession.id) {
+          // Emit whatever was still being assembled before the banner, so a record the
+          // AppHost logged on its way out is not lost and still reads in order.
+          this.flushAppHostLogOutput();
           this._appHostStopped = true;
           this._resourceDebugSessions = this._resourceDebugSessions.filter(resourceSession => resourceSession.id !== session.id);
 
@@ -1679,6 +1689,10 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     return await vscode.debug.startDebugging(workspaceFolder, debugConfig, parentSession);
   }
 
+  registerResourceCleanup(disposable: vscode.Disposable): void {
+    this.registerDisposable(disposable);
+  }
+
   private getDebugSessionWorkspaceFolder(debugConfig: AspireResourceExtendedDebugConfiguration): vscode.WorkspaceFolder | undefined {
     const resourcePath = typeof debugConfig.cwd === 'string'
       ? debugConfig.cwd
@@ -1798,7 +1812,8 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     // Windows' SIGTERM → 143 exit code which is not normalized to 0) would
     // be missed and the summary would under-report failures.
     this._disposables.forEach(disposable => disposable.dispose());
-
+    this.flushAppHostLogOutput();
+    this._appHostLogOutput.reset();
     this._trackedDebugAdapters = [];
     this._onDidSendDebugConsoleOutput.dispose();
     // Keep this disposed session tracked while its delayed CLI termination is pending, so
@@ -1857,9 +1872,23 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   }
 
   private sendAppHostMessage(message: string, category: string | undefined) {
-    const filteredMessage = this._appHostParentOutputFilter.filter(message, category);
-    if (filteredMessage) {
-      this.sendMessage(filteredMessage.output, false, filteredMessage.category);
+    for (const output of this._appHostLogOutput.handleDebugAdapterOutput(message, category)) {
+      this.sendMessage(output.output, false, output.category);
+    }
+  }
+
+  private flushAppHostLogOutput() {
+    for (const output of this._appHostLogOutput.flush()) {
+      this.sendMessage(output.output, false, output.category);
+    }
+  }
+
+  sendAppHostLogEntry(entry: AppHostLogEntry) {
+    const output = this._appHostLogOutput.handleBackchannelEntry(entry);
+    if (output) {
+      // The coordinator terminates every record it renders, so never append another
+      // newline here.
+      this.sendMessage(output.output, false, output.category);
     }
   }
 
@@ -1914,6 +1943,6 @@ function isErrorWithStreamedDebugConsoleOutput(err: unknown): boolean {
   return err instanceof Error && (err as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten === true;
 }
 
-export { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
-export type { AppHostParentOutput } from "./session/appHostParentOutputFilter";
+export { AppHostParentOutputFilter } from "./appHostLogOutput";
+export type { AppHostParentOutput } from "./appHostLogOutput";
 export type { DashboardLaunchBehavior, DashboardBrowserType } from "./session/dashboardLauncher";

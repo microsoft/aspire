@@ -84,6 +84,10 @@ internal class YarpEnvConfigGenerator
                 }
             }
         }
+        else if (obj is Enum enumValue)
+        {
+            environmentVariables.Add(prefix, enumValue.ToString());
+        }
         else
         {
             foreach (var property in obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))

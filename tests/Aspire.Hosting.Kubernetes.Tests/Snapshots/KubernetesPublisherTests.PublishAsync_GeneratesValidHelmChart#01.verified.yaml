@@ -1,4 +1,4 @@
-parameters:
+﻿parameters:
   project1:
     project1_image: "project1:latest"
 secrets:

@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 import { findRunningAppHost, getCommandInvocationCount, getResources, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
-import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
+import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, reloadWorkspaceForE2E, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
+import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, observeVisibleSideBarSectionTitles, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
 
 const cliStartupTimeoutMs = getCliStartupTimeoutMs();
 
@@ -37,6 +37,27 @@ suite('Aspire AppHost tree E2E', function () {
         assert.strictEqual(await item.getLabel(), label);
         assert.ok(await waitForChildTreeItem(item, 'Run AppHost'));
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 1);
+    });
+
+    test('does not activate the Aspire view when the window reloads with Explorer selected', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+        await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
+
+        try {
+            await executeCommandFromPalette('workbench.view.explorer');
+            await reloadWorkspaceForE2E();
+            await waitForRepositoryIdle();
+            await waitForWorkspaceAppHost();
+
+            const visibleSectionTitles = await observeVisibleSideBarSectionTitles();
+            assert.ok(
+                !visibleSectionTitles.includes('AppHosts'),
+                `Aspire stole sidebar focus after reload. Visible sections: ${visibleSectionTitles.join(', ')}`);
+        } finally {
+            await executeE2eControlCommand({ name: 'closeAllEditors' });
+        }
     });
 
     test('shows streamed candidates while AppHost discovery is still running', async () => {

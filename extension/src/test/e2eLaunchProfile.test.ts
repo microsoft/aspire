@@ -5,7 +5,15 @@ import * as path from 'path';
 import { spawnSync } from 'child_process';
 import * as ts from 'typescript';
 
-import { removeDirectorySafely } from './testHelpers';
+function removeDirectorySafely(directory: string): void {
+    try {
+        fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
+    catch (error) {
+        console.warn(`Failed to remove test directory '${directory}': ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
 function readSourcePattern(source: string, name: string): RegExp {
     const declaration = new RegExp(`const ${name} = /(.+)/;`).exec(source);
     assert.ok(declaration, `run-e2e.js must define ${name}`);
@@ -75,6 +83,21 @@ function runE2eRunnerAsPlatform(extensionRoot: string, platform: 'darwin' | 'lin
         timeout: 120000,
         env: environment,
     });
+}
+
+function createE2eSpecFixtures(extensionRoot: string, fileNames: readonly string[]): string {
+    const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'unit');
+    fs.mkdirSync(testArtifactsRoot, { recursive: true });
+    const fixtureRoot = fs.mkdtempSync(path.join(testArtifactsRoot, 'e2e-spec-fixtures-'));
+    for (const fileName of fileNames) {
+        fs.writeFileSync(path.join(fixtureRoot, fileName), '');
+    }
+
+    return fixtureRoot;
+}
+
+function toPosixRelativePath(from: string, to: string): string {
+    return path.relative(from, to).split(path.sep).join('/');
 }
 
 function getTestBlock(source: string, testName: string): string {
@@ -201,6 +224,9 @@ suite('E2E launch profile', () => {
 
         // The validations that reject the environment, and the spec walk, have to come first.
         assert.ok(runner.indexOf('const matchedTestSpecs =') < runRootDeclaration);
+        assertTextOrder(runner, 'const javaStarterTestSpecs =', 'const shortRunRoot =');
+        assertTextOrder(runner, 'Java E2E spec selection mixes workspace fixtures', 'const shortRunRoot =');
+        assertTextOrder(runner, 'mixes Java and non-Java workspace fixtures', 'const shortRunRoot =');
         assert.ok(runner.indexOf("throw new Error('vscode-extension-tester must be pinned") < runRootDeclaration);
         assert.ok(runner.indexOf('const downloadCacheRoot =') < runRootDeclaration);
         assert.ok(runner.indexOf('const vscodeVersion = resolveCachedVsCodeVersion(') < runRootDeclaration);
@@ -210,6 +236,71 @@ suite('E2E launch profile', () => {
         const mainStart = runner.indexOf('async function main()');
         const mainBody = runner.slice(mainStart, runner.indexOf('\n  finally {', mainStart));
         assert.ok(mainBody.includes('prepareRunDirectories();'));
+    });
+
+    test('rejects mixed Java workspace fixtures before creating the per-run root even when Java E2E is explicitly disabled', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'unit');
+        fs.mkdirSync(testArtifactsRoot, { recursive: true });
+        const fixtureRoot = createE2eSpecFixtures(extensionRoot, [
+            'javaAppHost.e2e.test.js',
+            'javaStarterProjectModel.e2e.test.js',
+        ]);
+        const tempRoot = fs.mkdtempSync(path.join(testArtifactsRoot, 'aev-java-fixture-guard-'));
+        try {
+            const result = runE2eRunnerAsPlatform(extensionRoot, 'linux', {
+                ...process.env,
+                ASPIRE_EXTENSION_E2E_ENABLE_JAVA: 'false',
+                ASPIRE_EXTENSION_E2E_SPEC: path.join(fixtureRoot, '{javaAppHost,javaStarterProjectModel}.e2e.test.js'),
+                ASPIRE_EXTENSION_E2E_TEMP_ROOT: tempRoot,
+                ASPIRE_EXTENSION_E2E_VSCODE_VERSION: '1.130.0',
+            });
+
+            const starterSpec = toPosixRelativePath(extensionRoot, path.join(fixtureRoot, 'javaStarterProjectModel.e2e.test.js'));
+            const playgroundSpec = toPosixRelativePath(extensionRoot, path.join(fixtureRoot, 'javaAppHost.e2e.test.js'));
+            assert.notStrictEqual(result.status, 0);
+            assert.ok(
+                result.stderr.includes(`Java E2E spec selection mixes workspace fixtures. Starter matches: ${starterSpec}. Playground matches: ${playgroundSpec}. Split these specs into separate runs.`),
+                result.stderr);
+            assert.deepStrictEqual(fs.readdirSync(tempRoot), []);
+        }
+        finally {
+            removeDirectorySafely(tempRoot);
+            removeDirectorySafely(fixtureRoot);
+        }
+    });
+
+    test('rejects mixed Java and non-Java specs before creating the per-run root', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'unit');
+        fs.mkdirSync(testArtifactsRoot, { recursive: true });
+        const fixtureRoot = createE2eSpecFixtures(extensionRoot, [
+            'javaAppHost.e2e.test.js',
+            'packageSurface.e2e.test.js',
+        ]);
+        const tempRoot = fs.mkdtempSync(path.join(testArtifactsRoot, 'aev-java-non-java-guard-'));
+        try {
+            const result = runE2eRunnerAsPlatform(extensionRoot, 'linux', {
+                ...process.env,
+                ASPIRE_EXTENSION_E2E_CLI_PATH: path.join(tempRoot, 'missing-aspire'),
+                ASPIRE_EXTENSION_E2E_ENABLE_JAVA: '',
+                ASPIRE_EXTENSION_E2E_SPEC: path.join(fixtureRoot, '{javaAppHost,packageSurface}.e2e.test.js'),
+                ASPIRE_EXTENSION_E2E_TEMP_ROOT: tempRoot,
+                ASPIRE_EXTENSION_E2E_VSCODE_VERSION: '1.130.0',
+            });
+
+            const javaSpec = toPosixRelativePath(extensionRoot, path.join(fixtureRoot, 'javaAppHost.e2e.test.js'));
+            const nonJavaSpec = toPosixRelativePath(extensionRoot, path.join(fixtureRoot, 'packageSurface.e2e.test.js'));
+            assert.notStrictEqual(result.status, 0);
+            assert.ok(
+                result.stderr.includes(`Java E2E spec selection mixes Java and non-Java workspace fixtures. Java matches: ${javaSpec}. Non-Java matches: ${nonJavaSpec}. Split these specs into separate runs.`),
+                result.stderr);
+            assert.deepStrictEqual(fs.readdirSync(tempRoot), []);
+        }
+        finally {
+            removeDirectorySafely(tempRoot);
+            removeDirectorySafely(fixtureRoot);
+        }
     });
 
     test('removes the per-run root when the environment is rejected before any download', () => {
@@ -224,6 +315,7 @@ suite('E2E launch profile', () => {
                 timeout: 120000,
                 env: {
                     ...process.env,
+                    ASPIRE_EXTENSION_E2E_SPEC: 'out/test/e2eLaunchProfile.test.js',
                     ASPIRE_EXTENSION_E2E_TEMP_ROOT: tempRoot,
                     ASPIRE_EXTENSION_E2E_VSCODE_VERSION: 'latest',
                 },
@@ -522,7 +614,7 @@ suite('E2E launch profile', () => {
         assert.ok(dotNetSetupIndex >= 0);
         assert.ok(dotNetSetupIndex < azureFunctionsPrerequisitesIndex);
         assert.ok(workflow.includes('global-json-file: global.json'));
-        assert.deepStrictEqual(runnerTargetFrameworks, ['net10.0', 'net10.0', 'net10.0']);
+        assert.deepStrictEqual(runnerTargetFrameworks, ['net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0']);
         assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0', 'net10.0']);
         assert.ok(workflow.includes("core_tools_version='4.12.1'"));
         assert.ok(workflow.includes('faf8fb8d50b5293df338bec70594b12f45730e9fe251805298859b2238cf627e'));
@@ -551,6 +643,40 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('commandLineArgs: `--useHttps --cert "${certificatePath}" --password "${certificatePassword}"`'));
         assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}'));
         assert.strictEqual(runStep.includes('continue-on-error:'), false);
+    });
+
+    test('pins the unpackaged WinUI debugger regression environment for its Windows E2E shard', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const spec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'winUiDebug.e2e.test.ts'), 'utf8');
+        const openWinUiSourceIndex = spec.indexOf("await executeE2eControlCommand({ name: 'openFile', filePath: winUiAppPath });");
+        const projectLoadIndex = spec.indexOf('await waitForCSharpProjectLoad(winUiAppPath, 120000);');
+        const debugLaunchIndex = spec.indexOf("name: 'debugAppHost'");
+
+        assert.ok(workflow.includes('shardName: winui-debug'));
+        assert.ok(workflow.includes('spec: out/test-e2e/test-e2e/winUiDebug.e2e.test.js'));
+        assert.ok(workflow.includes('installWinUI: true'));
+        assert.ok(workflow.includes('name: Install WinUI E2E debugger prerequisites'));
+        assert.ok(workflow.includes('csharp/2.140.9/vspackage?targetPlatform=win32-x64'));
+        assert.ok(workflow.includes('ed7a3ca7775b0afa0c7c8e51e203eba0ca5e7366969509a3bbdd707888b8536a'));
+        assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_ENABLE_WINUI=true'));
+        assert.ok(runner.includes("const enableWinUiE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';"));
+        assert.ok(runner.includes('is required when a debugger-backed E2E shard is enabled.'));
+        assert.ok(!runner.includes('is required when ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true.'));
+        assert.ok(runner.includes('<WindowsPackageType>None</WindowsPackageType>'));
+        assert.ok(runner.includes('<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>'));
+        assert.ok(runner.includes('<PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />'));
+        assert.ok(runner.includes('<PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />'));
+        assert.ok(runner.includes('File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");'));
+        assert.ok(spec.includes('this.timeout(1_200_000);'));
+        assert.ok(spec.includes("const symbol = 'InitializeComponent';"));
+        assert.ok(spec.includes("name: 'getDefinitions'"));
+        assert.ok(openWinUiSourceIndex >= 0);
+        assert.ok(projectLoadIndex > openWinUiSourceIndex);
+        assert.ok(debugLaunchIndex > projectLoadIndex);
+        assert.ok(spec.includes("await waitForReadyMarker(readyMarkerPath, 240000);"));
+        assert.ok(spec.includes("await waitForResourceState('e2e-winui', ['Running'], 30000);"));
     });
 
     test('wires structured E2E harness failures into advisory handling', () => {
@@ -1076,6 +1202,12 @@ suite('E2E launch profile', () => {
         assert.ok(workspaceTargetProofSource.includes("const wrapperDirectory = path.join(fixtureRoot, '.workspace-target-cli-wrappers');"));
         assert.ok(workspaceTargetProofSource.includes('const wrapperPath = path.join(wrapperDirectory, `aspire-${folderName}`);'));
         assert.ok(!workspaceTargetProofSource.includes('const wrapperPath = path.join(folderPath, `aspire-${folderName}`);'));
+        const workspaceRouting = getTestBlock(workspaceTargetProofSource, 'isolates folder terminals and keeps global commands window scoped');
+        assert.ok(workspaceRouting.includes("const folderC = createFolderFixture(runRoot, 'folder-c');"));
+        assert.ok(workspaceRouting.includes("const workspaceFolderLabels = ['folder-a', 'folder-b', 'folder-c'] as const;"));
+        assert.ok(workspaceRouting.includes("await invokeNewForFolder('folder-c', folderC);"));
+        assert.ok(!workspaceRouting.includes("await invokeNewForFolder('folder-b', folderB);"));
+        assert.ok(workspaceRouting.includes('assert.ok(!updateCommand.commandLine.includes(folderC.wrapperPath), updateCommand.commandLine);'));
 
         const edgeCases = getTestBlock(edgeCasesSource, 'shows debugger install guidance while the Aspire panel and AppHost source are closed');
         assert.ok(edgeCases.includes("waitForNotificationMessage("));

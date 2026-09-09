@@ -67,6 +67,100 @@ public sealed class StartStopTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task StartSingleFileAppHostDoesNotCountBuildAgainstStartupTimeout()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectName = $"SlowBuild_{Guid.NewGuid():N}";
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+
+        // The pre-build must exceed the startup budget. If dotnet run rebuilds the file after the
+        // budget starts, this target runs a second time and aspire start fails with a timeout.
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "Directory.Build.targets"),
+            """
+            <Project>
+              <Target Name="DelayBuildPastStartupTimeout" BeforeTargets="CoreCompile" Condition="'$(DesignTimeBuild)' != 'true'">
+                <Exec Command="sleep 7" />
+              </Target>
+            </Project>
+            """);
+
+        await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(projectName)}", counter);
+
+        await auto.TypeAsync("ASPIRE_CLI_START_TIMEOUT=5 aspire start --format json");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.AspireStopAsync(counter);
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task StartThroughSymlinkCanBeDescribedAndStoppedThroughRealPath()
+    {
+        const string projectName = "AliasedAppHost";
+        const string projectLinkName = "AliasedAppHostLink";
+        const string resourceName = "alias-marker";
+
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+
+        var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
+        var appHostSource = File.ReadAllText(appHostFilePath);
+        Assert.Contains("var builder = DistributedApplication.CreateBuilder(args);", appHostSource);
+        File.WriteAllText(
+            appHostFilePath,
+            appHostSource.Replace(
+                "var builder = DistributedApplication.CreateBuilder(args);",
+                $"""
+                var builder = DistributedApplication.CreateBuilder(args);
+                builder.AddParameter("{resourceName}");
+                """,
+                StringComparison.Ordinal));
+
+        await auto.RunCommandAsync($"ln -s {projectName} {projectLinkName}", counter);
+
+        var realAppHostPath = $"{projectName}/apphost.cs";
+        var linkedAppHostPath = $"{projectLinkName}/apphost.cs";
+        await auto.AspireStartAsync(counter, apphost: linkedAppHostPath);
+
+        await auto.RunCommandAsync(
+            $"aspire describe --apphost {realAppHostPath} {resourceName} --format json > alias-resource.json",
+            counter,
+            TimeSpan.FromSeconds(30));
+        await auto.RunCommandAsync(
+            $"jq -e '.resources | any(.name == \"{resourceName}\")' alias-resource.json",
+            counter,
+            TimeSpan.FromSeconds(10));
+
+        await auto.TypeAsync($"aspire stop --apphost {realAppHostPath}");
+        await auto.EnterAsync();
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    [Fact]
     public async Task StopWithNoRunningAppHostExitsSuccessfully()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

@@ -10,6 +10,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Semver;
 
@@ -233,7 +234,9 @@ internal sealed class StopCommand : BaseCommand
             var appHostFile = GetAppHostFile(connection);
             if (appHostFile is not null)
             {
-                return await StopRunningAppHostsForResolvedFileAsync(appHostFile, displayNotRunningMessage: true, cancellationToken).ConfigureAwait(false);
+                // Reuse the connections already scanned above rather than scanning every socket a second
+                // time. A rescan pays each unreachable socket's connect retry budget again.
+                return await StopRunningAppHostsForResolvedFileAsync(appHostFile, allConnections, cancellationToken).ConfigureAwait(false);
             }
 
             _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
@@ -273,7 +276,13 @@ internal sealed class StopCommand : BaseCommand
         var appHostFile = GetAppHostFile(result.Connection!);
         if (appHostFile is not null)
         {
-            return await StopRunningAppHostsForResolvedFileAsync(appHostFile, displayNotRunningMessage: true, cancellationToken).ConfigureAwait(false);
+            // The resolver returns a single connection, but every instance running at that path should be
+            // stopped, so the full set is needed here.
+            var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
+                SharedCommandStrings.ScanningForRunningAppHosts,
+                cancellationToken).ConfigureAwait(false);
+
+            return await StopRunningAppHostsForResolvedFileAsync(appHostFile, allConnections, cancellationToken).ConfigureAwait(false);
         }
 
         _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
@@ -281,42 +290,25 @@ internal sealed class StopCommand : BaseCommand
         return new StopAppHostResult(exitCode, appHostFile);
     }
 
-    private async Task<StopAppHostResult> StopRunningAppHostsForResolvedFileAsync(FileInfo appHostFile, bool displayNotRunningMessage, CancellationToken cancellationToken)
+    private async Task<StopAppHostResult> StopRunningAppHostsForResolvedFileAsync(FileInfo appHostFile, AppHostConnectionResult[] allConnections, CancellationToken cancellationToken)
     {
-        var matchingSocketPaths = AppHostHelper.FindMatchingNonOrphanedSockets(
-            appHostFile.FullName,
-            ExecutionContext.HomeDirectory.FullName,
-            Environment.ProcessId,
-            _logger);
-
-        if (matchingSocketPaths.Length == 0)
-        {
-            if (displayNotRunningMessage)
-            {
-                var displayPath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName);
-                InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath));
-            }
-
-            return new StopAppHostResult(CliExitCodes.Success, null);
-        }
-
-        var matchingSocketPathSet = matchingSocketPaths.ToHashSet(GetSocketPathComparer());
-        var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
-            SharedCommandStrings.ScanningForRunningAppHosts,
-            cancellationToken).ConfigureAwait(false);
+        var canonicalAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName);
 
         var matchingConnections = allConnections
-            .Where(result => result.Success && result.Connection is not null && matchingSocketPathSet.Contains(result.Connection.SocketPath))
+            .Where(result =>
+                result is { Success: true, Connection.AppHostInfo.AppHostPath: { } connectionAppHostPath } &&
+                StringComparers.FileSystemPath.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(connectionAppHostPath),
+                    canonicalAppHostPath))
             .Select(result => result.Connection!)
             .ToArray();
 
         if (matchingConnections.Length == 0)
         {
-            if (displayNotRunningMessage)
-            {
-                var displayPath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName);
-                InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath));
-            }
+            // Reachable when the AppHost exits between being resolved and these connections being
+            // enumerated. Reporting it as not running is the right outcome for that race.
+            var displayPath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName);
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath));
 
             return new StopAppHostResult(CliExitCodes.Success, null);
         }
@@ -513,7 +505,7 @@ internal sealed class StopCommand : BaseCommand
             // it here is the primary guard against a stale socket tripping up later commands: the AppHost's own
             // cleanup is skipped if it crashes hard, and the orphan-pruning backstop misfires on Windows when the
             // dead PID is reused (https://github.com/microsoft/aspire/issues/17587).
-            AppHostHelper.TryDeleteSocketFile(connection.SocketPath, _logger);
+            connection.Socket.TryDelete();
             InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier));
             return CompleteStopActivity(activity, CliExitCodes.Success);
         }
@@ -574,13 +566,6 @@ internal sealed class StopCommand : BaseCommand
     }
 
     private StringComparer GetAppHostPathComparer()
-    {
-        return _environment.IsWindows()
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
-    }
-
-    private StringComparer GetSocketPathComparer()
     {
         return _environment.IsWindows()
             ? StringComparer.OrdinalIgnoreCase

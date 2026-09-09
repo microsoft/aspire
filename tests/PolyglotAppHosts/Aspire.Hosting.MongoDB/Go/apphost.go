@@ -28,7 +28,7 @@ func main() {
 
 	builder.AddMongoDB("mongo-express").WithMongoExpress(&aspire.WithMongoExpressOptions{
 		ConfigureContainer: func(container aspire.MongoExpressContainerResource) {
-			container.WithHostPort(8082)
+			container.WithHostPort(aspire.Float64Ptr(8082))
 		},
 	})
 
@@ -47,6 +47,27 @@ func main() {
 	mongoChained.AddDatabase("analytics-db", &aspire.AddDatabaseOptions{DatabaseName: aspire.StringPtr("analytics")})
 
 	if err = mongoChained.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
+	// Test 11: Test WithBindIpAll
+	builder.AddMongoDB("mongo-bind-all").WithBindIpAll()
+
+	// Test 12: Test WithReplicaSet with WithKeyFile, WithTlsMode and WithTlsAllowInvalidCertificates
+	keyFileParam := builder.AddParameter("rs-keyfile", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("my-secret-key")})
+	mongoRsMember := builder.AddMongoDB("mongo-rs-member").WithReplicaSet("rs0").WithKeyFile(keyFileParam, &aspire.WithKeyFileOptions{KeyFilePath: aspire.StringPtr("/etc/rs.key")}).WithTlsMode().WithTlsAllowInvalidCertificates()
+	if err = mongoRsMember.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
+	// Test 13: Test AddMongoDBReplicaSet with WithMember
+	// NOTE: The members are not given a key file of their own here. WithMember gives them the replica set's shared one,
+	// and a member carrying a different key file is rejected.
+	mongo1 := builder.AddMongoDB("mongo-rs-1")
+	mongo2 := builder.AddMongoDB("mongo-rs-2")
+
+	replicaSet := builder.AddMongoDBReplicaSet("rs0").WithMember(mongo1).WithMember(mongo2)
+	if err = replicaSet.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 

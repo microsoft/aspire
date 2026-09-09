@@ -79,7 +79,7 @@ export function registerCodeLensCommands(
     const target = appHostPath
       ? getCliPathTargetForUri(vscode.Uri.file(appHostPath))
       : windowCliPathTarget;
-    terminalProvider.sendAspireCommandToAspireTerminal(command, true, undefined, { target });
+    return terminalProvider.sendAspireCommandToAspireTerminal(command, true, undefined, { target });
   });
   const codeLensRevealResourceRegistration = registerInstrumentedCommand('aspire-vscode.codeLensRevealResource', 'codelens', (resourceName: string, appHostPath?: string) => {
     const element = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
@@ -106,7 +106,7 @@ export function registerCodeLensCommands(
     const target = appHostPath
       ? getCliPathTargetForUri(vscode.Uri.file(appHostPath))
       : windowCliPathTarget;
-    terminalProvider.sendAspireCommandToAspireTerminal('logs', true, additionalArgs, { target });
+    return terminalProvider.sendAspireCommandToAspireTerminal('logs', true, additionalArgs, { target });
   });
 
   return [

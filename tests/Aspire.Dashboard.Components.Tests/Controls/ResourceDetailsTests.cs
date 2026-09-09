@@ -29,7 +29,6 @@ public class ResourceDetailsTests : DashboardTestContext
     {
         // Arrange
         ResourceSetupHelpers.SetupResourceDetails(this);
-        var menuProvider = RenderComponent<FluentMenuProvider>();
 
         var resource1 = ModelTestHelpers.CreateResource(
             "app1",
@@ -63,9 +62,11 @@ public class ResourceDetailsTests : DashboardTestContext
             });
 
         var actionsButton = cut.Find(".resource-details-actions");
+        Assert.Contains("toolbar-button", actionsButton.ClassList);
+        Assert.Contains("details-toolbar-button", actionsButton.ClassList);
         await actionsButton.ClickAsync(new MouseEventArgs());
 
-        var maskAllSwitch = menuProvider.WaitForElement(".mask-all-switch");
+        var maskAllSwitch = cut.WaitForElement(".mask-all-switch");
 
         // HACK. Calling OnClick on the element isn't triggering the event correctly. Instead, call OnClick on the menu item model.
         var item = cut.FindComponents<AspireMenu>().SelectMany(m => m.Instance.Items).Single(s => s.Class == maskAllSwitch.Attributes["class"]!.Value);
@@ -122,7 +123,6 @@ public class ResourceDetailsTests : DashboardTestContext
     {
         // Arrange
         ResourceSetupHelpers.SetupResourceDetails(this);
-        var menuProvider = RenderComponent<FluentMenuProvider>();
 
         var resource1 = ModelTestHelpers.CreateResource(
             "app1",
@@ -158,7 +158,7 @@ public class ResourceDetailsTests : DashboardTestContext
         var actionsButton = cut.Find(".resource-details-actions");
         await actionsButton.ClickAsync(new MouseEventArgs());
 
-        var maskAllSwitch = menuProvider.WaitForElement(".mask-all-switch");
+        var maskAllSwitch = cut.WaitForElement(".mask-all-switch");
 
         // HACK. Calling OnClick on the element isn't triggering the event correctly. Instead, call OnClick on the menu item model.
         var item = cut.FindComponents<AspireMenu>().SelectMany(m => m.Instance.Items).Single(s => s.Class == maskAllSwitch.Attributes["class"]!.Value);

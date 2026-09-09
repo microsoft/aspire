@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
 using Aspire;
 using Aspire.Azure.AI.Inference;
 using Aspire.Azure.Common;
@@ -186,10 +187,10 @@ public static class AspireAzureAIInferenceExtensions
             => configuration.Bind(settings);
 
         protected override IHealthCheck CreateHealthCheck(ChatCompletionsClient client, ChatCompletionsClientSettings settings)
-            => throw new NotImplementedException();
+            => new AzureAIInferenceChatCompletionsHealthCheck(client);
 
         protected override bool GetHealthCheckEnabled(ChatCompletionsClientSettings settings)
-            => false;
+            => !settings.DisableHealthChecks && SupportsModelInfoHealthCheck(settings.Endpoint);
 
         protected override bool GetMetricsEnabled(ChatCompletionsClientSettings settings)
             => !settings.DisableMetrics;
@@ -439,10 +440,10 @@ public static class AspireAzureAIInferenceExtensions
             => configuration.Bind(settings);
 
         protected override IHealthCheck CreateHealthCheck(EmbeddingsClient client, ChatCompletionsClientSettings settings)
-            => throw new NotImplementedException();
+            => new AzureAIInferenceEmbeddingsHealthCheck(client);
 
         protected override bool GetHealthCheckEnabled(ChatCompletionsClientSettings settings)
-            => false;
+            => !settings.DisableHealthChecks && SupportsModelInfoHealthCheck(settings.Endpoint);
 
         protected override bool GetMetricsEnabled(ChatCompletionsClientSettings settings)
             => !settings.DisableMetrics;
@@ -452,6 +453,42 @@ public static class AspireAzureAIInferenceExtensions
 
         protected override bool GetTracingEnabled(ChatCompletionsClientSettings settings)
             => !settings.DisableTracing;
+    }
+
+    private static bool SupportsModelInfoHealthCheck(Uri? endpoint)
+    {
+        if (endpoint is null)
+        {
+            return false;
+        }
+
+        // The SDK's /info operation is unsupported by Azure OpenAI endpoints and local dev servers
+        // (Foundry Local, Ollama, etc.) that serve OpenAI-compatible routes but not /info.
+        // See https://learn.microsoft.com/dotnet/api/azure.ai.inference.chatcompletionsclient.getmodelinfoasync.
+        // Keep these domains aligned with Azure OpenAI endpoint additions until the SDK exposes a capability
+        // signal that can replace domain inference. DisableHealthChecks is the escape hatch for unrecognized endpoints.
+        var host = endpoint.Host;
+
+        // Exclude loopback endpoints (Foundry Local emits http://127.0.0.1:<port>/).
+        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            || (IPAddress.TryParse(host, out var ip) && IPAddress.IsLoopback(ip)))
+        {
+            return false;
+        }
+
+        return !IsHostOrSubdomain(host, "openai.azure.com")
+            && !IsHostOrSubdomain(host, "openai.azure.us")
+            && !IsHostOrSubdomain(host, "openai.azure.cn")
+            && !IsHostOrSubdomain(host, "openai.azure.de")
+            && !(IsHostOrSubdomain(host, "services.ai.azure.com") && IsPathOrSubpath(endpoint.AbsolutePath, "/openai"));
+
+        static bool IsHostOrSubdomain(string host, string domain)
+            => host.Equals(domain, StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith($".{domain}", StringComparison.OrdinalIgnoreCase);
+
+        static bool IsPathOrSubpath(string path, string expectedPath)
+            => path.Equals(expectedPath, StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith($"{expectedPath}/", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

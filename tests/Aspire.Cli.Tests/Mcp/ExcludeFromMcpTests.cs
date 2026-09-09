@@ -123,7 +123,7 @@ public class ExcludeFromMcpTests
             ],
             DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "http://localhost:18888" }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
@@ -156,7 +156,7 @@ public class ExcludeFromMcpTests
             ],
             DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "http://localhost:18888" }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
@@ -188,7 +188,7 @@ public class ExcludeFromMcpTests
             ],
             LogLines = [new ResourceLogLine { Content = "secret log", IsError = false, ResourceName = SecretServiceName, LineNumber = 1 }]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
         var arguments = new Dictionary<string, JsonElement>
@@ -222,7 +222,7 @@ public class ExcludeFromMcpTests
             ],
             LogLines = [new ResourceLogLine { Content = "Application started", IsError = false, ResourceName = ApiServiceName, LineNumber = 1 }]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
         var arguments = new Dictionary<string, JsonElement>
@@ -260,7 +260,7 @@ public class ExcludeFromMcpTests
             ],
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
 
@@ -401,7 +401,7 @@ public class ExcludeFromMcpTests
                 }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var (mockHttpClientFactory, _) = CreateMockHttpWithLogs(ApiServiceName, SecretServiceName);
 
@@ -453,7 +453,7 @@ public class ExcludeFromMcpTests
                 }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
         return monitor;
     }
 

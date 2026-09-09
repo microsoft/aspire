@@ -50,7 +50,14 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return Task.FromResult(new GetCapabilitiesResponse
         {
-            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2, AuxiliaryBackchannelCapabilities.V3, AuxiliaryBackchannelCapabilities.Terminals_V1]
+            Capabilities =
+            [
+                AuxiliaryBackchannelCapabilities.V1,
+                AuxiliaryBackchannelCapabilities.V2,
+                AuxiliaryBackchannelCapabilities.V3,
+                AuxiliaryBackchannelCapabilities.Terminals_V1,
+                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+            ]
         });
     }
 
@@ -1177,6 +1184,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         return new ResourceSnapshot
         {
             Name = resourceEvent.ResourceId,
+            Version = snapshot.Version,
             DisplayName = resource.Name,
             ResourceType = snapshot.ResourceType,
             State = snapshot.State?.Text,

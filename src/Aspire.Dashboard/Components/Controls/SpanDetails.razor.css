@@ -1,27 +1,18 @@
-::deep.span-details-layout {
-    display: grid;
-    grid-template-rows: auto 1fr;
-    grid-template-areas:
-        "toolbar"
-        "main";
-    overflow: auto;
-    gap: calc(var(--design-unit) * 1px);
-}
-
-::deep.span-details-layout > fluent-toolbar {
-    grid-area: toolbar;
+::deep.span-details-layout > .details-toolbar > .toolbar-end .span-details-actions,
+::deep.span-details-layout > .details-toolbar > .toolbar-end .span-details-actions::part(control) {
+    border-radius: 6px;
 }
 
 ::deep .property-grid-container h4 {
-    padding: calc(var(--design-unit) * 3px);
-    margin-top: calc(var(--design-unit) * 1px);
+    padding: var(--spacingHorizontalM);
+    margin-top: var(--spacingVerticalXS);
     margin-bottom: 0;
 }
 
 ::deep .spanlink-container {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: calc((6 + (var(--design-unit) * var(--density))) * 1px);
+    gap: var(--spacingHorizontalXXS);
     align-items: center;
 }
 

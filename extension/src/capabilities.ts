@@ -10,6 +10,7 @@ export type Capability =
     | 'devkit' // Support for .NET DevKit extension (old, used for determining whether to build .NET projects in extension)
     | 'ms-dotnettools.csdevkit' // Older AppHost versions used this extension identifier instead of devkit
     | 'project' // Support for running C# projects
+    | 'project-with-external-build.v1' // Support for externally built C# projects
     | 'ms-dotnettools.csharp' // Older AppHost versions used this extension identifier instead of project
     | 'python' // Support for running Python projects
     | 'ms-python.python' // Older AppHost versions used this extension identifier instead of python
@@ -19,14 +20,18 @@ export type Capability =
     | 'ms-vscode.cpptools' // Rust debug adapter extension identifier on Windows (cppvsdbg)
     | 'vadimcn.vscode-lldb' // Rust debug adapter extension identifier on macOS/Linux (CodeLLDB)
     | 'node' // Support for running Node.js projects
+    | 'deno.v1' // Support for debugging Deno AppHosts through js-debug's inspector attach path
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
+    | 'deno' // Support for running Deno projects (built-in to VS Code via js-debug)
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
     | 'maui' // Support for running .NET MAUI projects
     | 'ms-dotnettools.dotnet-maui' // MAUI debug adapter extension identifier
     | 'java' // Support for running Java projects
     | 'vscjava.vscode-java-debug' // Java debug adapter extension identifier
-    | 'azure-functions'; // Support for running Azure Functions projects
+    | 'azure-functions' // Support for running Azure Functions projects
+    | 'message-actions.v1' // Support structured actions on interaction-service notifications
+    | 'apphost-log-output.v1'; // Support structured AppHost log correlation in the debug console
 
 export type Capabilities = Capability[];
 
@@ -109,7 +114,9 @@ export function isJavaInstalled(extensionInstalled: (extensionId: string) => boo
 }
 
 export function getSupportedCapabilities(platform: NodeJS.Platform = process.platform): Capabilities {
-    const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
+    const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'message-actions.v1', 'build-dotnet-using-cli'];
+
+    capabilities.push('apphost-log-output.v1');
 
     if (isCsDevKitInstalled()) {
         capabilities.push("devkit");
@@ -118,6 +125,7 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
 
     if (isCsharpInstalled()) {
         capabilities.push("project");
+        capabilities.push("project-with-external-build.v1");
         capabilities.push(csharpExtensionId);
 
         // Azure Functions debugging requires both C# (coreclr attach to the worker
@@ -145,6 +153,7 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
 
     if (isNodeInstalled()) {
         capabilities.push("node");
+        capabilities.push("deno.v1");
         capabilities.push("browser");
     }
 
@@ -152,6 +161,9 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
         capabilities.push("bun");
         capabilities.push("oven.bun-vscode");
     }
+
+    // Deno debugging uses VS Code's built-in js-debug, so no extension probe is required.
+    capabilities.push("deno");
 
     if (isMauiInstalled()) {
         capabilities.push("maui");

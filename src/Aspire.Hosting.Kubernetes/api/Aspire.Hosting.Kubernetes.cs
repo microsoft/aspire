@@ -702,6 +702,25 @@ namespace Aspire.Hosting.Kubernetes.Resources
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class CsiVolumeSourceV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "driver")]
+        public string Driver { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "fsType")]
+        public string? FsType { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "nodePublishSecretRef")]
+        public LocalObjectReferenceV1? NodePublishSecretRef { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "readOnly")]
+        public bool? ReadOnly { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "volumeAttributes")]
+        public System.Collections.Generic.Dictionary<string, string> VolumeAttributes { get { throw null; } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class Deployment : Workload
     {
         public Deployment() : base(default!, default!) { }
@@ -2926,6 +2945,9 @@ namespace Aspire.Hosting.Kubernetes.Resources
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "configMap")]
         public ConfigMapVolumeSourceV1? ConfigMap { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "csi")]
+        public CsiVolumeSourceV1? Csi { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "emptyDir")]
         public EmptyDirVolumeSourceV1? EmptyDir { get { throw null; } set { } }

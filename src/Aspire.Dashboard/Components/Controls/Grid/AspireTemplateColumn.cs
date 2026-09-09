@@ -11,9 +11,6 @@ public class AspireTemplateColumn<TGridItem> : TemplateColumn<TGridItem>, IAspir
     [Parameter]
     public GridColumnManager? ColumnManager { get; set; }
 
-    [Parameter]
-    public string? ColumnId { get; set; }
-
     protected override void OnInitialized()
     {
         Tooltip = true;

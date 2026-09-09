@@ -161,6 +161,7 @@ public interface IResourceContainerImageManager
 internal sealed class ResourceContainerImageManager(
     ILogger<ResourceContainerImageManager> logger,
     IContainerRuntimeResolver containerRuntimeResolver,
+    IProcessRunner processRunner,
     IServiceProvider serviceProvider,
     DistributedApplicationExecutionContext? executionContext = null) : IResourceContainerImageManager
 {
@@ -406,7 +407,7 @@ internal sealed class ResourceContainerImageManager(
             string.Join(" ", spec.Arguments)
             );
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = processRunner.Run(spec);
 
         await using (processDisposable)
         {

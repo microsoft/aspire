@@ -1,0 +1,1154 @@
+fluent-button {
+    --aspire-button-background: var(--colorNeutralBackground1);
+    --aspire-button-foreground: var(--colorNeutralForeground1);
+    --aspire-button-border-color: var(--colorNeutralStroke1);
+}
+
+fluent-button:where([appearance="primary"]) {
+    --aspire-button-background: var(--accent-button-background);
+    --aspire-button-foreground: var(--accent-button-foreground);
+    --aspire-button-border-color: transparent;
+}
+
+fluent-button:where([appearance="outline"], [appearance="transparent"]) {
+    --aspire-button-background: var(--colorTransparentBackground);
+}
+
+fluent-button:where([appearance="subtle"], [appearance="transparent"]) {
+    --aspire-button-foreground: var(--colorNeutralForeground2);
+    --aspire-button-border-color: transparent;
+}
+
+fluent-button:where([appearance="subtle"]) {
+    --aspire-button-background: var(--colorSubtleBackground);
+}
+
+/* Fluent v5 Default replaces v4 Stealth for bordered toolbar and utility buttons. */
+
+fluent-button:not([appearance]) {
+    --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
+    --colorNeutralStroke1Hover: var(--aspire-button-hover-border);
+}
+
+/* Fluent v5 renamed v4's Accent appearance to Primary. Preserve the final-v4 color recipe for every primary action. */
+
+fluent-button[appearance="primary"] {
+    background-color: var(--aspire-button-background);
+    color: var(--aspire-button-foreground);
+}
+
+fluent-button[appearance="primary"]:hover {
+    background-color: var(--accent-button-hover-background);
+    color: var(--accent-button-hover-foreground);
+}
+
+fluent-button[appearance="primary"]:active {
+    background-color: var(--accent-button-pressed-background);
+    color: var(--accent-button-pressed-foreground);
+}
+
+fluent-button[appearance="primary"] .copy-icon,
+fluent-button[appearance="primary"] .checkmark-icon {
+    fill: currentColor !important;
+}
+
+/* Fluent v5 renamed v4's Lightweight appearance to Transparent. */
+
+fluent-button[appearance="transparent"] {
+    --colorTransparentBackgroundHover: var(--colorNeutralBackground2);
+}
+
+/* Keep grid-button hover visible even when the grid doesn't highlight its rows. */
+
+.fluent-data-grid tr:not([hover]) fluent-button[appearance="transparent"] {
+    --colorTransparentBackgroundHover: var(--colorNeutralBackground3);
+}
+
+/* Keep disabled visuals independent of hover/pressed rules. Appearances and custom button
+   styles supply their resting values; loading buttons also use disabled-focusable. */
+
+fluent-button:is([disabled], [disabled-focusable]) {
+    --aspire-button-icon-hover-color: var(--aspire-button-icon-color, currentColor);
+    --colorNeutralForeground2BrandHover: currentColor;
+    --colorNeutralForeground2BrandPressed: currentColor;
+    opacity: 0.3 !important;
+    cursor: not-allowed !important;
+    transition: none !important;
+}
+
+/* Leave Fluent's system colors in control for Windows Contrast Themes. */
+
+@media (forced-colors: none) {
+    fluent-button:is([disabled], [disabled-focusable]) {
+        background: var(--aspire-button-background) !important;
+        color: var(--aspire-button-foreground) !important;
+        border-color: var(--aspire-button-border-color) !important;
+    }
+}
+
+/* Preserve the final-v4 input and select recipes across their Fluent v5 replacements. */
+
+fluent-text-input,
+fluent-number-input,
+fluent-dropdown {
+    --colorNeutralStrokeAccessible: var(--colorNeutralStroke1);
+    --colorNeutralStrokeAccessibleHover: var(--colorNeutralStroke1);
+    --colorNeutralStrokeAccessiblePressed: var(--colorNeutralStroke1);
+    --colorNeutralStroke1Hover: var(--colorNeutralStroke1);
+    --colorNeutralStroke1Pressed: var(--colorNeutralStroke1);
+    --colorCompoundBrandStroke: var(--colorBrandStroke1);
+    --colorCompoundBrandStrokePressed: var(--colorBrandStroke1);
+    --colorNeutralForeground3: var(--colorNeutralForeground2);
+}
+
+/* Restore native text selection colors instead of Fluent v5's inverted theme colors. */
+fluent-text-input::part(control)::selection {
+    color: HighlightText;
+    background-color: Highlight;
+}
+
+fluent-text-input:is([disabled], :disabled),
+fluent-text-input:is([disabled], :disabled)::part(control) {
+    cursor: not-allowed;
+}
+
+fluent-text-input:is([disabled], :disabled)::part(root) {
+    background-color: var(--colorNeutralBackgroundDisabled);
+}
+
+fluent-text-input:is([disabled], :disabled)::part(control) {
+    color: var(--colorNeutralForegroundDisabled);
+}
+
+fluent-dropdown > [slot="control"] {
+    align-self: center;
+}
+
+/* Fluent's placeholder state follows option selection, which can be empty even when a combobox has custom text. */
+fluent-dropdown[type="combobox"]:not([disabled]) > input[slot="control"]:not(:placeholder-shown) {
+    color: var(--colorNeutralForeground1);
+}
+
+.aspire-input {
+    width: 100%;
+    --borderRadiusMedium: 6px;
+}
+
+fluent-field.aspire-input,
+.mobile-filter-toolbar fluent-field:has(> :is(fluent-text-input, fluent-dropdown)) {
+    margin-block: 0;
+    row-gap: 0;
+}
+
+.aspire-input:not(fluent-field),
+fluent-field.aspire-input > [slot="input"],
+.mobile-filter-toolbar fluent-field > :is(fluent-text-input, fluent-dropdown)[slot="input"] {
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    min-height: 28px;
+    --borderRadiusMedium: 6px;
+}
+
+.aspire-input:not(fluent-field)::part(root),
+fluent-field.aspire-input > [slot="input"]::part(root),
+.mobile-filter-toolbar fluent-field > :is(fluent-text-input, fluent-dropdown)[slot="input"]::part(root) {
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border-radius: var(--aspire-control-radius);
+}
+
+fluent-text-input.aspire-input::part(control),
+fluent-number-input.aspire-input::part(control),
+fluent-field.aspire-input > fluent-text-input::part(control),
+fluent-field.aspire-input > fluent-number-input::part(control),
+.mobile-filter-toolbar fluent-text-input::part(control) {
+    height: 22px;
+    min-height: 22px;
+    padding: 0 9px;
+}
+
+.aspire-field-row {
+    display: flex;
+    column-gap: 12px;
+    align-items: center;
+}
+
+.aspire-field-label,
+.aspire-dialog-fields fluent-field > label[slot="label"] {
+    font-size: 13.5px;
+    font-weight: var(--fontWeightMedium);
+}
+
+.aspire-button,
+.aspire-button::part(control),
+fluent-dialog-body > [slot="action"] fluent-button,
+fluent-dialog-body > [slot="action"] fluent-button::part(control),
+fluent-drawer fluent-drawer-body > [slot="footer"] fluent-button,
+fluent-drawer fluent-drawer-body > [slot="footer"] fluent-button::part(control) {
+    height: var(--aspire-control-height);
+    min-height: var(--aspire-control-height);
+    padding-inline: 14px;
+    border-radius: var(--aspire-control-radius);
+    font-weight: var(--fontWeightRegular);
+}
+
+.aspire-compact-button,
+.aspire-compact-button::part(control) {
+    height: 24px;
+    min-height: 24px;
+    padding-inline: 14px;
+    border-radius: var(--aspire-control-radius);
+    font-size: var(--fontSizeBase200);
+    font-weight: var(--fontWeightRegular);
+    line-height: 20px;
+}
+
+.aspire-neutral-button,
+.aspire-neutral-button::part(control) {
+    --aspire-button-border-color: transparent;
+    --aspire-button-background:
+        padding-box linear-gradient(var(--aspire-neutral-button-background, var(--messagebar-action-background)), var(--aspire-neutral-button-background, var(--messagebar-action-background))),
+        border-box var(--aspire-neutral-button-border, var(--messagebar-action-border));
+    --aspire-button-foreground: var(--colorNeutralForeground1);
+    border-color: var(--aspire-button-border-color);
+    background: var(--aspire-button-background);
+    color: var(--aspire-button-foreground);
+}
+
+.aspire-neutral-button:hover,
+.aspire-neutral-button:hover::part(control) {
+    background:
+        padding-box linear-gradient(var(--messagebar-action-hover-background), var(--messagebar-action-hover-background)),
+        border-box var(--messagebar-action-hover-border);
+}
+
+.aspire-neutral-button:active,
+.aspire-neutral-button:active::part(control) {
+    background:
+        padding-box linear-gradient(var(--messagebar-action-pressed-background), var(--messagebar-action-pressed-background)),
+        border-box var(--messagebar-action-pressed-border);
+}
+
+.aspire-neutral-button:focus-visible,
+.aspire-neutral-button:focus-visible::part(control) {
+    outline-offset: -2px;
+}
+
+.aspire-icon-button,
+.aspire-icon-button::part(control),
+.details-toolbar-button,
+.details-toolbar-button::part(control),
+fluent-dialog-body > [slot="title-action"] fluent-button[icon-only],
+fluent-drawer fluent-drawer-body > [slot="close"] fluent-button,
+fluent-drawer fluent-drawer-body > [slot="close"] fluent-button::part(control) {
+    width: var(--aspire-control-height);
+    min-width: var(--aspire-control-height);
+    height: var(--aspire-control-height);
+    min-height: var(--aspire-control-height);
+    padding: 0;
+}
+
+.aspire-icon-button,
+.aspire-icon-button::part(control) {
+    --aspire-button-background: transparent;
+    border-radius: var(--aspire-control-radius);
+    background-color: var(--aspire-button-background);
+}
+
+.aspire-link-button,
+.aspire-link-button::part(control),
+.button-hyperlink,
+.button-hyperlink-no-icon,
+.button-hyperlink::part(control),
+.button-hyperlink-no-icon::part(control) {
+    --aspire-button-background: var(--aspire-link-button-background, transparent);
+    --aspire-button-foreground: var(--aspire-link-button-color, var(--colorBrandForeground1));
+    --aspire-button-border-color: transparent;
+    width: auto;
+    min-width: var(--aspire-control-height);
+    height: var(--aspire-control-height);
+    min-height: var(--aspire-control-height);
+    padding: 0;
+    border: 1px solid var(--aspire-button-border-color);
+    border-radius: var(--aspire-control-radius);
+    background-color: var(--aspire-button-background);
+    color: var(--aspire-button-foreground);
+    font-weight: var(--fontWeightRegular);
+}
+
+.aspire-link-button,
+.aspire-link-button::part(control) {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.button-hyperlink,
+.button-hyperlink-no-icon {
+    --aspire-link-button-background: var(--property-grid-background-color);
+}
+
+.button-hyperlink:hover,
+.button-hyperlink-no-icon:hover,
+.button-hyperlink:hover::part(control),
+.button-hyperlink-no-icon:hover::part(control) {
+    background-color: var(--property-grid-background-color);
+    color: var(--colorNeutralForeground2BrandHover);
+}
+
+.button-hyperlink:active,
+.button-hyperlink-no-icon:active,
+.button-hyperlink:active::part(control),
+.button-hyperlink-no-icon:active::part(control) {
+    background-color: var(--property-grid-background-color);
+    color: var(--colorBrandForeground1);
+}
+
+.button-hyperlink > [slot="start"] {
+    margin-inline-end: var(--inline-icon-margin);
+}
+
+.aspire-link-button:hover,
+.aspire-link-button:hover::part(control) {
+    border-color: transparent;
+    background-color: var(--colorNeutralBackground3);
+    color: var(--aspire-link-button-hover-color, var(--colorBrandForegroundLinkHover));
+    text-decoration: none;
+}
+
+.aspire-link-button:active,
+.aspire-link-button:active::part(control) {
+    border-color: transparent;
+    background-color: var(--aspire-link-button-pressed-background);
+    color: var(--aspire-link-button-pressed-color, var(--colorBrandForegroundLinkPressed));
+    text-decoration: none;
+}
+
+.aspire-link-button:focus-visible,
+.aspire-link-button:focus-visible::part(control) {
+    outline-offset: -2px;
+}
+
+fluent-field.aspire-checkbox {
+    margin: 0;
+    column-gap: 0;
+    row-gap: 0;
+}
+
+fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) {
+    opacity: 0.3;
+}
+
+fluent-field.aspire-checkbox:not(:has(> fluent-checkbox[disabled])) > label {
+    cursor: pointer;
+}
+
+.aspire-checkbox:not(fluent-field),
+fluent-field.aspire-checkbox > fluent-checkbox {
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+    min-height: 18px;
+    --borderRadiusSmall: 6px;
+}
+
+.validation-message,
+.fluent-validation-message {
+    color: var(--error);
+    font-size: var(--fontSizeBase300);
+    line-height: var(--lineHeightBase300);
+    margin: 0;
+}
+
+fluent-dialog-body fluent-radio {
+    --size: 18px;
+    flex-shrink: 0;
+}
+
+fluent-dialog-body fluent-radio::part(checked-indicator) {
+    width: 8px;
+    height: 8px;
+}
+
+/* Match v4 radio colors in normal light/dark themes, but leave Fluent's system-color styling
+    in control when forced colors are active (for example, Windows Contrast Themes).
+    See https://developer.mozilla.org/en-US/docs/Web/CSS/@media/forced-colors */
+
+@media (forced-colors: none) {
+    fluent-dialog-body fluent-radio:not(:state(disabled)) {
+        background-color: transparent;
+    }
+
+    fluent-dialog-body fluent-radio:state(checked):not(:state(disabled)) {
+        background-color: var(--colorBrandBackground);
+        border-color: transparent;
+    }
+
+    fluent-dialog-body fluent-radio:state(checked):not(:state(disabled)):hover {
+        background-color: var(--colorBrandBackgroundHover);
+    }
+
+    fluent-dialog-body fluent-radio:state(checked):not(:state(disabled))::part(checked-indicator) {
+        background-color: var(--colorNeutralForegroundOnBrand);
+    }
+}
+
+.fluent-validation-message > [message] > svg {
+    display: none;
+}
+
+fluent-field.invalid > [slot="input"] {
+    --colorNeutralStroke1: var(--error);
+    --colorNeutralStroke1Hover: var(--error);
+    --colorNeutralStroke1Pressed: var(--error);
+    --colorNeutralStrokeDisabled: var(--error);
+    --colorStrokeFocus1: var(--error);
+    --colorStrokeFocus2: var(--error);
+    --colorCompoundBrandStroke: var(--error);
+    --colorCompoundBrandStrokePressed: var(--error);
+}
+
+input.invalid,
+select.invalid,
+textarea.invalid,
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+    border-color: var(--error);
+}
+
+:focus-visible {
+    outline: 2px solid var(--colorBrandStroke1);
+    outline-offset: 0;
+    box-shadow: none;
+}
+
+fluent-dropdown > [slot="control"]:focus-visible {
+    outline: none;
+}
+
+fluent-dropdown {
+    --borderRadiusMedium: 6px;
+}
+
+fluent-dropdown > fluent-listbox {
+    background-color: var(--aspire-popup-background);
+    border-radius: var(--aspire-popup-radius);
+    box-shadow: var(--aspire-popup-shadow);
+    padding: 3px;
+    row-gap: 0;
+}
+
+fluent-dropdown fluent-option {
+    min-height: 28px;
+    height: 28px;
+    padding: 0 10px;
+    color: var(--aspire-dropdown-option-foreground);
+    background-color: var(--aspire-popup-background);
+}
+
+fluent-dropdown fluent-option[selected],
+fluent-dropdown fluent-option:hover,
+fluent-dropdown fluent-option:state(active),
+fluent-dropdown fluent-option:focus-visible {
+    color: var(--aspire-dropdown-option-foreground);
+    background-color: var(--aspire-dropdown-option-selected-background);
+}
+
+fluent-dropdown fluent-option:state(active) {
+    border: none;
+}
+
+fluent-dropdown fluent-option[selected]:hover {
+    background-color: var(--aspire-dropdown-option-selected-hover-background);
+}
+
+fluent-dropdown fluent-option::part(content) {
+    transform: translateX(-20px);
+}
+
+fluent-dropdown fluent-option[selected],
+fluent-dropdown fluent-option[selected]:hover {
+    position: relative;
+    color: transparent;
+}
+
+fluent-dropdown fluent-option[selected]::part(content) {
+    color: var(--aspire-dropdown-option-foreground);
+}
+
+fluent-dropdown fluent-option[selected]::before {
+    position: absolute;
+    top: 5px;
+    left: 1px;
+    width: 3px;
+    height: 14px;
+    border-radius: var(--aspire-control-radius);
+    background-color: var(--colorBrandStroke1);
+    content: "";
+}
+
+fluent-dropdown fluent-option:focus-visible {
+    outline: none;
+}
+
+fluent-text-input[appearance="outline"]:focus-within::part(root) {
+    border-color: var(--colorStrokeFocus1);
+    outline: var(--strokeWidthThick) solid var(--colorStrokeFocus1);
+    outline-offset: calc(-1 * var(--strokeWidthThick));
+}
+
+fluent-text-input[appearance="outline"]:focus-within::part(root)::after {
+    transform: scaleX(0);
+}
+
+#components-reconnect-modal {
+    color: var(--colorNeutralForeground1);
+    background-color: var(--colorNeutralBackground1);
+}
+
+.components-rejoining-animation div {
+    border-color: var(--colorBrandStroke1);
+}
+
+[data-theme="dark"] fluent-badge[color="danger"] {
+    --colorNeutralForegroundOnBrand: #ffffff;
+}
+
+/* Firefox uses the standard properties, while Chromium, Edge, and WebKit use the pseudo-elements
+   for exact sizing and hover styling. Fluent v5 supplies an inherited scrollbar-color, which takes
+   precedence over the pseudo-elements in Chromium 121+, so reset it before applying the v4 recipe.
+   See https://developer.mozilla.org/docs/Web/CSS/scrollbar-color#browser_compatibility */
+
+@supports selector(::-webkit-scrollbar) {
+    *,
+    fluent-dialog-body::part(content),
+    fluent-popover-b::part(dialog),
+    ::part(listbox) {
+        scrollbar-color: auto;
+    }
+}
+
+@supports not selector(::-webkit-scrollbar) {
+    *,
+    fluent-dialog-body::part(content),
+    fluent-popover-b::part(dialog),
+    ::part(listbox) {
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
+    }
+}
+
+::-webkit-scrollbar,
+fluent-dialog-body::part(content)::-webkit-scrollbar,
+fluent-popover-b::part(dialog)::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+}
+
+::-webkit-scrollbar-track,
+fluent-dialog-body::part(content)::-webkit-scrollbar-track,
+fluent-popover-b::part(dialog)::-webkit-scrollbar-track {
+    background: var(--scrollbar-track-color);
+}
+
+::-webkit-scrollbar-thumb,
+fluent-dialog-body::part(content)::-webkit-scrollbar-thumb,
+fluent-popover-b::part(dialog)::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-color);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover,
+fluent-dialog-body::part(content)::-webkit-scrollbar-thumb:hover,
+fluent-popover-b::part(dialog)::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover-color);
+}
+
+::-webkit-scrollbar-corner,
+fluent-dialog-body::part(content)::-webkit-scrollbar-corner,
+fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+.block-warning {
+    font-family: var(--fontFamilyBase);
+    border: 1px solid var(--messagebar-warning-border-color);
+    background-color: var(--messagebar-warning-background-color);
+    color: var(--colorNeutralForeground1);
+    display: grid;
+    grid-template-columns: 24px auto;
+    width: fit-content;
+    align-items: center;
+    min-height: 36px;
+    border-radius: var(--borderRadiusMedium);
+    padding: 0 12px;
+    column-gap: 8px;
+}
+
+.block-warning-icon {
+    grid-column: 1;
+    display: flex;
+    justify-content: center;
+}
+
+.block-warning-message {
+    grid-column: 2;
+    padding: 8px 0;
+    align-self: center;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+}
+
+.block-warning-message .title {
+    font-weight: 600;
+    padding: 0 4px 0 0;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+}
+
+:root {
+    --inline-icon-margin: 5px;
+}
+
+body {
+    overflow: hidden;
+}
+
+.aspire-menu-container {
+    --colorNeutralBackground1Hover: var(--aspire-menu-item-hover-background);
+}
+
+.aspire-menu-container fluent-menu-list {
+    gap: 0;
+    padding: 3px 0;
+    border-radius: var(--aspire-popup-radius);
+    background-color: var(--aspire-popup-background);
+    box-shadow: var(--aspire-popup-shadow);
+}
+
+.aspire-menu-container fluent-menu-list:has(> fluent-menu-item:state(submenu)) {
+    min-width: 180px;
+}
+
+.aspire-menu-container fluent-menu-item {
+    gap: 0;
+    grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto);
+    height: 28px;
+    min-height: 28px;
+    margin-inline: 4px;
+    padding: 0;
+    border-radius: var(--aspire-control-radius);
+    background-color: var(--aspire-popup-background);
+    color: var(--aspire-dropdown-option-foreground);
+    font-family: var(--fontFamilyBase);
+    font-size: var(--fontSizeBase300);
+    font-weight: var(--fontWeightRegular);
+    line-height: var(--lineHeightBase300);
+}
+
+.aspire-menu-container fluent-menu-item:state(submenu) {
+    grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto) 24px;
+    height: 32px;
+    min-height: 32px;
+    padding-inline-end: 8px;
+}
+
+.aspire-menu-container fluent-menu-item > [slot="start"],
+.aspire-menu-container fluent-menu-item > [slot="indicator"] {
+    grid-column: 1;
+    grid-row: 1;
+    position: relative;
+    inset-inline-start: 8px;
+}
+
+.aspire-menu-container fluent-menu-item:hover,
+.aspire-menu-container fluent-menu-item:state(active),
+.aspire-menu-container fluent-menu-item:focus-visible {
+    background-color: var(--aspire-menu-item-hover-background);
+}
+
+.aspire-menu-container fluent-divider {
+    margin-block: 4px;
+}
+
+/* Fluent v5 separates the indicator and start slots. Collapse the unused indicator track so the
+   icon and content align with v4's 32px start track while retaining the end slot for secondary actions. */
+
+.aspire-menu-container fluent-menu-item:not(:state(submenu))::part(content) {
+    grid-column: 2 / span 2;
+    grid-row: 1;
+    min-width: 0;
+    overflow: hidden;
+    padding-inline: 0;
+    text-overflow: ellipsis;
+}
+
+.aspire-menu-container fluent-menu-item:state(submenu)::part(content) {
+    grid-column: 3;
+    grid-row: 1;
+    padding-inline: 0;
+}
+
+fluent-menu-item:state(disabled) {
+    background-color: transparent;
+    color: var(--colorNeutralForeground1);
+    cursor: not-allowed;
+    opacity: 0.3;
+}
+
+.aspire-menu-container.mobile-nav-menu {
+    z-index: 1;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    gap: 0;
+    padding-inline: 0;
+    border: 1px solid transparent;
+    border-radius: var(--aspire-popup-radius);
+    background-color: var(--aspire-popup-background);
+    box-shadow: var(--aspire-popup-shadow);
+}
+
+.aspire-menu-container.mobile-nav-menu fluent-menu-item {
+    position: relative;
+    grid-template-columns: 36px minmax(0, 1fr) 32px;
+    width: auto;
+    min-width: 0;
+    height: 40px;
+    margin: 0;
+    border: 1px solid transparent;
+    background-color: transparent;
+    color: var(--aspire-dropdown-option-foreground);
+}
+
+.aspire-menu-container.mobile-nav-menu fluent-menu-item > [slot="start"] {
+    --colorNeutralForeground1: var(--aspire-dropdown-option-foreground);
+    inset-inline-start: 8px;
+    color: inherit;
+}
+
+.aspire-menu-container.mobile-nav-menu fluent-menu-item > [slot="start"] svg {
+    fill: currentColor;
+}
+
+.aspire-menu-container.mobile-nav-menu fluent-menu-item:not(:state(submenu))::part(content) {
+    grid-column: 2;
+}
+
+.aspire-menu-container.mobile-nav-menu fluent-menu-item:hover,
+.aspire-menu-container.mobile-nav-menu fluent-menu-item:state(active) {
+    background-color: var(--aspire-menu-item-hover-background);
+}
+
+.aspire-menu-container.mobile-nav-menu .mobile-nav-menu-item-active::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    top: 4px;
+    width: 3px;
+    height: 30px;
+    border-radius: 2px;
+    background-color: var(--colorBrandForegroundLinkPressed);
+}
+
+.aspire-menu-container.mobile-nav-menu fluent-menu-item > .mobile-nav-menu-icon-active {
+    color: var(--colorBrandForegroundLinkPressed);
+}
+
+.aspire-menu-container.mobile-nav-menu fluent-divider {
+    --colorNeutralStroke2: var(--mobile-nav-divider-color);
+    height: 1px;
+    margin: 0 0 4px;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+/* Fluent renders each bar between two sibling panes. Match a collapsed pane immediately before
+   the bar with the adjacent-sibling selector, or immediately after it via :has(). */
+
+.fluent-multi-splitter > .fluent-multi-splitter-pane[status="collapsed"] + .fluent-multi-splitter-bar,
+.fluent-multi-splitter > .fluent-multi-splitter-bar:has(+ .fluent-multi-splitter-pane[status="collapsed"]) {
+    display: none;
+}
+
+body .fluent-multi-splitter > .fluent-multi-splitter-bar {
+    background-color: transparent;
+    z-index: 99;
+}
+
+.fluent-multi-splitter > .fluent-multi-splitter-bar > span[part="resize"] {
+    display: none;
+}
+
+.fluent-multi-splitter > .fluent-multi-splitter-bar::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    background-color: var(--fluent-multi-splitter-background-color);
+}
+
+.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar::before {
+    inset-block: 0;
+    width: 1px;
+}
+
+.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar {
+    /* Overlap the transparent hit target across both panes so only the 1px line consumes space. */
+    margin-inline: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
+}
+
+.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar::before {
+    inset-inline: 0;
+    height: 1px;
+}
+
+.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar {
+    /* Overlap the transparent hit target across both panes so only the 1px line consumes space. */
+    margin-block: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
+}
+
+fluent-button {
+    min-width: 32px;
+    font-weight: var(--fontWeightRegular);
+}
+
+fluent-text-input[type="search"] [slot="start"] svg {
+    fill: var(--colorNeutralForeground1) !important;
+}
+
+.content-list-popover::part(dialog) {
+    max-width: 400px;
+    max-height: 300px;
+    padding: 14px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overflow-wrap: normal;
+    cursor: default;
+    word-break: normal;
+}
+
+.content-list-popover > strong {
+    display: block;
+    margin-bottom: 8px;
+    font-family: var(--aspire-font-display);
+    font-size: 16px;
+    font-weight: var(--fontWeightSemibold);
+    line-height: normal;
+}
+
+.content-list-popover-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.content-list-popover-items > fluent-field {
+    margin-block: 0;
+}
+
+.fluent-tabs {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.fluent-tabs:not(.aspire-content-tabs) {
+    width: fit-content !important;
+    display: flex;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.fluent-tabs:not(.aspire-content-tabs),
+.fluent-tabs.aspire-content-tabs > fluent-tablist {
+    min-height: 40px;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-control-radius);
+}
+
+.fluent-tabs.aspire-content-tabs {
+    display: block;
+    align-items: initial;
+    min-height: 0;
+    overflow: visible;
+    gap: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+}
+
+.fluent-tabs > fluent-tablist {
+    width: fit-content;
+}
+
+.fluent-tab-panel:empty {
+    display: none;
+}
+
+fluent-tab {
+    height: 32px;
+    padding: 0 12px;
+    gap: 4px;
+    border: 1px solid transparent;
+    border-radius: var(--aspire-control-radius);
+}
+
+fluent-tab.tab-label svg {
+    width: 18px !important;
+    min-width: 18px;
+    max-width: 18px;
+    height: 18px !important;
+    margin-right: var(--spacingHorizontalXS);
+    color: var(--colorBrandForeground1);
+}
+
+fluent-tab.tab-label > span {
+    align-items: center;
+}
+
+fluent-tab.tab-label fluent-badge {
+    min-width: 20px;
+    margin-inline-start: var(--spacingHorizontalXS);
+    padding: 1px 3px;
+    border: 1px solid transparent;
+    border-radius: 100px;
+    background: var(--colorNeutralBackground3);
+    color: currentColor;
+    font-weight: var(--fontWeightRegular);
+}
+
+fluent-tab[aria-selected="true"] {
+    color: var(--colorNeutralForeground1);
+    background-color: var(--colorNeutralBackground3);
+    border-color: var(--colorNeutralStroke1);
+    font-weight: var(--fontWeightRegular);
+}
+
+/* Fluent v5 renders hover/selection indicators on the tab and tablist. The v4 design represents
+    these states with the tab's background, foreground, and border instead. */
+
+fluent-tab::before,
+fluent-tab::after,
+fluent-tablist::after {
+    display: none;
+}
+
+fluent-tab[aria-selected="false"] {
+    color: var(--colorNeutralForeground3);
+}
+
+fluent-tab[aria-selected="false"]:hover {
+    color: var(--colorNeutralForeground1);
+}
+
+.fluent-data-grid:not(.trace-view-grid) th,
+.fluent-data-grid:not(.trace-view-grid) td {
+    border-bottom: var(--strokeWidthThin) solid var(--aspire-data-grid-cell-border-color, var(--colorNeutralStroke3)) !important;
+}
+
+table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-state="loading-content"])) {
+    /* Keep the bottom row border visible when scrolling a populated grid. */
+    margin-bottom: 1px !important;
+}
+
+.fluent-data-grid.aspire-spaced-grid > thead > tr > th {
+    padding: 4px 1px;
+}
+
+.fluent-data-grid.aspire-spaced-grid > thead > tr > th:first-child {
+    padding-inline-start: 0;
+}
+
+.fluent-data-grid.aspire-spaced-grid > tbody > tr:not([row-state="empty-content"]) > td {
+    padding: 4px 16px;
+}
+
+.aspire-empty-content {
+    width: 100%;
+    height: 100px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: 600;
+}
+
+.fluent-data-grid > thead > tr > th,
+.fluent-data-grid > thead > tr > th fluent-button,
+.fluent-data-grid > thead > tr > th [col-title-text] {
+    color: var(--colorNeutralForeground3);
+    font-weight: 400 !important;
+}
+
+.fluent-data-grid > thead > tr > th [col-title-text] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fluent-data-grid > thead > tr > th fluent-button::part(content) {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.property-grid-container > fluent-accordion,
+.property-grid-container > fluent-accordion > fluent-accordion-item {
+    width: 100%;
+    max-width: none;
+}
+
+.property-grid-container .fluent-data-grid {
+    --aspire-data-grid-cell-border-color: var(--datagrid-border-color);
+}
+
+.property-grid-container .fluent-data-grid > thead > tr > th fluent-button {
+    --colorSubtleBackground: var(--property-grid-background-color);
+}
+
+.property-grid-container th {
+    padding: 4px 1px 4px 0 !important;
+    text-align: left !important;
+}
+
+.property-grid-container td {
+    padding: 4px 16px 4px 0 !important;
+}
+
+.property-grid-container tbody tr:last-child td {
+    border-bottom: none !important;
+}
+
+.empty-data::before {
+    content: "-";
+}
+
+fluent-accordion-item.property-details-accordion-item {
+    margin-bottom: var(--spacingVerticalS);
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 10px;
+    background-color: var(--property-grid-background-color);
+    overflow: hidden;
+}
+
+fluent-accordion-item.property-details-accordion-item::part(heading),
+fluent-accordion-item.property-details-accordion-item::part(content) {
+    background-color: var(--property-grid-background-color);
+}
+
+fluent-accordion-item.property-details-accordion-item::part(heading) {
+    --accordion-marker-background: transparent;
+    min-height: 40px;
+    padding-inline: var(--spacingHorizontalM);
+    direction: rtl;
+}
+
+fluent-accordion-item.property-details-accordion-item::part(heading):hover {
+    --accordion-marker-background: color-mix(in srgb, var(--property-grid-background-color) 93.5%, var(--colorNeutralForeground1));
+}
+
+fluent-accordion-item.property-details-accordion-item::part(content) {
+    padding-inline: 0;
+}
+
+fluent-accordion-item.property-details-accordion-item::part(button) {
+    direction: ltr;
+    text-align: left;
+    font-family: var(--aspire-font-display);
+    font-weight: 600;
+}
+
+fluent-badge.property-details-accordion-badge {
+    min-width: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--borderRadiusCircular);
+    outline: none;
+    box-shadow: none;
+    background-color: var(--property-grid-badge-background-color);
+    color: var(--colorNeutralForeground1);
+    font-weight: 400;
+}
+
+.fluent-data-grid > thead > tr[row-type="sticky-header"] > th {
+    background-color: var(--colorNeutralBackground2);
+}
+
+.fluent-data-grid > thead > tr > th {
+    --fluent-data-grid-header-opacity: 0;
+}
+
+.fluent-data-grid > thead > tr > th:hover {
+    --fluent-data-grid-header-opacity: 1;
+}
+
+.main-grid > thead > tr > th.expand-col:not(.select-all) {
+    padding: 4px 1px 4px 16px;
+}
+
+.main-grid > thead > tr > th:not(.select-all):not(.expand-col) {
+    padding: 4px 1px 4px 8px;
+}
+
+.fluent-data-grid > thead > tr > th fluent-button {
+    --aspire-button-foreground: var(--colorNeutralForeground3);
+    --aspire-button-border-color: transparent;
+    --colorSubtleBackground: var(--aspire-page-background);
+    --colorSubtleBackgroundHover: var(--colorNeutralBackground3);
+    --colorSubtleBackgroundPressed: var(--colorNeutralBackground3);
+    height: 28px;
+    min-height: 28px;
+    padding-inline: 2px;
+    border: 1px solid var(--aspire-button-border-color);
+    border-radius: var(--aspire-control-radius);
+}
+
+/* Fluent anchors paint their own neutral surface. Match that surface to the row while
+   ShowHover is active so embedded actions don't appear as opaque patches in the hovered row. */
+
+.fluent-data-grid tr[hover]:not([row-type="header"], [row-type="sticky-header"]):hover fluent-anchor[appearance="lightweight"]:not(:hover),
+.fluent-data-grid tr[hover]:not([row-type="header"], [row-type="sticky-header"]):hover fluent-anchor[appearance="stealth"]:not(:hover) {
+    background-color: var(--datagrid-hover-color) !important;
+    transition-property: border, color;
+}
+
+.fluent-data-grid tr.selected-row:not([row-type="header"], [row-type="sticky-header"]),
+.fluent-data-grid tr.selected-row:not([row-type="header"], [row-type="sticky-header"]) > td {
+    background-color: var(--datagrid-selected-color);
+}
+
+.fluent-data-grid tr.selected-row:not([row-type="header"], [row-type="sticky-header"]) fluent-anchor[appearance="lightweight"]:not(:hover),
+.fluent-data-grid tr.selected-row:not([row-type="header"], [row-type="sticky-header"]) fluent-anchor[appearance="stealth"]:not(:hover) {
+    background-color: var(--datagrid-selected-color) !important;
+    transition-property: border, color;
+}
+
+.resource-icon,
+.severity-icon {
+    vertical-align: text-bottom;
+    margin-inline-end: var(--inline-icon-margin);
+    flex-shrink: 0;
+}
+
+.persistent-container-icon {
+    vertical-align: text-bottom;
+    margin-inline-start: var(--inline-icon-margin);
+}

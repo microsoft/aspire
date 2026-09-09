@@ -63,7 +63,7 @@ var forceAllReasonOption = new Option<string?>("--force-all-reason")
 {
     Description = "Human-readable reason recorded in the run summary when --force-all is a fail-SAFE " +
                   "fallback (e.g. the CI checkout couldn't reach the merge-base) rather than the kill " +
-                  "switch. Lets the weekly audit -- which reads the summary, not the raw logs -- tell a " +
+                  "switch. Lets a later audit -- which reads the summary, not the raw logs -- tell a " +
                   "systemic regression apart from an intentional run-full-ci full run."
 };
 
@@ -128,6 +128,22 @@ internal sealed record RunOptions(
 
 internal static class Selection
 {
+    private static readonly IReadOnlyDictionary<string, string> s_advisoryTestTargets =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Aspire.Deployment.EndToEnd.Tests"] = "deployment workflow-only",
+            ["Aspire.EndToEnd.Tests"] = "outerloop-only",
+            ["Aspire.Oracle.EntityFrameworkCore.Tests"] = "outerloop-only",
+        };
+
+    private static readonly IReadOnlyDictionary<string, string> s_advisoryJobTargets =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["job:deployment-e2e"] = "schedule/dispatch-only",
+        };
+
+    private sealed record AdvisoryTarget(string Token, string DisplayName, string Qualifier);
+
     public static int Run(RunOptions options)
     {
         var trace = new SelectionTrace();
@@ -720,53 +736,93 @@ internal static class Selection
 
         if (!options.Enforce)
         {
-            // Audit mode runs the full matrix and every job regardless of the selection, so the lists
-            // below are advisory: they are what selective CI WOULD run once ENFORCE_SELECTION is on.
-            // Say so explicitly, otherwise a reader could mistake the subset for what actually ran.
-            sb.AppendLine("_The full test matrix and all jobs still run in audit mode. The tests and jobs below are what selective CI **would** run under enforcement._");
+            // Audit mode runs all regular PR work regardless of the selection. Schedule/outerloop-only
+            // targets are reported separately because the PR selector cannot cause them to run.
+            sb.AppendLine("_The regular PR test matrix and PR-gated jobs still run in audit mode. The PR tests and jobs below are what selective CI **would** run under enforcement. Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates; independent workflows may still run them for a PR._");
             sb.AppendLine();
-        }
-
-        if (result.SelectsAll)
-        {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Runs the full test matrix + all jobs (ALL)** — {result.EscalationReason}");
-            sb.AppendLine();
-            WriteCommentFile(commentPath, sb.ToString());
-            return;
         }
 
         var tests = result.TestProjects.OrderBy(p => p, StringComparer.Ordinal).ToList();
         // Keep the full job: tokens for cause lookup; strip the prefix only for display.
         var jobs = result.Jobs.OrderBy(j => j, StringComparer.Ordinal).ToList();
+        var prTests = tests.Where(test => !s_advisoryTestTargets.ContainsKey(test)).ToList();
+        var prJobs = jobs.Where(job => !s_advisoryJobTargets.ContainsKey(job)).ToList();
+        var advisoryTargets = GetAdvisoryTargets(tests, jobs);
+        var allPrTestProjects = allTestProjects.Count(test => !s_advisoryTestTargets.ContainsKey(test));
+
+        if (result.SelectsAll)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Selects the full PR test matrix + all PR-gated jobs (ALL)** — {result.EscalationReason}");
+            sb.AppendLine();
+            AppendAdvisoryTargets(sb, advisoryTargets);
+            WriteCommentFile(commentPath, sb.ToString());
+            return;
+        }
 
         var fileWord = changedFiles.Count == 1 ? "changed file" : "changed files";
-        var jobWord = jobs.Count == 1 ? "job" : "jobs";
+        var jobWord = prJobs.Count == 1 ? "job" : "jobs";
+        var advisoryWord = advisoryTargets.Count == 1 ? "target" : "targets";
         sb.AppendLine(CultureInfo.InvariantCulture,
-            $"**{tests.Count} / {allTestProjects.Count} test projects · {jobs.Count} {jobWord}**, from {changedFiles.Count} {fileWord}.");
+            $"**{prTests.Count} / {allPrTestProjects} PR test projects · {prJobs.Count} PR {jobWord} · {advisoryTargets.Count} advisory-only {advisoryWord}**, from {changedFiles.Count} {fileWord}.");
         sb.AppendLine();
 
         // WHAT runs -- the flat lists up front. A reviewer scanning a large selection sees the complete
         // set of projects and jobs without reading the per-trigger breakdown below. Test projects come
         // first because they are the primary thing a reviewer cares about; the non-.NET jobs follow.
-        sb.AppendLine(CultureInfo.InvariantCulture, $"### Selected test projects ({tests.Count} / {allTestProjects.Count})");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"### Selected PR test projects ({prTests.Count} / {allPrTestProjects})");
         sb.AppendLine();
-        sb.AppendLine(tests.Count == 0
-            ? "_none — no .NET test projects run for this change._"
-            : string.Join(", ", tests.Select(t => $"`{t}`")));
+        sb.AppendLine(prTests.Count == 0
+            ? "_none — no PR-gated .NET test projects run for this change._"
+            : string.Join(", ", prTests.Select(t => $"`{t}`")));
         sb.AppendLine();
 
-        sb.AppendLine(CultureInfo.InvariantCulture, $"### Selected jobs ({jobs.Count})");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"### Selected PR jobs ({prJobs.Count})");
         sb.AppendLine();
-        sb.AppendLine(jobs.Count == 0
+        sb.AppendLine(prJobs.Count == 0
             ? "_none_"
-            : string.Join(", ", jobs.Select(j => $"`{StripJobPrefix(j)}`")));
+            : string.Join(", ", prJobs.Select(j => $"`{StripJobPrefix(j)}`")));
         sb.AppendLine();
+
+        AppendAdvisoryTargets(sb, advisoryTargets);
 
         // HOW it was chosen -- the per-trigger grouping.
         AppendSelectionRationale(sb, result, tests, jobs);
 
         sb.AppendLine();
         WriteCommentFile(commentPath, sb.ToString());
+    }
+
+    private static IReadOnlyList<AdvisoryTarget> GetAdvisoryTargets(
+        IReadOnlyList<string> tests,
+        IReadOnlyList<string> jobs)
+    {
+        var targets = tests
+            .Where(s_advisoryTestTargets.ContainsKey)
+            .Select(test => new AdvisoryTarget($"test:{test}", test, s_advisoryTestTargets[test]))
+            .ToList();
+        targets.AddRange(jobs
+            .Where(s_advisoryJobTargets.ContainsKey)
+            .Select(job => new AdvisoryTarget(job, StripJobPrefix(job), s_advisoryJobTargets[job])));
+
+        return targets;
+    }
+
+    private static void AppendAdvisoryTargets(StringBuilder sb, IReadOnlyList<AdvisoryTarget> targets)
+    {
+        sb.AppendLine(CultureInfo.InvariantCulture, $"### Advisory workflow impact ({targets.Count})");
+        sb.AppendLine();
+        if (targets.Count == 0)
+        {
+            sb.AppendLine("_none_");
+        }
+        else
+        {
+            foreach (var target in targets)
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- `{target.DisplayName}` *({target.Qualifier})*");
+            }
+        }
+        sb.AppendLine();
     }
 
     // Renders the "how these were chosen" section: every selected test project grouped under each
@@ -1036,8 +1092,11 @@ internal static class Selection
         var source = options.ChangedFilesPath is not null
             ? $"changed-files {options.ChangedFilesPath}"
             : $"git diff {options.From}{(options.To is null ? " (working tree)" : $"..{options.To}")}";
+        var mode = options.Enforce
+            ? "enforcing"
+            : "audit (advisory: the regular test matrix + selector-gated jobs run regardless of the selection below; advisory-only targets are reported but scheduled independently)";
         sb.AppendLine("### Options");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {(options.Enforce ? "enforcing" : "audit (advisory: the full matrix + all jobs run regardless of the selection below)")}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {mode}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- change source: {source}");
         var forceAllDetail = options.ForceAll && options.ForceAllReason is not null
             ? $"True — fail-safe run-all because {options.ForceAllReason}"
@@ -1099,36 +1158,58 @@ internal static class Selection
         sb.AppendLine();
 
         sb.AppendLine("### Selection");
+        var selected = result.TestProjects.OrderBy(p => p, StringComparer.Ordinal).ToList();
+        var jobTokens = result.Jobs.OrderBy(j => j, StringComparer.Ordinal).ToList();
+        var selectedPrTests = selected.Where(test => !s_advisoryTestTargets.ContainsKey(test)).ToList();
+        var prJobTokens = jobTokens.Where(job => !s_advisoryJobTargets.ContainsKey(job)).ToList();
+        var advisoryTargets = GetAdvisoryTargets(selected, jobTokens);
+        var allPrTestProjects = allTestProjects.Count(test => !s_advisoryTestTargets.ContainsKey(test));
+
         if (result.SelectsAll)
         {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"- **selects ALL** — {result.EscalationReason}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"- **selects ALL PR test projects + jobs** — {result.EscalationReason}");
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"- advisory-only targets: {(advisoryTargets.Count == 0 ? "(none)" : string.Join(", ", advisoryTargets.Select(target => target.Token)))}");
             WriteOut(sb);
             return;
         }
 
-        var selected = result.TestProjects.OrderBy(p => p, StringComparer.Ordinal).ToList();
         var skipped = allTestProjects.Except(result.TestProjects, StringComparer.Ordinal)
+            .Where(test => !s_advisoryTestTargets.ContainsKey(test))
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToList();
-        var jobTokens = result.Jobs.OrderBy(j => j, StringComparer.Ordinal).ToList();
 
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- selected test projects: {selected.Count} / {allTestProjects.Count}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- triggered jobs: {(jobTokens.Count == 0 ? "(none)" : string.Join(", ", jobTokens))}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- selected PR test projects: {selectedPrTests.Count} / {allPrTestProjects}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- triggered PR jobs: {(prJobTokens.Count == 0 ? "(none)" : string.Join(", ", prJobTokens))}");
+        sb.AppendLine(CultureInfo.InvariantCulture,
+            $"- advisory-only targets: {(advisoryTargets.Count == 0 ? "(none)" : string.Join(", ", advisoryTargets.Select(target => target.Token)))}");
         sb.AppendLine();
 
         // Each selected test project / job is listed with the full set of reasons it was selected
         // (the changed file, affected project, graph edge, or selected test that pulled it in, plus
         // the curated rule's reason text). This is the "why" an auditor needs to trust the selection.
-        AppendCauseList(sb, "Selected test projects", selected, p => p, result.TestCauses);
+        AppendCauseList(sb, "Selected PR test projects", selectedPrTests, p => p, result.TestCauses);
         AppendCauseList(
             sb,
-            "Triggered jobs",
-            jobTokens,
+            "Triggered PR jobs",
+            prJobTokens,
             t => t.StartsWith("job:", StringComparison.Ordinal) ? t["job:".Length..] : t,
+            result.JobCauses);
+        AppendCauseList(
+            sb,
+            "Advisory test projects",
+            selected.Where(s_advisoryTestTargets.ContainsKey).ToList(),
+            p => p,
+            result.TestCauses);
+        AppendCauseList(
+            sb,
+            "Advisory schedule/dispatch jobs",
+            jobTokens.Where(s_advisoryJobTargets.ContainsKey).ToList(),
+            StripJobPrefix,
             result.JobCauses);
         // In enforcing mode the unselected projects are actually skipped; in audit mode the full matrix
         // still runs, so they only "would have been" skipped.
-        AppendProjectList(sb, options.Enforce ? "Skipped (not run)" : "Would have been skipped", skipped);
+        AppendProjectList(sb, options.Enforce ? "Skipped PR test projects (not run)" : "PR test projects that would have been skipped", skipped);
 
         WriteOut(sb);
 

@@ -117,6 +117,28 @@ suite('Aspire DCP run session lifecycle', () => {
         await stopHarness(harness);
     });
 
+    test('empty run-session IDs are rejected before wire delivery', async () => {
+        const client = await openNotificationClient(harness);
+        const sendCore = sinon.spy(AspireDcpServer, 'sendNotificationCore');
+        const warning = sinon.stub(extensionLogOutputChannel, 'warn');
+
+        const notification = {
+            notification_type: 'processRestarted',
+            session_id: '',
+            dcp_id: harness.dcpId,
+            pid: 42,
+        } satisfies ProcessRestartedNotification;
+        harness.dcpServer.sendNotification(notification);
+        await drainNotifications(client);
+
+        assert.strictEqual(sendCore.callCount, 0);
+        assert.deepStrictEqual(client.notifications, []);
+        assert.strictEqual(
+            warning.calledOnceWithExactly(
+                'Dropping processRestarted DCP notification because the run-session ID is empty.'),
+            true);
+    });
+
     test('process DELETE terminates before blocked teardown and suppresses all later notifications', async () => {
         const stopSession = sinon.stub().returns(new Promise<void>(() => { }));
         const client = await openNotificationClient(harness);

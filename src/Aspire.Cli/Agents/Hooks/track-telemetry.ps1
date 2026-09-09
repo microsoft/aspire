@@ -82,13 +82,16 @@ $normalizedInput = $rawInput -replace '\\"', '"'
 
 $timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
-# Detect the client (used only for a low-cardinality client-name tag).
+# Detect the client (used only for a low-cardinality client-name tag). Keep the App marker before
+# COPILOT_CLI because App sessions also set COPILOT_CLI=1.
 $propertyNames = @()
 if ($data.PSObject -and $data.PSObject.Properties) { $propertyNames = $data.PSObject.Properties.Name }
 $hasHookEventName = $propertyNames -contains 'hook_event_name'
 $hasToolArgs = $propertyNames -contains 'toolArgs'
 
-if ($env:COPILOT_CLI -eq '1') {
+if ($env:AI_AGENT -eq 'github_copilot_app_agent') {
+    $clientName = 'copilot-app'
+} elseif ($env:COPILOT_CLI -eq '1') {
     $clientName = 'copilot-cli'
 } elseif ($hasHookEventName) {
     $toolUseId = [string]$data.tool_use_id

@@ -1306,6 +1306,9 @@ public class ParameterProcessorTests
             return Task.FromResult(new DeploymentStateSection(sectionName, [], 0));
         }
 
+        public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+            => AcquireSectionAsync(sectionName, cancellationToken);
+
         public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
@@ -1664,6 +1667,9 @@ public class ParameterProcessorTests
 
             return Task.FromResult(new DeploymentStateSection(sectionName, sectionData, 0));
         }
+
+        public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+            => AcquireSectionAsync(sectionName, cancellationToken);
 
         public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {

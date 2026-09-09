@@ -50,6 +50,36 @@ internal sealed class FileLock : IDisposable
     }
 
     /// <summary>
+    /// Acquires an exclusive file lock synchronously, retrying on contention.
+    /// </summary>
+    /// <param name="lockPath">The full path of the lock file.</param>
+    /// <param name="timeout">Maximum time to wait for the lock.</param>
+    /// <returns>A <see cref="FileLock"/> that releases the lock when disposed.</returns>
+    /// <exception cref="TimeoutException">Thrown if the lock cannot be acquired within the timeout period.</exception>
+    public static FileLock Acquire(string lockPath, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        CreateLockDirectory(lockPath);
+
+        while (true)
+        {
+            try
+            {
+                return new FileLock(CreateLockStream(lockPath));
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                if (DateTime.UtcNow >= deadline)
+                {
+                    throw new TimeoutException($"Failed to acquire file lock '{lockPath}' within {timeout.TotalSeconds:F0} seconds.", exception);
+                }
+            }
+
+            Thread.Sleep(s_defaultRetryDelay);
+        }
+    }
+
+    /// <summary>
     /// Attempts to acquire an exclusive file lock without waiting.
     /// </summary>
     public static FileLock? TryAcquire(string lockPath)

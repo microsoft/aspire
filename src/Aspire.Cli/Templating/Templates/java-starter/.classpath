@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+  <classpathentry kind="src" path="" including="AppHost.java" excluding=".aspire/modules/" />
+  <classpathentry kind="src" path=".aspire/modules" />
+  <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-25" />
+  <classpathentry kind="output" path=".java-build" />
+</classpath>

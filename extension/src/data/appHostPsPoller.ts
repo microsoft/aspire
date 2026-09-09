@@ -6,6 +6,7 @@ import { extensionLogOutputChannel } from '../utils/logging';
 import { errorFetchingAppHosts } from '../loc/strings';
 import { AppHostCliRunner, LimitedOutputBuffer, oneShotOutputBufferLimit } from './appHostCliRunner';
 import { windowCliPathTarget } from '../utils/cliPathVariables';
+import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
 
 export interface PsOutput {
     readonly stdout: string;
@@ -160,6 +161,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         if (!this._isCurrentPsFetch(fetchVersion)) {
             return;
         }
+        reportCliResolvedForOperation(windowCliPathTarget, cliPath);
 
         let psProcess: ChildProcessWithoutNullStreams | undefined;
         let psProcessCompletedSynchronously = false;
@@ -345,6 +347,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         if (!isCurrentPsCommand()) {
             return;
         }
+        reportCliResolvedForOperation(windowCliPathTarget, cliPath);
         const invocationArgs = this._cliRunner.normalizeNoLogoArgs(cliPath, args);
 
         let stdout = '';

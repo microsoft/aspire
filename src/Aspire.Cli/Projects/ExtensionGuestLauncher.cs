@@ -40,12 +40,20 @@ internal sealed class ExtensionGuestLauncher : IGuestProcessLauncher
         // GuestLaunchOptions is intentionally ignored — the extension owns the debug-session
         // lifecycle and has its own teardown path (it does not spawn a child process here, so
         // there's nothing for the console-isolation / graceful-then-tree-kill ladder to target).
-        // Prepend the runtime command (e.g., "npx") as the first argument so the
-        // extension can extract it as the runtimeExecutable for the debug session.
-        var allArgs = new List<string> { command };
-        allArgs.AddRange(args);
         var effectiveEnvironmentVariables = environmentVariables.ToDictionary();
         ProfilingTelemetry.AddActivityContextToEnvironment(Activity.Current, effectiveEnvironmentVariables);
+
+        if (!PathLookupHelper.TryResolveExecutablePath(command, out var resolvedCommand, effectiveEnvironmentVariables))
+        {
+            var errorOutput = new OutputCollector();
+            errorOutput.AppendError(CommandPathResolver.GetMissingCommandMessage(command));
+            return (-1, errorOutput);
+        }
+
+        // Prepend the resolved runtime command as the first argument so the
+        // extension can extract it as the runtimeExecutable for the debug session.
+        var allArgs = new List<string> { resolvedCommand };
+        allArgs.AddRange(args);
 
         await _extensionInteractionService.LaunchAppHostAsync(
             _appHostFile.FullName,

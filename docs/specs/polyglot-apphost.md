@@ -1365,6 +1365,25 @@ Configuration for polyglot app hosts:
 
 **Language persistence:** On first `aspire run`, if `language` is not set, the CLI detects it from file patterns and saves it to `settings.json`. Subsequent runs use the persisted value.
 
+### Application settings
+
+Polyglot AppHosts use the standard .NET configuration convention. The managed application builder loads these optional files from the directory containing the AppHost:
+
+- `appsettings.json`
+- `appsettings.{Environment}.json`
+
+The environment-specific file overrides the base file. Environment variables and AppHost command-line arguments retain the standard .NET configuration precedence over both JSON files.
+
+The generated guest SDK exposes the resulting configuration through the application builder. For example, a TypeScript AppHost can read a value as follows:
+
+```typescript
+const builder = await createBuilder();
+const configuration = await builder.getConfiguration();
+const region = await configuration.getConfigValue("Deployment:Region");
+```
+
+The managed server keeps its own internal configuration separate, so application settings do not replace ATS assembly discovery or server logging settings.
+
 ### apphost.run.json
 
 Launch settings:

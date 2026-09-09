@@ -18,5 +18,6 @@
     <CITestsProperty Include="requiresTestSdk" MSBuildProp="RequiresTestSdk" Default="false" />
     <CITestsProperty Include="requiresCliArchive" MSBuildProp="RequiresCliArchive" Default="false" />
     <CITestsProperty Include="enablePlaywrightInstall" MSBuildProp="EnablePlaywrightInstall" Default="false" />
+    <CITestsProperty Include="requiresJava" MSBuildProp="RequiresJava" Default="false" />
   </ItemGroup>
 </Project>

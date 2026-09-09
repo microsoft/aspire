@@ -5,7 +5,9 @@
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIREPERSISTENCE001
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPROJECTS001
 
+using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
@@ -45,12 +47,10 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
-        // run --project <path> [--configuration <cfg>] --no-launch-profile
-        // (--configuration is only present when the app host assembly declares a build configuration)
-        Assert.Equal("run", args[0]);
-        Assert.Equal("--project", args[1]);
-        Assert.Equal(projectPath, args[2]);
-        Assert.Equal("--no-launch-profile", args[^1]);
+        var expected = new List<string> { "run", "--project", projectPath, "--no-build" };
+        AddExpectedConfiguration(builder, expected);
+        expected.Add("--no-launch-profile");
+        Assert.Equal(expected, args);
     }
 
     [Fact]
@@ -63,12 +63,10 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
-        // run --file <path> --no-cache [--configuration <cfg>] --no-launch-profile
-        Assert.Equal("run", args[0]);
-        Assert.Equal("--file", args[1]);
-        Assert.Equal(appPath, args[2]);
-        Assert.Equal("--no-cache", args[3]);
-        Assert.Equal("--no-launch-profile", args[^1]);
+        var expected = new List<string> { "run", "--file", appPath, "--no-build" };
+        AddExpectedConfiguration(builder, expected);
+        expected.Add("--no-launch-profile");
+        Assert.Equal(expected, args);
     }
 
     [Fact]
@@ -469,6 +467,30 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Equal("project", annotation.LaunchConfigurationType);
     }
 
+    [Theory]
+    [InlineData("MyService.csproj")]
+    [InlineData("service.cs")]
+    public async Task AddDotnetProject_RebuilderUsesConfiguredBuildConfiguration(string projectFileName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", projectFileName);
+        var project = builder.AddDotnetProject("svc", projectPath, options => options.ExcludeLaunchProfile = true);
+        var launchDefaults = Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>());
+        launchDefaults.BuildConfiguration = "Release";
+
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        var args = await ArgumentEvaluator.GetArgumentListAsync(rebuilder);
+
+        Assert.Equal(
+            [
+                "build",
+                projectPath,
+                "--configuration",
+                "Release"
+            ],
+            args);
+    }
+
     [Fact]
     public async Task AddDotnetProject_MaterializesEndpointsFromLaunchProfile()
     {
@@ -515,6 +537,20 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void AddLifeCycleCommands_FileBasedApp_AddsRebuildCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var appPath = Path.Combine(builder.AppHostDirectory, "service.cs");
+        var resource = builder.AddDotnetProject("testapp", appPath, o => o.ExcludeLaunchProfile = true).Resource;
+        resource.AddLifeCycleCommands();
+
+        Assert.Contains(
+            resource.Annotations.OfType<ResourceCommandAnnotation>(),
+            annotation => annotation.Name == KnownResourceCommands.RebuildCommand);
+    }
+
+    [Fact]
     public void AddLifeCycleCommands_DirectlyConstructedDotnetProjectResource_RestartHasDetailedProjectDescription()
     {
         // The type has a public constructor, so it can be added with AddResource instead of
@@ -532,28 +568,30 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddDotnetProject_DebugAnnotator_ProducesProjectLaunchConfiguration()
     {
-        // The "project" SupportsDebuggingAnnotation must produce a ProjectLaunchConfiguration carrying the
-        // project path so the IDE (and DCP) can launch/debug it exactly like AddProject. The producer also
-        // resolves the launch profile selection, so an out-of-assembly integration gets the complete
-        // configuration without doing any of that work itself.
+        // The versioned external-build capability prevents an older IDE from accepting the resource while ignoring
+        // coordinated-build metadata. The producer still resolves the full project launch configuration.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
 
         Assert.True(app.Resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
-        Assert.Equal(KnownLaunchConfigurationTypes.Project, supportsDebugging.LaunchConfigurationType);
+        Assert.Equal(KnownLaunchConfigurationTypes.ProjectWithExternalBuild, supportsDebugging.LaunchConfigurationType);
 
         var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
             app.Resource,
             ExecutableLaunchMode.Debug);
         var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(
             await app.Resource.CreateLaunchConfigurationAsync(callbackContext));
-        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
+        Assert.Equal(KnownLaunchConfigurationTypes.ProjectWithExternalBuild, launchConfig.Type);
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
         Assert.Equal(projectPath, launchConfig.ProjectPath);
         Assert.True(launchConfig.DisableLaunchProfile);
         Assert.Equal(string.Empty, launchConfig.LaunchProfile);
+        Assert.Equal(
+            builder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration,
+            launchConfig.BuildConfiguration);
+        Assert.True(launchConfig.SuppressBuild);
     }
 
     [Fact]
@@ -671,18 +709,17 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffolding()
+    public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffoldingWhenExternalBuildIsSupported()
     {
-        // When the active IDE advertises support for the "project" launch configuration, the IDE owns the
-        // launch (via project_path + launch profile). Emitting `dotnet run …` here would be handed to the IDE
-        // as the debugged program's invocation args, so only the user's own args should remain.
+        // The versioned capability guarantees that the IDE honors coordinated-build values and suppression.
+        // Emitting `dotnet run …` as well would hand those tool arguments to the debugged program.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
         builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
         {
             ProtocolsSupported = ["test"],
-            SupportedLaunchConfigurations = ["project"]
+            SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.ProjectWithExternalBuild]
         });
 
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
@@ -698,10 +735,34 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffoldingWhenLegacyProjectLaunchIsSupported()
+    {
+        // An IDE that supports only ordinary project launch owns both building and launching the resource. The
+        // coordinated-build path is disabled for this session, so only the user's program arguments are emitted.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
+        });
+
+        var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
+        var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
+                         .WithArgs("--config", "prod.yaml");
+
+        using var application = builder.Build();
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Equal(["--config", "prod.yaml"], args);
+    }
+
+    [Fact]
     public async Task AddDotnetProject_InDebugSession_KeepsDotnetRunArgs_WhenProjectLaunchUnsupported()
     {
-        // When the IDE does NOT advertise "project" support, the resource runs as a plain process, so the full
-        // `dotnet run --project …` command must be preserved.
+        // When the IDE does not advertise project support, the resource runs as a plain process, so the full
+        // `dotnet run --project ...` command must be preserved.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
@@ -719,7 +780,6 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
 
         // run --project <path> [--configuration <cfg>] --no-launch-profile --config prod.yaml
-        // (--configuration is only present when the app host assembly declares a build configuration)
         Assert.Equal("run", args[0]);
         Assert.Equal("--project", args[1]);
         Assert.Equal(projectPath, args[2]);
@@ -899,6 +959,15 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         context.Args.Add("package");
         context.Args.Add("--yes");
         context.Args.Add("--");
+    }
+
+    private static void AddExpectedConfiguration(IDistributedApplicationBuilder builder, List<string> expected)
+    {
+        if (builder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration is { Length: > 0 } configuration)
+        {
+            expected.Add("--configuration");
+            expected.Add(configuration);
+        }
     }
 
     private static void AssertUnsupportedPublishMessage(

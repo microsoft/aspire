@@ -1,0 +1,15 @@
+﻿parameters:
+  project:
+    project_image: "project:latest"
+  executable:
+    executable_image: "executable:latest"
+secrets: {}
+config:
+  project:
+    OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
+    DATA_PATH: "/srv/project"
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://env-dashboard-service:18889"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+    OTEL_SERVICE_NAME: "project"
+  executable:
+    DATA_PATH: "/srv/executable"

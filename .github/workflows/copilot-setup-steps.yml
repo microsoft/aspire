@@ -1,7 +1,15 @@
 name: "Copilot Setup Steps"
 
-# Allow testing of the setup steps from your repository's "Actions" tab.
-on: workflow_dispatch
+# Automatically run the setup steps when they are changed to allow for easy validation, and
+# allow manual testing through the repository's "Actions" tab.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
 
 jobs:
   # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot.
@@ -22,7 +30,7 @@ jobs:
         with:
           version: v0.72.0
 
-      - name: Build solution
+      - name: Restore solution
         # a full build is too slow; also do not fail on errors, continue so that
         # copilot can attempt to recover
         run: ./build.sh -restore || true
@@ -32,7 +40,7 @@ jobs:
         run: ./dotnet.sh tool install --global Verify.Tool --version 0.6.0 || true
 
       - name: Setup PATH
-        run:
+        run: |
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
           echo "$PWD/.dotnet/" >> $GITHUB_PATH
 

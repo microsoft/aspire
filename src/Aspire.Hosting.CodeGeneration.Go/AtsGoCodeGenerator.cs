@@ -688,10 +688,10 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             return "nil";
         }
 
-        return typeRef.Category switch
+        var renderedValue = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => value.ToRelaxedJsonString(),
-            AtsTypeCategory.Enum => $"{MapTypeRefToGo(typeRef, isOptional: false)}({value.ToRelaxedJsonString()})",
+            AtsTypeCategory.Enum => $"{MapEnumType(typeRef.TypeId)}({value.ToRelaxedJsonString()})",
             AtsTypeCategory.Dto when value is JsonObject obj && dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoInfo)
                 => RenderGoDtoValue(obj, dtoInfo, dtoTypesById),
             AtsTypeCategory.Array or AtsTypeCategory.List when value is JsonArray arr
@@ -700,6 +700,16 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 => $"map[{MapTypeRefToGo(typeRef.KeyType, isOptional: false)}]{MapTypeRefToGo(typeRef.ValueType, isOptional: false)}{{{string.Join(", ", obj.Select(pair => $"{AtsJsonCodeWriter.ToRelaxedJsonString(pair.Key)}: {RenderGoExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)}"))}}}",
             _ => value.ToRelaxedJsonString()
         };
+
+        if (!ShouldApplyNullableType(typeRef))
+        {
+            return renderedValue;
+        }
+
+        var valueType = typeRef.Category == AtsTypeCategory.Primitive
+            ? MapPrimitiveType(typeRef.TypeId)
+            : MapEnumType(typeRef.TypeId);
+        return $"func(value {valueType}) *{valueType} {{ return &value }}({renderedValue})";
     }
 
     private string RenderGoDtoValue(
@@ -993,8 +1003,8 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"func (s *{implName}) Value(name string) (string, error) {{");
         WriteLine("\tinput, err := s.Get(name)");
         WriteLine("\tif err != nil { return \"\", err }");
-        WriteLine("\tif input == nil { return \"\", nil }");
-        WriteLine("\treturn input.Value, nil");
+        WriteLine("\tif input == nil || input.Value == nil { return \"\", nil }");
+        WriteLine("\treturn *input.Value, nil");
         WriteLine("}");
         WriteLine();
 
@@ -1002,7 +1012,8 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"func (s *{implName}) RequiredValue(name string) (string, error) {{");
         WriteLine("\tinput, err := s.Required(name)");
         WriteLine("\tif err != nil { return \"\", err }");
-        WriteLine("\treturn input.Value, nil");
+        WriteLine("\tif input.Value == nil { return \"\", nil }");
+        WriteLine("\treturn *input.Value, nil");
         WriteLine("}");
         WriteLine();
     }
@@ -1429,10 +1440,15 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 WriteLine($"{indent}}}");
                 continue;
             }
-            var typeStr = MapTypeRefToGo(p.Type, p.IsOptional);
-            if (IsNilableGoType(typeStr))
+
+            var type = MapTypeRefToGo(p.Type, isOptional: false);
+            // A nil DTO or ReferenceExpression must be checked before it is boxed into any; otherwise
+            // serializeValue sees a non-nil interface and dereferences the typed nil. Nullable primitive
+            // and enum pointers intentionally bypass this guard because nil represents an explicit ATS null.
+            if (IsNilableGoType(type) && (p.Type is null || !ShouldApplyNullableType(p.Type)))
             {
-                WriteLine($"{indent}if {paramName} != nil {{ reqArgs[\"{p.Name}\"] = serializeValue({paramName}) }}");
+                var nilGuard = type == "any" ? $"!isNil({paramName})" : $"{paramName} != nil";
+                WriteLine($"{indent}if {nilGuard} {{ reqArgs[\"{p.Name}\"] = serializeValue({paramName}) }}");
             }
             else
             {
@@ -2103,7 +2119,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             _ => "any"
         };
 
-        if (isOptional && !IsNilableGoType(baseType))
+        if ((isOptional || ShouldApplyNullableType(typeRef)) && !IsNilableGoType(baseType))
         {
             return $"*{baseType}";
         }
@@ -2143,6 +2159,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         typeName.StartsWith("map[", StringComparison.Ordinal) ||
         typeName == "any" ||
         typeName.StartsWith("func(", StringComparison.Ordinal);
+
+    private static bool ShouldApplyNullableType(AtsTypeRef typeRef) =>
+        typeRef.IsNullable == true
+        && typeRef.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum
+        && typeRef.TypeId is not (AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken);
 
     /// <summary>
     /// Handle types map to their Go interface name. Interfaces in Go are

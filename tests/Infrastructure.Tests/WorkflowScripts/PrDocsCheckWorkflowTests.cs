@@ -11,7 +11,7 @@ namespace Infrastructure.Tests;
 public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
 {
     [Fact]
-    public void SourceWorkflowBridgesCurrentAndLegacyCanonicalBaseIntoSafeOutputs()
+    public void SourceWorkflowResolvesCanonicalTargetIntoSafeOutputs()
     {
         var workflow = ReadWorkflow("pr-docs-check.md");
         var safeOutputs = GetSection(workflow, "^safe-outputs:", "^pre-agent-steps:");
@@ -22,20 +22,24 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
             "if: contains(needs.agent.outputs.output_types, 'create_pull_request')",
             customSteps,
             StringComparison.Ordinal);
+        Assert.Equal(
+            2,
+            Regex.Matches(
+                customSteps,
+                "if: contains\\(needs\\.agent\\.outputs\\.output_types, 'create_pull_request'\\)",
+                RegexOptions.CultureInvariant).Count);
         Assert.Contains("/tmp/gh-aw/agent_output.json", customSteps, StringComparison.Ordinal);
-        Assert.Contains("len(create_items) != 1", customSteps, StringComparison.Ordinal);
-        Assert.Contains("has_base = \"base\" in create_item", customSteps, StringComparison.Ordinal);
-        Assert.Contains("has_base_branch = \"base_branch\" in create_item", customSteps, StringComparison.Ordinal);
-        Assert.Contains("base = create_item.get(\"base\")", customSteps, StringComparison.Ordinal);
-        Assert.Contains("base_branch = create_item.get(\"base_branch\")", customSteps, StringComparison.Ordinal);
-        Assert.Contains("if has_base and has_base_branch and base != base_branch:", customSteps, StringComparison.Ordinal);
-        Assert.Contains("target_branch = base if has_base else base_branch", customSteps, StringComparison.Ordinal);
+        Assert.Contains("/tmp/gh-aw/safeoutputs.jsonl", customSteps, StringComparison.Ordinal);
+        Assert.Contains("trap 'rm -rf -- _resolver' EXIT", customSteps, StringComparison.Ordinal);
         Assert.Contains(
-            "re.fullmatch(r\"main|release/[0-9]+\\.[0-9]+(?:\\.[0-9]+)?\", target_branch)",
+            "resolve_safe_output_target.py",
             customSteps,
             StringComparison.Ordinal);
-        Assert.Contains("github_output.write(f\"branch={target_branch}\\n\")", customSteps, StringComparison.Ordinal);
-        Assert.Empty(Regex.Matches(customSteps, "actions/checkout@", RegexOptions.CultureInvariant).Cast<Match>());
+        Assert.Contains(
+            "EXPECTED_SOURCE_PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}",
+            customSteps,
+            StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(customSteps, "actions/checkout@", RegexOptions.CultureInvariant).Cast<Match>());
         Assert.Contains(
             "base-branch: ${{ steps.resolve-target.outputs.branch || 'main' }}",
             safeOutputs,
@@ -61,30 +65,39 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
             "if: contains(needs.agent.outputs.output_types, 'create_pull_request')",
             safeOutputs,
             StringComparison.Ordinal);
+        Assert.Equal(
+            2,
+            Regex.Matches(
+                safeOutputs,
+                "(?m)^        if: contains\\(needs\\.agent\\.outputs\\.output_types, 'create_pull_request'\\)$",
+                RegexOptions.CultureInvariant).Count);
         Assert.Contains("/tmp/gh-aw/agent_output.json", safeOutputs, StringComparison.Ordinal);
-        Assert.Contains("base = create_item.get(\"base\")", safeOutputs, StringComparison.Ordinal);
-        Assert.Contains("base_branch = create_item.get(\"base_branch\")", safeOutputs, StringComparison.Ordinal);
-        Assert.Contains("if has_base and has_base_branch and base != base_branch:", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains("/tmp/gh-aw/safeoutputs.jsonl", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains("trap 'rm -rf -- _resolver' EXIT", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains("permission-contents: write", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains("resolve_safe_output_target.py", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains(
+            "EXPECTED_SOURCE_PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}",
+            safeOutputs,
+            StringComparison.Ordinal);
         Assert.Contains(
             "\\\"base_branch\\\":\\\"${{ steps.resolve-target.outputs.branch || 'main' }}\\\"",
             safeOutputs,
             StringComparison.Ordinal);
-        Assert.Collection(
-            Regex.Matches(safeOutputs, "uses: actions/checkout@", RegexOptions.CultureInvariant).Cast<Match>(),
-            _ => { },
-            _ => { });
+        Assert.Equal(
+            3,
+            Regex.Matches(safeOutputs, "uses: actions/checkout@", RegexOptions.CultureInvariant).Count);
     }
 
     [Fact]
-    public void OutcomeValidatorReadsCurrentAndLegacyCanonicalBase()
+    public void OutcomeValidatorUsesSharedCanonicalTargetResolver()
     {
         var validator = File.ReadAllText(
             Path.Combine(RepoRoot.Path, ".github", "workflows", "pr-docs-check", "validate_outcome.py"));
 
-        Assert.Contains("create_pull_request.get(\"base\")", validator, StringComparison.Ordinal);
-        Assert.Contains("create_pull_request.get(\"base_branch\")", validator, StringComparison.Ordinal);
-        Assert.Contains("if base != base_branch:", validator, StringComparison.Ordinal);
-        Assert.Contains("_get_create_pull_request_target(payload)", validator, StringComparison.Ordinal);
+        Assert.Contains("resolve_target_branch(", validator, StringComparison.Ordinal);
+        Assert.Contains("raw_safe_outputs", validator, StringComparison.Ordinal);
+        Assert.Contains("require_target_branch(", validator, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -155,6 +168,10 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
                 notifyJob,
                 StringComparison.Ordinal);
             Assert.Contains("--created-pr-base \"${CREATED_PR_BASE}\"", notifyJob, StringComparison.Ordinal);
+            Assert.Contains(
+                "--raw-safe-outputs \"$(dirname \"${GH_AW_AGENT_OUTPUT}\")/safeoutputs.jsonl\"",
+                notifyJob,
+                StringComparison.Ordinal);
         }
     }
 

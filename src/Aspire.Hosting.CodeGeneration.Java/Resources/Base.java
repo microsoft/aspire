@@ -60,23 +60,23 @@ final class AspireUnion {
         this.value = value;
     }
 
-    static AspireUnion of(Object value) {
+    public static AspireUnion of(Object value) {
         return value instanceof AspireUnion union ? union : new AspireUnion(value);
     }
 
-    static AspireUnion fromValue(Object value) {
+    public static AspireUnion fromValue(Object value) {
         return of(value);
     }
 
-    Object getValue() {
+    public Object getValue() {
         return value;
     }
 
-    boolean is(Class<?> type) {
+    public boolean is(Class<?> type) {
         return value != null && type.isInstance(value);
     }
 
-    <T> T getValueAs(Class<T> type) {
+    public <T> T getValueAs(Class<T> type) {
         if (value == null) {
             return null;
         }
@@ -236,7 +236,7 @@ class ReferenceExpression {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(handle));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", client.registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
 
         return (String) client.invokeCapability("Aspire.Hosting.ApplicationModel/getValue", reqArgs);

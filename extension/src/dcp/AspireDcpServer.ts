@@ -815,12 +815,13 @@ export default class AspireDcpServer {
     }
 
     sendNotification(notification: RunSessionNotification): void {
-        if (notification.session_id.length > 0) {
-            this._runSessions.notify(notification);
+        if (notification.session_id.length === 0) {
+            extensionLogOutputChannel.warn(
+                `Dropping ${notification.notification_type} DCP notification because the run-session ID is empty.`);
             return;
         }
 
-        this._deliver(notification.dcp_id, notification);
+        this._runSessions.notify(notification);
     }
 
     private _deliver(ownerDcpId: string, notification: RunSessionNotification): void {

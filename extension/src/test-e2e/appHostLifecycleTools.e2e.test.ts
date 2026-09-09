@@ -300,6 +300,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
             const linkedFixture = fixture;
             assert.ok(linkedFixture);
             const wrapper = writeTimeoutCliWrapper();
+            const timeoutMs = 10000;
             let descendantPid: number | undefined;
 
             try {
@@ -309,12 +310,12 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     name: 'runAspireCli',
                     args: ['timeout-tree'],
                     workingDirectory: path.relative(getWorkspaceRoot(), linkedFixture.linkedWorktreePath),
-                    timeoutMs: 1000,
+                    timeoutMs,
                 }, 30000);
                 invocation.catch(() => undefined);
 
-                descendantPid = await waitForProcessIdFile(wrapper.pidPath, 10000);
-                await assert.rejects(invocation, /timed out after 1000ms/);
+                descendantPid = await waitForProcessIdFile(wrapper.pidPath, 30000);
+                await assert.rejects(invocation, new RegExp(`timed out after ${timeoutMs}ms`));
                 assert.strictEqual(isProcessRunning(descendantPid), false, `Expected descendant process ${descendantPid} to be gone before runAspireCli rejected.`);
             }
             finally {

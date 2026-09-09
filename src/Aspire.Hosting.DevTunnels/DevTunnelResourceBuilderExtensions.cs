@@ -143,10 +143,15 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 await devTunnelEnvironmentManager.EnsureUserLoggedInAsync(ct).ConfigureAwait(false);
 
                 // Create the dev tunnel
+                string resolvedTunnelId;
                 try
                 {
                     logger.LogInformation("Creating dev tunnel '{TunnelId}'", tunnelResource.TunnelId);
                     var tunnelStatus = await devTunnelClient.CreateTunnelAsync(tunnelResource.TunnelId, tunnelResource.Options, logger, ct).ConfigureAwait(false);
+                    // The CLI resolves a bare ID and returns its cluster-qualified ID. Use that ID for
+                    // port operations because bare IDs may not resolve tunnels across clusters.
+                    // See https://github.com/microsoft/aspire/issues/18790.
+                    resolvedTunnelId = tunnelStatus.TunnelId;
                     logger.LogDebug("Dev tunnel '{TunnelId}' created", tunnelResource.TunnelId);
                 }
                 catch (Exception ex)
@@ -174,13 +179,13 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
                 async Task DeleteUnmodeledPortsAsync()
                 {
-                    var existingPorts = await devTunnelClient.GetPortListAsync(tunnelResource.ResolvedTunnelId, logger, ct).ConfigureAwait(false);
+                    var existingPorts = await devTunnelClient.GetPortListAsync(resolvedTunnelId, logger, ct).ConfigureAwait(false);
                     var modeledPortNumbers = (await Task.WhenAll(tunnelResource.Ports.Select(p => p.GetTunnelPortAsync(ct).AsTask())).ConfigureAwait(false)).ToHashSet();
                     var unmodeledPorts = existingPorts.Ports.Where(p => !modeledPortNumbers.Contains(p.PortNumber)).ToList();
                     if (unmodeledPorts.Count > 0)
                     {
                         logger.LogInformation("Deleting {Count} unmodeled ports from dev tunnel '{TunnelId}': {Ports}", unmodeledPorts.Count, tunnelResource.TunnelId, string.Join(", ", unmodeledPorts.Select(p => p.PortNumber)));
-                        await Task.WhenAll(unmodeledPorts.Select(p => devTunnelClient.DeletePortAsync(tunnelResource.ResolvedTunnelId, p.PortNumber, logger, ct))).ConfigureAwait(false);
+                        await Task.WhenAll(unmodeledPorts.Select(p => devTunnelClient.DeletePortAsync(resolvedTunnelId, p.PortNumber, logger, ct))).ConfigureAwait(false);
                     }
                 }
 
@@ -200,7 +205,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                     try
                     {
                         _ = await devTunnelClient.CreatePortAsync(
-                                portResource.DevTunnel.ResolvedTunnelId,
+                                resolvedTunnelId,
                                 tunnelPort,
                                 portResource.Options,
                                 portLogger,

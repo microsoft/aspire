@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model.Otlp;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.Extensions.Localization;
 
@@ -94,24 +93,6 @@ public sealed class SpanHasAttributeTelemetryFilter : TelemetryFilter
         _attributeNames = attributeNames;
     }
 
-    public override IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input)
-    {
-        throw new NotSupportedException();
-    }
-
-    public override bool Apply(OtlpSpan span)
-    {
-        foreach (var attributeName in _attributeNames)
-        {
-            if (!string.IsNullOrEmpty(span.Attributes.GetValue(attributeName)))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     public override bool Equals(TelemetryFilter? other)
     {
         return false;
@@ -135,24 +116,6 @@ public sealed class SpanNoMatchTelemetryFilter : TelemetryFilter
         _filters = filters;
     }
 
-    public override IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input)
-    {
-        throw new NotSupportedException();
-    }
-
-    public override bool Apply(OtlpSpan span)
-    {
-        foreach (var filter in _filters)
-        {
-            if (filter.Apply(span))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     public override bool Equals(TelemetryFilter? other)
     {
         return false;
@@ -174,35 +137,6 @@ public sealed class SpanScopePrefixTelemetryFilter : TelemetryFilter
         }
 
         _scopePrefixes = scopePrefixes;
-    }
-
-    public override IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input)
-    {
-        throw new NotSupportedException();
-    }
-
-    public override bool Apply(OtlpSpan span)
-    {
-        foreach (var scopePrefix in _scopePrefixes)
-        {
-            if (span.Scope.Name.StartsWith(scopePrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                // Exact match.
-                if (span.Scope.Name.Length == scopePrefix.Length)
-                {
-                    return true;
-                }
-                // Starts with prefix followed by delimiter.
-                if (span.Scope.Name[scopePrefix.Length] == '.')
-                {
-                    return true;
-                }
-
-                return false;
-            }
-        }
-
-        return false;
     }
 
     public override bool Equals(TelemetryFilter? other)

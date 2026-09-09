@@ -1822,15 +1822,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 }
 
-public sealed class InMemoryLogTests(ITestOutputHelper testOutputHelper) : LogTests(testOutputHelper)
-{
-    protected override bool UseSqlite => false;
-}
-
 public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTests(testOutputHelper)
 {
-    protected override bool UseSqlite => true;
-
     [Fact]
     public async Task GetLogSummaries_MoreThanSqliteVariableLimit_ReturnsTraceDisplayData()
     {

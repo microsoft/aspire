@@ -387,10 +387,11 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             builder.addContainer("consumer", "nginx")
                 .withReference(db);
 
-            // build() flushes all pending promises before proceeding. If the
-            // flush implementation deadlocks (e.g. re-awaiting a promise tracked
-            // after flush starts), this line hangs and the test times out.
-            await builder.build().run();
+            // Invoke build() through another fluent promise. The build wrapper and its
+            // synchronously chained run() call must stay out of build()'s promise flush.
+            await builder.addHealthCheck("chained-build", async () => ({}))
+                .build()
+                .run();
             """;
 
         File.WriteAllText(appHostPath, newContent);

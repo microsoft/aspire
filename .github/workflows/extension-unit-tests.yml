@@ -1,0 +1,116 @@
+name: VS Code extension unit tests
+
+on:
+  workflow_call:
+    inputs:
+      packageVsix:
+        required: false
+        type: boolean
+        default: true
+      extensionVersionOverride:
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  extension_tests_win:
+    name: Run VS Code extension unit tests (Windows)
+    runs-on: windows-latest
+    env:
+      NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    defaults:
+      run:
+        working-directory: ./extension
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Setup Node.js environment
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22.x'
+      - name: Install Corepack
+        run: |
+          # Scope Corepack's cache to this job so prepareCorepackYarn.mjs cannot
+          # collide with any other build sharing the runner's user profile.
+          # Cannot be set at job-level env: the `runner` context is unavailable
+          # in job env evaluation, so we forward it through $GITHUB_ENV instead.
+          $CorepackHome = Join-Path $env:RUNNER_TEMP 'corepack'
+          $env:COREPACK_HOME = $CorepackHome
+          "COREPACK_HOME=$CorepackHome" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          $CorepackVersion = (Get-Content -Raw -Path 'scripts/corepack-version.txt').Trim()
+          # The hosted Windows image already has a yarn shim in npm's global
+          # prefix. The npm Corepack package owns that shim too, so force only
+          # in CI where the tool install is isolated to this ephemeral job.
+          npm install --global --force --registry "$env:NPM_REGISTRY" "corepack@$CorepackVersion"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $npmGlobalBin = (npm prefix --global).Trim()
+          $env:PATH = "$npmGlobalBin$([IO.Path]::PathSeparator)$env:PATH"
+          $npmGlobalBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          $installed = (corepack --version).Trim()
+          if ($installed -ne $CorepackVersion) {
+            Write-Error "corepack version mismatch: expected $CorepackVersion, got '$installed'. The bundled Corepack on PATH may be taking precedence over the npm-global install."
+            exit 1
+          }
+
+          corepack enable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Seed Corepack's cache from the internal dnceng npm feed. Corepack's
+          # built-in `corepack prepare --activate` would download Yarn 1.x from
+          # its hardcoded upstream endpoint rather than the configured internal
+          # feed, bypassing the dependency source this workflow is supposed to
+          # validate. The shared prepareCorepackYarn.mjs script does the
+          # equivalent via `npm pack` against $NPM_REGISTRY, then drops the same
+          # on-disk layout Corepack would have written.
+          node ./scripts/prepareCorepackYarn.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          corepack yarn --version
+      - name: Validate lockfile registries
+        # Allowlist scoped to lines starting with "resolved" (the only lines in
+        # yarn.lock that carry a tarball URL — `npm:` aliases don't).
+        # CONTRIBUTING.MD asks contributors to regenerate yarn.lock through the
+        # internal dotnet-public-npm feed; an allowlist catches drift to any
+        # other public mirror or tarball host.
+        run: |
+          node -e "const fs = require('fs'); const allow = 'pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm'; const bad = fs.readFileSync('yarn.lock', 'utf8').split(/\r?\n/).filter(l => /^\s*resolved\s+\x22/.test(l)).filter(l => !l.includes(allow)); if (bad.length) { throw new Error('extension/yarn.lock contains resolved entries outside the internal dotnet-public-npm feed. Regenerate it through the internal feed before restoring. First offender -> ' + bad[0]); }"
+      - name: Install dependencies
+        run: corepack yarn install --frozen-lockfile --non-interactive
+      - name: Run tests
+        run: corepack yarn test
+      # The VSIX steps run even when 'Run tests' failed. The E2E workflow installs
+      # this artifact but deliberately runs independently from the unit-test result,
+      # so packaging must use !cancelled() rather than the default success() check.
+      - name: Override extension version for PR builds
+        if: ${{ inputs.packageVsix && !cancelled() && inputs.extensionVersionOverride != '' }}
+        run: corepack yarn version --new-version "${{ inputs.extensionVersionOverride }}" --no-git-tag-version
+      - name: Package VSIX
+        if: ${{ inputs.packageVsix && !cancelled() }}
+        env:
+          ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"
+        run: corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
+      - name: Assert E2E VSIX contains bridge
+        if: ${{ inputs.packageVsix && !cancelled() }}
+        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present
+      # Packaged separately because the E2E VSIX intentionally contains the bridge.
+      # No env override here reproduces the shipping build, where webpack stubs the
+      # bridge in production mode and step-scoped env values do not leak.
+      - name: Package production VSIX
+        if: ${{ inputs.packageVsix && !cancelled() }}
+        run: corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix
+      - name: Assert production VSIX excludes bridge
+        if: ${{ inputs.packageVsix && !cancelled() }}
+        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent
+      - name: Upload VSIX
+        if: ${{ inputs.packageVsix && !cancelled() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: aspire-extension
+          path: extension/out/aspire-extension.vsix

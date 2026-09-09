@@ -32,6 +32,14 @@ cd "$WORK_DIR"
 echo "Creating Java apphost project..."
 aspire init --language java --non-interactive -d
 
+cat <<'EOF' > appsettings.json
+{
+  "PolyglotTest": {
+    "Value": "from-appsettings"
+  }
+}
+EOF
+
 echo "Adding Redis integration..."
 aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     echo "aspire add failed, manually updating settings.json..."
@@ -45,10 +53,10 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     fi
 }
 
-echo "Configuring AppHost.java with Redis..."
+echo "Configuring AppHost.java with appsettings validation and Redis..."
 if grep -q "builder.build().run();" AppHost.java; then
-    sed -i '/builder.build().run();/i\        builder.addRedis("cache")\n            .withImageRegistry("netaspireci.azurecr.io");' AppHost.java
-    echo "✅ Redis configuration added to AppHost.java"
+    sed -i '/builder.build().run();/i\        var appSettingsValue = builder.getConfiguration().getConfigValue("PolyglotTest:Value");\n        if (!"from-appsettings".equals(appSettingsValue)) {\n            throw new IllegalStateException("Expected appsettings.json value, got \\"" + appSettingsValue + "\\"");\n        }\n\n        builder.addRedis("cache")\n            .withImageRegistry("netaspireci.azurecr.io");' AppHost.java
+    echo "✅ appsettings validation and Redis configuration added to AppHost.java"
 fi
 
 echo "=== AppHost.java ==="

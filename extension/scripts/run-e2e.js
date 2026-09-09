@@ -44,9 +44,24 @@ const matchedTestSpecs = verifyExtesterFeedOnly ? [] : findSpecMatches(testSpec)
 //
 // ASPIRE_EXTENSION_E2E_ENABLE_JAVA remains as an explicit override for running a Java spec through
 // a glob, or for forcing the Java workspace off while debugging the runner.
+const matchedJavaTestSpecs = matchedTestSpecs.filter(isJavaSpecPath);
+const javaStarterTestSpecs = matchedJavaTestSpecs.filter(isJavaStarterSpecPath);
+const javaPlaygroundTestSpecs = matchedJavaTestSpecs.filter(specPath => !isJavaStarterSpecPath(specPath));
+const matchedNonJavaTestSpecs = matchedTestSpecs.filter(specPath => !isJavaSpecPath(specPath));
+if (matchedJavaTestSpecs.length > 0 && matchedNonJavaTestSpecs.length > 0) {
+  const javaMatches = matchedJavaTestSpecs.map(specPath => toPosixPath(path.relative(extensionRoot, specPath))).sort();
+  const nonJavaMatches = matchedNonJavaTestSpecs.map(specPath => toPosixPath(path.relative(extensionRoot, specPath))).sort();
+  throw new Error(`Java E2E spec selection mixes Java and non-Java workspace fixtures. Java matches: ${javaMatches.join(', ')}. Non-Java matches: ${nonJavaMatches.join(', ')}. Split these specs into separate runs.`);
+}
 const enableJavaE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_JAVA
   ? process.env.ASPIRE_EXTENSION_E2E_ENABLE_JAVA === 'true'
-  : matchedTestSpecs.length > 0 && matchedTestSpecs.every(isJavaSpecPath);
+  : matchedJavaTestSpecs.length > 0 && matchedNonJavaTestSpecs.length === 0;
+if (javaStarterTestSpecs.length > 0 && javaPlaygroundTestSpecs.length > 0) {
+  const starterMatches = javaStarterTestSpecs.map(specPath => toPosixPath(path.relative(extensionRoot, specPath))).sort();
+  const playgroundMatches = javaPlaygroundTestSpecs.map(specPath => toPosixPath(path.relative(extensionRoot, specPath))).sort();
+  throw new Error(`Java E2E spec selection mixes workspace fixtures. Starter matches: ${starterMatches.join(', ')}. Playground matches: ${playgroundMatches.join(', ')}. Split these specs into separate runs.`);
+}
+const useJavaStarterWorkspace = enableJavaE2E && javaStarterTestSpecs.length > 0;
 // redhat.java supplies the language server, which is what produces workspace diagnostics and the
 // classpath the debug adapter launches against. vscjava.vscode-java-debug supplies the `java` debug
 // adapter the Aspire debugger delegates to, and vscjava.vscode-java-dependency is a hard activation
@@ -124,9 +139,11 @@ const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTER
 const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
 const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
 const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
+const winUiReadyMarkerPath = path.join(workspaceRoot, 'winui-e2e-ready.txt');
 const runRootNuGetConfigPath = path.join(shortRunRoot, 'NuGet.config');
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
 const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
+const enableWinUiE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';
 const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';
 let cliPathForCleanup;
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
@@ -321,6 +338,7 @@ function logE2eConfiguration() {
   console.log(`  current CLI regressions: ${process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'skipped' : 'included'}`);
   console.log(`  Azure Functions: ${enableAzureFunctionsE2E ? 'enabled' : 'disabled'}`);
   console.log(`  Java: ${enableJavaE2E ? 'enabled' : 'disabled'}`);
+  console.log(`  WinUI: ${enableWinUiE2E ? 'enabled' : 'disabled'}`);
   console.log(`  results: ${path.relative(extensionRoot, resultsDir)}`);
   console.log(`  storage diagnostics: ${path.relative(extensionRoot, storageDiagnosticsDir)}`);
   console.log(`  workspace diagnostics: ${path.relative(extensionRoot, workspaceDiagnosticsDir)}`);
@@ -335,6 +353,10 @@ function logE2eConfiguration() {
  */
 function isJavaSpecPath(specPath) {
   return path.basename(specPath).toLowerCase().startsWith('java');
+}
+
+function isJavaStarterSpecPath(specPath) {
+  return path.basename(specPath).toLowerCase().startsWith('javastarterprojectmodel.');
 }
 
 function logStep(name) {
@@ -422,7 +444,7 @@ function escapeRegExp(value) {
 }
 
 function toPosixPath(value) {
-  return path.resolve(value).replace(/^\\\\\?\\/, '').split(path.sep).join('/');
+  return value.replace(/^\\\\\?\\/, '').split(path.sep).join('/');
 }
 
 function writeVsCodeLocaleFile() {
@@ -614,7 +636,7 @@ async function main() {
     validateCliPath(cliPath);
     const appHostSdkVersion = resolveAppHostSdkVersion(cliPath);
     prepareWorkspaceFixture(cliPath, appHostSdkVersion);
-    copyJavaPlaygroundIntoWorkspace(bundledCliPath);
+    prepareJavaWorkspace(bundledCliPath, appHostSdkVersion);
     restoreWorkspaceFixture();
     const vsixPath = process.env.ASPIRE_EXTENSION_E2E_VSIX
       ? path.resolve(process.env.ASPIRE_EXTENSION_E2E_VSIX)
@@ -624,7 +646,7 @@ async function main() {
       throw new Error(`VSIX not found at ${vsixPath}`);
     }
     validateVsix(vsixPath);
-    const azureFunctionsVsixPaths = resolveAzureFunctionsVsixPaths();
+    const debuggerVsixPaths = resolveDebuggerVsixPaths();
     if (enableAzureFunctionsE2E) {
       validateAzureFunctionsCoreTools();
     }
@@ -653,6 +675,7 @@ async function main() {
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
       ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
+      ASPIRE_EXTENSION_E2E_ENABLE_WINUI: enableWinUiE2E ? 'true' : 'false',
       VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
       LANG: 'C.UTF-8',
       LC_ALL: 'C.UTF-8',
@@ -697,9 +720,9 @@ async function main() {
 
     logStep('Installing VSIX');
     run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', vsixPath], extestEnv, { timeout: 300000 });
-    for (const azureFunctionsVsix of azureFunctionsVsixPaths) {
-      logStep(`Installing ${azureFunctionsVsix.displayName} VSIX`);
-      run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', azureFunctionsVsix.path], extestEnv, { timeout: 300000 });
+    for (const debuggerVsix of debuggerVsixPaths) {
+      logStep(`Installing ${debuggerVsix.displayName} VSIX`);
+      run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', debuggerVsix.path], extestEnv, { timeout: 300000 });
     }
     assertJavaExtensionsRegistered();
 
@@ -847,16 +870,15 @@ function validateCliPath(resolvedCliPath) {
   }
 }
 
-function resolveAzureFunctionsVsixPaths() {
-  if (!enableAzureFunctionsE2E) {
+function resolveDebuggerVsixPaths() {
+  if (!enableAzureFunctionsE2E && !enableWinUiE2E) {
     return [];
   }
 
-  // Aspire advertises its azure-functions launch capability only when both the C# and
-  // Azure Functions extensions are installed. Install C# with its required .NET runtime
-  // dependency, plus the Azure Resource Groups extension that Functions activates directly.
-  // All dependencies must be explicit because the E2E VS Code instance runs offline.
-  return [
+  // .NET resource shards need the C# extension and its .NET runtime dependency. Azure Functions
+  // additionally needs the Azure Resource Groups and Functions extensions before Aspire advertises
+  // that launch capability. All dependencies must be explicit because the E2E instance runs offline.
+  const vsixPaths = [
     {
       displayName: '.NET Install Tool',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX'),
@@ -865,15 +887,18 @@ function resolveAzureFunctionsVsixPaths() {
       displayName: 'C#',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX'),
     },
-    {
+  ];
+  if (enableAzureFunctionsE2E) {
+    vsixPaths.push({
       displayName: 'Azure Resource Groups',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX'),
-    },
-    {
+    }, {
       displayName: 'Azure Functions',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX'),
-    },
-  ];
+    });
+  }
+
+  return vsixPaths;
 }
 
 /**
@@ -900,7 +925,7 @@ function copyJavaPlaygroundIntoWorkspace(bundledCliPath) {
   // `.aspire/` is generated rather than checked in, so it has to exist before the copy: it is what
   // the AppHost's `import aspire.*` statements resolve against, and the generated sources are the
   // very thing the diagnostics test measures.
-  ensureJavaAppHostSdkGenerated(bundledCliPath, source);
+  ensureJavaAppHostSdkGenerated(bundledCliPath, path.join(source, 'JavaSpringBoot.AppHost.Java'));
 
   logStep('Copying the Java Spring Boot playground into the E2E workspace');
   fs.cpSync(source, workspaceRoot, {
@@ -939,6 +964,70 @@ function copyJavaPlaygroundIntoWorkspace(bundledCliPath) {
   fs.rmSync(path.join(workspaceRoot, 'aspire.config.json'), { force: true });
 }
 
+function prepareJavaWorkspace(bundledCliPath, appHostSdkVersion) {
+  if (!enableJavaE2E) {
+    return;
+  }
+
+  if (!useJavaStarterWorkspace) {
+    copyJavaPlaygroundIntoWorkspace(bundledCliPath);
+    return;
+  }
+
+  assertWorkspaceRootIsNotGitIgnored();
+  logStep('Generating the Java starter in the E2E workspace');
+
+  for (const entry of fs.readdirSync(workspaceRoot)) {
+    fs.rmSync(path.join(workspaceRoot, entry), { recursive: true, force: true });
+  }
+
+  const result = spawnSync(bundledCliPath, [
+    'new',
+    'aspire-java-starter',
+    '--name',
+    'JavaStarter',
+    '--output',
+    workspaceRoot,
+    '--version',
+    appHostSdkVersion,
+    '--localhost-tld',
+    'false',
+    '--suppress-agent-init',
+    '--non-interactive',
+    '--nologo',
+  ], {
+    cwd: extensionRoot,
+    env: getAspireCliEnvironment(),
+    shell: false,
+    encoding: 'utf8',
+    timeout: 600000,
+  });
+  fs.writeFileSync(workspaceMarkerFile, `${runId}\n`);
+
+  if (result.error) {
+    throw new Error(`Unable to generate the Java starter: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`Generating the Java starter failed with code ${result.status ?? `signal ${result.signal ?? 'unknown'}`}.
+stdout:
+${result.stdout}
+stderr:
+${result.stderr}`);
+  }
+
+  ensureJavaAppHostSdkGenerated(bundledCliPath, workspaceRoot);
+
+  const settingsPath = path.join(workspaceRoot, '.vscode', 'settings.json');
+  const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : {};
+  settings['aspire.aspireCliExecutablePath'] = bundledCliPath;
+  settings['aspire.enableAutoRestore'] = false;
+  settings['aspire.enableSettingsFileCreationPromptOnStartup'] = false;
+  settings['aspire.appHostDiscoveryTimeoutMs'] = 120000;
+  settings['java.configuration.updateBuildConfiguration'] = 'automatic';
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, undefined, 2));
+}
+
 /**
  * Fails when the Java workspace root is excluded by a .gitignore rule.
  *
@@ -970,14 +1059,12 @@ function assertWorkspaceRootIsNotGitIgnored() {
 }
 
 /**
- * Makes sure the playground's generated Aspire Java SDK exists before it is copied.
+ * Makes sure the Java AppHost's generated Aspire SDK exists before VS Code opens the workspace.
  *
- * `aspire restore` is run in the playground itself rather than in the copied workspace because the
- * generator assemblies resolve relative to the repository's package feed; the same command run
- * against a copy under a temporary directory fails to discover the Java code generator.
+ * `aspire restore` runs in the repository-local AppHost because the generator assemblies resolve
+ * relative to the repository's package feed; a temporary-directory copy cannot discover them.
  */
-function ensureJavaAppHostSdkGenerated(bundledCliPath, playgroundRoot) {
-  const appHostDirectory = path.join(playgroundRoot, 'JavaSpringBoot.AppHost.Java');
+function ensureJavaAppHostSdkGenerated(bundledCliPath, appHostDirectory) {
   const generatedModules = path.join(appHostDirectory, '.aspire', 'modules');
   if (fs.existsSync(generatedModules) && fs.readdirSync(generatedModules).length > 0) {
     return;
@@ -1192,9 +1279,10 @@ function assertExtensionSupportsVsCodeVersion(extensionDirectory, directoryName)
   }
 }
 
-function resolveRequiredVsixPath(environmentVariable) {  const configuredPath = process.env[environmentVariable];
+function resolveRequiredVsixPath(environmentVariable) {
+  const configuredPath = process.env[environmentVariable];
   if (!configuredPath) {
-    throw new Error(`${environmentVariable} is required when ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true.`);
+    throw new Error(`${environmentVariable} is required when a debugger-backed E2E shard is enabled.`);
   }
 
   const resolvedPath = path.resolve(configuredPath);
@@ -1317,7 +1405,13 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   if (enableAzureFunctionsE2E) {
     writeAzureFunctionsProject('AspireE2E.Functions');
   }
-  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E);
+  if (enableWinUiE2E) {
+    if (!isWindows) {
+      throw new Error('The WinUI extension E2E fixture can only run on Windows.');
+    }
+    writeWinUiProject('AspireE2E.WinUI');
+  }
+  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableWinUiE2E);
   writeNuGetConfigIfLocalPackageSourcesExist();
 
   const vscodeDirectory = path.join(workspaceRoot, '.vscode');
@@ -1370,11 +1464,14 @@ function restoreWorkspaceFixture() {
   }
 }
 
-function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions) {
+function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeWinUi) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
   const azureFunctionsPackageReference = includeAzureFunctions
     ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
+    : '';
+  const winUiProjectReference = includeWinUi
+    ? '    <ProjectReference Include="../AspireE2E.WinUI/AspireE2E.WinUI.csproj" />\n'
     : '';
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
 
@@ -1387,13 +1484,16 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
 
   <ItemGroup>
     <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />
-${azureFunctionsPackageReference}  </ItemGroup>
+${winUiProjectReference}${azureFunctionsPackageReference}  </ItemGroup>
 
 </Project>
 `);
 
   const azureFunctionsResource = includeAzureFunctions
     ? `builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n\n`
+    : '';
+  const winUiResource = includeWinUi
+    ? 'builder.AddProject<Projects.AspireE2E_WinUI>("e2e-winui", launchProfileName: "E2E");\n\n'
     : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001
@@ -1477,7 +1577,7 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
     .WithHttpEndpoint(name: "http")
     .WithTerminal();
 
-${azureFunctionsResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
+${winUiResource}${azureFunctionsResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
 {
     var task = await context.ReportingStep
         .CreateTaskAsync("Running E2E run action pipeline step", context.CancellationToken)
@@ -1511,6 +1611,114 @@ builder.Build().Run();
 
 sealed class NoCommandsResource(string name) : Aspire.Hosting.ApplicationModel.Resource(name);
 `);
+}
+
+function writeWinUiProject(projectName) {
+  const runtimeIdentifier = process.arch === 'arm64'
+    ? 'win-arm64'
+    : process.arch === 'x64' ? 'win-x64' : undefined;
+  if (!runtimeIdentifier) {
+    throw new Error(`The WinUI extension E2E fixture does not support ${process.arch}.`);
+  }
+
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  const propertiesDirectory = path.join(projectDirectory, 'Properties');
+  fs.mkdirSync(propertiesDirectory, { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>${projectName}</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RuntimeIdentifier>${runtimeIdentifier}</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />
+  </ItemGroup>
+
+</Project>
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'App.xaml'), `<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="${projectName}.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'App.xaml.cs'), `${csharpFileHeader}using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+
+namespace ${projectName};
+
+public partial class App : Application
+{
+    private Window? _window;
+
+    public App()
+    {
+        InitializeComponent();
+    }
+
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        var readyFile = Environment.GetEnvironmentVariable("ASPIRE_WINUI_E2E_READY_FILE")
+            ?? throw new InvalidOperationException("ASPIRE_WINUI_E2E_READY_FILE is required.");
+        File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");
+
+        _window = new Window
+        {
+            Content = new TextBlock { Text = "Aspire WinUI E2E" }
+        };
+        _window.Activate();
+    }
+}
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'app.manifest'), `<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="${projectName}.app" />
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+</assembly>
+`);
+
+  fs.writeFileSync(path.join(propertiesDirectory, 'launchSettings.json'), JSON.stringify({
+    profiles: {
+      E2E: {
+        commandName: 'Project',
+        environmentVariables: {
+          ASPIRE_WINUI_E2E_READY_FILE: winUiReadyMarkerPath,
+        },
+      },
+    },
+  }, undefined, 2));
 }
 
 function writeAzureFunctionsProject(projectName) {
@@ -2129,10 +2337,15 @@ function copyWorkspaceProjectSources() {
 
     const sourceDirectory = path.join(workspaceRoot, entry.name);
     const destinationDirectory = path.join(workspaceDiagnosticsDir, entry.name);
+    copyIfExists(path.join(sourceDirectory, 'App.xaml'), path.join(destinationDirectory, 'App.xaml'));
+    copyIfExists(path.join(sourceDirectory, 'App.xaml.cs'), path.join(destinationDirectory, 'App.xaml.cs'));
     copyIfExists(path.join(sourceDirectory, 'AppHost.cs'), path.join(destinationDirectory, 'AppHost.cs'));
     copyIfExists(path.join(sourceDirectory, 'Program.cs'), path.join(destinationDirectory, 'Program.cs'));
+    copyIfExists(path.join(sourceDirectory, 'app.manifest'), path.join(destinationDirectory, 'app.manifest'));
+    copyIfExists(path.join(sourceDirectory, 'Properties', 'launchSettings.json'), path.join(destinationDirectory, 'Properties', 'launchSettings.json'));
     copyIfExists(path.join(sourceDirectory, `${entry.name}.csproj`), path.join(destinationDirectory, `${entry.name}.csproj`));
   }
+  copyIfExists(winUiReadyMarkerPath, path.join(workspaceDiagnosticsDir, path.basename(winUiReadyMarkerPath)));
 }
 
 function redactTextFilesForArtifacts(directory) {

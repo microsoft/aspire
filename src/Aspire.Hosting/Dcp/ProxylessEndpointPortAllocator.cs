@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.Dcp;
 
 /// <summary>
-/// Allocates and tracks public ports for proxyless endpoints that do not specify one.
+/// Allocates and tracks non-ephemeral ports that Aspire selects before DCP starts a workload.
 /// </summary>
 /// <remarks>
 /// Uses a stateful hybrid scan over the configured non-ephemeral port range. The allocator starts
@@ -97,6 +97,16 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
             var port = AllocatePortCore(endpoint.Protocol);
             _reservedPorts.Add(endpoint, port);
             return port;
+        }
+    }
+
+    public int AllocatePort(ProtocolType protocol)
+    {
+        lock (_lock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            return AllocatePortCore(protocol);
         }
     }
 

@@ -76,6 +76,8 @@ internal sealed class RunCommand : BaseCommand
     private readonly TimeProvider _timeProvider;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
+    // Match BackchannelLoggerProvider's 1,000-entry replay buffer.
+    private const int MaxRememberedAppHostLogSequenceNumbers = 1000;
 
     private static readonly TimeSpan s_appHostStartupCancellationTimeout = TimeSpan.FromSeconds(5);
 
@@ -99,6 +101,9 @@ internal sealed class RunCommand : BaseCommand
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation
     // error. Keep guest AppHost startup waits alive briefly so those failures are reported instead of hidden.
     private static readonly TimeSpan s_startupFailureObservationWindow = TimeSpan.FromSeconds(2);
+
+    // A wedged extension must degrade to legacy output instead of stalling AppHost log capture.
+    private static readonly TimeSpan s_structuredLogSupportProbeTimeout = TimeSpan.FromSeconds(2);
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
 
@@ -342,7 +347,6 @@ internal sealed class RunCommand : BaseCommand
 
             // Start the project run as a pending task - we'll handle UX while it runs
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
-            var startupStartTimestamp = _timeProvider.GetTimestamp();
             runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             // When this is a detached child, watch the foreground launcher during startup. If the launcher
@@ -372,29 +376,39 @@ internal sealed class RunCommand : BaseCommand
             bool buildSuccess;
             using (var waitForBuildActivity = _profilingTelemetry.StartRunAppHostWaitForBuild())
             {
-                try
+                // Restore and build happen before the AppHost can begin startup, so they must not
+                // consume ASPIRE_CLI_START_TIMEOUT. User cancellation still stops an unexpectedly long build.
+                var completedTask = await Task.WhenAny(buildCompletionSource.Task, runTask).WaitAsync(cancellationToken).ConfigureAwait(false);
+                if (completedTask == runTask)
                 {
-                    buildSuccess = await buildCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken);
-                }
-                catch (TimeoutException)
-                {
-                    runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                    await CancelAppHostStartupAsync(runCts, runTask, cancellationToken).ConfigureAwait(false);
-                    return CreateStartupTimeoutResult(timeoutSeconds);
+                    // A project that faults or exits before signaling build completion must not leave
+                    // this unbounded wait pending. The existing build-failure path observes runTask.
+                    buildCompletionSource.TrySetResult(false);
                 }
 
+                buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
                 waitForBuildActivity.SetAppHostBuildSuccess(buildSuccess);
             }
             if (!buildSuccess)
             {
+                var runExitCode = await runTask;
+                if (cancellationToken.IsCancellationRequested && runExitCode == CliExitCodes.Cancelled)
+                {
+                    runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
+                    return CommandResult.Cancelled(CliExitCodes.Success);
+                }
+
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "build_failed");
                 // Build failed - display captured output and return exit code
                 if (context.OutputCollector is { } outputCollector)
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                return CommandResult.Failure(await runTask, InteractionServiceStrings.ProjectCouldNotBeBuilt);
+                return CommandResult.Failure(
+                    runExitCode == CliExitCodes.Success ? CliExitCodes.FailedToDotnetRunAppHost : runExitCode,
+                    InteractionServiceStrings.ProjectCouldNotBeBuilt);
             }
+            var startupStartTimestamp = _timeProvider.GetTimestamp();
             var appHostStartupOutputStartIndex = context.OutputCollector?.GetLines().Count() ?? 0;
 
             // If --wait-for-debugger, display a message so the user knows the AppHost is paused.
@@ -476,12 +490,17 @@ internal sealed class RunCommand : BaseCommand
                 }
                 else
                 {
-                    // We want to display resource information in remote environments.
-                    // Resources update over time so we'll use a live display.
-                    // It is used to show discovered endpoints as they come in over the backchannel.
+                    // Remote environments surface endpoints discovered over the backchannel. Interactive
+                    // terminals replace a cumulative snapshot in place, while redirected output appends
+                    // each endpoint transition once without cursor manipulation.
                     var discoveredEndpoints = new List<(string Resource, string Endpoint)>();
                     var endpointsLocalizedString = RunCommandStrings.Endpoints;
                     var showCtrlC = !ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
+
+                    Markup BuildEndpointMarkup(string resource, string endpoint)
+                    {
+                        return new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(InteractionService, endpoint)}");
+                    }
 
                     IRenderable BuildLiveRenderable()
                     {
@@ -502,7 +521,7 @@ internal sealed class RunCommand : BaseCommand
                                     i == 0
                                         ? new Align(new Markup($"[bold green]{endpointsLocalizedString}[/]:"), HorizontalAlignment.Right)
                                         : Text.Empty,
-                                    new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(InteractionService, endpoint)}")
+                                    BuildEndpointMarkup(resource, endpoint)
                                 );
                             }
 
@@ -517,20 +536,60 @@ internal sealed class RunCommand : BaseCommand
                         return rows.Count > 0 ? new Rows(rows) : Text.Empty;
                     }
 
+                    IRenderable BuildStaticEndpointRenderable(string resource, string endpoint, bool isFirstEndpoint)
+                    {
+                        var endpointsGrid = new Grid();
+                        endpointsGrid.AddColumn();
+                        endpointsGrid.AddColumn();
+                        endpointsGrid.Columns[0].Width = longestLocalizedLengthWithColon;
+
+                        if (isFirstEndpoint)
+                        {
+                            endpointsGrid.AddRow(Text.Empty, Text.Empty);
+                        }
+
+                        endpointsGrid.AddRow(
+                            isFirstEndpoint
+                                ? new Align(new Markup($"[bold green]{endpointsLocalizedString}[/]:"), HorizontalAlignment.Right)
+                                : Text.Empty,
+                            BuildEndpointMarkup(resource, endpoint)
+                        );
+
+                        return new Padder(endpointsGrid, new Padding(3, 0));
+                    }
+
+                    async Task ProcessResourceStatesAsync(Action<string, string> endpointWriter)
+                    {
+                        var resourceStates = backchannel.GetResourceStatesAsync(cancellationToken);
+                        await foreach (var resourceState in resourceStates.WithCancellation(cancellationToken))
+                        {
+                            ProcessResourceState(resourceState, endpointWriter);
+                        }
+                    }
+
                     try
                     {
-                        await InteractionService.DisplayLiveAsync(BuildLiveRenderable(), async updateTarget =>
+                        if (_hostEnvironment.SupportsInteractiveOutput)
                         {
-                            var resourceStates = backchannel.GetResourceStatesAsync(cancellationToken);
-                            await foreach (var resourceState in resourceStates.WithCancellation(cancellationToken))
-                            {
-                                ProcessResourceState(resourceState, (resource, endpoint) =>
+                            await InteractionService.DisplayLiveAsync(
+                                BuildLiveRenderable(),
+                                updateTarget => ProcessResourceStatesAsync((resource, endpoint) =>
                                 {
                                     discoveredEndpoints.Add((resource, endpoint));
                                     updateTarget(BuildLiveRenderable());
-                                });
-                            }
-                        });
+                                }));
+                        }
+                        else
+                        {
+                            AppendCtrlCMessage(longestLocalizedLengthWithColon);
+
+                            var isFirstEndpoint = true;
+                            await ProcessResourceStatesAsync((resource, endpoint) =>
+                            {
+                                InteractionService.DisplayRenderable(BuildStaticEndpointRenderable(resource, endpoint, isFirstEndpoint));
+                                isFirstEndpoint = false;
+                            });
+                        }
                     }
                     catch (ConnectionLostException) when (cancellationToken.IsCancellationRequested)
                     {
@@ -606,7 +665,10 @@ internal sealed class RunCommand : BaseCommand
                 }
             }
         }
-        catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
+        catch (OperationCanceledException ex) when (
+            ex.CancellationToken == cancellationToken ||
+            ex is ExtensionOperationCanceledException ||
+            (runCts is not null && ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested))
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
 
@@ -1107,22 +1169,128 @@ internal sealed class RunCommand : BaseCommand
         {
             await Task.Yield();
 
-            var logEntries = backchannel.GetAppHostLogEntriesAsync(cancellationToken);
+            // Start the probe without awaiting it so extension responsiveness never delays
+            // subscription to the AppHost stream or writes to the diagnostic log file.
+            var structuredLogSupportProbe = ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out var extensionBackchannel)
+                ? SupportsStructuredAppHostLogsAsync(fileLoggerProvider, extensionBackchannel, cancellationToken)
+                : Task.FromResult(false);
 
-            await foreach (var entry in logEntries.WithCancellation(cancellationToken))
+            var logEntries = backchannel.GetAppHostLogEntriesAsync(cancellationToken);
+            bool? extensionSupportsStructuredLogs = null;
+            var pendingExtensionEntries = new List<BackchannelLogEntry>();
+            var recentSequenceIdentities = new HashSet<(Guid GenerationId, long SequenceNumber)>(MaxRememberedAppHostLogSequenceNumbers);
+            var sequenceIdentityOrder = new Queue<(Guid GenerationId, long SequenceNumber)>(MaxRememberedAppHostLogSequenceNumbers);
+
+            try
             {
-                if (ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out _))
+                using var enumerationCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                await using var enumerator = logEntries.GetAsyncEnumerator(enumerationCancellationSource.Token);
+                Task<bool>? moveNextTask = null;
+
+                try
                 {
-                    if (entry.LogLevel is not LogLevel.Trace and not LogLevel.Debug)
+                    while (true)
                     {
-                        // Send only information+ level logs to the extension host.
-                        extensionInteractionService.WriteDebugSessionMessage(entry.Message, entry.LogLevel is not LogLevel.Error and not LogLevel.Critical, "\x1b[2m");
+                        moveNextTask ??= enumerator.MoveNextAsync().AsTask();
+
+                        // Once an entry is buffered, keep one MoveNextAsync in flight and observe the
+                        // capability probe alongside it. This preserves file capture throughput while
+                        // allowing an idle stream to flush as soon as the extension answers.
+                        if (extensionSupportsStructuredLogs is null && pendingExtensionEntries.Count > 0)
+                        {
+                            var probeCompletedFirst = structuredLogSupportProbe.IsCompleted ||
+                                await Task.WhenAny(moveNextTask, structuredLogSupportProbe).ConfigureAwait(false) == structuredLogSupportProbe;
+                            if (probeCompletedFirst)
+                            {
+                                extensionSupportsStructuredLogs = await structuredLogSupportProbe.ConfigureAwait(false);
+                                ForwardPendingAppHostLogEntriesToExtension(
+                                    extensionInteractionService!,
+                                    extensionSupportsStructuredLogs.Value,
+                                    pendingExtensionEntries);
+                                continue;
+                            }
+                        }
+
+                        var hasEntry = await moveNextTask.ConfigureAwait(false);
+                        moveNextTask = null;
+                        if (!hasEntry)
+                        {
+                            break;
+                        }
+
+                        var entry = enumerator.Current;
+
+                        // A reconnect replays the AppHost's 1,000-entry buffer. Remember exact
+                        // generation/sequence pairs to preserve delayed delivery and distinguish a
+                        // replacement AppHost. Sequence zero comes from older AppHosts and has no
+                        // stable identity.
+                        if (entry.SequenceNumber > 0)
+                        {
+                            var sequenceIdentity = (entry.GenerationId, entry.SequenceNumber);
+                            if (!recentSequenceIdentities.Add(sequenceIdentity))
+                            {
+                                continue;
+                            }
+
+                            sequenceIdentityOrder.Enqueue(sequenceIdentity);
+                            if (sequenceIdentityOrder.Count > MaxRememberedAppHostLogSequenceNumbers)
+                            {
+                                recentSequenceIdentities.Remove(sequenceIdentityOrder.Dequeue());
+                            }
+                        }
+
+                        var shortCategory = FileLoggerProvider.GetShortCategoryName(entry.CategoryName);
+                        var message = string.IsNullOrEmpty(entry.Exception)
+                            ? entry.Message
+                            : $"{entry.Message}{Environment.NewLine}{entry.Exception}";
+                        fileLoggerProvider.WriteLog(entry.Timestamp, entry.LogLevel, $"AppHost/{shortCategory}", message);
+
+                        // Preserve the previous RPC volume. Trace and Debug still arrive through the
+                        // AppHost console provider and are styled by the extension.
+                        if (extensionInteractionService is null || entry.LogLevel is LogLevel.Trace or LogLevel.Debug)
+                        {
+                            continue;
+                        }
+
+                        if (extensionSupportsStructuredLogs is null)
+                        {
+                            pendingExtensionEntries.Add(entry);
+                            continue;
+                        }
+
+                        ForwardAppHostLogEntryToExtension(extensionInteractionService, extensionSupportsStructuredLogs.Value, entry);
                     }
                 }
+                finally
+                {
+                    if (moveNextTask is not null)
+                    {
+                        // Forwarding can fail while the stream read is still pending. Cancel and
+                        // settle that read before DisposeAsync touches the enumerator.
+                        await enumerationCancellationSource.CancelAsync().ConfigureAwait(false);
+                        try
+                        {
+                            await moveNextTask.ConfigureAwait(false);
+                        }
+                        catch (Exception) when (enumerationCancellationSource.IsCancellationRequested)
+                        {
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+            {
+                // The AppHost process exited and the backchannel connection was lost. This is
+                // expected during orderly shutdown, but buffered records still need to be flushed.
+            }
 
-                // Write to the unified log file via FileLoggerProvider
-                var shortCategory = FileLoggerProvider.GetShortCategoryName(entry.CategoryName);
-                fileLoggerProvider.WriteLog(entry.Timestamp, entry.LogLevel, $"AppHost/{shortCategory}", entry.Message);
+            if (!cancellationToken.IsCancellationRequested && extensionInteractionService is not null && pendingExtensionEntries.Count > 0)
+            {
+                extensionSupportsStructuredLogs ??= await structuredLogSupportProbe.ConfigureAwait(false);
+                ForwardPendingAppHostLogEntriesToExtension(
+                    extensionInteractionService,
+                    extensionSupportsStructuredLogs.Value,
+                    pendingExtensionEntries);
             }
         }
         catch (OperationCanceledException)
@@ -1137,6 +1305,72 @@ internal sealed class RunCommand : BaseCommand
             // token fires because logCaptureCancellationSource.Cancel() runs in the finally
             // block after the AppHost process has already exited.
             return;
+        }
+    }
+
+    private static void ForwardPendingAppHostLogEntriesToExtension(
+        IExtensionInteractionService extensionInteractionService,
+        bool extensionSupportsStructuredLogs,
+        List<BackchannelLogEntry> pendingExtensionEntries)
+    {
+        foreach (var pendingEntry in pendingExtensionEntries)
+        {
+            ForwardAppHostLogEntryToExtension(extensionInteractionService, extensionSupportsStructuredLogs, pendingEntry);
+        }
+
+        pendingExtensionEntries.Clear();
+    }
+
+    private static void ForwardAppHostLogEntryToExtension(
+        IExtensionInteractionService extensionInteractionService,
+        bool extensionSupportsStructuredLogs,
+        BackchannelLogEntry entry)
+    {
+        // Older AppHosts deserialize the added sequence as 0. Only numbered records have
+        // the identity needed to suppress reconnect replays safely.
+        if (extensionSupportsStructuredLogs && entry.SequenceNumber > 0)
+        {
+            extensionInteractionService.WriteAppHostLogEntry(new ExtensionAppHostLogEntry
+            {
+                GenerationId = entry.GenerationId,
+                SequenceNumber = entry.SequenceNumber,
+                LogLevel = entry.LogLevel.ToString(),
+                Message = entry.Message,
+                CategoryName = entry.CategoryName,
+                EventId = entry.EventId.Id,
+                Exception = entry.Exception,
+            });
+        }
+        else
+        {
+            // Older extensions only accept plain debug-session messages.
+            extensionInteractionService.WriteDebugSessionMessage(entry.Message, entry.LogLevel is not LogLevel.Error and not LogLevel.Critical, "\x1b[2m");
+        }
+    }
+
+    private static async Task<bool> SupportsStructuredAppHostLogsAsync(
+        FileLoggerProvider fileLoggerProvider,
+        IExtensionBackchannel extensionBackchannel,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.AppHostLogOutput, cancellationToken)
+                .WaitAsync(s_structuredLogSupportProbeTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            fileLoggerProvider.WriteLog(
+                DateTimeOffset.UtcNow,
+                LogLevel.Debug,
+                "Aspire.Cli",
+                "Structured AppHost log capability probe failed; using legacy debug console output.",
+                ex);
+            return false;
         }
     }
 

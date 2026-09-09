@@ -78,18 +78,24 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
     }
 
     /**
-     * Returns the resolved AppHost path from the active editor or workspace settings, or null if none is available.
+     * Returns the resolved AppHost path from the explicit resource, active editor, or optionally workspace settings, or null if none is available.
      */
-    public async getAppHostPath(): Promise<string | null> {
-        if (vscode.window.activeTextEditor) {
-            const candidate = await this.tryFindCandidateForEditorFile(vscode.window.activeTextEditor.document.uri.fsPath);
+    public async getAppHostPath(resource?: vscode.Uri, allowWorkspaceFallback = true): Promise<string | null> {
+        const appHostUri = resource ?? vscode.window.activeTextEditor?.document.uri;
+
+        if (appHostUri) {
+            const candidate = await this.tryFindCandidateForEditorFile(appHostUri.fsPath);
             if (candidate) {
                 return getDebugTargetForCandidate(candidate);
             }
+
+            if (resource && !allowWorkspaceFallback) {
+                return null;
+            }
         }
 
-        const workspaceFolder = vscode.window.activeTextEditor
-            ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
+        const workspaceFolder = appHostUri
+            ? vscode.workspace.getWorkspaceFolder(appHostUri)
             : vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
             return null;
@@ -119,8 +125,8 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
         }
     }
 
-    public async tryExecuteRunAppHost(noDebug: boolean): Promise<void> {
-        await this.launchAspireDebugSession('run', noDebug);
+    public async tryExecuteRunAppHost(noDebug: boolean, resource?: vscode.Uri, allowWorkspaceFallback = true): Promise<void> {
+        await this.launchAspireDebugSession('run', noDebug, undefined, await this.getAppHostPath(resource, allowWorkspaceFallback));
     }
 
     public async tryExecuteDeployAppHost(noDebug: boolean): Promise<void> {
@@ -139,11 +145,11 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
         aspireCommand: AspireCommandType,
         noDebug: boolean,
         doStep?: string,
-        selectedAppHostPath?: string,
+        selectedAppHostPath?: string | null,
         target?: CliPathResolutionTarget,
         cliPath?: string,
     ): Promise<void> {
-        const appHostToRun = selectedAppHostPath ?? await this.getAppHostPath();
+        const appHostToRun = selectedAppHostPath === undefined ? await this.getAppHostPath() : selectedAppHostPath;
         if (!appHostToRun) {
             vscode.window.showErrorMessage(noAppHostInWorkspace);
             return;

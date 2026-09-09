@@ -10,6 +10,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Otlp.Serialization;
 using Aspire.Tests;
 using Google.Protobuf.Collections;
@@ -25,7 +26,7 @@ public sealed class TelemetryImportServiceTests
 {
     private static readonly DateTime s_testTime = new(2024, 1, 15, 10, 30, 0, DateTimeKind.Utc);
 
-    private static TelemetryImportService CreateImportService(InMemoryTelemetryRepository repository, bool disableImport = false, DashboardActivitySource? activitySource = null)
+    private static TelemetryImportService CreateImportService(SqliteTelemetryRepository repository, bool disableImport = false, DashboardActivitySource? activitySource = null)
     {
         var options = new DashboardOptions { UI = new UIOptions { DisableImport = disableImport } };
         var optionsMonitor = new TestOptionsMonitor<DashboardOptions>(options);
@@ -35,7 +36,8 @@ public sealed class TelemetryImportServiceTests
     [Fact]
     public async Task ImportAsync_CreatesActivity()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         using var activitySource = new DashboardActivitySource();
         var service = CreateImportService(repository, activitySource: activitySource);
         var activities = new List<Activity>();
@@ -54,7 +56,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_WhenDisabled_ThrowsInvalidOperationException()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var service = CreateImportService(repository, disableImport: true);
 
         var logsJson = CreateLogsJson("TestService", "instance-1", "Test log message");
@@ -69,7 +72,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_JsonFile_WithLogs_ImportsSuccessfully()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var service = CreateImportService(repository);
 
         // Create log data
@@ -94,7 +98,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_JsonFile_WithTraces_ImportsSuccessfully()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var service = CreateImportService(repository);
 
         // Create trace data
@@ -117,7 +122,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_JsonFile_WithMetrics_ImportsSuccessfully()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var service = CreateImportService(repository);
 
         // Create metrics data
@@ -140,7 +146,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_ZipFile_WithMultipleJsonFiles_ImportsAll()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var service = CreateImportService(repository);
 
         // Create a zip file with logs and traces JSON
@@ -182,7 +189,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_ZipFile_IgnoresNonJsonFiles()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var service = CreateImportService(repository);
 
         // Create a zip file with a txt file and a json file
@@ -218,7 +226,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_TxtFile_IsIgnored()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var service = CreateImportService(repository);
 
         var stream = new MemoryStream(Encoding.UTF8.GetBytes("Some console output"));
@@ -235,7 +244,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_EmptyJsonFile_HandlesGracefully()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var service = CreateImportService(repository);
 
         var stream = new MemoryStream(Encoding.UTF8.GetBytes(""));
@@ -252,7 +262,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_InvalidJson_HandlesGracefully()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var service = CreateImportService(repository);
 
         var stream = new MemoryStream(Encoding.UTF8.GetBytes("{ invalid json }"));
@@ -269,7 +280,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_UnsupportedExtension_HandlesGracefully()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var service = CreateImportService(repository);
 
         var stream = new MemoryStream(Encoding.UTF8.GetBytes("some content"));
@@ -286,7 +298,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_RoundTrip_LogsExportAndImport_PreservesData()
     {
         // Arrange
-        var sourceRepository = CreateRepository();
+        using var sourceRepositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var sourceRepository = sourceRepositoryContext.Repository;
         var addContext = new AddContext();
 
         await sourceRepository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
@@ -313,7 +326,8 @@ public sealed class TelemetryImportServiceTests
         var jsonString = JsonSerializer.Serialize(exportedJson, OtlpJsonSerializerContext.DefaultOptions);
 
         // Import
-        var targetRepository = CreateRepository();
+        using var targetRepositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var targetRepository = targetRepositoryContext.Repository;
         var importService = CreateImportService(targetRepository);
         var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonString));
 
@@ -337,7 +351,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_RoundTrip_LogsWithAspireLogId_FiltersOutAttribute()
     {
         // Arrange - Export logs (which adds aspire.log_id attribute)
-        var sourceRepository = CreateRepository();
+        using var sourceRepositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var sourceRepository = sourceRepositoryContext.Repository;
         var addContext = new AddContext();
 
         await sourceRepository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
@@ -370,7 +385,24 @@ public sealed class TelemetryImportServiceTests
         var jsonString = JsonSerializer.Serialize(exportedJson, OtlpJsonSerializerContext.DefaultOptions);
 
         // Import
-        var targetRepository = CreateRepository();
+        using var targetRepositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var targetRepository = targetRepositoryContext.Repository;
+        await targetRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "TestService", instanceId: "test-1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("ExistingLogger"),
+                        LogRecords = { CreateLogRecord(time: s_testTime, message: "Existing message") }
+                    }
+                }
+            }
+        });
+        await targetRepository.ClearStructuredLogsAsync();
         var importService = CreateImportService(targetRepository);
         var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonString));
 
@@ -398,7 +430,8 @@ public sealed class TelemetryImportServiceTests
     public async Task ImportAsync_RoundTrip_TracesExportAndImport_PreservesData()
     {
         // Arrange
-        var sourceRepository = CreateRepository();
+        using var sourceRepositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var sourceRepository = sourceRepositoryContext.Repository;
         var addContext = new AddContext();
 
         await sourceRepository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
@@ -425,7 +458,8 @@ public sealed class TelemetryImportServiceTests
         var jsonString = JsonSerializer.Serialize(exportedJson, OtlpJsonSerializerContext.DefaultOptions);
 
         // Import
-        var targetRepository = CreateRepository();
+        using var targetRepositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var targetRepository = targetRepositoryContext.Repository;
         var importService = CreateImportService(targetRepository);
         var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonString));
 

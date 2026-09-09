@@ -26,7 +26,7 @@ func main() {
 	}).WithProperties(func(configuredHub aspire.AzureEventHubResource) {
 		configuredHub.SetHubName("orders-hub")
 		_, _ = configuredHub.HubName()
-		configuredHub.SetPartitionCount(2)
+		configuredHub.SetPartitionCount(aspire.Float64Ptr(2))
 		_, _ = configuredHub.PartitionCount()
 	})
 	if hub.Err() != nil {
@@ -48,7 +48,7 @@ func main() {
 	eventHubs.RunAsEmulator(&aspire.RunAsEmulatorOptions{
 		ConfigureContainer: func(emulator aspire.AzureEventHubsEmulatorResource) {
 			emulator.
-				WithHostPort(5673).
+				WithHostPort(aspire.Float64Ptr(5673)).
 				WithConfigurationFile("./eventhubs.config.json").
 				WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
 					aspire.AzureEventHubsRoleAzureEventHubsDataSender,

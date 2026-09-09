@@ -268,7 +268,7 @@ public sealed class TestSelector
         // Match ONLY production project names: Layer 1 reports production AND test projects, and the
         // affected test projects are already selected via the intersection above. Without this filter
         // an affected matrix test name (e.g. "Aspire.Hosting.Python.Tests") would match a production
-        // glob like "Aspire.Hosting*" and spuriously fire production jobs (ats-diffs / extension-e2e /
+        // glob like "Aspire.Hosting*" and spuriously fire production jobs (extension-e2e /
         // typescript-api-compat / deployment-e2e) for a TEST-ONLY change. See test-trigger-map.yml's
         // affected_project_rules comment ("matched against the affected PRODUCTION projects").
         var affectedProductionProjects = layer1Affected

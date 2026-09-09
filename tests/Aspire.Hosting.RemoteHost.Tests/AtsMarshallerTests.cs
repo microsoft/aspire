@@ -30,6 +30,7 @@ public class AtsMarshallerTests
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonIgnore", Name = "DtoWithJsonIgnore", ClrType = typeof(DtoWithJsonIgnore), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithReadOnlyProperty", Name = "DtoWithReadOnlyProperty", ClrType = typeof(DtoWithReadOnlyProperty), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithInitListProperties", Name = "DtoWithInitListProperties", ClrType = typeof(DtoWithInitListProperties), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithTimeSpans", Name = "DtoWithTimeSpans", ClrType = typeof(DtoWithTimeSpans), Properties = [] },
             ],
             EnumTypes = []
         };
@@ -777,6 +778,72 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public void UnmarshalFromJson_UnmarshalsTimeSpanPropertiesFromMilliseconds()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["required"] = 1500,
+            ["optional"] = 90_000,
+            ["empty"] = null
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithTimeSpans), context);
+
+        var dto = Assert.IsType<DtoWithTimeSpans>(result);
+        Assert.Equal(TimeSpan.FromMilliseconds(1500), dto.Required);
+        Assert.Equal(TimeSpan.FromSeconds(90), dto.Optional);
+        Assert.Null(dto.Empty);
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_UnmarshalsTimeSpanPropertiesFromLegacyStrings()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["required"] = "00:00:01.5000000",
+            ["optional"] = "00:01:30"
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithTimeSpans), context);
+
+        var dto = Assert.IsType<DtoWithTimeSpans>(result);
+        Assert.Equal(TimeSpan.FromMilliseconds(1500), dto.Required);
+        Assert.Equal(TimeSpan.FromSeconds(90), dto.Optional);
+    }
+
+    [Fact]
+    public void MarshalToJson_MarshalsTimeSpanPropertiesAsMilliseconds()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new DtoWithTimeSpans
+        {
+            Required = TimeSpan.FromMilliseconds(1500),
+            Optional = TimeSpan.FromSeconds(90)
+        };
+
+        var result = marshaller.MarshalToJson(dto);
+
+        var json = Assert.IsType<JsonObject>(result);
+        Assert.Equal(1500, json["required"]?.GetValue<double>());
+        Assert.Equal(90_000, json["optional"]?.GetValue<double>());
+        Assert.Null(json["empty"]);
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_RejectsOutOfRangeTimeSpanProperty()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject { ["required"] = double.MaxValue };
+
+        var exception = Assert.Throws<CapabilityException>(
+            () => marshaller.UnmarshalFromJson(json, typeof(DtoWithTimeSpans), context));
+
+        Assert.Contains("outside the supported range", exception.Message);
+    }
+
+    [Fact]
     public void UnmarshalFromJson_UnmarshalsEnumFromString()
     {
         var (marshaller, context) = CreateMarshallerWithContext();
@@ -1021,6 +1088,23 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public void ApplyDtoProperties_UpdatesTimeSpanPropertiesFromMilliseconds()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new DtoWithTimeSpans();
+        var source = new JsonObject
+        {
+            ["required"] = 2500,
+            ["optional"] = 120_000
+        };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(DtoWithTimeSpans));
+
+        Assert.Equal(TimeSpan.FromMilliseconds(2500), dto.Required);
+        Assert.Equal(TimeSpan.FromMinutes(2), dto.Optional);
+    }
+
+    [Fact]
     public void IsDtoType_ReturnsTrueForRegisteredDtoType()
     {
         var marshaller = CreateMarshaller();
@@ -1060,6 +1144,14 @@ public class AtsMarshallerTests
     {
         public string? Label { get; set; }
         public TestEnum Status { get; set; }
+    }
+
+    [AspireDto]
+    private sealed class DtoWithTimeSpans
+    {
+        public TimeSpan Required { get; set; }
+        public TimeSpan? Optional { get; set; }
+        public TimeSpan? Empty { get; set; }
     }
 
     [AspireDto]

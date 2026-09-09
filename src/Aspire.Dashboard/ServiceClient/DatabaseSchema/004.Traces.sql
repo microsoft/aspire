@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS telemetry_spans (
     resource_view_id INTEGER NOT NULL REFERENCES telemetry_resource_views(resource_view_id) ON DELETE CASCADE,
     scope_id INTEGER NOT NULL REFERENCES telemetry_scopes(scope_id),
     name TEXT NOT NULL,
+    display_summary TEXT NOT NULL,
     kind INTEGER NOT NULL REFERENCES telemetry_span_kinds(kind),
     start_time_ticks INTEGER NOT NULL,
     end_time_ticks INTEGER NOT NULL,

@@ -322,6 +322,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Open AppHost Log.
+        /// </summary>
+        public static string OpenAppHostLog {
+            get {
+                return ResourceManager.GetString("OpenAppHostLog", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Open CLI Log.
+        /// </summary>
+        public static string OpenCliLog {
+            get {
+                return ResourceManager.GetString("OpenCliLog", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The project could not be built..
         /// </summary>
         public static string ProjectCouldNotBeBuilt {

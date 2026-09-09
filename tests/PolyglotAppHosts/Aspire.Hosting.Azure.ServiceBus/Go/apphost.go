@@ -23,7 +23,7 @@ func main() {
 		RunAsEmulator(&aspire.RunAsEmulatorOptions{
 			ConfigureContainer: func(emulator aspire.AzureServiceBusEmulatorResource) {
 				emulator.WithConfigurationFile("./servicebus-config.json")
-				emulator.WithHostPort(5672)
+				emulator.WithHostPort(aspire.Float64Ptr(5672))
 			},
 		})
 	if emulatorBus.Err() != nil {
@@ -63,13 +63,13 @@ func main() {
 
 	// ── DTO types ───────────────────────────────────────────────────────────────
 	filter := &aspire.AzureServiceBusCorrelationFilter{
-		CorrelationId: "order-123",
-		Subject:       "OrderCreated",
-		ContentType:   "application/json",
-		MessageId:     "msg-001",
-		ReplyTo:       "reply-queue",
-		SessionId:     "session-1",
-		SendTo:        "destination",
+		CorrelationId: aspire.StringPtr("order-123"),
+		Subject:       aspire.StringPtr("OrderCreated"),
+		ContentType:   aspire.StringPtr("application/json"),
+		MessageId:     aspire.StringPtr("msg-001"),
+		ReplyTo:       aspire.StringPtr("reply-queue"),
+		SessionId:     aspire.StringPtr("session-1"),
+		SendTo:        aspire.StringPtr("destination"),
 	}
 	_ = &aspire.AzureServiceBusRule{
 		Name:              "order-filter",
@@ -80,15 +80,15 @@ func main() {
 	// ── 6. WithProperties — callbacks on Queue, Topic, Subscription ────────────
 	queue.WithProperties(func(q aspire.AzureServiceBusQueueResource) {
 		// Set all queue properties
-		q.SetDeadLetteringOnMessageExpiration(true)
-		q.SetDefaultMessageTimeToLive(36000000000)           // 1 hour in ticks
-		q.SetDuplicateDetectionHistoryTimeWindow(6000000000) // 10 min in ticks
-		q.SetForwardDeadLetteredMessagesTo("dead-letter-queue")
-		q.SetForwardTo("forwarding-queue")
-		q.SetLockDuration(300000000) // 30 seconds in ticks
-		q.SetMaxDeliveryCount(10)
-		q.SetRequiresDuplicateDetection(true)
-		q.SetRequiresSession(false)
+		q.SetDeadLetteringOnMessageExpiration(aspire.BoolPtr(true))
+		q.SetDefaultMessageTimeToLive(aspire.Float64Ptr(36000000000))           // 1 hour in ticks
+		q.SetDuplicateDetectionHistoryTimeWindow(aspire.Float64Ptr(6000000000)) // 10 min in ticks
+		q.SetForwardDeadLetteredMessagesTo(aspire.StringPtr("dead-letter-queue"))
+		q.SetForwardTo(aspire.StringPtr("forwarding-queue"))
+		q.SetLockDuration(aspire.Float64Ptr(300000000)) // 30 seconds in ticks
+		q.SetMaxDeliveryCount(aspire.Float64Ptr(10))
+		q.SetRequiresDuplicateDetection(aspire.BoolPtr(true))
+		q.SetRequiresSession(aspire.BoolPtr(false))
 
 		// Read back properties to verify getter generation
 		_, _ = q.DeadLetteringOnMessageExpiration()
@@ -98,21 +98,21 @@ func main() {
 	})
 
 	topic.WithProperties(func(t aspire.AzureServiceBusTopicResource) {
-		t.SetDefaultMessageTimeToLive(6048000000000)         // 7 days in ticks
-		t.SetDuplicateDetectionHistoryTimeWindow(3000000000) // 5 min in ticks
-		t.SetRequiresDuplicateDetection(false)
+		t.SetDefaultMessageTimeToLive(aspire.Float64Ptr(6048000000000))         // 7 days in ticks
+		t.SetDuplicateDetectionHistoryTimeWindow(aspire.Float64Ptr(3000000000)) // 5 min in ticks
+		t.SetRequiresDuplicateDetection(aspire.BoolPtr(false))
 
 		_, _ = t.RequiresDuplicateDetection()
 	})
 
 	subscription.WithProperties(func(s aspire.AzureServiceBusSubscriptionResource) {
-		s.SetDeadLetteringOnMessageExpiration(true)
-		s.SetDefaultMessageTimeToLive(72000000000) // 2 hours in ticks
-		s.SetForwardDeadLetteredMessagesTo("sub-dlq")
-		s.SetForwardTo("sub-forward")
-		s.SetLockDuration(600000000) // 1 min in ticks
-		s.SetMaxDeliveryCount(5)
-		s.SetRequiresSession(false)
+		s.SetDeadLetteringOnMessageExpiration(aspire.BoolPtr(true))
+		s.SetDefaultMessageTimeToLive(aspire.Float64Ptr(72000000000)) // 2 hours in ticks
+		s.SetForwardDeadLetteredMessagesTo(aspire.StringPtr("sub-dlq"))
+		s.SetForwardTo(aspire.StringPtr("sub-forward"))
+		s.SetLockDuration(aspire.Float64Ptr(600000000)) // 1 min in ticks
+		s.SetMaxDeliveryCount(aspire.Float64Ptr(5))
+		s.SetRequiresSession(aspire.BoolPtr(false))
 
 		// Read back a subscription property
 		_, _ = s.LockDuration()

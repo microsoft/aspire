@@ -7,7 +7,7 @@ import { AspireDebugSession, getLoggableDebugConfiguration } from '../debugger/A
 import * as debuggerExtensionsModule from '../debugger/debuggerExtensions';
 import { getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
 import { javaDebuggerExtension, parseJavaAppHostCommand, resolveJavaClassPaths } from '../debugger/languages/java';
-import { javaAppHostCommandNotRecognized, javaDebuggerExtensionNotInstalled } from '../loc/strings';
+import { invalidLaunchConfiguration, javaAppHostCommandNotRecognized, javaDebuggerExtensionNotInstalled } from '../loc/strings';
 import { AspireResourceExtendedDebugConfiguration, GoLaunchConfiguration, JavaLaunchConfiguration } from '../dcp/types';
 
 suite('Java Debugger Extension Tests', () => {
@@ -65,6 +65,50 @@ suite('Java Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.mainClass, 'com.example.api.Application');
         assert.deepStrictEqual(debugConfig.args, ['--server.port=8080']);
         assert.strictEqual(debugConfig.noDebug, false);
+    });
+
+    test('uses the Java executable selected by the CLI', async () => {
+        const acceptedExecutables = [
+            'C:\\Program Files\\Java.cmd\\jdk-25\\bin\\java.exe',
+            'C:\\Program Files\\Java\\jdk-25\\bin\\java.com',
+            '\\\\server\\share\\jdk-25\\bin\\java.exe',
+            '/opt/jdk-25/bin/java',
+        ];
+
+        for (const javaExec of acceptedExecutables) {
+            const debugConfig = createDebugConfig();
+            await javaDebuggerExtension.createDebugSessionConfigurationCallback!(
+                createJavaLaunchConfig({ java_exec: javaExec }),
+                [],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                debugConfig);
+
+            assert.strictEqual(debugConfig.javaExec, javaExec);
+        }
+
+        const rejectedExecutables = [
+            'java',
+            'bin/java',
+            '.\\bin\\java.exe',
+            '\\opt\\jdk\\bin\\java.exe',
+            '/usr/bin/env',
+            'C:\\Windows\\System32\\cmd.exe',
+            'C:\\Java\\bin\\java.cmd',
+            'C:\\Java\\bin\\java.BAT',
+        ];
+
+        for (const javaExec of rejectedExecutables) {
+            const launchConfig = createJavaLaunchConfig({ java_exec: javaExec });
+            await assert.rejects(
+                () => javaDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    launchConfig,
+                    [],
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    createDebugConfig()),
+                new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig))));
+        }
     });
 
     test('sets noDebug when launch option disables debugging', async () => {
@@ -437,6 +481,42 @@ suite('Java Debugger Extension Tests', () => {
             javaAppHostCommandNotRecognized());
     });
 
+    test('maps an absolute Java AppHost launcher to the Java launch configuration', async () => {
+        stubInstalledExtensions(['redhat.java', 'vscjava.vscode-java-debug']);
+        const javaExec = '/opt/jdk-25/bin/java';
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves(createDebugConfig());
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/AppHost.java',
+                command: 'run',
+            },
+        };
+        const debugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            {} as any,
+            () => { });
+        sinon.stub(debugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(debugSession as any, 'startAndGetDebugSession').resolves(undefined);
+
+        await debugSession.startAppHost(
+            '/workspace/AppHost.java',
+            [javaExec, '-cp', 'target/classes', 'AppHost'],
+            [],
+            true,
+            { forceBuild: false });
+
+        const launchConfig = createDebugSessionConfiguration.firstCall.args[1] as JavaLaunchConfiguration;
+        assert.strictEqual(launchConfig.java_exec, javaExec);
+    });
+
     test('always redacts resolved Java environments from persistent configuration logs', async () => {
         const credential = 'resolved-environment-credential';
         const debugConfig = createDebugConfig();
@@ -457,6 +537,16 @@ suite('Java Debugger Extension Tests', () => {
         const loggableConfig = getLoggableDebugConfiguration(debugConfig, true);
         assert.strictEqual(loggableConfig.env, '<redacted>');
         assert.ok(!JSON.stringify(loggableConfig).includes(credential));
+    });
+
+    test('redacts the selected Java executable from persistent configuration logs', () => {
+        const javaExec = path.join('/Users', 'developer', '.jdks', 'jdk-25', 'bin', 'java');
+        const debugConfig = createDebugConfig({ javaExec });
+
+        const loggableConfig = getLoggableDebugConfiguration(debugConfig, false);
+
+        assert.strictEqual(loggableConfig.javaExec, '<redacted>');
+        assert.ok(!JSON.stringify(loggableConfig).includes(javaExec));
     });
 });
 
@@ -541,18 +631,29 @@ suite('Java AppHost Command Parsing Tests', () => {
         assert.deepStrictEqual(parsed?.appHostArgs, ['-Dnot.a.vm.arg']);
     });
 
-    test('does not mistake a separated option value for the main class', () => {
+    test('does not mistake any Java 25 separated option value for the main class', () => {
         // These options take their value as the *next* argument. Treating the value as a bare token
         // makes it the main class, and the adapter then launches something the user never asked for
         // without reporting anything wrong.
-        const cases: [string[], string][] = [
-            [['java', '--add-opens', 'java.base/java.lang=ALL-UNNAMED', '-cp', 'out', 'AppHost'], '--add-opens'],
-            [['java', '--add-exports', 'java.base/sun.nio.ch=ALL-UNNAMED', '-cp', 'out', 'AppHost'], '--add-exports'],
-            [['java', '--patch-module', 'java.base=patches', '-cp', 'out', 'AppHost'], '--patch-module']
+        const cases: [string, string][] = [
+            ['--module-path', 'mods'],
+            ['-p', 'mods'],
+            ['--upgrade-module-path', 'upgrade-mods'],
+            ['--add-modules', 'java.sql,java.net.http'],
+            ['--limit-modules', 'java.base,java.logging'],
+            ['--add-exports', 'java.base/sun.nio.ch=ALL-UNNAMED'],
+            ['--add-opens', 'java.base/java.lang=ALL-UNNAMED'],
+            ['--add-reads', 'app=ALL-UNNAMED'],
+            ['--patch-module', 'java.base=patches'],
+            ['--enable-native-access', 'ALL-UNNAMED'],
+            ['--source', '25'],
+            ['-splash', 'splash.png']
         ];
 
-        for (const [args, option] of cases) {
-            assert.strictEqual(parseJavaAppHostCommand(args)?.mainClass, 'AppHost', option);
+        for (const [option, value] of cases) {
+            const parsed = parseJavaAppHostCommand(['java', option, value, '-cp', 'out', 'AppHost']);
+            assert.strictEqual(parsed?.mainClass, 'AppHost', option);
+            assert.deepStrictEqual(parsed?.vmArgs, [option, value], option);
         }
     });
 
@@ -593,9 +694,40 @@ suite('Java AppHost Command Parsing Tests', () => {
     });
 
     test('accepts a launcher referenced by an absolute path', () => {
-        const parsed = parseJavaAppHostCommand([path.join('/opt', 'jdk', 'bin', 'java'), '-cp', 'out', 'AppHost']);
+        const javaExec = '/opt/jdk-25/bin/java';
+        const parsed = parseJavaAppHostCommand([javaExec, '-cp', 'out', 'AppHost']);
 
         assert.strictEqual(parsed?.mainClass, 'AppHost');
+        assert.strictEqual(parsed?.javaExec, javaExec);
+    });
+
+    test('accepts directly executable Windows Java launcher suffixes', () => {
+        for (const suffix of ['.exe', '.com']) {
+            const javaExec = `C:\\Program Files\\Java\\jdk-25\\bin\\java${suffix}`;
+            const parsed = parseJavaAppHostCommand([javaExec, '-cp', 'out', 'AppHost']);
+
+            assert.strictEqual(parsed?.mainClass, 'AppHost', suffix);
+            assert.strictEqual(parsed?.javaExec, javaExec, suffix);
+        }
+    });
+
+    test('rejects Windows command shims that the debug adapter cannot spawn directly', () => {
+        for (const suffix of ['.bat', '.cmd']) {
+            const javaExec = `C:\\Program Files\\Java\\jdk-25\\bin\\java${suffix}`;
+            assert.strictEqual(parseJavaAppHostCommand([javaExec, '-cp', 'out', 'AppHost']), null, suffix);
+        }
+    });
+
+    test('accepts bare java for compatibility without selecting a javaExec', () => {
+        const parsed = parseJavaAppHostCommand(['java', '-cp', 'out', 'AppHost']);
+
+        assert.strictEqual(parsed?.mainClass, 'AppHost');
+        assert.ok(parsed && !('javaExec' in parsed));
+    });
+
+    test('rejects non-authoritative relative Java launcher paths', () => {
+        assert.strictEqual(parseJavaAppHostCommand(['bin/java', '-cp', 'out', 'AppHost']), null);
+        assert.strictEqual(parseJavaAppHostCommand(['.\\bin\\java.exe', '-cp', 'out', 'AppHost']), null);
     });
 
     // The CLI writes the classpath relative to the AppHost directory it runs `java` from, and the

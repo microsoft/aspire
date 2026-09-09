@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests.TestTriggerMap;
 
@@ -43,6 +44,26 @@ public sealed class SelectTestsWorkflowTests
         Assert.Contains(
             "forceAll: ${{ contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}",
             testsYml);
+    }
+
+    [Fact]
+    public void TestsWorkflowEnforcesSelectedTestSubset()
+    {
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(TestsWorkflowPath));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
+        var setupForTests = (YamlMappingNode)jobs.Children[new YamlScalarNode("setup_for_tests")];
+        var steps = (YamlSequenceNode)setupForTests.Children[new YamlScalarNode("steps")];
+        var selectTests = Assert.Single(
+            steps.Cast<YamlMappingNode>(),
+            step => step.Children.TryGetValue(new YamlScalarNode("uses"), out var uses) &&
+                    uses.ToString() == "./.github/actions/select-tests");
+        var inputs = (YamlMappingNode)selectTests.Children[new YamlScalarNode("with")];
+
+        Assert.Equal("true", inputs.Children[new YamlScalarNode("enforce")].ToString());
     }
 
     // The comment_selection job posts one comment per pushed commit (createComment for a new commit,

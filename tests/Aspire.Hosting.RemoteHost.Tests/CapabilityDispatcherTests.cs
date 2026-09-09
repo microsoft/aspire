@@ -1631,6 +1631,24 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void GetDto_DeserializesTimeSpanPropertyFromMilliseconds()
+    {
+        var args = new JsonObject
+        {
+            ["dto"] = new JsonObject
+            {
+                ["label"] = "item",
+                ["timeout"] = 90_000
+            }
+        };
+
+        var result = args.GetDto<TestDtoWithEnum>("dto");
+
+        Assert.NotNull(result);
+        Assert.Equal(TimeSpan.FromSeconds(90), result.Timeout);
+    }
+
+    [Fact]
     public void GetDto_ReturnsNullWhenPropertyMissing()
     {
         var args = new JsonObject();
@@ -2607,6 +2625,7 @@ internal sealed class TestDtoWithEnum
 {
     public string? Label { get; set; }
     public TestDispatchEnum Status { get; set; }
+    public TimeSpan? Timeout { get; set; }
 }
 
 [AspireDto]

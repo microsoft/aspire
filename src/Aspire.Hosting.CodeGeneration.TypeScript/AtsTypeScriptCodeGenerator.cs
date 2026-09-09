@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript;
@@ -472,6 +473,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 refExpr,
                 AspireDict,
                 AspireList,
+                createFluentPromiseClass as $aspireCreateFluentPromiseClass,
                 InteractionInputCollectionPromiseImpl
             } from './base.mjs';
 
@@ -488,6 +490,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
             import type {
                 Awaitable,
+                FluentPromiseTransitions as $aspireFluentPromiseTransitions,
                 InteractionInput,
                 InteractionInputCollection,
                 InteractionInputCollectionPromise,
@@ -1532,22 +1535,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// Generates a thenable wrapper class for a builder that enables fluent chaining.
     /// </summary>
     /// <remarks>
-    /// <para>The generated class implements both <c>PromiseLike</c> (via <c>then()</c>) and
-    /// all fluent methods of the builder, forwarding each call through the inner promise.</para>
+    /// <para>The generated constructor delegates runtime forwarding to <c>FluentPromise</c>. A compact
+    /// transition table identifies members whose results need another fluent wrapper.</para>
     /// <para>Generated TypeScript (example for <c>RedisResource</c>):</para>
     /// <code>
-    /// class RedisResourcePromiseImpl implements RedisResourcePromise {
-    ///     constructor(private _promise: Promise&lt;RedisResource&gt;, private _client: AspireClientRpc) {
-    ///         _client.trackPromise(_promise);
-    ///     }
-    ///     then&lt;T1, T2&gt;(...): PromiseLike&lt;T1 | T2&gt; {
-    ///         return this._promise.then(...);
-    ///     }
-    ///     withEnvironment(name: string, value: string): RedisResourcePromise {
-    ///         return new RedisResourcePromiseImpl(
-    ///             this._promise.then(obj =&gt; obj.withEnvironment(name, value)), this._client);
-    ///     }
-    /// }
+    /// const RedisResourcePromiseImpl = $aspireCreateFluentPromiseClass&lt;RedisResource, RedisResourcePromise&gt;(() =&gt; ({
+    ///     withEnvironment: () =&gt; RedisResourcePromiseImpl,
+    /// }));
     /// </code>
     /// </remarks>
     private void GenerateThenableClass(BuilderModel builder)
@@ -1568,122 +1562,86 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         var promiseClass = $"{builder.BuilderClassName}Promise";
         var promiseImplementationClass = TypeScriptApiProjector.GetImplementationPromiseClassName(builder.BuilderClassName);
-
-        WriteLine($"/**");
-        WriteLine($" * Thenable wrapper for {builder.BuilderClassName} that enables fluent chaining.");
-        WriteLine($" * @example");
-        WriteLine($" * await builder.addSomething().withX().withY();");
-        WriteLine($" */");
-        WriteLine($"class {promiseImplementationClass} implements {promiseClass} {{");
-        WriteLine($"    constructor(private _promise: Promise<{builder.BuilderClassName}>, private _client: AspireClientRpc, track = true) {{");
-        WriteLine($"        if (track) {{ _client.trackPromise(_promise); }}");
-        WriteLine($"    }}");
-        WriteLine();
-
-        // Generate then() for PromiseLike interface
-        WriteLine($"    then<TResult1 = {builder.BuilderClassName}, TResult2 = never>(");
-        WriteLine($"        onfulfilled?: ((value: {builder.BuilderClassName}) => TResult1 | PromiseLike<TResult1>) | null,");
-        WriteLine("        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null");
-        WriteLine("    ): PromiseLike<TResult1 | TResult2> {");
-        WriteLine("        return this._promise.then(onfulfilled, onrejected);");
-        WriteLine("    }");
-        WriteLine();
+        var transitions = new Dictionary<string, (string? PromiseImplementationClass, bool Track, bool TrackTransitions)>(StringComparer.Ordinal);
 
         foreach (var prop in getterOnlyProperties)
         {
-            var returnType = _projector.GetGetterOnlyPropertyMethodReturnType(prop.Getter!.ReturnType);
-            WriteLine($"    {prop.PropertyName}(): {returnType} {{");
             if (_projector.TryGetPromiseWrapperType(prop.Getter!.ReturnType, out _, out var promiseImplementationClassName))
             {
-                WriteLine($"        return new {promiseImplementationClassName}(this._promise.then(obj => obj.{prop.PropertyName}()), this._client, false);");
+                transitions[prop.PropertyName] = (promiseImplementationClassName, Track: false, TrackTransitions: true);
             }
             else
             {
-                WriteLine($"        return this._promise.then(obj => obj.{prop.PropertyName}());");
+                transitions[prop.PropertyName] = (PromiseImplementationClass: null, Track: false, TrackTransitions: true);
             }
-            WriteLine("    }");
-            WriteLine();
         }
 
-        // Generate fluent methods that chain via .then()
-        // Capabilities are already flattened - no need to collect from parents
-        // Filter out property getters and setters - they are not methods
         foreach (var capability in capabilities)
         {
             var signature = _projector.ResolveMethodSignature(builder, capability);
-
-            // Forward args to underlying object's method (which handles options extraction)
-            var forwardArgs = signature.RequiredParameters
-                .Select(parameter => parameter.Name)
-                .ToList();
-            if (signature.OptionsParameter is { } optionsParameter)
-            {
-                forwardArgs.Add(optionsParameter.Name);
-            }
-            if (signature.TrailingCancellationToken is { } cancellationToken)
-            {
-                forwardArgs.Add(cancellationToken.Name);
-            }
-            var argsString = string.Join(", ", forwardArgs);
-
-            // Check if this method returns a non-builder type
+            var methodName = signature.MethodName;
+            // build() flushes tracked promises. Its wrapper and any synchronously chained
+            // transitions must stay untracked because they depend on that flush completing.
+            var isBuild = string.Equals(methodName, "build", StringComparison.OrdinalIgnoreCase);
+            var trackTransition = !isBuild;
             var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
-
             if (hasNonBuilderReturn)
             {
-                if (_projector.TryGetPromiseWrapperType(capability.ReturnType, out var returnPromiseInterfaceName, out var returnPromiseImplementationClassName))
+                if (_projector.TryGetPromiseWrapperType(capability.ReturnType, out _, out var returnPromiseImplementationClassName))
                 {
-                    Write($"    {signature.MethodName}(");
-                    Write(signature.ParameterList);
-                    WriteLine($"): {returnPromiseInterfaceName} {{");
-                    Write($"        return new {returnPromiseImplementationClassName}(this._promise.then(obj => obj.{signature.MethodName}(");
-                    Write(argsString);
-                    WriteLine(")), this._client);");
-                    WriteLine("    }");
-                    WriteLine();
-                    continue;
+                    transitions[methodName] = (returnPromiseImplementationClassName, Track: trackTransition, TrackTransitions: !isBuild);
                 }
-
-                // For non-builder returns, call the public method directly
-                var returnType = _projector.MapTypeRefToTypeScript(capability.ReturnType);
-                Write($"    {signature.MethodName}(");
-                Write(signature.ParameterList);
-                WriteLine($"): Promise<{returnType}> {{");
-                Write($"        return this._promise.then(obj => obj.{signature.MethodName}(");
-                Write(argsString);
-                WriteLine("));");
-                WriteLine("    }");
+                else
+                {
+                    transitions[methodName] = (PromiseImplementationClass: null, Track: false, TrackTransitions: true);
+                }
+                continue;
             }
-            else
+
+            var methodPromiseImplementationClass = promiseImplementationClass;
+            if (capability.ReturnsBuilder && capability.ReturnType?.TypeId != null &&
+                !string.Equals(capability.ReturnType.TypeId, builder.TypeId, StringComparison.Ordinal) &&
+                !string.Equals(capability.ReturnType.TypeId, capability.TargetTypeId, StringComparison.Ordinal))
             {
-                // For fluent builder methods, determine the correct promise class.
-                // Factory methods returning a different builder type use the return type's promise class.
-                var methodPromiseClass = promiseClass;
-                var methodPromiseImplementationClass = promiseImplementationClass;
-                if (capability.ReturnsBuilder && capability.ReturnType?.TypeId != null &&
-                    !string.Equals(capability.ReturnType.TypeId, builder.TypeId, StringComparison.Ordinal) &&
-                    !string.Equals(capability.ReturnType.TypeId, capability.TargetTypeId, StringComparison.Ordinal))
-                {
-                    var returnClass = _projector.WrapperClassNames.GetValueOrDefault(capability.ReturnType.TypeId)
-                        ?? TypeScriptApiProjector.DeriveClassName(capability.ReturnType.TypeId);
-                    methodPromiseClass = $"{returnClass}Promise";
-                    methodPromiseImplementationClass = TypeScriptApiProjector.GetImplementationPromiseClassName(returnClass);
-                }
-
-                Write($"    {signature.MethodName}(");
-                Write(signature.ParameterList);
-                Write($"): {methodPromiseClass} {{");
-                WriteLine();
-                // Forward to the public method on the underlying object, wrapping result in promise class
-                Write($"        return new {methodPromiseImplementationClass}(this._promise.then(obj => obj.{signature.MethodName}(");
-                Write(argsString);
-                WriteLine($")), this._client);");
-                WriteLine("    }");
+                var returnClass = _projector.WrapperClassNames.GetValueOrDefault(capability.ReturnType.TypeId)
+                    ?? TypeScriptApiProjector.DeriveClassName(capability.ReturnType.TypeId);
+                methodPromiseImplementationClass = TypeScriptApiProjector.GetImplementationPromiseClassName(returnClass);
             }
-            WriteLine();
+
+            transitions[methodName] = (methodPromiseImplementationClass, Track: trackTransition, TrackTransitions: !isBuild);
         }
 
-        WriteLine("}");
+        GenerateFluentPromiseImplementation(builder.BuilderClassName, promiseClass, promiseImplementationClass, transitions);
+    }
+
+    private void GenerateFluentPromiseImplementation(
+        string className,
+        string promiseClass,
+        string promiseImplementationClass,
+        IReadOnlyDictionary<string, (string? PromiseImplementationClass, bool Track, bool TrackTransitions)> transitions)
+    {
+        WriteLine("/** @internal */");
+        WriteLine($"const {promiseImplementationClass} = $aspireCreateFluentPromiseClass<{className}, {promiseClass}>((): $aspireFluentPromiseTransitions => ({{");
+        foreach (var (methodName, transition) in transitions)
+        {
+            var methodNameLiteral = $"\"{JsonEncodedText.Encode(methodName)}\"";
+            if (transition.PromiseImplementationClass is null)
+            {
+                WriteLine($"    [{methodNameLiteral}]: null,");
+                continue;
+            }
+
+            var constructorProvider = $"() => {transition.PromiseImplementationClass}";
+            var transitionExpression = (transition.Track, transition.TrackTransitions) switch
+            {
+                (true, true) => constructorProvider,
+                (true, false) => $"[{constructorProvider}, true, false] as const",
+                (false, true) => $"[{constructorProvider}, false] as const",
+                (false, false) => $"[{constructorProvider}, false, false] as const"
+            };
+            WriteLine($"    [{methodNameLiteral}]: {transitionExpression},");
+        }
+        WriteLine("}));");
         WriteLine();
     }
 
@@ -3067,18 +3025,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// type classes (resources with <c>ExposeMethods</c>) rather than builder classes.</para>
     /// <para>Generated TypeScript (example for <c>PostgresResource</c>):</para>
     /// <code>
-    /// class PostgresResourcePromiseImpl implements PostgresResourcePromise {
-    ///     constructor(private _promise: Promise&lt;PostgresResource&gt;, private _client: AspireClientRpc) {
-    ///         _client.trackPromise(_promise);
-    ///     }
-    ///     then&lt;T1, T2&gt;(...): PromiseLike&lt;T1 | T2&gt; {
-    ///         return this._promise.then(...);
-    ///     }
-    ///     withEnvironment(name: string, value: string): PostgresResourcePromise {
-    ///         return new PostgresResourcePromiseImpl(
-    ///             this._promise.then(obj =&gt; obj.withEnvironment(name, value)), this._client);
-    ///     }
-    /// }
+    /// const PostgresResourcePromiseImpl =
+    ///     $aspireCreateFluentPromiseClass&lt;PostgresResource, PostgresResourcePromise&gt;(...);
     /// </code>
     /// </remarks>
     private void GenerateTypeClassThenableWrapper(BuilderModel model, List<AtsCapabilityInfo> methods)
@@ -3086,24 +3034,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var className = TypeScriptApiProjector.DeriveClassName(model.TypeId);
         var promiseClass = $"{className}Promise";
         var promiseImplementationClass = TypeScriptApiProjector.GetImplementationPromiseClassName(className);
-
-        WriteLine($"/**");
-        WriteLine($" * Thenable wrapper for {className} that enables fluent chaining.");
-        WriteLine($" */");
-        WriteLine($"class {promiseImplementationClass} implements {promiseClass} {{");
-        WriteLine($"    constructor(private _promise: Promise<{className}>, private _client: AspireClientRpc, track = true) {{");
-        WriteLine($"        if (track) {{ _client.trackPromise(_promise); }}");
-        WriteLine($"    }}");
-        WriteLine();
-
-        // Generate then() for PromiseLike interface
-        WriteLine($"    then<TResult1 = {className}, TResult2 = never>(");
-        WriteLine($"        onfulfilled?: ((value: {className}) => TResult1 | PromiseLike<TResult1>) | null,");
-        WriteLine("        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null");
-        WriteLine("    ): PromiseLike<TResult1 | TResult2> {");
-        WriteLine("        return this._promise.then(onfulfilled, onrejected);");
-        WriteLine("    }");
-        WriteLine();
+        var transitions = new Dictionary<string, (string? PromiseImplementationClass, bool Track, bool TrackTransitions)>(StringComparer.Ordinal);
 
         var getters = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertyGetter).ToList();
         var setters = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertySetter).ToList();
@@ -3113,85 +3044,43 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         foreach (var prop in getterOnlyProperties)
         {
-            var returnType = _projector.GetGetterOnlyPropertyMethodReturnType(prop.Getter!.ReturnType);
-            WriteLine($"    {prop.PropertyName}(): {returnType} {{");
             if (_projector.TryGetPromiseWrapperType(prop.Getter!.ReturnType, out _, out var propertyPromiseImplementationClassName))
             {
-                WriteLine($"        return new {propertyPromiseImplementationClassName}(this._promise.then(obj => obj.{prop.PropertyName}()), this._client, false);");
+                transitions[prop.PropertyName] = (propertyPromiseImplementationClassName, Track: false, TrackTransitions: true);
             }
             else
             {
-                WriteLine($"        return this._promise.then(obj => obj.{prop.PropertyName}());");
+                transitions[prop.PropertyName] = (PromiseImplementationClass: null, Track: false, TrackTransitions: true);
             }
-            WriteLine("    }");
-            WriteLine();
         }
 
-        // Generate fluent methods that chain via .then()
         foreach (var capability in methods)
         {
             var signature = _projector.ResolveMethodSignature(model, capability);
-
-            // Forward args to underlying object's public method
-            var forwardArgs = signature.RequiredParameters
-                .Select(parameter => parameter.Name)
-                .ToList();
-            if (signature.OptionsParameter is { } optionsParameter)
-            {
-                forwardArgs.Add(optionsParameter.Name);
-            }
-            if (signature.TrailingCancellationToken is { } cancellationToken)
-            {
-                forwardArgs.Add(cancellationToken.Name);
-            }
-            var argsString = string.Join(", ", forwardArgs);
-
-            // Check if return type has a Promise wrapper
             var returnPromiseWrapper = _projector.GetPromiseWrapperForReturnType(capability.ReturnType);
-            var returnType = _projector.MapTypeRefToTypeScript(capability.ReturnType);
+            var methodName = signature.MethodName;
+            // Keep forwarded build transitions and their derived chains out of build()'s flush.
+            var isBuild = string.Equals(methodName, "build", StringComparison.OrdinalIgnoreCase);
+            var trackTransition = !isBuild;
             var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
-
             if (returnPromiseWrapper != null)
             {
                 var returnPromiseImplementationClass = TypeScriptApiProjector.GetImplementationPromiseClassName(
                     _projector.WrapperClassNames.GetValueOrDefault(capability.ReturnType!.TypeId)
                         ?? TypeScriptApiProjector.DeriveClassName(capability.ReturnType.TypeId));
-                // Return type has Promise wrapper - forward to public method, wrap result
-                Write($"    {signature.MethodName}(");
-                Write(signature.ParameterList);
-                WriteLine($"): {returnPromiseWrapper} {{");
-                Write($"        return new {returnPromiseImplementationClass}(this._promise.then(obj => obj.{signature.MethodName}(");
-                Write(argsString);
-                WriteLine($")), this._client);");
-                WriteLine("    }");
+                transitions[methodName] = (returnPromiseImplementationClass, Track: trackTransition, TrackTransitions: !isBuild);
             }
             else if (isVoid)
             {
-                // Void return - forward to public method, wrap result in this class's promise
-                Write($"    {signature.MethodName}(");
-                Write(signature.ParameterList);
-                WriteLine($"): {promiseClass} {{");
-                Write($"        return new {promiseImplementationClass}(this._promise.then(obj => obj.{signature.MethodName}(");
-                Write(argsString);
-                WriteLine($")), this._client);");
-                WriteLine("    }");
+                transitions[methodName] = (promiseImplementationClass, Track: trackTransition, TrackTransitions: !isBuild);
             }
             else
             {
-                // Non-void, non-wrapper return - plain Promise
-                Write($"    {signature.MethodName}(");
-                Write(signature.ParameterList);
-                WriteLine($"): Promise<{returnType}> {{");
-                Write($"        return this._promise.then(obj => obj.{signature.MethodName}(");
-                Write(argsString);
-                WriteLine("));");
-                WriteLine("    }");
+                transitions[methodName] = (PromiseImplementationClass: null, Track: false, TrackTransitions: true);
             }
-            WriteLine();
         }
 
-        WriteLine("}");
-        WriteLine();
+        GenerateFluentPromiseImplementation(className, promiseClass, promiseImplementationClass, transitions);
     }
 
     // ============================================================================

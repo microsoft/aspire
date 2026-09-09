@@ -19,6 +19,7 @@ suite('E2E shard matrix', () => {
     // would make the assertion vacuous. Keys are `name|shardName|spec` and values are tracking issues.
     const expectedAdvisoryRows = new Map<string, string>([
         ['Linux|apphost-tree|out/test-e2e/test-e2e/appHostTree.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
+        ['Linux|azure-functions|out/test-e2e/test-e2e/azureFunctions.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19639'],
         ['Windows|discovery-configuration|out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
         ['Windows|debug-dashboard|out/test-e2e/test-e2e/debugDashboard.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
     ]);

@@ -5383,6 +5383,9 @@ public class AzureEnvironmentResourceExtensionsTests
             return Task.FromResult(new DeploymentStateSection(sectionName, data, version: 0));
         }
 
+        public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+            => AcquireSectionAsync(sectionName, cancellationToken);
+
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {
             lock (_lock)

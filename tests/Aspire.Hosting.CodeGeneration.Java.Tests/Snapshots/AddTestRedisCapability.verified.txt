@@ -43,6 +43,7 @@
         TypeId: number,
         ClrType: int,
         IsInterface: false,
+        IsNullable: true,
         IsReadOnly: false,
         IsResourceBuilder: false,
         IsDistributedApplicationBuilder: false,

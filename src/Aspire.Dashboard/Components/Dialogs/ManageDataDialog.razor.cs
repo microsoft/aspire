@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.ManageData;
@@ -18,7 +19,7 @@ using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposable
+public partial class ManageDataDialog : IAsyncDisposable
 {
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -67,7 +68,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     private readonly HashSet<(string ResourceName, AspireDataType DataType)> _selectedRows = [];
     private readonly CancellationTokenSource _cts = new();
     private Task? _resourceSubscriptionTask;
-    private FluentDataGrid<ManageDataGridItem>? _dataGrid;
+    private AspireFluentDataGrid<ManageDataGridItem>? _dataGrid;
     private bool _isExporting;
     private bool _isRemoving;
     private string? _errorMessage;
@@ -94,13 +95,8 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
         await InvokeAsync(async () =>
         {
             UpdateData();
-
-            if (_dataGrid is not null)
-            {
-                await _dataGrid.SafeRefreshDataAsync();
-            }
-
             StateHasChanged();
+            await _dataGrid.SafeRefreshDataAsync();
         });
     }
 
@@ -197,11 +193,8 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
                 await InvokeAsync(async () =>
                 {
-                    if (_dataGrid is not null)
-                    {
-                        await _dataGrid.SafeRefreshDataAsync();
-                    }
                     StateHasChanged();
+                    await _dataGrid.SafeRefreshDataAsync();
                 });
             }
         });

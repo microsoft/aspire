@@ -28,7 +28,7 @@ func main() {
 	mysql.WithPhpMyAdmin(&aspire.WithPhpMyAdminOptions{
 		ContainerName: aspire.StringPtr("phpmyadmin"),
 		ConfigureContainer: func(container aspire.PhpMyAdminContainerResource) {
-			container.WithHostPort(8080)
+			container.WithHostPort(aspire.Float64Ptr(8080))
 		},
 	})
 

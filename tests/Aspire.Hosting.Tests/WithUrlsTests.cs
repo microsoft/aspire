@@ -987,6 +987,64 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         Assert.False(crossResourceUrl.IsInactive);
     }
 
+    [Fact]
+    public async Task WithUrlFromAnotherResourcesEndpointTracksThatResourcesRunningState()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        // Resource A has the endpoint. It starts explicitly so the test can control exactly when it becomes active.
+        var resourceA = builder.AddProject<Projects.ServiceA>("resourcea")
+            .WithHttpEndpoint(name: "api")
+            .WithExplicitStart();
+
+        // Resource B gets a URL that references resource A's endpoint via the object model.
+        var resourceB = builder.AddProject<Projects.ServiceA>("resourceb")
+            .WithUrls(c =>
+            {
+                c.Urls.Add(new()
+                {
+                    DisplayText = "API Docs",
+                    Url = "/",
+                    Endpoint = resourceA.Resource.GetEndpoint("api")
+                });
+            });
+
+        await using var app = await builder.BuildAsync();
+        var rns = app.Services.GetRequiredService<ResourceNotificationService>();
+
+        await app.StartAsync();
+
+        // Resource B comes up before resource A is started, so its cross-resource URL should be present but inactive.
+        var resourceEvent = await rns.WaitForResourceAsync(
+            resourceB.Resource.Name,
+            e => e.Snapshot.State == KnownResourceStates.Running,
+            default).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        var crossResourceUrl = resourceEvent.Snapshot.Urls.FirstOrDefault(u => u.DisplayProperties.DisplayName == "API Docs");
+        Assert.NotNull(crossResourceUrl);
+        Assert.True(crossResourceUrl.IsInactive);
+
+        // Start resource A. Resource B never changes state itself, but its cross-resource URL should become active.
+        var startResult = await app.ResourceCommands.ExecuteCommandAsync(resourceA.Resource, KnownResourceCommands.StartCommand).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        Assert.True(startResult.Success, startResult.Message);
+
+        resourceEvent = await rns.WaitForResourceAsync(
+            resourceB.Resource.Name,
+            e => e.Snapshot.Urls.FirstOrDefault(u => u.DisplayProperties.DisplayName == "API Docs") is { IsInactive: false },
+            default).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        // Stop resource A again. Resource B's URL should go back to inactive, without resource B itself restarting.
+        var stopResult = await app.ResourceCommands.ExecuteCommandAsync(resourceA.Resource, KnownResourceCommands.StopCommand).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        Assert.True(stopResult.Success, stopResult.Message);
+
+        resourceEvent = await rns.WaitForResourceAsync(
+            resourceB.Resource.Name,
+            e => e.Snapshot.Urls.FirstOrDefault(u => u.DisplayProperties.DisplayName == "API Docs") is { IsInactive: true },
+            default).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
+    }
+
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints
     {
 

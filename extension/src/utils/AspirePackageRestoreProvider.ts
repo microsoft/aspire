@@ -6,6 +6,7 @@ import { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from './process/cliProcess';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { getCliPathTargetForUri } from './cliPathVariables';
+import { reportCliResolvedForOperation } from './cliOperationResolution';
 import { extensionLogOutputChannel } from './logging';
 import { getEnableAutoRestore } from './settings';
 import { runningAspireRestore, runningAspireRestoreProgress, aspireRestoreCompleted, aspireRestoreAllCompleted, aspireRestoreFailed, aspireRestoreFailedStatusBar } from '../loc/strings';
@@ -26,7 +27,7 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
     private readonly _active = new Map<string, string>(); // configDir → relativePath
     private readonly _childProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _timeouts = new Set<ReturnType<typeof setTimeout>>();
-    private readonly _pendingRestore = new Set<string>(); // configDirs needing re-restore
+    private readonly _pendingRestore = new Map<string, boolean>(); // configDir → force restore
     private readonly _failedDirs = new Set<string>(); // configDirs that failed
     private _total = 0;
     private _completed = 0;
@@ -80,13 +81,13 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
             return;
         }
 
-        this._total = configs.length;
+        this._total = this._active.size + configs.length;
         this._completed = 0;
         this._failedDirs.clear();
 
         const pending = new Set<Promise<void>>();
         for (const uri of configs) {
-            const p = this._restoreIfChanged(uri, true).finally(() => pending.delete(p));
+            const p = this._restoreIfChanged(uri, true, force).finally(() => pending.delete(p));
             pending.add(p);
             if (pending.size >= AspirePackageRestoreProvider._maxConcurrency) {
                 await Promise.race(pending);
@@ -124,11 +125,15 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
                 this._total++;
             }
         }
-        await this._restoreIfChanged(uri, false);
+        await this._restoreIfChanged(uri, false, false);
     }
 
-    private async _restoreIfChanged(uri: vscode.Uri, isInitial: boolean): Promise<void> {
-        if (this._disposed || !getEnableAutoRestore()) {
+    private async _restoreIfChanged(
+        uri: vscode.Uri,
+        isInitial: boolean,
+        force: boolean,
+    ): Promise<void> {
+        if (this._disposed || (!force && !getEnableAutoRestore())) {
             return;
         }
 
@@ -144,7 +149,7 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         }
 
         const prev = this._lastContent.get(uri.fsPath);
-        if (!isInitial && prev === content) {
+        if (!force && !isInitial && prev === content) {
             this._completed++;
             this._showProgress();
             this._scheduleHide();
@@ -157,12 +162,14 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
 
         // Queue re-restore if one is already active for this config directory
         if (this._active.has(configDir)) {
-            this._pendingRestore.add(configDir);
+            this._pendingRestore.set(
+                configDir,
+                (this._pendingRestore.get(configDir) ?? false) || force);
             return;
         }
 
         try {
-            await this._runRestore(uri, configDir, relativePath);
+            await this._runRestore(uri, configDir, relativePath, force);
             if (this._disposed) {
                 return;
             }
@@ -181,12 +188,19 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         }
 
         // If a change arrived while we were restoring, re-read and restore again
-        while (!this._disposed && this._pendingRestore.delete(configDir)) {
-            await this._restoreIfChanged(uri, false);
+        while (!this._disposed && this._pendingRestore.has(configDir)) {
+            const reportPendingCliUse = this._pendingRestore.get(configDir) ?? false;
+            this._pendingRestore.delete(configDir);
+            await this._restoreIfChanged(uri, false, reportPendingCliUse);
         }
     }
 
-    private async _runRestore(uri: vscode.Uri, configDir: string, relativePath: string): Promise<void> {
+    private async _runRestore(
+        uri: vscode.Uri,
+        configDir: string,
+        relativePath: string,
+        reportCliUse: boolean,
+    ): Promise<void> {
         if (this._disposed) {
             return;
         }
@@ -195,9 +209,13 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         this._showProgress();
 
         try {
-            const cliPath = await this._terminalProvider.getAspireCliExecutablePath(getCliPathTargetForUri(uri));
+            const target = getCliPathTargetForUri(uri);
+            const cliPath = await this._terminalProvider.getAspireCliExecutablePath(target);
             if (this._disposed) {
                 return;
+            }
+            if (reportCliUse) {
+                reportCliResolvedForOperation(target, cliPath);
             }
             await new Promise<void>((resolve, reject) => {
                 let settled = false;

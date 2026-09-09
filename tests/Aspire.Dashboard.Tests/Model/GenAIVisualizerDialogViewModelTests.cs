@@ -7,6 +7,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Tests.Shared;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
@@ -23,7 +24,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_NoGenAIAttributes_NoMessages()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
@@ -63,7 +65,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_SpanError_HasErrorItem()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var status = new Status
         {
@@ -121,7 +124,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAILogEntries_HasMessages()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
@@ -218,7 +222,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAILogEntries_EmptyMessage_NoMessagesCreated()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
@@ -286,7 +291,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAISpanEvents_HasMessages()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var events = new List<Span.Types.Event>
         {
@@ -378,7 +384,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAISpanEvents_EmptyContent_NoMessagesCreated()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var events = new List<Span.Types.Event>
         {
@@ -433,7 +440,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAISpanEvents_MissingContent_NoMessagesCreated()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var events = new List<Span.Types.Event>
         {
@@ -482,7 +490,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAISpanAttributes_HasMessages()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var systemInstruction = JsonSerializer.Serialize(new List<MessagePart>
         {
@@ -605,7 +614,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAISpanAttributes_InvalidJson_DisplayErrorMessage()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var systemInstruction = JsonSerializer.Serialize(new List<MessagePart>
         {
@@ -678,7 +688,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAISpanAttributesWithoutContent_HasNoMessageContent()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var systemInstruction = JsonSerializer.Serialize(new List<MessagePart>
         {
@@ -798,7 +809,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_NoMessages_HasNoMessageContent()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var attributes = new KeyValuePair<string, string>[]
         {
@@ -842,7 +854,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_LangSmithFormat_HasMessages()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         // LangSmith uses flattened attributes with indexed format
         var attributes = new KeyValuePair<string, string>[]
@@ -918,7 +931,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_LangSmithFormat_MessageRoleContentFallback_HasMessages()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         // LangSmith format with message.role and message.content as fallback
         var attributes = new KeyValuePair<string, string>[]
@@ -994,7 +1008,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_LangSmithFormat_WithGapsInIndices_HasMessages()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         // LangSmith format with gaps in indices (0, 2, 5 instead of consecutive 0, 1, 2)
         var attributes = new KeyValuePair<string, string>[]
@@ -1092,7 +1107,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAIToolDefinitions_ParsesToolDefinitions()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         // Create the telemetry JSON manually because JSON Schema represents types as strings,
         // while the dashboard model uses a flags enum.
@@ -1189,7 +1205,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAIToolDefinitions_InvalidJson_EmptyToolDefinitions()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var attributes = new KeyValuePair<string, string>[]
         {
@@ -1232,7 +1249,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_NoToolDefinitions_EmptyToolDefinitions()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var attributes = new KeyValuePair<string, string>[]
         {
@@ -1274,7 +1292,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAISpanAttributes_JsonWithCommentsAndTrailingCommas_HasMessages()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         // JSON with comments and trailing commas - these are commonly produced by AI SDKs and LLM outputs
         var systemInstruction = """
@@ -1380,7 +1399,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAIToolDefinitions_JsonWithCommentsAndTrailingCommas_HasToolDefinitions()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         // Tool definitions JSON with comments and trailing commas
         var toolDefinitions = """
@@ -1452,7 +1472,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAIToolDefinitions_TypeAsArray_ParsesToolDefinitions()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         // Create tool definitions JSON with "type" as an array of strings
         // This is valid in JSON Schema and can occur in GenAI tool schemas
@@ -1553,7 +1574,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAIToolDefinitions_WithArrayItems_ParsesAndFormatsCorrectly()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         // Create tool definitions JSON with array types and items
         var toolDefinitionsJson = """
@@ -1657,7 +1679,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     private static Task<GenAIVisualizerDialogViewModel> CreateAsync(
-        InMemoryTelemetryRepository repository,
+        SqliteTelemetryRepository repository,
         SpanDetailsViewModel spanDetailsViewModel)
     {
         return GenAIVisualizerDialogViewModel.CreateAsync(
@@ -1673,7 +1695,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_NoEvaluationResults_EmptyEvaluationsList()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
@@ -1710,7 +1733,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_EvaluationResultsInLogEntries_ParsedCorrectly()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
@@ -1808,7 +1832,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_EvaluationResultsInSpanEvents_ParsedCorrectly()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var events = new List<Span.Types.Event>
         {
@@ -1891,7 +1916,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_EvaluationResultsMinimalData_ParsedCorrectly()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
@@ -1961,7 +1987,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_EvaluationResultsFromBothLogEntriesAndSpanEvents_AllParsed()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var events = new List<Span.Types.Event>
         {
@@ -2045,7 +2072,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAIToolDefinitions_UnexpectedTypeObject_DoesNotThrow()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         // Create tool definitions JSON with a parameter that has "type" as an object instead of string
         // This simulates the issue reported where Microsoft Agent Framework might produce such JSON
@@ -2135,7 +2163,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAISpanAttributes_TruncatedInputMessages_DisplaysAvailableMessages()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var inputMessages = JsonSerializer.Serialize(new List<ChatMessage>
         {
@@ -2220,7 +2249,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAISpanAttributes_TruncatedSystemInstructions_DisplaysPartialContent()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var systemInstruction = JsonSerializer.Serialize(new List<MessagePart>
         {
@@ -2281,7 +2311,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
     public async Task Create_GenAISpanAttributes_TruncatedOutputMessages_DisplaysAvailableMessages()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
 
         var outputMessages = JsonSerializer.Serialize(new List<ChatMessage>
         {

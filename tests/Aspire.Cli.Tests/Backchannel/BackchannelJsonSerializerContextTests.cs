@@ -10,6 +10,23 @@ namespace Aspire.Cli.Tests.Backchannel;
 public class BackchannelJsonSerializerContextTests
 {
     [Fact]
+    public void JsonSerializerOptionsSerializeInteractionMessageActionTargetsAsAUnion()
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        InteractionMessageAction[] actions =
+        [
+            InteractionMessageAction.ExecuteCommand("Retry", "aspire-vscode.retry"),
+            InteractionMessageAction.OpenFile("Open CLI Log", @"C:\logs\aspire.cli.log")
+        ];
+
+        var json = JsonSerializer.Serialize(actions, options);
+
+        Assert.Equal(
+            """[{"displayName":"Retry","command":"aspire-vscode.retry"},{"displayName":"Open CLI Log","filePath":"C:\\logs\\aspire.cli.log"}]""",
+            json);
+    }
+
+    [Fact]
     public void JsonSerializerOptionsCanSerializeAndDeserializeResourceSnapshotMcpServers()
     {
         var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();

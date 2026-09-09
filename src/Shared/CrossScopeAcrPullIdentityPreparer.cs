@@ -18,7 +18,7 @@ using Azure.Provisioning.Roles;
 // This linked helper runs after the application model and final registry selection are complete. For
 // only that cross-scope case, it creates a standalone identity and lets AzureResourcePreparer emit the
 // role assignment as a separately scoped module. Package-specific annotations remain in their owning
-// assemblies, so this source is linked into only the ACA and App Service projects.
+// assemblies, so this source is linked into only the compute integrations that use this pattern.
 namespace Aspire.Hosting.Azure;
 
 /// <summary>

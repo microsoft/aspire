@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Processes;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Backchannel;
@@ -61,7 +60,7 @@ internal sealed class OrphanedAppHostCollector(
                     // The process is confirmed gone, so the socket's owner is gone and the file is safe
                     // to remove by exact path (mirrors StopCommand). Leaving it behind would have later
                     // commands rediscover a dead AppHost.
-                    AppHostHelper.TryDeleteSocketFile(connection.SocketPath, logger);
+                    connection.Socket.TryDelete();
                     collected++;
                     logger.LogDebug(
                         "Collected orphaned AppHost {AppHostPath} (PID {AppHostPid}); its launching CLI {CliPid} is no longer running.",

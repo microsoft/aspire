@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMMAND001 // RequiredCommandAnnotation is for evaluation purposes only
+#pragma warning disable ASPIREDENO001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -159,6 +160,32 @@ public class RequiredCommandTests(ITestOutputHelper outputHelper)
         var app = builder.AddBunApp("app", workspace.Path, "server.ts");
 
         Assert.Equal(["bun"], await GetRequiredCommandsAsync(builder, app.Resource));
+    }
+
+    [Fact]
+    public async Task AddDenoApp_WithDenoJson_RequiresOnlyDenoWithoutDuplicates()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        File.WriteAllText(Path.Combine(workspace.Path, "deno.json"), "{}");
+
+        var app = builder.AddDenoApp("app", workspace.Path, "server.ts");
+
+        Assert.Equal(["deno"], await GetRequiredCommandsAsync(builder, app.Resource));
+    }
+
+    [Fact]
+    public async Task AddDenoApp_WithRunScript_WithNpm_DoesNotRequireDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var app = builder.AddDenoApp("app", workspace.Path, "server.ts")
+            .WithRunScript("start")
+            .WithNpm();
+
+        Assert.Equal(["node", "npm"], await GetRequiredCommandsAsync(builder, app.Resource));
     }
 
     [Fact]

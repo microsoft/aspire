@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TypeSystem;
@@ -39,6 +40,65 @@ public class AtsRustCodeGeneratorTests
 
         await Verify(files["aspire.rs"], extension: "rs")
             .UseFileName("AtsGeneratedAspire");
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_NullablePrimitiveArrayElementsUseOptions()
+    {
+        var nullableNumbers = Assert.IsType<AtsTypeRef>(AtsCapabilityScanner.CreateTypeRef(typeof(double?[])));
+        var atsContext = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    TypeId = "Tests/NullableArrayDto",
+                    Name = "NullableArrayDto",
+                    Properties =
+                    [
+                        new AtsDtoPropertyInfo
+                        {
+                            Name = "Values",
+                            Type = nullableNumbers
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var generated = _generator.GenerateDistributedApplication(atsContext)["aspire.rs"];
+
+        Assert.Contains("pub values: Vec<Option<f64>>", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExportedNullablePrimitiveArraysUseOptionElements()
+    {
+        var nullableNumbers = Assert.IsType<AtsTypeRef>(AtsCapabilityScanner.CreateTypeRef(typeof(double?[])));
+        var atsContext = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes = [],
+            ExportedValues =
+            [
+                new AtsExportedValueInfo
+                {
+                    OwningAssemblyName = TestTypesAssemblyName,
+                    PathSegments = ["NullableArrays", "Numbers"],
+                    Value = JsonNode.Parse("[1,null,2.5]"),
+                    Type = nullableNumbers
+                }
+            ]
+        };
+
+        var generated = _generator.GenerateDistributedApplication(atsContext)["aspire.rs"];
+
+        Assert.Contains("pub fn numbers() -> Vec<Option<f64>>", generated, StringComparison.Ordinal);
     }
 
     [Fact]

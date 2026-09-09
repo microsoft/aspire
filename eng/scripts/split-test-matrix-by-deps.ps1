@@ -5,14 +5,11 @@
 .DESCRIPTION
   Takes a flat all_tests matrix JSON (already OS-expanded) and splits it into
   dependency-based matrices for GitHub Actions consumption:
-  1. tests_matrix_no_nugets (primary) — tests with no package dependencies
-  2. tests_matrix_no_nugets_overflow — overflow when primary exceeds threshold
-  3. tests_matrix_requires_nugets_{linux,windows,macos} — tests needing built
+  1. tests_matrix_no_nugets — tests with no package dependencies
+  2. tests_matrix_requires_nugets_{linux,windows,macos} — tests needing built
      NuGet packages, split by OS so each group can depend on the per-OS CLI
      archive build that produces its RID-specific DCP/Dashboard NuGets
-  4. tests_matrix_requires_cli_archive — tests needing CLI native archives
-
-  The overflow mechanism keeps each matrix under GitHub Actions' 256-job limit.
+  3. tests_matrix_requires_cli_archive — tests needing CLI native archives
 
 .PARAMETER AllTestsMatrix
   JSON string of the all_tests matrix ({"include": [...]}).
@@ -23,10 +20,6 @@
 
 .PARAMETER OutputToGitHubEnv
   If set, outputs to GITHUB_OUTPUT environment file.
-
-.PARAMETER OverflowThreshold
-  Maximum entries in the no_nugets primary bucket before overflow kicks in.
-  Defaults to 250 (GitHub Actions hard limit is 256).
 
 .NOTES
   PowerShell 7+
@@ -41,10 +34,7 @@ param(
   [string]$AllTestsMatrixFile = "",
 
   [Parameter(Mandatory=$false)]
-  [switch]$OutputToGitHubEnv,
-
-  [Parameter(Mandatory=$false)]
-  [int]$OverflowThreshold = 250
+  [switch]$OutputToGitHubEnv
 )
 
 $ErrorActionPreference = 'Stop'
@@ -115,22 +105,9 @@ $nugetEntriesMacos   = @($nugetEntries | Where-Object { (Get-OsCategory $_.'runs
 
 Write-Host "    ↳ nugets linux: $($nugetEntriesLinux.Count), windows: $($nugetEntriesWindows.Count), macos: $($nugetEntriesMacos.Count)"
 
-# Split no_nugets into primary + overflow
-$noNugetPrimary = @()
-$noNugetOverflow = @()
-
-if ($noNugetEntries.Count -le $OverflowThreshold) {
-  $noNugetPrimary = $noNugetEntries
-} else {
-  $noNugetPrimary = @($noNugetEntries[0..($OverflowThreshold - 1)])
-  $noNugetOverflow = @($noNugetEntries[$OverflowThreshold..($noNugetEntries.Count - 1)])
-  Write-Host "  ↳ no_nugets overflow: $($noNugetPrimary.Count) primary + $($noNugetOverflow.Count) overflow"
-}
-
 # Validate no bucket exceeds the hard limit
 $buckets = @{
-  'tests_matrix_no_nugets' = $noNugetPrimary
-  'tests_matrix_no_nugets_overflow' = $noNugetOverflow
+  'tests_matrix_no_nugets' = $noNugetEntries
   'tests_matrix_requires_nugets_linux' = $nugetEntriesLinux
   'tests_matrix_requires_nugets_windows' = $nugetEntriesWindows
   'tests_matrix_requires_nugets_macos' = $nugetEntriesMacos

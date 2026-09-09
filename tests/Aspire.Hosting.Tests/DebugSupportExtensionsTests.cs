@@ -107,6 +107,10 @@ public class DebugSupportExtensionsTests
         Assert.Equal(GetProjectPath(project.Resource), launchConfiguration.ProjectPath);
         Assert.Equal("http", launchConfiguration.LaunchProfile);
         Assert.False(launchConfiguration.DisableLaunchProfile);
+        Assert.Equal(
+            builder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration,
+            launchConfiguration.BuildConfiguration);
+        Assert.False(launchConfiguration.SuppressBuild);
     }
 
     [Fact]

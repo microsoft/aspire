@@ -31,11 +31,14 @@ func main() {
 	foundry.AddDeployment("chat-from-model", model)
 
 	localFoundry := builder.AddFoundry("local-foundry")
-	localFoundry.RunAsFoundryLocal()
-	localFoundry.AddDeployment("local-chat", "Phi-3.5-mini-instruct", &aspire.AddDeploymentOptions{
+	localFoundry.RunAsFoundryLocal(&aspire.RunAsFoundryLocalOptions{
+		Endpoint: aspire.StringPtr("http://windows-host:5273"),
+	})
+	localChat := localFoundry.AddDeployment("local-chat", "Phi-3.5-mini-instruct", &aspire.AddDeploymentOptions{
 		ModelVersion: aspire.StringPtr("1"),
 		Format:       aspire.StringPtr("Microsoft"),
 	})
+	localChat.SetLocalModelId(aspire.StringPtr("Phi-3.5-mini-instruct-generic-gpu:1"))
 
 	registry := builder.AddAzureContainerRegistry("registry")
 	keyVault := builder.AddAzureKeyVault("vault")
@@ -126,7 +129,7 @@ server.listen(port, '127.0.0.1');
 		})
 
 	hostedAgent.AsHostedAgent(project, &aspire.HostedAgentOptions{
-		Description: "Validation hosted agent",
+		Description: aspire.StringPtr("Validation hosted agent"),
 		Cpu:         aspire.Float64Ptr(1),
 		Memory:      aspire.Float64Ptr(2),
 		Metadata: map[string]string{
