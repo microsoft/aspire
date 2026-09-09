@@ -188,44 +188,44 @@ fluent-dialog::part(dialog) {
     box-shadow: 0 0 2px rgba(0, 0, 0, 0.2), 0 64px 128px rgba(0, 0, 0, 0.24);
 }
 
-fluent-dialog-body.page-dialog-body {
+fluent-dialog-body {
     height: auto !important;
     max-height: calc(100dvh - 48px) !important;
 }
 
-.page-dialog-body fluent-dropdown,
-.page-dialog-body fluent-text-input {
+fluent-dialog-body fluent-dropdown,
+fluent-dialog-body fluent-text-input {
     --colorNeutralBackground1: var(--dialog-control-background);
 }
 
-.page-dialog-body fluent-button:not([appearance]):where(:not(.aspire-neutral-button)) {
+fluent-dialog-body fluent-button:not([appearance]):where(:not(.aspire-neutral-button)) {
     --aspire-button-background: transparent;
 }
 
-.page-dialog-body fluent-button:not([appearance]):where(:not(.aspire-neutral-button)):not(:hover):not(:active) {
+fluent-dialog-body fluent-button:not([appearance]):where(:not(.aspire-neutral-button)):not(:hover):not(:active) {
     background-color: var(--aspire-button-background);
 }
 
-.page-dialog-body fluent-button.aspire-neutral-button:not([appearance]):not(:hover):not(:active) {
+fluent-dialog-body fluent-button.aspire-neutral-button:not([appearance]):not(:hover):not(:active) {
     --aspire-neutral-button-background: var(--notification-action-background);
     --aspire-neutral-button-border: var(--notification-action-border);
 }
 
-[data-theme="dark"] .page-dialog-body fluent-button.aspire-neutral-button:not([appearance]):not(:hover):not(:active) {
+[data-theme="dark"] fluent-dialog-body fluent-button.aspire-neutral-button:not([appearance]):not(:hover):not(:active) {
     border-color: var(--colorNeutralStroke1);
 }
 
-fluent-dialog-body.page-dialog-body::part(title),
-fluent-dialog-body.page-dialog-body::part(actions) {
+fluent-dialog-body::part(title),
+fluent-dialog-body::part(actions) {
     margin: 0;
     background-color: transparent;
 }
 
-fluent-dialog-body.page-dialog-body::part(title) {
+fluent-dialog-body::part(title) {
     padding: 0 0 var(--spacingVerticalL);
 }
 
-fluent-dialog-body.page-dialog-body::part(actions) {
+fluent-dialog-body::part(actions) {
     padding: var(--spacingVerticalL) 0 0;
     flex-direction: row;
     justify-content: flex-end;
@@ -237,14 +237,14 @@ fluent-dialog-body.genai-dialog-body::part(content) {
     overflow: hidden;
 }
 
-fluent-dialog-body.page-dialog-body > [slot="title"] {
+fluent-dialog-body > [slot="title"] {
     font-family: var(--aspire-font-display);
     font-size: var(--fontSizeBase600);
     font-weight: var(--fontWeightRegular);
     line-height: var(--lineHeightBase600);
 }
 
-fluent-dialog-body.page-dialog-body > [slot="title-action"] fluent-button[icon-only] {
+fluent-dialog-body > [slot="title-action"] fluent-button[icon-only] {
     --aspire-button-foreground: var(--colorNeutralForeground1);
     box-sizing: border-box;
     max-width: 28px;
@@ -252,8 +252,8 @@ fluent-dialog-body.page-dialog-body > [slot="title-action"] fluent-button[icon-o
     color: var(--aspire-button-foreground);
 }
 
-fluent-dialog-body.page-dialog-body > [slot="action"] fluent-button,
-fluent-dialog-body.page-dialog-body > [slot="action"] fluent-button::part(control) {
+fluent-dialog-body > [slot="action"] fluent-button,
+fluent-dialog-body > [slot="action"] fluent-button::part(control) {
     width: auto;
 }
 
@@ -545,7 +545,6 @@ fluent-dialog-body::part(content) {
     }
 
     fluent-dialog-body,
-    fluent-dialog-body.page-dialog-body,
     fluent-drawer-body {
         width: 100% !important;
         min-width: 0;

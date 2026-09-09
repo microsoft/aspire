@@ -30,7 +30,6 @@ public class FilterDialogTests : DashboardTestContext
             }));
         });
 
-        Assert.Equal("page-dialog-body", Assert.Single(cut.FindComponents<FluentDialogBody>()).Instance.Class);
         Assert.Equal("aspire-input", Assert.Single(cut.FindComponents<FluentNumberInput<int?>>()).Instance.Class);
         Assert.DoesNotContain("fluent-combobox", cut.Markup);
 

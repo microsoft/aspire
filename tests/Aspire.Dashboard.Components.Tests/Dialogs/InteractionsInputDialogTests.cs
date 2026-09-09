@@ -426,7 +426,6 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("page-dialog-body", cut.Find("fluent-dialog-body").ClassList);
             var buttons = cut.FindAll("fluent-dialog-body [slot='action'] footer fluent-button");
             Assert.Collection(
                 buttons,

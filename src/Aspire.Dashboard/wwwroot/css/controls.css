@@ -183,8 +183,8 @@ fluent-field.aspire-input > fluent-number-input::part(control),
 
 .aspire-button,
 .aspire-button::part(control),
-fluent-dialog-body.page-dialog-body > [slot="action"] fluent-button,
-fluent-dialog-body.page-dialog-body > [slot="action"] fluent-button::part(control),
+fluent-dialog-body > [slot="action"] fluent-button,
+fluent-dialog-body > [slot="action"] fluent-button::part(control),
 fluent-drawer fluent-drawer-body > [slot="footer"] fluent-button,
 fluent-drawer fluent-drawer-body > [slot="footer"] fluent-button::part(control) {
     height: var(--aspire-control-height);
@@ -240,7 +240,7 @@ fluent-drawer fluent-drawer-body > [slot="footer"] fluent-button::part(control) 
 .aspire-icon-button::part(control),
 .details-toolbar-button,
 .details-toolbar-button::part(control),
-fluent-dialog-body.page-dialog-body > [slot="title-action"] fluent-button[icon-only],
+fluent-dialog-body > [slot="title-action"] fluent-button[icon-only],
 fluent-drawer fluent-drawer-body > [slot="close"] fluent-button,
 fluent-drawer fluent-drawer-body > [slot="close"] fluent-button::part(control) {
     width: var(--aspire-control-height);
@@ -362,12 +362,12 @@ fluent-field.aspire-checkbox > fluent-checkbox {
     margin: 0;
 }
 
-.page-dialog-body fluent-radio {
+fluent-dialog-body fluent-radio {
     --size: 18px;
     flex-shrink: 0;
 }
 
-.page-dialog-body fluent-radio::part(checked-indicator) {
+fluent-dialog-body fluent-radio::part(checked-indicator) {
     width: 8px;
     height: 8px;
 }
@@ -377,20 +377,20 @@ fluent-field.aspire-checkbox > fluent-checkbox {
     See https://developer.mozilla.org/en-US/docs/Web/CSS/@media/forced-colors */
 
 @media (forced-colors: none) {
-    .page-dialog-body fluent-radio:not(:state(disabled)) {
+    fluent-dialog-body fluent-radio:not(:state(disabled)) {
         background-color: transparent;
     }
 
-    .page-dialog-body fluent-radio:state(checked):not(:state(disabled)) {
+    fluent-dialog-body fluent-radio:state(checked):not(:state(disabled)) {
         background-color: var(--colorBrandBackground);
         border-color: transparent;
     }
 
-    .page-dialog-body fluent-radio:state(checked):not(:state(disabled)):hover {
+    fluent-dialog-body fluent-radio:state(checked):not(:state(disabled)):hover {
         background-color: var(--colorBrandBackgroundHover);
     }
 
-    .page-dialog-body fluent-radio:state(checked):not(:state(disabled))::part(checked-indicator) {
+    fluent-dialog-body fluent-radio:state(checked):not(:state(disabled))::part(checked-indicator) {
         background-color: var(--colorNeutralForegroundOnBrand);
     }
 }
@@ -524,6 +524,7 @@ fluent-text-input[appearance="outline"]:focus-within::part(root)::after {
 
 @supports selector(::-webkit-scrollbar) {
     *,
+    fluent-dialog-body::part(content),
     fluent-popover-b::part(dialog),
     ::part(listbox) {
         scrollbar-color: auto;
@@ -532,6 +533,7 @@ fluent-text-input[appearance="outline"]:focus-within::part(root)::after {
 
 @supports not selector(::-webkit-scrollbar) {
     *,
+    fluent-dialog-body::part(content),
     fluent-popover-b::part(dialog),
     ::part(listbox) {
         scrollbar-width: thin;
@@ -540,28 +542,33 @@ fluent-text-input[appearance="outline"]:focus-within::part(root)::after {
 }
 
 ::-webkit-scrollbar,
+fluent-dialog-body::part(content)::-webkit-scrollbar,
 fluent-popover-b::part(dialog)::-webkit-scrollbar {
     width: var(--scrollbar-size);
     height: var(--scrollbar-size);
 }
 
 ::-webkit-scrollbar-track,
+fluent-dialog-body::part(content)::-webkit-scrollbar-track,
 fluent-popover-b::part(dialog)::-webkit-scrollbar-track {
     background: var(--scrollbar-track-color);
 }
 
 ::-webkit-scrollbar-thumb,
+fluent-dialog-body::part(content)::-webkit-scrollbar-thumb,
 fluent-popover-b::part(dialog)::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb-color);
     border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover,
+fluent-dialog-body::part(content)::-webkit-scrollbar-thumb:hover,
 fluent-popover-b::part(dialog)::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-thumb-hover-color);
 }
 
 ::-webkit-scrollbar-corner,
+fluent-dialog-body::part(content)::-webkit-scrollbar-corner,
 fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
     background: transparent;
 }
