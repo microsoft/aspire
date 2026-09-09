@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Agentic workflow / CI automation change (organization-funded Copilot review workflow), no direct user-visible product effect",
+  "mergedAt": "2026-09-08T19:26:41Z",
+  "number": 19985,
+  "runDate": "2026-09-09T00:07:49Z",
+  "status": "excluded",
+  "title": "Add dry-run organization-funded Copilot review workflow"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Follow-up CI automation change to #19985 (Copilot review scan tuning), no user-facing impact",
+  "mergedAt": "2026-09-08T21:18:23Z",
+  "number": 19990,
+  "runDate": "2026-09-09T00:07:49Z",
+  "status": "excluded",
+  "title": "Skip stale PRs in scheduled Copilot review scans"
+}

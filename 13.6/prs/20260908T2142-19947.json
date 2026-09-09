@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Test-only change stabilizing a flaky VS Code extension E2E test, no user-facing impact",
+  "mergedAt": "2026-09-08T21:42:40Z",
+  "number": 19947,
+  "runDate": "2026-09-09T00:07:49Z",
+  "status": "excluded",
+  "title": "Stabilize WinUI extension E2E startup"
+}
