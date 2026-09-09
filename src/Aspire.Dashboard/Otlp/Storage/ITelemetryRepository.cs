@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
@@ -17,9 +17,9 @@ public interface ITelemetryRepository : IDisposable
     bool IsReadOnly { get; }
 
     bool HasDisplayedMaxLogLimitMessage { get; set; }
-    Message? MaxLogLimitMessage { get; set; }
+    DashboardMessageBarReference? MaxLogLimitMessage { get; set; }
     bool HasDisplayedMaxTraceLimitMessage { get; set; }
-    Message? MaxTraceLimitMessage { get; set; }
+    DashboardMessageBarReference? MaxTraceLimitMessage { get; set; }
 
     List<OtlpResource> GetResources(bool includeUninstrumentedPeers = false);
     List<OtlpResource> GetResourcesByName(string name, bool includeUninstrumentedPeers = false);

@@ -1,15 +1,17 @@
-﻿@implements IDialogContentComponent<AspirePageContentLayout.MobileToolbar>
-
-<FluentDialogBody>
-    <FluentStack Orientation="@Orientation.Vertical">
-        @Content.ToolbarSection
-    </FluentStack>
-
-    <FluentButton Class="mobile-absolute-toolbar mobile-toolbar"
-                  Appearance="@Appearance.Accent"
-                  Disabled="true">
-        @Content.MobileToolbarButtonText
-    </FluentButton>
+﻿
+<FluentDialogBody Class="toolbar-panel-body">
+    <ChildContent>
+        <div class="mobile-filter-toolbar">
+            @Content.ToolbarSection
+        </div>
+    </ChildContent>
+    <ActionTemplate>
+        <FluentButton Class="mobile-toolbar"
+                      Appearance="@ButtonAppearance.Primary"
+                      Disabled="true">
+            @Content.MobileToolbarButtonText
+        </FluentButton>
+    </ActionTemplate>
 </FluentDialogBody>
 
 @code {

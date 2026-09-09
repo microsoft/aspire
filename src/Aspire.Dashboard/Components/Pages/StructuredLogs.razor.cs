@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
@@ -47,12 +48,9 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private string? _pendingFocusElementId;
     private AspirePageContentLayout? _contentLayout;
     private string _filter = string.Empty;
-    private FluentDataGrid<LogSummary>? _dataGrid;
+    private AspireFluentDataGrid<LogSummary>? _dataGrid;
     private GridColumnManager _manager = null!;
     private IList<GridColumn> _gridColumns = null!;
-
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
 
     public string BasePath => DashboardUrls.StructuredLogsBasePath;
     public string SessionStorageKey => BrowserStorageKeys.StructuredLogsPageState;
@@ -94,7 +92,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
 
     [Inject]
-    public required IMessageService MessageService { get; init; }
+    public required DashboardMessageBarService MessageService { get; init; }
 
     [Inject]
     public required PauseManager PauseManager { get; init; }
@@ -150,7 +148,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             else if (!logs.IsFull && TelemetryRepository.MaxLogLimitMessage is { } message)
             {
                 // Telemetry could have been cleared from the dashboard. Automatically remove full message on data update.
-                message.Close();
+                await message.CloseAsync();
             }
         }
 
@@ -170,8 +168,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlsStringsLoc);
 
         _gridColumns = [
             new GridColumn(Name: ResourceColumn, DesktopWidth: "2fr", MobileWidth: "1fr"),
@@ -349,7 +345,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private async Task HandleFilterDialog(DialogResult result)
     {
-        if (result.Data is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
+        if (result.Value is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
         {
             if (filterResult.Delete)
             {

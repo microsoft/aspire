@@ -7,10 +7,16 @@ import { readExtensionLogs } from './helpers/logs';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
 
+interface DefinitionInfo {
+    filePath: string;
+    line: number;
+}
+
 suite('Aspire WinUI debug E2E', function () {
     this.timeout(1_200_000);
 
     const readyMarkerPath = path.join(getWorkspaceRoot(), 'winui-e2e-ready.txt');
+    const winUiAppPath = path.join(getWorkspaceRoot(), 'AspireE2E.WinUI', 'App.xaml.cs');
 
     teardown(async () => {
         if (!shouldRunWinUiProof()) {
@@ -37,6 +43,9 @@ suite('Aspire WinUI debug E2E', function () {
         const discovered = await waitForWorkspaceAppHost();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
 
+        await executeE2eControlCommand({ name: 'openFile', filePath: winUiAppPath });
+        await waitForCSharpProjectLoad(winUiAppPath, 120000);
+
         const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
         await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, before);
@@ -56,6 +65,49 @@ suite('Aspire WinUI debug E2E', function () {
 
 function shouldRunWinUiProof(): boolean {
     return process.platform === 'win32' && process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';
+}
+
+async function waitForCSharpProjectLoad(filePath: string, timeoutMs: number): Promise<void> {
+    const symbol = 'InitializeComponent';
+    const source = fs.readFileSync(filePath, 'utf8');
+    const symbolOffset = source.indexOf(symbol);
+    assert.ok(symbolOffset >= 0, `Expected ${symbol} in ${filePath}.`);
+
+    const beforeSymbol = source.slice(0, symbolOffset);
+    const line = beforeSymbol.split(/\r?\n/).length - 1;
+    const character = symbolOffset - (beforeSymbol.lastIndexOf('\n') + 1);
+    const projectDirectory = path.dirname(filePath);
+    const deadline = Date.now() + timeoutMs;
+    let lastDefinitions: readonly DefinitionInfo[] = [];
+
+    // Roslyn's design-time build and the Aspire CLI build both invoke XamlCompiler.exe against
+    // obj\...\input.json. Resolving this generated method proves the design-time XAML pass has
+    // released those files before the CLI starts. See https://github.com/microsoft/aspire/issues/19935.
+    while (Date.now() < deadline) {
+        const status = await executeE2eControlCommand({
+            name: 'getDefinitions',
+            filePath,
+            line,
+            character,
+        }, { timeoutMs: Math.max(1, deadline - Date.now()) })
+            .catch(error => {
+                throw new Error(`The C# definition probe for ${symbol} in ${filePath} failed: ${error instanceof Error ? error.message : String(error)}`);
+            });
+
+        const definitions = status.result;
+        if (!Array.isArray(definitions)) {
+            throw new Error(`The C# definition probe for ${symbol} returned an invalid result: ${JSON.stringify(definitions)}.`);
+        }
+
+        lastDefinitions = definitions as DefinitionInfo[];
+        if (lastDefinitions.some(definition => path.relative(projectDirectory, definition.filePath).split(path.sep)[0].toLowerCase() === 'obj')) {
+            return;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for the C# language server to resolve generated ${symbol} in ${filePath}. Last definitions: ${JSON.stringify(lastDefinitions)}`);
 }
 
 async function waitForReadyMarker(markerPath: string, timeoutMs: number): Promise<string> {

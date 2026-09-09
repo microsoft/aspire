@@ -858,14 +858,62 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             return;
         }
 
-        if (endpoint.Metadata.OwnerReferences is null)
+        if (endpoint.Metadata.OwnerReferences is not null)
+        {
+            foreach (var ownerReference in endpoint.Metadata.OwnerReferences)
+            {
+                await TryRefreshResource(ownerReference.Kind, ownerReference.Name).ConfigureAwait(false);
+            }
+        }
+
+        // A resource can display a URL for an endpoint owned by a different resource (see
+        // ResourceUrlAnnotation.Endpoint and the cross-resource URL handling in ResourceSnapshotBuilder.GetUrls).
+        // The refresh above only covers the endpoint's owning resource, so resources that merely reference the
+        // endpoint would otherwise never learn that it became active/inactive and their URL would get stuck.
+        await RefreshResourcesReferencingEndpoint(endpoint).ConfigureAwait(false);
+    }
+
+    private async Task RefreshResourcesReferencingEndpoint(Endpoint endpoint)
+    {
+        // Resolved from AppResources rather than ServicesMap: AppResources is built synchronously from the app
+        // model before the resource watcher starts, so it can't race against the separate Service watch loop
+        // that populates ServicesMap.
+        var service = endpoint.Spec.ServiceName is { } serviceName
+            ? _resourceState.AppResources.OfType<ServiceWithModelResource>().Select(s => s.Service).FirstOrDefault(s => s.Metadata.Name == serviceName)
+            : null;
+
+        if (service is null ||
+            service.AppModelResourceName is not { } endpointOwnerResourceName ||
+            service.EndpointName is not { } endpointName)
         {
             return;
         }
 
-        foreach (var ownerReference in endpoint.Metadata.OwnerReferences)
+        foreach (var (resourceName, resource) in _resourceState.ApplicationModel)
         {
-            await TryRefreshResource(ownerReference.Kind, ownerReference.Name).ConfigureAwait(false);
+            if (StringComparers.ResourceName.Equals(resourceName, endpointOwnerResourceName))
+            {
+                // The owning resource was already refreshed above.
+                continue;
+            }
+
+            if (!resource.TryGetUrls(out var urls) ||
+                !urls.Any(u => u.Endpoint is { } e &&
+                    StringComparers.ResourceName.Equals(e.Resource.Name, endpointOwnerResourceName) &&
+                    string.Equals(e.EndpointName, endpointName, StringComparisons.EndpointAnnotationName)))
+            {
+                continue;
+            }
+
+            foreach (var appResource in _resourceState.AppResources)
+            {
+                if (appResource is IResourceReference reference &&
+                    reference is not ServiceWithModelResource &&
+                    StringComparers.ResourceName.Equals(reference.ModelResource.Name, resourceName))
+                {
+                    await TryRefreshResource(appResource.DcpResourceKind, appResource.DcpResourceName).ConfigureAwait(false);
+                }
+            }
         }
     }
 

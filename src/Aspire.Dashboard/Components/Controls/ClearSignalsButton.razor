@@ -3,11 +3,11 @@
 
 @inject IStringLocalizer<ControlsStrings> Loc
 
-<AspireMenuButton IconStart="@(new Icons.Regular.Size16.Delete())"
+<AspireMenuButton IconStart="@(new Icons.Regular.Size16.Delete().WithColor(Color.Primary))"
                   Icon="@(new Icons.Regular.Size12.ChevronDown())"
-                  IconColor="Color.FillInverse"
+                  IconColor="Color.Default"
                   ItemsProvider="@(() => _clearMenuItems)"
-                  ButtonAppearance="Appearance.Neutral"
+                  ButtonAppearance="ButtonAppearance.Default"
                   ButtonClass="clear-button"
                   Disabled="@TelemetryRepository.IsReadOnly"
                   Title="@Loc[nameof(ControlsStrings.ClearSignalsButtonTitle)]" />

@@ -4,9 +4,7 @@
 @inject IStringLocalizer<ControlsStrings> Loc
 
 <div class="property-grid">
-    <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                    ColumnSortLabels="@_sortLabels"
-                    HeaderCellAsButtonWithMenu="true"
+    <FluentDataGrid HeaderCellAsButtonWithMenu="true"
                     ResizeType="DataGridResizeType.Discrete"
                     Items="@Items"
                     ItemKey="@ItemKey"

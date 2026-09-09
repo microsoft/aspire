@@ -76,10 +76,11 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         // Assert
-        cut.WaitForAssertion(() => Assert.Equal(3, cut.FindComponent<FluentDataGrid<SpanWaterfallViewModel>>().FindAll(".fluent-data-grid-row").Count));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.Instance.PageViewModel.SpanWaterfallViewModels?.Count));
+        Assert.Single(cut.FindComponents<FluentDataGrid<SpanWaterfallViewModel>>());
         cut.WaitForAssertion(() => Assert.Equal(1, telemetryRepository.TraceSubscriptionCount));
 
-        DisposeComponents();
+        await cut.InvokeAsync(DisposeComponents);
 
         Assert.Equal(0, telemetryRepository.TraceSubscriptionCount);
     }
@@ -192,6 +193,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         Assert.Null(header.GetAttribute("role"));
         Assert.Equal("group", filterGroup.GetAttribute("role"));
         Assert.Equal(controlsLoc[nameof(Dashboard.Resources.ControlsStrings.PageToolbarLandmark)].Value, filterGroup.GetAttribute("aria-label"));
+        Assert.True(filterGroup.ClassList.Contains("filter-toolbar"));
         Assert.Contains(header.Children, element => element.ClassList.Contains("trace-header-details"));
         Assert.Contains(header.Children, element => element.ClassList.Contains("trace-header-filters"));
         cut.WaitForAssertion(() =>

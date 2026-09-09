@@ -3220,6 +3220,59 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandAgentInit_IncludesAspireifyAndDoesNotOfferMcpServer()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, defaultValue) => defaultValue,
+        };
+        var promptedSkills = new List<SkillDefinition>();
+        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
+        {
+            var items = choices.Cast<object>().ToList();
+            if (items.FirstOrDefault() is SkillLocation)
+            {
+                return [SkillLocation.Standard];
+            }
+
+            Assert.All(items, static item => Assert.IsType<SkillDefinition>(item));
+            promptedSkills.AddRange(items.Cast<SkillDefinition>());
+            return items
+                .Cast<SkillDefinition>()
+                .Where(static skill => skill.IsDefault)
+                .Cast<object>()
+                .ToList();
+        };
+
+        var mcpApplicator = new AgentEnvironmentApplicator(
+            AgentCommandStrings.InitCommand_ConfigureMcpServer,
+            _ => Task.CompletedTask);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(mcpApplicator);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(promptedSkills, static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
+        var aspireifySkillPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "output",
+            ".agents",
+            "skills",
+            CommonAgentApplicators.AspireifySkillName,
+            "SKILL.md");
+        Assert.True(File.Exists(aspireifySkillPath));
+    }
+
+    [Fact]
     public async Task NewCommandNonInteractive_SuppressAgentInitTrue_SkipsAgentInit()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -3270,7 +3323,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
         Assert.True(File.Exists(skillPath));
         var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
-        Assert.False(File.Exists(aspireifySkillPath));
+        Assert.True(File.Exists(aspireifySkillPath));
     }
 
     [Fact]
@@ -3298,7 +3351,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
         Assert.True(File.Exists(skillPath));
         var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
-        Assert.False(File.Exists(aspireifySkillPath));
+        Assert.True(File.Exists(aspireifySkillPath));
     }
 
     [Fact]
