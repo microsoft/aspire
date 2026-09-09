@@ -34,6 +34,7 @@ public class OtelMetricsTests
         List<Metric> metrics = new();
         var builder = Host.CreateEmptyApplicationBuilder(null);
         var key = useKeyed ? "messaging" : null;
+        var groupId = $"otel-group-{Guid.NewGuid()}";
         builder.Configuration.AddInMemoryCollection([
             new KeyValuePair<string, string?>("ConnectionStrings:messaging", _containerFixture?.Container?.GetBootstrapAddress()),
         ]);
@@ -43,7 +44,7 @@ public class OtelMetricsTests
             builder.AddKeyedKafkaProducer<string, string>("messaging");
             builder.AddKeyedKafkaConsumer<string, string>("messaging", configureSettings: settings =>
             {
-                settings.Config.GroupId = "unused";
+                settings.Config.GroupId = groupId;
                 settings.Config.EnablePartitionEof = true;
                 settings.Config.AutoOffsetReset = AutoOffsetReset.Earliest;
             });
@@ -53,7 +54,7 @@ public class OtelMetricsTests
             builder.AddKafkaProducer<string, string>("messaging");
             builder.AddKafkaConsumer<string, string>("messaging", configureSettings: settings =>
             {
-                settings.Config.GroupId = "unused";
+                settings.Config.GroupId = groupId;
                 settings.Config.EnablePartitionEof = true;
                 settings.Config.AutoOffsetReset = AutoOffsetReset.Earliest;
             });
@@ -126,6 +127,12 @@ public class OtelMetricsTests
                 "messaging.client.sent.messages",
             ],
             metricNames);
+
+        Assert.All(metrics.Where(metric => metric.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka"), metric =>
+        {
+            Assert.Equal("0.3.0.0", metric.MeterVersion);
+            Assert.Equal("https://opentelemetry.io/schemas/1.44.0", metric.MeterSchemaUrl);
+        });
 
         var durationMetric = metrics.Last(metric =>
             metric.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka"

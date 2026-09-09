@@ -5,7 +5,7 @@
 ```console
 git clone https://github.com/open-telemetry/opentelemetry-dotnet-contrib.git
 git fetch --tags
-git checkout tags/Instrumentation.ConfluentKafka-0.2.0-alpha.2
+git checkout tags/Instrumentation.ConfluentKafka-0.3.0-alpha.1
 ```
 
 ### Instructions
@@ -18,8 +18,8 @@ git checkout tags/Instrumentation.ConfluentKafka-0.2.0-alpha.2
 - Preserve the existing AOT-compatible `PropertyFetcher.AOT.cs` instead of copying the reflection-based `PropertyFetcher.cs` used upstream.
 - In `ConfluentKafkaCommon.cs`:
     - Set `InstrumentationName` to `"OpenTelemetry.Instrumentation.ConfluentKafka"`.
-    - Set `InstrumentationVersion` to `new Version(0, 2, 0, 0).ToString()`.
-    - Construct `ActivitySource` and `Meter` directly with the instrumentation name/version and the v1.43.0 telemetry schema URL instead of copying `ActivitySourceFactory.cs`, `AssemblyVersionExtensions.cs`, and `MeterFactory.cs`.
+    - Set `InstrumentationVersion` to `new Version(0, 3, 0, 0).ToString()`.
+    - Construct `ActivitySource` and `Meter` directly with the instrumentation name/version and the v1.44.0 telemetry schema URL instead of copying `ActivitySourceFactory.cs`, `AssemblyVersionExtensions.cs`, `MeterFactory.cs`, and `SchemaUrls.cs`.
 - Preserve the local `InstrumentedConsumer` adaptation that records operation duration for completed empty polls (timeouts and partition EOF) without emitting message counts or spans.
 
 ## OpenTelemetry.Instrumentation.StackExchangeRedis

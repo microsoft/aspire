@@ -15,13 +15,17 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
     private readonly TextMapPropagator propagator = Propagators.DefaultTextMapPropagator;
     private readonly IProducer<TKey, TValue> producer;
     private readonly ConfluentKafkaProducerInstrumentationOptions<TKey, TValue> options;
+    private readonly Task<string?>? clusterIdTask;
 
     public InstrumentedProducer(
         IProducer<TKey, TValue> producer,
-        ConfluentKafkaProducerInstrumentationOptions<TKey, TValue> options)
+        ConfluentKafkaProducerInstrumentationOptions<TKey, TValue> options,
+        string? bootstrapServers = null)
     {
         this.producer = producer;
         this.options = options;
+
+        this.clusterIdTask = ConfluentKafkaCommon.GetOrFetchClusterIdAsync(producer.Handle, bootstrapServers);
     }
 
     public Handle Handle => this.producer.Handle;
@@ -255,7 +259,11 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
         produceException.Error.Code.ToString();
 
     private static string FormatArgumentException(ArgumentException argumentException) =>
+#if NET
         argumentException.GetType().FullName!;
+#else
+        argumentException.GetType().FullName;
+#endif
 
     private static void GetTags(string topic, out TagList tags, int? partition = null, string? errorType = null)
     {
@@ -318,12 +326,12 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
         var spanName = string.Concat(ConfluentKafkaCommon.SendOperationName, " ", topic);
 
         // Provide the attributes that can influence sampling decisions at span creation time
-        var initialTags = new ActivityTagsCollection
+        var initialTags = new TagList
         {
-            [SemanticConventions.AttributeMessagingDestinationName] = topic,
-            [SemanticConventions.AttributeMessagingOperationName] = ConfluentKafkaCommon.SendOperationName,
-            [SemanticConventions.AttributeMessagingOperationType] = ConfluentKafkaCommon.SendOperationType,
-            [SemanticConventions.AttributeMessagingSystem] = ConfluentKafkaCommon.KafkaMessagingSystem,
+            { SemanticConventions.AttributeMessagingDestinationName, topic },
+            { SemanticConventions.AttributeMessagingOperationName, ConfluentKafkaCommon.SendOperationName },
+            { SemanticConventions.AttributeMessagingOperationType, ConfluentKafkaCommon.SendOperationType },
+            { SemanticConventions.AttributeMessagingSystem, ConfluentKafkaCommon.KafkaMessagingSystem },
         };
 
         if (partition is { } partitionValue)
@@ -356,6 +364,12 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
             if (message.Value is null)
             {
                 activity.SetTag(SemanticConventions.AttributeMessagingKafkaMessageTombstone, true);
+            }
+
+            if (this.clusterIdTask?.Status == TaskStatus.RanToCompletion
+                && this.clusterIdTask.Result is { Length: > 0 } clusterId)
+            {
+                activity.SetTag(SemanticConventions.AttributeMessagingKafkaClusterId, clusterId);
             }
         }
 
