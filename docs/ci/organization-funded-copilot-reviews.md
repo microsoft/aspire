@@ -1,12 +1,28 @@
 # Organization-funded Copilot reviews
 
 The `Organization-funded Copilot reviews` workflow requests Copilot code review
-(CCR) using the repository's `GITHUB_TOKEN`, not a contributor's personal token.
+(CCR) using an installation token for `aspire-repo-bot`, not the workflow's
+`GITHUB_TOKEN` or a contributor's personal token. Organization funding is the
+goal, not a verified billing guarantee.
 It covers open PRs (including drafts) targeting `main` or `release/**`, including forks
 and bot-authored PRs. There is no author permission or license filter.
 
-**The default is dry-run. Merging this workflow does not enable billable review
-requests or change any GitHub rulesets.**
+**The default is dry-run only when the mode variable is unset. If it is already
+`enabled`, merging this change switches subsequent runs to the App immediately.
+Set dry-run and a pilot PR before merging to stage the rollout.** No GitHub
+rulesets are changed by the workflow.
+
+## App prerequisites
+
+The Aspire App must be installed on `microsoft/aspire` with Pull requests: write.
+The workflow uses the existing `ASPIRE_BOT_APP_ID` and `ASPIRE_BOT_PRIVATE_KEY`
+Actions secrets. The token action accepts the existing identifier via its
+`client-id` input, matching other repository workflows.
+
+Each run mints an installation token scoped explicitly to the `microsoft`
+installation and the `aspire` repository. Only Pull requests access is requested:
+write when the mode is exactly `enabled`, otherwise read. Token creation or
+permission failures stop the job; there is no fallback to `GITHUB_TOKEN`.
 
 ## Controls
 
@@ -16,7 +32,7 @@ Variables**. No follow-up PR is needed to change modes.
 | Variable | Value | Effect |
 | --- | --- | --- |
 | `COPILOT_REVIEW_MODE` | Unset or `dry-run` | Read metadata and report decisions; never request reviews. |
-| `COPILOT_REVIEW_MODE` | `enabled` | Request reviews using the Actions bot. |
+| `COPILOT_REVIEW_MODE` | `enabled` | Request reviews using the Aspire App. |
 | `COPILOT_REVIEW_MODE` | `disabled` | Skip the job (kill switch). |
 | `COPILOT_REVIEW_PR_NUMBER` | Unset | Consider all eligible PRs, including PRs opened before rollout. |
 | `COPILOT_REVIEW_PR_NUMBER` | A positive PR number | Restrict both event-driven and scheduled processing to that PR for a pilot. |
@@ -76,11 +92,17 @@ removes someone else's review request to force a retry.
 
 - The privileged workflow does not check out source, execute PR code, load local
   actions, install packages, or consume artifacts or caches.
-- The only action is a full-SHA-pinned `actions/github-script`. All logic is
-  inline so even loading policy code does not require checkout.
-- The only token permission is `pull-requests: write`. The job uses an ephemeral
-  GitHub-hosted runner with a ten-minute timeout. No App private key or PAT is
-  used.
+- Both actions (`actions/create-github-app-token` and `actions/github-script`)
+  are full-SHA-pinned. All policy logic is inline, requiring no checkout.
+- The workflow's `GITHUB_TOKEN` has no granted permissions. The App installation
+  token is restricted to this repository and Pull requests read/write as
+  described above, plus GitHub's mandatory metadata read access. The token action
+  revokes it during job cleanup; installation tokens also expire after one hour.
+- The App private key is passed only to the token action, not to the inline
+  reconciliation script. Unlike the narrowed token, the private key can mint
+  tokens with the App's broader installed permissions: protecting the secret
+  and trusted workflow/runtime remains essential. No PAT is used. The job uses
+  an ephemeral GitHub-hosted runner with a ten-minute timeout.
 - Repository and reviewer identities are fixed. PR-controlled values are API
   data, never interpolated into scripts or used as API URLs. Logs and summaries
   include only validated PR numbers, SHAs, and fixed decision messages.
@@ -91,10 +113,11 @@ removes someone else's review request to force a retry.
   suggestions. CCR's own runner/setup and secret configuration is a separate
   security boundary that must be assessed before the pilot.
 
-Dry-run uses the same token permissions but never calls the write endpoint.
+Dry-run uses a read-only App token and never calls the write endpoint. It still
+requires the App secrets for token creation; disabled mode skips the entire job.
 The single-PR scope and kill switch are rollout controls, not a hard spending
-limit. Once enabled for everyone, contributors can generate organization-paid
-reviews by pushing changes. Configure organization budgets/alerts and monitor
+limit. Once enabled for everyone, contributors can generate potentially billable
+reviews by pushing changes. Configure appropriate budgets/alerts and monitor
 usage; reconsider cadence if this becomes expensive or is abused.
 
 ## Billing and rollout
@@ -102,34 +125,44 @@ usage; reconsider cadence if this becomes expensive or is abused.
 [GitHub's CCR documentation](https://docs.github.com/en/copilot/concepts/agents/code-review#code-review-usage)
 attributes built-in automatic reviews to the author and explicitly states that
 bot-requested reviews are billed directly to the organization.
-[`GITHUB_TOKEN`](https://docs.github.com/en/actions/concepts/security/github_token)
-is an installation token, not the identity of the contributor triggering the
-workflow. GitHub documents
-[requesting the Copilot reviewer through REST](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review).
-These rules support this design, but actual execution and billing under
-Microsoft's policies must be confirmed before broad rollout.
+However, the previous `GITHUB_TOKEN` implementation showed an Actions-bot review
+request followed by CCR starting on behalf of the contributor on PR #18530,
+and a quota-limit rejection on PR #17949. Neither is a billing receipt, but
+they undermine the assumption that a bot requester alone proves organization
+funding. `GITHUB_TOKEN` is itself an installation token; using a separate App
+changes the requesting identity, not a documented billing-account selector.
 
-1. Merge in dry-run mode and inspect workflow decisions. No production billing
-   settings or automatic review rules are changed by this PR.
+GitHub documents
+[requesting the Copilot reviewer through REST](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review).
+Actual execution, quota enforcement, and billing under Microsoft's policies must
+be confirmed separately before broad rollout.
+
+1. Before merging, set `COPILOT_REVIEW_MODE=dry-run` and
+   `COPILOT_REVIEW_PR_NUMBER` to an agreed team-owned pilot PR. Cancel existing
+   enabled workflow runs if needed; changing variables does not stop them.
+   After merging, inspect workflow decisions and successful App token creation.
 2. Identify applicable repository and organization automatic CCR rules,
    including "Review new pushes." Disable those paths before enabling writes,
    or they can still create author-attributed or duplicate reviews.
-3. Set `COPILOT_REVIEW_PR_NUMBER` to an agreed pilot PR. Assess CCR's downstream
-   runner permissions and confirm organization funding/budget policies.
-4. Set `COPILOT_REVIEW_MODE=enabled`. Confirm that the Actions bot starts a
+3. Assess CCR's downstream runner permissions and confirm organization
+   funding/budget policies. Obtain the pilot participant's consent for possible
+   personal allowance consumption; do not experiment on unsuspecting customers.
+4. Set `COPILOT_REVIEW_MODE=enabled`. Confirm that `aspire-repo-bot[bot]` requests a
    review, then push another commit and confirm a re-review, including a push
-   during an active review. Include an external contributor in the pilot.
+   during an active review. Record PR/head, timestamps, requesting actor,
+   execution attribution, and any quota errors for billing correlation.
 5. Have a billing administrator confirm organization attribution and no
    contributor allowance consumption for these bot-requested reviews. An API
    success or a posted review alone is not proof of billing attribution.
 6. Clear the pilot variable to cover all eligible open PRs. Keep human approval
    requirements unchanged and monitor spend and failed workflow runs.
 
-If `GITHUB_TOKEN` cannot initiate CCR under organization policy, leave writes
-disabled until that failure is understood. An Aspire bot App installation token
-is a possible follow-up, scoped to this repository with Pull requests: write.
-Do not substitute a personal token, silently escalate permissions, or claim
-organization billing based only on the human who triggered a workflow run.
+If the App cannot initiate CCR or attribution remains unclear, leave writes
+disabled and escalate the pilot evidence to GitHub support. Ask which principal
+is checked for quota and which account is billed, and whether Actions and
+independent App installation tokens are handled differently. Do not substitute
+a personal token, silently escalate permissions, or infer billing solely from
+the requesting bot or the displayed "on behalf of" identity.
 
 Personal automatic-review settings and manual requests are outside this
 workflow's control and retain their own billing attribution. Actions usage for

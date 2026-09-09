@@ -1,4 +1,4 @@
-# Bot-requested reviews are billed to the organization, unlike ruleset reviews.
+# Request reviews through the Aspire App; organization billing still needs verification.
 # See docs/ci/organization-funded-copilot-reviews.md before enabling writes.
 name: Organization-funded Copilot reviews
 
@@ -34,9 +34,20 @@ jobs:
       (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      pull-requests: write
+    permissions: {}
     steps:
+      # Explicit scope avoids inheriting the App's broader installation permissions.
+      # Dry-run gets read access only; the action revokes the token during job cleanup.
+      - name: Create Aspire App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire
+          permission-pull-requests: ${{ vars.COPILOT_REVIEW_MODE == 'enabled' && 'write' || 'read' }}
+          skip-token-revoke: false
       # Intentionally inline: this privileged workflow never checks out code.
       - name: Reconcile Copilot reviews
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -44,7 +55,7 @@ jobs:
           COPILOT_REVIEW_MODE: ${{ vars.COPILOT_REVIEW_MODE }}
           COPILOT_REVIEW_PR_NUMBER: ${{ vars.COPILOT_REVIEW_PR_NUMBER }}
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ steps.app-token.outputs.token }}
           # A timed-out POST may already have started a billable review.
           retries: 0
           script: |
@@ -157,7 +168,7 @@ jobs:
                 return;
               }
               await github.rest.pulls.requestReviewers({ ...args, reviewers: [reviewer] });
-              record(number, sha, 'Requested Copilot review as the Actions bot.');
+              record(number, sha, 'Requested Copilot review as the Aspire App.');
             }
 
             if (context.eventName === 'pull_request_target') {

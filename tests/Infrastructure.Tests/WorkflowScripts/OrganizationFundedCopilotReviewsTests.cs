@@ -33,9 +33,24 @@ public sealed class OrganizationFundedCopilotReviewsTests(ITestOutputHelper outp
             Scalar(job, "if"));
         Assert.Equal("ubuntu-latest", Scalar(job, "runs-on"));
         Assert.Equal("10", Scalar(job, "timeout-minutes"));
-        var permission = Assert.Single(Mapping(job, "permissions").Children);
-        Assert.Equal("pull-requests", permission.Key.ToString());
-        Assert.Equal("write", permission.Value.ToString());
+        Assert.Empty(Mapping(job, "permissions").Children);
+
+        var steps = Assert.IsType<YamlSequenceNode>(job.Children[new YamlScalarNode("steps")]);
+        Assert.Equal(2, steps.Children.Count);
+        var tokenStep = Assert.IsType<YamlMappingNode>(steps.Children[0]);
+        Assert.Equal(["name", "id", "uses", "with"], tokenStep.Children.Keys.Select(key => key.ToString()));
+        Assert.Equal("app-token", Scalar(tokenStep, "id"));
+        Assert.Matches("^actions/create-github-app-token@[a-f0-9]{40}$", Scalar(tokenStep, "uses"));
+        var tokenOptions = Mapping(tokenStep, "with");
+        Assert.Equal(
+            ["client-id", "private-key", "owner", "repositories", "permission-pull-requests", "skip-token-revoke"],
+            tokenOptions.Children.Keys.Select(key => key.ToString()));
+        Assert.Equal("${{ secrets.ASPIRE_BOT_APP_ID }}", Scalar(tokenOptions, "client-id"));
+        Assert.Equal("${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}", Scalar(tokenOptions, "private-key"));
+        Assert.Equal("microsoft", Scalar(tokenOptions, "owner"));
+        Assert.Equal("aspire", Scalar(tokenOptions, "repositories"));
+        Assert.Equal("${{ vars.COPILOT_REVIEW_MODE == 'enabled' && 'write' || 'read' }}", Scalar(tokenOptions, "permission-pull-requests"));
+        Assert.Equal("false", Scalar(tokenOptions, "skip-token-revoke"));
 
         var step = ScriptStep(root);
         Assert.Equal(["name", "uses", "env", "with"], step.Children.Keys.Select(key => key.ToString()));
@@ -46,7 +61,7 @@ public sealed class OrganizationFundedCopilotReviewsTests(ITestOutputHelper outp
         Assert.Equal("${{ vars.COPILOT_REVIEW_PR_NUMBER }}", Scalar(environment, "COPILOT_REVIEW_PR_NUMBER"));
         var options = Mapping(step, "with");
         Assert.Equal(["github-token", "retries", "script"], options.Children.Keys.Select(key => key.ToString()));
-        Assert.Equal("${{ github.token }}", Scalar(options, "github-token"));
+        Assert.Equal("${{ steps.app-token.outputs.token }}", Scalar(options, "github-token"));
         Assert.Equal("0", Scalar(options, "retries"));
         Assert.Equal(-1, Scalar(options, "script").IndexOf("${{", StringComparison.Ordinal));
     }
@@ -131,7 +146,8 @@ public sealed class OrganizationFundedCopilotReviewsTests(ITestOutputHelper outp
     private static YamlMappingNode ScriptStep(YamlMappingNode root)
     {
         var job = Mapping(Mapping(root, "jobs"), "request-reviews");
-        return Assert.IsType<YamlMappingNode>(Assert.Single(Assert.IsType<YamlSequenceNode>(job.Children[new YamlScalarNode("steps")])));
+        var steps = Assert.IsType<YamlSequenceNode>(job.Children[new YamlScalarNode("steps")]);
+        return Assert.IsType<YamlMappingNode>(steps.Children[1]);
     }
 
     private static YamlMappingNode Mapping(YamlMappingNode node, string key)
