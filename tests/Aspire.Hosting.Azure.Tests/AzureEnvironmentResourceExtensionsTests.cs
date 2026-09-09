@@ -4890,13 +4890,10 @@ public class AzureEnvironmentResourceExtensionsTests
     [Fact]
     public void AddAzureEnvironment_UsesCloudCubeIcon()
     {
-        // Arrange
         var builder = CreateBuilder(isRunMode: true);
 
-        // Act
         var resourceBuilder = builder.AddAzureEnvironment();
 
-        // Assert
         var icon = Assert.Single(resourceBuilder.Resource.Annotations.OfType<ResourceIconAnnotation>());
         Assert.Equal("CloudCube", icon.IconName);
         Assert.Equal(IconVariant.Filled, icon.IconVariant);
