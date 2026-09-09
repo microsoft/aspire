@@ -2,18 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Extensions;
 
 internal static class ComponentExtensions
 {
-    public static async Task SafeRefreshDataAsync<T>(this FluentDataGrid<T>? dataGrid)
+    public static Task SafeRefreshDataAsync<T>(this AspireFluentDataGrid<T>? dataGrid)
     {
-        if (dataGrid != null)
-        {
-            await dataGrid.RefreshDataAsync().ConfigureAwait(false);
-        }
+        return dataGrid?.RefreshDataAndRenderAsync() ?? Task.CompletedTask;
     }
 
     public static async Task SafeRefreshDataAsync(this LogViewer? logViewer)

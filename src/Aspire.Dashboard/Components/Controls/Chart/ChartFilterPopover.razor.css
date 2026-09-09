@@ -10,6 +10,7 @@
     max-width: 32px;
     height: 32px;
     flex: 0 0 32px;
+    font-weight: var(--fontWeightRegular);
 }
 
 .chart-filter-button-container ::deep .chart-filter-button::part(control) {
@@ -17,4 +18,13 @@
     min-width: 32px;
     height: 32px;
     padding: 0;
+    font-weight: var(--fontWeightRegular);
+}
+
+.chart-filter-button-container + ::deep .chart-filter-popover::part(dialog) {
+    transform: translateX(calc(-100% + 32px));
+}
+
+::deep .chart-filter-popover .dimension-popup > fluent-field {
+    cursor: pointer;
 }

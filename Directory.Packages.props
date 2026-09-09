@@ -6,6 +6,9 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <!-- Set this to false when switching Microsoft.FluentUI.AspNetCore.Components to a release package. -->
+    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0-preview.26251.2</MicrosoftFluentUIAspNetCoreComponentsVersion>
+    <MicrosoftFluentUIAspNetCoreComponentsIsPreview>true</MicrosoftFluentUIAspNetCoreComponentsIsPreview>
     <!-- The Npgsql versions used when using Npgsql EF Core on net8/net9. The major versions need to match between Npgsql and EF Core. -->
     <Npgsql8Version>8.0.9</Npgsql8Version>
     <Npgsql9Version>9.0.5</Npgsql9Version>
@@ -123,8 +126,8 @@
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.4" />
-    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.4" />
+    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="$(MicrosoftFluentUIAspNetCoreComponentsVersion)" />
+    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.0.0-rc.6.26241.1" />
     <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
     <PackageVersion Include="ModelContextProtocol" Version="1.3.0" />
     <PackageVersion Include="MongoDB.Driver" Version="3.9.0" />

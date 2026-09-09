@@ -108,13 +108,11 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
     [Theory]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    [InlineData("Light", "fluent-text-field", "root")]
-    [InlineData("Light", "fluent-search", "root")]
-    [InlineData("Light", "fluent-number-field", "root")]
+    [InlineData("Light", "fluent-text-input", "control")]
+    [InlineData("Light", "fluent-number-input", "control")]
     [InlineData("Light", "fluent-text-area", "control")]
-    [InlineData("Dark", "fluent-text-field", "root")]
-    [InlineData("Dark", "fluent-search", "root")]
-    [InlineData("Dark", "fluent-number-field", "root")]
+    [InlineData("Dark", "fluent-text-input", "control")]
+    [InlineData("Dark", "fluent-number-input", "control")]
     [InlineData("Dark", "fluent-text-area", "control")]
     public async Task FluentDelegatedInput_ShowsVisibleFocusIndicator(string theme, string controlName, string partName)
     {
@@ -131,34 +129,25 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         var page = await context.NewPageAsync();
         await page.GotoAsync("/").DefaultTimeout();
-        await page.WaitForSelectorAsync("body:not(.before-upgrade)").DefaultTimeout();
         await page.WaitForSelectorAsync(
             $"html[data-theme='{theme.ToLowerInvariant()}']",
             new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
         await Assertions.Expect(page.GetByText("frontend", new PageGetByTextOptions { Exact = true }).First).ToBeVisibleAsync();
         await WaitForComponentsAndFontsAsync(page);
 
-        ILocator control;
-        if (string.Equals(controlName, "fluent-search", StringComparison.Ordinal))
-        {
-            control = page.Locator("fluent-search[name='resources-search']");
-        }
-        else
-        {
-            await page.EvaluateAsync(
-                """
-                async controlName => {
-                    await customElements.whenDefined(controlName);
-                    const control = document.createElement(controlName);
-                    control.id = 'delegated-focus-probe';
-                    control.style.cssText = 'position:fixed;left:-99999px;top:0;';
-                    document.body.appendChild(control);
-                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-                }
-                """,
-                controlName).DefaultTimeout();
-            control = page.Locator("#delegated-focus-probe");
-        }
+        await page.EvaluateAsync(
+            """
+            async controlName => {
+                await customElements.whenDefined(controlName);
+                const control = document.createElement(controlName);
+                control.id = 'delegated-focus-probe';
+                control.style.cssText = 'position:fixed;left:-99999px;top:0;';
+                document.body.appendChild(control);
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            }
+            """,
+            controlName).DefaultTimeout();
+        var control = page.Locator("#delegated-focus-probe");
 
         await AssertVisibleFocusIndicatorAsync(control, partName);
     }
@@ -180,7 +169,6 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         var page = await context.NewPageAsync();
         await page.GotoAsync("/").DefaultTimeout();
-        await page.WaitForSelectorAsync("body:not(.before-upgrade)").DefaultTimeout();
         await page.WaitForSelectorAsync(
             "html[data-theme='dark']",
             new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
@@ -288,7 +276,6 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         var page = await context.NewPageAsync();
         await page.GotoAsync("/").DefaultTimeout();
-        await page.WaitForSelectorAsync("body:not(.before-upgrade)").DefaultTimeout();
         await page.WaitForSelectorAsync(
             $"html[data-theme='{theme.ToLowerInvariant()}']",
             new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
@@ -344,11 +331,6 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         var page = await context.NewPageAsync();
         await page.GotoAsync(relativeUrl).DefaultTimeout();
 
-        // Wait until Blazor has upgraded the Fluent web components - app.js removes the
-        // `before-upgrade` class from <body> once the components are ready (before then <body> is
-        // visibility:hidden). Scanning earlier would audit the pre-hydration shell.
-        await page.WaitForSelectorAsync("body:not(.before-upgrade)").DefaultTimeout();
-
         // Confirm the requested theme actually applied (app-theme.js sets data-theme on <html>),
         // otherwise a contrast scan could silently run against the wrong palette.
         await page.WaitForSelectorAsync(
@@ -383,7 +365,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             await openSurfaceAsync(page);
 
             // The just-opened dialog mounts its own custom elements (e.g. the Settings language
-            // <fluent-select>); wait for those to upgrade too so the scan doesn't sample a
+            // <fluent-dropdown>); wait for those to upgrade too so the scan doesn't sample a
             // half-hydrated combobox inside the panel.
             await WaitForComponentsAndFontsAsync(page);
         }
@@ -420,10 +402,9 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             BuildFailureMessage(axeResults, blockingViolations, relativeUrl, theme, viewportLabel, surfaceLabel));
     }
 
-    // Blazor + Fluent web components hydrate asynchronously and independently: app.js clears the
-    // <body> `before-upgrade` class as soon as the *first* custom element upgrades, but other component
-    // types on the page (notably the Settings language <fluent-select> and the filter comboboxes) can
-    // still be mid-upgrade at that moment. axe scanning a half-upgraded combobox reads a transient
+    // Blazor + Fluent web components hydrate asynchronously and independently. Component types on
+    // the page (notably the Settings language dropdown and the filter comboboxes) can still be
+    // mid-upgrade when the page first renders. Axe scanning a half-upgraded combobox reads a transient
     // role/accessible-name and yields non-deterministic pass/fail results. Wait for every custom element
     // currently in the DOM to finish upgrading, then for web fonts to finish loading, so the scan (and
     // any preceding interaction) samples a fully settled, stable page.
