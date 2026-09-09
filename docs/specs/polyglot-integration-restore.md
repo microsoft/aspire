@@ -13,7 +13,9 @@ Both paths must apply the same Aspire-selected package source policy while prese
 
 Both restore paths use the AppHost directory as their NuGet configuration boundary.
 
-The package-only path loads the normal hierarchy from the AppHost directory. The SDK-generated root remains under the AppHost-specific Aspire integration cache, but sets `RestoreRootConfigDirectory` to `.aspire/integration-restore` beneath the AppHost when an Aspire policy overlay is required. Normal discovery applies that overlay before continuing through the Aspire-owned `.aspire` directory, the AppHost directory, and its ancestors. Without an overlay, discovery starts directly from the AppHost directory.
+The package-only path loads the normal hierarchy from the AppHost directory. The SDK-generated root remains under the AppHost-specific Aspire integration cache, but sets `RestoreRootConfigDirectory` to the AppHost's `.aspire` metadata directory when an Aspire policy overlay is required. Normal discovery applies the generated `.aspire/NuGet.Config` before continuing through the AppHost directory and its ancestors. Without an overlay, discovery starts directly from the AppHost directory.
+
+The `.aspire` directory is Aspire-owned metadata. Its `NuGet.Config` path is reserved for the generated policy overlay and is not a user-owned ambient NuGet configuration location. Repository policy belongs in the AppHost directory or one of its ancestors.
 
 This boundary intentionally:
 
@@ -136,7 +138,7 @@ The temporary overlay is deleted after the restore invocation.
 
 ## SDK restore root
 
-The SDK path writes a persistent policy overlay to an Aspire-owned policy directory beneath the AppHost and sets the generated root's `RestoreRootConfigDirectory` to that directory. Normal SDK discovery loads the overlay together with the AppHost hierarchy, while referenced projects continue to discover configuration from their own directories.
+The SDK path writes a persistent policy overlay to `.aspire/NuGet.Config` and sets the generated root's `RestoreRootConfigDirectory` to `.aspire`. Normal SDK discovery loads the generated overlay together with the AppHost hierarchy, while referenced projects continue to discover configuration from their own directories.
 
 `IntegrationRestore.csproj`, its intermediate output, and closure artifacts remain in the centralized integration cache. Their storage location does not participate in ambient NuGet configuration discovery.
 
