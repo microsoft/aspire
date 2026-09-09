@@ -232,6 +232,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Integration test scaffolding can only reference a C# AppHost project (.csproj)..
+        /// </summary>
+        public static string IntegrationTestAppHostMustBeCSharpProject {
+            get {
+                return ResourceManager.GetString("IntegrationTestAppHostMustBeCSharpProject", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Integration tests.
         /// </summary>
         public static string IntegrationTestsTemplate_Description {

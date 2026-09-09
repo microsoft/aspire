@@ -368,6 +368,7 @@ public class DotNetTemplateFactoryTests
             hostEnvironment,
             templateNuGetConfigService,
             appHostInfoResolver,
+            new TestProjectLocator(),
             new HostEnvironment(),
             NullLogger<DotNetTemplateFactory>.Instance);
     }

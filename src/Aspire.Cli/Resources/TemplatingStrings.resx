@@ -159,6 +159,9 @@
   <data name="IntegrationTestFrameworkOptionDescription" xml:space="preserve">
     <value>Selects the test framework for the integration test project: MSTest, NUnit, or xUnit.</value>
   </data>
+  <data name="IntegrationTestAppHostMustBeCSharpProject" xml:space="preserve">
+    <value>Integration test scaffolding can only reference a C# AppHost project (.csproj).</value>
+  </data>
   <data name="AppHostProjectOptionDescription" xml:space="preserve">
     <value>The path to the Aspire AppHost project file</value>
   </data>

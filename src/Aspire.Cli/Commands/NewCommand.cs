@@ -585,7 +585,15 @@ internal sealed class NewCommand : BaseCommand
             Channel = resolvedChannelName,
             Language = selectedLanguageId
         };
-        var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+        TemplateResult templateResult;
+        try
+        {
+            templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+        }
+        catch (ProjectLocatorException ex)
+        {
+            return HandleProjectLocatorException(ex, InteractionService, Telemetry);
+        }
 
         // Generated AppHosts can be run directly by dotnet, which cannot trigger lazy bundle
         // extraction. Ensure the bundle is ready instead of relying on best-effort prefetching.

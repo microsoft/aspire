@@ -14,6 +14,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 namespace Aspire.Cli.Templating;
 
@@ -29,6 +30,7 @@ internal class DotNetTemplateFactory(
     ICliHostEnvironment hostEnvironment,
     TemplateNuGetConfigService templateNuGetConfigService,
     IAppHostInfoResolver appHostInfoResolver,
+    IProjectLocator projectLocator,
     IEnvironment environment,
     ILogger<DotNetTemplateFactory> logger)
     : ITemplateFactory
@@ -235,11 +237,75 @@ internal class DotNetTemplateFactory(
             },
             async (template, inputs, parseResult, ct) =>
             {
-                var appHostProject = parseResult.GetValue(_appHostOption);
-                if (appHostProject is { Exists: false })
+                var specifiedAppHostProject = parseResult.GetValue(_appHostOption);
+                var multipleAppHostProjectsFoundBehavior = specifiedAppHostProject is null
+                    ? MultipleAppHostProjectsFoundBehavior.None
+                    : hostEnvironment.SupportsInteractiveInput
+                        ? MultipleAppHostProjectsFoundBehavior.Prompt
+                        : MultipleAppHostProjectsFoundBehavior.Throw;
+                AppHostProjectSearchResult searchResult;
+                try
                 {
-                    interactionService.DisplayError(InteractionServiceStrings.ProjectOptionDoesntExist);
-                    return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+                    searchResult = await projectLocator.UseOrFindAppHostProjectFileAsync(
+                        specifiedAppHostProject,
+                        multipleAppHostProjectsFoundBehavior,
+                        createSettingsFile: false,
+                        ct);
+                }
+                catch (ProjectLocatorException ex) when (
+                    specifiedAppHostProject is null &&
+                    ex.FailureReason is ProjectLocatorFailureReason.NoProjectFileFound
+                        or ProjectLocatorFailureReason.AppHostsMayNotBeBuildable
+                        or ProjectLocatorFailureReason.UnsupportedProjects)
+                {
+                    // AppHost discovery improves the generated test project when possible, but the underlying
+                    // templates also support standalone projects. Explicit --apphost errors still surface.
+                    logger.LogDebug(ex, "No compatible AppHost project was discovered. Generating a standalone integration test project.");
+                    searchResult = new AppHostProjectSearchResult(null, []);
+                }
+
+                var appHostProject = searchResult.SelectedProjectFile;
+                if (specifiedAppHostProject is not null)
+                {
+                    if (appHostProject is null)
+                    {
+                        throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.NoProjectFileFound);
+                    }
+
+                    if (!IsCompatibleIntegrationTestAppHost(appHostProject))
+                    {
+                        interactionService.DisplayError(TemplatingStrings.IntegrationTestAppHostMustBeCSharpProject);
+                        return new TemplateResult(CliExitCodes.FailedToFindProject);
+                    }
+                }
+                else if (appHostProject is null || !IsCompatibleIntegrationTestAppHost(appHostProject))
+                {
+                    if (appHostProject is not null)
+                    {
+                        logger.LogDebug(
+                            "The selected AppHost {AppHostProjectPath} cannot be referenced by a C# integration test project. Considering other discovered AppHosts.",
+                            appHostProject.FullName);
+                    }
+
+                    // A workspace setting can select a non-C# AppHost even when the discovery result
+                    // also contains compatible C# projects. Filter the complete candidate set before
+                    // deciding whether to generate standalone, select automatically, prompt, or fail.
+                    var compatibleAppHostProjects = searchResult.AllProjectFileCandidates
+                        .Where(IsCompatibleIntegrationTestAppHost)
+                        .ToList();
+                    appHostProject = compatibleAppHostProjects.Count switch
+                    {
+                        1 => compatibleAppHostProjects[0],
+                        > 1 when hostEnvironment.SupportsInteractiveInput => await interactionService.PromptForSelectionAsync(
+                            InteractionServiceStrings.SelectAppHostToUse,
+                            compatibleAppHostProjects,
+                            projectFile => $"{projectFile.Name.EscapeMarkup()} ({Path.GetRelativePath(executionContext.WorkingDirectory.FullName, projectFile.FullName).EscapeMarkup()})",
+                            cancellationToken: ct),
+                        > 1 => throw new ProjectLocatorException(
+                            ErrorStrings.MultipleProjectFilesFound,
+                            ProjectLocatorFailureReason.MultipleProjectFilesFound),
+                        _ => null
+                    };
                 }
 
                 var testTemplate = await prompter.PromptForTemplateAsync(
@@ -257,6 +323,9 @@ internal class DotNetTemplateFactory(
             },
             languageId: KnownLanguageId.CSharp);
     }
+
+    private static bool IsCompatibleIntegrationTestAppHost(FileInfo appHostProject)
+        => string.Equals(appHostProject.Extension, ".csproj", StringComparison.OrdinalIgnoreCase);
 
     private CallbackTemplate CreateSingleFileTemplate()
     {

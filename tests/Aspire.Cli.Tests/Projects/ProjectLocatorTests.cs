@@ -521,6 +521,11 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         });
 
         Assert.Equal(ErrorStrings.ProjectFileDoesntExist, ex.Message);
+        Assert.Equal(ProjectLocatorFailureReason.ProjectFileDoesntExist, ex.FailureReason);
+
+        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Equal(InteractionServiceStrings.ProjectOptionDoesntExist, errorMessage);
     }
 
     [Fact]
@@ -2044,6 +2049,11 @@ builder.Build().Run();");
         });
 
         Assert.Equal(ErrorStrings.ProjectFileDoesntExist, ex.Message);
+        Assert.Equal(ProjectLocatorFailureReason.ProjectFileDoesntExist, ex.FailureReason);
+
+        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Equal(InteractionServiceStrings.ProjectOptionDoesntExist, errorMessage);
     }
 
     [Fact]
@@ -2360,6 +2370,11 @@ builder.Build().Run();");
         });
 
         Assert.Equal(ErrorStrings.ProjectFileDoesntExist, ex.Message);
+        Assert.Equal(ProjectLocatorFailureReason.ProjectFileDoesntExist, ex.FailureReason);
+
+        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Equal(InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts, errorMessage);
     }
 
     [Fact]
@@ -2426,7 +2441,7 @@ builder.Build().Run();");
         Assert.Equal(ErrorStrings.AppHostsMayNotBeBuildable, ex.Message);
         Assert.Equal(ProjectLocatorFailureReason.AppHostsMayNotBeBuildable, ex.FailureReason);
 
-        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex, projectOptionSpecifiedAsDirectory: true);
+        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex);
         Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
         Assert.Equal(InteractionServiceStrings.UnbuildableAppHostsDetected, errorMessage);
     }
@@ -2720,6 +2735,44 @@ builder.Build().Run();");
 
         // Should return the first project file (TestInteractionService returns the first choice)
         AssertSameFileSystemPath(projectFile1.FullName, returnedProjectFile!.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileThrowsDirectorySpecificDiagnosticWhenDirectoryHasMultipleProjects()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var projectDirectory = workspace.WorkspaceRoot.CreateSubdirectory("MultiProject");
+        var projectFile1 = new FileInfo(Path.Combine(projectDirectory.FullName, "Project1.csproj"));
+        await File.WriteAllTextAsync(projectFile1.FullName, "Not a real project file.");
+        var projectFile2 = new FileInfo(Path.Combine(projectDirectory.FullName, "Project2.csproj"));
+        await File.WriteAllTextAsync(projectFile2.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = file => new AppHostValidationResult(
+                IsValid: file.FullName == projectFile1.FullName || file.FullName == projectFile2.FullName)
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+        var directoryAsFileInfo = new FileInfo(projectDirectory.FullName);
+
+        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
+            await projectLocator.UseOrFindAppHostProjectFileAsync(
+                directoryAsFileInfo,
+                MultipleAppHostProjectsFoundBehavior.Throw,
+                createSettingsFile: false,
+                CancellationToken.None).DefaultTimeout();
+        });
+
+        Assert.Equal(ErrorStrings.MultipleProjectFilesFound, ex.Message);
+        Assert.Equal(ProjectLocatorFailureReason.MultipleProjectFilesFound, ex.FailureReason);
+
+        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Equal(InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts, errorMessage);
     }
 
     [Fact]
