@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@afscrome"
+  ],
+  "description": "Redis Commander/Insight \"Manage\" links now appear on every Redis resource in the app instead of only the one that called WithRedisCommander()/WithRedisInsight(), and a DCP bug that left cross-resource URLs stuck as inactive after the tool started has been fixed.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-09-09T00:47:38Z",
+  "lastMergedAt": "2026-09-09T00:47:38Z",
+  "name": "Fixed Redis \"Manage\" links to tool resources",
+  "owner": "DamianEdwards",
+  "prs": [
+    19969
+  ]
+}

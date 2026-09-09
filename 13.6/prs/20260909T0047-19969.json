@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Fixed Redis Commander/Insight Manage links to show on every Redis resource and fixed stuck cross-resource URL activation state",
+  "mergedAt": "2026-09-09T00:47:38Z",
+  "number": 19969,
+  "runDate": "2026-09-09T06:05:40Z",
+  "status": "included",
+  "title": "Add \"Manage\" links from Redis to Redis Commander/Insight"
+}
