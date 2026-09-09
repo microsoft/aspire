@@ -15,7 +15,6 @@
     <DotNetSdkNet8VersionForTesting>8.0.415</DotNetSdkNet8VersionForTesting>
     <DotNetSdkNet9VersionForTesting>9.0.306</DotNetSdkNet9VersionForTesting>
     <DotNetSdkNet10VersionForTesting>10.0.400</DotNetSdkNet10VersionForTesting>
-    <DotNetSdkNet11VersionForTesting>11.0.100-rc.1.26425.128</DotNetSdkNet11VersionForTesting>
     <XunitV3Version>3.2.2</XunitV3Version>
     <XUnitAnalyzersVersion>1.21.0</XUnitAnalyzersVersion>
     <XunitRunnerVisualStudioVersion>3.1.5</XunitRunnerVisualStudioVersion>
