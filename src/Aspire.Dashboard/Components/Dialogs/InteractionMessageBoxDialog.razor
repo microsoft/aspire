@@ -2,7 +2,15 @@
 
 <FluentDialogBody Class="page-dialog-body">
     <ChildContent>
-        @((MarkupString)Content.MarkupMessage)
+        <div class="interaction-message-box-content">
+            @if (Icon is { } icon)
+            {
+                <FluentIcon Value="@icon" Color="@IconColor" Class="interaction-message-box-icon" />
+            }
+            <div class="interaction-message-box-message">
+                @((MarkupString)Content.MarkupMessage)
+            </div>
+        </div>
     </ChildContent>
 
     <ActionTemplate>

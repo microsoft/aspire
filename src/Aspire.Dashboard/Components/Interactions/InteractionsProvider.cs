@@ -161,6 +161,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 if (item.MessageBox is { } messageBox)
                 {
                     var dialogParameters = CreateDialogParameters(item, messageBox.Intent);
+                    dialogParameters.Title = WebUtility.HtmlEncode(item.Title);
                     dialogParameters.OnDialogResult = EventCallback.Factory.Create<DialogResult>(this, async dialogResult =>
                     {
                         var request = new WatchInteractionsRequestUpdate
@@ -193,6 +194,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     var content = new InteractionMessageBoxContent
                     {
                         MarkupMessage = GetMessageHtml(item),
+                        Intent = messageBox.Intent
                     };
 
                     dialogComponentId = TelemetryComponentIds.InteractionMessageBox;

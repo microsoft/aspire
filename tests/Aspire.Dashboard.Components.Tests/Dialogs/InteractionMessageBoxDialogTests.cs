@@ -6,6 +6,7 @@ using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
+using Aspire.DashboardService.Proto.V1;
 using Aspire.Dashboard.Tests;
 using Aspire.Tests.Shared;
 using Bunit;
@@ -15,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Dialogs;
 
@@ -27,7 +29,7 @@ public sealed class InteractionMessageBoxDialogTests : DashboardTestContext
     {
         var getCut = SetUpDialog(out var dialogService);
         var reference = await dialogService.ShowDialogAsync<InteractionMessageBoxDialog>(
-            new InteractionMessageBoxContent { MarkupMessage = "Message" },
+            new InteractionMessageBoxContent { MarkupMessage = "Message", Intent = MessageIntent.None },
             new DialogParameters
             {
                 PrimaryAction = "Continue",
@@ -55,7 +57,7 @@ public sealed class InteractionMessageBoxDialogTests : DashboardTestContext
         var getCut = SetUpDialog(out var dialogService);
 
         await dialogService.ShowDialogAsync<InteractionMessageBoxDialog>(
-            new InteractionMessageBoxContent { MarkupMessage = "Waiting" },
+            new InteractionMessageBoxContent { MarkupMessage = "Waiting", Intent = MessageIntent.None },
             new DialogParameters
             {
                 PrimaryAction = string.Empty,
@@ -66,6 +68,37 @@ public sealed class InteractionMessageBoxDialogTests : DashboardTestContext
 
         var button = Assert.Single(cut.FindAll("fluent-dialog-body [slot='action'] footer fluent-button"));
         Assert.Equal("Stop waiting", button.TextContent.Trim());
+    }
+
+    [Theory]
+    [InlineData(MessageIntent.None, null, Color.Default)]
+    [InlineData(MessageIntent.Success, typeof(Icons.Filled.Size24.CheckmarkCircle), Color.Success)]
+    [InlineData(MessageIntent.Warning, typeof(Icons.Filled.Size24.Warning), Color.Warning)]
+    [InlineData(MessageIntent.Error, typeof(Icons.Filled.Size24.DismissCircle), Color.Error)]
+    [InlineData(MessageIntent.Information, typeof(Icons.Filled.Size24.Info), Color.Info)]
+    [InlineData(MessageIntent.Confirmation, typeof(Icons.Filled.Size24.QuestionCircle), Color.Success)]
+    public async Task Intent_RendersExpectedIcon(MessageIntent intent, Type? expectedIconType, Color expectedColor)
+    {
+        var getCut = SetUpDialog(out var dialogService);
+
+        await dialogService.ShowDialogAsync<InteractionMessageBoxDialog>(
+            new InteractionMessageBoxContent { MarkupMessage = "Message", Intent = intent },
+            new DialogParameters { UseCustomFooter = true });
+        var cut = getCut();
+
+        var icons = cut.FindComponents<FluentIcon<Icon>>()
+            .Where(component => component.Instance.Class == "interaction-message-box-icon")
+            .ToList();
+        if (expectedIconType is null)
+        {
+            Assert.Empty(icons);
+        }
+        else
+        {
+            var icon = Assert.Single(icons).Instance;
+            Assert.IsType(expectedIconType, icon.Value);
+            Assert.Equal(expectedColor, icon.Color);
+        }
     }
 
     private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)

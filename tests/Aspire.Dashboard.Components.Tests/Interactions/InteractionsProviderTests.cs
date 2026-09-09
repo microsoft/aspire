@@ -144,7 +144,14 @@ public partial class InteractionsProviderTests : DashboardTestContext
             isEnabled: true,
             interactionChannelProvider: () => interactionsChannel,
             sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
-        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.CompletedTask);
+        object? dialogContent = null;
+        DialogParameters? dialogParameters = null;
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) =>
+        {
+            dialogContent = data;
+            dialogParameters = parameters;
+            return Task.CompletedTask;
+        });
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
@@ -159,7 +166,8 @@ public partial class InteractionsProviderTests : DashboardTestContext
         await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
         {
             InteractionId = 1,
-            MessageBox = new InteractionMessageBox()
+            Title = "Confirm <script>alert('title')</script>",
+            MessageBox = new InteractionMessageBox { Intent = MessageIntent.Confirmation }
         });
 
         // Assert 1
@@ -173,6 +181,9 @@ public partial class InteractionsProviderTests : DashboardTestContext
 
             return dialogService.LastInstance == reference.Dialog.Instance && reference.InteractionId == 1;
         }, "Wait for dialog reference created.");
+
+        Assert.Equal("Confirm &lt;script&gt;alert(&#39;title&#39;)&lt;/script&gt;", dialogParameters!.Title);
+        Assert.Equal(MessageIntent.Confirmation, Assert.IsType<InteractionMessageBoxContent>(dialogContent).Intent);
 
         // Act 2
         var dashboardDialogReference = instance._interactionDialogReference!.Dialog;
