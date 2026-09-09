@@ -9,7 +9,7 @@ internal sealed class FakeKafkaConsumer<TKey, TValue> : IConsumer<TKey, TValue>
 {
     public ConsumeResult<TKey, TValue>? ConsumeResult { get; set; }
 
-    public ConsumeException? ExceptionToThrow { get; set; }
+    public Exception? ExceptionToThrow { get; set; }
 
     public Handle Handle => null!;
 

@@ -20,6 +20,7 @@ git checkout tags/Instrumentation.ConfluentKafka-0.2.0-alpha.2
     - Set `InstrumentationName` to `"OpenTelemetry.Instrumentation.ConfluentKafka"`.
     - Set `InstrumentationVersion` to `new Version(0, 2, 0, 0).ToString()`.
     - Construct `ActivitySource` and `Meter` directly with the instrumentation name/version and the v1.43.0 telemetry schema URL instead of copying `ActivitySourceFactory.cs`, `AssemblyVersionExtensions.cs`, and `MeterFactory.cs`.
+- Preserve the local `InstrumentedConsumer` adaptation that records operation duration for completed empty polls (timeouts and partition EOF) without emitting message counts or spans.
 
 ## OpenTelemetry.Instrumentation.StackExchangeRedis
 

@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Metrics;
 using Xunit;
+using static Aspire.Confluent.Kafka.Tests.MetricTestHelpers;
 
 namespace Aspire.Confluent.Kafka.Tests;
 
@@ -80,6 +81,7 @@ public class OtelMetricsTests
             await producer.FlushAsync();
         }
 
+        var pollCount = 0;
         using (var consumer = useKeyed
             ? host.Services.GetRequiredKeyedService<IConsumer<string, string>>(key)
             : host.Services.GetRequiredService<IConsumer<string, string>>())
@@ -95,6 +97,7 @@ public class OtelMetricsTests
                     continue;
                 }
 
+                pollCount++;
                 if (consumerResult.IsPartitionEOF)
                 {
                     break;
@@ -123,5 +126,23 @@ public class OtelMetricsTests
                 "messaging.client.sent.messages",
             ],
             metricNames);
+
+        var durationMetric = metrics.Last(metric =>
+            metric.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka"
+            && metric.Name == "messaging.client.operation.duration");
+        var durationPoints = new List<MetricPoint>();
+        foreach (ref readonly var point in durationMetric.GetMetricPoints())
+        {
+            if (Equals(GetTagValue(point, "messaging.destination.name"), topic))
+            {
+                durationPoints.Add(point);
+            }
+        }
+
+        Assert.Equal(2, durationPoints.Count);
+        var sendPoint = Assert.Single(durationPoints, point => Equals(GetTagValue(point, "messaging.operation.name"), "send"));
+        Assert.Equal(5, sendPoint.GetHistogramCount());
+        var pollPoint = Assert.Single(durationPoints, point => Equals(GetTagValue(point, "messaging.operation.name"), "poll"));
+        Assert.Equal(pollCount, pollPoint.GetHistogramCount());
     }
 }
