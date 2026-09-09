@@ -100,6 +100,10 @@
     display: none;
 }
 
+::deep fluent-toast-b::part(dialog) {
+    align-items: center;
+}
+
 ::deep fluent-toast-b.resource-command-toast::part(dialog) {
     font-size: 13px;
 }
@@ -247,7 +251,12 @@
     }
 
     ::deep.layout > .desktop-nav-rail .fluent-appbar-item > a:hover {
-        background-color: var(--colorNeutralBackground1Hover);
+        background-color: var(--colorNeutralBackground3);
+        color: var(--colorNeutralForeground1);
+    }
+
+    ::deep.layout > .desktop-nav-rail .fluent-appbar-item > a:hover svg {
+        fill: var(--colorBrandForeground1) !important;
     }
 
     ::deep.layout > .desktop-nav-rail .fluent-appbar-item > a.active {

@@ -89,10 +89,13 @@ fluent-button:is([disabled], [disabled-focusable]) {
 /* Preserve the final-v4 input and select recipes across their Fluent v5 replacements. */
 
 fluent-text-input,
+fluent-number-input,
 fluent-dropdown {
     --colorNeutralStrokeAccessible: var(--colorNeutralStroke1);
-    --colorNeutralStrokeAccessibleHover: var(--colorNeutralStroke1Hover);
-    --colorNeutralStrokeAccessiblePressed: var(--colorNeutralStroke1Pressed);
+    --colorNeutralStrokeAccessibleHover: var(--colorNeutralStroke1);
+    --colorNeutralStrokeAccessiblePressed: var(--colorNeutralStroke1);
+    --colorNeutralStroke1Hover: var(--colorNeutralStroke1);
+    --colorNeutralStroke1Pressed: var(--colorNeutralStroke1);
     --colorCompoundBrandStroke: var(--colorBrandStroke1);
     --colorCompoundBrandStrokePressed: var(--colorBrandStroke1);
     --colorNeutralForeground3: var(--colorNeutralForeground2);
@@ -490,7 +493,7 @@ fluent-dropdown fluent-option:focus-visible {
 fluent-text-input[appearance="outline"]:focus-within::part(root) {
     border-color: var(--colorStrokeFocus1);
     outline: var(--strokeWidthThick) solid var(--colorStrokeFocus1);
-    outline-offset: calc(-1 * var(--strokeWidthThin));
+    outline-offset: calc(-1 * var(--strokeWidthThick));
 }
 
 fluent-text-input[appearance="outline"]:focus-within::part(root)::after {

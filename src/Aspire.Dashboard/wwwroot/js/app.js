@@ -20,7 +20,7 @@ fluentDropdownStyleSheet.replaceSync(`
 
     :host(:where(:focus-within)) .control {
         outline: 2px solid var(--colorBrandStroke1);
-        outline-offset: 0;
+        outline-offset: -2px;
     }
 
     .control::before, .control::after {

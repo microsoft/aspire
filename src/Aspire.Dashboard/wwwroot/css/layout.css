@@ -641,9 +641,12 @@ fluent-dialog-body::part(content) {
 .toolbar-button:not([appearance]) {
     --colorNeutralBackground1: var(--colorNeutralBackground2);
     --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
+    --colorNeutralBackground1Pressed: var(--aspire-link-button-pressed-background);
     --colorNeutralForeground1: var(--colorBrandForeground1);
     --colorNeutralForeground1Hover: var(--colorBrandForeground1);
+    --colorNeutralForeground1Pressed: var(--colorBrandForeground1);
     --colorNeutralStroke1Hover: var(--colorNeutralStroke1);
+    --colorNeutralStroke1Pressed: var(--colorNeutralStroke1);
 }
 
 .filter-toolbar fluent-divider {
