@@ -497,6 +497,43 @@ suite('Aspire tree action command E2E', function () {
         const codeLensEditor = await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments', 'hello from codelens');
         assert.notStrictEqual(codeLensEditor.text, commandPaletteEditor.text);
     });
+
+    test('passes CodeLens file input through hidden resource command execution', async function () {
+        this.timeout(600000);
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        await restoreE2eCliPathForE2E();
+
+        const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForAppHostLaunching(appHostPath);
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 120000, runBefore);
+        await waitForRunningAppHost();
+
+        const workerState = await waitForResourceState('e2e-worker', ['Running'], 180000);
+        const workerResource = findResource(workerState.state, 'e2e-worker');
+        assert.ok(workerResource, 'Expected e2e-worker to be present after AppHost startup.');
+        assert.ok(workerResource.commands?.['read-file'], 'Expected read-file resource command.');
+
+        const selectedFilePath = path.join(path.dirname(appHostPath), 'resource-command-input.json');
+        const terminalBefore = getTerminalCommandCount();
+        const commandBefore = getCommandInvocationCount('aspire-vscode.codeLensResourceAction');
+        await executeE2eControlCommand({
+            name: 'executeCodeLensResourceAction',
+            resourceName: workerResource.name,
+            commandName: 'read-file',
+            appHostPath,
+            filePickerPaths: [selectedFilePath],
+        }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.codeLensResourceAction', 'success', 60000, commandBefore);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
+        await waitForResourceCommandOutputEditor(
+            workerResource.name,
+            'read-file',
+            '{"message":"hello from resource command file input"}');
+    });
 });
 
 type AppHostActionControlCommand =

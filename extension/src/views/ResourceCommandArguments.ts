@@ -38,6 +38,10 @@ interface SecretWarningItem extends vscode.QuickPickItem {
     suppressFutureWarnings: boolean;
 }
 
+type ResourceCommandFilePicker = (options: vscode.OpenDialogOptions) => Thenable<vscode.Uri[] | undefined>;
+
+let showResourceCommandFilePicker: ResourceCommandFilePicker = options => vscode.window.showOpenDialog(options);
+
 export const resourceCommandSecretWarningSuppressedKey = 'resourceCommandArguments.secretWarningSuppressed';
 
 export interface ResourceCommandArgumentOptions {
@@ -46,6 +50,20 @@ export interface ResourceCommandArgumentOptions {
     // project, resource, or command.
     secretWarningState?: vscode.Memento;
     loadDynamicArguments?: ResourceCommandArgumentLoader;
+}
+
+export async function withResourceCommandFilePickerForE2E<T>(
+    filePicker: ResourceCommandFilePicker,
+    action: () => PromiseLike<T>,
+): Promise<T> {
+    const previousFilePicker = showResourceCommandFilePicker;
+    showResourceCommandFilePicker = filePicker;
+    try {
+        return await action();
+    }
+    finally {
+        showResourceCommandFilePicker = previousFilePicker;
+    }
 }
 
 // Resource command number inputs are forwarded to hosting, which validates with
@@ -296,7 +314,7 @@ async function promptForArgumentValue(title: string, input: ResourceCommandArgum
 }
 
 async function promptForFileArgument(title: string, input: ResourceCommandArgumentInputJson): Promise<string | undefined> {
-    const selectedFiles = await vscode.window.showOpenDialog({
+    const selectedFiles = await showResourceCommandFilePicker({
         canSelectFiles: true,
         canSelectFolders: false,
         canSelectMany: input.allowMultipleFiles ?? false,

@@ -567,10 +567,11 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task ExecuteCommandAsync_FileArgument_CopiesSelectedFileForCommand()
+    public async Task ExecuteCommandAsync_FileArgument_UsesValidatedContentForCommand()
     {
         using var builder = CreateBuilder();
-        using var selectedFile = builder.FileSystemService.TempDirectory.CreateTempFile("bingo.json");
+        using var fileSystemService = new TestFileSystemService();
+        using var selectedFile = fileSystemService.TempDirectory.CreateTempFile("bingo.json");
         await File.WriteAllTextAsync(selectedFile.Path, """{"square":"free"}""");
 
         string? capturedName = null;
@@ -617,6 +618,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 {
                     using var files = context.Inputs["squares"].GetFiles();
                     validationContent = await File.ReadAllTextAsync(Assert.Single(files).FilePath);
+                    await File.WriteAllTextAsync(selectedFile.Path, """{"square":"changed-after-validation"}""");
                 }
             });
 

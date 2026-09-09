@@ -1513,6 +1513,31 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
             ],
         })
     .WithCommand(
+        "read-file",
+        "read-file",
+        static async context =>
+        {
+            using var files = context.Arguments["file"].GetFiles();
+            var file = files.Single();
+            var content = await File.ReadAllTextAsync(file.FilePath, context.CancellationToken);
+            return CommandResults.Success("Read file completed.", content);
+        },
+        new CommandOptions
+        {
+            Arguments =
+            [
+                new InteractionInput
+                {
+                    Name = "file",
+                    Label = "Input file",
+                    InputType = InputType.File,
+                    Required = true,
+                    FileFilter = ".json",
+                    MaxFileSize = 1024,
+                },
+            ],
+        })
+    .WithCommand(
         "disabled-e2e-command",
         "disabled-e2e-command",
         static _ => Task.FromResult(CommandResults.Success()),
@@ -1592,6 +1617,10 @@ builder.Build().Run();
 
 sealed class NoCommandsResource(string name) : Aspire.Hosting.ApplicationModel.Resource(name);
 `);
+
+  fs.writeFileSync(
+    path.join(projectDirectory, 'resource-command-input.json'),
+    '{"message":"hello from resource command file input"}\n');
 }
 
 function writeAzureFunctionsProject(projectName) {
