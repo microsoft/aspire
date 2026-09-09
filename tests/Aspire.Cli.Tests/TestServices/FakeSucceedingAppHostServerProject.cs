@@ -18,6 +18,8 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
 
     public string? RequestedChannel { get; private set; }
 
+    public string? PackageSourceOverride { get; private set; }
+
     public string GetInstanceIdentifier() => AppDirectoryPath;
 
     public Task<AppHostServerPrepareResult> PrepareAsync(
@@ -28,6 +30,7 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
         CancellationToken cancellationToken = default)
     {
         RequestedChannel = requestedChannel;
+        PackageSourceOverride = packageSourceOverride;
         return Task.FromResult(new AppHostServerPrepareResult(Success: true, Output: null));
     }
 

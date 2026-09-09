@@ -329,7 +329,8 @@ internal sealed class AddCommand : BaseCommand
             // is named stable/daily/staging but its Aspire.* packages live in a local directory, and
             // without the local source in nuget.config the C# `dotnet add package` restore of the
             // local-only version fails. See docs/specs/cli-identity-sidecar.md.
-            if (string.IsNullOrEmpty(source) &&
+            if (project.LanguageId == KnownLanguageId.CSharp &&
+                string.IsNullOrEmpty(source) &&
                 (VersionHelper.IsLocalBuildChannel(selectedNuGetPackage.Channel.Name) || selectedNuGetPackage.Channel.IsBackedByLocalPackageDirectory))
             {
                 var mappings = selectedNuGetPackage.Channel.Mappings;
@@ -357,6 +358,7 @@ internal sealed class AddCommand : BaseCommand
                 AppHostFile = effectiveAppHostProjectFile,
                 PackageId = selectedNuGetPackage.Package.Id,
                 PackageVersion = selectedNuGetPackage.Package.Version,
+                RequestedChannel = GetRequestedRestoreChannel(selectedNuGetPackage.Channel),
                 Source = source
             };
 
@@ -441,6 +443,16 @@ internal sealed class AddCommand : BaseCommand
         {
             addActivity.Dispose();
         }
+    }
+
+    private static string GetRequestedRestoreChannel(PackageChannel channel)
+    {
+        // A null requested channel means "use the channel persisted by the project". Selecting a
+        // package from the implicit channel must instead override any persisted non-stable channel
+        // for this operation while retaining ambient NuGet policy, which is the stable-channel contract.
+        return channel.Type is PackageChannelType.Implicit
+            ? PackageChannelNames.Stable
+            : channel.Name;
     }
 
     private async Task<bool> HasEffectivePackageSourceMappingAsync(

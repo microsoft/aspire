@@ -815,6 +815,53 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
+    public async Task AddPackageAsync_PassesSelectedRestorePolicyToAppHostServer()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "channel": "staging",
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var serverProject = new FakeSucceedingAppHostServerProject(_workspace.WorkspaceRoot.FullName);
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (_, _) => Task.FromResult<IAppHostServerProject>(serverProject)
+        };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: factory,
+            serverSessionFactory: new FakeAppHostServerSessionFactory());
+
+        const string requestedChannel = "pr-12345";
+        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        var result = await project.AddPackageAsync(
+            new AddPackageContext
+            {
+                AppHostFile = new FileInfo(appHostPath),
+                PackageId = "Aspire.Hosting.Redis",
+                PackageVersion = "2.0.0",
+                RequestedChannel = requestedChannel,
+                Source = sourceOverride
+            },
+            CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(requestedChannel, serverProject.RequestedChannel);
+        Assert.Equal(sourceOverride, serverProject.PackageSourceOverride);
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal(PackageChannelNames.Staging, reloaded.Channel);
+        Assert.Equal("2.0.0", reloaded.Packages?["Aspire.Hosting.Redis"]);
+    }
+
+    [Fact]
     public async Task FindAndStopRunningInstanceAsync_CleansUpDeadPidSocketAndReturnsNoRunningInstance()
     {
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");

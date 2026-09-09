@@ -76,7 +76,12 @@ internal sealed class AddPackageContext
     public required string PackageVersion { get; init; }
 
     /// <summary>
-    /// Gets or sets the optional NuGet source.
+    /// Gets or sets the package channel selected for this add operation.
+    /// </summary>
+    public string? RequestedChannel { get; init; }
+
+    /// <summary>
+    /// Gets or sets the optional invocation-scoped NuGet source.
     /// </summary>
     public string? Source { get; init; }
 
