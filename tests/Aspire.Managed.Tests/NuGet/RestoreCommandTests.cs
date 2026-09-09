@@ -287,6 +287,11 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
               <packageSources>
                 <add key="private" value="{sourcePath}" />
               </packageSources>
+              <packageSourceMapping>
+                <packageSource key="private">
+                  <package pattern="Aspire*" />
+                </packageSource>
+              </packageSourceMapping>
             </configuration>
             """);
 
@@ -298,6 +303,37 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
             source => source.Name == "private" &&
                 source.Source == sourcePath &&
                 source.IsEnabled);
+        Assert.True(settings.PackageSourceMappingEnabled);
+    }
+
+    [Fact]
+    public void SettingsCommand_ReportsWhenHigherPrecedenceConfigClearsPackageSourceMapping()
+    {
+        var projectDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "AppHost"));
+        File.WriteAllText(
+            Path.Combine(_workspace.Path, "NuGet.Config"),
+            """
+            <configuration>
+              <packageSourceMapping>
+                <packageSource key="private">
+                  <package pattern="Aspire*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        File.WriteAllText(
+            Path.Combine(projectDirectory.FullName, "NuGet.Config"),
+            """
+            <configuration>
+              <packageSourceMapping>
+                <clear />
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        var settings = SettingsCommand.GetSettings(projectDirectory.FullName);
+
+        Assert.False(settings.PackageSourceMappingEnabled);
     }
 
     /// <summary>

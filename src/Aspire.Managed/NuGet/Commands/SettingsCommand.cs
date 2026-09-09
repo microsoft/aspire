@@ -45,12 +45,21 @@ internal static class SettingsCommand
                 source.Source,
                 source.IsEnabled))
             .ToArray();
+        var packageSourceMappingEnabled = new PackageSourceMappingProvider(settings)
+            .GetPackageSourceMappingItems()
+            .Count > 0;
 
-        return new NuGetSettingsResult(settings.GetConfigFilePaths().ToArray(), sources);
+        return new NuGetSettingsResult(
+            settings.GetConfigFilePaths().ToArray(),
+            sources,
+            packageSourceMappingEnabled);
     }
 }
 
-internal sealed record NuGetSettingsResult(string[] ConfigPaths, NuGetSourceResult[] Sources);
+internal sealed record NuGetSettingsResult(
+    string[] ConfigPaths,
+    NuGetSourceResult[] Sources,
+    bool PackageSourceMappingEnabled);
 
 internal sealed record NuGetSourceResult(string Name, string Source, bool IsEnabled);
 

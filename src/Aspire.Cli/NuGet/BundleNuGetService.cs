@@ -17,7 +17,8 @@ namespace Aspire.Cli.NuGet;
 
 internal sealed record NuGetSettingsInfo(
     IReadOnlyList<string> ConfigPaths,
-    IReadOnlyList<NuGetSourceInfo> Sources);
+    IReadOnlyList<NuGetSourceInfo> Sources,
+    bool PackageSourceMappingEnabled);
 
 internal sealed record NuGetSourceInfo(string Name, string Source, bool IsEnabled);
 
@@ -361,8 +362,14 @@ internal sealed class BundleNuGetService : INuGetService
                         ?? throw new InvalidDataException("The NuGet settings response contained a source without a location."),
                     element.GetProperty("IsEnabled").GetBoolean()))
                 .ToArray();
+            var packageSourceMappingEnabled = document.RootElement
+                .GetProperty("PackageSourceMappingEnabled")
+                .GetBoolean();
 
-            return new NuGetSettingsInfo(configPaths, sources);
+            return new NuGetSettingsInfo(
+                configPaths,
+                sources,
+                packageSourceMappingEnabled);
         }
         catch (JsonException ex)
         {

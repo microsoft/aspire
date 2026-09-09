@@ -1855,7 +1855,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task PrepareAsync_WithPackageReferences_UsesPackageSourceOverride()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        var packageSourceOverride = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "aspire-pr-hive",
+            "packages");
         List<string>? restoreArgs = null;
 
         var (server, executionFactory) = CreatePackageReferenceServer(workspace);
@@ -1896,7 +1899,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task PrepareAsync_WithPackageSourceOverride_AddsNuGetOrgFallbackSource()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        var packageSourceOverride = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "aspire-pr-hive",
+            "packages");
         List<string>? restoreArgs = null;
 
         var (server, executionFactory) = CreatePackageReferenceServer(workspace);
@@ -2290,7 +2296,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // End-to-end check that `aspire new --source <pr> --channel <X>` does not let the channel's
         // Aspire* feed remain co-eligible with the override at restore time.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        var packageSourceOverride = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "aspire-pr-hive",
+            "packages");
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
 
         var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
@@ -3187,7 +3196,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task PrepareAsync_WithProjectReferencesAndPackageSourceOverride_UsesPolicyOverlayAndRestoreHints()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        var packageSourceOverride = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "aspire-pr-hive",
+            "packages");
         XDocument? generatedProject = null;
         XDocument? restoreOverlay = null;
         ProcessInvocationOptions? buildOptions = null;
@@ -4047,7 +4059,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
     private static string CreateNuGetSettingsResponse(
         IEnumerable<string>? configPaths = null,
-        IEnumerable<(string Name, string Source, bool IsEnabled)>? sources = null)
+        IEnumerable<(string Name, string Source, bool IsEnabled)>? sources = null,
+        bool packageSourceMappingEnabled = false)
         => System.Text.Json.JsonSerializer.Serialize(new
         {
             ConfigPaths = configPaths?.ToArray() ?? [],
@@ -4058,7 +4071,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                     source.Source,
                     source.IsEnabled
                 })
-                .ToArray() ?? []
+                .ToArray() ?? [],
+            PackageSourceMappingEnabled = packageSourceMappingEnabled
         });
 
     private static string[] GetArgumentValues(IReadOnlyList<string> args, string argumentName)

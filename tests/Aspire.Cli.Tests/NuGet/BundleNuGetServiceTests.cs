@@ -558,7 +558,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
                 Sources = new[]
                 {
                     new { Name = "private", Source = "https://example.com/feed", IsEnabled = true }
-                }
+                },
+                PackageSourceMappingEnabled = true
             }))
         };
         var service = new BundleNuGetService(
@@ -573,6 +574,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal([configPath], settings.ConfigPaths);
         var source = Assert.Single(settings.Sources);
         Assert.Equal(new NuGetSourceInfo("private", "https://example.com/feed", IsEnabled: true), source);
+        Assert.True(settings.PackageSourceMappingEnabled);
         Assert.Equal(["nuget", "settings", "--working-dir", appHostDirectory.FullName], invocation!);
     }
 
