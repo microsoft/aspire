@@ -23,6 +23,7 @@ public sealed class NotificationEntryComponentTests : DashboardTestContext
         Services.AddSingleton<IStringLocalizer<Aspire.Dashboard.Resources.Dialogs>>(new TestStringLocalizer<Aspire.Dashboard.Resources.Dialogs>());
         Services.AddSingleton(TimeProvider.System);
         var invoked = false;
+        var dismissed = false;
         var entry = new NotificationEntry
         {
             Title = "Command completed",
@@ -40,10 +41,12 @@ public sealed class NotificationEntryComponentTests : DashboardTestContext
         };
 
         var cut = RenderComponent<NotificationEntryComponent>(builder => builder
-            .Add(component => component.Entry, entry));
+            .Add(component => component.Entry, entry)
+            .Add(component => component.OnDismiss, () => dismissed = true));
 
         await cut.Find(".notification-entry-action").ClickAsync(new MouseEventArgs());
 
         Assert.True(invoked);
+        Assert.False(dismissed);
     }
 }

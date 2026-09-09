@@ -12,8 +12,7 @@ using Microsoft.FluentUI.AspNetCore.Components;
 namespace Aspire.Dashboard.Components.Layout;
 
 /// <summary>
-/// Renders the Fluent dialog provider and dismisses open dialogs when navigation changes,
-/// restoring the navigation-driven dismissal behavior from Fluent UI v4.
+/// Renders the Fluent dialog provider and dismisses open dialogs when navigation changes.
 /// </summary>
 [Authorize(Policy = FrontendAuthorizationDefaults.PolicyName)]
 public class DashboardDialogProvider : ComponentBase, IDisposable

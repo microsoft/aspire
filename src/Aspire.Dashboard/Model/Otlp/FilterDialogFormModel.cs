@@ -19,6 +19,7 @@ public class FilterDialogFormModel : IValidatableObject
 
     public bool ValueIsDate { get; set; }
 
+    // Duration filters intentionally support only whole milliseconds. An int is large enough for typical trace durations.
     public int? NumericValue { get; set; }
 
     /// <summary>

@@ -349,7 +349,9 @@ public partial class TraceDetailsTests : DashboardTestContext
         logger.LogInformation($"Assert updated row count for '{traceId}'");
         await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
         {
-            return cut.Instance.PageViewModel.SpanWaterfallViewModels?.Count == 3;
+            var grid = cut.FindComponent<FluentDataGrid<SpanWaterfallViewModel>>();
+            var rows = grid.FindAll(".fluent-data-grid-row");
+            return rows.Count == 4;
         }, "Expected rows to be rendered.", logger);
     }
 
