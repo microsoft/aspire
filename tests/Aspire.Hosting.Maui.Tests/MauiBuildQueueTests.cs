@@ -1126,8 +1126,8 @@ public class MauiBuildQueueTests(ITestOutputHelper outputHelper)
         var buildArgs = MauiBuildQueueEventSubscriber.GetBuildArguments(android, buildInfo);
         var launchArgs = await ArgumentEvaluator.GetArgumentListAsync(android);
 
-        Assert.Contains("-p:AdbTarget=-s emulator-5556", buildArgs);
-        Assert.Contains("-p:AdbTarget=-s emulator-5556", launchArgs);
+        Assert.Equal(["build", tempFile, "-f", "net10.0-android", "--configuration", "Debug", "-p:AdbTarget=-s emulator-5556"], buildArgs);
+        Assert.Equal(["run", "-f", "net10.0-android", "-p:AdbTarget=-s emulator-5556"], launchArgs);
     }
 
     [Fact]
@@ -1147,8 +1147,8 @@ public class MauiBuildQueueTests(ITestOutputHelper outputHelper)
         var buildArgs = MauiBuildQueueEventSubscriber.GetBuildArguments(iosSimulator, buildInfo);
         var launchArgs = await ArgumentEvaluator.GetArgumentListAsync(iosSimulator);
 
-        Assert.Contains("-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79", buildArgs);
-        Assert.Contains("-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79", launchArgs);
+        Assert.Equal(["build", tempFile, "-f", "net10.0-ios", "--configuration", "Debug", "-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79"], buildArgs);
+        Assert.Equal(["run", "-f", "net10.0-ios", "-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79"], launchArgs);
     }
 
     private static void AddOriginalStopCommand(IResource resource, Action? onExecute = null)

@@ -61,10 +61,16 @@ mauiApp.AddAndroidDevice("my-pixel", "abc12345");
 
 ```typescript
 // Android emulator selected from available Android Virtual Devices when the resource starts
-mauiApp.addAndroidEmulator("android-emulator");
+await mauiApp.addAndroidEmulator("android-emulator");
 
 // Android with specific running emulator serial from adb devices
-mauiApp.addAndroidEmulator("pixel-7-emulator", { emulatorId: "emulator-5554" });
+await mauiApp.addAndroidEmulator("pixel-7-emulator", { emulatorId: "emulator-5554" });
+
+// iOS simulator selected from available simulators when the resource starts
+await mauiApp.addiOSSimulator("ios-simulator");
+
+// iOS with specific simulator UDID
+await mauiApp.addiOSSimulator("iphone-15-sim", { simulatorId: "E25BBE37-69BA-4720-B6FD-D54C97791E79" });
 ```
 
 > **Note on Device/Simulator ID Validation**: The iOS methods include validation to help detect common mistakes:

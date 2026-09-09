@@ -224,8 +224,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
         Assert.Equal("-p:AdbTarget=-s emulator-5556", MauiPlatformHelper.GetSelectedTargetMsBuildArgument(env.Android));
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(env.Android, env.App.Services);
-        Assert.Contains("-p:AdbTarget=-s emulator-5556", args);
-        Assert.DoesNotContain("-p:AdbTarget=-e", args);
+        Assert.Equal(["run", "-f", "net10.0-android", "-p:AdbTarget=-s emulator-5556"], args);
     }
 
     [Fact]
