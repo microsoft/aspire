@@ -38,7 +38,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     internal const string IntegrationProjectFileName = "IntegrationRestore.csproj";
 
     private const string ProjectAssetsFileName = "project.assets.json";
-    private const string RestoreAdditionalProjectSourcesEnvironmentVariable = "RestoreAdditionalProjectSources";
+    internal const string IntegrationHostingVersionPropertyName = "AspireIntegrationHostingVersion";
     private const string RestoreStampFileName = "aspire-restore.stamp";
 
     private readonly string _appDirectoryPath;
@@ -378,7 +378,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             packageRefs,
             projectRefs,
             nugetConfigPaths: null,
-            restoreAdditionalProjectSources: null,
+            integrationHostingVersion: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             cancellationToken).ConfigureAwait(false);
@@ -388,7 +388,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         IReadOnlyList<IntegrationReference> packageRefs,
         IReadOnlyList<IntegrationReference> projectRefs,
         IReadOnlyList<string>? nugetConfigPaths,
-        string? restoreAdditionalProjectSources,
+        string? integrationHostingVersion,
         string? nugetPackagesPath,
         IReadOnlyList<string>? nugetFallbackPackagesPaths,
         CancellationToken cancellationToken)
@@ -410,10 +410,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 }
             }
         }
-        if (restoreAdditionalProjectSources is not null)
+        if (integrationHostingVersion is not null)
         {
-            hash.Append("\0RestoreAdditionalProjectSources\0"u8);
-            hash.Append(Encoding.UTF8.GetBytes(restoreAdditionalProjectSources));
+            hash.Append("\0AspireIntegrationHostingVersion\0"u8);
+            hash.Append(Encoding.UTF8.GetBytes(integrationHostingVersion));
         }
         if (nugetPackagesPath is not null)
         {
@@ -809,24 +809,21 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         string projectFilePath,
         bool noRestore,
         string? globalPackagesFolder,
-        string? restoreAdditionalProjectSources,
+        string integrationHostingVersion,
         bool suppressLogging,
         IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
     {
         var buildOutput = new OutputCollector();
-        Dictionary<string, string>? environmentVariables = null;
-        if (globalPackagesFolder is not null || restoreAdditionalProjectSources is not null)
+        // Environment-backed MSBuild properties are visible during NuGet's restore graph
+        // evaluation, including Directory.Packages.props.
+        var environmentVariables = new Dictionary<string, string>
         {
-            environmentVariables = [];
-            if (globalPackagesFolder is not null)
-            {
-                environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = globalPackagesFolder;
-            }
-            if (restoreAdditionalProjectSources is not null)
-            {
-                environmentVariables[RestoreAdditionalProjectSourcesEnvironmentVariable] = restoreAdditionalProjectSources;
-            }
+            [IntegrationHostingVersionPropertyName] = integrationHostingVersion
+        };
+        if (globalPackagesFolder is not null)
+        {
+            environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = globalPackagesFolder;
         }
 
         var exitCode = await _dotNetCliRunner.BuildAsync(
@@ -836,9 +833,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             {
                 StandardOutputCallback = line => buildOutput.AppendOutput(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
                 StandardErrorCallback = line => buildOutput.AppendError(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
-                EnvironmentVariableFilter = globalPackagesFolder is not null
-                    ? static name => string.Equals(name, CliPathHelper.NuGetPackagesEnvironmentVariable, StringComparison.OrdinalIgnoreCase)
-                    : null,
+                EnvironmentVariableFilter = name =>
+                    string.Equals(name, IntegrationHostingVersionPropertyName, StringComparison.OrdinalIgnoreCase) ||
+                    (globalPackagesFolder is not null &&
+                        string.Equals(name, CliPathHelper.NuGetPackagesEnvironmentVariable, StringComparison.OrdinalIgnoreCase)),
                 EnvironmentVariables = environmentVariables,
                 SuppressLogging = suppressLogging
             },
@@ -901,20 +899,14 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 disabledAmbientSourceKeys).ConfigureAwait(false);
         }
 
-        var channelSources = GetNuGetSources(restoreSources)?.ToArray() ?? [];
         var rootAdditionalSources = restoreSources.PackageSourceMappings is null
             ? GetNuGetSources(restoreSources)?.ToArray()
             : configSources
                 .Where(static source => !source.IsAmbient)
                 .Select(static source => source.Source)
                 .ToArray();
-        var restoreAdditionalProjectSources = IntegrationClosureBuilder.CreateRestoreAdditionalProjectSourcesValue(
-            _environment.GetEnvironmentVariable(RestoreAdditionalProjectSourcesEnvironmentVariable),
-            channelSources);
         var sensitiveRestoreSources = settings.Sources
             .Select(static source => source.Source)
-            .Concat((restoreAdditionalProjectSources ?? string.Empty)
-                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -970,7 +962,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             packageRefs,
             projectRefs,
             configPaths,
-            restoreAdditionalProjectSources,
+            sdkVersion,
             globalPackagesFolder ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
             CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment),
             cancellationToken).ConfigureAwait(false);
@@ -996,7 +988,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             projectFilePath,
             noRestore: skipRestore,
             globalPackagesFolder,
-            restoreAdditionalProjectSources,
+            integrationHostingVersion: sdkVersion,
             suppressLogging: sensitiveRestoreSources.Length > 0,
             sensitiveRestoreSources,
             cancellationToken).ConfigureAwait(false);
@@ -1008,7 +1000,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 projectFilePath,
                 noRestore: false,
                 globalPackagesFolder,
-                restoreAdditionalProjectSources,
+                integrationHostingVersion: sdkVersion,
                 suppressLogging: sensitiveRestoreSources.Length > 0,
                 sensitiveRestoreSources,
                 cancellationToken).ConfigureAwait(false);

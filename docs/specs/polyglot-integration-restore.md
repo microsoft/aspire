@@ -97,20 +97,26 @@ The generated root project receives `RestoreAdditionalProjectSources` only for e
 
 The generated project does not set `RestoreConfigFile`. Using normal discovery preserves NuGet settings that cannot be represented as source arguments or project properties.
 
-## Referenced-project source contribution
+## Referenced-project version hint
 
-The SDK process receives an invocation-scoped `RestoreAdditionalProjectSources` environment value containing the effective Aspire source locations. Any existing environment value is preserved and the Aspire locations are appended.
+The SDK process exposes the invocation-scoped `AspireIntegrationHostingVersion` MSBuild property. It contains the `Aspire.Hosting` version selected by the CLI.
+
+The property is a hint for integration authors. It is visible to every project evaluated in the SDK process, including transitive project references, and an integration can explicitly consume it through central package management.
+
+For example, an integration that intentionally aligns its `Aspire.Hosting` dependency with the invoking CLI can use:
+
+```xml
+<Project>
+  <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting" Version="$(AspireIntegrationHostingVersion)"
+                    Condition="'$(AspireIntegrationHostingVersion)' != ''" />
+  </ItemGroup>
+</Project>
+```
+
+Referenced projects remain responsible for their own restore policy. A project that explicitly replaces `RestoreSources` must configure every source needed by the version it selects.
 
 When the source policy requires an isolated global packages folder, the SDK process also receives that folder through `NUGET_PACKAGES`. The generated root and every referenced project therefore use the same source-specific package cache.
-
-This is a best-effort default:
-
-- Referenced projects can override the environment-derived property in their own project configuration.
-- Aspire does not inject custom targets into user projects.
-- Aspire does not replace a referenced project's NuGet configuration root.
-- Aspire does not pass a global command-line property that the project cannot override.
-
-The generated root overrides its own value as described above, while referenced projects independently evaluate the environment default.
 
 ## Credentials
 
@@ -146,7 +152,7 @@ SDK restore fingerprints include:
 
 - Generated project content.
 - Ordered configuration paths and file bytes.
-- Effective child-source environment input.
+- Integration hosting-version hint value.
 - Global and fallback package folder inputs.
 - Referenced project files and their directory-scoped imports.
 
@@ -156,10 +162,10 @@ SDK restore skipping is disabled when a config file references an environment va
 
 | Scenario | Generated root | Referenced projects |
 |---|---|---|
-| Default channel | Uses the effective channel policy and ambient hierarchy | Receives the same effective source locations as an environment default |
-| Internal proxy override | Uses only the proxy selected by the source policy | Receives the proxy location |
-| Ambient authenticated source | Uses the ambient source key and NuGet-owned credentials | Receives the source location as a best-effort default |
-| Explicitly selected disabled source | Clears inherited disabled-source state under the complete mapping policy | Receives the selected source location |
-| Local or PR package hive | Uses an absolute local source and standard NuGet global-packages behavior | Receives the absolute local source |
+| Default channel | Uses the effective channel policy and ambient hierarchy | Can opt into the selected version |
+| Internal proxy override | Uses only the proxy selected by the source policy | Retains its own restore policy |
+| Ambient authenticated source | Uses the ambient source key and NuGet-owned credentials | Retains its own configuration and credentials |
+| Explicitly selected disabled source | Clears inherited disabled-source state under the complete mapping policy | Retains its own restore policy |
+| Local or PR package hive | Uses an absolute local source and standard NuGet global-packages behavior | Can opt into the selected version |
 | Nested AppHost config | Excluded by the integration-cache discovery boundary | Remains available to projects whose own hierarchy includes it |
-| Referenced project outside the AppHost tree | Uses the generated root hierarchy | Receives the effective source locations without replacing its own config |
+| Referenced project outside the AppHost tree | Uses the generated root hierarchy | Retains its own config and can explicitly consume the version hint |
