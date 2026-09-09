@@ -367,21 +367,16 @@ public class ResourceCommandService
                     }
 
                     materializedFileCollections = materialization.FileCollections;
-                    loadedDynamicArgumentNames = await LoadDynamicCommandArgumentsAsync(arguments, cancellationToken).ConfigureAwait(false);
-                    if (loadedDynamicArgumentNames.Count > 0)
+                    var dynamicLoadResult = await LoadDynamicCommandArgumentsAsync(
+                        arguments,
+                        materializedFileCollections,
+                        fileArgumentSnapshots,
+                        cancellationToken).ConfigureAwait(false);
+                    loadedDynamicArgumentNames = dynamicLoadResult.LoadedArgumentNames;
+                    materializedFileCollections = dynamicLoadResult.FileCollections;
+                    if (dynamicLoadResult.ErrorMessage is { } dynamicLoadError)
                     {
-                        materialization = await RefreshMaterializedFileArgumentsAsync(
-                            arguments,
-                            materializedFileCollections,
-                            fileArgumentSnapshots,
-                            captureSourceChanges: true,
-                            cancellationToken).ConfigureAwait(false);
-                        if (materialization.ErrorMessage is { } refreshError)
-                        {
-                            return new ExecuteCommandResult { Success = false, Message = refreshError };
-                        }
-
-                        materializedFileCollections = materialization.FileCollections;
+                        return new ExecuteCommandResult { Success = false, Message = dynamicLoadError };
                     }
                 }
 
@@ -550,20 +545,16 @@ public class ResourceCommandService
                 return (new ExecuteCommandResult { Success = false, Message = fileArgumentError }, normalizedArguments);
             }
 
-            var loadedDynamicArgumentNames = await LoadDynamicCommandArgumentsAsync(normalizedArguments, cancellationToken).ConfigureAwait(false);
-            if (loadedDynamicArgumentNames.Count > 0)
+            var dynamicLoadResult = await LoadDynamicCommandArgumentsAsync(
+                normalizedArguments,
+                materializedFileCollections,
+                fileArgumentSnapshots,
+                cancellationToken).ConfigureAwait(false);
+            var loadedDynamicArgumentNames = dynamicLoadResult.LoadedArgumentNames;
+            materializedFileCollections = dynamicLoadResult.FileCollections;
+            if (dynamicLoadResult.ErrorMessage is { } dynamicLoadError)
             {
-                materialization = await RefreshMaterializedFileArgumentsAsync(
-                    normalizedArguments,
-                    materializedFileCollections,
-                    fileArgumentSnapshots,
-                    captureSourceChanges: true,
-                    cancellationToken).ConfigureAwait(false);
-                materializedFileCollections = materialization.FileCollections;
-                if (materialization.ErrorMessage is { } refreshError)
-                {
-                    return (new ExecuteCommandResult { Success = false, Message = refreshError }, normalizedArguments);
-                }
+                return (new ExecuteCommandResult { Success = false, Message = dynamicLoadError }, normalizedArguments);
             }
 
             var result = await ValidateArgumentsAsync(annotation, normalizedArguments, loadedDynamicArgumentNames, cancellationToken).ConfigureAwait(false)
@@ -755,7 +746,11 @@ public class ResourceCommandService
         return !context.HasErrors;
     }
 
-    private async Task<HashSet<string>> LoadDynamicCommandArgumentsAsync(InteractionInputCollection arguments, CancellationToken cancellationToken)
+    private async Task<(HashSet<string> LoadedArgumentNames, IReadOnlyList<InteractionFileCollection> FileCollections, string? ErrorMessage)> LoadDynamicCommandArgumentsAsync(
+        InteractionInputCollection arguments,
+        IReadOnlyList<InteractionFileCollection> materializedFileCollections,
+        Dictionary<string, FileArgumentSnapshot> fileArgumentSnapshots,
+        CancellationToken cancellationToken)
     {
         var loadedArgumentNames = new HashSet<string>(StringComparers.InteractionInputName);
         foreach (var argument in arguments)
@@ -770,10 +765,24 @@ public class ResourceCommandService
                     CancellationToken = cancellationToken
                 }).ConfigureAwait(false);
                 loadedArgumentNames.Add(argument.Name);
+
+                // Callbacks can read, dispose, or replace any file input through AllInputs. Refresh after each
+                // callback so the next callback receives a new collection that reflects the latest input values.
+                var materialization = await RefreshMaterializedFileArgumentsAsync(
+                    arguments,
+                    materializedFileCollections,
+                    fileArgumentSnapshots,
+                    captureSourceChanges: true,
+                    cancellationToken).ConfigureAwait(false);
+                materializedFileCollections = materialization.FileCollections;
+                if (materialization.ErrorMessage is not null)
+                {
+                    return (loadedArgumentNames, materializedFileCollections, materialization.ErrorMessage);
+                }
             }
         }
 
-        return loadedArgumentNames;
+        return (loadedArgumentNames, materializedFileCollections, null);
     }
 
     private static bool ShouldLoadDynamicCommandArgument(InputLoadOptions dynamicLoading, InteractionInputCollection arguments)

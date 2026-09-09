@@ -645,6 +645,272 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.NotEqual(selectedFile.Path, capturedPath);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FileArgument_RefreshesMaterializationBetweenDynamicCallbacks(bool validateOnly)
+    {
+        using var builder = CreateBuilder();
+        using var fileSystemService = new TestFileSystemService();
+        using var originalFile = fileSystemService.TempDirectory.CreateTempFile("original.json");
+        using var replacementFile = fileSystemService.TempDirectory.CreateTempFile("replacement.json");
+        await File.WriteAllTextAsync(originalFile.Path, """{"source":"original"}""");
+        await File.WriteAllTextAsync(replacementFile.Path, """{"source":"replacement"}""");
+
+        string? firstCallbackContent = null;
+        string? secondCallbackContent = null;
+        string? validationContent = null;
+        string? commandContent = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "import",
+            displayName: "Import",
+            executeCommand: async context =>
+            {
+                using var files = context.Arguments["squares"].GetFiles();
+                commandContent = await File.ReadAllTextAsync(Assert.Single(files).FilePath);
+                return CommandResults.Success();
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "squares",
+                        InputType = InputType.File,
+                        Required = true,
+                        FileFilter = ".json",
+                        MaxFileSize = 1024,
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            AlwaysLoadOnStart = true,
+                            LoadCallback = async context =>
+                            {
+                                using var files = context.Input.GetFiles();
+                                firstCallbackContent = await File.ReadAllTextAsync(Assert.Single(files).FilePath);
+                                context.Input.Value = JsonSerializer.Serialize(new[] { replacementFile.Path });
+                            }
+                        }
+                    },
+                    new InteractionInput
+                    {
+                        Name = "summary",
+                        InputType = InputType.Text,
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            DependsOnInputs = ["squares"],
+                            LoadCallback = async context =>
+                            {
+                                using var files = context.AllInputs["squares"].GetFiles();
+                                secondCallbackContent = await File.ReadAllTextAsync(Assert.Single(files).FilePath);
+                            }
+                        }
+                    }
+                ],
+                ValidateArguments = async context =>
+                {
+                    using var files = context.Inputs["squares"].GetFiles();
+                    validationContent = await File.ReadAllTextAsync(Assert.Single(files).FilePath);
+                }
+            });
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "squares",
+                InputType = InputType.File,
+                Value = JsonSerializer.Serialize(new[] { originalFile.Path })
+            }
+        ]);
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        ExecuteCommandResult result;
+        if (validateOnly)
+        {
+            (result, _) = await app.Services.GetRequiredService<ResourceCommandService>()
+                .ValidateCommandArgumentsAsync("myResource", "import", arguments, CancellationToken.None);
+        }
+        else
+        {
+            result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "import", arguments);
+        }
+
+        Assert.True(result.Success);
+        Assert.Equal("""{"source":"original"}""", firstCallbackContent);
+        Assert.Equal("""{"source":"replacement"}""", secondCallbackContent);
+        Assert.Equal(secondCallbackContent, validationContent);
+        if (!validateOnly)
+        {
+            Assert.Equal(secondCallbackContent, commandContent);
+        }
+    }
+
+    [Theory]
+    [InlineData("malformed-json")]
+    [InlineData("too-many-files")]
+    [InlineData("missing-file")]
+    [InlineData("extension-mismatch")]
+    [InlineData("initial-size-limit")]
+    public async Task ExecuteCommandAsync_InvalidFileArgument_ReturnsSpecificError(string invalidFileArgument)
+    {
+        using var builder = CreateBuilder();
+        using var fileSystemService = new TestFileSystemService();
+        using var selectedDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory();
+
+        var allowMultipleFiles = false;
+        var fileFilter = ".json";
+        var maxFileSize = 1024L;
+        string value;
+        string expectedMessage;
+
+        switch (invalidFileArgument)
+        {
+            case "malformed-json":
+                value = "not-json";
+                expectedMessage = "File argument 'squares' has an invalid value.";
+                break;
+            case "too-many-files":
+                value = JsonSerializer.Serialize(new[] { "first.json", "second.json" });
+                expectedMessage = "File argument 'squares' accepts at most 1 file(s).";
+                break;
+            case "missing-file":
+                var missingFilePath = Path.Combine(selectedDirectory.Path, "missing.json");
+                value = JsonSerializer.Serialize(new[] { missingFilePath });
+                expectedMessage = $"File '{missingFilePath}' does not exist.";
+                break;
+            case "extension-mismatch":
+                var mismatchedFilePath = Path.Combine(selectedDirectory.Path, "bingo.txt");
+                await File.WriteAllTextAsync(mismatchedFilePath, "{}");
+                value = JsonSerializer.Serialize(new[] { mismatchedFilePath });
+                expectedMessage = "File 'bingo.txt' does not match the accepted file types (.json).";
+                break;
+            case "initial-size-limit":
+                var oversizedFilePath = Path.Combine(selectedDirectory.Path, "bingo.json");
+                await File.WriteAllTextAsync(oversizedFilePath, "12345");
+                value = JsonSerializer.Serialize(new[] { oversizedFilePath });
+                maxFileSize = 4;
+                expectedMessage = "File 'bingo.json' exceeds the maximum size of 4 bytes.";
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown invalid file argument case '{invalidFileArgument}'.");
+        }
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "import",
+            displayName: "Import",
+            executeCommand: _ =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "squares",
+                        InputType = InputType.File,
+                        Required = true,
+                        AllowMultipleFiles = allowMultipleFiles,
+                        FileFilter = fileFilter,
+                        MaxFileSize = maxFileSize
+                    }
+                ]
+            });
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "squares",
+                InputType = InputType.File,
+                Value = value
+            }
+        ]);
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "import", arguments);
+
+        Assert.False(result.Success);
+        Assert.Equal(expectedMessage, result.Message);
+        Assert.False(executed);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_FileGrowsDuringSnapshot_RejectsAndCleansUpTemporaryFile()
+    {
+        using var builder = CreateBuilder();
+        using var selectedFileSystemService = new TestFileSystemService();
+        using var selectedFile = selectedFileSystemService.TempDirectory.CreateTempFile("bingo.json");
+        await File.WriteAllTextAsync(selectedFile.Path, "1234");
+
+        string? snapshotPath = null;
+        using var snapshotFileSystemService = new TestFileSystemService(path =>
+        {
+            if (Path.GetFileName(path) == "bingo.json" && snapshotPath is null)
+            {
+                snapshotPath = path;
+                File.AppendAllText(selectedFile.Path, "5");
+            }
+        });
+        builder.Services.AddSingleton<IFileSystemService>(snapshotFileSystemService);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "import",
+            displayName: "Import",
+            executeCommand: _ =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "squares",
+                        InputType = InputType.File,
+                        Required = true,
+                        FileFilter = ".json",
+                        MaxFileSize = 4
+                    }
+                ]
+            });
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "squares",
+                InputType = InputType.File,
+                Value = JsonSerializer.Serialize(new[] { selectedFile.Path })
+            }
+        ]);
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "import", arguments);
+
+        Assert.False(result.Success);
+        Assert.Equal("File 'bingo.json' exceeds the maximum size of 4 bytes.", result.Message);
+        Assert.False(executed);
+        Assert.NotNull(snapshotPath);
+        Assert.False(File.Exists(snapshotPath));
+    }
+
     [Fact]
     public async Task ExecuteCommandAsync_WithArgumentValuesAndResource_PassesArgumentsToCommand()
     {
