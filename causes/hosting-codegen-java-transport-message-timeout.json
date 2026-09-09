@@ -1,0 +1,17 @@
+{
+  "id": "hosting-codegen-java-transport-message-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: AtsJavaCodeGeneratorTests probe times out waiting for transport message on ubuntu-latest",
+  "test_name": "Aspire.Hosting.CodeGeneration.Java.Tests.AtsJavaCodeGeneratorTests.GeneratedReferenceExpression_CancellationIsRequestScoped",
+  "error_pattern": "Probe failed with exit code 1.\nstderr:\nException in thread \"main\" java.lang.IllegalStateException: Timed out waiting for transport message\n\tat aspire.ReferenceExpressionCancellationProbe.requireMessage(ReferenceExpressionCancellationProbe.java:148)\n\tat aspire.ReferenceExpressionCancellationProbe.invokeAndComplete(ReferenceExpressionCancellationProbe.java:44)\n\tat aspire.ReferenceExpressionCancellationProbe.main(ReferenceExpressionCancellationProbe.java:29)",
+  "occurrences": [
+    {
+      "run_id": 34401953654,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34401953654",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Java.Tests, Hosting.CodeGeneration.Java,... / Hosting.CodeGeneration.Java (ubuntu-latest)",
+      "pr_number": 19994,
+      "observed_at": "2026-09-09T21:33:15Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20017"
+}

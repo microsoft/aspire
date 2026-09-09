@@ -25,6 +25,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, ...) / Hosting.Azure.Kubernetes (windows-latest)",
       "pr_number": 19969,
       "observed_at": "2026-09-09T01:20:43Z"
+    },
+    {
+      "run_id": 34401953654,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34401953654",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Java.Tests, Hosting.CodeGeneration.Java,... / Hosting.CodeGeneration.Java (ubuntu-latest)",
+      "pr_number": 19994,
+      "observed_at": "2026-09-09T21:33:15Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19982"

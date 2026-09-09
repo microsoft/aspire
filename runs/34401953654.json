@@ -1,0 +1,55 @@
+{
+  "run_id": 34401953654,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34401953654",
+  "analyzed_at": "2026-09-09T21:33:15Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19994,
+    "title": "Bump baseline-browser-mapping from 2.10.13 to 2.11.20 in /extension",
+    "author": "dependabot[bot]",
+    "state": "closed",
+    "head_branch": "dependabot/npm_and_yarn/extension/baseline-browser-mapping-2.11.20",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19994"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Java.Tests, Hosting.CodeGeneration.Java,... / Hosting.CodeGeneration.Java (ubuntu-latest)",
+      "id": 102636354113,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34401953654/job/102636354113",
+      "classification": "flaky-test",
+      "reason": "Test uses a Java probe process that timed out waiting for a transport message, an environment/timing issue unrelated to the PR, which only modifies extension/yarn.lock (a browser-mapping dependency bump for the VS Code extension).",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, Hosti... / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 102636361933,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34401953654/job/102636361933",
+      "classification": "flaky-test",
+      "reason": "Test times out with System.TimeoutException; matches a previously tracked recurring flaky test (hosting-azure-kubernetes-destroypipeline-timeout, 3 prior occurrences) unrelated to the PR's yarn.lock change.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.CodeGeneration.Java.Tests.AtsJavaCodeGeneratorTests.GeneratedReferenceExpression_CancellationIsRequestScoped",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Java.Tests, Hosting.CodeGeneration.Java,... / Hosting.CodeGeneration.Java (ubuntu-latest)",
+      "error": "Probe failed with exit code 1.\nstdout:\n\nstderr:\nException in thread \"main\" java.lang.IllegalStateException: Timed out waiting for transport message\n\tat aspire.ReferenceExpressionCancellationProbe.requireMessage(ReferenceExpressionCancellationProbe.java:148)\n\tat aspire.ReferenceExpressionCancellationProbe.invokeAndComplete(ReferenceExpressionCancellationProbe.java:44)\n\tat aspire.ReferenceExpressionCancellationProbe.main(ReferenceExpressionCancellationProbe.java:29)",
+      "stack_trace": "at Aspire.Hosting.CodeGeneration.Java.Tests.AtsJavaCodeGeneratorTests.GeneratedReferenceExpression_CancellationIsRequestScoped() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Java.Tests/AtsJavaCodeGeneratorTests.cs:line 1837\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "Timeout waiting for a transport message from a spawned Java probe process is an environment/timing-sensitive failure, not related to the PR's yarn.lock dependency bump for the VS Code extension."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, Hosti... / Hosting.Azure.Kubernetes (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 565\n   at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 575\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "Matches previously tracked flaky test 'hosting-azure-kubernetes-destroypipeline-timeout' (3 prior occurrences); failing test is in Azure Kubernetes infrastructure code unrelated to the PR's extension/yarn.lock change."
+    }
+  ],
+  "causes": ["hosting-codegen-java-transport-message-timeout", "hosting-azure-kubernetes-destroypipeline-timeout"]
+}
