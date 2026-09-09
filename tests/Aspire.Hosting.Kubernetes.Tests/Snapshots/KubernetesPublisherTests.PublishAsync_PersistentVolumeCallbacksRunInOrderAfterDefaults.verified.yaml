@@ -4,10 +4,10 @@ kind: "PersistentVolumeClaim"
 metadata:
   name: "data"
   labels:
-    example.com/retention: "retain"
+    stage: "second"
 spec:
-  volumeMode: "Filesystem"
-  volumeName: "existing-volume"
+  storageClassName: ""
+  volumeName: "replacement-volume"
   accessModes:
     - "ReadWriteOnce"
   resources:

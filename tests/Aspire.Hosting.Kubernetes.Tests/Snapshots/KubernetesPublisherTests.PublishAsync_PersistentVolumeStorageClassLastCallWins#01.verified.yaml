@@ -2,12 +2,9 @@
 apiVersion: "v1"
 kind: "PersistentVolumeClaim"
 metadata:
-  name: "data"
-  labels:
-    example.com/retention: "retain"
+  name: "classless"
 spec:
-  volumeMode: "Filesystem"
-  volumeName: "existing-volume"
+  storageClassName: ""
   accessModes:
     - "ReadWriteOnce"
   resources:

@@ -1069,7 +1069,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             else
             {
                 storageClassName = await ResolveExpressionAsync(storageClassExpression, volumeResource.Name, cancellationToken).ConfigureAwait(false);
-                if (storageClassName is { Length: > 0} && string.IsNullOrWhiteSpace(storageClassName))
+                if (storageClassName is { Length: > 0 } && string.IsNullOrWhiteSpace(storageClassName))
                 {
                     storageClassName = null;
                 }
@@ -1077,8 +1077,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }
         else if (DefaultStorageClassName == "")
         {
-            // Preserve behavior of legacy PVCs. When DefaultStorageClassName 
-            // was set to an empty string and volumeResource.StorageClassName 
+            // Preserve behavior of legacy PVCs. When DefaultStorageClassName
+            // was set to an empty string and volumeResource.StorageClassName
             // was empty or null, legacy PVCs would omit the storageClassName entirely.
             storageClassName = null;
         }

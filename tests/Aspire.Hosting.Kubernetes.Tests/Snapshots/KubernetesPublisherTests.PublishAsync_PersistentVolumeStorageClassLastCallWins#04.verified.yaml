@@ -2,12 +2,8 @@
 apiVersion: "v1"
 kind: "PersistentVolumeClaim"
 metadata:
-  name: "data"
-  labels:
-    example.com/retention: "retain"
+  name: "omitted-parameter"
 spec:
-  volumeMode: "Filesystem"
-  volumeName: "existing-volume"
   accessModes:
     - "ReadWriteOnce"
   resources:

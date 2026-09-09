@@ -139,8 +139,6 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                 "PASSED: wrote aks-pv-marker-42 revision first");
             await StopPortForwardAsync(auto, counter);
 
-            await RetainPersistentVolumeForStaticBindingAsync(auto, counter);
-
             UpdateDeploymentRevision(appHostPath);
 
             await DeployAsync(auto, counter, waitForPipelineSuccess: false);
@@ -153,14 +151,43 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                 "kubectl wait --for=condition=Ready pod/apiservice-statefulset-0 --namespace \"$NS\" --timeout=5m",
                 counter,
                 TimeSpan.FromMinutes(6));
-            await VerifyStaticPersistentVolumeBindingAsync(auto, counter);
             await VerifyFileSystemGroupAsync(auto, counter, expectedFsGroup: 3000);
             await auto.RunCommandAsync(
                 "PVC_UID_AFTER=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
                 "POD_UID_AFTER=$(kubectl get pod apiservice-statefulset-0 --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
-                "test \"$PVC_UID_AFTER\" != \"$PVC_UID_BEFORE\" && " +
+                "test \"$PVC_UID_AFTER\" = \"$PVC_UID_BEFORE\" && " +
                 "test \"$POD_UID_AFTER\" != \"$POD_UID_BEFORE\" && " +
-                "echo \"Redeploy recreated PVC $PVC_UID_BEFORE as $PVC_UID_AFTER and replaced pod $POD_UID_BEFORE with $POD_UID_AFTER\"",
+                "echo \"Redeploy preserved PVC $PVC_UID_BEFORE and replaced pod $POD_UID_BEFORE with $POD_UID_AFTER\"",
+                counter);
+
+            apiPort = GetAvailablePort();
+            await StartPortForwardAsync(auto, counter, apiPort);
+            await VerifyApiResponseAsync(
+                auto,
+                counter,
+                apiPort,
+                "?action=read",
+                "PASSED: read aks-pv-marker-42 revision second");
+            await VerifyApiResponseAsync(
+                auto,
+                counter,
+                apiPort,
+                "?action=write-new",
+                "PASSED: wrote new aks-pv-marker-42 revision second");
+            await StopPortForwardAsync(auto, counter);
+
+            // Verify ordinary redeployment above before deliberately deleting the claim.
+            // Static rebinding must reuse the disk with a new claim, whereas an ordinary
+            // redeploy must preserve the original claim's identity and data.
+            await RetainPersistentVolumeForStaticBindingAsync(auto, counter);
+            await DeployAsync(auto, counter, waitForPipelineSuccess: false);
+            await WaitForStatefulSetAndManagedDiskAsync(auto, counter);
+            await VerifyStaticPersistentVolumeBindingAsync(auto, counter);
+            await VerifyFileSystemGroupAsync(auto, counter, expectedFsGroup: 3000);
+            await auto.RunCommandAsync(
+                "PVC_UID_REBOUND=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
+                "test -n \"$PVC_UID_REBOUND\" && test \"$PVC_UID_REBOUND\" != \"$PVC_UID_AFTER\" && " +
+                "echo \"Static binding recreated PVC $PVC_UID_AFTER as $PVC_UID_REBOUND\"",
                 counter);
 
             apiPort = GetAvailablePort();
@@ -233,8 +260,8 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             var data = aks.AddPersistentVolume("data")
                 .WithCapacity("1Gi");
 
-            // The test sets these only after retaining the disk-backed PV from the first
-            // deployment. The second deployment must statically bind the generated PVC to
+            // The test sets these only after verifying that the first two deployments
+            // preserve the claim. The third deployment must statically bind the new PVC to
             // that exact PV instead of dynamically provisioning a replacement.
             if (Environment.GetEnvironmentVariable("EXISTING_PV_NAME") is { Length: > 0 } persistentVolumeName &&
                 Environment.GetEnvironmentVariable("EXISTING_PV_STORAGE_CLASS") is { Length: > 0 } storageClassName)

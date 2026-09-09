@@ -82,7 +82,7 @@ public static class KubernetesPersistentVolumeExtensions
         ArgumentNullException.ThrowIfNull(storageClassName);
         if (storageClassName.Length > 0)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(storageClassName);   
+            ArgumentException.ThrowIfNullOrWhiteSpace(storageClassName);
         }
 
         builder.Resource.ShouldRequestStorageClassName = true;
@@ -182,13 +182,15 @@ public static class KubernetesPersistentVolumeExtensions
     /// The named PersistentVolume must satisfy the claim's storage class, access modes, and requested capacity; otherwise, the claim remains unbound.
     /// Configure these values to match the existing volume.
     /// </remarks>
+    /// <exception cref="ArgumentNullException">The builder or volume name is null.</exception>
+    /// <exception cref="ArgumentException">The volume name is empty or consists only of whitespace.</exception>
     [AspireExport]
     public static IResourceBuilder<KubernetesPersistentVolumeResource> WithPersistentVolumeName(
         this IResourceBuilder<KubernetesPersistentVolumeResource> builder,
         string persistentVolumeName)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(persistentVolumeName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(persistentVolumeName);
 
         builder.Resource.PersistentVolumeName = ReferenceExpression.Create($"{persistentVolumeName}");
         return builder;
@@ -287,7 +289,7 @@ public static class KubernetesPersistentVolumeExtensions
     ///     .WithConfiguration(claim =>
     ///     {
     ///         claim.Metadata.Labels["example.com/retention"] = "retain";
-    ///         claim.Spec.VolumeMode = "Block";
+    ///         claim.Spec.VolumeMode = "Filesystem";
     ///     });
     /// </code>
     /// </example>
