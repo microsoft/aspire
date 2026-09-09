@@ -281,9 +281,23 @@ public static class EFMigrationResourceBuilderExtensions
         {
             null => builder,
             string projectPath => builder.WithMigrationsProject(projectPath),
-            IResourceBuilder<IDotnetProgramResource> projectBuilder => builder.WithMigrationsProject(projectBuilder.Resource.GetProjectMetadata().ProjectPath),
+            IResourceBuilder<IDotnetProgramResource> projectBuilder => WithMigrationsProjectResource(builder, projectBuilder.Resource),
             _ => throw new ArgumentException("Migrations project must be omitted, a project path string, or a project resource builder.", nameof(migrationsProject))
         };
+    }
+
+    private static IResourceBuilder<EFMigrationResource> WithMigrationsProjectResource(
+        IResourceBuilder<EFMigrationResource> builder,
+        IDotnetProgramResource projectResource)
+    {
+        var metadata = projectResource.GetProjectMetadata();
+        if (metadata.IsFileBasedApp)
+        {
+            throw new InvalidOperationException(
+                $"EF Core migrations require a project file. Resource '{projectResource.Name}' is a file-based app.");
+        }
+
+        return builder.WithMigrationsProject(metadata.ProjectPath);
     }
 
     // Base image repositories used when publishing the migration bundle as a container. The

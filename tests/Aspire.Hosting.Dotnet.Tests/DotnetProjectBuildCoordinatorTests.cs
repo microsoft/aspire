@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREEXTENSION001, ASPIREPIPELINES001
+#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREEXTENSION001, ASPIREPIPELINES001, ASPIREPROJECTS001
 
 using System.Reflection;
 using System.Text.Json;
@@ -210,7 +210,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         builder.Configuration["AppHost:Run:WatchEnabled"] = watchEnabled.ToString();
 
-        var project = builder.AddDotnetProject("api", "Api.csproj", options => options.ExcludeLaunchProfile = true);
+        var project = builder.AddDotnetProject("api", "Api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithReplicas(2);
 
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         AssertBuildDependency(project.Resource, buildResource);
@@ -2197,6 +2198,92 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Single(File.ReadAllLines(GetBuildCountPath(sharedProject)));
         Assert.Single(File.ReadAllLines(GetBuildCountPath(apiProject)));
         Assert.Single(File.ReadAllLines(GetBuildCountPath(workerProject)));
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task ReplicasShareOneCoordinatedBuildAndLaunchDistinctProcesses()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var projectPath = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(projectPath)!, "Program.cs"), """
+            using Shared;
+
+            File.WriteAllText(
+                Path.Combine(args[0], $"{Environment.ProcessId}.txt"),
+                SharedValue.Value);
+            """);
+        var sentinels = Directory.CreateDirectory(Path.Combine(workspace.Path, "instances")).FullName;
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        var resource = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithReplicas(2)
+            .WithArgs(sentinels);
+        await using var app = builder.Build();
+
+        using (var startCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StartAsync(startCts.Token);
+        }
+
+        var instances = resource.Resource.GetResolvedResourceNames();
+        Assert.Equal(2, instances.Length);
+        using (var completionCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await Task.WhenAll(instances.Select(name =>
+                app.ResourceNotifications.WaitForResourceAsync(
+                    resource.Resource.Name,
+                    resourceEvent => resourceEvent.ResourceId == name && resourceEvent.Snapshot.State?.Text == KnownResourceStates.Finished,
+                    completionCts.Token)));
+        }
+
+        using (var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StopAsync(stopCts.Token);
+        }
+
+        var files = Directory.GetFiles(sentinels, "*.txt");
+        Assert.Equal(2, files.Length);
+        Assert.All(files, path => Assert.Equal("shared", File.ReadAllText(path)));
+        Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(sharedProject)));
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(projectPath)));
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task FailedCoordinatedBuildPreventsEveryReplicaFromStarting()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateBrokenProject(workspace.Path, "REPLICAS_BUILD_FAILED");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        var resource = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithReplicas(2);
+        await using var app = builder.Build();
+
+        using (var startCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StartAsync(startCts.Token);
+        }
+
+        var instances = resource.Resource.GetResolvedResourceNames();
+        Assert.Equal(2, instances.Length);
+        using (var failureCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await Task.WhenAll(instances.Select(name =>
+                app.ResourceNotifications.WaitForResourceAsync(
+                    resource.Resource.Name,
+                    resourceEvent => resourceEvent.ResourceId == name && resourceEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart,
+                    failureCts.Token)));
+        }
+
+        Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(stopCts.Token);
     }
 
     [Fact]
