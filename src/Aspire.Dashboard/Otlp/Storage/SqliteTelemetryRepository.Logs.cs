@@ -802,18 +802,18 @@ public sealed partial class SqliteTelemetryRepository
         public long ScopeId { get; }
     }
 
-    private class AttributeRecord
+    internal class AttributeRecord
     {
         public required string AttributeKey { get; init; }
         public required string AttributeValue { get; init; }
     }
 
-    private sealed class OwnedAttributeRecord : AttributeRecord
+    internal sealed class OwnedAttributeRecord : AttributeRecord
     {
         public required long OwnerId { get; init; }
     }
 
-    private sealed class LogRecord
+    internal sealed class LogRecord
     {
         public required long LogId { get; init; }
         public required long ResourceId { get; init; }
@@ -839,7 +839,7 @@ public sealed partial class SqliteTelemetryRepository
         public required string ScopeVersion { get; init; }
     }
 
-    private sealed class LogSummaryRecord
+    internal sealed class LogSummaryRecord
     {
         public required int TotalItemCount { get; init; }
         public required bool IsFull { get; init; }
@@ -859,7 +859,7 @@ public sealed partial class SqliteTelemetryRepository
         public bool? HasGenAI { get; init; }
     }
 
-    private sealed class FieldValueRecord
+    internal sealed class FieldValueRecord
     {
         public string? FieldValue { get; init; }
         public required int ValueCount { get; init; }

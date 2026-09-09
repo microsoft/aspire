@@ -482,7 +482,7 @@ public sealed partial class SqliteTelemetryRepository
         return attributes.ToLookup(record => record.OwnerId);
     }
 
-    private sealed class MetricPointDataRecord : MetricPointRecord
+    internal sealed class MetricPointDataRecord : MetricPointRecord
     {
         public required long DimensionId { get; init; }
         public required long StartTimeTicks { get; init; }
@@ -492,7 +492,7 @@ public sealed partial class SqliteTelemetryRepository
         public byte[]? ExplicitBounds { get; init; }
     }
 
-    private sealed class MetricDimensionAttributeRecord
+    internal sealed class MetricDimensionAttributeRecord
     {
         public required long DimensionId { get; init; }
         public required long InstrumentId { get; init; }
@@ -500,7 +500,7 @@ public sealed partial class SqliteTelemetryRepository
         public string? AttributeValue { get; init; }
     }
 
-    private sealed class MetricExemplarRecord
+    internal sealed class MetricExemplarRecord
     {
         public required long ExemplarId { get; init; }
         public required long DimensionId { get; init; }

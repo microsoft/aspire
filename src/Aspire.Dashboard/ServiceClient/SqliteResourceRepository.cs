@@ -542,7 +542,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         }
     }
 
-    private sealed class ConsoleLogRecord
+    internal sealed class ConsoleLogRecord
     {
         public required int LineNumber { get; init; }
         public required string Content { get; init; }

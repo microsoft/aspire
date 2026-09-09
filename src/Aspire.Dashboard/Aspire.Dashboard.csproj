@@ -11,6 +11,7 @@
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
+    <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Dapper.AOT</InterceptorsPreviewNamespaces>
     <!-- Enable System.GC.DynamicAdaptationMode to get a GC that dynamically adapts to the application's memory use. -->
     <GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
     <!--
@@ -51,6 +52,7 @@
 
   <ItemGroup>
     <PackageReference Include="Dapper" />
+    <PackageReference Include="Dapper.AOT" />
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Humanizer.Core" />

@@ -106,6 +106,7 @@
     <!-- external dependencies -->
     <PackageVersion Include="Confluent.Kafka" Version="2.15.0" />
     <PackageVersion Include="Dapper" Version="2.1.79" />
+    <PackageVersion Include="Dapper.AOT" Version="1.0.52" />
     <!-- axe-core accessibility engine wrapper for Playwright. The MIT-licensed .NET wrapper's
          major.minor tracks the embedded axe-core version, so 4.11.x runs axe-core 4.11.x.
          Test-only dependency; pinned to a version present on the dotnet-public feed mirror. -->

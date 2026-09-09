@@ -31,6 +31,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -1152,4 +1154,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     }
 
     private static bool IsHttpsOrNull(BindingAddress? address) => address == null || string.Equals(address.Scheme, "https", StringComparison.Ordinal);
+
+    private sealed class DashboardComponentActivator(IServiceProvider serviceProvider) : IComponentActivator
+    {
+        // FluentDataGrid creates this closed component type dynamically, so Native AOT can't discover it from Razor markup.
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Virtualize<(int, LogSummary)>))]
+        [UnconditionalSuppressMessage("Trimming", "IL2092", Justification = "Runtime-created Blazor components require all members to be preserved for Native AOT.")]
+        public IComponent CreateInstance([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type componentType)
+        {
+            return (IComponent)ActivatorUtilities.CreateInstance(serviceProvider, componentType);
+        }
+    }
 }
