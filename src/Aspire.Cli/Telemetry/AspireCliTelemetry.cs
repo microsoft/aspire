@@ -261,6 +261,13 @@ internal sealed class AspireCliTelemetry : IHostedService
             // bounded, but this also protects shutdown from unexpected filesystem or provider stalls.
             _logger.LogDebug(ex, "Timed out waiting for internal Microsoft diagnostics to complete.");
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Activity listeners/processors can throw during emission, after detection has finished.
+            // Completion is awaited from shutdown's finally block and must not replace the command's
+            // exit code or prevent application/provider shutdown. Caller cancellation still propagates.
+            _logger.LogDebug(ex, "Failed to complete internal Microsoft diagnostics.");
+        }
     }
 
     /// <summary>
@@ -299,7 +306,7 @@ internal sealed class AspireCliTelemetry : IHostedService
                     {
                         internalMicrosoftTimeoutSource = new(timeout);
                     }
-                    internalMicrosoftTask = GetInternalMicrosoftResultAsync(internalMicrosoftTimeoutSource);
+                    internalMicrosoftTask = GetInternalMicrosoftResultAsync(internalMicrosoftTimeoutSource, TimeProvider.System);
                 }
 
                 await Task.WhenAll(new Task[] { macAddressHashTask, deviceIdTask }).ConfigureAwait(false);
@@ -379,9 +386,9 @@ internal sealed class AspireCliTelemetry : IHostedService
         _internalMicrosoftDiagnosticsTask = EmitInternalMicrosoftDetectorDiagnosticsAsync(internalMicrosoftResultSource.Task);
     }
 
-    private async Task<InternalMicrosoftDetectionResult> GetInternalMicrosoftResultAsync(CancellationTokenSource? timeoutSource)
+    internal async Task<InternalMicrosoftDetectionResult> GetInternalMicrosoftResultAsync(CancellationTokenSource? timeoutSource, TimeProvider timeProvider)
     {
-        var startTimestamp = Stopwatch.GetTimestamp();
+        var startTimestamp = timeProvider.GetTimestamp();
         var cancellationToken = timeoutSource?.Token ?? CancellationToken.None;
 
         try
@@ -400,7 +407,7 @@ internal sealed class AspireCliTelemetry : IHostedService
                 Domain: null,
                 Outcome: InternalMicrosoftDetectorOutcome.TimedOut,
                 CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
-                Duration: Stopwatch.GetElapsedTime(startTimestamp),
+                Duration: timeProvider.GetElapsedTime(startTimestamp),
                 ProbeDiagnostics: []);
         }
         catch (Exception ex)
@@ -417,7 +424,7 @@ internal sealed class AspireCliTelemetry : IHostedService
                 Domain: null,
                 Outcome: InternalMicrosoftDetectorOutcome.Failed,
                 CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
-                Duration: Stopwatch.GetElapsedTime(startTimestamp),
+                Duration: timeProvider.GetElapsedTime(startTimestamp),
                 ProbeDiagnostics: []);
         }
     }

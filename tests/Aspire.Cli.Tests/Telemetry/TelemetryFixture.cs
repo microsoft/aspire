@@ -27,6 +27,7 @@ internal sealed class TelemetryFixture : IDisposable
     /// <param name="sampleResult">The sampling result for the activity listener. Defaults to <see cref="ActivitySamplingResult.AllDataAndRecorded"/>.</param>
     /// <param name="executionContext">Optional CLI execution context. Defaults to a local-identity context so the telemetry's required context is always satisfied.</param>
     /// <param name="telemetryConfiguration">Optional telemetry configuration. Uses reported telemetry defaults if not specified.</param>
+    /// <param name="initialize">Whether to initialize telemetry and wait for completion before returning.</param>
     public TelemetryFixture(
         IMachineInformationProvider? machineInfoProvider = null,
         ICIEnvironmentDetector? ciEnvironmentDetector = null,
@@ -35,7 +36,8 @@ internal sealed class TelemetryFixture : IDisposable
         ILogger<AspireCliTelemetry>? logger = null,
         ActivitySamplingResult sampleResult = ActivitySamplingResult.AllDataAndRecorded,
         CliExecutionContext? executionContext = null,
-        TelemetryConfiguration? telemetryConfiguration = null)
+        TelemetryConfiguration? telemetryConfiguration = null,
+        bool initialize = true)
     {
         ReportedSourceName = $"Test.{Path.GetRandomFileName()}";
         DiagnosticsSourceName = $"Test.{Path.GetRandomFileName()}";
@@ -78,9 +80,12 @@ internal sealed class TelemetryFixture : IDisposable
         Telemetry = telemetryConfiguration is null
             ? new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource)
             : new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, telemetryConfiguration, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
-        Telemetry.Initialize();
-        // Wait for background tag calculation to complete so tests can assert on tags.
-        Telemetry.GetDefaultTagsAsync().GetAwaiter().GetResult();
+        if (initialize)
+        {
+            Telemetry.Initialize();
+            // Wait for background tag calculation to complete so tests can assert on tags.
+            Telemetry.GetDefaultTagsAsync().GetAwaiter().GetResult();
+        }
     }
 
     /// <summary>

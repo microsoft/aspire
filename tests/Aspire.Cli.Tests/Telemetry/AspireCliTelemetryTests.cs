@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
@@ -537,10 +538,14 @@ public class AspireCliTelemetryTests
         Assert.True((long?)activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs) > 0);
     }
 
-    [Fact]
-    public async Task Initialize_RecordsActualElapsedDurationWhenInternalMicrosoftDetectorTimesOut()
+    [Theory]
+    [InlineData(25)]
+    [InlineData(500)]
+    public async Task GetInternalMicrosoftResultAsync_RecordsActualElapsedDurationWhenDetectorTimesOut(int elapsedMilliseconds)
     {
+        var timeProvider = new FakeTimeProvider();
         var timeout = TimeSpan.FromMilliseconds(25);
+        using var timeoutSource = new CancellationTokenSource(timeout, timeProvider);
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
             DetectionCallback = async cancellationToken =>
@@ -549,31 +554,83 @@ public class AspireCliTelemetryTests
                 throw new UnreachableException();
             }
         };
-        var machineInformationProvider = new TelemetryFixture.TestMachineInformationProvider
+        using var fixture = new TelemetryFixture(
+            internalMicrosoftDetector: internalMicrosoftDetector,
+            initialize: false);
+        var resultTask = fixture.Telemetry.GetInternalMicrosoftResultAsync(timeoutSource, timeProvider);
+
+        Assert.False(resultTask.IsCompleted);
+        // Cancellation can be observed later than the budget under contention. Keep virtual time
+        // fixed until the wrapper finishes so scheduling cannot affect the recorded duration.
+        var elapsed = TimeSpan.FromMilliseconds(elapsedMilliseconds);
+        timeProvider.Advance(elapsed);
+        var result = await resultTask.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // Completing unrelated tag calculation later must not extend the already captured duration.
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, result.Outcome);
+        Assert.Equal(elapsed, result.Duration);
+    }
+
+    [Fact]
+    public async Task CompleteInternalMicrosoftDiagnosticsAsync_ContainsListenerFailureDuringShutdown()
+    {
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger, initialize: false);
+        var exception = new InvalidOperationException("Simulated detector activity listener failure.");
+        var listenerCalled = false;
+        using var listener = new ActivityListener
         {
-            // Tag calculation is awaited separately from the detector. Delaying it proves the
-            // detector duration is captured when cancellation is observed, not after tag calculation.
-            GetDeviceIdCallback = async () =>
+            ShouldListenTo = source => source.Name == fixture.ReportedSourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(250));
-                return "test-device-id";
+                if (activity.OperationName == TelemetryConstants.Activities.InternalMicrosoftDetector)
+                {
+                    listenerCalled = true;
+                    throw exception;
+                }
             }
         };
-        using var fixture = new TelemetryFixture(
-            machineInfoProvider: machineInformationProvider,
-            internalMicrosoftDetector: internalMicrosoftDetector,
-            telemetryConfiguration: new TelemetryConfiguration
-            {
-                ReportedTelemetryEnabled = true,
-                EmitInternalMicrosoftDiagnostics = true,
-                InternalMicrosoftDetectionTimeout = timeout
-            });
-        await fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync();
+        ActivitySource.AddActivityListener(listener);
 
-        var activity = Assert.IsType<Activity>(fixture.CapturedActivity);
-        Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome));
-        var durationMilliseconds = Assert.IsType<long>(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs));
-        Assert.InRange(durationMilliseconds, 1, 150);
+        fixture.Telemetry.Initialize();
+        await fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync().WaitAsync(TimeSpan.FromSeconds(30));
+        await fixture.Telemetry.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(listenerCalled);
+        var log = Assert.Single(logger.Collector.GetSnapshot());
+        Assert.Equal(LogLevel.Debug, log.Level);
+        Assert.Equal("Failed to complete internal Microsoft diagnostics.", log.Message);
+        Assert.Same(exception, log.Exception);
+    }
+
+    [Fact]
+    public async Task CompleteInternalMicrosoftDiagnosticsAsync_PreservesCallerCancellation()
+    {
+        var deviceId = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var fixture = new TelemetryFixture(
+            machineInfoProvider: new TelemetryFixture.TestMachineInformationProvider
+            {
+                GetDeviceIdCallback = () => deviceId.Task
+            },
+            initialize: false);
+        using var cancellationSource = new CancellationTokenSource();
+        fixture.Telemetry.Initialize();
+        var completionTask = fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync();
+        var stopTask = fixture.Telemetry.StopAsync(cancellationSource.Token);
+
+        try
+        {
+            await cancellationSource.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stopTask);
+            Assert.False(completionTask.IsCompleted);
+        }
+        finally
+        {
+            deviceId.TrySetResult("test-device-id");
+            await completionTask.WaitAsync(TimeSpan.FromSeconds(30));
+        }
     }
 
     [Fact]
