@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The path to the Aspire AppHost project file.
+        ///   Looks up a localized string similar to The path to the Aspire AppHost project file or a directory to search.
         /// </summary>
         public static string AppHostProjectOptionDescription {
             get {

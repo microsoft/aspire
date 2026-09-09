@@ -31,7 +31,7 @@ public sealed class IntegrationTestScaffoldingTests(ITestOutputHelper output)
 
         await auto.TypeAsync(
             "aspire new aspire-test " +
-            "--name IntegrationTestApp.Tests --output IntegrationTestApp/IntegrationTestApp.Tests --suppress-agent-init");
+            "--name IntegrationTestApp.Discovered.Tests --output IntegrationTestApp/IntegrationTestApp.Discovered.Tests --suppress-agent-init");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("> MSTest").Search(s).Count > 0,
@@ -41,7 +41,19 @@ public sealed class IntegrationTestScaffoldingTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
         await auto.RunCommandAsync(
-            "dotnet test IntegrationTestApp/IntegrationTestApp.Tests/IntegrationTestApp.Tests.csproj -- --filter-method \"*.AppHostBuilds\"",
+            "aspire new aspire-test " +
+            "--apphost IntegrationTestApp/IntegrationTestApp.AppHost/IntegrationTestApp.AppHost.csproj " +
+            "--test-framework MSTest --name IntegrationTestApp.Explicit.Tests " +
+            "--output IntegrationTestApp/IntegrationTestApp.Explicit.Tests --non-interactive --suppress-agent-init",
+            counter,
+            TimeSpan.FromMinutes(5));
+
+        await auto.RunCommandAsync(
+            "dotnet test IntegrationTestApp/IntegrationTestApp.Discovered.Tests/IntegrationTestApp.Discovered.Tests.csproj -- --filter-method \"*.AppHostBuilds\"",
+            counter,
+            TimeSpan.FromMinutes(5));
+        await auto.RunCommandAsync(
+            "dotnet test IntegrationTestApp/IntegrationTestApp.Explicit.Tests/IntegrationTestApp.Explicit.Tests.csproj -- --filter-method \"*.AppHostBuilds\"",
             counter,
             TimeSpan.FromMinutes(5));
     }

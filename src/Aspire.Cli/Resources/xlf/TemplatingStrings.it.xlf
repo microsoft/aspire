@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="it" original="../TemplatingStrings.resx">
     <body>
       <trans-unit id="AppHostProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file</source>
-        <target state="new">The path to the Aspire AppHost project file</target>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
+        <target state="new">The path to the Aspire AppHost project file or a directory to search</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireAppHost_Description">
