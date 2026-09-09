@@ -16,6 +16,8 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
 {
     public string AppDirectoryPath { get; } = appDirectoryPath;
 
+    public string? RequestedChannel { get; private set; }
+
     public string GetInstanceIdentifier() => AppDirectoryPath;
 
     public Task<AppHostServerPrepareResult> PrepareAsync(
@@ -23,8 +25,11 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
         IEnumerable<IntegrationReference> integrations,
         string? requestedChannel = null,
         string? packageSourceOverride = null,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult(new AppHostServerPrepareResult(Success: true, Output: null));
+        CancellationToken cancellationToken = default)
+    {
+        RequestedChannel = requestedChannel;
+        return Task.FromResult(new AppHostServerPrepareResult(Success: true, Output: null));
+    }
 
     public Task<AppHostServerRunResult> RunAsync(
         int hostPid,

@@ -485,26 +485,28 @@ internal sealed class AddCommand : BaseCommand
                 .FirstOrDefault(static element => string.Equals(
                     element.Name.LocalName,
                     "packageSourceMapping",
-                    StringComparison.OrdinalIgnoreCase));
+                    StringComparison.Ordinal));
             if (section is null)
             {
                 continue;
             }
 
-            if (section.Elements().Any(static element => string.Equals(
-                element.Name.LocalName,
-                "packageSource",
-                StringComparison.OrdinalIgnoreCase)))
+            bool? hasPackageSourceMapping = null;
+            foreach (var element in section.Elements())
             {
-                return true;
+                if (string.Equals(element.Name.LocalName, "clear", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasPackageSourceMapping = false;
+                }
+                else if (string.Equals(element.Name.LocalName, "packageSource", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasPackageSourceMapping = true;
+                }
             }
 
-            if (section.Elements().Any(static element => string.Equals(
-                element.Name.LocalName,
-                "clear",
-                StringComparison.OrdinalIgnoreCase)))
+            if (hasPackageSourceMapping is not null)
             {
-                return false;
+                return hasPackageSourceMapping.Value;
             }
         }
 

@@ -2877,6 +2877,61 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task HasPackageSourceMappingAsync_MatchesNuGetSectionAndItemSemantics()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var nonCanonicalSectionPath = Path.Combine(workspace.WorkspaceRoot.FullName, "noncanonical.config");
+        var mappingThenClearPath = Path.Combine(workspace.WorkspaceRoot.FullName, "mapping-then-clear.config");
+        var clearThenMappingPath = Path.Combine(workspace.WorkspaceRoot.FullName, "clear-then-mapping.config");
+
+        File.WriteAllText(
+            nonCanonicalSectionPath,
+            """
+            <configuration>
+              <PackageSourceMapping>
+                <packageSource key="private">
+                  <package pattern="*" />
+                </packageSource>
+              </PackageSourceMapping>
+            </configuration>
+            """);
+        File.WriteAllText(
+            mappingThenClearPath,
+            """
+            <configuration>
+              <packageSourceMapping>
+                <packageSource key="private">
+                  <package pattern="*" />
+                </packageSource>
+                <clear />
+              </packageSourceMapping>
+            </configuration>
+            """);
+        File.WriteAllText(
+            clearThenMappingPath,
+            """
+            <configuration>
+              <packageSourceMapping>
+                <clear />
+                <PackageSource key="private">
+                  <package pattern="*" />
+                </PackageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        Assert.False(await AddCommand.HasPackageSourceMappingAsync(
+            [nonCanonicalSectionPath],
+            CancellationToken.None));
+        Assert.False(await AddCommand.HasPackageSourceMappingAsync(
+            [mappingThenClearPath],
+            CancellationToken.None));
+        Assert.True(await AddCommand.HasPackageSourceMappingAsync(
+            [clearThenMappingPath],
+            CancellationToken.None));
+    }
+
+    [Fact]
     public async Task AddCommand_WithLocalHive_PrefersCurrentCliVersion()
     {
         // The local channel enumerates .nupkg files directly from disk and does not call

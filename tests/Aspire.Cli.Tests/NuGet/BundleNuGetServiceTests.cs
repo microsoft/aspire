@@ -722,6 +722,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             workingDirectory: appHostDirectory.FullName,
             nugetConfigPaths: [nugetConfigPath]);
 
+        Assert.Contains("--no-nuget-org", invocations[0]);
         Assert.Equal(nugetConfigPath, GetArgumentValue(invocations[0], "--nuget-config"));
     }
 

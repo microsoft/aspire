@@ -45,7 +45,7 @@ When a stable project with custom NuGet configuration moves to a source-specific
 - The selected channel becomes authoritative for its Aspire package patterns.
 - Competing ambient Aspire mappings are temporarily replaced.
 - Ambient sources and mappings for unrelated packages remain effective.
-- Channel-required global-package-cache isolation prevents packages restored under the previous source policy from satisfying the new restore.
+- Channel-required global-package-cache isolation prevents entries in the ordinary global packages folder from satisfying the new restore. Configured fallback folders remain part of NuGet's native policy and can still satisfy packages.
 
 Moving back to stable removes the source-specific Aspire policy. The project's ambient Aspire mappings become effective again without requiring the user to reconstruct their NuGet configuration.
 
@@ -68,7 +68,7 @@ The result contains the effective source locations, package patterns, and cache-
 
 Relative local sources are resolved against the AppHost directory before they are used from the integration cache.
 
-Cache isolation is an explicit channel policy rather than something inferred from a local source path. Staging feeds opt into source-specific isolation because distinct feeds can publish different packages under the same stable-shaped version.
+Cache isolation is an explicit channel policy rather than something inferred from a local source path. Staging feeds opt into a source-specific global packages folder because distinct feeds can publish different packages under the same stable-shaped version. This isolates the writable global cache; it does not disable configured fallback folders.
 
 Local and PR package hives use [NuGet's normal global-packages behavior](https://learn.microsoft.com/nuget/consume-packages/managing-the-global-packages-and-cache-folders): an existing package with the requested ID and version is reused without consulting the selected source. Replacing package contents under an existing version therefore requires publishing a new version, removing the cached package, or selecting a fresh global packages folder through standard NuGet configuration.
 
@@ -127,7 +127,8 @@ The package-only path:
 3. Passes the ordered overlay and ambient config paths to `Aspire.Managed`.
 4. Defines selected sources in the overlay when no ambient source key represents them.
 5. Uses direct source arguments only for source-only policies that do not require a mapping overlay.
-6. Injects the resulting `ISettings` into `DependencyGraphSpecRequestProvider`.
+6. Treats the evaluated hierarchy and explicitly selected sources as the complete source set rather than implicitly appending NuGet.org.
+7. Injects the resulting `ISettings` into `DependencyGraphSpecRequestProvider`.
 
 Configured source descriptors are reused so source names, credentials, protocol settings, and credential-provider behavior remain NuGet-owned.
 
@@ -139,9 +140,9 @@ The SDK path writes a persistent policy overlay to an Aspire-owned policy direct
 
 `IntegrationRestore.csproj`, its intermediate output, and closure artifacts remain in the centralized integration cache. Their storage location does not participate in ambient NuGet configuration discovery.
 
-The generated root project receives `RestoreAdditionalProjectSources` only for source-only policies that do not require a mapping overlay. Source-specific channel and explicit override policies define their selected sources and source-key mappings in the overlay.
+The generated root project receives non-empty `RestoreAdditionalProjectSources` only for source-only policies that do not require a mapping overlay. Otherwise, it sets the property to an empty value so an inherited environment or MSBuild property cannot introduce an untracked source. Source-specific channel and explicit override policies define their selected sources and source-key mappings in the overlay.
 
-The generated project does not set `RestoreConfigFile`. Using normal discovery preserves NuGet settings that cannot be represented as source arguments or project properties.
+The generated project's early-imported props explicitly clear `RestoreConfigFile`. This prevents an inherited environment or MSBuild property from bypassing the AppHost-anchored hierarchy while preserving normal directory-based discovery.
 
 ## Referenced-project version hint
 
@@ -162,7 +163,7 @@ For example, an integration that intentionally aligns its `Aspire.Hosting` depen
 
 Referenced projects remain responsible for their own restore policy. A project that explicitly replaces `RestoreSources` must configure every source needed by the version it selects.
 
-When the source policy requires an isolated global packages folder, the SDK process also receives that folder through `NUGET_PACKAGES`. The generated root and every referenced project therefore use the same source-specific package cache.
+When the source policy requires an isolated global packages folder, the SDK process also receives that folder through `NUGET_PACKAGES`. The generated root and referenced projects use that cache unless a referenced project explicitly takes ownership by setting `RestorePackagesPath`.
 
 ## Credentials
 
@@ -176,7 +177,7 @@ Credentials remain in NuGet-owned mechanisms:
 
 The Aspire overlay contains no copied credential material.
 
-Credential-bearing source URLs are rejected for SDK project-reference restores because the generated project and persistent overlay must remain non-secret. Package-only diagnostics redact credential-bearing source values.
+Credential-bearing source URLs selected directly by an Aspire channel or source override are rejected for SDK project-reference restores because the generated project and persistent overlay must remain non-secret. Credential-bearing sources inherited from ambient NuGet configuration remain available through NuGet's native hierarchy. Package-only diagnostics redact credential-bearing source values.
 
 NuGet-generated restore artifacts are not scrubbed or separately isolated by Aspire. Files such as `project.assets.json`, dependency graph specifications, and `.nupkg.metadata` can retain configured source URLs, including inline URL credentials. Authentication should therefore use NuGet credential mechanisms rather than embedding credentials in source URLs.
 
