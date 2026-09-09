@@ -122,8 +122,8 @@ internal static class SemanticConventions
     public const string AttributeNetworkPeerAddress = "network.peer.address"; // replaces: "net.peer.ip" (AttributeNetPeerIp)
     public const string AttributeNetworkPeerPort = "network.peer.port"; // replaces: "net.peer.port" (AttributeNetPeerPort)
 
-    // v1.42.0 Messaging spans
-    // https://github.com/open-telemetry/semantic-conventions/blob/v1.42.0/docs/messaging/messaging-spans.md
+    // v1.44.0 Messaging spans
+    // https://github.com/open-telemetry/semantic-conventions/blob/v1.44.0/docs/messaging/messaging-spans.md
     public const string AttributeMessagingClientId = "messaging.client.id"; // replaces: "messaging.client_id"
     public const string AttributeMessagingConsumerGroupName = "messaging.consumer.group.name"; // replaces: "messaging.kafka.consumer.group"
     public const string AttributeMessagingDestinationName = "messaging.destination.name";
@@ -131,14 +131,15 @@ internal static class SemanticConventions
     public const string AttributeMessagingOperationName = "messaging.operation.name"; // replaces: "messaging.operation"
     public const string AttributeMessagingOperationType = "messaging.operation.type";
 
-    // v1.42.0 Messaging metrics
-    // https://github.com/open-telemetry/semantic-conventions/blob/v1.42.0/docs/messaging/messaging-metrics.md
+    // v1.44.0 Messaging metrics
+    // https://github.com/open-telemetry/semantic-conventions/blob/v1.44.0/docs/messaging/messaging-metrics.md
     public const string MetricMessagingClientOperationDuration = "messaging.client.operation.duration"; // replaces: "messaging.publish.duration" and "messaging.receive.duration"
     public const string MetricMessagingClientSentMessages = "messaging.client.sent.messages"; // replaces: "messaging.publish.messages"
     public const string MetricMessagingClientConsumedMessages = "messaging.client.consumed.messages"; // replaces: "messaging.receive.messages"
 
-    // v1.42.0 Messaging (Kafka)
-    // https://github.com/open-telemetry/semantic-conventions/blob/v1.42.0/docs/messaging/kafka.md
+    // v1.44.0 Messaging (Kafka)
+    // https://github.com/open-telemetry/semantic-conventions/blob/v1.44.0/docs/messaging/kafka.md
+    public const string AttributeMessagingKafkaClusterId = "messaging.kafka.cluster.id";
     public const string AttributeMessagingKafkaMessageKey = "messaging.kafka.message.key";
     public const string AttributeMessagingKafkaMessageTombstone = "messaging.kafka.message.tombstone";
     public const string AttributeMessagingKafkaOffset = "messaging.kafka.offset"; // replaces: "messaging.kafka.message.offset"
@@ -150,6 +151,7 @@ internal static class SemanticConventions
     public const string AttributeDbSystemName = "db.system.name";
     public const string AttributeDbNamespace = "db.namespace";
     public const string AttributeDbResponseStatusCode = "db.response.status_code";
+    public const string AttributeDbResponseReturnedRows = "db.response.returned_rows";
     public const string AttributeDbOperationBatchSize = "db.operation.batch.size";
     public const string AttributeDbQuerySummary = "db.query.summary";
     public const string AttributeDbQueryText = "db.query.text";

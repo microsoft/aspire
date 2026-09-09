@@ -106,7 +106,7 @@ internal static class OpenTelemetryConsumeResultExtensions
             return consumeResult;
         }
 
-        var processActivity = StartProcessActivity(TryExtractPropagationContext(consumeResult, out var propagationContext) ? propagationContext : default, consumeResult.TopicPartitionOffset, consumeResult.Message.Key, consumeResult.Message.Value is null, instrumentedConsumer.Name, instrumentedConsumer.GroupId!);
+        var processActivity = StartProcessActivity(TryExtractPropagationContext(consumeResult, out var propagationContext) ? propagationContext : default, consumeResult.TopicPartitionOffset, consumeResult.Message.Key, consumeResult.Message.Value is null, instrumentedConsumer.Name, instrumentedConsumer.GroupId!, instrumentedConsumer.ClusterIdTask);
 
         try
         {
@@ -129,7 +129,7 @@ internal static class OpenTelemetryConsumeResultExtensions
     internal static PropagationContext ExtractPropagationContext(Headers? headers)
         => Propagators.DefaultTextMapPropagator.Extract(default, headers, ExtractTraceContext);
 
-    private static Activity? StartProcessActivity<TKey>(PropagationContext propagationContext, TopicPartitionOffset? topicPartitionOffset, TKey? key, bool isTombstone, string clientId, string groupId)
+    private static Activity? StartProcessActivity<TKey>(PropagationContext propagationContext, TopicPartitionOffset? topicPartitionOffset, TKey? key, bool isTombstone, string clientId, string groupId, Task<string?>? clusterIdTask)
     {
 #pragma warning disable IDE0370 // Suppression is unnecessary
         var spanName = string.IsNullOrEmpty(topicPartitionOffset?.Topic)
@@ -142,11 +142,11 @@ internal static class OpenTelemetryConsumeResultExtensions
             : [];
 
         // Provide the attributes that can influence sampling decisions at span creation time
-        var initialTags = new ActivityTagsCollection
+        var initialTags = new TagList
         {
-            [SemanticConventions.AttributeMessagingOperationName] = ConfluentKafkaCommon.ProcessOperationName,
-            [SemanticConventions.AttributeMessagingOperationType] = ConfluentKafkaCommon.ProcessOperationType,
-            [SemanticConventions.AttributeMessagingSystem] = ConfluentKafkaCommon.KafkaMessagingSystem,
+            { SemanticConventions.AttributeMessagingOperationName, ConfluentKafkaCommon.ProcessOperationName },
+            { SemanticConventions.AttributeMessagingOperationType, ConfluentKafkaCommon.ProcessOperationType },
+            { SemanticConventions.AttributeMessagingSystem, ConfluentKafkaCommon.KafkaMessagingSystem },
         };
 
         if (groupId is { Length: > 0 })
@@ -185,6 +185,12 @@ internal static class OpenTelemetryConsumeResultExtensions
             if (isTombstone)
             {
                 activity.SetTag(SemanticConventions.AttributeMessagingKafkaMessageTombstone, true);
+            }
+
+            if (clusterIdTask?.Status == TaskStatus.RanToCompletion
+                && clusterIdTask.Result is { Length: > 0 } clusterId)
+            {
+                activity.SetTag(SemanticConventions.AttributeMessagingKafkaClusterId, clusterId);
             }
         }
 

@@ -195,6 +195,67 @@ namespace OpenTelemetry.Internal
         }
 
         /// <summary>
+        /// Throw an exception if the value equals <see langword="default"/>.
+        /// </summary>
+        /// <typeparam name="T">The value type to validate.</typeparam>
+        /// <param name="value">The value to check.</param>
+        /// <param name="paramName">The parameter name to use in the thrown exception.</param>
+        [DebuggerHidden]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ThrowIfDefault<T>(T value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
+            where T : struct, IEquatable<T>
+        {
+            if (value.Equals(default(T)))
+            {
+                throw new ArgumentException($"Must not be the default {typeof(T).Name} value.", paramName);
+            }
+        }
+
+        /// <summary>
+        /// Throw an exception if the enum value is not a defined member of
+        /// <typeparamref name="TEnum"/>.
+        /// </summary>
+        /// <typeparam name="TEnum">The enum type to validate.</typeparam>
+        /// <param name="value">The value to check.</param>
+        /// <param name="paramName">The parameter name to use in the thrown exception.</param>
+        [DebuggerHidden]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ThrowIfUndefined<TEnum>(TEnum value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
+            where TEnum : struct, Enum
+        {
+#if NET
+            if (!Enum.IsDefined(value))
+#else
+            if (!Enum.IsDefined(typeof(TEnum), value))
+#endif
+            {
+                throw new ArgumentOutOfRangeException(paramName, value, $"Must be a defined {typeof(TEnum).Name} value.");
+            }
+        }
+
+        /// <summary>
+        /// Throw an exception if the enum value is the default (zero) value or is not a
+        /// defined member of <typeparamref name="TEnum"/>.
+        /// </summary>
+        /// <typeparam name="TEnum">The enum type to validate.</typeparam>
+        /// <param name="value">The value to check.</param>
+        /// <param name="paramName">The parameter name to use in the thrown exception.</param>
+        [DebuggerHidden]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ThrowIfUndefinedOrDefault<TEnum>(TEnum value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
+            where TEnum : struct, Enum
+        {
+#if NET
+            if (value.Equals(default(TEnum)) || !Enum.IsDefined(value))
+#else
+            if (value.Equals(default(TEnum)) || !Enum.IsDefined(typeof(TEnum), value))
+#endif
+            {
+                throw new ArgumentOutOfRangeException(paramName, value, $"Must be a defined, non-default {typeof(TEnum).Name} value.");
+            }
+        }
+
+        /// <summary>
         /// Throw an exception if the value is not of the expected type.
         /// </summary>
         /// <param name="value">The value to check.</param>

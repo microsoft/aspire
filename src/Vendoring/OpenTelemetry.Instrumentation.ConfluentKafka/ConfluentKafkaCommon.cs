@@ -1,9 +1,12 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Globalization;
+using Confluent.Kafka;
+using Confluent.Kafka.Admin;
 using OpenTelemetry.Trace;
 
 namespace OpenTelemetry.Instrumentation.ConfluentKafka;
@@ -12,8 +15,8 @@ namespace OpenTelemetry.Instrumentation.ConfluentKafka;
 /// Contains common constants and static members used by the Confluent Kafka instrumentation.
 /// </summary>
 /// <remarks>
-/// Follows the v1.43.0 messaging semantic conventions:
-/// https://github.com/open-telemetry/semantic-conventions/tree/v1.43.0/docs/messaging.
+/// Follows the v1.44.0 messaging semantic conventions:
+/// https://github.com/open-telemetry/semantic-conventions/tree/v1.44.0/docs/messaging.
 /// </remarks>
 internal static class ConfluentKafkaCommon
 {
@@ -29,10 +32,10 @@ internal static class ConfluentKafkaCommon
     internal const string ReceiveOperationType = "receive";
     internal const string ProcessOperationType = "process";
 
-    internal static readonly Version SemanticConventionsVersion = new(1, 43, 0);
+    internal static readonly Version SemanticConventionsVersion = new(1, 44, 0);
 
     internal const string InstrumentationName = "OpenTelemetry.Instrumentation.ConfluentKafka";
-    internal static readonly string InstrumentationVersion = new Version(0, 2, 0, 0).ToString();
+    internal static readonly string InstrumentationVersion = new Version(0, 3, 0, 0).ToString();
     internal static readonly string SchemaUrl = $"https://opentelemetry.io/schemas/{SemanticConventionsVersion.ToString(3)}";
     internal static readonly ActivitySource ActivitySource = new(new ActivitySourceOptions(InstrumentationName)
     {
@@ -60,6 +63,32 @@ internal static class ConfluentKafkaCommon
         SemanticConventions.MetricMessagingClientConsumedMessages,
         unit: "{message}",
         description: "Number of messages that were delivered to the application.");
+
+    private static readonly ConcurrentDictionary<string, Task<string?>> ClusterIdCache = new();
+
+    internal static async Task<string?> GetOrFetchClusterIdAsync(Handle handle, string? bootstrapServers)
+    {
+        if (string.IsNullOrEmpty(bootstrapServers))
+        {
+            return await FetchClusterIdAsync(handle).ConfigureAwait(false);
+        }
+
+#if NET
+        var key = bootstrapServers;
+#else
+        var key = bootstrapServers!;
+#endif
+
+        var task = ClusterIdCache.GetOrAdd(key, _ => FetchClusterIdAsync(handle));
+        var result = await task.ConfigureAwait(false);
+
+        if (result == null)
+        {
+            ClusterIdCache.TryRemove(key, out _);
+        }
+
+        return result;
+    }
 
     /// <summary>
     /// Normalizes a Kafka message key to the string representation required by the
@@ -93,4 +122,19 @@ internal static class ConfluentKafkaCommon
         TimeSpan value => value.ToString("c", CultureInfo.InvariantCulture),
         _ => null,
     };
+
+    private static async Task<string?> FetchClusterIdAsync(Handle handle)
+    {
+        try
+        {
+            using var admin = new DependentAdminClientBuilder(handle).Build();
+            var result = await admin.DescribeClusterAsync(new DescribeClusterOptions { RequestTimeout = TimeSpan.FromSeconds(5) }).ConfigureAwait(false);
+            return result.ClusterId;
+        }
+        catch (Exception ex)
+        {
+            ConfluentKafkaInstrumentationEventSource.Log.FailedToFetchClusterId(ex);
+            return null;
+        }
+    }
 }
