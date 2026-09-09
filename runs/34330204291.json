@@ -1,0 +1,38 @@
+{
+  "run_id": 34330204291,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34330204291",
+  "analyzed_at": "2026-09-09T09:12:33Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19431,
+    "title": "Migrate dashboard to Fluent UI Blazor v5",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/fluentui-v5-dashboard",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19431"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "id": 102397564389,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34330204291/job/102397564389",
+      "classification": "flaky-test",
+      "reason": "Job failed due to a known flaky test (Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared) throwing a SQLite column-count mismatch error unrelated to PR changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "error": "Microsoft.Data.Sqlite.SqliteException : SQLite Error 1: 'expected 0 columns for '' but got 18'.",
+      "stack_trace": "at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()\n   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()\n   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()\n   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)\n   at Aspire.Dashboard.ServiceClient.TracingSqliteConnection.TracingDbCommand.ExecuteDbDataReader(CommandBehavior behavior) in /_/src/Aspire.Dashboard/ServiceClient/TracingSqliteConnection.cs:line 296\n   at Aspire.Dashboard.Otlp.Storage.SqliteTelemetryRepository.MaterializeMetricDimensions(...) in /_/src/Aspire.Dashboard/Otlp/Storage/SqliteTelemetryRepository.Metrics.Reads.cs:line 206",
+      "classification": "flaky",
+      "reason": "This is a previously identified recurring flaky test (cause id dashboard-components-sqlite-column-count-mismatch, tracked in issue #19742, 6 prior occurrences) caused by an intermittent SQLite connection state issue, not by the PR's Fluent UI v5 migration changes."
+    }
+  ],
+  "causes": ["dashboard-components-sqlite-column-count-mismatch"]
+}

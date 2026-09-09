@@ -46,6 +46,13 @@
       "job": "Tests / No-package tests / Hosting-4 (windows-latest)",
       "pr_number": 19678,
       "observed_at": "2026-09-08T17:05:57Z"
+    },
+    {
+      "run_id": 34330204291,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34330204291",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "pr_number": 19431,
+      "observed_at": "2026-09-09T09:12:33Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19742"
