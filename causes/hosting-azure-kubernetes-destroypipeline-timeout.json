@@ -18,6 +18,13 @@
       "job": "Tests / No-package tests (regular, Infrastructure.Tests, ...) / Infrastructure (ubuntu-latest)",
       "pr_number": 19990,
       "observed_at": "2026-09-08T21:51:36Z"
+    },
+    {
+      "run_id": 34296511200,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34296511200",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, ...) / Hosting.Azure.Kubernetes (windows-latest)",
+      "pr_number": 19969,
+      "observed_at": "2026-09-09T01:20:43Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19982"

@@ -1,0 +1,38 @@
+{
+  "run_id": 34296511200,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34296511200",
+  "analyzed_at": "2026-09-09T01:20:43Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19969,
+    "title": "Add \"Manage\" links from Redis to Redis Commander/Insight",
+    "author": "afscrome",
+    "state": "closed",
+    "head_branch": "claude/aspire-11603-fix-validation-058a20",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19969"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, ...) / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 102294623892,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34296511200/job/102294623892",
+      "classification": "flaky-test",
+      "reason": "Test failure is a known intermittent timeout in AzureKubernetesInfrastructureTests on windows-latest, unrelated to the PR which only modifies Redis builder extensions, DcpResourceWatcher, and Redis/WithUrls tests.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent",
+      "job": "Hosting.Azure.Kubernetes (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 565\n   at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 575",
+      "classification": "flaky",
+      "reason": "Matches prior known cause 'hosting-azure-kubernetes-destroypipeline-timeout' (issue #19982); test times out intermittently on windows-latest and the PR does not touch Azure Kubernetes hosting code."
+    }
+  ],
+  "causes": ["hosting-azure-kubernetes-destroypipeline-timeout"]
+}
