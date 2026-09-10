@@ -132,6 +132,11 @@ public class ContainerImageBuildOptions
     /// Gets the target platform for the container.
     /// </summary>
     public ContainerTargetPlatform? TargetPlatform { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the Dockerfile references images available only in the local runtime store.
+    /// </summary>
+    internal bool RequiresLocalImageStore { get; init; }
 }
 
 /// <summary>

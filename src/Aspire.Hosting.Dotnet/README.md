@@ -132,7 +132,9 @@ guidance when it detects this cross-operating-system failure.
 
 Set `Destination` to `ContainerImageDestination.Archive` in `WithContainerBuildOptions` to save an SDK-built
 image as an archive. An archive-only SDK build does not require Docker or Podman to be running; layering files
-from another container still requires a container runtime.
+from another container still requires a container runtime. Docker supports layered archives in Docker format
+because the layering build must use Docker's local image store before `docker image save` exports the result.
+Use Podman when container-file layering must produce an OCI-format archive.
 
 For .NET SDK publishing, a non-existent `OutputPath` with any filename extension is an explicit archive
 filename. This includes custom extensions such as `image.custom`, not only `.tar` or `.tar.gz`. A path without
