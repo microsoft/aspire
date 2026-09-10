@@ -92,6 +92,43 @@ public partial class ConsoleLogsTests
     }
 
     [Fact]
+    public async Task TerminalResource_OpenWindow_CarriesCurrentFontAndKeepsInlineView()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var resource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Running);
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [resource]);
+        SetupConsoleLogsServices(client);
+        SetupTerminalViewJsInterop();
+        TerminalSetupHelpers.SetupTerminalDock(this);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: resource.Name));
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder => builder
+            .Add(p => p.ResourceName, resource.Name)
+            .Add(p => p.ViewportInformation, viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        var terminal = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminal.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true, FontPx = 17
+        }));
+
+        var open = Assert.Single(cut.Instance.LogsMenuItemsForTest,
+            item => item.Text == Resources.ConsoleLogs.TerminalToolbarOpenInWindow);
+        await cut.InvokeAsync(open.OnClick!);
+
+        var invocation = Assert.Single(JSInterop.Invocations, i => i.Identifier == "openTerminalWindow");
+        Assert.Equal("resource:terminal-resource:0", invocation.Arguments[0]);
+        Assert.Equal("http://localhost/terminal-window/resource/terminal-resource/0?fontSize=17", invocation.Arguments[1]);
+        Assert.Same(terminal, cut.FindComponent<TerminalView>().Instance);
+    }
+
+    [Fact]
     public async Task TerminalResource_ViewPicker_MarksActiveViewAsChecked()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();

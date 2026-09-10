@@ -18,9 +18,9 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.167.0-alpha.1547.1.798b26c**,
+`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.167.0-alpha.1549.1.496ccf5**,
 paired with the Hex1b NuGet build from commit
-`798b26c8a297e3060bb9e3a509f76668be6b9022`. The client and server use the evolving
+`496ccf508470eed8744dbe46675e3d26928e8c91`. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
 different client based only on a similar version number.
 
@@ -84,6 +84,21 @@ view retains the client, selection, and producer-backed history. Disposal closes
 only this view, never the server-side producer. Sizing changes explicitly request
 primary when necessary and wait for role confirmation; normal input does not
 take resize ownership. Public font-size limits are 8–32 pixels.
+
+Native `onClose` reports transport closure even before mounting completes.
+Aspire reserves WebSocket close code `4000` for authoritative AppHost producer
+completion; normal closure, abnormal disconnects, close reasons and `wasClean`
+never imply completion. Completed views stay visible without reconnecting;
+other disconnects use bounded retries. No application messages are added to HWT.
+The last available projection can remain after completion, but a final frame is
+not guaranteed and completion before mounting can leave an empty view.
+
+The browser's `setReadOnly` and the server's per-presentation
+`Hwt1PresentationAdapter.IsReadOnly` enforce live input policy independently.
+The component updates server policy before browser UX. Native browser gating
+also covers held pointers, queued gestures, direct paste/action calls and
+pending clipboard reads. Inspection remains available while the connection is
+live; already accepted or in-flight commands cannot be recalled.
 
 Role state comes from the public `onRoleChange` callback's `id`, `primaryId`,
 and `isPrimary` fields. The backend's direct HMP workload mirror preserves

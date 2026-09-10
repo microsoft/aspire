@@ -13,6 +13,7 @@ export declare class WebTerminal implements WebTerminalHandle {
     get geometry(): TerminalGeometry;
     get peer(): TerminalPeer;
     get connected(): boolean;
+    get readOnly(): boolean;
     /** Current presented workload title; retained on disconnect/dispose. Treat as untrusted text. */
     get title(): string;
     get progress(): TerminalProgress;
@@ -41,6 +42,8 @@ export declare class WebTerminal implements WebTerminalHandle {
     /** Sends an explicit paste through the producer's mode-aware input encoder. */
     paste(text: string): void;
     pasteClipboard(): Promise<string>;
+    /** Changes per-view input policy without reconnecting; server authorization remains host-owned. */
+    setReadOnly(readOnly: boolean): void;
     focus(): void;
     /** Request HMP1 primary explicitly; peer notifications confirm the result. */
     requestPrimary(): void;

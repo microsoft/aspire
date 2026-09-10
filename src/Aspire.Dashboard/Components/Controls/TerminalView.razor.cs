@@ -24,6 +24,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private int _connectedGeneration = -1;
     private string? _connectedEndpoint;
     private bool _appliedReadOnly;
+    private bool _appliedAutoFit;
     private bool _initializationFailed;
     private string? _failedEndpoint;
     private bool _disposed;
@@ -80,14 +81,27 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public bool Chromeless { get; set; }
 
     /// <summary>Gets or sets the per-surface key for page-lifetime font-size persistence.</summary>
-    /// <remarks>Dock panes and detached windows use separate keys even when they show the same terminal.</remarks>
+    /// <remarks>Detached windows seed their font from the opener without sharing live font preferences.</remarks>
     [Parameter]
     public string? SizeMemoryKey { get; set; }
+
+    /// <summary>Gets or sets the initial font size in CSS pixels when this surface has no remembered preference.</summary>
+    /// <remarks>Null uses the terminal's default. Changing this value does not override a mounted view's font.</remarks>
+    [Parameter]
+    public int? InitialFontSize { get; set; }
+
+    /// <summary>Gets the selected font size, or the initial preference before the first state notification.</summary>
+    public int? FontSize => _state.FontPx > 0 ? _state.FontPx : InitialFontSize;
 
     /// <summary>Gets or sets whether the footer offers fixed-resolution presets. Defaults to true.</summary>
     /// <remarks>The font stepper remains available on surfaces sized by a splitter or dialog.</remarks>
     [Parameter]
     public bool ShowDimensionsPicker { get; set; } = true;
+
+    /// <summary>Gets or sets whether opening this surface fits its grid to the container while preserving font size.</summary>
+    /// <remarks>Set this only for the active dock pane. Read-only views do not take resize control.</remarks>
+    [Parameter]
+    public bool AutoFit { get; set; }
 
     /// <summary>Raised when the terminal's role, dimensions, font or connection state changes.</summary>
     [Parameter]
@@ -153,6 +167,13 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                     _appliedReadOnly = readOnly;
                     continue;
                 }
+                if (_terminalId != 0 && _appliedAutoFit != AutoFit)
+                {
+                    var autoFit = AutoFit;
+                    await _jsModule!.InvokeVoidAsync("setAutoFit", _terminalId, autoFit);
+                    _appliedAutoFit = autoFit;
+                    continue;
+                }
                 break;
             }
         }
@@ -204,6 +225,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         _selfRef ??= DotNetObjectReference.Create(this);
         _connectedGeneration = -1;
         var readOnly = ReadOnly;
+        var autoFit = AutoFit;
         _terminalId = await _jsModule.InvokeAsync<int>(
             "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef,
             new TerminalViewOptions
@@ -212,7 +234,9 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 ReadOnly = readOnly,
                 Chromeless = Chromeless,
                 ShowDimensions = ShowDimensionsPicker,
+                AutoFit = autoFit,
                 SizeMemoryKey = SizeMemoryKey,
+                InitialFontSize = InitialFontSize,
                 Label = Loc[nameof(Resources.ConsoleLogs.TerminalInputLabel)],
                 DecreaseFontSize = DecreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
                 IncreaseFontSize = IncreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
@@ -221,6 +245,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 FocusControlsHint = FocusControlsHintLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalFocusControlsHint)],
             }, _selectionTemplateElement, _footerElement);
         _appliedReadOnly = readOnly;
+        _appliedAutoFit = autoFit;
         if (!_disposed)
         {
             _sizePresets = await GetSizePresetsAsync();
@@ -296,13 +321,6 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         _sessionEndpoint = null;
     }
 
-    /// <summary>Checks authoritative completion before retrying a failed native connection.</summary>
-    /// <param name="viewId">The opaque identifier of the view requesting the check.</param>
-    /// <returns>True when the view ended or has been released; otherwise false.</returns>
-    [JSInvokable]
-    public bool IsTerminalEnded(string viewId) =>
-        _disposed || _viewSession is null || _viewSession.Id != viewId || _viewSession.Ended.IsCompletedSuccessfully;
-
     /// <summary>Updates this view's chrome and forwards the current terminal state to its host.</summary>
     /// <param name="state">The generation-tagged state supplied by the JS adapter.</param>
     [JSInvokable]
@@ -335,6 +353,14 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>Selects automatic sizing or one of the terminal's fixed grid presets.</summary>
     /// <param name="sizeKey">The preset key, or <c>auto</c>.</param>
     public Task SetSizeModeAsync(string sizeKey) => InvokeTerminalAsync("setSizeModeFromHost", sizeKey);
+
+    /// <summary>Fits the terminal grid to its container without changing the selected font size.</summary>
+    public Task FitToContainerAsync() => InvokeTerminalAsync("fitToContainer");
+
+    private IReadOnlyList<TerminalSizePreset> DisplayedSizePresets => _state.Cols > 0 && _state.Rows > 0 &&
+        !_sizePresets.Any(p => p.Value == _state.SizeKey)
+        ? [new(_state.SizeKey, $"{_state.Cols}\u00d7{_state.Rows}", _state.Cols, _state.Rows), .. _sizePresets]
+        : _sizePresets;
 
     /// <summary>Gets the supported grid presets from the JS adapter.</summary>
     /// <returns>The available preset values and dimensions.</returns>
@@ -482,8 +508,12 @@ public sealed record TerminalViewOptions
     public bool Chromeless { get; init; }
     /// <summary>Whether fixed-resolution presets are offered.</summary>
     public bool ShowDimensions { get; init; } = true;
+    /// <summary>Whether opening the active surface requests automatic grid sizing at the current font size.</summary>
+    public bool AutoFit { get; init; }
     /// <summary>The per-surface key for remembering the font size.</summary>
     public string? SizeMemoryKey { get; init; }
+    /// <summary>The initial font size when no per-surface preference has been remembered.</summary>
+    public int? InitialFontSize { get; init; }
     /// <summary>The accessible label for the terminal's keyboard input.</summary>
     public required string Label { get; init; }
     /// <summary>The accessible decrease-font-size label.</summary>
@@ -527,6 +557,8 @@ public sealed record TerminalToolbarState
     public bool CanIncreaseFontSize { get; init; }
     /// <summary>Whether grid presets are available.</summary>
     public bool SizeSelectEnabled { get; init; }
+    /// <summary>Whether fitting is available and the view is not already the auto-sized primary.</summary>
+    public bool FitEnabled { get; init; }
     /// <summary>The server-authoritative grid width.</summary>
     public int Cols { get; init; }
     /// <summary>The server-authoritative grid height.</summary>

@@ -17,8 +17,8 @@ namespace Aspire.Dashboard.Components.Pages;
 /// reloaded or closed.
 /// </para>
 /// <para>
-/// The window is the terminal's whole viewport, so resizing it resizes the grid — that is the reason to detach in the
-/// first place, and it comes for free from the chromeless fit layout plus the existing resize observer.
+/// Opening the window requests primary once and fits the grid at the opener's selected font size. While primary,
+/// the window resizes the grid to its viewport without changing that font size.
 /// </para>
 /// </remarks>
 public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
@@ -50,6 +50,10 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     /// </summary>
     [Parameter]
     public int ReplicaIndex { get; set; }
+
+    /// <summary>Gets or sets the font size carried from the terminal's originating surface.</summary>
+    [SupplyParameterFromQuery(Name = "fontSize")]
+    public int? FontSize { get; set; }
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }

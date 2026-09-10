@@ -39,6 +39,7 @@ public class TerminalDockTests : DashboardTestContext
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
         var terminals = cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray();
+        Assert.Equal([true, false], terminals.Select(terminal => terminal.AutoFit));
 
         await cut.InvokeAsync(() => cut.Instance.SetHeightAsync(requestedHeight, viewportHeight));
         var dock = cut.Find(".terminal-dock");
@@ -58,6 +59,10 @@ public class TerminalDockTests : DashboardTestContext
         Assert.Equal(terminals, cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray());
         Assert.Equal("first", cut.Find("[role=tab][aria-selected=true]").TextContent.Trim());
         Assert.Empty(client.ClosedTerminals);
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        Assert.Equal([false, false], terminals.Select(terminal => terminal.AutoFit));
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        Assert.Equal([true, false], terminals.Select(terminal => terminal.AutoFit));
     }
 
     [Fact]
@@ -489,6 +494,48 @@ public class TerminalDockTests : DashboardTestContext
 
         Assert.Empty(Services.GetRequiredService<INotificationService>().GetNotifications());
         Assert.Empty(toasts.FindComponents<FluentToast>());
+    }
+
+    [Fact]
+    public async Task DetachActiveTerminal_CarriesItsFontAndReturnResumesAutoFit()
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = RenderComponent<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
+        var views = cut.FindComponents<TerminalView>();
+        for (var i = 0; i < views.Count; i++)
+        {
+            var view = views[i].Instance;
+            var fontSize = i == 0 ? 23 : 19;
+            await cut.InvokeAsync(() => view.OnTerminalStateChanged(new TerminalToolbarState
+            {
+                TerminalId = 1, Generation = 1, Connected = true, FontPx = fontSize
+            }));
+        }
+        await cut.FindAll(".terminal-dock-tab-select")[1].ClickAsync(new());
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second", "third"));
+        cut.WaitForAssertion(() => Assert.Equal(3, cut.FindComponents<TerminalView>().Count));
+
+        await cut.Find(".terminal-dock-detach").ClickAsync(new());
+        var open = Assert.Single(JSInterop.Invocations, i => i.Identifier == "openTerminalWindow");
+        Assert.Equal("second", open.Arguments[0]);
+        Assert.Equal("http://localhost/terminal-window/apphost/second?fontSize=19", open.Arguments[1]);
+        Assert.Equal(2, cut.FindComponents<TerminalView>().Count);
+        Assert.Single(cut.FindAll(".terminal-dock-detached"));
+
+        await cut.FindAll(".terminal-dock-detached-actions .aspire-button")[1].ClickAsync(new());
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".terminal-dock-detached"));
+            var returned = cut.FindComponents<TerminalView>().Select(c => c.Instance).ToArray();
+            Assert.Equal(3, returned.Length);
+            Assert.Equal([false, true, false], returned.Select(view => view.AutoFit));
+            Assert.Equal("dock:second", returned[1].SizeMemoryKey);
+        });
     }
 
     [Fact]

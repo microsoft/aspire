@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Model;
@@ -79,15 +81,24 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
     /// An opaque, page-stable identifier for the terminal — a dock terminal id, or a resource name and replica index.
     /// </param>
     /// <param name="url">The dashboard URL that renders the detached terminal.</param>
+    /// <param name="fontSize">The originating view's font size, or null if the view has not reported one yet.</param>
     /// <param name="widthPx">Requested window width, in pixels.</param>
     /// <param name="heightPx">Requested window height, in pixels.</param>
     public async Task<TerminalWindowOpenResult> OpenAsync(
         string key,
         string url,
+        int? fontSize,
         int widthPx = DefaultWindowWidthPx,
         int heightPx = DefaultWindowHeightPx)
     {
         var module = await GetModuleAsync().ConfigureAwait(false);
+
+        // Carry only the font preference across browser contexts, not the source grid dimensions:
+        // the new primary must calculate its own rows and columns from the popup's viewport.
+        if (fontSize is { } size)
+        {
+            url = QueryHelpers.AddQueryString(url, "fontSize", size.ToString(CultureInfo.InvariantCulture));
+        }
 
         var result = await module.InvokeAsync<string>(
             "openTerminalWindow", key, url, widthPx, heightPx, _selfRef).ConfigureAwait(false);

@@ -101,7 +101,7 @@ internal static class KnownFeatures
 
         [TerminalCommandsEnabled] = new(
             TerminalCommandsEnabled,
-            "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
+            "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach', 'aspire terminal tape play'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
             DefaultValue: false),
 
         [PolyglotIntegrationFilterEnabled] = new(

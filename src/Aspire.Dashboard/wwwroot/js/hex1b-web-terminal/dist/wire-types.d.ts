@@ -1,4 +1,4 @@
-import type { InputModifiers, PointerButton, SelectionMode, SelectionRange, TerminalBuffer, TerminalFont, TerminalGeometry, TerminalPeer, TerminalSize, TerminalStats, TerminalRendererPreference, TerminalStatusLevel, TerminalProgress, TerminalShellIntegration } from "./types.js";
+import type { InputModifiers, PointerButton, SelectionMode, SelectionRange, TerminalBuffer, TerminalFont, TerminalGeometry, TerminalPeer, TerminalSize, TerminalStats, TerminalRendererPreference, TerminalStatusLevel, TerminalProgress, TerminalShellIntegration, TerminalCloseDetails } from "./types.js";
 export type SelectionText = {
     status: "valid";
     text: string;
@@ -205,7 +205,10 @@ export interface WorkerStats extends TerminalStats {
     history?: HistoryMetadata | null;
 }
 export type WorkerOutputMessage = {
-    type: "connected" | "disconnected";
+    type: "connected";
+} | {
+    type: "closed";
+    details: TerminalCloseDetails;
 } | {
     type: "status";
     message: string;

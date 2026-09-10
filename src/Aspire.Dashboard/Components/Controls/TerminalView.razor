@@ -47,10 +47,14 @@
                               OnClick="@(() => SetFontSizeAsync(_state.FontPx + 1))">+</FluentButton>
                 @if (ShowDimensionsPicker)
                 {
-                    <FluentSelect TOption="TerminalSizePreset" TValue="string" Class="terminal-size-select" Items="@_sizePresets"
+                    <FluentButton Class="terminal-fit" Disabled="@(!_state.FitEnabled || ReadOnly)"
+                                  Title="@(FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)])"
+                                  aria-label="@(FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)])"
+                                  OnClick="FitToContainerAsync">@(FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)])</FluentButton>
+                    <FluentSelect TOption="TerminalSizePreset" TValue="string" Class="terminal-size-select" Items="@DisplayedSizePresets"
                                   OptionValue="@(p => p.Value)"
-                                  OptionText="@(p => p.Value == "auto" ? FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)].Value : p.Label)"
-                                  Value="@_state.SizeKey" ValueChanged="@(value => SetSizeModeAsync(value ?? "auto"))"
+                                  OptionText="@(p => p.Label)"
+                                  Value="@_state.SizeKey" ValueChanged="@(value => SetSizeModeAsync(value ?? string.Empty))"
                                   Disabled="@(!_state.SizeSelectEnabled || ReadOnly)"
                                   aria-label="@(TerminalDimensionsLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSize)])" />
                 }

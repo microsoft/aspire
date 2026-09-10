@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
 using Grpc.Core;
@@ -31,6 +32,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private const int MaximumHeightPx = 1200;
 
     private readonly List<TerminalDescriptor> _terminals = [];
+    private readonly Dictionary<string, TerminalView> _terminalViews = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _cts = new();
     private readonly string _elementIdPrefix = $"terminal-dock-{Guid.NewGuid():N}";
 
@@ -219,7 +221,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         try
         {
             var url = NavigationManager.ToAbsoluteUri($"/terminal-window/apphost/{Uri.EscapeDataString(terminalId)}").ToString();
-            var result = await WindowLauncher.OpenAsync(terminalId, url).ConfigureAwait(true);
+            var fontSize = _terminalViews.TryGetValue(terminalId, out var view) ? view.FontSize : null;
+            var result = await WindowLauncher.OpenAsync(terminalId, url, fontSize).ConfigureAwait(true);
 
             if (result is TerminalWindowOpenResult.Blocked)
             {
@@ -229,6 +232,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             else
             {
                 _detachedTerminalIds.Add(terminalId);
+                _terminalViews.Remove(terminalId);
             }
 
             StateHasChanged();
@@ -361,6 +365,10 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                         // Recovery snapshots replace all prior state, including terminals removed while offline.
                         endedTerminalIds.AddRange(_detachedTerminalIds.Where(id => !_terminals.Any(t => t.TerminalId == id)));
                         _detachedTerminalIds.ExceptWith(endedTerminalIds);
+                        foreach (var id in _terminalViews.Keys.Where(id => !_terminals.Any(t => t.TerminalId == id)).ToArray())
+                        {
+                            _terminalViews.Remove(id);
+                        }
                     }
                     else if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Change &&
                              Apply(update.Change.ChangeType, update.Change.Terminal) is { } endedTerminalId)
@@ -413,6 +421,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 break;
 
             case TerminalChangeType.Removed:
+                _terminalViews.Remove(descriptor.TerminalId);
                 if (index >= 0)
                 {
                     _terminals.RemoveAt(index);

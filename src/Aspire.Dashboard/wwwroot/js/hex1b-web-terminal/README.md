@@ -51,6 +51,51 @@ terminal.focus();
 or disposes a mounted view. Disposal removes only the appended element and its
 connection, not the container or server-side shared terminal.
 
+### Connection closure and workload completion
+
+Use `onClose(details)` to observe the browser's actual WebSocket close event.
+`TerminalCloseDetails` contains readonly `code`, `reason`, and `wasClean` fields.
+The callback runs once with the view already disconnected, **even if the socket
+closes before the first HWT frame or authoritative HMP peer state**. A pending
+mount rejects after the callback, so capture any host state before calling mount.
+The details object is frozen. Reasons are untrusted text; do not render them as HTML.
+
+```ts
+import { WebTerminal, type TerminalCloseDetails } from "@hex1b/web-terminal";
+
+const container = document.getElementById("terminal");
+if (!container) throw new Error("Missing terminal container");
+let closed: TerminalCloseDetails | undefined;
+try {
+  const terminal = await WebTerminal.mount(container, {
+    url: "/ws/terminal",
+    onClose(details) {
+      closed = details;
+      console.log("View closed", details.code, details.reason, details.wasClean);
+    }
+  });
+  terminal.focus();
+} catch (error) {
+  // closed is set for a transport close, but not for local initialization failure.
+  console.error("Mount failed", closed, error);
+}
+```
+
+Transport loss is **not workload completion**. Code 1006 means the browser did not
+receive a close frame; even code 1000 and `wasClean: true` only describe transport
+closure, not successful process exit. Hosts can define an application close-code
+contract and send it when their authoritative producer reports completion,
+including before any HWT frame exists. Hex1b does not assign workload meaning to
+close codes or reason strings. HTTP upgrade failures generally surface as 1006;
+browsers do not expose the rejected HTTP response body or status through this API.
+
+The client never retries automatically. The host decides whether to mount a new
+view after transport loss or leave an ended tab/dialog visible. Abort, explicit
+disposal, mount timeout, and local initialization/renderer failures do not
+synthesize `onClose`; no callback runs after disposal. Callback exceptions are
+reported to the host, not swallowed or retried, and do not leave mounting pending.
+The API does not retain the producer after exit or promise a final rendered frame.
+
 ### Browser and deployment requirements
 
 Use a browser with WebGPU or WebGL2, module workers, transferable OffscreenCanvas,
@@ -135,9 +180,10 @@ workers, fonts, and the intended WebSocket endpoint.
 | `renderer` | `"auto"` (prefer WebGPU), `"webgpu"`, or `"webgl2"`; selected once per mount. |
 | `font` | One family and optional downloadable font faces; see below. |
 | `sizing` | `{ mode: "auto", fontSize?: number }` or `{ mode: "fixed", columns, rows, fontSize?: number }`. |
-| `readOnly` | Disable application input while retaining history inspection and selection. |
+| `readOnly` | Initial per-view input policy; change it later with `setReadOnly(boolean)`. |
 | `label` | Accessible label for the terminal's hidden keyboard input. |
 | `onTitleChange` | Initial authoritative workload title, then distinct presented changes; see below. |
+| `onClose` | Native WebSocket close details, including pre-mount transport failure; not workload completion. |
 | `onProgressChange`, `onShellIntegrationChange` | Initial authoritative activity, then distinct presented changes for host-owned chrome. |
 | `inputBindings`, `onInput`, `actions` | Per-view input policy and custom actions. |
 | `onSelectionUI` | Synchronous, cancelable UI notification hook. |
@@ -149,7 +195,7 @@ Font size is an integer from 8–32, defaulting to 16. Import `MIN_FONT_SIZE` an
 ownership. `requestPrimary()` explicitly requests ownership; inspect `peer` or
 `onRoleChange` to observe the result.
 
-The handle exposes `geometry`, `peer`, `connected`, `title`, `progress`, `shellIntegration`, `stats`, `screenText`,
+The handle exposes `geometry`, `peer`, `connected`, `readOnly`, `title`, `progress`, `shellIntegration`, `stats`, `screenText`,
 `sizing`, `viewport`, `selection`, `inputBindings`, and `inputContext`.
 Metrics start empty; check optional fields before using them. History may be
 unavailable, and selection can be unavailable, none, pending, valid, or
@@ -159,6 +205,62 @@ an independently reconstructed ANSI buffer.
 
 Callbacks include `onGeometry`, `onRoleChange`, `onTitleChange`, `onSizingChange`, `onStats`,
 `onProgressChange`, `onShellIntegrationChange`, `onViewportChange`, `onSelectionChange`, `onStatus`, and `onInputError`.
+
+### Live read-only views
+
+Call `terminal.setReadOnly(true)` to disable application input on an already
+mounted view. `terminal.readOnly`, `inputContext.readOnly`, and selection UI
+notifications reflect the new policy. Use `setReadOnly(false)` to re-enable input;
+neither call remounts, reconnects, releases the peer's primary role, or changes
+the server's current grid. A writable primary resumes automatic sizing requests.
+Mutating the original `options.readOnly` after mount has no effect.
+
+Read-only blocks keyboard/text/IME input, application mouse reports, direct
+`paste()`/`pasteClipboard()`, the paste paths of `runAction()`, `resize()`,
+`setSizing()`, `requestPrimary()`, and automatic resize requests. Explicit input
+methods throw when disabled; DOM application input is not forwarded. Routing
+overrides cannot bypass this policy. Custom actions can still run local operations,
+but any terminal input method they call remains gated.
+
+Active pointer capture and queued mouse movement, pending composition, queued
+resize, and pending clipboard pastes are cancelled on policy change. Quickly
+re-enabling input does not revive a previously pending paste. Commands already
+dispatched cannot be recalled. Output, local selection gestures, history
+navigation, resync, and copying remain available, including a copy already in
+progress. UI notifications follow their usual coalescing rules.
+
+```ts
+import { WebTerminal } from "@hex1b/web-terminal";
+
+const container = document.getElementById("terminal");
+const inputEnabled = document.querySelector<HTMLInputElement>("#input-enabled");
+if (!container || !inputEnabled) throw new Error("Missing terminal controls");
+
+const terminal = await WebTerminal.mount(container, {
+  url: "/ws/terminal",
+  readOnly: !inputEnabled.checked
+});
+inputEnabled.addEventListener("change", () => terminal.setReadOnly(!inputEnabled.checked));
+```
+
+**Client policy is not authorization.** Enforce it independently on each server
+view with `Hwt1PresentationAdapter.IsReadOnly`, initially or at runtime. For
+example, in the host's existing connection setup (C# snippet):
+
+```csharp
+var presentation = new Hwt1PresentationAdapter { IsReadOnly = true };
+// Attach this presentation to the view's terminal and drive its existing transport loops.
+// Only trusted host policy should grant writes:
+presentation.IsReadOnly = false;
+```
+
+The adapter ignores producer-mutating browser input, resize, and primary requests
+while read-only, but still processes acknowledgements, resync, history, selection,
+and copy. This is **per presentation**, not a producer-wide input lock: direct
+terminal automation and other authorized viewers continue. A policy change does
+not retract a command the adapter already accepted. The host must update both its
+server policy and browser UX; client changes do not authorize themselves, and the
+server property does not automatically change client UI.
 
 ### Workload titles
 

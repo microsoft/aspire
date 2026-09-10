@@ -23,6 +23,7 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
     private readonly DashboardWebApplication _app;
     private readonly TerminalTestProducer _producer = new(100, 30, 100);
     private readonly bool _useGrpc;
+    private readonly ConcurrentBag<Task> _attachmentDisposals = [];
     private int _disposedAttachments;
     private int _terminalEnded;
     private int _includeHmpExit;
@@ -76,6 +77,9 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
     public Task WaitForAttachmentsReleasedAsync(CancellationToken cancellationToken) =>
         _producer.WaitForAttachmentsReleasedAsync(cancellationToken);
 
+    public Task WaitForDisposedAttachmentsAsync(CancellationToken cancellationToken) =>
+        Task.WhenAll(_attachmentDisposals).WaitAsync(cancellationToken);
+
     public Task<ClientWebSocket> ConnectBrowserAsync(CancellationToken cancellationToken) =>
         ConnectBrowserCoreAsync(viewId: null, cancellationToken);
 
@@ -114,7 +118,13 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
     private async Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
         Assert.Equal("test", terminalId);
-        var connection = (await ConnectAsync(terminalId, 0, cancellationToken))!;
+        // A completed terminal reports Ended without attaching to the disposed
+        // producer or returning any HMP handshake bytes.
+        var connection = Volatile.Read(ref _terminalEnded) != 0
+            ? Stream.Null
+            : (await ConnectAsync(terminalId, 0, cancellationToken))!;
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _attachmentDisposals.Add(disposed.Task);
         var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
             new TerminalRequestWriter(connection),
             new TerminalResponseReader(connection, () => Volatile.Read(ref _terminalEnded) != 0,
@@ -126,6 +136,7 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
             {
                 Interlocked.Increment(ref _disposedAttachments);
                 connection.Dispose();
+                disposed.TrySetResult();
             });
         var stream = new GrpcTerminalClientStream(call, terminalId);
         await stream.SendSelectorAsync(cancellationToken);

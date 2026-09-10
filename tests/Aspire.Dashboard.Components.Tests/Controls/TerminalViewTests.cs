@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Xunit;
 
@@ -65,11 +66,80 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Equal(chromeless, cut.Find(".terminal-view").ClassList.Contains("terminal-chromeless"));
         Assert.Equal(chromeless ? 0 : 1, cut.FindAll(".terminal-titlebar").Count);
         Assert.Equal(showDimensions ? 1 : 0, cut.FindAll(".terminal-size-select").Count);
+        Assert.Equal(showDimensions ? 1 : 0, cut.FindAll(".terminal-fit").Count);
         Assert.Single(cut.FindAll(".terminal-font-minus"));
         Assert.Single(cut.FindAll(".terminal-font-plus"));
         Assert.Equal(Resources.ConsoleLogs.TerminalFocusControlsHint, cut.Find(".terminal-focus-hint").TextContent);
         Assert.Equal(Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize, cut.Find(".terminal-font-minus").GetAttribute("aria-label"));
         Assert.Equal(Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize, cut.Find(".terminal-font-plus").GetAttribute("aria-label"));
+    }
+
+    [Fact]
+    public async Task InitialFontSize_SeedsMountWithoutResettingCurrentFont()
+    {
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        var cut = RenderComponent<TerminalView>(builder => builder
+            .Add(p => p.ResourceName, "shell")
+            .Add(p => p.InitialFontSize, 19));
+        Assert.Equal(19, cut.Instance.FontSize);
+        var options = Assert.IsType<TerminalViewOptions>(
+            Assert.Single(module.Invocations, i => i.Identifier == "initTerminal").Arguments[3]);
+        Assert.Equal(19, options.InitialFontSize);
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true, FontPx = 21
+        }));
+        cut.SetParametersAndRender(builder => builder.Add(p => p.InitialFontSize, 17));
+        Assert.Equal(21, cut.Instance.FontSize);
+        Assert.Single(module.Invocations, i => i.Identifier == "initTerminal");
+    }
+
+    [Fact]
+    public async Task FitButton_UsesCurrentStateAndKeepsThePickerForDimensionsOnly()
+    {
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var fitButton = cut.FindComponents<FluentButton>().Single(p => p.Instance.Class == "terminal-fit");
+        Assert.True(fitButton.Instance.Disabled);
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true, FitEnabled = true,
+            Cols = 97, Rows = 38, SizeKey = "97x38", SizeSelectEnabled = true
+        }));
+        Assert.False(fitButton.Instance.Disabled);
+        Assert.Equal(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").TextContent.Trim());
+        var items = cut.FindComponent<FluentSelect<TerminalSizePreset, string>>().Instance.Items;
+        Assert.NotNull(items);
+        Assert.Equal([new("97x38", "97\u00d738", 97, 38), new TerminalSizePreset("80x24", "80\u00d724", 80, 24)], items);
+        cut.Find(".terminal-fit").Click();
+        Assert.Equal(new object?[] { 1 }, Assert.Single(module.Invocations, i => i.Identifier == "fitToContainer").Arguments);
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true, FitEnabled = false,
+            Cols = 97, Rows = 38, SizeKey = "97x38"
+        }));
+        Assert.True(fitButton.Instance.Disabled);
+    }
+
+    [Fact]
+    public void AutoFit_ChangesDuringInitializationApplyWithoutReconnecting()
+    {
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        var init = module.Setup<int>("initTerminal", _ => true);
+        var cut = RenderComponent<TerminalView>(builder => builder
+            .Add(p => p.ResourceName, "shell").Add(p => p.AutoFit, true));
+        Assert.True(Assert.IsType<TerminalViewOptions>(Assert.Single(init.Invocations).Arguments[3]).AutoFit);
+        cut.SetParametersAndRender(builder => builder.Add(p => p.AutoFit, false));
+        init.SetResult(1);
+        cut.WaitForAssertion(() => Assert.Equal(new object?[] { 1, false },
+            Assert.Single(module.Invocations, i => i.Identifier == "setAutoFit").Arguments));
+        cut.SetParametersAndRender(builder => builder.Add(p => p.AutoFit, true));
+        Assert.Equal(["initTerminal", "getSizePresets", "setAutoFit", "setAutoFit"], module.Invocations.Select(i => i.Identifier));
     }
 
     [Fact]
@@ -376,7 +446,7 @@ public class TerminalViewTests : DashboardTestContext
     }
 
     [Fact]
-    public void CompletionBeforeInitializationFinishes_IsAvailableToTheRetryCheckWithoutAnObserver()
+    public void CompletionBeforeInitializationFinishes_DisablesInputWithoutDismissingTheView()
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var init = module.Setup<int>("initTerminal", _ => true);
@@ -385,15 +455,15 @@ public class TerminalViewTests : DashboardTestContext
         var viewId = Assert.IsType<TerminalViewOptions>(Assert.Single(init.Invocations).Arguments[3]).ViewId;
         Assert.True(Services.GetRequiredService<TerminalViewSessionRegistry>().TryGet(
             viewId, "/api/apphost-terminal?terminalId=terminal", out var session));
-        Assert.False(cut.Instance.IsTerminalEnded(viewId));
+        Assert.False(session.Ended.IsCompleted);
         session.MarkEnded();
-        Assert.True(cut.Instance.IsTerminalEnded(viewId));
+        Assert.True(session.Ended.IsCompletedSuccessfully);
         Assert.True(session.ReadOnly);
         Assert.Single(cut.FindAll(".terminal-container"));
         Assert.Equal(["initTerminal"], module.Invocations.Select(i => i.Identifier));
         init.SetResult(1);
         cut.WaitForAssertion(() => Assert.Single(init.Invocations));
-        Assert.True(cut.Instance.IsTerminalEnded(viewId));
+        Assert.True(session.ReadOnly);
     }
 
     private static void AssertBoundEndpoint(string expected, object? value)

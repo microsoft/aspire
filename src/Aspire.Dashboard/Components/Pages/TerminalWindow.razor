@@ -8,8 +8,7 @@
 
 <PageTitle>@_title</PageTitle>
 
-@* The terminal is the whole page. There is no nav, no toolbar and no terminal chrome, so the grid gets the entire
-   window and refits as the user resizes it. *@
+@* Without dashboard navigation or a page toolbar, the terminal fills the window and fits its available space. *@
 <div class="terminal-window">
     @if (_ended)
     {
@@ -20,6 +19,8 @@
         <TerminalView ResourceName="@ResourceName"
                       ReplicaIndex="@ReplicaIndex"
                       EndpointPathAndQuery="@_endpoint"
+                      InitialFontSize="@FontSize"
+                      AutoFit="true"
                       Chromeless="true" />
     }
 </div>

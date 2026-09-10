@@ -9,9 +9,10 @@ let nextId = 1;
 const DEFAULT_FONT_SIZE = 13;
 const RECONNECT_BACKOFF_MS = [500, 1000, 2000, 4000, 5000];
 const MAX_RECONNECT_ATTEMPTS = 30;
-const COMPLETION_CHECK_TIMEOUT_MS = 5000;
+// Aspire's WebSocket endpoint sends this private-use code only after authoritative
+// producer completion. It is not an HWT message or a Hex1b-defined close code.
+const TERMINAL_ENDED_CLOSE_CODE = 4000;
 const SIZE_PRESETS = [
-    { value: "auto", label: "Auto", cols: 0, rows: 0 },
     { value: "80x24", label: "80×24", cols: 80, rows: 24 },
     { value: "80x30", label: "80×30", cols: 80, rows: 30 },
     { value: "100x30", label: "100×30", cols: 100, rows: 30 },
@@ -101,65 +102,34 @@ function connectionFailed(state, generation, error) {
     state.connected = false;
     state.peer = { id: null, primaryId: null, isPrimary: false };
     state.pendingSizing = null;
-    void finishConnectionFailure(state, generation, error);
-}
-
-async function finishConnectionFailure(state, generation, error) {
-    // The package times out before its first frame even if the server intentionally
-    // retains an ended view's socket. Consult the existing per-view registration,
-    // through Blazor, rather than parsing private error strings or HWT payloads.
-    const ended = await checkTerminalEnded(state);
-    if (!isCurrent(state, generation)) {
-        return;
-    }
-    state.failurePending = false;
-    if (ended === true) {
-        state.ended = true;
-        state.error = null;
-        state.waitingForVisibility = false;
-        cancelReconnect(state);
-        if (!state.client) {
-            state.controller?.abort();
-        }
-        // A completed view is kept in place until closed. After an unsuccessful
-        // first mount this can be empty; there is no promise of a final screen.
-    } else {
-        console.warn("Dashboard terminal connection failed.", error);
-        state.error = ended === false ? "mount-failed" : "disconnected";
-        if (ended === false) {
-            releaseClient(state);
-            scheduleReconnect(state, generation);
-        }
-        // If the Blazor circuit cannot confirm lifecycle state, preserve the view
-        // and offer explicit retry instead of guessing and looping indefinitely.
-    }
+    console.warn("Dashboard terminal connection failed.", error);
+    state.error = "mount-failed";
+    releaseClient(state);
+    scheduleReconnect(state, generation);
     notifyToolbar(state);
 }
 
-async function checkTerminalEnded(state) {
-    if (!state.dotNetRef || !state.viewId) {
-        return false;
+function connectionClosed(state, generation, details) {
+    if (!isCurrent(state, generation) || state.ended) {
+        return;
     }
-    const controller = new AbortController();
-    state.completionCheck = controller;
-    let timeout;
-    const cancelled = new Promise(resolve => {
-        controller.signal.addEventListener("abort", () => resolve(null), { once: true });
-        timeout = setTimeout(() => resolve(null), COMPLETION_CHECK_TIMEOUT_MS);
-    });
-    try {
-        return await Promise.race([
-            Promise.resolve().then(() => state.dotNetRef.invokeMethodAsync("IsTerminalEnded", state.viewId))
-                .then(value => typeof value === "boolean" ? value : null, () => null),
-            cancelled,
-        ]);
-    } finally {
-        clearTimeout(timeout);
-        controller.abort();
-        if (state.completionCheck === controller) {
-            state.completionCheck = null;
-        }
+    if (details.code !== TERMINAL_ENDED_CLOSE_CODE) {
+        // Normal closure (1000), missing close frames (1006), reasons and wasClean
+        // describe transport state, never whether the producer has completed.
+        connectionFailed(state, generation, new Error(`Terminal WebSocket closed (${details.code}).`));
+        return;
     }
+    state.ended = true;
+    state.connected = false;
+    state.pendingSizing = null;
+    state.autoFitPending = false;
+    state.waitingForVisibility = false;
+    state.error = null;
+    cancelReconnect(state);
+    state.client?.setReadOnly(true);
+    // Keep an already mounted projection until the user dismisses the view.
+    // A close before the first frame leaves an empty container, not a fake frame.
+    notifyToolbar(state);
 }
 
 function inputFailed(state, error) {
@@ -299,46 +269,14 @@ function focusControls(state, reverse) {
     return true;
 }
 
-function inputPolicy(state, input, context) {
+function inputPolicy(state, input) {
     // Input interception is a public package hook and reaches shadow-root keyboard
     // input without querying the client's private textarea or swallowing F6 in the PTY.
     if (input.type === "key" && input.key === "F6" && !input.ctrl && !input.alt && !input.meta) {
         return focusControls(state, input.shift) ? InputRoute.Consume : InputRoute.Browser;
     }
-    if (state.readOnly || state.ended) {
-        // The server independently enforces this per-view restriction, including a
-        // paste or drag that started before this flag changed. It is a presentation
-        // policy, not user authorization. All inspection actions below are public.
-        if (input.type === "key") {
-            const key = input.key.toLowerCase();
-            if ((input.ctrl || input.meta) && key === "c" && context.selection.status === "valid") {
-                return { action: "copySelection" };
-            }
-            if (input.key === "Escape" && context.selection.active) {
-                return { action: "clearSelection" };
-            }
-            if (input.shift && ["PageUp", "PageDown"].includes(input.key)) {
-                return { action: "scrollLines", args: input.key === "PageUp" ? -20 : 20 };
-            }
-            return input.ctrl || input.meta ? InputRoute.Browser : InputRoute.Consume;
-        }
-        if (input.type === "text" || input.type === "paste") {
-            return InputRoute.Consume;
-        }
-        if (input.type === "wheel") {
-            return { action: "scrollLines", args: Math.sign(input.deltaY) * 3 };
-        }
-        if (input.type === "pointer") {
-            if (input.button === "right") {
-                return context.selection.status === "valid" ? { action: "copySelection" } : InputRoute.Consume;
-            }
-            if (input.button === "middle" || (context.mouseCaptured && !input.shift && !context.historical)) {
-                return InputRoute.Consume;
-            }
-            // Ordinary selection, or Shift-drag in mouse-capturing applications, stays native.
-            return InputRoute.Continue;
-        }
-    }
+    // Hex1b's live read-only policy owns keyboard, IME, pointer, paste and sizing
+    // gating, including queued gestures and direct clipboard/action API calls.
     return InputRoute.Continue;
 }
 
@@ -347,7 +285,6 @@ function connectClient(state) {
         return;
     }
     cancelReconnect(state);
-    state.completionCheck?.abort();
     state.failurePending = false;
     const generation = ++state.generation;
     releaseClient(state);
@@ -355,6 +292,7 @@ function connectClient(state) {
     state.geometry = null;
     state.connected = false;
     state.pendingSizing = null;
+    state.autoFitPending = state.autoFit;
     state.waitingForVisibility = false;
     notifyToolbar(state);
     // A hidden Console view must not spend the package's first-frame timeout.
@@ -376,17 +314,20 @@ async function mountClient(state, generation, controller) {
             signal: controller.signal,
             label: state.options.label,
             sizing: state.sizing,
-            // The package's flag is mount-only. Keep it writable so the per-view
-            // server policy and public input interceptor can change without reconnecting.
-            readOnly: false,
-            onInput: (input, context) => inputPolicy(state, input, context),
+            readOnly: state.readOnly,
+            onInput: input => inputPolicy(state, input),
+            onClose(details) {
+                if (current()) {
+                    connectionClosed(state, generation, details);
+                }
+            },
             onSelectionUI: createSelectionUI(state, current),
             // The package chooses WebGL2 on ordinary HTTP/unavailable WebGPU;
             // unexpected initialization and runtime rendering errors still surface.
             // https://github.com/mitchdenny/hex1b/pull/491
             renderer: "auto",
             onStatus(message, level) {
-                if (!current() || level !== "error") {
+                if (!current() || state.ended || level !== "error") {
                     return;
                 }
                 if (state.client?.connected) {
@@ -417,7 +358,7 @@ async function mountClient(state, generation, controller) {
                 }
             },
             onInputError(error) {
-                if (current()) {
+                if (current() && !state.ended) {
                     inputFailed(state, error);
                 }
             },
@@ -427,6 +368,12 @@ async function mountClient(state, generation, controller) {
             return;
         }
         state.client = client;
+        // Policy can change while mount is waiting for its first frame.
+        client.setReadOnly(state.readOnly || state.ended);
+        if (state.ended) {
+            notifyToolbar(state);
+            return;
+        }
         state.connected = client.connected;
         state.peer = client.peer;
         state.geometry = client.geometry;
@@ -438,6 +385,7 @@ async function mountClient(state, generation, controller) {
             client.focus();
         }
         state.restoreFocus = false;
+        applyAutoFit(state);
         applyPendingSizing(state);
         notifyToolbar(state);
     } catch (error) {
@@ -477,18 +425,30 @@ function changeSizing(state, sizing) {
     if (state.peer.isPrimary) {
         applyPendingSizing(state);
     } else {
-        // Only explicit sizing gestures request authority, never ordinary keyboard, paste or mouse input.
+        // Opening an auto-fit surface or explicitly sizing it requests authority;
+        // ordinary keyboard, paste and mouse input never do.
         requestPrimaryFromHost(state.id);
     }
 }
 
+function applyAutoFit(state) {
+    if (!state.autoFitPending || state.readOnly || state.ended || !state.client?.connected || !isVisible(state)) {
+        return;
+    }
+    // Request once on opening/activation, not on role notifications: another
+    // viewer taking primary must not cause the two views to fight over the grid.
+    state.autoFitPending = false;
+    fitToContainer(state.id);
+}
+
 export function initTerminal(element, wsUrl, dotNetRef, options, selectionTemplate, footer) {
     const id = nextId++;
-    const fontSize = rememberedFontSizes.get(options.sizeMemoryKey) ?? DEFAULT_FONT_SIZE;
+    const fontSize = rememberedFontSizes.get(options.sizeMemoryKey) ??
+        (Number.isFinite(options.initialFontSize) ? clampFontSize(options.initialFontSize) : DEFAULT_FONT_SIZE);
     const state = {
         id, element, wsUrl, dotNetRef, options, selectionTemplate, footer,
-        viewId: new URL(wsUrl).searchParams.get("viewId") ?? options.viewId,
         readOnly: !!options.readOnly,
+        autoFit: !!options.autoFit,
         client: null,
         controller: null,
         disposed: false,
@@ -498,6 +458,7 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         geometry: null,
         sizing: { mode: "auto", fontSize },
         pendingSizing: null,
+        autoFitPending: false,
         error: null,
         generation: 0,
         attempts: 0,
@@ -506,7 +467,6 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         lastToolbarJson: null,
         waitingForVisibility: false,
         restoreFocus: false,
-        completionCheck: null,
         failurePending: false,
         listeners: new AbortController(),
     };
@@ -520,6 +480,8 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
     state.observer = new ResizeObserver(() => {
         if (state.waitingForVisibility && !state.disposed && !state.ended && isVisible(state)) {
             connectClient(state);
+        } else if (!state.disposed) {
+            applyAutoFit(state);
         }
     });
     state.observer.observe(element);
@@ -534,7 +496,6 @@ export function reconnectTerminal(id, wsUrl) {
         return state?.generation ?? 0;
     }
     state.wsUrl = wsUrl;
-    state.viewId = new URL(wsUrl).searchParams.get("viewId");
     state.ended = false;
     state.attempts = 0;
     state.error = null;
@@ -555,7 +516,6 @@ export function disposeTerminal(id) {
     }
     state.observer.disconnect();
     state.listeners.abort();
-    state.completionCheck?.abort();
     releaseClient(state);
     state.dotNetRef = null;
     terminals.delete(id);
@@ -571,10 +531,38 @@ export function setReadOnly(id, readOnly) {
         return;
     }
     state.readOnly = readOnly;
+    state.client?.setReadOnly(readOnly || state.ended);
     if (readOnly) {
         state.pendingSizing = null;
+    } else {
+        state.autoFitPending = state.autoFit;
+        applyAutoFit(state);
     }
     notifyToolbar(state);
+}
+
+export function setAutoFit(id, autoFit) {
+    const state = terminals.get(id);
+    if (!state || state.autoFit === autoFit) {
+        return;
+    }
+    state.autoFit = autoFit;
+    state.autoFitPending = autoFit;
+    if (!autoFit) {
+        state.pendingSizing = null;
+    }
+    applyAutoFit(state);
+}
+
+export function fitToContainer(id) {
+    const state = terminals.get(id);
+    if (state) {
+        changeSizing(state, { mode: "auto", fontSize: state.sizing.fontSize });
+    }
+}
+
+function clampFontSize(fontSize) {
+    return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(fontSize)));
 }
 
 export function setFontSizeFromHost(id, fontSize) {
@@ -582,18 +570,20 @@ export function setFontSizeFromHost(id, fontSize) {
     if (!state || !Number.isFinite(fontSize)) {
         return;
     }
-    changeSizing(state, { mode: "auto", fontSize: Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(fontSize))) });
+    changeSizing(state, { mode: "auto", fontSize: clampFontSize(fontSize) });
 }
 
 export function setSizeModeFromHost(id, sizeKey) {
-    const state = terminals.get(id);
-    const preset = SIZE_PRESETS.find(p => p.value === sizeKey);
-    if (!state || !preset || (state.options.showDimensions === false && sizeKey !== "auto")) {
+    if (sizeKey === "auto") {
+        fitToContainer(id);
         return;
     }
-    changeSizing(state, preset.value === "auto"
-        ? { mode: "auto", fontSize: state.sizing.fontSize }
-        : { mode: "fixed", columns: preset.cols, rows: preset.rows, fontSize: state.sizing.fontSize });
+    const state = terminals.get(id);
+    const preset = SIZE_PRESETS.find(p => p.value === sizeKey);
+    if (!state || !preset || state.options.showDimensions === false) {
+        return;
+    }
+    changeSizing(state, { mode: "fixed", columns: preset.cols, rows: preset.rows, fontSize: state.sizing.fontSize });
 }
 
 export function requestPrimaryFromHost(id) {
@@ -626,12 +616,15 @@ export function getToolbarState(id) {
         status: !connected ? "connecting" : isPrimary ? "primary" : state.peer.primaryId === null ? "no-primary" : "viewer",
         connected, isPrimary, canTakeControl,
         sizeMode: state.sizing.mode === "auto" ? "font" : "fixed",
-        sizeKey: state.sizing.mode === "auto" ? "auto" : `${state.sizing.columns}x${state.sizing.rows}`,
+        sizeKey: state.sizing.mode === "auto"
+            ? state.geometry ? `${state.geometry.columns}x${state.geometry.rows}` : ""
+            : `${state.sizing.columns}x${state.sizing.rows}`,
         fontPx: state.sizing.fontSize,
         fontControlsEnabled,
         canDecreaseFontSize: fontControlsEnabled && state.sizing.fontSize > MIN_FONT_SIZE,
         canIncreaseFontSize: fontControlsEnabled && state.sizing.fontSize < MAX_FONT_SIZE,
         sizeSelectEnabled: !state.readOnly && (isPrimary || canTakeControl),
+        fitEnabled: !state.readOnly && (isPrimary || canTakeControl) && !(isPrimary && state.sizing.mode === "auto"),
         cols: state.geometry?.columns ?? 0,
         rows: state.geometry?.rows ?? 0,
         error: state.error,
@@ -672,6 +665,7 @@ export function refreshLayout(id) {
     if (state.waitingForVisibility) {
         connectClient(state);
     } else {
+        applyAutoFit(state);
         // The package observes this container; revealing a view must not reconnect or discard its history.
         state.client?.refreshSelectionUI();
     }

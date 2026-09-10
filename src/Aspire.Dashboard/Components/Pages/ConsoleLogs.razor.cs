@@ -1391,7 +1391,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             var path = $"/terminal-window/resource/{Uri.EscapeDataString(resourceName)}/{_terminalReplicaIndex}";
             var result = await TerminalWindowLauncher.OpenAsync(
                 key: $"resource:{resourceName}:{_terminalReplicaIndex}",
-                url: NavigationManager.ToAbsoluteUri(path).ToString()).ConfigureAwait(true);
+                url: NavigationManager.ToAbsoluteUri(path).ToString(),
+                fontSize: _terminalViewRef?.FontSize).ConfigureAwait(true);
 
             if (result is TerminalWindowOpenResult.Blocked)
             {

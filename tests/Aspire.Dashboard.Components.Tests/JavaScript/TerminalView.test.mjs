@@ -70,6 +70,8 @@ beforeEach(() => {
             peer: { id: "browser-1", primaryId: "cli-1", isPrimary: false },
             geometry: { columns: 100, rows: 30 },
             sizing: { ...options.sizing },
+            readOnly: options.readOnly,
+            readOnlyCalls: [],
             sizingCalls: [],
             primaryRequests: 0,
             focusCalls: 0,
@@ -84,6 +86,10 @@ beforeEach(() => {
                 this.sizingCalls.push(sizing);
                 options.onSizingChange(sizing);
             },
+            setReadOnly(readOnly) {
+                this.readOnly = readOnly;
+                this.readOnlyCalls.push(readOnly);
+            },
             focus() { this.focusCalls++; document.activeElement = this.element; },
             clearSelection() { this.selectionClears++; },
             refreshSelectionUI() { this.selectionRefreshes++; },
@@ -92,6 +98,10 @@ beforeEach(() => {
             element, options, client,
             resolve() { ready.resolve(client); },
             reject(error = new Error("No first frame")) { ready.reject(error); },
+            close(code, reason = "", wasClean = true) {
+                client.connected = false;
+                options.onClose({ code, reason, wasClean });
+            },
             role(primary) {
                 client.peer = { ...client.peer, primaryId: primary ? client.peer.id : "cli-1", isPrimary: primary };
                 options.onRoleChange(client.peer);
@@ -160,7 +170,7 @@ function selectionEvent(attempt, overrides = {}) {
     return event;
 }
 
-function mount({ visible = true, dotNetRef, options = {}, isEnded = () => false } = {}) {
+function mount({ visible = true, dotNetRef, options = {} } = {}) {
     const element = {
         clientWidth: visible ? 800 : 0,
         clientHeight: visible ? 600 : 0,
@@ -182,8 +192,10 @@ function mount({ visible = true, dotNetRef, options = {}, isEnded = () => false 
     });
     const viewId = options.viewId ?? `view-${++serial}`;
     const id = terminal.initTerminal(element, "wss://dashboard/api/terminal?resource=app&replica=1",
-        dotNetRef ?? { invokeMethodAsync: (name, value) =>
-            name === "OnTerminalStateChanged" ? snapshots.push(value) : isEnded(value) },
+        dotNetRef ?? { invokeMethodAsync: (name, value) => {
+            assert.equal(name, "OnTerminalStateChanged");
+            snapshots.push(value);
+        } },
         { label: "Localized terminal input", ...options, viewId }, template, footer);
     ids.push(id);
     return { id, element, controls, footer, footerControls, viewId };
@@ -390,8 +402,9 @@ test("init returns an id while mount waits for its first connected frame", async
     await settle();
     assert.deepEqual(snapshots.at(-1), {
         terminalId: id, generation: 1, status: "viewer", connected: true,
-        isPrimary: false, canTakeControl: true, sizeMode: "font", sizeKey: "auto",
+        isPrimary: false, canTakeControl: true, sizeMode: "font", sizeKey: "100x30",
         fontPx: 13, fontControlsEnabled: true, sizeSelectEnabled: true,
+        fitEnabled: true,
         canDecreaseFontSize: true, canIncreaseFontSize: true,
         cols: 100, rows: 30, error: null,
     });
@@ -586,7 +599,7 @@ test("explicit reconnect cancels the automatic retry and drops a pending sizing 
     attempts[2].resolve();
     await settle();
     assert.equal(terminal.getToolbarState(id).generation, 3);
-    assert.equal(terminal.getToolbarState(id).sizeKey, "auto");
+    assert.equal(terminal.getToolbarState(id).sizeKey, "100x30");
 });
 
 test("automatic retries are bounded and explicit reconnect resets the exhausted budget", async () => {
@@ -667,10 +680,48 @@ test("font preference follows its surface across remounts but not another surfac
     terminal.setFontSizeFromHost(first.id, 21);
     assert.equal(terminal.getToolbarState(first.id).fontPx, 21);
     terminal.disposeTerminal(first.id);
-    mount({ options: { sizeMemoryKey: "memory:dock" } });
+    mount({ options: { sizeMemoryKey: "memory:dock", initialFontSize: 15 } });
     mount({ options: { sizeMemoryKey: "memory:window" } });
     assert.equal(attempts[1].options.sizing.fontSize, 21);
     assert.equal(attempts[2].options.sizing.fontSize, 13);
+});
+
+test("initial font preferences use package bounds and default when absent", () => {
+    for (const [initialFontSize, expected] of [
+        [undefined, 13], [null, 13], [NaN, 13],
+        [4, MIN_FONT_SIZE], [72, MAX_FONT_SIZE], [18.6, 19],
+    ]) {
+        mount({ options: { initialFontSize } });
+        assert.equal(attempts.at(-1).options.sizing.fontSize, expected);
+    }
+});
+
+test("a detached surface fits as primary using the originating font without stealing control back", async () => {
+    const source = mount({ options: { sizeMemoryKey: "handoff:dock" } });
+    attempts[0].resolve();
+    await settle();
+    attempts[0].role(true);
+    terminal.setFontSizeFromHost(source.id, 21);
+    const font = terminal.getToolbarState(source.id).fontPx;
+    terminal.disposeTerminal(source.id);
+
+    mount({ options: { autoFit: true, initialFontSize: font } });
+    const popup = attempts[1];
+    assert.deepEqual(popup.options.sizing, { mode: "auto", fontSize: 21 });
+    popup.resolve();
+    await settle();
+    assert.equal(popup.client.primaryRequests, 1);
+    popup.role(true);
+    assert.deepEqual(popup.client.sizingCalls, [{ mode: "auto", fontSize: 21 }]);
+    popup.role(false);
+    assert.equal(popup.client.primaryRequests, 1);
+
+    mount({ options: { sizeMemoryKey: "handoff:dock", autoFit: true } });
+    attempts[2].resolve();
+    await settle();
+    assert.equal(attempts[2].client.primaryRequests, 1);
+    attempts[2].role(true);
+    assert.deepEqual(attempts[2].client.sizingCalls, [{ mode: "auto", fontSize: 21 }]);
 });
 
 test("font stepper states use package bounds instead of the former xterm range", async () => {
@@ -701,9 +752,94 @@ test("container-sized surfaces retain the font stepper but reject fixed presets"
     assert.deepEqual(attempts[0].client.sizingCalls, [{ mode: "auto", fontSize: 18 }]);
 });
 
-test("per-view read-only preserves inspection and blocks host sizing and control without static native mode", async () => {
+test("opening an auto-fit surface takes primary once and preserves font size across activation", async () => {
+    const { id, element } = mount({ options: { autoFit: true, showDimensions: false } });
+    attempts[0].resolve();
+    await settle();
+    const client = attempts[0].client;
+    assert.equal(client.primaryRequests, 1);
+    assert.deepEqual(client.sizingCalls, []);
+    attempts[0].role(true);
+    assert.deepEqual(client.sizingCalls, [{ mode: "auto", fontSize: 13 }]);
+    terminal.setFontSizeFromHost(id, 18);
+    element.clientWidth = 1000;
+    element.clientHeight = 700;
+    observers[0].callback();
+    assert.deepEqual(client.sizing, { mode: "auto", fontSize: 18 });
+    assert.equal(client.primaryRequests, 1, "Native automatic sizing handles container resize");
+
+    attempts[0].role(false);
+    observers[0].callback();
+    assert.equal(client.primaryRequests, 1, "Losing primary must not start a resize ownership fight");
+    terminal.setAutoFit(id, false);
+    terminal.setAutoFit(id, true);
+    terminal.setAutoFit(id, true);
+    assert.equal(client.primaryRequests, 2);
+    attempts[0].role(true);
+    assert.deepEqual(client.sizingCalls, [
+        { mode: "auto", fontSize: 13 },
+        { mode: "auto", fontSize: 18 },
+        { mode: "auto", fontSize: 18 },
+    ]);
+    assert.equal(attempts.length, 1);
+});
+
+test("auto-fit waits for a visible writable view and does not size a deactivated pane", async () => {
+    const { id, element } = mount({ visible: false, options: { autoFit: true, readOnly: true } });
+    assert.equal(attempts.length, 0);
+    element.clientWidth = 800;
+    element.clientHeight = 600;
+    observers[0].callback();
+    attempts[0].resolve();
+    await settle();
+    const client = attempts[0].client;
+    assert.equal(client.primaryRequests, 0);
+    terminal.setReadOnly(id, false);
+    assert.equal(client.primaryRequests, 1);
+    terminal.setAutoFit(id, false);
+    attempts[0].role(true);
+    assert.deepEqual(client.sizingCalls, []);
+    terminal.setReadOnly(id, true);
+    terminal.setAutoFit(id, true);
+    assert.deepEqual(client.sizingCalls, []);
+    terminal.setReadOnly(id, false);
+    assert.deepEqual(client.sizingCalls, [{ mode: "auto", fontSize: 13 }]);
+    terminal.disposeTerminal(id);
+    observers[0].callback();
+    assert.equal(client.primaryRequests, 1);
+});
+
+test("Fit is separate from fixed presets and disabled only for an auto-sized primary or blocked view", async () => {
+    const { id } = mount();
+    assert.equal(terminal.getToolbarState(id).fitEnabled, false);
+    assert.deepEqual(terminal.getSizePresets().map(p => p.value), ["80x24", "80x30", "100x30", "132x30", "132x50"]);
+    attempts[0].resolve();
+    await settle();
+    assert.equal(terminal.getToolbarState(id).fitEnabled, true);
+    terminal.fitToContainer(id);
+    assert.equal(attempts[0].client.primaryRequests, 1);
+    attempts[0].role(true);
+    assert.equal(terminal.getToolbarState(id).fitEnabled, false);
+    terminal.setSizeModeFromHost(id, "80x24");
+    assert.equal(terminal.getToolbarState(id).fitEnabled, true);
+    terminal.fitToContainer(id);
+    assert.equal(terminal.getToolbarState(id).fitEnabled, false);
+    assert.deepEqual(attempts[0].client.sizingCalls, [
+        { mode: "auto", fontSize: 13 },
+        { mode: "fixed", columns: 80, rows: 24, fontSize: 13 },
+        { mode: "auto", fontSize: 13 },
+    ]);
+    attempts[0].role(false);
+    assert.equal(terminal.getToolbarState(id).fitEnabled, true);
+    terminal.setReadOnly(id, true);
+    terminal.fitToContainer(id);
+    assert.equal(terminal.getToolbarState(id).fitEnabled, false);
+    assert.equal(attempts[0].client.primaryRequests, 1);
+});
+
+test("per-view read-only uses the native policy and blocks host sizing and control", async () => {
     const { id } = mount({ options: { readOnly: true } });
-    assert.equal(attempts[0].options.readOnly, false, "Mount-time native mode cannot support live unblocking");
+    assert.equal(attempts[0].options.readOnly, true);
     attempts[0].resolve();
     await settle();
     attempts[0].role(true);
@@ -716,7 +852,8 @@ test("per-view read-only preserves inspection and blocks host sizing and control
     assert.equal(state.fontControlsEnabled, false);
     assert.equal(state.sizeSelectEnabled, false);
     assert.equal(state.canTakeControl, false);
-    assert.deepEqual(attempts[0].options.onInput({ type: "wheel", deltaY: 10 }), { action: "scrollLines", args: 3 });
+    assert.equal(attempts[0].client.readOnly, true);
+    assert.equal(attempts[0].options.onInput({ type: "wheel", deltaY: 10 }), "continue");
     assert.equal(attempts[0].options.onInput({ type: "pointer", button: "left", shift: true },
         { mouseCaptured: true }), "continue", "Native Shift-drag selection remains available");
 });
@@ -733,17 +870,36 @@ test("live read-only changes update UX without remounting or mutating package op
     assert.equal(attempts[0].client.primaryRequests, 0);
     const context = { selection: { status: "valid", active: true }, mouseCaptured: true };
     const onInput = attempts[0].options.onInput;
-    assert.equal(onInput({ type: "key", key: "a" }, context), "consume");
-    assert.equal(onInput({ type: "text", text: "composed text" }, context), "consume");
-    assert.equal(onInput({ type: "paste", text: "pasted text" }, context), "consume");
-    assert.equal(onInput({ type: "pointer", button: "left" }, context), "consume");
-    assert.deepEqual(onInput({ type: "key", key: "c", ctrl: true }, context), { action: "copySelection" });
-    assert.deepEqual(onInput({ type: "pointer", button: "right" }, context), { action: "copySelection" });
+    assert.equal(attempts[0].client.readOnly, true);
+    for (const input of [
+        { type: "key", key: "a" },
+        { type: "text", text: "composed text" },
+        { type: "paste", text: "pasted text" },
+        { type: "pointer", button: "left" },
+        { type: "key", key: "c", ctrl: true },
+        { type: "pointer", button: "right" },
+    ]) {
+        assert.equal(onInput(input, context), "continue", "Native policy must own all application and inspection routing");
+    }
     terminal.setReadOnly(id, false);
     assert.equal(onInput({ type: "key", key: "a" }, context), "continue");
     assert.equal(onInput({ type: "paste", text: "allowed" }, context), "continue");
+    assert.equal(attempts[0].client.readOnly, false);
+    assert.deepEqual(attempts[0].client.readOnlyCalls, [false, true, false]);
     assert.equal(attempts.length, 1);
 });
+
+for (const initialReadOnly of [false, true]) {
+    test(`read-only changes during mounting reconcile from ${initialReadOnly} before input is available`, async () => {
+        const { id } = mount({ options: { readOnly: initialReadOnly } });
+        terminal.setReadOnly(id, !initialReadOnly);
+        attempts[0].resolve();
+        await settle();
+        assert.equal(attempts[0].options.readOnly, initialReadOnly);
+        assert.equal(attempts[0].client.readOnly, !initialReadOnly);
+        assert.equal(attempts.length, 1);
+    });
+}
 
 test("read-only cancels a pending resize request without changing producer ownership", async () => {
     const { id } = mount();
@@ -798,13 +954,13 @@ test("element snapshots expose public screen and selection state for the matchin
     assert.equal(terminal.getTerminalSnapshot(element), null);
 });
 
-test("ended registration prevents retry after an unsuccessful first frame without dismissing the view", async () => {
-    const { id, element } = mount({ isEnded: () => true });
+test("authoritative close before the first frame retains the view without retry or a Blazor completion check", async () => {
+    const { id, element } = mount();
+    attempts[0].close(4000);
     attempts[0].reject(new Error("Native first-frame failure"));
     await settle();
     assert.equal(terminal.getTerminalSnapshot(element).ended, true);
     assert.equal(terminal.getToolbarState(id).error, null);
-    assert.equal(attempts[0].options.signal.aborted, true);
     assert.equal(timers.size, 0);
     terminal.refreshLayout(id);
     terminal.reconnectTerminal(id, attempts[0].options.url);
@@ -814,56 +970,67 @@ test("ended registration prevents retry after an unsuccessful first frame withou
     assert.equal(terminal.getTerminalSnapshot(element), null);
 });
 
-test("completion check keeps an existing last presentation and does not forward input", async () => {
-    const { id, element } = mount({ isEnded: () => true });
+test("authoritative close keeps the existing presentation read-only without remounting", async () => {
+    const { id, element } = mount();
+    attempts[0].client.screenText = "Last available presentation";
     attempts[0].resolve();
     await settle();
-    attempts[0].client.connected = false;
-    attempts[0].options.onStatus("Connection failed", "error");
+    attempts[0].close(4000);
+    attempts[0].options.onStatus("Late transport error", "error");
     await settle();
     assert.equal(terminal.getTerminalSnapshot(element).ended, true);
     assert.equal(attempts[0].client.disposed, false);
     assert.equal(timers.size, 0);
     terminal.setReadOnly(id, false);
     assert.equal(terminal.getTerminalSnapshot(element).readOnly, true);
-    assert.equal(attempts[0].options.onInput({ type: "key", key: "a" }, { selection: {} }), "consume");
+    assert.equal(attempts[0].client.readOnly, true);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Last available presentation");
+    assert.equal(terminal.getToolbarState(id).error, null);
     terminal.requestPrimaryFromHost(id);
     assert.equal(attempts[0].client.primaryRequests, 0);
 });
 
-test("completion checks are bounded without guessing when the Blazor circuit is unavailable", async () => {
-    const result = Promise.withResolvers();
-    const { id, element } = mount({ isEnded: () => result.promise });
+test("completion before the mount continuation cannot revive the connected state", async () => {
+    const { id, element } = mount({ options: { autoFit: true } });
     attempts[0].resolve();
+    attempts[0].close(4000);
     await settle();
-    attempts[0].client.connected = false;
-    attempts[0].options.onStatus("Connection failed", "error");
-    await settle();
-    const [timer, { callback, delay }] = timers.entries().next().value;
-    assert.equal(delay, 5000);
-    timers.delete(timer);
-    callback();
-    await settle();
-    assert.equal(terminal.getToolbarState(id).error, "disconnected");
-    assert.equal(attempts[0].client.disposed, false);
+    assert.equal(terminal.getTerminalSnapshot(element).ended, true);
+    assert.equal(terminal.getToolbarState(id).connected, false);
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(attempts[0].client.readOnly, true);
+    assert.equal(attempts[0].client.primaryRequests, 0);
     assert.equal(timers.size, 0);
-    result.resolve(true);
-    await settle();
-    assert.equal(terminal.getTerminalSnapshot(element).ended, false);
 });
 
-test("rebind cancels pending completion checks and ignores the old registration's answer", async () => {
-    const result = Promise.withResolvers();
-    const checked = [];
-    const { id, element, viewId } = mount({ isEnded: value => { checked.push(value); return result.promise; } });
+for (const code of [1000, 1001, 1006]) {
+    for (const mounted of [false, true]) {
+        test(`transport close ${code} ${mounted ? "after" : "before"} mounting retries regardless of close reason or cleanliness`, async () => {
+            const { id, element } = mount();
+            if (mounted) {
+                attempts[0].resolve();
+                await settle();
+            }
+            attempts[0].close(code, "Terminal ended", code !== 1006);
+            attempts[0].reject();
+            await settle();
+            assert.equal(terminal.getTerminalSnapshot(element).ended, false);
+            assert.equal(terminal.getToolbarState(id).connected, false);
+            assert.equal(timers.size, 1);
+            assert.equal(retry(), 500);
+            attempts[1].resolve();
+            await settle();
+            assert.equal(terminal.getToolbarState(id).connected, true);
+        });
+    }
+}
+
+test("rebind ignores authoritative close from the old connection", async () => {
+    const { id, element } = mount();
     attempts[0].resolve();
     await settle();
-    attempts[0].client.connected = false;
-    attempts[0].options.onStatus("Connection failed", "error");
-    await settle();
-    assert.deepEqual(checked, [viewId]);
     terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=next&viewId=next");
-    result.resolve(true);
+    attempts[0].close(4000);
     attempts[1].resolve();
     await settle();
     assert.equal(terminal.getTerminalSnapshot(element).ended, false);
@@ -871,17 +1038,15 @@ test("rebind cancels pending completion checks and ignores the old registration'
     assert.equal(timers.size, 0);
 });
 
-test("disposing a view cancels its outstanding completion check and mount", async () => {
-    const result = Promise.withResolvers();
-    const { id } = mount({ isEnded: () => result.promise });
-    attempts[0].reject();
-    await settle();
+test("disposing a view ignores later native close callbacks", async () => {
+    const { id } = mount();
     terminal.disposeTerminal(id);
+    attempts[0].close(4000);
+    attempts[0].close(1006);
     await settle();
     assert.equal(timers.size, 0);
     assert.equal(attempts[0].options.signal.aborted, true);
-    result.resolve(true);
-    await settle();
+    assert.equal(terminal.getToolbarState(id), null);
     assert.equal(attempts.length, 1);
 });
 
@@ -890,7 +1055,7 @@ test("frontend manifest, lockfile, vendored package and backend use the exact pa
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
     const vendored = JSON.parse(await readFile(new URL("package.json", assets), "utf8"));
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.167.0-alpha.1547.1.798b26c");
+    assert.equal(version, "0.167.0-alpha.1549.1.496ccf5");
     assert.equal(vendored.version, version);
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);

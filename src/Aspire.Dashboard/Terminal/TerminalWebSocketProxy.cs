@@ -16,6 +16,9 @@ namespace Aspire.Dashboard.Terminal;
 /// </summary>
 internal static class TerminalWebSocketProxy
 {
+    // Private Aspire wire contract, not an HWT protocol status: only the AppHost's
+    // authoritative gRPC Ended notification permits this close code.
+    private const WebSocketCloseStatus TerminalEndedCloseStatus = (WebSocketCloseStatus)4000;
     private static readonly TimeSpan s_handshakeTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_sendTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan s_closeTimeout = TimeSpan.FromSeconds(2);
@@ -243,10 +246,10 @@ internal static class TerminalWebSocketProxy
         {
             session?.MarkEnded();
             // A completed AppHost terminal cannot perform HMP's initial replay.
-            // Keep an empty viewer open until the user closes it, without creating
-            // a fake workload or adding Aspire messages to the HWT protocol.
+            // Upgrade and close with the authoritative status without fabricating
+            // an initial HWT frame or keeping an empty server-side mirror alive.
             using var endedSocket = await context.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
-            await PumpViewAsync(endedSocket, presentation: null, workload: null, upstream, session, logger, context.RequestAborted).ConfigureAwait(false);
+            await CloseAsync(endedSocket, TerminalEndedCloseStatus, "Terminal ended", receive: null, logger).ConfigureAwait(false);
             return;
         }
         catch (Exception ex) when (ex is IOException or RpcException or InvalidOperationException or
@@ -267,7 +270,13 @@ internal static class TerminalWebSocketProxy
             // Also cover mirror construction and disposal: these run outside the
             // pump lifetime, but must not escape an already-upgraded request.
             logger.LogError(ex, "Terminal view failed ({ConnectionId}).", connectionId);
-            await CloseOutputAsync(socket, WebSocketCloseStatus.InternalServerError, "Terminal view failed", logger).ConfigureAwait(false);
+            var ended = upstream is GrpcTerminalClientStream { TerminalEnded: true };
+            if (ended)
+            {
+                session?.MarkEnded();
+            }
+            await CloseAsync(socket, ended ? TerminalEndedCloseStatus : WebSocketCloseStatus.InternalServerError,
+                ended ? "Terminal ended" : "Terminal view failed", receive: null, logger).ConfigureAwait(false);
         }
         finally
         {
@@ -282,7 +291,10 @@ internal static class TerminalWebSocketProxy
         // This mirror belongs only to this browser; disposing it releases the HMP
         // peer and its transport, never the producer or the creator's terminal.
         // https://github.com/mitchdenny/hex1b/blob/798b26c/docs/web-terminal.md
-        var presentation = new Hwt1PresentationAdapter();
+        var presentation = new Hwt1PresentationAdapter
+        {
+            IsReadOnly = session?.ReadOnly == true || upstream is GrpcTerminalClientStream { TerminalEnded: true } || !workload.IsConnected
+        };
         await using var presentationLifetime = presentation.ConfigureAwait(false);
         var terminal = Hex1bTerminal.CreateBuilder()
             .WithWorkload(workload)
@@ -293,18 +305,14 @@ internal static class TerminalWebSocketProxy
         await PumpViewAsync(socket, presentation, workload, upstream, session, logger, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task PumpViewAsync(WebSocket socket, Hwt1PresentationAdapter? presentation, Hmp1WorkloadAdapter? workload,
+    private static async Task PumpViewAsync(WebSocket socket, Hwt1PresentationAdapter presentation, Hmp1WorkloadAdapter workload,
         Stream upstream, TerminalViewSession? session, ILogger logger, CancellationToken cancellationToken)
     {
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var sending = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
-        var send = presentation is null
-            ? Task.Delay(Timeout.InfiniteTimeSpan, sending.Token)
-            : SendFramesAsync(socket, presentation, sending.Token);
+        var send = SendFramesAsync(socket, presentation, sending.Token, stopping.Token);
         var receive = ReceiveMessagesAsync(socket, presentation, workload, session, upstream as GrpcTerminalClientStream, stopping.Token);
-        var disconnected = workload is null
-            ? Task.Delay(Timeout.InfiniteTimeSpan, stopping.Token)
-            : WaitForTransportDisconnectAsync(workload, upstream, session, logger, stopping.Token);
+        var disconnected = WaitForTransportDisconnectAsync(workload, upstream, logger, stopping.Token);
         var tasks = new[] { send, receive, disconnected };
         var closeStatus = WebSocketCloseStatus.NormalClosure;
         var closeReason = "Terminal closed";
@@ -349,14 +357,41 @@ internal static class TerminalWebSocketProxy
         }
         finally
         {
+            // A pump failure can race HMP Exit. Let the bounded gRPC drain finish
+            // before choosing a close code instead of mistaking transport EOF for
+            // completion (or losing an Ended notification immediately after Exit).
+            if (workload.DisconnectedTask.IsCompleted && !cancellationToken.IsCancellationRequested)
+            {
+                await ObserveTeardownAsync(disconnected, logger).ConfigureAwait(false);
+            }
+
             // Send the close frame before cancelling ReceiveAsync, which can abort
             // the socket. Stop and join the binary sender first because WebSocket
             // permits only one pending send operation, including CloseOutputAsync.
             try
             {
                 await sending.CancelAsync().ConfigureAwait(false);
-                await ObserveTeardownAsync(send, logger).ConfigureAwait(false);
-                await CloseOutputAsync(socket, closeStatus, closeReason, logger).ConfigureAwait(false);
+                try
+                {
+                    // Cancel only the frame wait, not an in-flight socket send:
+                    // cancelling SendAsync also aborts the socket and loses the
+                    // completion close. A stalled browser gets a bounded grace period.
+                    // Finish observing teardown even if the request was cancelled.
+                    await ObserveTeardownAsync(send, logger).WaitAsync(s_closeTimeout, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                    socket.Abort();
+                }
+
+                if (upstream is GrpcTerminalClientStream { TerminalEnded: true })
+                {
+                    session?.MarkEnded();
+                    closeStatus = TerminalEndedCloseStatus;
+                    closeReason = "Terminal ended";
+                }
+
+                await CloseAsync(socket, closeStatus, closeReason, receive, logger).ConfigureAwait(false);
             }
             finally
             {
@@ -373,7 +408,7 @@ internal static class TerminalWebSocketProxy
     }
 
     private static async Task WaitForTransportDisconnectAsync(Hmp1WorkloadAdapter workload, Stream upstream,
-        TerminalViewSession? session, ILogger logger, CancellationToken cancellationToken)
+        ILogger logger, CancellationToken cancellationToken)
     {
         await workload.DisconnectedTask.WaitAsync(cancellationToken).ConfigureAwait(false);
         if (upstream is not GrpcTerminalClientStream grpc)
@@ -398,16 +433,6 @@ internal static class TerminalWebSocketProxy
             logger.LogDebug("Timed out waiting for the AppHost terminal's final transport status.");
             return;
         }
-
-        if (grpc.TerminalEnded)
-        {
-            session?.MarkEnded();
-            // HWT currently has no authoritative ended state. Retain this viewer
-            // and its last available projection until the user dismisses it. The
-            // receive loop rejects mutations after this flag is set, but still
-            // serves local selection/copy/history operations on the mirror.
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
-        }
     }
 
     private static async Task ObserveTeardownAsync(Task task, ILogger logger)
@@ -427,7 +452,7 @@ internal static class TerminalWebSocketProxy
         }
     }
 
-    private static async Task CloseOutputAsync(WebSocket socket, WebSocketCloseStatus status, string reason, ILogger logger)
+    private static async Task CloseAsync(WebSocket socket, WebSocketCloseStatus status, string reason, Task? receive, ILogger logger)
     {
         if (socket.State is not (WebSocketState.Open or WebSocketState.CloseReceived))
         {
@@ -437,7 +462,18 @@ internal static class TerminalWebSocketProxy
         using var timeout = new CancellationTokenSource(s_closeTimeout);
         try
         {
-            await socket.CloseOutputAsync(status, reason, timeout.Token).ConfigureAwait(false);
+            if (receive is null)
+            {
+                await socket.CloseAsync(status, reason, timeout.Token).ConfigureAwait(false);
+            }
+            else
+            {
+                await socket.CloseOutputAsync(status, reason, timeout.Token).ConfigureAwait(false);
+                // Leave the existing receive in charge of the peer's close reply.
+                // Cancelling it immediately after sending can reset the connection
+                // before the browser receives the authoritative completion status.
+                await ObserveTeardownAsync(receive, logger).WaitAsync(timeout.Token).ConfigureAwait(false);
+            }
         }
         catch (Exception ex) when (ex is WebSocketException or OperationCanceledException or InvalidOperationException)
         {
@@ -446,13 +482,15 @@ internal static class TerminalWebSocketProxy
         }
     }
 
-    private static async Task SendFramesAsync(WebSocket socket, Hwt1PresentationAdapter presentation, CancellationToken cancellationToken)
+    private static async Task SendFramesAsync(WebSocket socket, Hwt1PresentationAdapter presentation,
+        CancellationToken frameCancellationToken, CancellationToken cancellationToken)
     {
         while (true)
         {
             // HWT1 frames are ordered complete binary messages. The adapter handles
             // acknowledgements and coalesces state while blocked; never drop frames.
-            var frame = await presentation.ReadFrameAsync(cancellationToken).ConfigureAwait(false);
+            var frame = await presentation.ReadFrameAsync(frameCancellationToken).ConfigureAwait(false);
+            frameCancellationToken.ThrowIfCancellationRequested();
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(s_sendTimeout);
             try
@@ -466,8 +504,8 @@ internal static class TerminalWebSocketProxy
         }
     }
 
-    private static async Task ReceiveMessagesAsync(WebSocket socket, Hwt1PresentationAdapter? presentation,
-        Hmp1WorkloadAdapter? workload, TerminalViewSession? session, GrpcTerminalClientStream? grpc, CancellationToken cancellationToken)
+    private static async Task ReceiveMessagesAsync(WebSocket socket, Hwt1PresentationAdapter presentation,
+        Hmp1WorkloadAdapter workload, TerminalViewSession? session, GrpcTerminalClientStream? grpc, CancellationToken cancellationToken)
     {
         // HWT1 commands are UTF-8 JSON, e.g. {"type":"ack","revision":1}. WebSocket
         // fragmentation can split anywhere, including within a UTF-8 code point.
@@ -497,24 +535,11 @@ internal static class TerminalWebSocketProxy
             }
             while (!result.EndOfMessage);
 
-            using var document = JsonDocument.Parse(buffer.AsMemory(0, length));
-            var type = document.RootElement.GetProperty("type").GetString();
-            var mutatesWorkload = type switch
-            {
-                "input" or "paste" or "key" or "mouse" or "resize" or "requestPrimary" => true,
-                "ack" or "resync" or "viewport" or "selection" or "copy" => false,
-                _ => throw new InvalidDataException("Unknown terminal command.")
-            };
-
             // Read policy after receiving the complete command: a paste or pointer
             // action started before the component became read-only may arrive later.
-            // Do not close the view or block ACKs, selection, copying, or output.
-            if (presentation is null || mutatesWorkload &&
-                (session?.ReadOnly == true || grpc?.TerminalEnded == true || workload?.IsConnected == false))
-            {
-                continue;
-            }
-
+            // Hex1b owns validation and the mutation gate, including which commands
+            // remain available for read-only viewing, selection, copying and history.
+            presentation.IsReadOnly = session?.ReadOnly == true || grpc?.TerminalEnded == true || !workload.IsConnected;
             await presentation.HandleMessageAsync(buffer.AsMemory(0, length), cancellationToken).ConfigureAwait(false);
         }
     }

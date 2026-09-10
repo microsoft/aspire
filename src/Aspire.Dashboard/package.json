@@ -8,6 +8,6 @@
     "test": "node --test ../../tests/Aspire.Dashboard.Components.Tests/JavaScript/*.test.mjs"
   },
   "dependencies": {
-    "@hex1b/web-terminal": "0.167.0-alpha.1547.1.798b26c"
+    "@hex1b/web-terminal": "0.167.0-alpha.1549.1.496ccf5"
   }
 }

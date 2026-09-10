@@ -333,10 +333,13 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
         await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await host.StartAsync(timeout.Token);
-        using var first = await host.ConnectBrowserAsync(timeout.Token);
+        using var session = host.CreateViewSession(readOnly: false);
+        using var first = await host.ConnectBrowserAsync(session, timeout.Token);
         await ReadUntilAsync(first, _ => true, timeout.Token);
         await first.CloseAsync(WebSocketCloseStatus.NormalClosure, "Detach", timeout.Token);
         await host.WaitForAttachmentsReleasedAsync(timeout.Token);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, first.CloseStatus);
+        Assert.False(session.Ended.IsCompleted);
 
         host.Workload.Write("producer-survived-detach");
         await host.WaitForProducerTextAsync("producer-survived-detach", timeout.Token);
@@ -359,24 +362,26 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task BrowserView_ReadOnlyPolicyChangesWithoutReconnect(bool useGrpc)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BrowserView_ReadOnlyPolicyChangesWithoutReconnect(bool useGrpc, bool initiallyReadOnly)
     {
         await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await host.StartAsync(timeout.Token);
-        using var session = host.CreateViewSession(readOnly: false);
+        using var session = host.CreateViewSession(readOnly: initiallyReadOnly);
         using var browser = await host.ConnectBrowserAsync(session, timeout.Token);
         await ReadUntilAsync(browser, _ => true, timeout.Token);
         session.ReadOnly = true;
 
+        host.Workload.Write("\u001b[?1000h\u001b[?1006h");
         await SendAsync(browser, """{"type":"input","text":"blocked-input"}""", timeout.Token);
         await SendAsync(browser, """{"type":"paste","text":"blocked-paste"}""", timeout.Token);
-        // Read-only commands are discarded before native input validation,
-        // including keyboard/pointer messages that arrived from stale UI state.
-        await SendAsync(browser, """{"type":"key"}""", timeout.Token);
-        await SendAsync(browser, """{"type":"mouse"}""", timeout.Token);
+        // These valid commands must pass native validation but not reach the producer.
+        await SendAsync(browser, """{"type":"key","key":"Enter","ctrl":false,"alt":false,"shift":false}""", timeout.Token);
+        await SendAsync(browser, """{"type":"mouse","action":"down","button":"left","x":1,"y":1}""", timeout.Token);
         await SendAsync(browser, """{"type":"resize","columns":80,"rows":24}""", timeout.Token);
         await SendAsync(browser, """{"type":"requestPrimary","columns":80,"rows":24}""", timeout.Token);
         await SendAsync(browser, """{"type":"resync"}""", timeout.Token);
@@ -397,7 +402,9 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
         var input = new StringBuilder();
         while (!input.ToString().EndsWith("allowed", StringComparison.Ordinal))
         {
-            if (await host.Workload.InputEvents.ReadAsync(timeout.Token) is Hex1bKeyEvent key)
+            var inputEvent = await host.Workload.InputEvents.ReadAsync(timeout.Token);
+            Assert.IsNotType<Hex1bMouseEvent>(inputEvent);
+            if (inputEvent is Hex1bKeyEvent key)
             {
                 input.Append(key.Text);
             }
@@ -411,28 +418,128 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task BrowserView_AppHostEndRetainsMirrorUntilBrowserCloses(bool includeHmpExit)
+    public async Task BrowserView_ReadOnlyPolicyIsLimitedToOneView(bool useGrpc)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var session = host.CreateViewSession(readOnly: true);
+        using var readOnly = await host.ConnectBrowserAsync(session, timeout.Token);
+        await ReadUntilAsync(readOnly, _ => true, timeout.Token);
+        using var interactive = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(interactive, _ => true, timeout.Token);
+
+        await SendAsync(interactive, """{"type":"requestPrimary","columns":80,"rows":24}""", timeout.Token);
+        var primary = await ReadUntilAsync(interactive, frame => frame.GetProperty("peer").GetProperty("isPrimary").GetBoolean(), timeout.Token);
+        var peerId = primary.GetProperty("peer").GetProperty("id").GetString();
+        await ReadUntilAsync(readOnly, frame => frame.GetProperty("peer").GetProperty("primaryId").GetString() == peerId, timeout.Token);
+        await SendAsync(readOnly, """{"type":"requestPrimary","columns":120,"rows":40}""", timeout.Token);
+        await SendAsync(readOnly, """{"type":"paste","text":"blocked"}""", timeout.Token);
+        await SendAsync(readOnly, """{"type":"resync"}""", timeout.Token);
+        var unchanged = await ReadUntilAsync(readOnly, frame => frame.GetProperty("full").GetBoolean(), timeout.Token);
+        Assert.Equal(80, unchanged.GetProperty("columns").GetInt32());
+        Assert.Equal(24, unchanged.GetProperty("rows").GetInt32());
+        Assert.False(unchanged.GetProperty("peer").GetProperty("isPrimary").GetBoolean());
+        Assert.Equal(peerId, host.Presentation.PrimaryPeerId);
+
+        await SendAsync(interactive, """{"type":"input","text":"x"}""", timeout.Token);
+        Hex1bEvent input;
+        do
+        {
+            input = await host.Workload.InputEvents.ReadAsync(timeout.Token);
+        }
+        while (input is not Hex1bKeyEvent);
+        Assert.Equal("x", ((Hex1bKeyEvent)input).Text);
+        await readOnly.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+        await interactive.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+        await host.WaitForAttachmentsReleasedAsync(timeout.Token);
+    }
+
+    [Theory]
+    [InlineData(false, """{"type":"unknown"}""")]
+    [InlineData(true, """{"type":"unknown"}""")]
+    [InlineData(false, """{"type":"key"}""")]
+    [InlineData(true, """{"type":"key"}""")]
+    [InlineData(false, """{"type":"mouse"}""")]
+    [InlineData(true, """{"type":"mouse"}""")]
+    [InlineData(false, """{"type":"input","text":42}""")]
+    [InlineData(true, """{"type":"input","text":42}""")]
+    [InlineData(false, "{")]
+    [InlineData(true, "{")]
+    public async Task BrowserView_NativeValidationRejectsInvalidCommandsEvenWhenReadOnly(bool readOnly, string command)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var session = host.CreateViewSession(readOnly);
+        using var browser = await host.ConnectBrowserAsync(session, timeout.Token);
+        await ReadUntilAsync(browser, _ => true, timeout.Token);
+
+        await SendAsync(browser, command, timeout.Token);
+        var close = await ReadCloseAsync(browser, timeout.Token);
+        Assert.Equal(WebSocketCloseStatus.PolicyViolation, close.CloseStatus);
+        Assert.False(session.Ended.IsCompleted);
+        await browser.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", timeout.Token);
+        await host.WaitForAttachmentsReleasedAsync(timeout.Token);
+    }
+
+    [Fact]
+    public async Task BrowserView_AppHostEndBeforeHandshakeClosesWithoutHwtFrame()
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc: true);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        await host.EndTerminalAsync(includeHmpExit: false);
+        using var session = host.CreateViewSession(readOnly: false);
+        using var browser = await host.ConnectBrowserAsync(session, timeout.Token);
+
+        var result = await browser.ReceiveAsync(new byte[64], timeout.Token);
+        Assert.Equal(WebSocketMessageType.Close, result.MessageType);
+        Assert.Equal((WebSocketCloseStatus)4000, result.CloseStatus);
+        await session.Ended.WaitAsync(timeout.Token);
+        Assert.True(session.ReadOnly);
+        await browser.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", timeout.Token);
+        await host.WaitForAttachmentsReleasedAsync(timeout.Token);
+        Assert.Equal(0, host.ConnectionCount);
+        await host.WaitForDisposedAttachmentsAsync(timeout.Token);
+        Assert.Equal(1, host.DisposedAttachments);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BrowserView_AppHostEndClosesWithCompletionStatusAndReleasesMirror(bool includeHmpExit, bool acknowledgeInitialFrame)
     {
         await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc: true);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await host.StartAsync(timeout.Token);
         using var session = host.CreateViewSession(readOnly: false);
         using var browser = await host.ConnectBrowserAsync(session, timeout.Token);
-        await ReadUntilAsync(browser, _ => true, timeout.Token);
+        if (acknowledgeInitialFrame)
+        {
+            await ReadUntilAsync(browser, _ => true, timeout.Token);
+        }
+        else
+        {
+            var buffer = new byte[64 * 1024];
+            WebSocketReceiveResult frame;
+            do
+            {
+                frame = await browser.ReceiveAsync(buffer, timeout.Token);
+                Assert.Equal(WebSocketMessageType.Binary, frame.MessageType);
+            }
+            while (!frame.EndOfMessage);
+        }
 
         await host.EndTerminalAsync(includeHmpExit);
         await host.WaitForEndedObservedAsync(timeout.Token);
         await session.Ended.WaitAsync(timeout.Token);
-        await SendAsync(browser, """{"type":"input","text":"ignored"}""", timeout.Token);
-        await SendAsync(browser, """{"type":"requestPrimary","columns":80,"rows":24}""", timeout.Token);
-        await SendAsync(browser, """{"type":"resync"}""", timeout.Token);
-
-        var retained = await ReadUntilAsync(browser, frame => frame.GetProperty("full").GetBoolean(), timeout.Token);
-        Assert.Equal(100, retained.GetProperty("columns").GetInt32());
-        Assert.Equal(30, retained.GetProperty("rows").GetInt32());
-        Assert.Equal(WebSocketState.Open, browser.State);
-        Assert.Equal(0, host.DisposedAttachments);
-        await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "User dismissed the terminal", timeout.Token);
+        var close = await ReadCloseAsync(browser, timeout.Token);
+        Assert.Equal((WebSocketCloseStatus)4000, close.CloseStatus);
+        Assert.True(session.ReadOnly);
+        await browser.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", timeout.Token);
         await host.WaitForAttachmentsReleasedAsync(timeout.Token);
         Assert.Equal(1, host.DisposedAttachments);
     }
@@ -460,18 +567,26 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
 
         await host.Presentation.DisposeAsync();
 
-        try
-        {
-            var closed = await browser.ReceiveAsync(buffer, timeout.Token);
-            Assert.Equal(WebSocketMessageType.Close, closed.MessageType);
-        }
-        catch (WebSocketException ex)
-        {
-            // Cancelling the server's pending ReceiveAsync can abort the socket.
-            // Either close path must end promptly, without waiting for the HWT ACK timeout.
-            Assert.Equal(WebSocketError.ConnectionClosedPrematurely, ex.WebSocketErrorCode);
-        }
+        var closed = await ReadCloseAsync(browser, timeout.Token);
+        Assert.Equal(WebSocketCloseStatus.EndpointUnavailable, closed.CloseStatus);
         Assert.False(session.Ended.IsCompleted);
+        await browser.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", timeout.Token);
+        await host.WaitForAttachmentsReleasedAsync(timeout.Token);
+        Assert.Equal(useGrpc ? 1 : 0, host.DisposedAttachments);
+    }
+
+    private static async Task<WebSocketReceiveResult> ReadCloseAsync(WebSocket socket, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[64 * 1024];
+        while (true)
+        {
+            var result = await socket.ReceiveAsync(buffer, cancellationToken);
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                return result;
+            }
+            Assert.Equal(WebSocketMessageType.Binary, result.MessageType);
+        }
     }
 
     private static Task SendAsync(WebSocket socket, string message, CancellationToken cancellationToken)

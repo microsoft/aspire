@@ -11,12 +11,38 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
 public class TerminalWindowTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OpeningWindow_AutoFitsUsingFontFromQuery(bool appHost)
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient(terminalChannelProvider: () => updates));
+        var path = appHost ? "/terminal-window/apphost/terminal" : "/terminal-window/resource/shell/2";
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"{path}?fontSize=19");
+        var cut = RenderComponent<TerminalWindow>(builder => builder
+            .Add(p => p.TerminalId, appHost ? "terminal" : null)
+            .Add(p => p.ResourceName, appHost ? null : "shell")
+            .Add(p => p.ReplicaIndex, appHost ? 0 : 2));
+
+        var terminal = cut.FindComponent<TerminalView>().Instance;
+        Assert.True(terminal.AutoFit);
+        Assert.True(terminal.Chromeless);
+        Assert.True(terminal.ShowDimensionsPicker);
+        Assert.Equal(19, terminal.InitialFontSize);
+        var options = Assert.IsType<TerminalViewOptions>(
+            Assert.Single(JSInterop.Invocations, i => i.Identifier == "initTerminal").Arguments[3]);
+        Assert.True(options.AutoFit);
+        Assert.Equal(19, options.InitialFontSize);
+    }
+
     [Fact]
     public async Task SameRoute_PreservesTitleEndedStateAndSubscription()
     {

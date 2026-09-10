@@ -55,9 +55,27 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await connection.WaitForProducerTextAsync("Output while read-only", CancellationToken.None).DefaultTimeout();
             await ExpectObserverTextAsync(page, "Output while read-only");
             await Assertions.Expect(terminal.Locator("canvas")).ToBeVisibleAsync();
-            await input.FocusAsync();
+            await page.EvaluateAsync("() => window.moduleTerminal.focus()");
             await page.Keyboard.TypeAsync("blocked-keyboard");
             await PasteAsync(input, "blocked-paste");
+            Assert.Equal(["Terminal view does not accept input", "Terminal view does not accept input"],
+                await page.EvaluateAsync<string[]>("""
+                    async () => {
+                        const errors = [];
+                        for (const action of [
+                            () => window.moduleTerminal.paste('blocked-direct-paste'),
+                            () => window.moduleTerminal.runAction('pasteClipboard')
+                        ]) {
+                            try {
+                                await action();
+                                errors.push('Input unexpectedly accepted');
+                            } catch (error) {
+                                errors.push(error.message);
+                            }
+                        }
+                        return errors;
+                    }
+                    """));
             await page.EvaluateAsync("""
                 async id => {
                     const module = await import('/Components/Controls/TerminalView.razor.js');
@@ -89,7 +107,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
 
             await SetReadOnlyAsync(page, terminalId, session, true);
             await ExpectReadOnlyAsync(page, true);
-            await input.FocusAsync();
+            await page.EvaluateAsync("() => window.moduleTerminal.focus()");
             await page.Keyboard.TypeAsync("blocked-again");
             await PasteAsync(input, "blocked-paste-again");
             await page.EvaluateAsync("() => window.terminalObserver.paste('still-active')");
@@ -275,14 +293,18 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
 
     private static async Task ExpectReadOnlyAsync(IPage page, bool readOnly)
     {
-        // Until Hex1b exposes a live read-only setter, the adapter's input policy and
-        // server gate change together without replacing the native terminal textarea.
         await page.WaitForFunctionAsync("""
-            async readOnly => {
-                const module = await import('/Components/Controls/TerminalView.razor.js');
-                return module.getTerminalSnapshot(document.querySelector('[data-testid="module-terminal"]'))?.readOnly === readOnly;
-            }
+            readOnly => window.moduleTerminal?.readOnly === readOnly
             """, readOnly).DefaultTimeout();
+        var input = page.GetByTestId("module-terminal").Locator("textarea");
+        if (readOnly)
+        {
+            await Assertions.Expect(input).ToBeDisabledAsync();
+        }
+        else
+        {
+            await Assertions.Expect(input).ToBeEnabledAsync();
+        }
     }
 
     private static Task PasteAsync(ILocator input, string text) =>
@@ -297,10 +319,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     private static async Task WaitForConnectedAsync(IPage page, int terminalId)
     {
         await page.WaitForFunctionAsync("""
-            async id => {
-                const module = await import('/Components/Controls/TerminalView.razor.js');
-                return module.getToolbarState(id)?.connected === true;
-            }
+            id => window.terminalModule.getToolbarState(id)?.connected === true
             """, terminalId).DefaultTimeout();
     }
 
@@ -308,6 +327,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
         page.EvaluateAsync<int>("""
             async ({ endpoint, viewId, readOnly, chromeless }) => {
                 const module = await import('/Components/Controls/TerminalView.razor.js');
+                window.terminalModule = module;
                 const container = document.createElement('div');
                 container.dataset.testid = 'module-terminal';
                 container.style.cssText = 'position:fixed;left:0;top:0;width:700px;height:500px;z-index:10000';
@@ -322,9 +342,22 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
                 const url = new URL(endpoint, location.href);
                 url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
                 url.searchParams.set('viewId', viewId);
-                return module.initTerminal(container, url.href, null, {
-                    label: 'Test terminal input', readOnly, chromeless
-                }, template, footer);
+                // Capture the public client returned by the real mount, without replacing
+                // its input implementation, to exercise direct paste/action entry points.
+                const { WebTerminal } = await import('/js/hex1b-web-terminal/dist/index.js');
+                const mount = WebTerminal.mount;
+                WebTerminal.mount = async (...args) => {
+                    const client = await mount.call(WebTerminal, ...args);
+                    window.moduleTerminal = client;
+                    return client;
+                };
+                try {
+                    return module.initTerminal(container, url.href, null, {
+                        label: 'Test terminal input', readOnly, chromeless
+                    }, template, footer);
+                } finally {
+                    WebTerminal.mount = mount;
+                }
             }
             """, new { endpoint = Endpoint, viewId = session.Id, readOnly = session.ReadOnly, chromeless });
 

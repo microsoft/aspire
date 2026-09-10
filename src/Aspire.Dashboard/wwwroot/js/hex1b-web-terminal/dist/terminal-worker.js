@@ -52,7 +52,7 @@ function fail(error) {
     stats.connected = false;
     clearInterval(metricsTimer);
     clearInterval(blinkTimer);
-    socket?.close(1011, "Browser renderer failed");
+    socket?.close();
     emitStats();
     postStatus(message, "error");
     renderer?.dispose();
@@ -230,19 +230,22 @@ async function initialize(message) {
         }
         receiveFrame(event.data).catch(fail);
     });
-    socket.addEventListener("error", () => fail(new Error("WebSocket connection failed; verify the demo server is running")));
+    // WebSocket errors are followed by close, which carries the browser's actual status.
+    // Rejecting mount on error would terminate this worker before that status can be delivered.
     socket.addEventListener("close", event => {
         stats.connected = false;
         if (!failed && !stopped) {
             stats.gpu = "stopped";
             stats.fps = 0;
-            postStatus(`View disconnected (${event.code}${event.reason ? `: ${event.reason}` : ""}). Attach another view to reconnect.`, "error");
-            emitStats();
             stopped = true;
             clearInterval(metricsTimer);
             clearInterval(blinkTimer);
             renderer?.dispose();
-            self.postMessage({ type: "disconnected" });
+            self.postMessage({ type: "closed", details: {
+                    code: event.code, reason: event.reason, wasClean: event.wasClean
+                } });
+            postStatus(`View disconnected (${event.code}${event.reason ? `: ${event.reason}` : ""}). Attach another view to reconnect.`, "error");
+            emitStats();
         }
     });
     metricsTimer = setInterval(() => {

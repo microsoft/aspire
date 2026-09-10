@@ -784,30 +784,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         TemporaryWorkspace workspace,
         Action<TestAppHostAuxiliaryBackchannel> configure,
         Action<CliServiceCollectionTestOptions>? configureOptions = null)
-    {
-        var monitor = new TestAuxiliaryBackchannelMonitor();
-        var backchannel = new TestAppHostAuxiliaryBackchannel
-        {
-            IsInScope = true,
-            AppHostInfo = new AppHostInformation
-            {
-                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
-                ProcessId = 1234
-            },
-            SupportsTerminalsV1 = true
-        };
-        configure(backchannel);
-        monitor.AddConnection("socket.hash1", backchannel);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled];
-            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
-            configureOptions?.Invoke(options);
-        });
-
-        return (services.BuildServiceProvider(), backchannel);
-    }
+        => TerminalCommandTestServices.CreateProvider(workspace, outputHelper, configure, configureOptions);
 
     private static ResourceSnapshot CreateSnapshot(string name, string? displayName = null)
     {

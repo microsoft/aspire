@@ -58,6 +58,8 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         var cut = getCut();
         cut.WaitForAssertion(() => Assert.Equal(disabled || loading, cut.FindComponent<TerminalView>().Instance.ReadOnly));
         var terminal = cut.FindComponent<TerminalView>().Instance;
+        Assert.True(terminal.AutoFit);
+        Assert.False(terminal.ShowDimensionsPicker);
 
         foreach (var state in new (bool Disabled, bool Loading)[] { (false, false), (true, false), (true, true), (false, true), (false, false) })
         {

@@ -39,8 +39,10 @@ internal static class TerminalSetupHelpers
         module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);
         module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
         module.SetupVoid("refreshLayout", _ => true).SetVoidResult();
+        module.SetupVoid("setAutoFit", _ => true).SetVoidResult();
+        module.SetupVoid("fitToContainer", _ => true).SetVoidResult();
         module.Setup<TerminalSizePreset[]>("getSizePresets").SetResult(
-            [new("auto", "Auto", 0, 0), new("80x24", "80×24", 80, 24)]);
+            [new("80x24", "80×24", 80, 24)]);
         return module;
     }
 

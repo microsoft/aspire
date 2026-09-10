@@ -124,32 +124,32 @@ HMP byte stream from `AttachTerminal`, tunneled over the existing dashboard
 gRPC connection. Closing a viewer releases only that attachment; the creator
 continues to own the terminal.
 
-The paired web client does not expose WebSocket close details or a native
-completed-terminal state. As a temporary workaround, an authoritative gRPC
-`Ended` notification leaves the browser connection in place until the user
-closes the view. Input is no longer forwarded, and no Aspire-specific messages
-are injected into HWT. This also avoids automatic reconnect attempts against a
-completed process. Completion before the initial handshake can leave an empty
-view; preserving the final screen and displaying an explicit ended indicator
-are not guaranteed by this workaround. If the native mount times out before
-its first frame, the adapter asks its existing Blazor component whether this
-view has received authoritative completion before deciding to retry. An
-unavailable Blazor circuit surfaces an error requiring explicit retry rather
-than guessing. An actual transport failure remains retryable rather than
-being treated as completion.
+An authoritative gRPC `Ended` notification closes the viewer's WebSocket with
+Aspire's private application close code `4000`, including completion before the
+initial HMP handshake. This is an Aspire endpoint contract, not a Hex1b close
+code or an Aspire-specific HWT message. The browser observes it through native
+`onClose` and leaves the tab or dialog visible without reconnecting. Completion
+before the first frame can leave an empty view; an already mounted view keeps
+its last available projection, without guaranteeing a final frame. Normal
+closure (`1000`), abnormal transport loss (`1006`), close reason strings, and
+`wasClean` do not indicate producer completion and remain retryable.
 
 Each component registers a separate input policy with the dashboard and passes
 its opaque `viewId` with the WebSocket URL. Changes to an interaction's disabled
 state update that policy before updating browser input behavior. The bridge
-rejects input, pointer, paste, resize, and primary-role requests for read-only
-views while allowing output, acknowledgements, selection, copy, and history.
+applies `Hwt1PresentationAdapter.IsReadOnly` before dispatching each complete
+command, delegating validation and input gating to Hex1b. The browser uses
+`setReadOnly` without remounting; native gating also cancels held pointers,
+queued gestures and pending clipboard pastes, including direct paste/action
+calls. Read-only views retain output, acknowledgements, selection, copy, and
+history while connected. Already accepted or in-flight commands cannot be recalled.
 This is a per-view presentation policy, not a new user authorization boundary:
 it does not lock the terminal, its creator's automation, or other viewers.
 
 ### Browser requirements and package pairing
 
 The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
-exactly `0.167.0-alpha.1547.1.798b26c`. HWT1 is experimental state transfer
+exactly `0.167.0-alpha.1549.1.496ccf5`. HWT1 is experimental state transfer
 between these paired packages, not a stable wire contract implemented by
 Aspire. Upgrade both together. The full npm `dist` tree is vendored, including
 module workers, relative imports, fonts and licenses.
@@ -213,7 +213,10 @@ rendered inside the toolbar's options (⋯) `AspireMenuButton`:
 
 The terminal frame keeps font decrease/increase buttons, the current font
 size, and the live columns-by-rows selector together in its bottom-right
-footer. The selector offers Fit mode and predefined terminal dimensions,
+footer. A separate Fit button switches to container-sized rows and columns
+without changing font size, and is disabled while the view is already the
+auto-sized primary. The selector offers predefined terminal dimensions
+and displays the current grid,
 keeping both sizing operations available without opening the page options
 menu. A terminal starts at 132×50. A viewer adopts the producer's current
 dimensions. Ordinary keyboard and paste input do not take resize control;
@@ -222,18 +225,87 @@ changing the grid. The bottom-left footer hint advertises <kbd>F6</kbd>, which m
 keyboard focus from terminal input to the footer controls; <kbd>Shift+F6</kbd>
 moves focus to the preceding dashboard control.
 
+Dock panes, interaction dialogs and detached windows automatically fit when
+opened. A detached window takes primary once, carrying the originating view's
+selected font size rather than its grid dimensions. Its font preference can
+then change independently of the opener. The active dock pane requests resize
+control when revealed or returned from a detached window; inactive panes do not take it.
+Container resizing then changes rows and columns, not the selected font size.
+Read-only views cannot take resize control, and a view that loses primary to
+another viewer does not automatically reclaim it.
+
+Hex1b enforces a minimum grid of 20 columns by 10 rows. If the container is too
+small for that grid at the selected font size, the renderer still scales the
+text down to fit.
+
 The console log stream is now subscribed to for terminal-enabled
 resources too (previously it was suppressed), which is what makes the
 Console view non-empty for a `WithTerminal()` resource.
 
 ## CLI
 
-`aspire terminal <resource> [--replica N]` (`Aspire.Cli/Commands/TerminalCommand.cs`)
+`aspire terminal attach <resource> [--replica N]` (`Aspire.Cli/Commands/TerminalAttachCommand.cs`)
 opens its own `Hmp1WorkloadAdapter` against the consumer UDS path
 returned by `IBackchannel.GetTerminalInfoAsync(resource, replica)` and
 renders frames into the host terminal via Hex1b's `Hex1bTerminal`. When the
 resource has more than one replica and the CLI is interactive, it prompts
 for a selection; in non-interactive mode the `--replica` flag is required.
+
+### Tape playback
+
+`aspire terminal tape play <resource> --tape-file <path>` uses Hex1b's
+`TapeParser` and `TapePlayer` to execute a VHS `.tape` script against an
+existing resource terminal. It requires the same `features.terminalCommandsEnabled` feature
+flag as `terminal attach` and `terminal ps`.
+
+```sh
+aspire terminal tape play shell --tape-file ./probe.tape
+aspire terminal tape play shell --tape-file ./probe.tape --replica 1 --apphost ./AppHost/AppHost.csproj --timeout 30
+```
+
+For example, against an idle Bash shell:
+
+```text
+Set TypingSpeed 0
+Set WaitTimeout 10s
+Wait+Line /[$#>]$/
+Type "printf 'ASPIRE_TAPE_%s\n' ready"
+Enter
+Wait+Screen /ASPIRE_TAPE_ready/
+```
+
+Wait for meaningful application output rather than merely the echoed input.
+Here the expected marker is deliberately not contiguous in the typed command.
+Exit code zero means the tape completed, not that every shell command succeeded.
+
+The command prints the final plain-text screen to stdout; discovery messages,
+warnings, and source-located diagnostics go to stderr. A comment-only or empty
+tape reads the current screen after the initial producer snapshot has arrived.
+A failed tape command prints its failure screen and returns a nonzero exit code.
+`--timeout` defaults to 120 seconds and bounds the HMP connection and playback using
+cancellation; capture finalization and cleanup may continue after cancellation.
+An overall timeout returns exit code 17, and user cancellation returns 130.
+
+Playback connects as a secondary HMP peer. It does not request primary ownership,
+resize the producer, create a new shell, or stop the resource on completion or
+failure. Other viewers and input sources can remain attached; input is not
+exclusive, so coordinate playback with other users. A disconnected transport
+fails playback rather than retrying potentially non-idempotent input.
+
+Supported commands follow the pinned Hex1b tape implementation: `Type`, keys and
+chords, `Sleep`, `Wait` / `Wait+Line` / `Wait+Screen`, timing and wait settings,
+`Source`, text `Output`, and `Hide` / `Show`. For example,
+`Wait+Screen@5s /Ready/` sets that wait's timeout. This is not full VHS media or
+presentation compatibility: screenshots/video, clipboard actions, scrolling,
+font/pixel-size settings, and shell-launch/environment settings are rejected
+during preflight before any input is sent.
+
+`Source` and `.txt` / `.ascii` `Output` paths resolve relative to the root tape
+file's directory on the **CLI machine**, including sources nested in other
+directories. Output parent directories must already exist, and existing output
+files are not overwritten. Included tapes must have the `.tape` extension;
+their own `Output` directives are ignored. Text `Output` records per-command
+screens, unlike stdout's final screen.
 
 ## DCP integration
 

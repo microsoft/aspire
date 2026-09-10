@@ -23,72 +23,62 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
     [InlineData(false)]
     [InlineData(true)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task AppHostWorkloadEnded_RetainedSocketKeepsTabUntilExplicitClose(bool beforeHandshake)
+    public async Task AppHostWorkloadEnded_CompletionCloseKeepsTabUntilExplicitClose(bool beforeHandshake)
     {
         await RunTestAsync(async page =>
         {
             var (updates, closes) = await fixture.StartSessionAsync();
             await page.Clock.InstallAsync();
             var parkedConnections = Channel.CreateUnbounded<IWebSocketRoute>();
-            var terminalSocket = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-            page.WebSocket += (_, socket) =>
-            {
-                if (new Uri(socket.Url).AbsolutePath == "/api/apphost-terminal")
-                {
-                    terminalSocket.TrySetResult(socket.Url);
-                }
-            };
             var connectionCount = 0;
-            if (beforeHandshake)
+            await page.RouteWebSocketAsync("**/api/apphost-terminal?*", route =>
             {
-                await page.RouteWebSocketAsync("**/api/apphost-terminal?*", route =>
+                Interlocked.Increment(ref connectionCount);
+                if (beforeHandshake)
                 {
-                    Interlocked.Increment(ref connectionCount);
                     route.OnMessage(_ => { });
-                    parkedConnections.Writer.TryWrite(route);
-                });
-            }
+                }
+                else
+                {
+                    route.ConnectToServer();
+                }
+                parkedConnections.Writer.TryWrite(route);
+            });
 
             await page.GotoAsync("/").DefaultTimeout();
             await updates.Writer.WriteAsync(Change(TerminalChangeType.Added, "ended"));
             await updates.Writer.WriteAsync(Change(TerminalChangeType.Activated, "ended"));
             await Assertions.Expect(Tab(page, "ended")).ToBeVisibleAsync();
             TestTerminalConnection? producer = null;
-            string socketUrl;
-            if (beforeHandshake)
-            {
-                socketUrl = (await parkedConnections.Reader.ReadAsync().AsTask().DefaultTimeout()).Url;
-            }
-            else
+            var parked = await parkedConnections.Reader.ReadAsync().AsTask().DefaultTimeout();
+            if (!beforeHandshake)
             {
                 producer = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
                 await producer.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
                 await Assertions.Expect(page.Locator(".terminal-dock-pane.active")
                     .GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true })).ToBeEnabledAsync();
-                socketUrl = await terminalSocket.Task.DefaultTimeout();
             }
 
-            var endpoint = new Uri(socketUrl);
+            var endpoint = new Uri(parked.Url);
             var viewId = QueryHelpers.ParseQuery(endpoint.Query)["viewId"].ToString();
             Assert.True(fixture.DashboardApp.Services.GetRequiredService<TerminalViewSessionRegistry>()
                 .TryGet(viewId, endpoint.PathAndQuery, out var session));
             session.MarkEnded();
 
-            // Transport tests cover how gRPC sets the retained completion state. Before
-            // the first frame the native mount times out and removes its input, but the
-            // containing view must remain and consult that state instead of reconnecting.
+            // Transport tests cover the authoritative gRPC signal. Here both a pre-frame
+            // socket and a mounted presentation must observe Aspire's completion close.
             var terminal = await page.Locator(".terminal-dock .terminal-container").ElementHandleAsync();
             Assert.NotNull(terminal);
-            await page.Clock.FastForwardAsync(35_000);
-            if (beforeHandshake)
-            {
-                await page.WaitForFunctionAsync("""
-                    async () => {
-                        const module = await import('/Components/Controls/TerminalView.razor.js');
-                        return module.getTerminalSnapshot(document.querySelector('.terminal-dock .terminal-container'))?.ended;
-                    }
-                    """).DefaultTimeout();
-            }
+            await parked.CloseAsync(new() { Code = 4000, Reason = "Terminal ended" });
+            await page.EvaluateAsync("""
+                async () => { window.terminalModule = await import('/Components/Controls/TerminalView.razor.js'); }
+                """);
+            await page.WaitForFunctionAsync("""
+                () => {
+                    const state = window.terminalModule.getTerminalSnapshot(document.querySelector('.terminal-dock .terminal-container'));
+                    return state?.ended && !state.connected;
+                }
+                """).DefaultTimeout();
             await page.Clock.FastForwardAsync(5_000);
             await Assertions.Expect(Tab(page, "ended")).ToHaveAttributeAsync("aria-selected", "true");
             Assert.True(await terminal.EvaluateAsync<bool>("element => element.isConnected"));
