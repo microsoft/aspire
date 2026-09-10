@@ -571,7 +571,9 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
                     {
                         Name = "private",
                         Identity = NuGetSourceIdentity.Compute(packageSource, sourceIdentityKey),
-                        IsEnabled = true
+                        IsEnabled = true,
+                        HasCredentials = false,
+                        HasClientCertificates = false
                     }
                 },
                 SensitiveSourceValues = Array.Empty<string>(),
@@ -602,7 +604,9 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new NuGetSourceInfo(
                 "private",
                 NuGetSourceIdentity.Compute(packageSource, sourceIdentityKey),
-                IsEnabled: true),
+                IsEnabled: true,
+                HasCredentials: false,
+                HasClientCertificates: false),
             source);
         Assert.Empty(settings.SensitiveSourceValues);
         Assert.Same(sourceIdentityKey, settings.SourceIdentityKey);
@@ -664,12 +668,16 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             settings.Sources,
             source => source.Name == "local" &&
                 source.Identity == NuGetSourceIdentity.Compute(localSourceDirectory.FullName, sourceIdentityKey) &&
-                !source.IsEnabled);
+                !source.IsEnabled &&
+                !source.HasCredentials &&
+                !source.HasClientCertificates);
         Assert.Contains(
             settings.Sources,
             source => source.Name == "sensitive" &&
                 source.Identity == NuGetSourceIdentity.Compute(sensitiveSource, sourceIdentityKey) &&
-                source.IsEnabled);
+                source.IsEnabled &&
+                !source.HasCredentials &&
+                !source.HasClientCertificates);
         Assert.Equal([sensitiveSource], settings.SensitiveSourceValues);
         Assert.True(settings.PackageSourceMappingEnabled);
         Assert.Contains(

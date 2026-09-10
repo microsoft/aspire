@@ -98,7 +98,9 @@ internal static class SettingsCommand
         => new(
             source.Name,
             NuGetSourceIdentity.Compute(source.Source, identityKey),
-            source.IsEnabled);
+            source.IsEnabled,
+            source.Credentials is not null,
+            source.ClientCertificates is { Count: > 0 });
 
     private static byte[] ReadIdentityKey()
     {
@@ -137,7 +139,9 @@ internal sealed record NuGetSettingsResult(
 internal sealed record NuGetSourceResult(
     string Name,
     string Identity,
-    bool IsEnabled);
+    bool IsEnabled,
+    bool HasCredentials,
+    bool HasClientCertificates);
 
 [JsonSerializable(typeof(NuGetConfigOverlayRequest))]
 [JsonSerializable(typeof(NuGetSettingsResult))]
