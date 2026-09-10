@@ -601,13 +601,17 @@ add_to_path()
 # Shell single-quoted literals: /home/it's $here becomes '/home/it'\''s $here'.
 # Fish uses backslash escaping inside single quotes instead of POSIX quote concatenation.
 quote_shell_literal() {
-    local value="$1"
+    local value="$1" replacement
+    # Keep replacement text in variables and use assignment-context expansion. Bash 3.2
+    # interprets inline quote/backslash escapes differently inside a double-quoted replacement.
     if [[ "$2" == fish ]]; then
-        value="${value//\\/\\\\}"
-        value="${value//\'/\\\'}"
+        replacement='\\'
+        value=${value//\\/$replacement}
+        replacement="\\'"
     else
-        value="${value//\'/\'\\\'\'}"
+        replacement="'\\''"
     fi
+    value=${value//\'/$replacement}
     printf "'%s'" "$value"
 }
 

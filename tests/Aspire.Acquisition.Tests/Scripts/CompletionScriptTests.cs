@@ -281,6 +281,31 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     [InlineData(true, "bash")]
     [InlineData(true, "zsh")]
     [InlineData(true, "fish")]
+    public async Task QuoteShellLiteral_PreservesQuotesBackslashesAndMetacharacters(bool dogfood, string shell)
+    {
+        using var env = new TestEnvironment();
+        const string value = "it's \\ $home ` [test] & \"quoted\"";
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRShell : ScriptPaths.ReleaseShell,
+            $"quote_shell_literal '{Quote(value)}' {shell}",
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var expected = shell == "fish"
+            ? "'" + value.Replace("\\", "\\\\").Replace("'", "\\'") + "'"
+            : "'" + Quote(value) + "'";
+        Assert.Equal(expected, result.Output.Trim());
+    }
+
+    [Theory]
+    [InlineData(false, "bash")]
+    [InlineData(false, "zsh")]
+    [InlineData(false, "fish")]
+    [InlineData(true, "bash")]
+    [InlineData(true, "zsh")]
+    [InlineData(true, "fish")]
     public async Task InstallCompletions_UsesUserShellPathsWithoutOverwritingProfile(bool dogfood, string shell)
     {
         using var env = new TestEnvironment();

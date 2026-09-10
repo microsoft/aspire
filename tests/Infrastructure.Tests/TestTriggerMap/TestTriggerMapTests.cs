@@ -361,6 +361,10 @@ public sealed class TestTriggerMapTests
     public static TheoryData<string, string[]> AuditedLoosePathCases => new()
     {
         {
+            "eng/scripts/pack-cli-npm-package.pointer.README.md",
+            ["test:Aspire.Cli.Tests", "test:Infrastructure.Tests"]
+        },
+        {
             ".github/workflows/prepare-installer-artifacts.yml",
             ["test:Infrastructure.Tests", "job:winget-installer", "job:homebrew-installer"]
         },

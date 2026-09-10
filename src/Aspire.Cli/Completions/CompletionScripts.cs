@@ -38,6 +38,8 @@ internal static class CompletionScripts
                     while IFS= read -r suggestion; do
                         [[ -n "$suggestion" ]] || continue
                         [[ "$suggestion" == "$word"* ]] || continue
+                        # Without -o filenames, Readline inserts custom candidates verbatim.
+                        # Quote here to preserve argument boundaries and prevent shell expansion.
                         printf -v suggestion '%q' "$suggestion"
                         COMPREPLY+=("$suggestion")
                     done < <(command aspire '[suggest]' "$line" 2>/dev/null)
