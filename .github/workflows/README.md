@@ -1,5 +1,86 @@
 # GitHub Workflows
 
+## Main to Release 14.0 Synchronization
+
+`sync-main-to-release-14.yml` keeps the advance `release/14.0` integration branch
+up to date while `main` develops 13.6. It runs daily at **08:23 UTC** and can be
+dispatched manually, but only from `main` in `microsoft/aspire`.
+
+The workflow uses the existing Aspire App secrets (`ASPIRE_BOT_APP_ID` and
+`ASPIRE_BOT_PRIVATE_KEY`) with repository-scoped contents and pull-request write
+permissions. It only calls GitHub APIs; it never checks out or executes branch
+code with the bot token.
+
+Each batch creates a `sync/main-to-release-14.0/<main-sha>` branch pointing at a
+snapshot of `main`, then opens a PR into `release/14.0`. There is at most one open
+sync PR. An open PR is reconciled rather than replaced or force-pushed, preserving
+manual conflict resolutions and avoiding CI churn. Commits arriving on `main`
+while that PR is open are picked up by the next run after it merges.
+
+### Auto-merge prerequisites
+
+- Enable **Allow merge commits** and **Allow auto-merge** in repository settings.
+- Allow merge commits in every ruleset applying to `release/14.0`. A separate
+  `main` ruleset can continue requiring squash merges for normal feature PRs.
+- Ensure branch push restrictions allow the Aspire App to merge. Required status
+  checks and reviews are respected, not bypassed or self-approved by the bot.
+
+With an approval requirement, a maintainer still needs to approve each PR; it
+then merges automatically when the remaining requirements pass. Fully unattended
+merges also require a deliberate branch-policy decision about reviews. The
+workflow does not change any repository settings or branch protections.
+
+To exempt only the App from approvals, use an approval-only ruleset targeting
+exactly `release/14.0`, with the Aspire App in its bypass list using **For pull
+requests only**. Keep required CI (including `Final Results`) in a **separate**
+ruleset without an App bypass. Keep force-push and deletion protections outside
+the bypassable ruleset too. Remove or adjust overlapping approval requirements,
+including classic branch protection: a more permissive ruleset does not override
+another rule. The bypass is granted to the merging App, not to a PR author; this
+workflow additionally verifies the PR's bot author, repository, branch prefix,
+and workflow marker before requesting a merge.
+
+Native auto-merge is intentionally the only deferred merge mechanism here.
+There are [reports that App approval bypasses are not honored by native
+auto-merge](https://github.com/orgs/community/discussions/190610), even when the
+normal merge API honors them. If a sync PR remains blocked on approval after CI
+passes, approve it manually; a CI-completion merge handler can be considered
+later. Do not solve that problem by giving the App permission to bypass CI.
+See GitHub's [bypass configuration](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#granting-bypass-permissions-for-your-branch-or-tag-ruleset)
+and [rule layering](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets#about-rule-layering)
+documentation.
+
+If repository merge commits or auto-merge are disabled, the workflow leaves the
+PR open, warns in the run summary, and retries on the next run. Conflicts likewise
+leave an actionable PR open. An already-ready PR is merged normally with a
+merge commit and an expected-head check, without an administrative bypass. If
+GitHub has not computed mergeability after a short retry window, rerun the
+workflow from `main` or let the next daily run reconcile it. Other API or
+permission failures fail the run and are covered by the scheduled-workflow watchdog.
+
+### Resolving conflicts
+
+Fetch and check out the sync PR's branch, merge `origin/release/14.0` into it,
+resolve conflicts, and push to that same branch. Keep the **14.0** version in
+`eng/Versions.props` when resolving version conflicts; other dependency changes
+from `main` should still flow forward. The next run retries enabling auto-merge.
+
+Never resolve these conflicts by merging `release/14.0` into `main`: doing so
+would leak 14.0-only changes into 13.6. Always merge sync PRs using **merge commits**,
+not squash or rebase, so Git can recognize already-integrated main commits.
+
+### Ending the temporary branch arrangement
+
+1. Create `release/13.6` from `main` for stabilization.
+2. Disable this workflow in Actions, cancel any queued/active runs, and merge or
+   close any outstanding sync PR before starting the reverse integration.
+3. Merge `release/14.0` back into `main`, preserving its 14.0 version. Prefer a
+   merge commit for this one-off integration too; a squash-only `main` ruleset
+   needs a temporary exception if preserving that ancestry.
+4. Remove the temporary synchronization workflow and its watchdog entry from
+   `monitor-scheduled-workflows.config.json`. `main` now develops 14.0; 13.6 fixes
+   can follow the normal release-branch backmerge process.
+
 ## Quarantine/Disable Test Workflow
 
 The `apply-test-attributes.yml` workflow allows repository maintainers to quarantine, unquarantine, disable, or enable tests directly from issue or PR comments.

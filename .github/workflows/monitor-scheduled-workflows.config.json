@@ -13,6 +13,7 @@
     { "file": "warm-cli-e2e-image-cache.yml", "name": "Warm CLI E2E Image Cache" },
     { "file": "locker.yml", "name": "Lock Threads" },
     { "file": "backmerge-release.yml", "name": "Backmerge Release to Main" },
+    { "file": "sync-main-to-release-14.yml", "name": "Sync Main to Release 14.0" },
 
     { "file": "tests-outerloop.yml", "name": "Outerloop Tests", "selfReports": true },
     { "file": "tests-quarantine.yml", "name": "Quarantined Tests", "selfReports": true },
