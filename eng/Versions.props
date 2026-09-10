@@ -1,8 +1,8 @@
 <Project>
   <PropertyGroup>
     <!-- This repo version -->
-    <MajorVersion>13</MajorVersion>
-    <MinorVersion>6</MinorVersion>
+    <MajorVersion>14</MajorVersion>
+    <MinorVersion>0</MinorVersion>
     <PatchVersion>0</PatchVersion>
     <VersionPrefix>$(MajorVersion).$(MinorVersion).$(PatchVersion)</VersionPrefix>
     <PreReleaseVersionLabel>preview.1</PreReleaseVersionLabel>
