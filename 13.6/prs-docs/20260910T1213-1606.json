@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Documents the GitHub Models retirement, but the corresponding product PR(s) (#18953, #19848) that removed the Aspire.Hosting.GitHub.Models integration were not merged in this milestone window, so there is no matching changelog entry to attach this docs PR to.",
+  "mergedAt": "2026-09-10T12:13:14Z",
+  "number": 1606,
+  "runDate": "2026-09-10T18:07:35Z",
+  "status": "excluded",
+  "title": "Document GitHub Models retirement"
+}

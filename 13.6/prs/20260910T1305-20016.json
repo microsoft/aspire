@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Internal CI/engineering change: switches the Copilot review request workflow to use a scoped GitHub App token instead of GITHUB_TOKEN. No user-facing product impact.",
+  "mergedAt": "2026-09-10T13:05:09Z",
+  "number": 20016,
+  "runDate": "2026-09-10T18:07:35Z",
+  "status": "excluded",
+  "title": "Use a scoped Aspire App token for Copilot review requests"
+}

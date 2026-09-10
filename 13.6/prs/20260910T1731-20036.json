@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Internal CI/engineering change: restricts automated Copilot code review requests to PR authors with write access. No user-facing product impact.",
+  "mergedAt": "2026-09-10T17:31:42Z",
+  "number": 20036,
+  "runDate": "2026-09-10T18:07:35Z",
+  "status": "excluded",
+  "title": "Restrict automated Copilot reviews to authors with write access"
+}
