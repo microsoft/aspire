@@ -28,6 +28,9 @@ public sealed class IntegrationTestScaffoldingTests(ITestOutputHelper output)
             "aspire new aspire-starter --name IntegrationTestApp --output IntegrationTestApp --non-interactive --suppress-agent-init",
             counter,
             TimeSpan.FromMinutes(5));
+        await auto.RunCommandAsync(
+            "echo '// TypeScript AppHost' > IntegrationTestApp/apphost.mts",
+            counter);
 
         await auto.TypeAsync(
             "aspire new aspire-test " +
@@ -42,7 +45,7 @@ public sealed class IntegrationTestScaffoldingTests(ITestOutputHelper output)
 
         await auto.RunCommandAsync(
             "aspire new aspire-test " +
-            "--apphost IntegrationTestApp/IntegrationTestApp.AppHost/IntegrationTestApp.AppHost.csproj " +
+            "--apphost IntegrationTestApp " +
             "--test-framework MSTest --name IntegrationTestApp.Explicit.Tests " +
             "--output IntegrationTestApp/IntegrationTestApp.Explicit.Tests --non-interactive --suppress-agent-init",
             counter,

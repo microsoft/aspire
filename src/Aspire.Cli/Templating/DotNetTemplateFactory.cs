@@ -238,17 +238,16 @@ internal class DotNetTemplateFactory(
             async (template, inputs, parseResult, ct) =>
             {
                 var specifiedAppHostProject = parseResult.GetValue(_appHostOption);
-                var multipleAppHostProjectsFoundBehavior = specifiedAppHostProject is null
-                    ? MultipleAppHostProjectsFoundBehavior.None
-                    : hostEnvironment.SupportsInteractiveInput
-                        ? MultipleAppHostProjectsFoundBehavior.Prompt
-                        : MultipleAppHostProjectsFoundBehavior.Throw;
+                var specifiedAppHostProjectIsDirectory = specifiedAppHostProject is not null
+                    && Directory.Exists(specifiedAppHostProject.FullName);
                 AppHostProjectSearchResult searchResult;
                 try
                 {
+                    // Resolve every candidate before selecting one because the generic locator also
+                    // discovers AppHost types that a C# integration test project cannot reference.
                     searchResult = await projectLocator.UseOrFindAppHostProjectFileAsync(
                         specifiedAppHostProject,
-                        multipleAppHostProjectsFoundBehavior,
+                        MultipleAppHostProjectsFoundBehavior.None,
                         createSettingsFile: false,
                         ct);
                 }
@@ -265,20 +264,7 @@ internal class DotNetTemplateFactory(
                 }
 
                 var appHostProject = searchResult.SelectedProjectFile;
-                if (specifiedAppHostProject is not null)
-                {
-                    if (appHostProject is null)
-                    {
-                        throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.NoProjectFileFound);
-                    }
-
-                    if (!IsCompatibleIntegrationTestAppHost(appHostProject))
-                    {
-                        interactionService.DisplayError(TemplatingStrings.IntegrationTestAppHostMustBeCSharpProject);
-                        return new TemplateResult(CliExitCodes.FailedToFindProject);
-                    }
-                }
-                else if (appHostProject is null || !IsCompatibleIntegrationTestAppHost(appHostProject))
+                if (appHostProject is null || !IsCompatibleIntegrationTestAppHost(appHostProject))
                 {
                     if (appHostProject is not null)
                     {
@@ -288,8 +274,9 @@ internal class DotNetTemplateFactory(
                     }
 
                     // A workspace setting can select a non-C# AppHost even when the discovery result
-                    // also contains compatible C# projects. Filter the complete candidate set before
-                    // deciding whether to generate standalone, select automatically, prompt, or fail.
+                    // also contains compatible C# projects. Explicit directories can likewise contain
+                    // several AppHost types. Filter the complete candidate set before deciding whether
+                    // to generate standalone, select automatically, prompt, or fail.
                     var compatibleAppHostProjects = searchResult.AllProjectFileCandidates
                         .Where(IsCompatibleIntegrationTestAppHost)
                         .ToList();
@@ -303,9 +290,21 @@ internal class DotNetTemplateFactory(
                             cancellationToken: ct),
                         > 1 => throw new ProjectLocatorException(
                             ErrorStrings.MultipleProjectFilesFound,
-                            ProjectLocatorFailureReason.MultipleProjectFilesFound),
+                            ProjectLocatorFailureReason.MultipleProjectFilesFound,
+                            specifiedAppHostProjectIsDirectory),
                         _ => null
                     };
+                }
+
+                if (specifiedAppHostProject is not null && appHostProject is null)
+                {
+                    if (searchResult.SelectedProjectFile is null && searchResult.AllProjectFileCandidates.Count == 0)
+                    {
+                        throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.NoProjectFileFound);
+                    }
+
+                    interactionService.DisplayError(TemplatingStrings.IntegrationTestAppHostMustBeCSharpProject);
+                    return new TemplateResult(CliExitCodes.FailedToFindProject);
                 }
 
                 var testTemplate = await prompter.PromptForTemplateAsync(

@@ -1085,13 +1085,25 @@ internal sealed class ProjectLocator(
                     // File exists but is not a valid single-file apphost. Search in the parent directory.
                     // Propagate displayProgress so callers that opted out of progress UI (e.g. the hidden
                     // `extension get-apphosts` flow) do not start emitting progress on this fallback path.
-                    return await UseOrFindAppHostProjectFileCoreAsync(
-                        new FileInfo(parentDirectory.FullName),
-                        multipleAppHostProjectsFoundBehavior,
-                        createSettingsFile,
-                        displayProgress,
-                        projectOptionSpecifiedAsDirectory,
-                        cancellationToken);
+                    try
+                    {
+                        return await UseOrFindAppHostProjectFileCoreAsync(
+                            new FileInfo(parentDirectory.FullName),
+                            multipleAppHostProjectsFoundBehavior,
+                            createSettingsFile,
+                            displayProgress,
+                            projectOptionSpecifiedAsDirectory,
+                            cancellationToken);
+                    }
+                    catch (ProjectLocatorException ex) when (ex.FailureReason is ProjectLocatorFailureReason.ProjectFileDoesntExist)
+                    {
+                        // The original file exists, so an empty fallback search means it is not a
+                        // valid AppHost rather than that the user supplied a nonexistent path.
+                        logger.LogDebug(ex, "No project-based AppHost was found beside invalid single-file AppHost {ProjectFile}.", projectFile.FullName);
+                        throw new ProjectLocatorException(
+                            ErrorStrings.ProjectFileNotAppHostProject,
+                            ProjectLocatorFailureReason.ProjectFileNotAppHostProject);
+                    }
                 }
 
                 if (handler is not null)
