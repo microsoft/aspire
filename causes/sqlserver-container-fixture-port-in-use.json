@@ -32,6 +32,13 @@
       "job": "Tests / Hosting.GitHub.Models / Hosting.GitHub.Models (windows-latest)",
       "pr_number": 19670,
       "observed_at": "2026-09-02T01:58:54Z"
+    },
+    {
+      "run_id": 34433050282,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34433050282",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "pr_number": 19682,
+      "observed_at": "2026-09-10T04:46:54Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19014"

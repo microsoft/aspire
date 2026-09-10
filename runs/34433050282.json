@@ -1,0 +1,120 @@
+{
+  "run_id": 34433050282,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34433050282",
+  "analyzed_at": "2026-09-10T04:46:54Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19682,
+    "title": "Fix macOS Platform SSO internal detection",
+    "author": "DamianEdwards",
+    "state": "closed",
+    "head_branch": "damianedwards-investigate-corp-mac-detection",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19682"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 102742388359,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34433050282/job/102742388359",
+      "classification": "flaky-test",
+      "reason": "SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings failed with 6 unexpected warnings from a real dotnet build of Aspire.Hosting.csproj in a RemoteExecutor child process. This test does not touch any code changed by the PR (which only touches InternalMicrosoftDetector.cs and its tests); the failure stems from environment-dependent build warning output.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 102742388547,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34433050282/job/102742388547",
+      "classification": "flaky-test",
+      "reason": "Same SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings failure as the macOS job (6 unexpected build warnings), unrelated to the PR's InternalMicrosoftDetector changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "id": 102742389476,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34433050282/job/102742389476",
+      "classification": "flaky-test",
+      "reason": "All 6 AzureSqlPrincipalReconciliationTests failed because SqlServerContainerFixture could not bind Docker port 1433/8080 (address already in use). This matches the known recurring flaky-test cause 'sqlserver-container-fixture-port-in-use' and is unrelated to the PR's macOS Platform SSO detection changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception.",
+      "stack_trace": "Child exception:\n  Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   6\n   at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/SdkDumpCommandTests.cs:line 280",
+      "classification": "flaky",
+      "reason": "Test builds Aspire.Hosting.csproj in a child process and asserts zero build warnings; unrelated code in the PR (InternalMicrosoftDetector.cs telemetry detection) does not touch Aspire.Hosting, so the warning count regression is environment/build-state related, not caused by this PR."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception.",
+      "stack_trace": "Child exception:\n  Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   6\n   at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/SdkDumpCommandTests.cs:line 280",
+      "classification": "flaky",
+      "reason": "Same as macOS occurrence: unrelated to the PR's changed files (InternalMicrosoftDetector.cs / its tests), fails on both OS runners consistently which points to an environment/build-warning issue rather than a code regression from this PR."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationCreatesThePrincipalWithTheIdentityObjectIdAsItsSid",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint testcontainers-ryuk-594aca05-f67a-4ceb-8048-1c68a1f0e4bd (8ecadd7c4f3e3d90b36d1120ac36ac0e3e33d65ba1d39414747dcdc1a922f30c): failed to bind host port for 0.0.0.0::172.17.0.2:8080/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(HttpStatusCode statusCode, HttpResponseMessage response, IEnumerable`1 handlers) in /_/src/Docker.DotNet/DockerClient.cs:line 494\n   at Docker.DotNet.ContainerOperations.StartContainerAsync(...) in /_/src/Docker.DotNet/Endpoints/ContainerOperations.cs:line 201\n   at DotNet.Testcontainers.Containers.ResourceReaper.GetAndStartNewAsync(...) in /_/src/Testcontainers/Containers/ResourceReaper.cs:line 231",
+      "classification": "flaky",
+      "reason": "Docker port conflict (address already in use) on shared CI runner during Testcontainers Ryuk/SQL Server container startup, matching prior recurring cause 'sqlserver-container-fixture-port-in-use'. Not related to the PR's changed files."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationHandlesPrincipalNamesRequiringEscaping",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity ... address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in /_/src/Docker.DotNet/DockerClient.cs:line 494\n   at Docker.DotNet.ContainerOperations.StartContainerAsync(...) in /_/src/Docker.DotNet/Endpoints/ContainerOperations.cs:line 201",
+      "classification": "flaky",
+      "reason": "Same Docker port-in-use fixture initialization failure as the other AzureSqlPrincipalReconciliationTests, matching prior cause 'sqlserver-container-fixture-port-in-use'."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationIsANoOpWhenTheScriptRunsAgain",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity ... address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in /_/src/Docker.DotNet/DockerClient.cs:line 494",
+      "classification": "flaky",
+      "reason": "Same Docker port-in-use fixture initialization failure, matching prior cause 'sqlserver-container-fixture-port-in-use'."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationReplacesThePrincipalWhenTheIdentityObjectIdChanges",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity ... address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in /_/src/Docker.DotNet/DockerClient.cs:line 494",
+      "classification": "flaky",
+      "reason": "Same Docker port-in-use fixture initialization failure, matching prior cause 'sqlserver-container-fixture-port-in-use'."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationLeavesPrincipalsItDidNotCreateIntact",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity ... address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in /_/src/Docker.DotNet/DockerClient.cs:line 494",
+      "classification": "flaky",
+      "reason": "Same Docker port-in-use fixture initialization failure, matching prior cause 'sqlserver-container-fixture-port-in-use'."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationRollsBackWhenTheUserCannotBeRecreated",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity ... address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in /_/src/Docker.DotNet/DockerClient.cs:line 494",
+      "classification": "flaky",
+      "reason": "Same Docker port-in-use fixture initialization failure, matching prior cause 'sqlserver-container-fixture-port-in-use'."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationFailsWithoutDamageWhenThePrincipalOwnsASchema",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity ... address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in /_/src/Docker.DotNet/DockerClient.cs:line 494",
+      "classification": "flaky",
+      "reason": "Same Docker port-in-use fixture initialization failure, matching prior cause 'sqlserver-container-fixture-port-in-use'."
+    }
+  ],
+  "causes": ["sqlserver-container-fixture-port-in-use", "cli-sdkdumpcommandtests-doesnotemitwarnings-flaky"]
+}
