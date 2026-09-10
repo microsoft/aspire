@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Shared;
+
 namespace Aspire.Cli.Packaging;
 
 internal static class PackageSourceIdentity
@@ -14,32 +16,7 @@ internal static class PackageSourceIdentity
             !Path.IsPathFullyQualified(trimmed);
     }
 
-    public static string Normalize(string source)
-    {
-        var trimmed = source.Trim();
-        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
-        {
-            if (uri.IsFile)
-            {
-                return $"path:{NormalizePath(uri.LocalPath)}";
-            }
-
-            return $"uri:{uri.AbsoluteUri}";
-        }
-
-        if (Path.IsPathFullyQualified(trimmed))
-        {
-            return $"path:{NormalizePath(trimmed)}";
-        }
-
-        return $"name:{trimmed.ToUpperInvariant()}";
-    }
-
-    private static string NormalizePath(string path)
-    {
-        var normalized = Path.GetFullPath(path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
-        return OperatingSystem.IsWindows() ? normalized.ToUpperInvariant() : normalized;
-    }
+    public static string Normalize(string source) => NuGetSourceIdentity.Normalize(source);
 
     private sealed class IdentityComparer : IEqualityComparer<string>
     {

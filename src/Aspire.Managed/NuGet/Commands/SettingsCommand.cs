@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Shared;
 using NuGet.Configuration;
 
 namespace Aspire.Managed.NuGet.Commands;
@@ -24,7 +25,7 @@ internal static class SettingsCommand
         {
             var workingDirectory = parseResult.GetValue(workingDirectoryOption)!;
             Console.WriteLine(JsonSerializer.Serialize(
-                GetSettings(workingDirectory),
+                GetSettings(workingDirectory, ReadIdentityKey()),
                 SettingsJsonContext.Default.NuGetSettingsResult));
             return 0;
         });
@@ -32,18 +33,17 @@ internal static class SettingsCommand
         return command;
     }
 
-    internal static NuGetSettingsResult GetSettings(string workingDirectory)
+    internal static NuGetSettingsResult GetSettings(string workingDirectory, byte[] identityKey)
     {
+        ArgumentNullException.ThrowIfNull(identityKey);
+
         var settings = Settings.LoadDefaultSettings(
             workingDirectory,
             configFileName: null,
             new XPlatMachineWideSetting());
         var sources = new PackageSourceProvider(settings)
             .LoadPackageSources()
-            .Select(static source => new NuGetSourceResult(
-                source.Name,
-                source.Source,
-                source.IsEnabled))
+            .Select(source => CreateSourceResult(source, identityKey))
             .ToArray();
         var packageSourceMappings = new PackageSourceMappingProvider(settings)
             .GetPackageSourceMappingItems()
@@ -85,6 +85,42 @@ internal static class SettingsCommand
             disabledPackageSourceKeys,
             reservedPackageSourceKeys);
     }
+
+    private static NuGetSourceResult CreateSourceResult(PackageSource source, byte[] identityKey)
+    {
+        var hasCredentialMaterial = NuGetSourceIdentity.HasCredentialMaterial(source.Source);
+        return new NuGetSourceResult(
+            source.Name,
+            NuGetSourceIdentity.Compute(source.Source, identityKey),
+            source.IsEnabled,
+            hasCredentialMaterial,
+            hasCredentialMaterial &&
+                !NuGetSourceIdentity.CanRedactCredentialMaterialWithoutOriginalValue(source.Source));
+    }
+
+    private static byte[] ReadIdentityKey()
+    {
+        var encodedKey = Environment.GetEnvironmentVariable(NuGetSourceIdentity.KeyEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(encodedKey))
+        {
+            throw new InvalidOperationException("The NuGet source identity key was not provided.");
+        }
+
+        try
+        {
+            var key = Convert.FromBase64String(encodedKey);
+            if (key.Length != NuGetSourceIdentity.KeySizeInBytes)
+            {
+                throw new InvalidOperationException("The NuGet source identity key has an invalid length.");
+            }
+
+            return key;
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidOperationException("The NuGet source identity key is invalid.", ex);
+        }
+    }
 }
 
 internal sealed record NuGetSettingsResult(
@@ -95,7 +131,12 @@ internal sealed record NuGetSettingsResult(
     string[] DisabledPackageSourceKeys,
     string[] ReservedPackageSourceKeys);
 
-internal sealed record NuGetSourceResult(string Name, string Source, bool IsEnabled);
+internal sealed record NuGetSourceResult(
+    string Name,
+    string Identity,
+    bool IsEnabled,
+    bool HasCredentialMaterial,
+    bool RequiresFullOutputSuppression);
 
 [JsonSerializable(typeof(NuGetConfigOverlayRequest))]
 [JsonSerializable(typeof(NuGetSettingsResult))]

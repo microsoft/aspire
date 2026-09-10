@@ -26,6 +26,7 @@ namespace Aspire.Cli.Tests.Projects;
 public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 {
     private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
+    private static readonly byte[] s_sourceIdentityKey = new byte[NuGetSourceIdentity.KeySizeInBytes];
 
     [Fact]
     public async Task WriteIfChangedAsync_LeavesAnIdenticalFileAlone()
@@ -1315,9 +1316,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             ambientMappings: [],
             ambientSources:
             [
-                new NuGetSourceInfo("private", "https://example.com/private", IsEnabled: true),
-                new NuGetSourceInfo("mirror", "https://example.com/mirror", IsEnabled: true),
-                new NuGetSourceInfo("disabled", "https://example.com/disabled", IsEnabled: false)
+                CreateNuGetSourceInfo("private", "https://example.com/private", isEnabled: true),
+                CreateNuGetSourceInfo("mirror", "https://example.com/mirror", isEnabled: true),
+                CreateNuGetSourceInfo("disabled", "https://example.com/disabled", isEnabled: false)
             ],
             selectedSources:
             [
@@ -1437,7 +1438,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 new PackageMapping("*", "https://example.com/fallback")
             ],
             ambientSources: [],
-            reservedPackageSourceKeys: ["aspire-0", "aspire-2"]);
+            reservedPackageSourceKeys: ["aspire-0", "aspire-2"],
+            s_sourceIdentityKey);
 
         Assert.Equal(["aspire-1", "aspire-3"], sources.Select(static source => source.Key));
     }
@@ -1450,13 +1452,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             ConfigPaths: [],
             Sources:
             [
-                new NuGetSourceInfo("Private", source, IsEnabled: false),
-                new NuGetSourceInfo("unrelated", "https://example.com/unrelated", IsEnabled: false)
+                CreateNuGetSourceInfo("Private", source, isEnabled: false),
+                CreateNuGetSourceInfo("unrelated", "https://example.com/unrelated", isEnabled: false)
             ],
             PackageSourceMappingEnabled: false,
             PackageSourceMappings: [],
             DisabledPackageSourceKeys: ["private", "unrelated"],
-            ReservedPackageSourceKeys: ["Private", "unrelated"]);
+            ReservedPackageSourceKeys: ["Private", "unrelated"],
+            SourceIdentityKey: s_sourceIdentityKey);
 
         var overlay = PrebuiltAppHostServer.CreateNuGetConfigOverlay(
             [new PackageMapping("Aspire*", source)],
@@ -2021,13 +2024,27 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var configSources = PrebuiltAppHostServer.ResolveNuGetConfigSources(
             restoreSources.PackageSourceMappings,
             ambientSources: [],
-            reservedPackageSourceKeys: []);
+            reservedPackageSourceKeys: [],
+            s_sourceIdentityKey);
         return await server.CreateRestoreOverlayAsync(
             restoreSources,
             configSources,
-            new NuGetSettingsInfo([], [], false, [], [], []),
+            new NuGetSettingsInfo([], [], false, [], [], [], s_sourceIdentityKey),
             CancellationToken.None);
     }
+
+    private static NuGetSourceInfo CreateNuGetSourceInfo(
+        string name,
+        string source,
+        bool isEnabled,
+        bool hasCredentialMaterial = false)
+        => new(
+            name,
+            NuGetSourceIdentity.Compute(source, s_sourceIdentityKey),
+            isEnabled,
+            hasCredentialMaterial,
+            hasCredentialMaterial &&
+                !NuGetSourceIdentity.CanRedactCredentialMaterialWithoutOriginalValue(source));
 
     private static async Task<IReadOnlyList<string>?> ResolveAdditionalSourcesAsync(
         PrebuiltAppHostServer server,
@@ -2959,7 +2976,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new LayoutProcessRunner(nugetExecutionFactory),
             new TestFeatures(),
             new TestEnvironment(),
-            NullLogger<BundleNuGetService>.Instance);
+            NullLogger<BundleNuGetService>.Instance)
+        {
+            SourceIdentityKeyFactory = static () => s_sourceIdentityKey
+        };
         var server = CreatePrebuiltAppHostServer(
             workspace,
             layout: layout,
@@ -3088,7 +3108,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             }),
             new TestFeatures(),
             new TestEnvironment(),
-            NullLogger<BundleNuGetService>.Instance);
+            NullLogger<BundleNuGetService>.Instance)
+        {
+            SourceIdentityKeyFactory = static () => s_sourceIdentityKey
+        };
         var server = CreatePrebuiltAppHostServer(
             workspace,
             layout: layout,
@@ -4239,7 +4262,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
             new TestEnvironment(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance)
+        {
+            SourceIdentityKeyFactory = static () => s_sourceIdentityKey
+        };
 
         var server = CreatePrebuiltAppHostServer(
             workspace,
@@ -4460,11 +4486,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         {
             ConfigPaths = configPaths?.ToArray() ?? [],
             Sources = sourceArray
-                .Select(static source => new
+                .Select(source => new
                 {
                     source.Name,
-                    source.Source,
-                    source.IsEnabled
+                    Identity = NuGetSourceIdentity.Compute(source.Source, s_sourceIdentityKey),
+                    source.IsEnabled,
+                    HasCredentialMaterial = NuGetSourceIdentity.HasCredentialMaterial(source.Source),
+                    RequiresFullOutputSuppression =
+                        NuGetSourceIdentity.HasCredentialMaterial(source.Source) &&
+                        !NuGetSourceIdentity.CanRedactCredentialMaterialWithoutOriginalValue(source.Source)
                 })
                 .ToArray(),
             PackageSourceMappingEnabled = mappingArray.Length > 0,
