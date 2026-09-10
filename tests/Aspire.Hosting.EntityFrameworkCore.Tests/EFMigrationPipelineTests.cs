@@ -1,19 +1,82 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES001, ASPIREDOTNETPROJECT001, ASPIREDOTNETTOOL, ASPIREPROJECTS001, ASPIREFILESYSTEM001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.EntityFrameworkCore.Tests.TestServices;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.EntityFrameworkCore.Tests;
 
 public class EFMigrationPipelineTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task CustomBuildWarningPreservesPublishingResult(bool bundle, bool fail)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null);
+        using var services = builder.Services.BuildServiceProvider();
+        using var workspace = services.GetRequiredService<IFileSystemService>().TempDirectory.CreateTempSubdirectory();
+        builder.Services.Configure<PipelineOptions>(options => options.OutputPath = workspace.Path);
+        var callbackCalls = 0;
+        var project = builder.AddDotnetProject("api", new Projects.ServiceA().ProjectPath,
+            options => options.ExcludeLaunchProfile = true).WithBuildEnvironment(_ => { callbackCalls++; });
+        var migrations = project.AddEFMigrations("migrations");
+        if (bundle)
+        {
+            migrations.PublishAsMigrationBundle();
+        }
+        else
+        {
+            migrations.PublishAsMigrationScript();
+        }
+        var tool = new TestEfTool
+        {
+            Result = fail ? CommandResults.Failure("EF output is missing") : CommandResults.Success()
+        };
+        migrations.Resource.ToolResource = tool.Resource;
+        using var app = builder.Build();
+        var sink = new TestSink();
+        var context = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(), builder.ExecutionContext, app.Services,
+            new TestLogger("EF", sink, level => level >= LogLevel.Information), TestContext.Current.CancellationToken);
+        var steps = new List<PipelineStep>();
+        foreach (var annotation in migrations.Resource.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = context,
+                Resource = migrations.Resource
+            }));
+        }
+        var step = Assert.Single(steps);
+        var stepContext = new PipelineStepContext { PipelineContext = context, ReportingStep = null! };
+
+        if (fail)
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => step.Action(stepContext));
+            Assert.Contains("EF output is missing", exception.Message);
+        }
+        else
+        {
+            await step.Action(stepContext);
+        }
+
+        Assert.Single(tool.Invocations);
+        Assert.Single(sink.Writes, write => write.LogLevel == LogLevel.Warning);
+        Assert.Equal(0, callbackCalls);
+    }
+
     [Fact]
     public async Task BundleOnlyProducesGenerateStep()
     {

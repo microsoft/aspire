@@ -765,8 +765,11 @@ internal sealed class ResourceContainerImageManager(
         var runtimeIdentifiers = targetPlatform.Value.ToMSBuildRuntimeIdentifierString();
         if (runtimeIdentifiers.Contains(';'))
         {
-            arguments.Add($"/p:RuntimeIdentifiers={runtimeIdentifiers}");
-            arguments.Add($"/p:ContainerRuntimeIdentifiers={runtimeIdentifiers}");
+            // ArgumentList preserves "linux-x64;linux-arm64" as one argument, but MSBuild still
+            // splits property switches on ';'. Escape the value for that second parsing layer.
+            // https://github.com/dotnet/msbuild/issues/471
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("RuntimeIdentifiers", runtimeIdentifiers));
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerRuntimeIdentifiers", runtimeIdentifiers));
         }
         else
         {

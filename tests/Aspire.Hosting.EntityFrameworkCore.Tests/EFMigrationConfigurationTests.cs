@@ -232,6 +232,15 @@ public class EFMigrationConfigurationTests
 
         Assert.Same(migrations, result);
         Assert.Equal(target.Resource.GetProjectMetadata().ProjectPath, migrations.Resource.MigrationsProjectPath);
+        Assert.Same(target.Resource, migrations.Resource.MigrationsProjectResource);
+
+        migrations.WithMigrationsProject<Projects.ServiceA>();
+        Assert.Null(migrations.Resource.MigrationsProjectResource);
+
+        migrations.WithMigrationsProjectForPolyglot(target);
+        migrations.Resource.MigrationsProjectPath = new Projects.ServiceA().ProjectPath;
+        Assert.Null(migrations.Resource.MigrationsProjectResource);
+        Assert.Null(migrations.Resource.MigrationsProjectMetadata);
     }
 
     [Fact]

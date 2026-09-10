@@ -2,13 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL
-#pragma warning disable ASPIREPROJECTS001
+#pragma warning disable ASPIREPROJECTS001, ASPIREEXTENSION001
 
 using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -24,6 +25,7 @@ namespace Aspire.Hosting;
 internal sealed class EFCoreOperationExecutor : IDisposable
 {
     private readonly IDotnetProgramResource _startupProjectResource;
+    private readonly EFMigrationResource _migrationResource;
     private readonly string? _targetProjectPath;
     private readonly string? _contextTypeName;
     private readonly ILogger _logger;
@@ -35,6 +37,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
     private string? _resolvedTargetProjectPath;
     private string? _configuration;
     private bool _initialized;
+    private bool _buildCustomizationWarningLogged;
     internal const string ToolStartCommandName = "ef-tool-start";
     internal string? ResolvedFramework { get; private set; }
 
@@ -61,17 +64,16 @@ internal sealed class EFCoreOperationExecutor : IDisposable
     private static readonly SemaphoreSlim s_globalDotnetEfLock = new(1, 1);
 
     public EFCoreOperationExecutor(
-        IDotnetProgramResource startupProjectResource,
-        string? targetProjectPath,
-        string? contextTypeName,
+        EFMigrationResource migrationResource,
         ILogger logger,
         CancellationToken cancellationToken,
         IServiceProvider serviceProvider,
         DotnetToolResource toolResource)
     {
-        _startupProjectResource = startupProjectResource;
-        _targetProjectPath = targetProjectPath;
-        _contextTypeName = contextTypeName;
+        _migrationResource = migrationResource;
+        _startupProjectResource = migrationResource.StartupProjectResource;
+        _targetProjectPath = migrationResource.MigrationsProjectPath;
+        _contextTypeName = migrationResource.DbContextTypeName;
         _logger = logger;
         _cancellationToken = cancellationToken;
         _serviceProvider = serviceProvider;
@@ -197,11 +199,24 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
     private async Task<EFOperationResult> ExecuteEfCommandAsync(string command, string subCommand, Dictionary<string, string?>? additionalArgs = null, bool noBuild = true)
     {
+        var projects = GetParticipatingProjects();
+        // This is independent of database/runtime dependency waits (which some commands deliberately skip).
+        // Waiting for the startup app itself would deadlock the supported app.WaitFor(migrations) pattern.
+        foreach (var project in projects)
+        {
+            if (project.TryGetLastAnnotation<DotnetProgramBuildCompletionAnnotation>(out var buildCompletion))
+            {
+                await buildCompletion.Callback(_serviceProvider, _cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         var initResult = EnsurePathsInitialized();
         if (!initResult.Success)
         {
             return initResult;
         }
+
+        WarnAboutBuildCustomizations(projects, command, subCommand);
 
         // Build the EF command arguments (these go after the -- in dotnet tool exec).
         // `--no-build` is normally added because all interactive run-mode commands assume the
@@ -379,6 +394,71 @@ internal sealed class EFCoreOperationExecutor : IDisposable
                 s_globalDotnetEfLock.Release();
             }
         }
+    }
+
+    private List<IDotnetProgramResource> GetParticipatingProjects()
+    {
+        var projects = new List<IDotnetProgramResource> { _startupProjectResource };
+        if (_migrationResource.MigrationsProjectResource is { } targetResource)
+        {
+            if (!ReferenceEquals(targetResource, _startupProjectResource))
+            {
+                projects.Add(targetResource);
+            }
+        }
+        else if (_targetProjectPath is not null &&
+                 _serviceProvider.GetService<DistributedApplicationModel>() is { } model)
+        {
+            // Paths still select the EF target exactly as before. Matching model resources only supplies
+            // optional readiness/diagnostics; do not reject or change EF's selection for ambiguous paths.
+            var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            foreach (var project in model.Resources.OfType<IDotnetProgramResource>())
+            {
+                if (!ReferenceEquals(project, _startupProjectResource) &&
+                    comparer.Equals(GetProjectPath(project), _targetProjectPath))
+                {
+                    projects.Add(project);
+                }
+            }
+        }
+
+        return projects;
+    }
+
+    private void WarnAboutBuildCustomizations(IReadOnlyList<IDotnetProgramResource> projects, string command, string subCommand)
+    {
+        if (_buildCustomizationWarningLogged)
+        {
+            return;
+        }
+
+        var affectedProjects = projects
+            .Where(project => project.Annotations.OfType<IDotnetProgramBuildEnvironmentProvider>().Any() ||
+                (project.TryGetLastAnnotation<IProjectMetadata>(out var metadata) && metadata.BuildEnvironment.Count > 0))
+            .Select(project => $"'{project.Name}'")
+            .ToList();
+        if (_migrationResource.MigrationsProjectResource is null &&
+            _migrationResource.MigrationsProjectMetadata?.BuildEnvironment.Count > 0)
+        {
+            affectedProjects.Add("the migrations project metadata");
+        }
+
+        if (affectedProjects.Count == 0)
+        {
+            return;
+        }
+
+        // Provider presence deliberately includes no-op callbacks. Never evaluate a callback just for logging,
+        // and never disclose values. One executor represents one requested operation, including nested EF calls.
+        _buildCustomizationWarningLogged = true;
+        _logger.LogWarning(
+            "EF command '{Command} {SubCommand}' is continuing with Aspire-specific build customizations configured on {Projects} " +
+            "(WithBuildEnvironment, IDotnetProgramBuildEnvironmentProvider, or custom build-property metadata). " +
+            "These customizations are not forwarded as MSBuild global properties to dotnet-ef. " +
+            "EF may use suitable output, select different or stale output, or fail if the expected output is missing. " +
+            "Where equivalent, define the required settings in shared .csproj or Directory.Build.props configuration " +
+            "so the coordinated build and EF evaluate the same values.",
+            command, subCommand, string.Join(", ", affectedProjects));
     }
 
     private static string GetToolStartCommandName(DotnetToolResource toolResource)
