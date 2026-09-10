@@ -8,6 +8,8 @@ using HealthChecks.Azure.KeyVault.Secrets;
 
 namespace Aspire.Azure.Security.KeyVault;
 
+// Temporary CCR App-token retry marker for PR #17949; remove after the billing investigation.
+
 /// <summary>
 /// Provides the client configuration settings for connecting to Azure Key Vault.
 /// </summary>
