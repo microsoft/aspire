@@ -2649,6 +2649,76 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await wait.WaitAsync(TestContext.Current.CancellationToken);
     }
 
+    [Fact]
+    public async Task ConcurrentBuildPlanMaterializationJoinsCurrentAttempt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        var coordinator = app.Services.GetRequiredService<DotnetProjectBuildCoordinator.CoordinatorState>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var firstMaterializationEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondInvocationFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var releaseMaterialization = new ManualResetEventSlim();
+        var applicationStoppedAccessCount = 0;
+        var lifetime = new TestHostApplicationLifetime(() =>
+        {
+            Interlocked.Increment(ref applicationStoppedAccessCount);
+            firstMaterializationEntered.TrySetResult();
+            releaseMaterialization.Wait(TestContext.Current.CancellationToken);
+            return default;
+        });
+        using var services = new ServiceCollection()
+            .AddSingleton<IHostApplicationLifetime>(lifetime)
+            .BuildServiceProvider();
+
+        Task? firstAttempt = null;
+        var firstInvocation = Task.Run(() =>
+        {
+            firstAttempt = coordinator.MaterializeBuildPlan(model, services);
+        });
+        await firstMaterializationEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        Task? secondAttempt = null;
+        Exception? secondException = null;
+        var secondInvocation = Task.Run(() =>
+        {
+            try
+            {
+                secondAttempt = coordinator.MaterializeBuildPlan(model, services);
+            }
+            catch (Exception ex)
+            {
+                secondException = ex;
+            }
+            finally
+            {
+                secondInvocationFinished.TrySetResult();
+            }
+        });
+
+        try
+        {
+            await secondInvocationFinished.Task.WaitAsync(TestContext.Current.CancellationToken);
+            Assert.Null(secondException);
+            Assert.NotNull(secondAttempt);
+            Assert.False(secondAttempt.IsCompleted);
+            Assert.Equal(1, Volatile.Read(ref applicationStoppedAccessCount));
+        }
+        finally
+        {
+            releaseMaterialization.Set();
+        }
+
+        await Task.WhenAll(firstInvocation, secondInvocation);
+        Assert.NotNull(firstAttempt);
+        await Task.WhenAll(firstAttempt, secondAttempt);
+        Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+    }
+
     [Theory]
     [InlineData(nameof(KnownResourceStates.Finished), 1)]
     [InlineData(nameof(KnownResourceStates.FailedToStart), null)]

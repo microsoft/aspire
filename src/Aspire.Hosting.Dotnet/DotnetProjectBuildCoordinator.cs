@@ -224,12 +224,14 @@ internal static class DotnetProjectBuildCoordinator
     internal sealed class CoordinatorState : IDisposable
     {
         private readonly IDistributedApplicationBuilder _builder;
+        private readonly object _materializationLock = new();
         private readonly List<ResourceRegistration> _registrations = [];
         private readonly List<DotnetProjectBuildResource> _ownedBuildResources = [];
         private readonly List<SharedBuildEnvironment> _sharedBuildEnvironments = [];
         private readonly Dictionary<DotnetProjectResource, Action> _eagerDependencyRollbacks =
             new(ReferenceEqualityComparer.Instance);
         private bool _materialized;
+        private bool _materializationInProgress;
         private bool _disposed;
         private TaskCompletionSource _materializationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -273,11 +275,16 @@ internal static class DotnetProjectBuildCoordinator
             IServiceProvider services,
             CancellationToken cancellationToken)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            Task materializationTask;
+            lock (_materializationLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                materializationTask = _materializationCompletion.Task;
+            }
 
             // BeforeStartEvent subscribers can request build output before the BeforeStart pipeline's final
             // action creates the plan. Waiting here must not block that event or depend on application readiness.
-            await Volatile.Read(ref _materializationCompletion).Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await materializationTask.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             var registration = _registrations.Single(
                 registration => ReferenceEquals(registration.Resource, resource));
@@ -332,13 +339,17 @@ internal static class DotnetProjectBuildCoordinator
 
         public void Dispose()
         {
-            if (_disposed)
+            lock (_materializationLock)
             {
-                return;
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
+                _materializationCompletion.TrySetCanceled();
             }
 
-            _disposed = true;
-            _materializationCompletion.TrySetCanceled();
             RemoveEagerBuildDependencies(_registrations.Select(registration => registration.Resource));
             foreach (var buildResource in _ownedBuildResources)
             {
@@ -354,18 +365,45 @@ internal static class DotnetProjectBuildCoordinator
             DistributedApplicationModel model,
             IServiceProvider services)
         {
-            var completion = Volatile.Read(ref _materializationCompletion);
+            TaskCompletionSource completion;
+            lock (_materializationLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                completion = _materializationCompletion;
+                if (_materializationInProgress)
+                {
+                    return completion.Task;
+                }
+
+                _materializationInProgress = true;
+            }
+
+            // Consumers must remain able to capture this attempt while the synchronous model mutation runs.
             try
             {
                 MaterializeBuildPlanCore(model, services);
-                completion.TrySetResult();
             }
             catch (Exception ex)
             {
-                // Existing consumers observe this failed attempt; subsequent consumers can await a retry.
-                Volatile.Write(ref _materializationCompletion, new(TaskCreationOptions.RunContinuationsAsynchronously));
-                completion.TrySetException(ex);
+                lock (_materializationLock)
+                {
+                    _materializationInProgress = false;
+                    if (!_disposed)
+                    {
+                        // Existing consumers observe this failed attempt; subsequent consumers can await a retry.
+                        _materializationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    }
+
+                    completion.TrySetException(ex);
+                }
+
                 throw;
+            }
+
+            lock (_materializationLock)
+            {
+                _materializationInProgress = false;
+                completion.TrySetResult();
             }
 
             return Task.CompletedTask;
