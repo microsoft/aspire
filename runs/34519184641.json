@@ -1,0 +1,38 @@
+{
+  "run_id": 34519184641,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34519184641",
+  "analyzed_at": "2026-09-10T20:17:26Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19987,
+    "title": "Add configurable dev tunnel idle expiration",
+    "author": "krubenok",
+    "state": "closed",
+    "head_branch": "u/kyrubeno/dev-tunnel-expiration",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19987"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Tests, Dashboard, Dashboard, tests/Aspire.Dashboard.T... / Dashboard (windows-latest)",
+      "id": 103022012879,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34519184641/job/103022012879",
+      "classification": "transient-infra",
+      "reason": "Job failed at generic 'Build test project' step with exit code 1; job logs unavailable. PR only modifies Aspire.Hosting.DevTunnels source/tests, not Aspire.Dashboard.Tests, so the failure is unrelated to PR changes. Matches known recurring pattern of widespread unrelated 'Build test project' exit-1 failures across multiple job types.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 103025162541,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34519184641/job/103025162541",
+      "classification": "flaky-test",
+      "reason": "Homebrew cask artifact preparation failed with exit code 1 and 'problem in 1 cask detected'; job logs unavailable. This job is unrelated to the PR's DevTunnels-only changes and matches a known recurring pattern of Homebrew/WinGet installer artifact preparation failures seen frequently and unrelated to specific PR content.",
+      "failed_steps": ["Prepare Homebrew cask artifact"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["build-test-project-widespread-exit1-unrelated", "cli-smoke-test-homebrew-winget-unrelated"]
+}

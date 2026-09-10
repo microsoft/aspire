@@ -1,7 +1,7 @@
 {
   "id": "build-test-project-widespread-exit1-unrelated",
   "type": "infra-failure",
-  "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground) fail with generic exit code 1",
+  "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard) fail with generic exit code 1",
   "error_pattern": "Process completed with exit code 1. (Build test project step failed across multiple unrelated jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job').",
   "occurrences": [
     {
@@ -38,6 +38,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
       "pr_number": 20040,
       "observed_at": "2026-09-10T19:46:42Z"
+    },
+    {
+      "run_id": 34519184641,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34519184641",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Tests, Dashboard, Dashboard, tests/Aspire.Dashboard.T... / Dashboard (windows-latest)",
+      "pr_number": 19987,
+      "observed_at": "2026-09-10T20:17:26Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"
