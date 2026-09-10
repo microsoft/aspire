@@ -1060,6 +1060,68 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithExplicitStableChannelAndCurrentCliVersion_IgnoresIdentityLocalPackageSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string identityChannel = "pr-12345";
+        const string identityVersion = "13.4.0-pr.17141.gf142085f";
+        var packageSource = workspace.CreateDirectory("hive-packages");
+        List<string>? restoreArgs = null;
+        string[]? configuredSources = null;
+
+        var stableChannel = PackageChannel.CreateExplicitChannel(
+            name: PackageChannelNames.Stable,
+            quality: PackageChannelQuality.Stable,
+            mappings: [new PackageMapping("Aspire*", NuGetOrgSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance);
+        var identityPackageChannel = PackageChannel.CreateExplicitChannel(
+            name: identityChannel,
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", packageSource.FullName)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                [stableChannel, identityPackageChannel])
+        };
+        var executionContext = CreateContextWithIdentityChannel(identityChannel, identityVersion);
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService, executionContext);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            WriteNuGetConfigOverlayIfRequested(args);
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+                configuredSources = GetPackageSourcesFromConfigArguments(args);
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                identityVersion,
+                [IntegrationReference.FromPackage("Aspire.Hosting.Redis", identityVersion)],
+                requestedChannel: PackageChannelNames.Stable);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Empty(GetSourceArguments(restoreArgs!));
+            Assert.Empty(Assert.IsType<string[]>(configuredSources));
+            Assert.DoesNotContain(packageSource.FullName, restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public void Constructor_UsesDistinctWorkingDirectoriesForMultipleAppHostsInSameWorkspace()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
