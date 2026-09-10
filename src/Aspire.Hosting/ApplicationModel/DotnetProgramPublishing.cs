@@ -205,7 +205,8 @@ internal static class DotnetProgramPublishing
                 Destination = buildResult.Destination,
                 OutputPath = runtimeOutputPath,
                 ImageFormat = buildResult.ImageFormat,
-                TargetPlatform = buildResult.TargetPlatform ?? ContainerTargetPlatform.LinuxAmd64
+                TargetPlatform = buildResult.TargetPlatform ?? ContainerTargetPlatform.LinuxAmd64,
+                RequiresLocalImageStore = true
             };
 
             await containerRuntime.BuildImageAsync(

@@ -42,7 +42,7 @@ internal static class LocalDeploymentTestHelpers
     {
         foreach (var kind in new[] { "container", "volume", "network" })
         {
-            var resources = await RunDockerCleanupAsync([kind, "ls", "-q", "--filter", $"label={label}"], output);
+            var resources = await RunDockerCleanupAsync(GetLabeledResourceListArguments(kind, label), output);
             foreach (var resource in resources.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
             {
                 string[] arguments = kind == "container"
@@ -51,6 +51,13 @@ internal static class LocalDeploymentTestHelpers
                 await RunDockerCleanupAsync(arguments, output);
             }
         }
+    }
+
+    internal static string[] GetLabeledResourceListArguments(string kind, string label)
+    {
+        return kind == "container"
+            ? [kind, "ls", "--all", "-q", "--filter", $"label={label}"]
+            : [kind, "ls", "-q", "--filter", $"label={label}"];
     }
 
     internal static async Task CleanupImageAsync(string image, ITestOutputHelper output)

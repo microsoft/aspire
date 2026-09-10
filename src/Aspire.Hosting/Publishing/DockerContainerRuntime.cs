@@ -13,6 +13,10 @@ namespace Aspire.Hosting.Publishing;
 
 internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContainerRuntime>
 {
+    private const string LocalImageOciArchiveNotSupportedMessage =
+        "Docker cannot export an OCI archive when container-file layering references locally built images. " +
+        "Use ContainerImageFormat.Docker for this archive or run the publish with Podman.";
+
     public DockerContainerRuntime(ILogger<DockerContainerRuntime> logger, IProcessRunner processRunner) : base(logger, processRunner)
     {
     }
@@ -26,8 +30,9 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             : options?.ImageName ?? throw new ArgumentException("ImageName must be provided in options.", nameof(options));
 
         string? builderName = null;
-        var resourceName = ResourceExtensions.FlattenContainerImageName(imageName);
         var exportsArchive = !string.IsNullOrEmpty(options?.OutputPath);
+        var requiresLocalImageStore = options?.RequiresLocalImageStore == true;
+        var exportsLocalImageArchive = exportsArchive && requiresLocalImageStore;
 
         if (options?.ImageFormat == ContainerImageFormat.Oci)
         {
@@ -37,12 +42,12 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             }
         }
 
-        if (exportsArchive)
+        if (exportsArchive && !requiresLocalImageStore)
         {
             // Docker's in-daemon builder cannot reliably write Docker or OCI archive exporters.
             // Use an isolated BuildKit container for archive output and remove it after the build.
             // https://docs.docker.com/build/exporters/
-            builderName = $"{resourceName}-builder";
+            builderName = $"aspire-{Guid.NewGuid():N}";
             await CreateBuildkitInstanceAsync(builderName, cancellationToken).ConfigureAwait(false);
         }
 
@@ -50,8 +55,13 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
         {
             var arguments = $"buildx build --file \"{dockerfilePath}\" --tag \"{imageName}\"";
 
-            // Archive exports use the isolated builder created above.
-            if (!string.IsNullOrEmpty(builderName))
+            if (requiresLocalImageStore)
+            {
+                // Container-file layering refers to images tagged only in the daemon's image store.
+                // Pin the build to the daemon-backed builder instead of honoring an ambient Buildx selection.
+                arguments += " --builder \"default\"";
+            }
+            else if (!string.IsNullOrEmpty(builderName))
             {
                 arguments += $" --builder \"{builderName}\"";
             }
@@ -63,7 +73,8 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             }
 
             // Add output format support if specified
-            if (options?.ImageFormat is not null || !string.IsNullOrEmpty(options?.OutputPath))
+            if (!exportsLocalImageArchive &&
+                (options?.ImageFormat is not null || !string.IsNullOrEmpty(options?.OutputPath)))
             {
                 var outputType = options?.ImageFormat switch
                 {
@@ -120,6 +131,11 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
                     processResult.ProcessOutput,
                     processResult.TotalProcessOutputLineCount);
             }
+
+            if (exportsLocalImageArchive)
+            {
+                await RunDockerSaveAsync(imageName, options!, cancellationToken).ConfigureAwait(false);
+            }
         }
         finally
         {
@@ -133,6 +149,24 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
     public override async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
     {
+        if (options?.RequiresLocalImageStore == true &&
+            !string.IsNullOrEmpty(options.OutputPath))
+        {
+            switch (options.ImageFormat)
+            {
+                case ContainerImageFormat.Oci:
+                    throw new DistributedApplicationException(LocalImageOciArchiveNotSupportedMessage);
+                case ContainerImageFormat.Docker:
+                case null:
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(
+                        nameof(options),
+                        options.ImageFormat,
+                        "Invalid container image format");
+            }
+        }
+
         // Verify buildx is available before attempting a Dockerfile build
         if (!await CheckDockerBuildxAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -151,6 +185,48 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             buildSecrets,
             stage,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task RunDockerSaveAsync(
+        string imageName,
+        ContainerImageBuildOptions options,
+        CancellationToken cancellationToken)
+    {
+        var arguments = BuildSaveArguments(imageName, options);
+        var processResult = await ExecuteContainerCommandWithResultAsync(
+            arguments,
+            "Docker image save for {ImageName} failed with exit code {ExitCode}.",
+            "Docker image save for {ImageName} succeeded.",
+            cancellationToken,
+            new object[] { imageName },
+            retainOutput: true).ConfigureAwait(false);
+
+        if (processResult.ExitCode != 0)
+        {
+            throw new ProcessFailedException(
+                $"Docker image save failed with exit code {processResult.ExitCode}.",
+                processResult.ExitCode,
+                processResult.ProcessOutput,
+                processResult.TotalProcessOutputLineCount);
+        }
+    }
+
+    /// <summary>
+    /// Builds the arguments that save a locally built image as a Docker archive.
+    /// </summary>
+    internal static string BuildSaveArguments(string imageName, ContainerImageBuildOptions options)
+    {
+        var outputPath = options.OutputPath;
+        ArgumentException.ThrowIfNullOrEmpty(outputPath);
+        var archivePath = ResourceExtensions.GetContainerImageArchivePath(outputPath, imageName);
+        var arguments = $"image save --output \"{archivePath}\"";
+
+        if (options.TargetPlatform is not null)
+        {
+            arguments += $" --platform \"{options.TargetPlatform.Value.ToRuntimePlatformString()}\"";
+        }
+
+        return $"{arguments} \"{imageName}\"";
     }
 
     public override async Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken)
