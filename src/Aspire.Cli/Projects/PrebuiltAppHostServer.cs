@@ -145,6 +145,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         IEnumerable<IntegrationReference> integrations,
         string? requestedChannel = null,
         string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
     {
         var integrationList = integrations.ToList();
@@ -169,7 +170,19 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             requestedChannel ??= ResolveRequestedChannel();
             if (string.IsNullOrWhiteSpace(effectivePackageSourceOverride))
             {
-                effectivePackageSourceOverride = await ResolveLocalPackageSourceOverrideAsync(requestedChannel, cancellationToken).ConfigureAwait(false);
+                var localPackageSourceChannel = requestedChannel;
+                if (localPackageSourceChannel is null &&
+                    string.Equals(sdkVersion, _executionContext.IdentitySdkVersion, StringComparison.OrdinalIgnoreCase))
+                {
+                    // An unpinned guest AppHost inherits the running CLI's SDK version. When that
+                    // version comes from a local package hive or ASPIRE_CLI_PACKAGES, restore must
+                    // use the same local source or it will request an unpublished build from the
+                    // ambient feeds. This remains a source-only override: the project has not
+                    // requested the CLI's channel policy.
+                    localPackageSourceChannel = _executionContext.IdentityChannel;
+                }
+
+                effectivePackageSourceOverride = await ResolveLocalPackageSourceOverrideAsync(localPackageSourceChannel, cancellationToken).ConfigureAwait(false);
             }
 
             if (projectRefs.Count > 0)
@@ -192,6 +205,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                     sdkVersion,
                     requestedChannel,
                     effectivePackageSourceOverride,
+                    packageSourceOverridePattern,
                     cancellationToken).ConfigureAwait(false);
 
                 if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
@@ -217,7 +231,11 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 {
                     // NuGet-only — use the bundled NuGet service (no SDK required)
                     _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
-                        packageRefs, requestedChannel, effectivePackageSourceOverride, cancellationToken);
+                        packageRefs,
+                        requestedChannel,
+                        effectivePackageSourceOverride,
+                        packageSourceOverridePattern,
+                        cancellationToken);
                 }
 
                 var appSettingsContent = CreateAppSettingsContent(packageRefs, []);
@@ -303,6 +321,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         List<IntegrationReference> packageRefs,
         string? requestedChannel,
         string? packageSourceOverride,
+        string? packageSourceOverridePattern,
         CancellationToken cancellationToken)
     {
         _logger.LogDebug("Restoring {Count} integration packages via bundled NuGet", packageRefs.Count);
@@ -312,7 +331,11 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             .Select(r => (r.Name, Version: GetRestoreVersion(r.Name, r.Version!, useExactPackageVersions)))
             .ToList();
         var restoreSources = NormalizeIntegrationRestoreSources(
-            await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false));
+            await ResolveIntegrationRestoreSourcesAsync(
+                requestedChannel,
+                packageSourceOverride,
+                packageSourceOverridePattern,
+                cancellationToken).ConfigureAwait(false));
         var settings = await _nugetService.GetNuGetSettingsAsync(_appDirectoryPath, cancellationToken).ConfigureAwait(false);
         var configSources = ResolveNuGetConfigSources(
             restoreSources.PackageSourceMappings,
@@ -863,13 +886,18 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         string sdkVersion,
         string? requestedChannel,
         string? packageSourceOverride,
+        string? packageSourceOverridePattern,
         CancellationToken cancellationToken)
     {
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
         var restoreSources = NormalizeIntegrationRestoreSources(
-            await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false));
+            await ResolveIntegrationRestoreSourcesAsync(
+                requestedChannel,
+                packageSourceOverride,
+                packageSourceOverridePattern,
+                cancellationToken).ConfigureAwait(false));
         var selectedSensitiveRestoreSources = restoreSources.AdditionalSources
             .Concat(restoreSources.PackageSourceMappings?.Select(static mapping => mapping.Source) ?? [])
             .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
@@ -1107,9 +1135,17 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         return channelName;
     }
 
-    internal Task<IntegrationRestoreSources> ResolveIntegrationRestoreSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
+    internal Task<IntegrationRestoreSources> ResolveIntegrationRestoreSourcesAsync(
+        string? requestedChannel,
+        string? packageSourceOverride,
+        string? packageSourceOverridePattern,
+        CancellationToken cancellationToken)
         => new IntegrationRestoreSourceResolver(_packagingService, _logger, _executionContext.NuGetServiceIndexOverride)
-            .ResolveAsync(requestedChannel, packageSourceOverride, cancellationToken);
+            .ResolveAsync(
+                requestedChannel,
+                packageSourceOverride,
+                packageSourceOverridePattern,
+                cancellationToken);
 
     private static IEnumerable<string>? GetNuGetSources(IntegrationRestoreSources restoreSources)
         => restoreSources.PackageSourceMappings is null && restoreSources.AdditionalSources.Count > 0
@@ -1270,6 +1306,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             .Where(static pattern => pattern != PackageMapping.AllPackages)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        var authoritativeSources = selectedMappings
+            .Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
+            .Select(static mapping => mapping.Source)
+            .ToHashSet(PackageSourceIdentity.Comparer);
         foreach (var patterns in patternsBySourceKey.Values)
         {
             patterns.RemoveAll(pattern => authoritativePatterns.Any(
@@ -1279,10 +1319,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         foreach (var mapping in selectedMappings)
         {
             if (ambientMappings.Count > 0 &&
-                mapping.PackageFilter == PackageMapping.AllPackages)
+                mapping.PackageFilter == PackageMapping.AllPackages &&
+                !authoritativeSources.Contains(mapping.Source))
             {
                 // An existing mapping policy already defines eligibility for non-Aspire packages.
-                // Channel fallback sources must not broaden that unrelated ambient policy.
+                // Channel fallback sources must not broaden that unrelated ambient policy. An
+                // explicitly selected source remains generally eligible because --source is direct
+                // user intent, while its exact package pattern still guarantees the root origin.
                 continue;
             }
 

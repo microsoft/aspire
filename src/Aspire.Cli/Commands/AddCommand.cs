@@ -129,6 +129,12 @@ internal sealed class AddCommand : BaseCommand
                 return AddCommandFailure(CliExitCodes.FailedToFindProject);
             }
 
+            var resolvedSource = string.IsNullOrWhiteSpace(source)
+                ? null
+                : PackageSourceOverrideMappings.ResolveForWorkingDirectory(
+                    source,
+                    effectiveAppHostProjectFile.Directory!);
+
             // Get the appropriate project handler
             var project = _projectFactory.GetProject(effectiveAppHostProjectFile);
             addActivity.SetAppHostLanguage(project.LanguageId);
@@ -187,7 +193,11 @@ internal sealed class AddCommand : BaseCommand
                 {
                     var (discoveredPackages, discoveredPolyglotIds) = await InteractionService.ShowStatusAsync(
                         AddCommandStrings.SearchingForAspirePackages,
-                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
+                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(
+                            effectiveAppHostProjectFile.Directory!,
+                            configuredChannel,
+                            resolvedSource,
+                            cancellationToken));
                     packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
                     polyglotCompatibleIds = discoveredPolyglotIds;
                 }
@@ -195,7 +205,11 @@ internal sealed class AddCommand : BaseCommand
                 {
                     var discoveredPackages = await InteractionService.ShowStatusAsync(
                         AddCommandStrings.SearchingForAspirePackages,
-                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
+                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(
+                            effectiveAppHostProjectFile.Directory!,
+                            configuredChannel,
+                            resolvedSource,
+                            cancellationToken));
                     packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
                 }
 
@@ -299,6 +313,7 @@ internal sealed class AddCommand : BaseCommand
                     integrationName,
                     version,
                     configuredChannel,
+                    resolvedSource,
                     cancellationToken,
                     promptForSinglePackage: integrationName is not null),
                 1 when packageMatchKind == ProfilingTelemetry.Values.AddPackageMatchKindExact
@@ -309,6 +324,7 @@ internal sealed class AddCommand : BaseCommand
                     filteredPackagesWithShortName,
                     version,
                     configuredChannel,
+                    resolvedSource,
                     cancellationToken,
                     promptForSingleFuzzyPackage)
             };
@@ -358,8 +374,14 @@ internal sealed class AddCommand : BaseCommand
                 AppHostFile = effectiveAppHostProjectFile,
                 PackageId = selectedNuGetPackage.Package.Id,
                 PackageVersion = selectedNuGetPackage.Package.Version,
-                RequestedChannel = GetRequestedRestoreChannel(selectedNuGetPackage.Channel),
-                Source = source
+                RequestedChannel = GetRequestedRestoreChannel(
+                    selectedNuGetPackage.Channel,
+                    selectedNuGetPackage.Package.Id,
+                    resolvedSource),
+                Source = resolvedSource,
+                SourcePackagePattern = resolvedSource is null
+                    ? null
+                    : selectedNuGetPackage.Package.Id
             };
 
             // Stop any running AppHost instance before adding the package.
@@ -445,14 +467,29 @@ internal sealed class AddCommand : BaseCommand
         }
     }
 
-    private static string GetRequestedRestoreChannel(PackageChannel channel)
+    private static string? GetRequestedRestoreChannel(
+        PackageChannel channel,
+        string packageId,
+        string? source)
     {
-        // A null requested channel means "use the channel persisted by the project". Selecting a
-        // package from the implicit channel must instead override any persisted non-stable channel
-        // for this operation while retaining ambient NuGet policy, which is the stable-channel contract.
-        return channel.Type is PackageChannelType.Implicit
-            ? PackageChannelNames.Stable
-            : channel.Name;
+        if (channel.Type is PackageChannelType.Explicit)
+        {
+            return channel.Name;
+        }
+
+        // A source-scoped search always identifies one canonical package ID. Mapping that exact
+        // package to the source can coexist with the project's channel while ambient policy
+        // remains available for the dependency closure.
+        if (!string.IsNullOrWhiteSpace(source) ||
+            !packageId.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        // A null requested channel means "use the channel persisted by the project". Selecting an
+        // Aspire package from the implicit channel must instead retain ambient NuGet policy for
+        // this operation, which is the stable-channel contract.
+        return PackageChannelNames.Stable;
     }
 
     private async Task<bool> HasEffectivePackageSourceMappingAsync(
@@ -569,17 +606,28 @@ internal sealed class AddCommand : BaseCommand
             Path.Combine(projectDirectory.FullName, "nuget.config"));
     }
 
-    private static async Task<IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> GetAllPackageVersions(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, CancellationToken cancellationToken)
+    private static async Task<IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> GetAllPackageVersions(
+        DirectoryInfo workingDirectory,
+        IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages,
+        string? source,
+        CancellationToken cancellationToken)
     {
         var distinctPackageIds = possiblePackages.DistinctBy(package => package.Package.Id);
         var channels = possiblePackages.Select(package => package.Channel).Distinct();
+        var sourceMappings = source is null
+            ? null
+            : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source);
 
         var versions = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
         foreach (var channel in channels)
         {
             foreach (var package in distinctPackageIds)
             {
-                var packages = await channel.GetPackageVersionsAsync(package.Package.Id, workingDirectory, cancellationToken);
+                var packages = await channel.GetPackageVersionsAsync(
+                    package.Package.Id,
+                    workingDirectory,
+                    sourceMappings,
+                    cancellationToken);
                 versions.AddRange(packages.Select(p => (FriendlyName: package.FriendlyName, Package: p, Channel: channel)));
             }
         }
@@ -591,6 +639,7 @@ internal sealed class AddCommand : BaseCommand
         IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages,
         string? preferredVersion,
         string? configuredChannel,
+        string? source,
         CancellationToken cancellationToken,
         bool promptForSinglePackage = false)
     {
@@ -622,7 +671,7 @@ internal sealed class AddCommand : BaseCommand
 
             var allVersions = await InteractionService.ShowStatusAsync(
                 string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SearchingForSpecifiedPackageVersion, selectedPackage.Package.Id, preferredVersion),
-                async () => await GetAllPackageVersions(workingDirectory, packageVersions, cancellationToken));
+                async () => await GetAllPackageVersions(workingDirectory, packageVersions, source, cancellationToken));
             var matchedPreferredVersionPackage = allVersions.FirstOrDefault(packageVersion => packageVersion.Package.Version == preferredVersion);
             if (matchedPreferredVersionPackage.Package is not null)
             {
@@ -703,6 +752,7 @@ internal sealed class AddCommand : BaseCommand
         string? searchTerm,
         string? preferredVersion,
         string? configuredChannel,
+        string? source,
         CancellationToken cancellationToken,
         bool promptForSinglePackage = false)
     {
@@ -711,7 +761,14 @@ internal sealed class AddCommand : BaseCommand
             InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoPackagesMatchedSearchTerm, searchTerm));
         }
 
-        return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, configuredChannel, cancellationToken, promptForSinglePackage);
+        return await GetPackageByInteractiveFlow(
+            workingDirectory,
+            possiblePackages,
+            preferredVersion,
+            configuredChannel,
+            source,
+            cancellationToken,
+            promptForSinglePackage);
     }
 
 }

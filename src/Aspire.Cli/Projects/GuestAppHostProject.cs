@@ -282,9 +282,16 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         List<IntegrationReference> integrations,
         string? requestedChannel,
         string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await appHostServerProject.PrepareAsync(sdkVersion, integrations, requestedChannel, packageSourceOverride, cancellationToken);
+        var result = await appHostServerProject.PrepareAsync(
+            sdkVersion,
+            integrations,
+            requestedChannel,
+            packageSourceOverride,
+            packageSourceOverridePattern,
+            cancellationToken);
         return (result.Success, result.Output, result.ChannelName, result.NeedsCodeGeneration);
     }
 
@@ -295,7 +302,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         var config = LoadConfiguration(directory);
-        return await BuildAndGenerateSdkAsync(directory, config, config.Channel, packageSourceOverride, cancellationToken);
+        return await BuildAndGenerateSdkAsync(
+            directory,
+            config,
+            config.Channel,
+            packageSourceOverride,
+            packageSourceOverridePattern: null,
+            cancellationToken);
     }
 
     private async Task<bool> BuildAndGenerateSdkAsync(
@@ -303,6 +316,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         AspireConfigFile config,
         string? requestedChannel,
         string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
     {
         var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
@@ -313,7 +327,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
         var sdkVersion = GetPrepareSdkVersion(config);
 
-        var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, requestedChannel, packageSourceOverride, cancellationToken);
+        var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(
+            appHostServerProject,
+            sdkVersion,
+            integrations,
+            requestedChannel,
+            packageSourceOverride,
+            packageSourceOverridePattern,
+            cancellationToken);
         if (!buildSuccess)
         {
             if (buildOutput is not null)
@@ -1453,6 +1474,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             config,
             requestedChannel,
             context.Source,
+            context.SourcePackagePattern,
             cancellationToken);
         if (!regenerateSuccess)
         {
@@ -1601,6 +1623,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     directory,
                     config,
                     requestedChannel,
+                    packageSourceOverridePattern: null,
                     cancellationToken: cancellationToken);
 
                 if (!regenerateSuccess)

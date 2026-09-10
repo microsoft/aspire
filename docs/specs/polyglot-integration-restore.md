@@ -68,7 +68,11 @@ The policy accounts for:
 
 The result contains the effective source locations, package patterns, and cache-isolation requirements. Downstream restore paths consume this result directly and do not reconstruct built-in feed URLs.
 
-Polyglot `aspire add` passes the channel selected during package discovery and any explicit `--source` value into this same restore policy. It does not create or modify an AppHost-local user NuGet configuration file. The `--source` value remains invocation-scoped, matching the existing command contract; associating a durable restore source with an individual integration reference is follow-up design work.
+When an AppHost has no requested channel and inherits the running CLI's SDK version, a local source associated with that CLI identity (a matching local hive or `ASPIRE_CLI_PACKAGES`) is applied as a source-only override. This keeps unpublished local and PR package versions resolvable without treating the CLI identity as the project's channel policy. An AppHost that selects a different SDK version continues to use ambient policy unless it requests a channel or source explicitly.
+
+Polyglot `aspire add` passes the channel selected during package discovery and any explicit `--source` value into this same restore policy. It does not create or modify an AppHost-local user NuGet configuration file. An explicit source scopes package discovery, polyglot compatibility filtering, and version selection exclusively to that source, so the command cannot offer an integration or version that the source does not contain. After selection, the selected canonical package ID is mapped authoritatively to the source, and that source remains generally eligible for dependencies it also contains. The effective ambient and project-channel policy remains eligible for the rest of the package's dependency closure, including transitive Aspire packages that the specified source does not contain. The `--source` value and its exact package pattern remain invocation-scoped, matching the existing command contract; associating a durable restore source with an individual integration reference is follow-up design work.
+
+The source-scoped discovery behavior is shared with C# AppHosts, but the additive restore overlay described here is polyglot-specific. C# AppHosts continue to delegate package installation to `dotnet package add --source`, because they do not use the generated polyglot restore overlay.
 
 Relative local sources are resolved against the AppHost directory before they are used from the integration cache.
 

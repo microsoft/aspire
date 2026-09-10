@@ -15,6 +15,7 @@ internal sealed class IntegrationRestoreSourceResolver(
     public async Task<IntegrationRestoreSources> ResolveAsync(
         string? requestedChannel,
         string? packageSourceOverride,
+        string? packageSourceOverridePattern,
         CancellationToken cancellationToken)
     {
         ThrowIfStagingUnavailable(requestedChannel);
@@ -98,7 +99,11 @@ internal sealed class IntegrationRestoreSourceResolver(
 
         if (hasOverride)
         {
-            packageSourceMappings = PackageSourceOverrideMappings.Create(packageSourceOverride!, sourcePolicyChannel, nugetServiceIndexOverride);
+            packageSourceMappings = PackageSourceOverrideMappings.Create(
+                packageSourceOverride!,
+                sourcePolicyChannel,
+                nugetServiceIndexOverride,
+                packageSourceOverridePattern);
             configureGlobalPackagesFolder = sourcePolicyChannel?.ConfigureGlobalPackagesFolder == true;
 
             foreach (var mapping in packageSourceMappings.Where(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))

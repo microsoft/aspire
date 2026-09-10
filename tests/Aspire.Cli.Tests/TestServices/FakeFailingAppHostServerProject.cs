@@ -28,6 +28,7 @@ internal sealed class FakeFailingAppHostServerProject(string appDirectoryPath) :
         IEnumerable<IntegrationReference> integrations,
         string? requestedChannel = null,
         string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
     {
         RequestedChannel = requestedChannel;
