@@ -31,6 +31,13 @@
       "job": "Tests / Build native CLI archive (Windows) / Build CLI (win-x64)",
       "pr_number": 20035,
       "observed_at": "2026-09-10T19:06:56Z"
+    },
+    {
+      "run_id": 34519005883,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34519005883",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "pr_number": 20040,
+      "observed_at": "2026-09-10T19:46:42Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"

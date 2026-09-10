@@ -1,0 +1,38 @@
+{
+  "run_id": 34519005883,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34519005883",
+  "analyzed_at": "2026-09-10T19:46:42Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 20040,
+    "title": "Keep Copilot review scans running past coding-agent PRs",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-organization-funded-copilot-reviews",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20040"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "id": 103012298680,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34519005883/job/103012298680",
+      "classification": "transient-infra",
+      "reason": "Build test project step failed with generic 'Process completed with exit code 1' and no retrievable logs. The PR only changes workflow YAML, docs, and unrelated Infrastructure.Tests workflow-script test files; it does not touch Aspire.Hosting.RemoteHost.Tests or its dependencies, so this is unrelated to PR changes. Matches known recurring cause of widespread unrelated 'Build test project' exit-code-1 failures.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Dotnet.Tests, Hosting.Dotnet, Hosting.Dotnet, tests/Asp... / Hosting.Dotnet (windows-latest)",
+      "id": 103012321977,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34519005883/job/103012321977",
+      "classification": "transient-infra",
+      "reason": "The 'Upload logs, and test results' step failed with 'Failed to CreateArtifact: Unable to make request: ETIMEDOUT', a network timeout talking to the GitHub Actions artifact service. This is a known transient infrastructure error unrelated to the PR's changes (workflow/docs/test-harness for Copilot reviews).",
+      "failed_steps": ["Upload logs, and test results"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["build-test-project-widespread-exit1-unrelated", "artifact-upload-etimedout"]
+}
