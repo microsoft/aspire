@@ -1444,6 +1444,49 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Equal(["aspire-1", "aspire-3"], sources.Select(static source => source.Key));
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void ResolveNuGetConfigSources_PrefersDisabledAliasWithAuthentication(
+        bool hasCredentials,
+        bool hasClientCertificates)
+    {
+        const string source = "https://example.com/private";
+        var sources = PrebuiltAppHostServer.ResolveNuGetConfigSources(
+            [new PackageMapping("Aspire*", source)],
+            ambientSources:
+            [
+                CreateNuGetSourceInfo("anonymous", source, isEnabled: false),
+                CreateNuGetSourceInfo(
+                    "authenticated",
+                    source,
+                    isEnabled: false,
+                    hasCredentials,
+                    hasClientCertificates)
+            ],
+            reservedPackageSourceKeys: ["anonymous", "authenticated"],
+            s_sourceIdentityKey);
+
+        Assert.Equal("authenticated", Assert.Single(sources).Key);
+    }
+
+    [Fact]
+    public void ResolveNuGetConfigSources_PreservesEnabledAliasOverDisabledAuthenticatedAlias()
+    {
+        const string source = "https://example.com/private";
+        var sources = PrebuiltAppHostServer.ResolveNuGetConfigSources(
+            [new PackageMapping("Aspire*", source)],
+            ambientSources:
+            [
+                CreateNuGetSourceInfo("enabled", source, isEnabled: true),
+                CreateNuGetSourceInfo("authenticated", source, isEnabled: false, hasCredentials: true)
+            ],
+            reservedPackageSourceKeys: ["enabled", "authenticated"],
+            s_sourceIdentityKey);
+
+        Assert.Equal("enabled", Assert.Single(sources).Key);
+    }
+
     [Fact]
     public void CreateNuGetConfigOverlay_EnablesSelectedAliasWithoutReEmittingCaseVariantDisabledKey()
     {
@@ -2037,11 +2080,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     private static NuGetSourceInfo CreateNuGetSourceInfo(
         string name,
         string source,
-        bool isEnabled)
+        bool isEnabled,
+        bool hasCredentials = false,
+        bool hasClientCertificates = false)
         => new(
             name,
             NuGetSourceIdentity.Compute(source, s_sourceIdentityKey),
-            isEnabled);
+            isEnabled,
+            hasCredentials,
+            hasClientCertificates);
 
     private static async Task<IReadOnlyList<string>?> ResolveAdditionalSourcesAsync(
         PrebuiltAppHostServer server,
@@ -2966,7 +3013,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                     ("private", channelSource, false),
                     ("unrelated", "https://example.com/unrelated", false)
                 ],
-                disabledPackageSourceKeys: ["anonymousAlias", "private", "unrelated"]))
+                disabledPackageSourceKeys: ["anonymousAlias", "private", "unrelated"],
+                credentialSourceKeys: ["private"]))
         };
         var nugetService = new BundleNuGetService(
             new FixedLayoutDiscovery(layout),
@@ -3047,12 +3095,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             Assert.NotNull(generatedPolicyOverlay);
             Assert.Empty(generatedPolicyOverlay.Descendants("packageSources"));
-            Assert.Equal(["Aspire*"], GetPackagePatternsForKey(generatedPolicyOverlay, "anonymousAlias"));
-            Assert.Empty(GetPackagePatternsForKey(generatedPolicyOverlay, "private"));
+            Assert.Empty(GetPackagePatternsForKey(generatedPolicyOverlay, "anonymousAlias"));
+            Assert.Equal(["Aspire*"], GetPackagePatternsForKey(generatedPolicyOverlay, "private"));
             var disabledPackageSources = Assert.Single(generatedPolicyOverlay.Descendants("disabledPackageSources"));
             Assert.NotNull(disabledPackageSources.Element("clear"));
             Assert.Equal(
-                ["private", "unrelated"],
+                ["anonymousAlias", "unrelated"],
                 disabledPackageSources
                     .Elements("add")
                     .Select(static source => source.Attribute("key")!.Value));
@@ -4463,11 +4511,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         IEnumerable<(string Name, string Source, bool IsEnabled)>? sources = null,
         IEnumerable<(string SourceKey, string[] Patterns)>? packageSourceMappings = null,
         IEnumerable<string>? disabledPackageSourceKeys = null,
-        IEnumerable<string>? reservedPackageSourceKeys = null)
+        IEnumerable<string>? reservedPackageSourceKeys = null,
+        IEnumerable<string>? credentialSourceKeys = null,
+        IEnumerable<string>? clientCertificateSourceKeys = null)
     {
         var sourceArray = sources?.ToArray() ?? [];
         var mappingArray = packageSourceMappings?.ToArray() ?? [];
         var disabledSourceKeyArray = disabledPackageSourceKeys?.ToArray() ?? [];
+        var credentialSourceKeySet = credentialSourceKeys?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+        var clientCertificateSourceKeySet = clientCertificateSourceKeys?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
         var reservedSourceKeyArray = reservedPackageSourceKeys?.ToArray()
             ?? sourceArray
                 .Select(static source => source.Name)
@@ -4483,7 +4535,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 {
                     source.Name,
                     Identity = NuGetSourceIdentity.Compute(source.Source, s_sourceIdentityKey),
-                    source.IsEnabled
+                    source.IsEnabled,
+                    HasCredentials = credentialSourceKeySet.Contains(source.Name),
+                    HasClientCertificates = clientCertificateSourceKeySet.Contains(source.Name)
                 })
                 .ToArray(),
             SensitiveSourceValues = sourceArray

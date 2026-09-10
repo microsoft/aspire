@@ -30,7 +30,9 @@ internal sealed record NuGetSettingsInfo(
 internal sealed record NuGetSourceInfo(
     string Name,
     string Identity,
-    bool IsEnabled);
+    bool IsEnabled,
+    bool HasCredentials,
+    bool HasClientCertificates);
 
 internal sealed record NuGetPackageSourceMappingInfo(string SourceKey, string[] Patterns);
 
@@ -396,7 +398,9 @@ internal sealed class BundleNuGetService : INuGetService
                         ?? throw new InvalidDataException("The NuGet settings response contained a source without a name."),
                     element.GetProperty("Identity").GetString()
                         ?? throw new InvalidDataException("The NuGet settings response contained a source without an identity."),
-                    element.GetProperty("IsEnabled").GetBoolean()))
+                    element.GetProperty("IsEnabled").GetBoolean(),
+                    element.GetProperty("HasCredentials").GetBoolean(),
+                    element.GetProperty("HasClientCertificates").GetBoolean()))
                 .ToArray();
             var sensitiveSourceValues = ReadStringArray(
                 document.RootElement,

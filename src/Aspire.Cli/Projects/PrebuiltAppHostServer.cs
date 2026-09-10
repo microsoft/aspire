@@ -1205,9 +1205,16 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 var enabledMatches = ambientMatches
                     .Where(static ambientSource => ambientSource.IsEnabled)
                     .ToArray();
-                var selectedMatches = enabledMatches.Length > 0
-                    ? enabledMatches
-                    : [ambientMatches[0]];
+                var selectedMatches = enabledMatches;
+                if (selectedMatches.Length == 0)
+                {
+                    // Credentials and client certificates are attached to source aliases. When an equivalent
+                    // source must be re-enabled, preserve the alias that carries its authentication configuration.
+                    var preferredDisabledMatch = ambientMatches.FirstOrDefault(static ambientSource =>
+                        ambientSource.HasCredentials || ambientSource.HasClientCertificates);
+                    selectedMatches = [preferredDisabledMatch ?? ambientMatches[0]];
+                }
+
                 foreach (var ambientSource in selectedMatches)
                 {
                     resolvedSources.Add(new NuGetConfigSource(

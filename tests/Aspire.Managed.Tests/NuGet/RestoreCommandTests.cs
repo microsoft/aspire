@@ -339,6 +339,38 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
     }
 
     [Fact]
+    public void SettingsCommand_ReportsSourceCredentialCapabilityWithoutReturningCredentials()
+    {
+        var credentialMarker = $"credential-marker-{Guid.NewGuid():N}";
+        File.WriteAllText(
+            Path.Combine(_workspace.Path, "NuGet.Config"),
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="private" value="https://packages.example.invalid/v3/index.json" />
+              </packageSources>
+              <packageSourceCredentials>
+                <private>
+                  <add key="Username" value="test-user" />
+                  <add key="ClearTextPassword" value="{credentialMarker}" />
+                </private>
+              </packageSourceCredentials>
+            </configuration>
+            """);
+
+        var settings = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
+        var serializedSettings = JsonSerializer.Serialize(
+            settings,
+            SettingsJsonContext.Default.NuGetSettingsResult);
+
+        var source = Assert.Single(settings.Sources);
+        Assert.True(source.HasCredentials);
+        Assert.False(source.HasClientCertificates);
+        Assert.DoesNotContain(credentialMarker, serializedSettings, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SettingsCommand_ReturnsMalformedCredentialBearingSourceForExactRedaction()
     {
         const string source = "https://user:p#word@packages.example.com/private";
