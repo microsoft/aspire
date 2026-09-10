@@ -7,6 +7,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
 
+/// <summary>
+/// Resolves the source policy shared by package-only and SDK-backed polyglot integration restores.
+/// C# AppHosts do not use this service; their <c>dotnet package add</c> behavior, including local and
+/// PR hive package-source mappings, is intentionally separate and outside this service's scope.
+/// </summary>
 internal sealed class IntegrationRestoreSourceResolver(
     IPackagingService packagingService,
     ILogger logger,

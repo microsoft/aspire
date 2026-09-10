@@ -32,7 +32,7 @@ The generated root's assets graph still includes packages contributed transitive
 
 ## Effective source policy
 
-`IntegrationRestoreSourceResolver` resolves channel and source customization before the package-only and SDK paths diverge.
+`IntegrationRestoreSourceResolver` resolves channel and source customization before the package-only and SDK paths diverge. The service is shared by those two polyglot restore implementations; C# AppHosts do not consume it. Their existing `dotnet package add` flow and local or PR hive configuration behavior, including package-source mappings emitted when ambient mapping is enabled, are intentional and outside this restore service's scope.
 
 Channel selection never changes the NuGet configuration discovery model. Every restore loads the AppHost-anchored hierarchy, then applies the same source-precedence rules:
 
@@ -76,7 +76,7 @@ When an AppHost has no requested channel and inherits the running CLI's SDK vers
 
 Polyglot `aspire add` passes the channel selected during package discovery and any explicit `--source` value into this same restore policy. It does not create or modify an AppHost-local user NuGet configuration file. An explicit source scopes package discovery, polyglot compatibility filtering, and version selection exclusively to that source, so the command cannot offer an integration or version that the source does not contain. Without an explicit source, exact-version discovery continues to use each candidate channel's package-source mappings rather than performing an unscoped ambient search. After selection, the selected canonical package ID is mapped authoritatively to an explicit source, and that source remains generally eligible for dependencies it also contains. The effective ambient and project-channel policy remains eligible for the rest of the package's dependency closure, including transitive Aspire packages that the specified source does not contain. The `--source` value and its exact package pattern remain invocation-scoped, matching the existing command contract; associating a durable restore source with an individual integration reference is follow-up design work.
 
-The source-scoped discovery behavior is shared with C# AppHosts, but the additive restore overlay described here is polyglot-specific. C# AppHosts continue to delegate package installation to `dotnet package add --source`, because they do not use the generated polyglot restore overlay.
+The higher-level source-scoped package discovery behavior is shared with C# AppHosts, but the restore policy and overlays described here are polyglot-specific.
 
 Relative local sources are resolved against the AppHost directory before they are used from the integration cache.
 
@@ -95,11 +95,11 @@ For a requested discovery directory, the operation:
 3. Returns non-secret source descriptors containing the source name, enabled state, credential and client-certificate capability flags, and a per-invocation keyed identity of the resolved location.
 4. Returns the effective package-source mapping entries produced by NuGet after applying the configuration hierarchy.
 5. Returns disabled and reserved source keys needed to avoid accidentally inheriting name-bound credentials, certificates, or disabled state when Aspire introduces a source.
-6. Returns the exact effective values of credential-bearing source locations for use only when redacting captured NuGet diagnostics.
+6. Returns the exact effective values of credential-bearing package and audit source locations for use only when redacting captured NuGet diagnostics.
 
-The operation does not return `packageSourceCredentials` entries, credential-provider tokens, client certificates, trusted signers, or serialized configuration sections, and it returns no standalone credential values. The CLI supplies a random identity key through the helper's private process environment, and both sides use that key to calculate per-invocation HMAC source identities. Ordinary source locations therefore remain inside NuGet-owned configuration while the CLI can still correlate a selected source with an ambient alias. Inline credential material crosses the protocol only when it is part of a credential-bearing source location returned as an exact redaction value through the private captured-output protocol between the same-user CLI and its bundled helper.
+The operation does not return `packageSourceCredentials` entries, credential-provider tokens, client certificates, trusted signers, or serialized configuration sections, and it returns no standalone credential values. The CLI supplies a random identity key through the helper's private process environment, and both sides use that key to calculate per-invocation HMAC source identities. Ordinary source locations therefore remain inside NuGet-owned configuration while the CLI can still correlate a selected package source with an ambient alias. Inline credential material crosses the protocol only when it is part of a credential-bearing package or audit source location returned as an exact redaction value through the private captured-output protocol between the same-user CLI and its bundled helper.
 
-The CLI matches effective Aspire source locations to the opaque identities using NuGet-compatible normalization rules. For each selected source, it prefers an enabled ambient alias; when every matching alias is disabled, it prefers an alias with credentials or client certificates before re-enabling one. The selected source key preserves NuGet's association with its authentication or transport settings without returning those settings to the CLI. Captured restore diagnostics are sanitized by replacing the exact credential-bearing source values and their normalized URI spellings with the same display-safe representation used for direct source arguments. Aspire does not heuristically scan arbitrary output for unknown URLs; only exact values for participating sources are redacted. This avoids changing unrelated output and keeps URI parsing off the general process-output path.
+The CLI matches effective Aspire package source locations to the opaque identities using NuGet-compatible normalization rules. For each selected source, it prefers an enabled ambient alias; when every matching alias is disabled, it prefers an alias with credentials or client certificates before re-enabling one. The selected source key preserves NuGet's association with its authentication or transport settings without returning those settings to the CLI. Captured restore diagnostics are sanitized by replacing the exact credential-bearing package and audit source values and their normalized URI spellings with the same display-safe representation used for direct source arguments. Aspire does not heuristically scan arbitrary output for unknown URLs; only exact values reported by the native settings bridge are redacted. This avoids changing unrelated output and keeps URI parsing off the general process-output path.
 
 ## Aspire policy overlay
 
@@ -143,7 +143,7 @@ The package-only path:
 6. Treats the evaluated hierarchy and explicitly selected sources as the complete source set rather than implicitly appending NuGet.org.
 7. Injects the resulting `ISettings` into `DependencyGraphSpecRequestProvider`.
 
-The overlay reuses ambient source keys. `Aspire.Managed` reloads the native configuration hierarchy, so credentials, protocol settings, and credential-provider behavior remain NuGet-owned. Only credential-bearing source location strings cross the settings bridge as exact diagnostic-redaction values.
+The overlay reuses ambient source keys. `Aspire.Managed` reloads the native configuration hierarchy, so credentials, protocol settings, audit settings, and credential-provider behavior remain NuGet-owned. Only credential-bearing package and audit source location strings cross the settings bridge as exact diagnostic-redaction values.
 
 The temporary overlay is deleted after the restore invocation.
 
