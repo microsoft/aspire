@@ -28,5 +28,4 @@ public sealed class NatsClientSettings
     /// The default value is <see langword="false"/>.
     /// </value>
     public bool DisableTracing { get; set; }
-
 }

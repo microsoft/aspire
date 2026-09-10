@@ -20,6 +20,8 @@ namespace Microsoft.Extensions.Hosting;
 public static class AspireNatsClientExtensions
 {
     private const string DefaultConfigSectionName = "Aspire:NATS:Net";
+    private const string ActivityNameSource = "NATS.Net";
+
     /// <inheritdoc cref="AddNatsClient(IHostApplicationBuilder, string, Action{NatsClientSettings}?, Func{IServiceProvider,NatsOpts,NatsOpts}?)"/>
     public static void AddNatsClient(this IHostApplicationBuilder builder, string connectionName)
         => AddNatsClientInternal(builder, connectionName: connectionName, serviceKey: null, configureSettings: null, configureOptions: null);
@@ -185,7 +187,7 @@ public static class AspireNatsClientExtensions
                 .AddOpenTelemetry()
                 .WithTracing(tracer =>
                 {
-                    tracer.AddSource("NATS.Net");
+                    tracer.AddSource(ActivityNameSource);
                 });
         }
     }
