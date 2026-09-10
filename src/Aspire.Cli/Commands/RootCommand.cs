@@ -99,6 +99,13 @@ internal sealed class RootCommand : BaseRootCommand
         Hidden = true
     };
 
+    internal static IReadOnlyList<Option> GlobalOptions { get; } =
+    [
+        DebugOption, DebugLevelOption, NonInteractiveOption, NoLogoOption, BannerOption,
+        WaitForDebuggerOption, CliWaitForDebuggerOption, CaptureProfileOption,
+        CaptureProfileOutputOption, CaptureProfileDelayOption, s_logFileOption
+    ];
+
     /// <summary>
     /// Global options that should be passed through to child CLI processes when spawning.
     /// Add new global options here to ensure they are forwarded during detached mode execution.
@@ -156,6 +163,7 @@ internal sealed class RootCommand : BaseRootCommand
         DestroyCommand destroyCommand,
         DoCommand doCommand,
         ConfigCommand configCommand,
+        CompletionsCommand completionsCommand,
         CacheCommand cacheCommand,
         CertificatesCommand certificatesCommand,
         DoctorCommand doctorCommand,
@@ -183,21 +191,14 @@ internal sealed class RootCommand : BaseRootCommand
     {
         _ansiConsole = ansiConsole;
 
-        Options.Add(DebugOption);
-        Options.Add(DebugLevelOption);
-        Options.Add(NonInteractiveOption);
-        Options.Add(NoLogoOption);
-        Options.Add(BannerOption);
-        Options.Add(WaitForDebuggerOption);
-        Options.Add(CliWaitForDebuggerOption);
+        foreach (var option in GlobalOptions)
+        {
+            Options.Add(option);
+        }
         if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
         {
             Options.Add(StartDebugSessionOption);
         }
-        Options.Add(CaptureProfileOption);
-        Options.Add(CaptureProfileOutputOption);
-        Options.Add(CaptureProfileDelayOption);
-        Options.Add(s_logFileOption);
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
         this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>
@@ -237,6 +238,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(addCommand);
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);
+        Subcommands.Add(completionsCommand);
         Subcommands.Add(cacheCommand);
         Subcommands.Add(certificatesCommand);
         Subcommands.Add(doctorCommand);

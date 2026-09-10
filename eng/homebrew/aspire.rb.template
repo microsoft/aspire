@@ -28,6 +28,13 @@ cask "aspire" do
 
   binary "aspire"
 
+  # Homebrew owns generation, replacement, and removal; no user profile is edited.
+  # An empty parameter prefix preserves Aspire's "pwsh" spelling.
+  # https://docs.brew.sh/Cask-Cookbook#stanza-generate_completions_from_executable
+  generate_completions_from_executable "aspire", "completions", "script",
+                                       shell_parameter_format: "",
+                                       shells:                 [:bash, :zsh, :fish, :pwsh]
+
   # The sidecar tells the CLI which install channel placed this binary, so
   # behaviors like self-update can route through `brew` instead of overwriting
   # the cask payload. See docs/specs/install-routes.md.

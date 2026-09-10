@@ -32,6 +32,9 @@ param(
     [Parameter(HelpMessage = "Do not add the install path to PATH environment variable (useful for portable installs)")]
     [switch]$SkipPath,
 
+    [Parameter(HelpMessage = "Do not generate or register PowerShell completions")]
+    [switch]$SkipCompletions,
+
     [Parameter(HelpMessage = "Show help message")]
     [switch]$Help
 )
@@ -145,10 +148,20 @@ PARAMETERS:
     -InstallExtension           Install VS Code extension along with the CLI
     -UseInsiders                Install extension to VS Code Insiders instead of VS Code (requires -InstallExtension)
     -SkipPath                   Do not add the install path to PATH environment variable (useful for portable installs)
+    -SkipCompletions            Do not generate or register PowerShell completions
     -KeepArchive                Keep downloaded archive files and temporary directory after installation
     -Help                       Show this help message
 
 ENVIRONMENT:
+    On PowerShell 7+, completions are generated in `$HOME/.aspire/completions and registered
+    in the current engine's CurrentUserAllHosts profile, only inside your home directory.
+    Older engines leave profiles untouched; open pwsh to configure completions manually.
+    -SkipPath generates an activation artifact without editing profiles. Elevated installs
+    and signed profiles require manual registration; AllSigned policy requires manual signing.
+    Restart PowerShell or run the printed activation command; aspire must be on PATH.
+    To remove, delete the generated file and the marked Aspire CLI completions profile entry.
+    Missing generated files are safe. Older CLIs get manual instructions instead.
+
     The script automatically updates the PATH environment variable for the current session.
 
     Windows: The script will also add the installation path to the user's persistent PATH
@@ -882,6 +895,155 @@ function Get-InstallPath {
     return [System.IO.Path]::GetFullPath($defaultPath)
 }
 
+# Reject paths outside HOME and reparse points that could redirect a write to a shared profile.
+function Test-UserCompletionPath {
+    param([string]$Path)
+
+    $homePath = [IO.Path]::GetFullPath($HOME).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    $comparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    if (-not $fullPath.StartsWith($homePath + [IO.Path]::DirectorySeparatorChar, $comparison)) {
+        return $false
+    }
+    $current = $fullPath
+    while (-not $current.Equals($homePath, $comparison)) {
+        $item = Get-Item -LiteralPath $current -Force -ErrorAction SilentlyContinue
+        if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            return $false
+        }
+        $current = [IO.Path]::GetDirectoryName($current)
+    }
+    return $true
+}
+
+function Test-ElevatedCompletionSession {
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        try {
+            $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+            return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        }
+        finally {
+            $identity.Dispose()
+        }
+    }
+    return [Environment]::UserName -eq 'root' -or $env:SUDO_USER -or $env:SUDO_UID
+}
+
+function Install-AspireCliCompletions {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CliPath,
+        [Parameter(Mandatory = $true)]
+        [bool]$Persist
+    )
+
+    if ($SkipCompletions) {
+        Write-Message "Skipping shell completions due to -SkipCompletions." -Level Info
+        return
+    }
+    # The installer supports PowerShell 4+, but the generated completions target PowerShell 7+.
+    # Do not guess another engine's profile or register a pwsh script in Windows PowerShell.
+    if ($PSVersionTable.PSVersion.Major -lt 7) {
+        Write-Message "Automatic shell completions require PowerShell 7 or later. The current profile was left untouched." -Level Warning
+        Write-Message "Open pwsh, put aspire on PATH, then run 'aspire completions script pwsh' and save/dot-source its successful output in pwsh." -Level Info
+        return
+    }
+    $stagingPath = $null
+    try {
+        if ($SkipPath) {
+            $Persist = $false
+        }
+        # Do not install unsigned generated code when policy requires signatures.
+        # Changing/bypassing execution policy is not an installer responsibility.
+        if ((Get-ExecutionPolicy) -eq 'AllSigned') {
+            Write-Message "AllSigned execution policy: leaving completion files and profiles untouched. Generate and sign 'aspire completions script pwsh' output manually before activation." -Level Warning
+            return
+        }
+        $completionDir = if ($Persist) { Join-Path $HOME '.aspire/completions' } else { Join-Path ([IO.Path]::GetDirectoryName($CliPath)) 'completions' }
+        $completionFile = Join-Path $completionDir 'aspire.ps1'
+        # A single-quoted PowerShell literal doubles apostrophes; $, backticks and spaces stay literal.
+        $quotedFile = "'" + $completionFile.Replace("'", "''") + "'"
+        $registration = "if (Test-Path -LiteralPath $quotedFile -PathType Leaf) { . $quotedFile } # Aspire CLI completions"
+        if (-not (Test-UserCompletionPath $completionFile)) {
+            throw "Completion files must be inside your home without symlink redirection."
+        }
+        if (-not $PSCmdlet.ShouldProcess($completionFile, "Generate PowerShell completions using '$CliPath completions script pwsh'")) {
+            if ($Persist -and $WhatIfPreference) {
+                Write-Message "[WhatIf] Would register completions in $($PROFILE.CurrentUserAllHosts) (only inside your home)." -Level Info
+            }
+            return
+        }
+        [IO.Directory]::CreateDirectory($completionDir) | Out-Null
+        $stagingPath = Join-Path $completionDir ('.aspire-completions-' + [Guid]::NewGuid().ToString('N'))
+        # Discard stderr and stage stdout so unsupported older CLIs cannot replace a working script.
+        # Use -LiteralPath for output: redirection to a path treats brackets as wildcard syntax.
+        $stream = [IO.File]::Open($stagingPath, [IO.FileMode]::CreateNew)
+        $stream.Dispose()
+        & $CliPath completions script pwsh 2> $null | Out-File -LiteralPath $stagingPath -Encoding utf8
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([IO.File]::ReadAllText($stagingPath))) {
+            throw "This CLI did not produce a completion script successfully."
+        }
+        if ([IO.File]::Exists($completionFile)) {
+            # PowerShell coerces $null to an empty string for this .NET overload.
+            [IO.File]::Replace($stagingPath, $completionFile, [NullString]::Value)
+        } else {
+            [IO.File]::Move($stagingPath, $completionFile)
+        }
+        Write-Message "PowerShell completions generated: $completionFile" -Level Info
+        Write-Message "Activate after putting aspire on PATH: $registration" -Level Info
+        Write-Message "To remove completions, delete $completionFile and its marked Aspire CLI completions profile entry." -Level Info
+        if (-not $Persist) {
+            Write-Message "Profile registration skipped: activate completions manually for this session." -Level Info
+            return
+        }
+        if (Test-ElevatedCompletionSession) {
+            Write-Message "Elevated install: leaving PowerShell profiles untouched. Activate completions from an unelevated pwsh session." -Level Warning
+            return
+        }
+        # Use the invoking edition's profile, not a hard-coded Documents/PowerShell path.
+        $profilePath = $PROFILE.CurrentUserAllHosts
+        if (-not $profilePath -or -not (Test-UserCompletionPath $profilePath)) {
+            throw "CurrentUserAllHosts is not a writable user-home profile."
+        }
+        if ($PSCmdlet.ShouldProcess($profilePath, "Register Aspire CLI completions")) {
+            [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($profilePath)) | Out-Null
+            $content = ''
+            $encoding = New-Object System.Text.UTF8Encoding($false)
+            if ([IO.File]::Exists($profilePath)) {
+                $reader = New-Object System.IO.StreamReader($profilePath, $true)
+                try {
+                    $content = $reader.ReadToEnd()
+                    $encoding = $reader.CurrentEncoding
+                } finally {
+                    $reader.Dispose()
+                }
+            }
+            # Authenticode appends this marker to signed PowerShell scripts. Even an invalid
+            # or expired signature should be preserved rather than invalidated by our append.
+            if ($content -match '(?m)^# SIG # Begin signature block\r?$') {
+                Write-Message "Signed PowerShell profile left untouched: $profilePath. Register completions manually and re-sign the profile if required by your execution policy." -Level Warning
+                return
+            }
+            if (($content -split '\r?\n') -notcontains $registration) {
+                # Append with the existing encoding (including Windows PowerShell UTF-16 profiles).
+                [IO.File]::AppendAllText($profilePath, [Environment]::NewLine + $registration + [Environment]::NewLine, $encoding)
+            }
+            Write-Message "Completions registered in $profilePath. Restart PowerShell or use the activation command above." -Level Info
+        }
+    }
+    catch [System.Management.Automation.RuntimeException] {
+        Write-Message "Shell completions were not installed; the CLI installation is unaffected. $($_.Exception.Message)" -Level Warning
+        Write-Message "With a supported CLI, run 'aspire completions script pwsh' and save/dot-source its successful output manually." -Level Info
+    }
+    finally {
+        if ($stagingPath -and [IO.File]::Exists($stagingPath)) {
+            Remove-Item -LiteralPath $stagingPath -Force -ErrorAction Continue
+        }
+    }
+}
+
 # Simplified PATH environment update
 function Update-PathEnvironment {
     [CmdletBinding(SupportsShouldProcess)]
@@ -1414,6 +1576,8 @@ function Start-AspireCliInstallation {
         } else {
             Update-PathEnvironment -InstallPath $resolvedInstallPath -TargetOS $targetOS
         }
+        $cliPath = Get-CliExecutablePath -DestinationPath $resolvedInstallPath -OS $targetOS
+        Install-AspireCliCompletions -CliPath $cliPath -Persist $true
     }
     catch {
         # Display clean error message without stack trace

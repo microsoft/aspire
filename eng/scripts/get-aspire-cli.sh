@@ -31,6 +31,7 @@ DRY_RUN=false
 INSTALL_EXTENSION=false
 USE_INSIDERS=false
 SKIP_PATH=false
+SKIP_COMPLETIONS=false
 DEFAULT_QUALITY="release"
 EXTENSION_ARTIFACT_NAME="aspire-vscode.vsix.zip"
 
@@ -62,10 +63,19 @@ USAGE:
     --install-extension         Install VS Code extension along with the CLI
     --use-insiders              Install extension to VS Code Insiders instead of VS Code (requires --install-extension)
     --skip-path                 Do not add the install path to PATH environment variable (useful for portable installs)
+    --skip-completions          Do not generate or register shell completions
     -k, --keep-archive          Keep downloaded archive files and temporary directory after installation
     --dry-run                   Show what would be done without actually performing any actions
     -v, --verbose               Enable verbose output
     -h, --help                  Show this help message
+
+COMPLETIONS:
+    Installs completions for bash, zsh, or fish (selected by SHELL) in your home directory.
+    --skip-path generates an activation artifact without editing profiles.
+    Elevated installs leave profiles untouched; activate from an unelevated shell.
+    Restart your shell or run the printed source command to activate; aspire must be on PATH.
+    To remove, delete the generated file and the marked Aspire CLI completions profile entry.
+    Missing generated files are safe. Unsupported shells/older CLIs get manual instructions.
 
 EXAMPLES:
     ./get-aspire-cli.sh
@@ -145,6 +155,10 @@ parse_args() {
                 ;;
             --skip-path)
                 SKIP_PATH=true
+                shift
+                ;;
+            --skip-completions)
+                SKIP_COMPLETIONS=true
                 shift
                 ;;
             -k|--keep-archive)
@@ -584,11 +598,152 @@ add_to_path()
     fi
 }
 
+# Shell single-quoted literals: /home/it's $here becomes '/home/it'\''s $here'.
+# Fish uses backslash escaping inside single quotes instead of POSIX quote concatenation.
+quote_shell_literal() {
+    local value="$1"
+    if [[ "$2" == fish ]]; then
+        value="${value//\\/\\\\}"
+        value="${value//\'/\\\'}"
+    else
+        value="${value//\'/\'\\\'\'}"
+    fi
+    printf "'%s'" "$value"
+}
+
+# Never follow a profile/file symlink or a directory symlink outside the user's home.
+# ZDOTDIR and XDG_CONFIG_HOME can point to shared/system locations.
+is_user_completion_path() {
+    local path="$1" home="${HOME%/}" parent
+    [[ -n "$home" && "$path" == "$home/"* && "$path" != *"/../"* && "$path" != *"/./"* && ! -L "$path" && ! -d "$path" ]] || return 1
+    parent=$(dirname "$path")
+    while [[ ! -d "$parent" ]]; do
+        [[ ! -L "$parent" ]] || return 1
+        parent=$(dirname "$parent")
+    done
+    home=$(cd "$home" && pwd -P) || return 1
+    parent=$(cd "$parent" && pwd -P) || return 1
+    [[ "$parent" == "$home" || "$parent" == "$home/"* ]]
+}
+
+is_elevated_install() {
+    [[ "$EUID" == 0 || -n "${SUDO_USER:-}" || -n "${SUDO_UID:-}" ]]
+}
+
+install_completions() {
+    if [[ "${SKIP_COMPLETIONS:-false}" == true ]]; then
+        say_info "Skipping shell completions due to --skip-completions."
+        return 0
+    fi
+    # Completion setup is best effort: an older or cross-target CLI must not fail installation.
+    local persist="$2"
+    if [[ "${SKIP_PATH:-false}" == true ]]; then
+        persist=false
+    fi
+    if ! install_completions_core "$1" "$persist"; then
+        say_warn "Shell completions were not installed; the CLI installation is unaffected."
+        say_info "With a supported CLI, run 'aspire completions script <shell>' (bash, zsh, fish, pwsh) and save/source its successful output manually."
+    fi
+}
+
+install_completions_core() {
+    local cli="$1" persist="$2" shell_name="${SHELL:-}"
+    shell_name="${shell_name##*/}"
+    local completion_dir="$HOME/.aspire/completions" profile="" registration
+    case "$shell_name" in
+        bash) profile="$HOME/.bashrc" ;;
+        zsh) profile="${ZDOTDIR:-$HOME}/.zshrc" ;;
+        fish) profile="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/aspire-completions.fish" ;;
+        *) say_warn "Cannot detect a supported completion shell from SHELL=${SHELL:-unset}."; return 1 ;;
+    esac
+    if [[ "$persist" != true ]]; then
+        completion_dir="$(dirname "$cli")/completions"
+    fi
+    local completion_file="$completion_dir/aspire.$shell_name" quoted_file
+    quoted_file=$(quote_shell_literal "$completion_file" "$shell_name")
+    if [[ "$shell_name" == fish ]]; then
+        registration="if test -f $quoted_file; source $quoted_file; end # Aspire CLI completions"
+    else
+        registration="if [ -f $quoted_file ]; then . $quoted_file; fi # Aspire CLI completions"
+    fi
+    local profiles=("$profile") new_login_profile=""
+    if [[ "$shell_name" == bash ]]; then
+        # Interactive non-login bash reads .bashrc; login bash (e.g. macOS Terminal)
+        # reads only the first existing login profile. Do not assume it sources .bashrc.
+        local login_profile="$HOME/.bash_profile"
+        if [[ ! -f "$login_profile" ]]; then
+            if [[ -f "$HOME/.bash_login" ]]; then
+                login_profile="$HOME/.bash_login"
+            elif [[ -f "$HOME/.profile" ]]; then
+                login_profile="$HOME/.profile"
+            else
+                new_login_profile="$login_profile"
+            fi
+        fi
+        profiles+=("$login_profile")
+        # .profile can also be read by non-bash shells.
+        registration="if [ -n \"\${BASH_VERSION:-}\" ] && [ -f $quoted_file ]; then . $quoted_file; fi # Aspire CLI completions"
+    fi
+    is_user_completion_path "$completion_file" || return 1
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] Would generate shell completions: $cli completions script $shell_name -> $completion_file"
+        if [[ "$persist" == true ]]; then
+            for profile in "${profiles[@]}"; do
+                say_info "[DRY RUN] Would register shell completions in: $profile (only inside your home)"
+            done
+        fi
+        return 0
+    fi
+    mkdir -p "$completion_dir" || return 1
+    # Stage stdout separately from stderr and promote only successful, nonempty output.
+    # A private adjacent directory avoids clobbering a working script with old-CLI errors.
+    local staging="$completion_dir/.aspire-completions-$$-$RANDOM"
+    (umask 077; mkdir "$staging") || return 1
+    if ! "$cli" completions script "$shell_name" > "$staging/script" 2> "$staging/error" || [[ ! -s "$staging/script" ]]; then
+        rm -rf "$staging"
+        return 1
+    fi
+    if ! mv -f "$staging/script" "$completion_file"; then
+        rm -rf "$staging"
+        return 1
+    fi
+    rm -rf "$staging"
+    say_info "Shell completions generated: $completion_file"
+    say_info "Activate after putting aspire on PATH: $registration"
+    say_info "To remove completions, delete $completion_file and its marked Aspire CLI completions profile entry."
+    if [[ "$persist" != true ]]; then
+        say_info "Profile registration skipped: activate completions manually for this session."
+        return 0
+    fi
+    if is_elevated_install; then
+        say_warn "Elevated install: leaving shell profiles untouched. Activate completions from an unelevated shell."
+        return 0
+    fi
+    for profile in "${profiles[@]}"; do
+        is_user_completion_path "$profile" || return 1
+        mkdir -p "$(dirname "$profile")" || return 1
+        if [[ "$profile" == "$new_login_profile" && ! -f "$profile" ]]; then
+            # The PATH installer writes .bashrc. A new login profile must source it,
+            # otherwise login shells would have completions but no aspire on PATH.
+            printf '%s\n' 'if [ -f "$HOME/.bashrc" ]; then . "$HOME/.bashrc"; fi # Added by get-aspire-cli.sh' >> "$profile" || return 1
+        fi
+        if [[ ! -f "$profile" ]] || ! grep -Fxq "$registration" "$profile"; then
+            printf '\n%s\n' "$registration" >> "$profile" || return 1
+        fi
+        say_info "Shell completions registered in $profile. Restart your shell or use the activation command above."
+    done
+}
+
 # Function to add PATH to shell profile
 add_to_shell_profile() {
     local bin_path="$1"
     local bin_path_unexpanded="$2"
     local xdg_config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+    if is_elevated_install; then
+        say_warn "Elevated install: leaving shell profiles untouched. Configure PATH from an unelevated shell."
+        return 0
+    fi
 
     # Detect the current shell
     local shell_name
@@ -616,23 +771,23 @@ add_to_shell_profile() {
 
     say_verbose "Detected shell: $shell_name"
 
-    local config_files
+    local config_files=()
     case "$shell_name" in
         bash)
-            config_files="$HOME/.bashrc $HOME/.bash_profile $HOME/.profile $xdg_config_home/bash/.bashrc $xdg_config_home/bash/.bash_profile"
+            config_files=("$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile" "$xdg_config_home/bash/.bashrc" "$xdg_config_home/bash/.bash_profile")
             ;;
         zsh)
-            config_files="$HOME/.zshrc $HOME/.zshenv $xdg_config_home/zsh/.zshrc $xdg_config_home/zsh/.zshenv"
+            config_files=("${ZDOTDIR:-$HOME}/.zshrc")
             ;;
         fish)
-            config_files="$HOME/.config/fish/config.fish"
+            config_files=("$xdg_config_home/fish/config.fish")
             ;;
         sh)
-            config_files="$HOME/.profile /etc/profile"
+            config_files=("$HOME/.profile")
             ;;
         *)
             # Default to bash files for unknown shells
-            config_files="$HOME/.bashrc $HOME/.bash_profile $HOME/.profile"
+            config_files=("$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile")
             ;;
     esac
 
@@ -640,7 +795,7 @@ add_to_shell_profile() {
     local config_file=""
 
     # Check for existing config files
-    for file in $config_files; do
+    for file in "${config_files[@]}"; do
         if [[ -f "$file" ]]; then
             config_file="$file"
             break
@@ -657,10 +812,10 @@ add_to_shell_profile() {
                 config_file="$HOME/.bashrc"
                 ;;
             zsh)
-                config_file="$HOME/.zshrc"
+                config_file="${ZDOTDIR:-$HOME}/.zshrc"
                 ;;
             fish)
-                config_file="$HOME/.config/fish/config.fish"
+                config_file="$xdg_config_home/fish/config.fish"
                 ;;
             sh)
                 config_file="$HOME/.profile"
@@ -672,6 +827,11 @@ add_to_shell_profile() {
         esac
 
         say_verbose "Attempting to create config file: $config_file"
+
+        if ! is_user_completion_path "$config_file"; then
+            say_warn "Leaving profile outside your home or redirected by a symlink untouched: $config_file"
+            return 0
+        fi
 
         if [[ "$DRY_RUN" == true ]]; then
             say_info "[DRY RUN] Would create config file: $config_file"
@@ -700,12 +860,24 @@ add_to_shell_profile() {
         fi
     fi
 
+    if ! is_user_completion_path "$config_file"; then
+        say_warn "Leaving profile outside your home or redirected by a symlink untouched: $config_file"
+        return 0
+    fi
+
+    # Keep the default relocatable HOME expression, but quote arbitrary custom paths literally.
+    local path_expression
+    if [[ "$bin_path_unexpanded" == '$HOME/.aspire/bin' ]]; then
+        path_expression='export PATH="$HOME/.aspire/bin:$PATH"'
+    else
+        path_expression="export PATH=$(quote_shell_literal "$bin_path" "$shell_name"):\$PATH"
+    fi
     case "$shell_name" in
         bash|zsh|sh)
-            add_to_path "$config_file" "$bin_path" "export PATH=\"$bin_path_unexpanded:\$PATH\""
+            add_to_path "$config_file" "$bin_path" "$path_expression"
             ;;
         fish)
-            add_to_path "$config_file" "$bin_path" "fish_add_path $bin_path_unexpanded"
+            add_to_path "$config_file" "$bin_path" "fish_add_path $(quote_shell_literal "$bin_path" fish)"
             ;;
         *)
             say_error "Unsupported shell type $shell_name. Please add the path $bin_path_unexpanded manually to \$PATH in your profile."
@@ -714,7 +886,7 @@ add_to_shell_profile() {
     esac
 
     printf "\nTo use the Aspire CLI in new terminal sessions, restart your terminal or run:\n"
-    say_info "  source $config_file"
+    say_info "  source $(quote_shell_literal "$config_file" "$shell_name")"
 
     return 0
 }
@@ -1207,6 +1379,8 @@ main() {
     else
         say_info "Skipping PATH configuration due to --skip-path flag"
     fi
+
+    install_completions "$INSTALLED_CLI_PATH" true
 }
 
 # Only run main when executed directly (not when sourced for unit tests).

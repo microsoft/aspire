@@ -1,0 +1,16 @@
+﻿# Bash completion for Aspire. Source this file from ~/.bashrc.
+_aspire_complete()
+{
+    local line suggestion word
+    local LC_ALL=C
+    COMPREPLY=()
+    line="${COMP_LINE:0:COMP_POINT}"
+    word="${COMP_WORDS[COMP_CWORD]}"
+    while IFS= read -r suggestion; do
+        [[ -n "$suggestion" ]] || continue
+        [[ "$suggestion" == "$word"* ]] || continue
+        printf -v suggestion '%q' "$suggestion"
+        COMPREPLY+=("$suggestion")
+    done < <(command aspire '[suggest]' "$line" 2>/dev/null)
+}
+complete -o default -F _aspire_complete aspire

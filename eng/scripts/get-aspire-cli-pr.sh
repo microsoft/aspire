@@ -46,6 +46,7 @@ HIVE_ONLY=false
 SKIP_EXTENSION_INSTALL=false
 USE_INSIDERS=false
 SKIP_PATH=false
+SKIP_COMPLETIONS=false
 HOST_OS="unset"
 
 # Function to show help
@@ -98,10 +99,16 @@ USAGE:
     --skip-extension.           Skip VS Code extension download and installation
     --use-insiders              Install extension to VS Code Insiders instead of VS Code
     --skip-path                 Do not add the install path to PATH environment variable (useful for portable installs)
+    --skip-completions          Do not generate shell completion artifacts
     -v, --verbose               Enable verbose output
     -k, --keep-archive          Keep downloaded archive files after installation
     --dry-run                   Show what would be done without performing actions
     -h, --help                  Show this help message
+
+COMPLETIONS:
+    Archive installs generate bash, zsh, or fish completions (selected by SHELL) beside the CLI.
+    Profiles are not changed: run the printed source command after putting this CLI on PATH.
+    Delete the generated file to remove completions. Package-manager modes do not configure them.
 
 EXAMPLES:
     ./get-aspire-cli-pr.sh 1234
@@ -280,6 +287,10 @@ parse_args() {
                 ;;
             --skip-path)
                 SKIP_PATH=true
+                shift
+                ;;
+            --skip-completions)
+                SKIP_COMPLETIONS=true
                 shift
                 ;;
             --dry-run)
@@ -529,6 +540,87 @@ add_to_path()
     fi
 }
 
+# Shell single-quoted literals: /home/it's $here becomes '/home/it'\''s $here'.
+# Fish uses backslash escaping inside single quotes instead of POSIX quote concatenation.
+quote_shell_literal() {
+    local value="$1"
+    if [[ "$2" == fish ]]; then
+        value="${value//\\/\\\\}"
+        value="${value//\'/\\\'}"
+    else
+        value="${value//\'/\'\\\'\'}"
+    fi
+    printf "'%s'" "$value"
+}
+
+# Never follow a profile/file symlink or a directory symlink outside the user's home.
+# ZDOTDIR and XDG_CONFIG_HOME can point to shared/system locations.
+is_user_completion_path() {
+    local path="$1" home="${HOME%/}" parent
+    [[ -n "$home" && "$path" == "$home/"* && "$path" != *"/../"* && "$path" != *"/./"* && ! -L "$path" && ! -d "$path" ]] || return 1
+    parent=$(dirname "$path")
+    while [[ ! -d "$parent" ]]; do
+        [[ ! -L "$parent" ]] || return 1
+        parent=$(dirname "$parent")
+    done
+    home=$(cd "$home" && pwd -P) || return 1
+    parent=$(cd "$parent" && pwd -P) || return 1
+    [[ "$parent" == "$home" || "$parent" == "$home/"* ]]
+}
+
+install_completions() {
+    if [[ "${SKIP_COMPLETIONS:-false}" == true ]]; then
+        say_info "Skipping shell completions due to --skip-completions."
+        return 0
+    fi
+    # Completion setup is best effort: an older or cross-target CLI must not fail installation.
+    if ! install_completions_core "$1"; then
+        say_warn "Shell completions were not installed; the CLI installation is unaffected."
+        say_info "With a supported CLI, run 'aspire completions script <shell>' (bash, zsh, fish, pwsh) and save/source its successful output manually."
+    fi
+}
+
+install_completions_core() {
+    local cli="$1" shell_name="${SHELL:-}"
+    shell_name="${shell_name##*/}"
+    case "$shell_name" in
+        bash|zsh|fish) ;;
+        *) say_warn "Cannot detect a supported completion shell from SHELL=${SHELL:-unset}."; return 1 ;;
+    esac
+    local completion_dir="$(dirname "$cli")/completions"
+    local completion_file="$completion_dir/aspire.$shell_name" quoted_file registration
+    quoted_file=$(quote_shell_literal "$completion_file" "$shell_name")
+    if [[ "$shell_name" == fish ]]; then
+        registration="if test -f $quoted_file; source $quoted_file; end"
+    else
+        registration="if [ -f $quoted_file ]; then . $quoted_file; fi"
+    fi
+    is_user_completion_path "$completion_file" || return 1
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] Would generate shell completions: $cli completions script $shell_name -> $completion_file"
+        say_info "Activate after putting aspire on PATH: $registration"
+        return 0
+    fi
+    mkdir -p "$completion_dir" || return 1
+    # Stage stdout separately from stderr and promote only successful, nonempty output.
+    # A private adjacent directory avoids clobbering a working script with old-CLI errors.
+    local staging="$completion_dir/.aspire-completions-$$-$RANDOM"
+    (umask 077; mkdir "$staging") || return 1
+    if ! "$cli" completions script "$shell_name" > "$staging/script" 2> "$staging/error" || [[ ! -s "$staging/script" ]]; then
+        rm -rf "$staging"
+        return 1
+    fi
+    if ! mv -f "$staging/script" "$completion_file"; then
+        rm -rf "$staging"
+        return 1
+    fi
+    rm -rf "$staging"
+    say_info "Shell completions generated: $completion_file"
+    say_info "Activate after putting aspire on PATH: $registration"
+    say_info "Dogfood install: leaving shell profiles untouched; activate completions manually for this session."
+    say_info "To remove completions, delete $completion_file."
+}
+
 # Function to add PATH to shell profile
 add_to_shell_profile() {
     local bin_path="$1"
@@ -573,7 +665,7 @@ add_to_shell_profile() {
             config_files="$HOME/.config/fish/config.fish"
             ;;
         sh)
-            config_files="$HOME/.profile /etc/profile"
+            config_files="$HOME/.profile"
             ;;
         *)
             # Default to bash files for unknown shells
@@ -1923,6 +2015,15 @@ main() {
                 fi
             fi
         fi
+    fi
+
+    # Package managers own their integration; archive dogfood never registers a profile.
+    if [[ "$HIVE_ONLY" != true && "$INSTALL_MODE" == archive ]]; then
+        local completion_cli="$cli_install_dir/aspire"
+        if [[ "${OS_ARG:-$HOST_OS}" == win ]]; then
+            completion_cli="$cli_install_dir/aspire.exe"
+        fi
+        install_completions "$completion_cli"
     fi
 
     # Print PATH activation hint for PR installs.

@@ -10,6 +10,26 @@ Aspire CLI is distributed via [Homebrew Cask](https://docs.brew.sh/Cask-Cookbook
 brew install --cask aspire              # stable
 ```
 
+## Shell completion
+
+The cask uses Homebrew's native
+[`generate_completions_from_executable`](https://docs.brew.sh/Cask-Cookbook#stanza-generate_completions_from_executable)
+artifact for Bash, Zsh, Fish, and PowerShell. Use a current Homebrew version with
+this cask DSL. Generation is offline and does not depend on the postflight sidecar.
+The empty `shell_parameter_format` preserves Aspire's `pwsh` argument (Homebrew's
+default translates it to `powershell`).
+
+Homebrew regenerates these files on install/upgrade and removes them on uninstall.
+It does not edit user profiles; PowerShell in particular needs explicit dot-sourcing.
+See the [CLI shell completion guide](../../src/Aspire.Cli/README.md#shell-completion)
+for activation, conventional locations, and removal. There is no completion-specific
+Homebrew opt-out; `--no-binaries` does not disable generated completion artifacts.
+LiveRelease validation checks that all four generated files exist after install and
+are removed on uninstall.
+
+Changing this template does not update an already-submitted upstream cask:
+the initial/upstream cask change must include the generation stanza, not just a version bump.
+
 ## Contents
 
 | File | Description |

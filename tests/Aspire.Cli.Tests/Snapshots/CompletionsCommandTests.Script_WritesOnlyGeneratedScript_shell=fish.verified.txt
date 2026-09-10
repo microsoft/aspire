@@ -1,0 +1,9 @@
+﻿# Fish completion for Aspire. Save as ~/.config/fish/completions/aspire.fish.
+# Reload the implementation without accumulating completion registrations.
+if not functions --query __aspire_complete
+    complete --command aspire --arguments '(__aspire_complete)'
+end
+function __aspire_complete
+    set -l line (commandline --current-process --cut-at-cursor)
+    command aspire '[suggest]' "$line" 2>/dev/null
+end

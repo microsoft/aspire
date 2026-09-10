@@ -45,6 +45,7 @@ public class ScriptFunctionCommand : ToolCommand
         // ${XDG_CONFIG_HOME:-$HOME/.config} from reading a real profile
         // outside the temp home when the developer has XDG_CONFIG_HOME set.
         WithEnvironmentVariable("XDG_CONFIG_HOME", Path.Combine(_testEnvironment.MockHome, ".config"));
+        WithEnvironmentVariable("ZDOTDIR", _testEnvironment.MockHome);
 
         // Default timeout to prevent hanging tests — individual tests can override via WithTimeout()
         WithTimeout(TimeSpan.FromSeconds(60));
@@ -108,6 +109,10 @@ public class ScriptFunctionCommand : ToolCommand
             # Restore original shell options
             eval "$_saved_opts" 2>/dev/null || true
             eval "$_saved_shopt" 2>/dev/null || true
+
+            # Profile tests use an isolated home, independent of whether the test host runs as root.
+            # Elevation-specific tests override this fake explicitly.
+            is_elevated_install() { return 1; }
 
             {{_functionExpression}}
             """;

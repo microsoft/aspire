@@ -210,6 +210,20 @@ if [[ "$VALIDATION_MODE" == "LiveRelease" ]]; then
   test_tap_root="$(brew --repository)/Library/Taps/local/homebrew-aspire-test"
   test_cask_ref="$test_tap_name/$CASK_NAME"
   test_cask_installed=false
+  brew_prefix="$(brew --prefix)"
+  completion_files=(
+    "$brew_prefix/etc/bash_completion.d/aspire"
+    "$brew_prefix/share/zsh/site-functions/_aspire"
+    "$brew_prefix/share/fish/vendor_completions.d/aspire.fish"
+    "$brew_prefix/share/pwsh/completions/_aspire.ps1"
+  )
+
+  for completion_file in "${completion_files[@]}"; do
+    if [[ -e "$completion_file" ]]; then
+      echo "Error: completion file already exists before install: $completion_file" >&2
+      exit 1
+    fi
+  done
 
   cleanup_test_install() {
     if [[ "$test_cask_installed" == true ]]; then
@@ -236,8 +250,24 @@ if [[ "$VALIDATION_MODE" == "LiveRelease" ]]; then
   aspire_version="$(aspire --version 2>&1)"
   echo "  Version: $aspire_version"
 
+  # The native completion artifact warns on generation failures without necessarily failing
+  # installation. Assert its output separately so a successful install cannot hide a regression.
+  for completion_file in "${completion_files[@]}"; do
+    if [[ ! -s "$completion_file" ]]; then
+      echo "Error: completion file missing or empty after install: $completion_file" >&2
+      exit 1
+    fi
+  done
+
   brew uninstall --cask "$test_cask_ref"
   test_cask_installed=false
+
+  for completion_file in "${completion_files[@]}"; do
+    if [[ -e "$completion_file" ]]; then
+      echo "Error: completion file still exists after uninstall: $completion_file" >&2
+      exit 1
+    fi
+  done
 
   if command -v aspire >/dev/null 2>&1; then
     echo "Error: aspire command still found in PATH after uninstall." >&2
