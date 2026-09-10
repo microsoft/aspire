@@ -28,6 +28,7 @@
   },
   "overrides": {
     "uuid": "$uuid",
-    "body-parser": "1.20.6"
+    "body-parser": "1.20.6",
+    "qs": "6.16.0"
   }
 }
