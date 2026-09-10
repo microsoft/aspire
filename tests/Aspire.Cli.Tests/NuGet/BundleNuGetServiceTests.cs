@@ -742,6 +742,46 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetNuGetSettingsAsync_ReturnsAuditSourceForExactRedaction()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var marker = $"audit-redaction-marker-{Guid.NewGuid():N}";
+        var sensitiveAuditSource = CreateSensitiveSource(marker);
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "NuGet.Config"),
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="packages" value="https://packages.example.invalid/v3/index.json" />
+              </packageSources>
+              <auditSources>
+                <clear />
+                <add key="audit" value="{sensitiveAuditSource}" />
+              </auditSources>
+            </configuration>
+            """);
+        var service = CreateServiceWithActualManagedHelper(
+            NullLogger<BundleNuGetService>.Instance,
+            new byte[NuGetSourceIdentity.KeySizeInBytes]);
+
+        var settings = await service.GetNuGetSettingsAsync(
+            appHostDirectory.FullName,
+            TestContext.Current.CancellationToken);
+        var diagnostic = $"warning NU1900: Error occurred while getting package vulnerability data: {sensitiveAuditSource}";
+        var redactedDiagnostic = PackageSourceRedactor.RedactOccurrences(
+            diagnostic,
+            settings.SensitiveSourceValues);
+
+        Assert.Equal([sensitiveAuditSource], settings.SensitiveSourceValues);
+        Assert.Contains(PackageSourceRedactor.RedactForDisplay(sensitiveAuditSource), redactedDiagnostic);
+        Assert.DoesNotContain(marker, redactedDiagnostic, StringComparison.Ordinal);
+        Assert.DoesNotContain(sensitiveAuditSource, redactedDiagnostic, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task WriteNuGetConfigOverlayAsync_UsesBundledHelperAndDeletesRequest()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

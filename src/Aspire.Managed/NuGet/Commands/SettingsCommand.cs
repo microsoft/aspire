@@ -41,13 +41,14 @@ internal static class SettingsCommand
             workingDirectory,
             configFileName: null,
             new XPlatMachineWideSetting());
-        var packageSources = new PackageSourceProvider(settings)
-            .LoadPackageSources()
-            .ToArray();
+        var packageSourceProvider = new PackageSourceProvider(settings);
+        var packageSources = packageSourceProvider.LoadPackageSources().ToArray();
+        var auditSources = packageSourceProvider.LoadAuditSources().ToArray();
         var sources = packageSources
             .Select(source => CreateSourceResult(source, identityKey))
             .ToArray();
         var sensitiveSourceValues = packageSources
+            .Concat(auditSources)
             .Select(static source => source.Source)
             .Where(NuGetSourceIdentity.HasCredentialMaterial)
             .Distinct(StringComparer.Ordinal)

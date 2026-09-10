@@ -409,6 +409,40 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
     }
 
     [Fact]
+    public void SettingsCommand_ReturnsCredentialBearingAuditSourceLocationsForExactRedaction()
+    {
+        const string credential = "fake-audit-token";
+        const string packageSource = "https://packages.example.invalid/v3/index.json";
+        const string auditSource = $"https://audit.example.invalid/v3/index.json?sig={credential}";
+        File.WriteAllText(
+            Path.Combine(_workspace.Path, "NuGet.Config"),
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="packages" value="{packageSource}" />
+              </packageSources>
+              <auditSources>
+                <clear />
+                <add key="audit" value="{auditSource}" />
+              </auditSources>
+            </configuration>
+            """);
+
+        var settings = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
+        var serializedSettings = JsonSerializer.Serialize(
+            settings,
+            SettingsJsonContext.Default.NuGetSettingsResult);
+
+        var source = Assert.Single(settings.Sources);
+        Assert.Equal("packages", source.Name);
+        Assert.Equal(NuGetSourceIdentity.Compute(packageSource, s_sourceIdentityKey), source.Identity);
+        Assert.Equal([auditSource], settings.SensitiveSourceValues);
+        Assert.Contains(credential, serializedSettings);
+        Assert.Contains(auditSource, serializedSettings);
+    }
+
+    [Fact]
     public void SettingsCommand_ReportsSourceCredentialCapabilityWithoutReturningCredentials()
     {
         var credentialMarker = $"credential-marker-{Guid.NewGuid():N}";
