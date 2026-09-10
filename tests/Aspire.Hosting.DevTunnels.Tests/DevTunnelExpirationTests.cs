@@ -11,49 +11,42 @@ namespace Aspire.Hosting.DevTunnels.Tests;
 public class DevTunnelExpirationTests
 {
     [Fact]
-    public void Expiration_DefaultsToNullAndCanBeCleared()
+    public void ExpirationHours_DefaultsToNullAndCanBeCleared()
     {
         var options = new DevTunnelOptions();
-        Assert.Null(options.Expiration);
+        Assert.Null(options.ExpirationHours);
 
-        options.Expiration = TimeSpan.FromDays(1);
-        options.Expiration = null;
+        options.ExpirationHours = 24;
+        options.ExpirationHours = null;
 
-        Assert.Null(options.Expiration);
+        Assert.Null(options.ExpirationHours);
     }
 
     [Theory]
     [InlineData(1)]
     [InlineData(25)]
     [InlineData(720)]
-    public void Expiration_AcceptsWholeHoursWithinRange(int hours)
+    public void ExpirationHours_AcceptsValuesWithinRange(int hours)
     {
-        var expiration = TimeSpan.FromHours(hours);
-        var options = new DevTunnelOptions { Expiration = expiration };
+        var options = new DevTunnelOptions { ExpirationHours = hours };
 
-        Assert.Equal(expiration, options.Expiration);
+        Assert.Equal(hours, options.ExpirationHours);
     }
 
     [Theory]
-    [InlineData(long.MinValue)]
-    [InlineData(-TimeSpan.TicksPerHour)]
+    [InlineData(int.MinValue)]
     [InlineData(0)]
-    [InlineData(TimeSpan.TicksPerHour - 1)]
-    [InlineData(TimeSpan.TicksPerHour + 1)]
-    [InlineData(TimeSpan.TicksPerHour + TimeSpan.TicksPerMinute)]
-    [InlineData(TimeSpan.TicksPerHour + TimeSpan.TicksPerHour / 2)]
-    [InlineData(30 * TimeSpan.TicksPerDay + 1)]
-    [InlineData(long.MaxValue)]
-    public void Expiration_RejectsInvalidValuesWithoutChangingOptions(long ticks)
+    [InlineData(721)]
+    [InlineData(int.MaxValue)]
+    public void ExpirationHours_RejectsInvalidValuesWithoutChangingOptions(int hours)
     {
-        var options = new DevTunnelOptions { Expiration = TimeSpan.FromDays(1) };
-        var expiration = TimeSpan.FromTicks(ticks);
+        var options = new DevTunnelOptions { ExpirationHours = 24 };
 
-        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => options.Expiration = expiration);
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => options.ExpirationHours = hours);
 
         Assert.Equal("value", exception.ParamName);
-        Assert.Equal(expiration, exception.ActualValue);
-        Assert.Equal(TimeSpan.FromDays(1), options.Expiration);
+        Assert.Equal(hours, exception.ActualValue);
+        Assert.Equal(24, options.ExpirationHours);
     }
 
     [Theory]
@@ -70,7 +63,7 @@ public class DevTunnelExpirationTests
         var result = tunnel.WithExpiration(hours);
 
         Assert.Same(tunnel, result);
-        Assert.Equal(TimeSpan.FromHours(hours), tunnel.Resource.Options.Expiration);
+        Assert.Equal(hours, tunnel.Resource.Options.ExpirationHours);
     }
 
     [Fact]
@@ -96,7 +89,7 @@ public class DevTunnelExpirationTests
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() => tunnel.WithExpiration(hours));
 
         Assert.Equal("expirationHours", exception.ParamName);
-        Assert.Null(tunnel.Resource.Options.Expiration);
+        Assert.Null(tunnel.Resource.Options.ExpirationHours);
     }
 
     [Theory]
@@ -112,7 +105,7 @@ public class DevTunnelExpirationTests
         cli.EnqueueUpdateResult(0);
         var options = new DevTunnelOptions
         {
-            Expiration = hours is { } value ? TimeSpan.FromHours(value) : null
+            ExpirationHours = hours
         };
 
         await cli.CreateTunnelAsync("mytunnel", options);
@@ -144,7 +137,7 @@ public class DevTunnelExpirationTests
             var cli = new TestDevTunnelCli();
             cli.EnqueueCreateResult(0);
             cli.EnqueueUpdateResult(0);
-            var options = new DevTunnelOptions { Expiration = TimeSpan.FromHours(25) };
+            var options = new DevTunnelOptions { ExpirationHours = 25 };
 
             await cli.CreateTunnelAsync("mytunnel", options);
             await cli.UpdateTunnelAsync("mytunnel", options);
@@ -170,7 +163,7 @@ public class DevTunnelExpirationTests
         var options = new DevTunnelOptions
         {
             Region = DevTunnelRegion.NorthEurope,
-            Expiration = hours is { } value ? TimeSpan.FromHours(value) : null
+            ExpirationHours = hours
         };
 
         var tunnel = await client.CreateTunnelAsync("mytunnel", options);
@@ -182,7 +175,7 @@ public class DevTunnelExpirationTests
     [Fact]
     public async Task ToLoggerString_IncludesExpiration()
     {
-        var options = new DevTunnelOptions { Expiration = TimeSpan.FromDays(1) };
+        var options = new DevTunnelOptions { ExpirationHours = 24 };
 
         await Verify(options.ToLoggerString());
     }

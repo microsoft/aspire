@@ -396,7 +396,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
         ArgumentOutOfRangeException.ThrowIfLessThan(expirationHours, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(expirationHours, 30 * 24);
 
-        tunnelBuilder.Resource.Options.Expiration = TimeSpan.FromHours(expirationHours);
+        tunnelBuilder.Resource.Options.ExpirationHours = expirationHours;
 
         return tunnelBuilder;
     }

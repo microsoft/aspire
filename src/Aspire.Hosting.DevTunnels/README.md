@@ -135,7 +135,7 @@ var tunnel = builder.AddDevTunnel("mytunnel")
                     .WithReference(web);
 ```
 
-Alternatively, set `Expiration` on `DevTunnelOptions` when calling `AddDevTunnel`.
+Alternatively, set `ExpirationHours` on `DevTunnelOptions` when calling `AddDevTunnel`.
 
 **TypeScript**
 

@@ -396,8 +396,8 @@ internal class DevTunnelCli
     }
 
     private static string? GetExpirationArgument(DevTunnelOptions options)
-        => options.Expiration is { } expiration
-            ? (expiration.Ticks / TimeSpan.TicksPerHour).ToString(CultureInfo.InvariantCulture) + "h"
+        => options.ExpirationHours is { } expirationHours
+            ? expirationHours.ToString(CultureInfo.InvariantCulture) + "h"
             : null;
 
     private static string? GetServiceUri(DevTunnelOptions options)
