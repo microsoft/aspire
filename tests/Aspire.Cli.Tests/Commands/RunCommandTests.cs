@@ -436,11 +436,11 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_WhenCancelledDuringBuild_AwaitsRunCleanupBeforeExit()
+    public async Task RunCommand_WhenExtensionStopsCliDuringBuild_AwaitsRunCleanupPastLocalTimeout()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var cts = new CancellationTokenSource();
         var interactionService = new TestInteractionService();
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(5));
 
         var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
         var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
@@ -483,6 +483,88 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.ProjectLocatorFactory = _ => projectLocator;
             options.AppHostProjectFactory = _ => projectFactory;
+            options.TimeProvider = timeProvider;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var cancellationManager = provider.GetRequiredService<ConsoleCancellationManager>();
+        var rpcTarget = provider.GetRequiredService<IExtensionRpcTarget>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+        var pendingCommand = result.InvokeAsync(cancellationToken: cancellationManager.Token);
+
+        await buildStarted.Task.DefaultTimeout();
+        await rpcTarget.StopCliAsync();
+        await cleanupStarted.Task.DefaultTimeout();
+
+        // The old path armed the five-second local startup-cancellation timeout here. Advance beyond
+        // that boundary and confirm manager-owned cancellation still keeps the handler attached to the
+        // project task; BaseCommand's process-wide deadline is the only allowed escape hatch.
+        timeProvider.Advance(TimeSpan.FromSeconds(6));
+        await Task.Yield();
+
+        Assert.False(timeProvider.TimerCreated.Task.IsCompleted, "Manager-owned cancellation armed the local startup timeout.");
+        Assert.False(pendingCommand.IsCompleted, "The CLI exited before build cleanup completed.");
+
+        cleanupCanFinish.TrySetResult();
+
+        var exitCode = await pendingCommand.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(cleanupCompleted.Task.IsCompletedSuccessfully);
+        Assert.Empty(interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenDirectlyCancelledDuringBuild_StopsWaitingAtLocalTimeout()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(5));
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var buildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupCanFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                buildStarted.TrySetResult();
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    cleanupStarted.TrySetResult();
+                    await cleanupCanFinish.Task;
+                    cleanupCompleted.TrySetResult();
+                    context.BuildCompletionSource?.TrySetResult(false);
+                }
+
+                return CliExitCodes.Cancelled;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.TimeProvider = timeProvider;
         });
 
         using var provider = services.BuildServiceProvider();
@@ -493,16 +575,18 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await buildStarted.Task.DefaultTimeout();
         cts.Cancel();
         await cleanupStarted.Task.DefaultTimeout();
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
 
-        Assert.False(pendingCommand.IsCompleted, "The CLI exited before build cleanup completed.");
-
-        cleanupCanFinish.TrySetResult();
+        timeProvider.Advance(TimeSpan.FromSeconds(6));
 
         var exitCode = await pendingCommand.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.True(cleanupCompleted.Task.IsCompletedSuccessfully);
+        Assert.False(cleanupCompleted.Task.IsCompleted, "Direct cancellation waited past its local safety timeout.");
         Assert.Empty(interactionService.DisplayedErrors);
+
+        cleanupCanFinish.TrySetResult();
+        await cleanupCompleted.Task.DefaultTimeout();
     }
 
     [Fact]
@@ -3896,6 +3980,22 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => utcNow;
+    }
+
+    private sealed class SignalingFakeTimeProvider(TimeSpan signaledDueTime) : FakeTimeProvider
+    {
+        public TaskCompletionSource TimerCreated { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            if (dueTime == signaledDueTime)
+            {
+                TimerCreated.TrySetResult();
+            }
+
+            return timer;
+        }
     }
 
     [Fact]
