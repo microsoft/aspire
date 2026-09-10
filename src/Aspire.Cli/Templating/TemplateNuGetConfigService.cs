@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
-using System.Globalization;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Templating;
@@ -305,7 +306,7 @@ internal sealed class TemplateNuGetConfigService(
             {
                 var templateSearchMappings = string.IsNullOrWhiteSpace(query.SourceOverride)
                     ? channel.Mappings
-                    : PackageSourceOverrideMappings.CreateForTemplateOperations(query.SourceOverride);
+                    : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(query.SourceOverride);
                 var templatePackages = await channel.GetTemplatePackagesAsync(
                     executionContext.WorkingDirectory,
                     templateSearchMappings,
@@ -424,7 +425,7 @@ internal sealed class TemplateNuGetConfigService(
     {
         var templateInstallMappings = string.IsNullOrWhiteSpace(sourceOverride)
             ? selection.Channel.Mappings
-            : PackageSourceOverrideMappings.CreateForTemplateOperations(sourceOverride);
+            : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(sourceOverride);
 
         // Whilst we install the templates - if source mappings are available we need
         // to generate a temporary NuGet.config file to make sure we install the right package

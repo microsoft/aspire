@@ -86,6 +86,11 @@ internal sealed class AddPackageContext
     public string? Source { get; init; }
 
     /// <summary>
+    /// Gets or sets the package pattern whose restore is owned by <see cref="Source"/>.
+    /// </summary>
+    public string? SourcePackagePattern { get; init; }
+
+    /// <summary>
     /// Gets or sets the output collector for capturing stdout/stderr.
     /// Project implementations populate this during execution.
     /// Commands can access it for error display.

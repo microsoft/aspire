@@ -914,6 +914,114 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithoutRequestedChannelAndCurrentCliVersion_UsesIdentityLocalPackageSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string identityChannel = "pr-12345";
+        const string identityVersion = "13.4.0-pr.17141.gf142085f";
+        var packageSource = workspace.CreateDirectory("hive-packages");
+        List<string>? restoreArgs = null;
+        string[]? configuredSources = null;
+
+        var channel = PackageChannel.CreateExplicitChannel(
+            name: identityChannel,
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", packageSource.FullName)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+        var executionContext = CreateContextWithIdentityChannel(identityChannel, identityVersion);
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService, executionContext);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            WriteNuGetConfigOverlayIfRequested(args);
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+                configuredSources = GetPackageSourcesFromConfigArguments(args);
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                identityVersion,
+                [IntegrationReference.FromPackage("Aspire.Hosting.Redis", identityVersion)]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Empty(GetSourceArguments(restoreArgs!));
+            Assert.Equal([packageSource.FullName, NuGetOrgSource], Assert.IsType<string[]>(configuredSources));
+            Assert.Contains($"Aspire.Hosting.Redis,[{identityVersion}]", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithoutRequestedChannelAndDifferentSdkVersion_IgnoresIdentityLocalPackageSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string identityChannel = "pr-12345";
+        const string identityVersion = "13.4.0-pr.17141.gf142085f";
+        const string requestedVersion = "13.3.0";
+        var packageSource = workspace.CreateDirectory("hive-packages");
+        List<string>? restoreArgs = null;
+        string[]? configuredSources = null;
+
+        var channel = PackageChannel.CreateExplicitChannel(
+            name: identityChannel,
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", packageSource.FullName)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+        var executionContext = CreateContextWithIdentityChannel(identityChannel, identityVersion);
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService, executionContext);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            WriteNuGetConfigOverlayIfRequested(args);
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+                configuredSources = GetPackageSourcesFromConfigArguments(args);
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                requestedVersion,
+                [IntegrationReference.FromPackage("Aspire.Hosting.Redis", requestedVersion)]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Empty(GetSourceArguments(restoreArgs!));
+            Assert.Empty(Assert.IsType<string[]>(configuredSources));
+            Assert.DoesNotContain(packageSource.FullName, restoreArgs!);
+            Assert.Contains($"Aspire.Hosting.Redis,{requestedVersion}", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public void Constructor_UsesDistinctWorkingDirectoriesForMultipleAppHostsInSameWorkspace()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1254,6 +1362,41 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ComposePackageSourceMappings_WithExactSourceOverride_PreservesAmbientDependencyMappings()
+    {
+        var mappings = PrebuiltAppHostServer.ComposePackageSourceMappings(
+            [
+                new PackageMapping("Aspire.Hosting.Redis", "https://example.com/override"),
+                new PackageMapping("*", "https://example.com/override"),
+                new PackageMapping("*", NuGetOrgSource)
+            ],
+            ambientMappings:
+            [
+                new NuGetPackageSourceMappingInfo("channel", ["Aspire*"]),
+                new NuGetPackageSourceMappingInfo("private", ["Contoso.*"])
+            ],
+            ambientSources: [],
+            selectedSources:
+            [
+                new NuGetConfigSource(
+                    "override",
+                    "https://example.com/override",
+                    IsAmbient: false,
+                    IsEnabled: true),
+                new NuGetConfigSource(
+                    "nuget.org",
+                    NuGetOrgSource,
+                    IsAmbient: false,
+                    IsEnabled: true)
+            ]);
+
+        Assert.Equal(["Aspire.Hosting.Redis", "*"], GetPatterns(mappings, "override"));
+        Assert.Equal(["Aspire*"], GetPatterns(mappings, "channel"));
+        Assert.Equal(["Contoso.*"], GetPatterns(mappings, "private"));
+        Assert.Empty(GetPatterns(mappings, "nuget.org"));
+    }
+
+    [Fact]
     public void ComposePackageSourceMappings_WithAmbientMappings_DoesNotAddChannelFallbackMapping()
     {
         var mappings = PrebuiltAppHostServer.ComposePackageSourceMappings(
@@ -1451,6 +1594,44 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var doc = XDocument.Load(result.ConfigFile.FullName);
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, packageSourceOverride));
         Assert.Empty(GetPackagePatternsForSource(doc, channelSource));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, NuGetOrgSource));
+    }
+
+    [Theory]
+    [InlineData("Aspire.Hosting.Redis")]
+    [InlineData("CommunityToolkit.Aspire.Hosting.Redis")]
+    public async Task CreateRestoreOverlay_WithExactPackageSourceOverride_PreservesChannelAspireMappings(
+        string packageId)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string packageSourceOverride = "/tmp/integration-packages";
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            name: "staging",
+            quality: PackageChannelQuality.Both,
+            mappings:
+            [
+                new PackageMapping("Aspire*", channelSource),
+                new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)
+            ],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance);
+        var server = CreateServerWithChannel(
+            workspace,
+            stagingChannel,
+            CreateContextWithIdentityChannel("pr-12345"));
+
+        using var result = await CreateRestoreOverlayAsync(
+            server,
+            requestedChannel: "staging",
+            packageSourceOverride: packageSourceOverride,
+            packageSourceOverridePattern: packageId);
+
+        Assert.NotNull(result);
+        var doc = XDocument.Load(result.ConfigFile.FullName);
+        Assert.Equal([packageId, PackageMapping.AllPackages], GetPackagePatternsForSource(doc, packageSourceOverride));
+        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, channelSource));
         Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, NuGetOrgSource));
     }
 
@@ -1725,14 +1906,17 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         return CreatePrebuiltAppHostServer(workspace, packagingService: packagingService, executionContext: executionContext);
     }
 
-    private static CliExecutionContext CreateContextWithIdentityChannel(string identityChannel) =>
+    private static CliExecutionContext CreateContextWithIdentityChannel(
+        string identityChannel,
+        string? identityVersion = null) =>
         new(new DirectoryInfo(Path.GetTempPath()),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "cache")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "sdks")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "logs")),
             "test.log",
-            identityChannel: identityChannel);
+            identityChannel: identityChannel,
+            identityVersion: identityVersion);
 
     // Builds a PrebuiltAppHostServer with the constant test wiring (socket name, SDK installer, process
     // execution factory, logger) so individual tests only specify the parameters their scenario exercises.
@@ -1826,11 +2010,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     private static async Task<TemporaryNuGetConfig?> CreateRestoreOverlayAsync(
         PrebuiltAppHostServer server,
         string? requestedChannel,
-        string? packageSourceOverride = null)
+        string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null)
     {
         var restoreSources = await server.ResolveIntegrationRestoreSourcesAsync(
             requestedChannel,
             packageSourceOverride,
+            packageSourceOverridePattern,
             CancellationToken.None);
         var configSources = PrebuiltAppHostServer.ResolveNuGetConfigSources(
             restoreSources.PackageSourceMappings,
@@ -1846,11 +2032,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     private static async Task<IReadOnlyList<string>?> ResolveAdditionalSourcesAsync(
         PrebuiltAppHostServer server,
         string? requestedChannel,
-        string? packageSourceOverride = null)
+        string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null)
     {
         var restoreSources = await server.ResolveIntegrationRestoreSourcesAsync(
             requestedChannel,
             packageSourceOverride,
+            packageSourceOverridePattern,
             CancellationToken.None);
         return restoreSources.AdditionalSources.Count > 0 ? restoreSources.AdditionalSources : null;
     }
@@ -4034,7 +4222,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
     private static (PrebuiltAppHostServer Server, TestProcessExecutionFactory ExecutionFactory) CreatePackageReferenceServer(
         TemporaryWorkspace workspace,
-        IPackagingService packagingService)
+        IPackagingService packagingService,
+        CliExecutionContext? executionContext = null)
     {
         var layout = CreateBundleLayout(workspace);
         var executionFactory = new TestProcessExecutionFactory
@@ -4056,7 +4245,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             workspace,
             layout: layout,
             packagingService: packagingService,
-            nugetService: nugetService);
+            nugetService: nugetService,
+            executionContext: executionContext);
 
         return (server, executionFactory);
     }

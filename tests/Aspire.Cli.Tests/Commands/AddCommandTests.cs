@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Commands;
@@ -12,10 +13,10 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
-using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -1993,13 +1994,19 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandPreservesSourceArgumentInBothCommands()
+    public async Task AddCommandUsesSourceForDiscoveryAndPackageRestore()
     {
         // Arrange
         string? addUsedSource = null;
+        var searchConfigs = new ConcurrentBag<(bool HasClear, string[] Sources)>();
         const string expectedSource = "https://custom-nuget-source.test/v3/index.json";
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "unavailable-channel"
+            }
+            """);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
 
@@ -2018,8 +2025,17 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
-                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken) =>
                 {
+                    Assert.NotNull(nugetConfigFile);
+                    var config = XDocument.Load(nugetConfigFile.FullName);
+                    searchConfigs.Add((
+                        config.Descendants("packageSources").Elements("clear").Any(),
+                        config.Descendants("packageSources")
+                            .Elements("add")
+                            .Select(element => element.Attribute("value")!.Value)
+                            .ToArray()));
+
                     var redisPackage = new NuGetPackage()
                     {
                         Id = "Aspire.Hosting.Redis",
@@ -2056,6 +2072,12 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Assert
         Assert.Equal(0, exitCode);
         Assert.Equal(expectedSource, addUsedSource);
+        Assert.NotEmpty(searchConfigs);
+        Assert.All(searchConfigs, searchConfig =>
+        {
+            Assert.True(searchConfig.HasClear);
+            Assert.Equal([expectedSource], searchConfig.Sources);
+        });
     }
 
     [Fact]
@@ -3184,10 +3206,18 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(string.Empty, addedPackageId);
     }
 
-    [Fact]
-    public async Task AddCommandPolyglotAppHostPassesSelectedRestorePolicy()
+    [Theory]
+    [InlineData("redis", "Aspire.Hosting.Redis", "Aspire.Hosting.Redis", null, true)]
+    [InlineData("Aspire.Hosting.Redis", "Aspire.Hosting.Redis", "Aspire.Hosting.Redis", null, true)]
+    [InlineData("CommunityToolkit.Aspire.Hosting.Redis", "CommunityToolkit.Aspire.Hosting.Redis", "CommunityToolkit.Aspire.Hosting.Redis", null, true)]
+    [InlineData("CommunityToolkit.Aspire.Hosting.Redis", "CommunityToolkit.Aspire.Hosting.Redis", null, null, false)]
+    public async Task AddCommandPolyglotAppHostPassesSelectedRestorePolicy(
+        string integrationName,
+        string packageId,
+        string? expectedSourcePackagePattern,
+        string? expectedRequestedChannel,
+        bool includeSource = true)
     {
-        // The polyglot-compatible integration (Redis) survives filtering and installs normally.
         AddPackageContext? addPackageContext = null;
         const string sourceOverride = "https://example.invalid/aspire";
 
@@ -3198,9 +3228,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var implicitCache = new FakeNuGetPackageCache
         {
             GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
-                [CreatePackage("Aspire.Hosting.Redis", "1.0.0"), CreatePackage("Aspire.Hosting.Foo", "1.0.0")]),
+                [CreatePackage(packageId, "1.0.0")]),
             GetPackagesAsyncCallback = (_, query, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
-                query == "tags:polyglot" ? [CreatePackage("Aspire.Hosting.Redis", "1.0.0")] : [])
+                query == "tags:polyglot" ? [CreatePackage(packageId, "1.0.0")] : [])
         };
 
         var tsFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
@@ -3227,15 +3257,17 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse($"add Aspire.Hosting.Redis --apphost \"{appHostFile.FullName}\" --source {sourceOverride}");
+        var sourceArgument = includeSource ? $" --source {sourceOverride}" : string.Empty;
+        var result = command.Parse($"add {integrationName} --apphost \"{appHostFile.FullName}\"{sourceArgument}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         Assert.NotNull(addPackageContext);
-        Assert.Equal("Aspire.Hosting.Redis", addPackageContext.PackageId);
-        Assert.Equal(PackageChannelNames.Stable, addPackageContext.RequestedChannel);
-        Assert.Equal(sourceOverride, addPackageContext.Source);
+        Assert.Equal(packageId, addPackageContext.PackageId);
+        Assert.Equal(expectedRequestedChannel, addPackageContext.RequestedChannel);
+        Assert.Equal(includeSource ? sourceOverride : null, addPackageContext.Source);
+        Assert.Equal(expectedSourcePackagePattern, addPackageContext.SourcePackagePattern);
     }
 
     [Fact]
