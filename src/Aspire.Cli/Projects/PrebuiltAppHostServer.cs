@@ -46,16 +46,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private const string ProjectAssetsFileName = "project.assets.json";
     internal const string IntegrationHostingVersionPropertyName = "AspireIntegrationHostingVersion";
     private const string RestoreStampFileName = "aspire-restore.stamp";
-    private static readonly string[] s_safeBuildDiagnosticMarkers =
-    [
-        "NETSDK1004",
-        "NETSDK1064",
-        "NU1101",
-        "NU1102",
-        "NU1605",
-        ProjectAssetsFileName
-    ];
-
     private readonly string _appDirectoryPath;
     private readonly string _socketPath;
     private readonly LayoutConfiguration _layout;
@@ -369,10 +359,11 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             sources: sources,
             nugetConfigPaths: configPaths,
             nugetConfigOverlayCacheIdentity: restoreOverlay?.CacheIdentity,
-            additionalSensitiveSources: restoreSources.PackageSourceMappings?
-                .Select(static mapping => mapping.Source),
+            additionalSensitiveSources: settings.SensitiveSourceValues.Concat(
+                restoreSources.PackageSourceMappings?
+                    .Select(static mapping => mapping.Source)
+                    .Where(PackageSourceOverrideMappings.HasCredentialMaterial) ?? []),
             globalPackagesFolderOverride: GetIntegrationRestoreGlobalPackagesFolder(restoreSources, restoreOverlay),
-            suppressFailureOutput: settings.Sources.Any(static source => source.RequiresFullOutputSuppression),
             ct: cancellationToken).ConfigureAwait(false);
     }
 
@@ -854,7 +845,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         string integrationHostingVersion,
         bool suppressLogging,
         IReadOnlyList<string> sensitiveSources,
-        bool suppressCapturedOutput,
         CancellationToken cancellationToken)
     {
         var buildOutput = new OutputCollector();
@@ -875,27 +865,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             new ProcessInvocationOptions
             {
                 StandardOutputCallback = line =>
-                {
-                    if (suppressCapturedOutput)
-                    {
-                        AppendSafeBuildDiagnosticMarker(line, buildOutput.AppendOutput);
-                    }
-                    else
-                    {
-                        buildOutput.AppendOutput(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources));
-                    }
-                },
+                    buildOutput.AppendOutput(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
                 StandardErrorCallback = line =>
-                {
-                    if (suppressCapturedOutput)
-                    {
-                        AppendSafeBuildDiagnosticMarker(line, buildOutput.AppendError);
-                    }
-                    else
-                    {
-                        buildOutput.AppendError(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources));
-                    }
-                },
+                    buildOutput.AppendError(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
                 EnvironmentVariableFilter = name =>
                     string.Equals(name, IntegrationHostingVersionPropertyName, StringComparison.OrdinalIgnoreCase) ||
                     (globalPackagesFolder is not null &&
@@ -906,17 +878,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             cancellationToken).ConfigureAwait(false);
 
         return (exitCode, buildOutput);
-    }
-
-    private static void AppendSafeBuildDiagnosticMarker(string line, Action<string> append)
-    {
-        foreach (var marker in s_safeBuildDiagnosticMarkers)
-        {
-            if (line.Contains(marker, StringComparison.Ordinal))
-            {
-                append(marker);
-            }
-        }
     }
 
     /// <summary>
@@ -947,11 +908,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        if (selectedSensitiveRestoreSources.Length > 0)
-        {
-            throw new InvalidOperationException(
-                "Credential-bearing package source URLs cannot be used when restoring integration project references. Configure credentials through NuGet instead.");
-        }
 
         var globalPackagesFolder = GetIntegrationRestoreGlobalPackagesFolder(restoreSources, restoreOverlay: null);
         var policyDirectory = IntegrationClosureBuilder.GetAppHostIntegrationPolicyDirectory(
@@ -987,10 +943,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var rootAdditionalSources = restoreSources.PackageSourceMappings is null
             ? GetNuGetSources(restoreSources)?.ToArray() ?? []
             : [];
-        var hasSensitiveAmbientSources = settings.Sources
-            .Any(static source => source.HasCredentialMaterial);
-        var suppressCapturedOutput = settings.Sources
-            .Any(static source => source.RequiresFullOutputSuppression);
+        var sensitiveSources = settings.SensitiveSourceValues
+            .Concat(selectedSensitiveRestoreSources)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         var intermediateOutputPath = Path.Combine(restoreDir, "obj");
         var projectContent = GenerateIntegrationProjectFile(
             packageRefs,
@@ -1071,9 +1027,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             noRestore: skipRestore,
             globalPackagesFolder,
             integrationHostingVersion: sdkVersion,
-            suppressLogging: hasSensitiveAmbientSources,
-            sensitiveSources: [],
-            suppressCapturedOutput,
+            suppressLogging: sensitiveSources.Length > 0,
+            sensitiveSources,
             cancellationToken).ConfigureAwait(false);
         if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
         {
@@ -1084,9 +1039,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 noRestore: false,
                 globalPackagesFolder,
                 integrationHostingVersion: sdkVersion,
-                suppressLogging: hasSensitiveAmbientSources,
-                sensitiveSources: [],
-                suppressCapturedOutput,
+                suppressLogging: sensitiveSources.Length > 0,
+                sensitiveSources,
                 cancellationToken).ConfigureAwait(false);
         }
 

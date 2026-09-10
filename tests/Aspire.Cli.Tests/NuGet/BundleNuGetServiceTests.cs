@@ -482,10 +482,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.True(Directory.Exists(Directory.GetParent(manifestPath)!.FullName));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RestorePackagesAsync_RedactsCredentialBearingSourcesFromFailures(bool suppressFailureOutput)
+    [Fact]
+    public async Task RestorePackagesAsync_RedactsCredentialBearingSourcesFromFailures()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -530,12 +528,10 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: appHostDirectory.FullName,
-            suppressFailureOutput: suppressFailureOutput));
+            additionalSensitiveSources: [credentialBearingSource]));
 
         Assert.DoesNotContain(credentialBearingSource, exception.Message);
-        Assert.Equal(
-            suppressFailureOutput,
-            !exception.Message.Contains("packages.example.com", StringComparison.Ordinal));
+        Assert.Contains("packages.example.com", exception.Message);
         Assert.DoesNotContain(sink.Writes, write => write.Message?.Contains(credentialBearingSource, StringComparison.Ordinal) == true);
         Assert.NotNull(restoreOutputPath);
     }
@@ -572,11 +568,10 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
                     {
                         Name = "private",
                         Identity = NuGetSourceIdentity.Compute(packageSource, sourceIdentityKey),
-                        IsEnabled = true,
-                        HasCredentialMaterial = false,
-                        RequiresFullOutputSuppression = false
+                        IsEnabled = true
                     }
                 },
+                SensitiveSourceValues = Array.Empty<string>(),
                 PackageSourceMappingEnabled = true,
                 PackageSourceMappings = new[]
                 {
@@ -604,10 +599,9 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new NuGetSourceInfo(
                 "private",
                 NuGetSourceIdentity.Compute(packageSource, sourceIdentityKey),
-                IsEnabled: true,
-                HasCredentialMaterial: false,
-                RequiresFullOutputSuppression: false),
+                IsEnabled: true),
             source);
+        Assert.Empty(settings.SensitiveSourceValues);
         Assert.Same(sourceIdentityKey, settings.SourceIdentityKey);
         Assert.True(settings.PackageSourceMappingEnabled);
         var mapping = Assert.Single(settings.PackageSourceMappings);

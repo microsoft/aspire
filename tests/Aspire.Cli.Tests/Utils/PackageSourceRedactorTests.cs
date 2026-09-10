@@ -54,6 +54,10 @@ public class PackageSourceRedactorTests
         "  https://user:p#word@host/  ",
         "https://user:p#word@host/",
         "Restore failed for <unparseable http source>.")]
+    [InlineData(
+        "https://[::1]/feed?sig=secret",
+        "https://[::1]/feed?sig=secret",
+        "Restore failed for https://[::1]/feed.")]
     public void RedactOccurrences_RedactsNormalizedDiagnosticSpellings(
         string source,
         string diagnosticSpelling,
@@ -64,22 +68,5 @@ public class PackageSourceRedactorTests
             [source]);
 
         Assert.Equal(expected, result);
-    }
-
-    [Theory]
-    [InlineData(
-        "Restore failed for https://feed.example.com/v3/index.json?sig=secret.",
-        "Restore failed for https://feed.example.com/v3/index.json")]
-    [InlineData(
-        "Restore failed for ******feed.example.com/v3/index.json?sig=secret.",
-        "Restore failed for ******feed.example.com/v3/index.json")]
-    [InlineData(
-        "See https://feed.example.com/v3/index.json for help.",
-        "See https://feed.example.com/v3/index.json for help.")]
-    public void RedactCredentialBearingUrls_DoesNotRequireOriginalCredential(
-        string value,
-        string expected)
-    {
-        Assert.Equal(expected, PackageSourceRedactor.RedactCredentialBearingUrls(value));
     }
 }

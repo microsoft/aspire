@@ -1455,6 +1455,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 CreateNuGetSourceInfo("Private", source, isEnabled: false),
                 CreateNuGetSourceInfo("unrelated", "https://example.com/unrelated", isEnabled: false)
             ],
+            SensitiveSourceValues: [],
             PackageSourceMappingEnabled: false,
             PackageSourceMappings: [],
             DisabledPackageSourceKeys: ["private", "unrelated"],
@@ -2029,22 +2030,18 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         return await server.CreateRestoreOverlayAsync(
             restoreSources,
             configSources,
-            new NuGetSettingsInfo([], [], false, [], [], [], s_sourceIdentityKey),
+            new NuGetSettingsInfo([], [], [], false, [], [], [], s_sourceIdentityKey),
             CancellationToken.None);
     }
 
     private static NuGetSourceInfo CreateNuGetSourceInfo(
         string name,
         string source,
-        bool isEnabled,
-        bool hasCredentialMaterial = false)
+        bool isEnabled)
         => new(
             name,
             NuGetSourceIdentity.Compute(source, s_sourceIdentityKey),
-            isEnabled,
-            hasCredentialMaterial,
-            hasCredentialMaterial &&
-                !NuGetSourceIdentity.CanRedactCredentialMaterialWithoutOriginalValue(source));
+            isEnabled);
 
     private static async Task<IReadOnlyList<string>?> ResolveAdditionalSourcesAsync(
         PrebuiltAppHostServer server,
@@ -3083,17 +3080,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         ProcessInvocationOptions? buildOptions = null;
         var dotNetCliRunner = new TestDotNetCliRunner
         {
-            BuildAsyncCallback = (projectFilePath, _, options, _) =>
+            BuildAsyncCallback = (_, _, options, _) =>
             {
                 buildOptions = options;
-                WriteClosureInputs(
-                    projectFilePath.Directory!,
-                    new Dictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["MyIntegration.dll"] = "integration-v1"
-                    },
-                    ["MyIntegration"]);
-                return 0;
+                options.StandardErrorCallback?.Invoke(
+                    $"NU1301: Unable to load the service index for source {credentialBearingSource}.");
+                return 1;
             }
         };
 
@@ -3128,9 +3120,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                     IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
                 ]);
 
-            Assert.True(result.Success);
+            Assert.False(result.Success);
             Assert.NotNull(buildOptions);
             Assert.True(buildOptions.SuppressLogging);
+            var output = string.Join(Environment.NewLine, result.Output!.GetLines().Select(static line => line.Line));
+            Assert.DoesNotContain("secret", output);
+            Assert.Contains("packages.example.com/v3/index.json", output);
         }
         finally
         {
@@ -3451,17 +3446,19 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithCredentialBearingSource_RejectsProjectRestoreWithoutPersistingCredentials()
+    public async Task PrepareAsync_WithCredentialBearingChannelSource_RedactsProjectRestoreFailure()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
         var buildCalled = false;
         var dotNetCliRunner = new TestDotNetCliRunner
         {
-            BuildAsyncCallback = (_, _, _, _) =>
+            BuildAsyncCallback = (_, _, options, _) =>
             {
                 buildCalled = true;
-                return 0;
+                options.StandardErrorCallback?.Invoke(
+                    $"NU1301: Unable to load the service index for source {channelSource}.");
+                return 1;
             }
         };
         var channel = PackageChannel.CreateExplicitChannel(
@@ -3492,15 +3489,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 requestedChannel: "daily");
 
             Assert.False(result.Success);
-            Assert.False(buildCalled);
+            Assert.True(buildCalled);
             Assert.NotNull(result.Output);
             var output = string.Join(Environment.NewLine, result.Output.GetLines().Select(static line => line.Line));
-            Assert.Contains("Configure credentials through NuGet instead.", output);
+            Assert.Contains("https://feed.blob.core.windows.net/packages/index.json", output);
             Assert.DoesNotContain("secret-sig", output);
-            Assert.False(File.Exists(Path.Combine(
-                workingDirectory,
-                IntegrationClosureBuilder.IntegrationRestoreFolderName,
-                "NuGet.Config")));
         }
         finally
         {
@@ -4490,12 +4483,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 {
                     source.Name,
                     Identity = NuGetSourceIdentity.Compute(source.Source, s_sourceIdentityKey),
-                    source.IsEnabled,
-                    HasCredentialMaterial = NuGetSourceIdentity.HasCredentialMaterial(source.Source),
-                    RequiresFullOutputSuppression =
-                        NuGetSourceIdentity.HasCredentialMaterial(source.Source) &&
-                        !NuGetSourceIdentity.CanRedactCredentialMaterialWithoutOriginalValue(source.Source)
+                    source.IsEnabled
                 })
+                .ToArray(),
+            SensitiveSourceValues = sourceArray
+                .Select(static source => source.Source)
+                .Where(NuGetSourceIdentity.HasCredentialMaterial)
+                .Distinct(StringComparer.Ordinal)
                 .ToArray(),
             PackageSourceMappingEnabled = mappingArray.Length > 0,
             PackageSourceMappings = mappingArray.Select(static mapping => new
