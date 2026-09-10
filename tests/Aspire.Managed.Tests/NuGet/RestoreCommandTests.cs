@@ -278,6 +278,76 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
     }
 
     [Fact]
+    public void NuGetPackageAssetResolver_ResolvesAssetsFromFallbackPackageFolder()
+    {
+        var globalPackagesPath = Path.Combine(_workspace.Path, "global-packages");
+        var fallbackPackagesPath = Path.Combine(_workspace.Path, "fallback-packages");
+        var packageAssetPath = Path.Combine(
+            fallbackPackagesPath,
+            "fake.package",
+            "1.0.0",
+            "lib",
+            "net10.0",
+            "Fake.Package.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(packageAssetPath)!);
+        File.Copy(typeof(RestoreCommandTests).Assembly.Location, packageAssetPath);
+
+        var outputPath = Path.Combine(_workspace.Path, "obj");
+        Directory.CreateDirectory(outputPath);
+        var assetsPath = Path.Combine(outputPath, "project.assets.json");
+        File.WriteAllText(
+            assetsPath,
+            $$"""
+            {
+              "version": 3,
+              "targets": {
+                "net10.0": {
+                  "Fake.Package/1.0.0": {
+                    "type": "package",
+                    "runtime": {
+                      "lib/net10.0/Fake.Package.dll": {}
+                    }
+                  }
+                }
+              },
+              "libraries": {
+                "Fake.Package/1.0.0": {
+                  "type": "package",
+                  "path": "fake.package/1.0.0",
+                  "files": [
+                    "lib/net10.0/Fake.Package.dll"
+                  ]
+                }
+              },
+              "projectFileDependencyGroups": {
+                "net10.0": [
+                  "Fake.Package >= 1.0.0"
+                ]
+              },
+              "packageFolders": {
+                "{{JsonEncodedPath(globalPackagesPath)}}": {},
+                "{{JsonEncodedPath(fallbackPackagesPath)}}": {}
+              },
+              "project": {
+                "frameworks": {
+                  "net10.0": {}
+                }
+              }
+            }
+            """);
+
+        var resolution = NuGetPackageAssetResolver.Resolve(
+            assetsPath,
+            "net10.0",
+            runtimeIdentifier: null);
+
+        Assert.Equal(globalPackagesPath, resolution.PackagesPath);
+        Assert.Equal(0, resolution.SkippedPackageCount);
+        var asset = Assert.Single(resolution.Assets);
+        Assert.Equal(packageAssetPath, asset.SourcePath);
+    }
+
+    [Fact]
     public void SettingsCommand_DiscoversWorkspaceNuGetConfigAndSourceNames()
     {
         var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.Config");

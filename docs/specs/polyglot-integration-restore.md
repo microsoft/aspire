@@ -40,7 +40,7 @@ Channel selection never changes the NuGet configuration discovery model. Every r
 2. A selected channel with an Aspire-specific feed is authoritative for the Aspire package patterns owned by that channel.
 3. Otherwise, Aspire packages use the ambient NuGet source and mapping policy.
 
-The absence of a channel and an explicitly selected stable channel therefore have the same source-resolution behavior. Stable packages do not require a dedicated Aspire feed and remain compatible with NuGet's default sources, NuGet.org mirrors, and repository-owned source policy. No AppHost-local `NuGet.Config` is required for a stable restore; when no such file exists, normal NuGet defaults and user or machine configuration apply. Daily, staging, and PR channels have channel-specific Aspire feeds, so their Aspire package mappings replace competing ambient Aspire mappings without replacing the rest of the NuGet hierarchy. The local channel is deliberately source-only: it adds the local package hive without introducing a package-source-mapping overlay.
+The absence of a channel and an explicitly selected stable channel normally have the same source-resolution behavior. The exception is the invocation-local source fallback described below, which applies only when no channel is requested and the AppHost inherits the running CLI's SDK version. Stable packages do not require a dedicated Aspire feed and remain compatible with NuGet's default sources, NuGet.org mirrors, and repository-owned source policy. No AppHost-local `NuGet.Config` is required for a stable restore; when no such file exists, normal NuGet defaults and user or machine configuration apply. Daily, staging, and PR channels have channel-specific Aspire feeds, so their Aspire package mappings replace competing ambient Aspire mappings without replacing the rest of the NuGet hierarchy. The local channel is deliberately source-only: it adds the local package hive without introducing a package-source-mapping overlay.
 
 ### Channel transitions
 
@@ -59,7 +59,7 @@ The same transition must also succeed when the project has no `NuGet.Config`. In
 
 A project configuration is valid for stable restore when its effective sources and package-source mappings can resolve the requested stable Aspire packages and their dependencies. A repository may therefore clear default sources and use an internal mirror without changing the channel-transition model.
 
-Selecting stable must also replace or remove a previously persisted non-stable channel value. Stable and an omitted channel have the same restore-source semantics, but an explicit stable selection must not leave the project logically pinned to daily or staging.
+Selecting stable must also replace or remove a previously persisted non-stable channel value. Explicit stable selection uses ambient restore-source policy and must not leave the project logically pinned to daily or staging. An omitted channel can additionally use the invocation-local source fallback when restoring the running CLI's own SDK version.
 
 The policy accounts for:
 
@@ -92,14 +92,14 @@ For a requested discovery directory, the operation:
 
 1. Loads the normal NuGet hierarchy with `Settings.LoadDefaultSettings`.
 2. Returns configuration paths in highest-to-lowest precedence order.
-3. Returns non-secret source descriptors containing the source name, enabled state, and a per-invocation keyed identity of the resolved location.
+3. Returns non-secret source descriptors containing the source name, enabled state, credential and client-certificate capability flags, and a per-invocation keyed identity of the resolved location.
 4. Returns the effective package-source mapping entries produced by NuGet after applying the configuration hierarchy.
 5. Returns disabled and reserved source keys needed to avoid accidentally inheriting name-bound credentials, certificates, or disabled state when Aspire introduces a source.
 6. Returns the exact effective values of credential-bearing source locations for use only when redacting captured NuGet diagnostics.
 
 The operation does not return `packageSourceCredentials` entries, credential-provider tokens, client certificates, trusted signers, or serialized configuration sections, and it returns no standalone credential values. The CLI supplies a random identity key through the helper's private process environment, and both sides use that key to calculate per-invocation HMAC source identities. Ordinary source locations therefore remain inside NuGet-owned configuration while the CLI can still correlate a selected source with an ambient alias. Inline credential material crosses the protocol only when it is part of a credential-bearing source location returned as an exact redaction value through the private captured-output protocol between the same-user CLI and its bundled helper.
 
-The CLI matches effective Aspire source locations to the opaque identities using NuGet-compatible normalization rules. Every match supplies an ambient source key used by the policy overlay, preserving NuGet's association between each alias and its authentication or transport settings without returning ordinary source descriptors. Captured restore diagnostics are sanitized by replacing the exact credential-bearing source values and their normalized URI spellings with the same display-safe representation used for direct source arguments. Aspire does not heuristically scan arbitrary output for unknown URLs; only exact values for participating sources are redacted. This avoids changing unrelated output and keeps URI parsing off the general process-output path.
+The CLI matches effective Aspire source locations to the opaque identities using NuGet-compatible normalization rules. For each selected source, it prefers an enabled ambient alias; when every matching alias is disabled, it prefers an alias with credentials or client certificates before re-enabling one. The selected source key preserves NuGet's association with its authentication or transport settings without returning those settings to the CLI. Captured restore diagnostics are sanitized by replacing the exact credential-bearing source values and their normalized URI spellings with the same display-safe representation used for direct source arguments. Aspire does not heuristically scan arbitrary output for unknown URLs; only exact values for participating sources are redacted. This avoids changing unrelated output and keeps URI parsing off the general process-output path.
 
 ## Aspire policy overlay
 
@@ -232,7 +232,8 @@ SDK restore skipping is disabled when a config file references an environment va
 
 | Scenario | Generated root | Referenced projects |
 |---|---|---|
-| No channel or stable channel | Uses ambient source policy and the AppHost hierarchy | Can opt into the selected version; ambient source policy remains authoritative |
+| Explicit stable channel | Uses ambient source policy and the AppHost hierarchy | Can opt into the selected version; ambient source policy remains authoritative |
+| No channel | Uses ambient source policy, plus an invocation-local source when needed to restore the running CLI's own SDK version | Can opt into the selected version and any credential-free invocation-local source |
 | No AppHost NuGet.Config | Uses normal NuGet default, user, and machine configuration | Uses each project's normal discovery hierarchy |
 | Daily, staging, or PR channel | Replaces competing Aspire mappings while retaining unrelated ambient policy | Can opt into the selected version and credential-free selected feed |
 | Local channel | Adds the absolute local hive as a source-only policy without replacing ambient mappings | Can opt into the selected version and local source |
@@ -242,6 +243,6 @@ SDK restore skipping is disabled when a config file references an environment va
 | Credential-bearing configured channel source | Uses the configured source, suppresses raw process logging, and exact-redacts captured diagnostics | Source hint is omitted; retains its own restore policy |
 | Ambient authenticated source | Uses the ambient source key and NuGet-owned credentials | Retains its own configuration and credentials |
 | Explicitly selected disabled source | Clears inherited disabled-source state under the complete mapping policy | Retains its own restore policy |
-| PR package hive | Uses an absolute local source with an authoritative Aspire mapping and standard NuGet global-packages behavior | Can opt into the selected version |
+| PR package hive | Uses an absolute local source with an authoritative Aspire mapping and standard NuGet global-packages behavior | Can opt into the selected version and local source |
 | Nested AppHost config | Included through AppHost-anchored discovery | Remains available to projects whose own hierarchy includes it |
-| Referenced project outside the AppHost tree | Uses the generated root hierarchy | Retains its own config and can explicitly consume the version hint |
+| Referenced project outside the AppHost tree | Uses the generated root hierarchy | Retains its own config and can explicitly consume the version and credential-free source hints |
