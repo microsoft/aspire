@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
@@ -11,12 +12,141 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end test for polyglot project reference support.
-/// Creates a .NET hosting integration project and a TypeScript AppHost that references it
-/// via <c>aspire.config.json</c>, then verifies the integration is discovered, code-generated, and functional.
+/// End-to-end tests for restoring and code-generating .NET hosting integration project references
+/// from polyglot AppHosts.
 /// </summary>
 public sealed class ProjectReferenceTests(ITestOutputHelper output)
 {
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task AddFromCustomSourceRestoresProjectReferenceClosure()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        if (strategy.Mode is not (CliInstallMode.LocalHive or CliInstallMode.LocalArchive or CliInstallMode.PullRequest))
+        {
+            Assert.Skip("This test requires a CLI archive containing the matching Aspire integration packages.");
+        }
+
+        var workspace = TemporaryWorkspace.Create(output);
+        // The probe package is referenced only by MyIntegration and exists only in the invocation's
+        // custom source. Its successful extraction proves the generated restore processed the project closure.
+        CreateRestoreProbePackage(Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed"));
+        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "empty-source"));
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot,
+            strategy,
+            output,
+            workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(
+            terminal,
+            workspace,
+            auto,
+            counter,
+            output,
+            TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.RunCommandAsync("export NUGET_PACKAGES=\"$PWD/.nuget-packages\"", counter);
+        await auto.RunCommandAsync(
+            "CLI_VERSION=$(aspire --version) && " +
+            "PACKAGE_DIR=$(find \"$HOME/.aspire/hives\" -path \"*/packages/Aspire.Hosting.$CLI_VERSION.nupkg\" -printf '%h\\n' -quit) && " +
+            "test -n \"$PACKAGE_DIR\" && mkdir -p source-feed && cp \"$PACKAGE_DIR\"/*.nupkg source-feed/",
+            counter);
+
+        await auto.TypeAsync("aspire init --language typescript --non-interactive --suppress-agent-init");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        var workDir = workspace.WorkspaceRoot.FullName;
+        var configPath = Path.Combine(workDir, "aspire.config.json");
+        var config = JsonNode.Parse(File.ReadAllText(configPath))?.AsObject()
+            ?? throw new InvalidOperationException("Expected aspire.config.json to contain a JSON object.");
+        var packages = config["packages"] as JsonObject ?? new JsonObject();
+        packages["MyIntegration"] = "./MyIntegration/MyIntegration.csproj";
+        config["packages"] = packages;
+        File.WriteAllText(configPath, config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        var integrationDirectory = Directory.CreateDirectory(Path.Combine(workDir, "MyIntegration"));
+        // The project deliberately clears ambient sources and opts into the CLI-provided source hint.
+        // Without the hint, its package restore cannot reach Custom.RestoreProbe.
+        File.WriteAllText(Path.Combine(integrationDirectory.FullName, "NuGet.Config"), """
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="empty" value="../empty-source" />
+              </packageSources>
+            </configuration>
+            """);
+        File.WriteAllText(Path.Combine(integrationDirectory.FullName, "MyIntegration.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(AspireIntegrationPackageSources)</RestoreAdditionalProjectSources>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting" Version="$(AspireIntegrationHostingVersion)" />
+                <PackageReference Include="Custom.RestoreProbe" Version="1.0.0" />
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(integrationDirectory.FullName, "MyIntegrationExtensions.cs"), """
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            namespace Aspire.Hosting;
+
+            public static class MyIntegrationExtensions
+            {
+                [AspireExport]
+                public static IResourceBuilder<ContainerResource> AddMyService(
+                    this IDistributedApplicationBuilder builder, string name)
+                    => builder.AddContainer(name, "redis", "latest");
+            }
+            """);
+
+        await auto.TypeAsync("aspire add Aspire.Hosting.Redis --source source-feed --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(3));
+
+        await auto.RunCommandAsync(
+            "test -f .nuget-packages/custom.restoreprobe/1.0.0/.nupkg.metadata && " +
+            "grep -q addMyService .aspire/modules/aspire.mts && " +
+            "grep -q addRedis .aspire/modules/aspire.mts",
+            counter);
+    }
+
+    private static void CreateRestoreProbePackage(string sourceDirectory)
+    {
+        Directory.CreateDirectory(sourceDirectory);
+        var packagePath = Path.Combine(sourceDirectory, "Custom.RestoreProbe.1.0.0.nupkg");
+        using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
+        var nuspec = archive.CreateEntry("Custom.RestoreProbe.nuspec");
+        using (var writer = new StreamWriter(nuspec.Open()))
+        {
+            writer.Write("""
+                <?xml version="1.0"?>
+                <package>
+                  <metadata>
+                    <id>Custom.RestoreProbe</id>
+                    <version>1.0.0</version>
+                    <authors>Aspire</authors>
+                    <description>Verifies project-reference restore source hints.</description>
+                  </metadata>
+                </package>
+                """);
+        }
+
+        archive.CreateEntry("lib/net10.0/_._");
+    }
+
     [Fact]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15831")]
     public async Task TypeScriptAppHostWithProjectReferenceIntegration()
