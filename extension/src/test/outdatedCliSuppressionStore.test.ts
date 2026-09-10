@@ -3,7 +3,11 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { FileSystemOutdatedCliSuppressionStore } from '../utils/outdatedCliSuppressionStore';
+import * as sinon from 'sinon';
+import {
+    FileSystemOutdatedCliSuppressionStore,
+    OutdatedCliNotificationClaim,
+} from '../utils/outdatedCliSuppressionStore';
 
 suite('outdatedCliSuppressionStore', () => {
     let directory: string;
@@ -28,6 +32,31 @@ suite('outdatedCliSuppressionStore', () => {
         assert.deepStrictEqual(
             (await first.readAll()).sort(),
             ['/cli/a\u000013.5.0', '/cli/b\u000013.5.0']);
+    });
+
+    test('uses one timestamp for a claim marker and payload', async () => {
+        const nowStub = sinon.stub(Date, 'now');
+        nowStub.onFirstCall().returns(1_000);
+        nowStub.returns(1_001);
+        const first = new FileSystemOutdatedCliSuppressionStore(directory);
+        const second = new FileSystemOutdatedCliSuppressionStore(directory);
+        let claim: OutdatedCliNotificationClaim | undefined;
+
+        try {
+            claim = await first.tryClaimNotification('/cli/a\u000013.5.0');
+            assert.ok(claim);
+            const storageDirectory = path.join(directory, 'outdated-cli-suppressions');
+            const claimMarker = fs.readdirSync(storageDirectory)
+                .find(entry => entry.startsWith('notification-claim-'));
+            assert.ok(claimMarker?.startsWith('notification-claim-1000-'));
+
+            await second.add('/cli/b\u000013.5.0');
+            assert.deepStrictEqual(await second.readAll(), ['/cli/b\u000013.5.0']);
+        }
+        finally {
+            await claim?.release();
+            nowStub.restore();
+        }
     });
 
     test('serializes a suppression written after the final notification check', async () => {

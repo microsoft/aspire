@@ -12,29 +12,29 @@
     box-sizing: border-box;
     max-height: 100vh;
     background-color: #0d1117;
-    border-top: 1px solid var(--neutral-stroke-divider-rest);
+    border-top: 1px solid var(--colorNeutralStroke1);
     transition: transform 120ms ease-out;
-    /* The dock always paints a dark terminal surface, whatever theme the rest of the dashboard is in, so it has
-       to pin the Fluent neutral ramp its descendants read. Otherwise they resolve the ambient theme: in light
-       theme `--neutral-fill-stealth-rest` is #f7f7f7, so the "stealth" tabstrip buttons paint a near-white block
-       on the dark strip, and `Color.Neutral` icons - which FluentIcon emits as an inline
-       `fill: var(--neutral-foreground-rest)` that no plain rule can override - render near-black on near-black.
-       Redefining the custom properties fixes both without !important, because the inline var() resolves here.
-       Values track the dock's own GitHub-dark palette rather than Fluent's dark theme so the buttons match the
-       surrounding surface, tabs, and accent exactly. */
-    --neutral-foreground-rest: #c9d1d9;
-    --neutral-foreground-hover: #f0f6fc;
-    --neutral-foreground-active: #8b949e;
-    /* Stealth must be genuinely transparent so the tabstrip and active-tab colours show through. */
-    --neutral-fill-stealth-rest: transparent;
-    --neutral-fill-stealth-hover: #21262d;
-    --neutral-fill-stealth-active: #30363d;
-    --neutral-fill-rest: #21262d;
-    --neutral-fill-hover: #30363d;
-    --neutral-fill-active: #282e33;
-    --neutral-stroke-divider-rest: #30363d;
+    /* The dock stays dark in both dashboard themes. Pin the Fluent tokens its buttons and icons
+       consume so a light dashboard theme cannot paint dark icons or light controls on the tabstrip. */
+    --colorNeutralForeground1: #c9d1d9;
+    --colorNeutralForeground1Hover: #f0f6fc;
+    --colorNeutralForeground1Pressed: #8b949e;
+    --colorNeutralForeground2: #c9d1d9;
+    --colorNeutralForeground2Hover: #f0f6fc;
+    --colorNeutralForeground2Pressed: #8b949e;
+    --colorNeutralForeground2BrandHover: #58a6ff;
+    --colorNeutralForeground2BrandPressed: #58a6ff;
+    --colorTransparentBackground: transparent;
+    --colorTransparentBackgroundPressed: #30363d;
+    --colorNeutralBackground1: #21262d;
+    --colorNeutralBackground1Hover: #30363d;
+    --colorNeutralBackground1Pressed: #282e33;
+    --colorNeutralBackground2: #21262d;
+    --colorNeutralBackground3: #30363d;
+    --colorNeutralStroke1: #30363d;
     /* Fluent's purple focus ring is close to unreadable on #0d1117; reuse the dock's own accent instead. */
-    --focus-stroke-outer: #58a6ff;
+    --colorBrandStroke1: #58a6ff;
+    --colorStrokeFocus2: #58a6ff;
 }
 
 .terminal-dock.visible {
@@ -52,7 +52,7 @@
     gap: 2px;
     padding: 2px 4px;
     background-color: #161b22;
-    border-bottom: 1px solid var(--neutral-stroke-divider-rest);
+    border-bottom: 1px solid var(--colorNeutralStroke1);
     flex: 0 0 auto;
 }
 
@@ -93,7 +93,7 @@
 }
 
 .terminal-dock-tab-select:focus-visible {
-    outline: 2px solid var(--focus-stroke-outer);
+    outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: -2px;
 }
 
@@ -172,12 +172,12 @@
 }
 
 .terminal-dock-resize-handle:hover {
-    background-color: var(--accent-fill-rest);
+    background-color: var(--colorBrandStroke1);
 }
 
 .terminal-dock-resize-handle:focus-visible {
-    background-color: var(--focus-stroke-outer);
-    outline: 2px solid var(--focus-stroke-outer);
+    background-color: var(--colorStrokeFocus2);
+    outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: -2px;
 }
 

@@ -6,9 +6,8 @@ using Aspire.DashboardService.Proto.V1;
 using Grpc.Core;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageIntent;
+using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageBarIntent;
 
 namespace Aspire.Dashboard.Components.Layout;
 
@@ -71,10 +70,10 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     public required ILogger<TerminalDock> Logger { get; init; }
 
     [Inject]
-    public required INotificationService NotificationService { get; init; }
+    public required Aspire.Dashboard.Model.INotificationService NotificationService { get; init; }
 
     [Inject]
-    public required IToastService ToastService { get; init; }
+    public required Microsoft.FluentUI.AspNetCore.Components.INotificationService ToastService { get; init; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -310,7 +309,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 Body = message,
                 Intent = FluentMessageIntent.Warning
             });
-            ToastService.ShowWarning(message);
+            await ToastService.ShowWarningToastAsync(message).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -270,7 +270,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     {
         if (param.IsCallback)
         {
-            return $"self._client.register_callback({paramName})";
+            return $"self._client.register_callback({paramName}{GetCallbackParameterTypeIds(param)})";
         }
         if (param.Type?.TypeId == AtsConstants.CancellationToken)
         {
@@ -283,13 +283,30 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     {
         if (param.IsCallback)
         {
-            return $"client.register_callback({paramName})";
+            return $"client.register_callback({paramName}{GetCallbackParameterTypeIds(param)})";
         }
         if (param.Type?.TypeId == AtsConstants.CancellationToken)
         {
             return $"client.register_cancellation_token({paramName})";
         }
         return paramName;
+    }
+
+    private static string GetCallbackParameterTypeIds(AtsParameterInfo parameter)
+    {
+        if (parameter.CallbackParameters is not { Count: > 0 } callbackParameters ||
+            !callbackParameters.Any(callbackParameter => IsHandleType(callbackParameter.Type)))
+        {
+            return string.Empty;
+        }
+
+        var typeIds = callbackParameters.Select(callbackParameter =>
+            IsHandleType(callbackParameter.Type)
+                ? JsonValue.Create(callbackParameter.Type.TypeId)!.ToJsonString()
+                : "None");
+        var tupleSuffix = callbackParameters.Count == 1 ? "," : string.Empty;
+
+        return $", ({string.Join(", ", typeIds)}{tupleSuffix})";
     }
 
     /// <summary>

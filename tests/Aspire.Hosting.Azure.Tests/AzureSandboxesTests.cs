@@ -39,6 +39,99 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AzureSandboxGroupsAddDashboardLinksToDeploymentSummary()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var firstGroup = builder.AddAzureSandboxGroup("first");
+        firstGroup.Resource.Outputs["id"] = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/example-rg/providers/Microsoft.App/sandboxGroups/first-group";
+        firstGroup.Resource.Outputs["location"] = "westus3";
+        var secondGroup = builder.AddAzureSandboxGroup("second");
+        secondGroup.Resource.Outputs["id"] = "/subscriptions/22222222-2222-2222-2222-222222222222/resourceGroups/other-rg/providers/Microsoft.App/sandboxGroups/second-group";
+        secondGroup.Resource.Outputs["location"] = "eastus2";
+
+        using var app = builder.Build();
+        var firstSteps = await CreateStepsAsync(app, firstGroup.Resource);
+        var firstSummaryStep = Assert.Single(firstSteps, step => step.Name == "print-azure-sandboxes-dashboard-first");
+        Assert.Contains(AzureEnvironmentResource.ProvisionInfrastructureStepName, firstSummaryStep.DependsOnSteps);
+        Assert.Contains(WellKnownPipelineSteps.Deploy, firstSummaryStep.RequiredBySteps);
+        Assert.Contains("print-summary", firstSummaryStep.Tags);
+
+        var secondSteps = await CreateStepsAsync(app, secondGroup.Resource);
+        var secondSummaryStep = Assert.Single(secondSteps, step => step.Name == "print-azure-sandboxes-dashboard-second");
+
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        await using var firstReportingStep = await new NullPublishingActivityReporter().CreateStepAsync("first");
+        await firstSummaryStep.Action(new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = firstReportingStep
+        });
+        await using var secondReportingStep = await new NullPublishingActivityReporter().CreateStepAsync("second");
+        await secondSummaryStep.Action(new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = secondReportingStep
+        });
+
+        Assert.Collection(
+            pipelineContext.Summary.Items,
+            item =>
+            {
+                const string expectedUrl = "https://sandboxes.azure.com/sandbox-groups/11111111-1111-1111-1111-111111111111/example-rg/first-group";
+                Assert.Equal("first sandbox dashboard", item.Key);
+                Assert.Equal($"[{expectedUrl}]({expectedUrl})", item.Value);
+                Assert.True(item.EnableMarkdown);
+            },
+            item =>
+            {
+                const string expectedUrl = "https://sandboxes.azure.com/sandbox-groups/22222222-2222-2222-2222-222222222222/other-rg/second-group";
+                Assert.Equal("second sandbox dashboard", item.Key);
+                Assert.Equal($"[{expectedUrl}]({expectedUrl})", item.Value);
+                Assert.True(item.EnableMarkdown);
+            });
+    }
+
+    [Fact]
+    public async Task ExcludedAzureSandboxGroupDoesNotAddDashboardLinkToDeploymentSummary()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .ExcludeFromManifest();
+
+        using var app = builder.Build();
+        var steps = await CreateStepsAsync(app, sandboxGroup.Resource);
+        var summaryStep = Assert.Single(steps, step => step.Name == "print-azure-sandboxes-dashboard-sandboxes");
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("summary");
+
+        await summaryStep.Action(new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        });
+
+        Assert.Empty(pipelineContext.Summary.Items);
+    }
+
+    [Fact]
+    public void AzureSandboxDashboardUrlEscapesRouteSegments()
+    {
+        Assert.Equal(
+            "https://sandboxes.azure.com/sandbox-groups/subscription%20id/resource%20group/sandbox%2Fgroup",
+            AzureSandboxGroupResource.GetDashboardUrl("subscription id", "resource group", "sandbox/group"));
+    }
+
+    [Fact]
     public void ExistingSandboxDataPlaneScopeUsesActualResourceOutputs()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -126,7 +219,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             .WithAzureUserAssignedIdentity(identity)
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -173,7 +266,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             .WithNoManagedIdentity();
         builder.AddContainer("worker", "image")
             .WithAnnotation(new AppIdentityAnnotation(computeIdentity.Resource))
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -195,7 +288,8 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var otherGroup = builder.AddAzureSandboxGroup("other-sandboxes");
         builder.AddContainer("worker", "image")
             .WithAnnotation(new AppIdentityAnnotation(identity.Resource))
-            .PublishAsAzureSandbox(sandboxGroup);
+            .WithComputeEnvironment(sandboxGroup)
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -220,7 +314,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             .PublishAsExisting("existing-sandboxes", "existing-rg");
         builder.AddContainer("worker", "image")
             .WithAnnotation(new AppIdentityAnnotation(identity.Resource))
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
 
@@ -373,8 +467,8 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var configureCalled = false;
         var buildOptionsCallbackCount = container.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count();
 
-        container.PublishAsAzureSandbox(sandboxGroup, options => configureCalled = true);
-        container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        container.PublishAsAzureSandbox(options => configureCalled = true);
+        container.PublishAsAzureSandbox(new AzureSandboxOptions
         {
             AutoSuspendMode = (AzureSandboxAutoSuspendMode)(-1)
         });
@@ -848,6 +942,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public void SandboxSecurityChangesDisablePreviousGenerationRetention()
     {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var endpoints = new[]
         {
             new AzureSandboxContainerDeployment.SandboxEndpoint(
@@ -941,14 +1036,6 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             identitySettings,
             AzureSandboxContainerDeployment.CreateEgressPolicy(["other.example.com"]));
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedEgressFingerprint, hasRuntimeEnvironmentConfiguration: false));
-    }
-
-    [Fact]
-    public void SandboxReadinessProbeDoesNotFollowRedirects()
-    {
-        using var handler = AzureSandboxContainerDeployment.CreatePublicEndpointHttpHandler();
-
-        Assert.False(handler.AllowAutoRedirect);
     }
 
     [Fact]
@@ -1793,6 +1880,111 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AzureDevComputeClientAddsEntraAuthorizedPortWithoutSecrets()
+    {
+        var handler = new RecordingHandler(async request =>
+        {
+            var body = await request.Content!.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            Assert.Equal(5, root.EnumerateObject().Count());
+            Assert.Equal("webhook", root.GetProperty("name").GetString());
+            Assert.Equal(8080, root.GetProperty("port").GetInt32());
+            Assert.Equal("OnDemand", root.GetProperty("activationMode").GetString());
+            Assert.Equal("Http", root.GetProperty("protocol").GetString());
+
+            var auth = root.GetProperty("auth");
+            Assert.Equal(2, auth.EnumerateObject().Count());
+            Assert.False(auth.GetProperty("anonymous").GetBoolean());
+            var entraId = auth.GetProperty("entraId");
+            Assert.True(entraId.GetProperty("enabled").GetBoolean());
+            Assert.Equal(
+                ["11111111-1111-1111-1111-111111111111"],
+                entraId.GetProperty("objectIds").EnumerateArray().Select(static item => item.GetString()!).ToArray());
+            Assert.Equal(
+                ["22222222-2222-2222-2222-222222222222"],
+                entraId.GetProperty("tenantIds").EnumerateArray().Select(static item => item.GetString()!).ToArray());
+
+            return JsonResponse(
+                """
+                {
+                  "ports": [
+                    { "name": "webhook", "port": 8080, "url": "https://sandbox.example.test" }
+                  ]
+                }
+                """);
+        });
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var ports = await client.AddPortAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "sandbox-1",
+            new AzureDevComputeAddPortRequest
+            {
+                Name = "webhook",
+                Port = 8080,
+                ActivationMode = "OnDemand",
+                Auth = new AzureDevComputePortAuthConfig
+                {
+                    Anonymous = false,
+                    EntraId = new AzureDevComputePortEntraIdAuthConfig
+                    {
+                        Enabled = true,
+                        ObjectIds = ["11111111-1111-1111-1111-111111111111"],
+                        TenantIds = ["22222222-2222-2222-2222-222222222222"]
+                    }
+                },
+                Protocol = "Http"
+            },
+            CancellationToken.None);
+
+        Assert.Equal(8080, Assert.Single(ports).Port);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientAddsDefaultEntraAuthenticatedPort()
+    {
+        var handler = new RecordingHandler(async request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+
+            var body = await request.Content!.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(body);
+            var auth = document.RootElement.GetProperty("auth");
+            Assert.False(auth.TryGetProperty("anonymous", out _));
+            var entraId = auth.GetProperty("entraId");
+            Assert.True(entraId.GetProperty("enabled").GetBoolean());
+            Assert.Empty(entraId.GetProperty("objectIds").EnumerateArray());
+            Assert.Empty(entraId.GetProperty("tenantIds").EnumerateArray());
+
+            return JsonResponse(
+                """
+                {
+                  "ports": [
+                    { "port": 8080, "url": "https://sandbox.example.test" }
+                  ]
+                }
+                """);
+        });
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var ports = await client.AddPortAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "sandbox-1",
+            new AzureDevComputeAddPortRequest
+            {
+                Port = 8080,
+                Auth = AzureSandboxContainerDeployment.CreatePortAuthConfig(anonymous: false),
+                Protocol = "Http"
+            },
+            CancellationToken.None);
+
+        var port = Assert.Single(ports);
+        Assert.Equal(8080, port.Port);
+        Assert.Equal("https://sandbox.example.test/", port.Url.ToString());
+    }
+
+    [Fact]
     public async Task SandboxContainerOptionsMapToRuntimeRequestShapes()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -1801,7 +1993,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+            .PublishAsAzureSandbox(new AzureSandboxOptions
             {
                 Tier = AzureSandboxTier.Large,
                 AutoSuspendEnabled = false,
@@ -1810,7 +2002,6 @@ public class AzureSandboxesTests(ITestOutputHelper output)
                 AutoDeleteEnabled = true,
                 AutoDeleteInterval = TimeSpan.FromHours(1),
                 AutoDeleteTrigger = AzureSandboxAutoDeleteTrigger.AfterSuspend,
-                PublicEndpointReadyTimeout = TimeSpan.FromMinutes(2),
                 Endpoints =
                 [
                     new AzureSandboxEndpointOptions
@@ -1845,7 +2036,6 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Null(lifecycle.AutoDeletePolicy.DeleteIntervalInDays);
         Assert.Equal(3600, lifecycle.AutoDeletePolicy.DeleteIntervalInSeconds);
         Assert.Equal("AfterSuspend", lifecycle.AutoDeletePolicy.Trigger);
-        Assert.Equal(TimeSpan.FromMinutes(2), AzureSandboxContainerDeployment.GetPublicEndpointReadyTimeout(sandboxContainer));
 
         var egress = AzureSandboxContainerDeployment.CreateEgressPolicy(
         [
@@ -1884,14 +2074,14 @@ public class AzureSandboxesTests(ITestOutputHelper output)
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var defaultResource = builder.AddContainer("default", "image")
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
         var disabledResource = builder.AddContainer("disabled", "image")
-            .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+            .PublishAsAzureSandbox(new AzureSandboxOptions
             {
                 AutoSuspendEnabled = false
             });
         var enabledResource = builder.AddContainer("enabled", "image")
-            .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+            .PublishAsAzureSandbox(new AzureSandboxOptions
             {
                 AutoSuspendEnabled = true,
                 AutoSuspendInterval = TimeSpan.FromMinutes(5),
@@ -1929,35 +2119,27 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var container = builder.AddContainer("frontend", "image");
 
-        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(new AzureSandboxOptions
         {
             AutoSuspendInterval = TimeSpan.FromMilliseconds(1500)
         }));
-        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(new AzureSandboxOptions
         {
             AutoSuspendInterval = TimeSpan.FromSeconds((double)int.MaxValue + 1)
         }));
-        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(new AzureSandboxOptions
         {
             AutoDeleteInterval = TimeSpan.FromSeconds(-1)
         }));
-        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
-        {
-            PublicEndpointReadyTimeout = TimeSpan.Zero
-        }));
-        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
-        {
-            PublicEndpointReadyTimeout = TimeSpan.FromSeconds((double)int.MaxValue + 1)
-        }));
-        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(new AzureSandboxOptions
         {
             AutoSuspendMode = (AzureSandboxAutoSuspendMode)(-1)
         }));
-        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(new AzureSandboxOptions
         {
             AutoDeleteTrigger = (AzureSandboxAutoDeleteTrigger)(-1)
         }));
-        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(new AzureSandboxOptions
         {
             Endpoints =
             [
@@ -1975,7 +2157,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
             .WithVolume("cache", "/cache")
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -1994,7 +2176,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()
             .AsHttp2Service()
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -2017,12 +2199,12 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var api = builder.AddContainer("api", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
             .WithHttpEndpoint(targetPort: 3000)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -2046,7 +2228,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+            .PublishAsAzureSandbox(new AzureSandboxOptions
             {
                 Endpoints =
                 [
@@ -2080,7 +2262,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             .WithHttpEndpoint(name: "public", targetPort: 8080)
             .WithHttpEndpoint(name: "private", targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+            .PublishAsAzureSandbox(new AzureSandboxOptions
             {
                 Endpoints =
                 [
@@ -2119,7 +2301,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddContainer("cache", "redis", "latest")
             .WithEndpoint(targetPort: 6379, scheme: "tcp", isExternal: true)
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -2158,7 +2340,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
                 options.ImageFormat = ContainerImageFormat.Oci;
                 options.TargetPlatform = ContainerTargetPlatform.LinuxArm64;
             })
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
         var frontendCallbackCount = frontend.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count();
         var backendCallbackCount = backend.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count();
 
@@ -2340,7 +2522,11 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         builder.AddProject<TestProject>("frontend", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 5000)
             .WithExternalHttpEndpoints()
-            .WithComputeEnvironment(sandboxGroup);
+            .WithComputeEnvironment(sandboxGroup)
+            .PublishAsAzureSandbox(new AzureSandboxOptions
+            {
+                Tier = AzureSandboxTier.Large
+            });
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -2355,6 +2541,238 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var sandboxEndpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
         Assert.Equal(5000, sandboxEndpoint.TargetPort);
         Assert.True(sandboxEndpoint.IsExternal);
+        var resources = AzureSandboxContainerDeployment.CreateSandboxResources(sandboxContainer);
+        Assert.Equal("2000m", resources.Cpu);
+        Assert.Equal("4096Mi", resources.Memory);
+        Assert.Equal("40960Mi", resources.Disk);
+    }
+
+    [Fact]
+    public async Task PublishAsAzureSandboxRequiresSandboxGroup()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddContainer("frontend", "image")
+            .PublishAsAzureSandbox();
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Equal(
+            "Resource 'frontend' is configured to publish as an Azure sandbox, but there are no 'AzureSandboxGroupResource' resources. Ensure you have added one by calling 'AddAzureSandboxGroup'.",
+            exception.InnerException?.Message);
+    }
+
+    [Fact]
+    public async Task PublishAsAzureSandboxRequiresMatchingSandboxGroup()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureSandboxGroup("sandboxes");
+        var containerApps = builder.AddAzureContainerAppEnvironment("containerapps");
+        builder.AddContainer("frontend", "image")
+            .WithComputeEnvironment(containerApps)
+            .PublishAsAzureSandbox();
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Equal(
+            "Resource 'frontend' is configured to publish as an Azure sandbox, but it is assigned to compute environment 'containerapps', which is not an active Azure sandbox group. Assign it to an 'AzureSandboxGroupResource' by calling 'WithComputeEnvironment'.",
+            exception.InnerException?.Message);
+    }
+
+    [Fact]
+    public async Task SandboxGroupAutomaticallyDeploysDotNetProjectWithoutExposingEndpoints()
+    {
+        using var tempDir = new TemporaryDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddProject<TestProject>("frontend");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var project = Assert.Single(model.GetProjectResources(), resource => resource.Name == "frontend");
+        Assert.Same(sandboxGroup.Resource, project.GetComputeEnvironment());
+        Assert.Collection(
+            project.GetEndpoints().OrderBy(static endpoint => endpoint.EndpointName, StringComparer.Ordinal),
+            endpoint => Assert.Equal("http", endpoint.EndpointName),
+            endpoint => Assert.Equal("https", endpoint.EndpointName));
+        var deploymentTarget = Assert.IsType<AzureSandboxContainerResource>(
+            project.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        Assert.Empty(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(deploymentTarget));
+
+        var pipelineContext = new PipelineContext(
+            model,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+        var environment = await AzureSandboxContainerDeployment.ResolveEnvironmentVariablesAsync(stepContext, project);
+        Assert.Equal("8080", environment.Values["HTTP_PORTS"]);
+        Assert.False(environment.Values.ContainsKey("HTTPS_PORTS"));
+    }
+
+    [Fact]
+    public async Task SandboxProjectExternalHttpEndpointUsesPlaintextHttpListener()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddProject<TestProject>("frontend", launchProfileName: null)
+            .WithHttpsEndpoint(targetPort: 7001)
+            .WithHttpEndpoint(targetPort: 5001)
+            .WithEndpoint("http", endpoint => endpoint.IsExternal = true);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var project = Assert.Single(
+            app.Services.GetRequiredService<DistributedApplicationModel>().GetProjectResources(),
+            resource => resource.Name == "frontend");
+        var deploymentTarget = Assert.IsType<AzureSandboxContainerResource>(
+            project.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var endpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(deploymentTarget));
+
+        Assert.Equal("http", endpoint.Name);
+        Assert.Equal(5001, endpoint.TargetPort);
+        Assert.Equal("Http", endpoint.Protocol);
+        Assert.True(endpoint.IsExternal);
+    }
+
+    [Fact]
+    public async Task SandboxProjectRejectsExposedHttpsEndpointWithoutPlaintextHttpEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddProject<TestProject>("frontend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var project = Assert.Single(
+            app.Services.GetRequiredService<DistributedApplicationModel>().GetProjectResources(),
+            resource => resource.Name == "frontend");
+        var deploymentTarget = Assert.IsType<AzureSandboxContainerResource>(
+            project.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var exception = Assert.Throws<NotSupportedException>(
+            () => AzureSandboxContainerDeployment.ResolveSandboxEndpoints(deploymentTarget));
+
+        Assert.Equal(
+            "Endpoint 'https' on project resource 'frontend' is exposed through Azure sandbox ingress, which terminates TLS and forwards plaintext HTTP. Add an HTTP endpoint that shares this endpoint's target port.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task SandboxProjectSharedHttpHttpsPortUsesConfiguredAccessPolicy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddProject<TestProject>("frontend")
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(new AzureSandboxOptions
+            {
+                Endpoints =
+                [
+                    new AzureSandboxEndpointOptions
+                    {
+                        Name = "http",
+                        Anonymous = true
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var project = Assert.Single(
+            model.GetProjectResources(),
+            resource => resource.Name == "frontend");
+        var deploymentTarget = Assert.IsType<AzureSandboxContainerResource>(
+            project.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var endpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(deploymentTarget));
+        Assert.Equal("http", endpoint.Name);
+        Assert.Equal(8080, endpoint.TargetPort);
+        Assert.True(endpoint.Anonymous);
+
+        var pipelineContext = new PipelineContext(
+            model,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+        var stateManager = app.Services.GetRequiredService<IDeploymentStateManager>();
+        var state = await stateManager.AcquireSectionAsync(
+            AzureSandboxContainerDeployment.GetStateSectionName(deploymentTarget),
+            TestContext.Current.CancellationToken);
+        state.Data["Ports"] = new JsonArray(new JsonObject
+        {
+            ["Name"] = "http",
+            ["Port"] = 8080,
+            ["Url"] = "https://frontend.example.test"
+        });
+        await stateManager.SaveSectionAsync(state, TestContext.Current.CancellationToken);
+
+        Assert.True(AzureSandboxContainerDeployment.TryResolveEndpointReferenceValue(
+            project.GetEndpoint("http"),
+            sandboxGroup.Resource,
+            out var httpUrlExpression));
+        Assert.True(AzureSandboxContainerDeployment.TryResolveEndpointReferenceValue(
+            project.GetEndpoint("https"),
+            sandboxGroup.Resource,
+            out var httpsUrlExpression));
+        Assert.Equal("https://frontend.example.test", (await AzureSandboxContainerDeployment.ResolveValueWithEgressHostsAsync(stepContext, project, httpUrlExpression)).Value);
+        Assert.Equal("https://frontend.example.test", (await AzureSandboxContainerDeployment.ResolveValueWithEgressHostsAsync(stepContext, project, httpsUrlExpression)).Value);
+    }
+
+    [Fact]
+    public async Task MultipleSandboxGroupsDeployOneDotNetProjectEach()
+    {
+        using var tempDir = new TemporaryDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path);
+
+        var frontendGroup = builder.AddAzureSandboxGroup("frontend-group");
+        var backendGroup = builder.AddAzureSandboxGroup("backend-group");
+        var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithComputeEnvironment(frontendGroup);
+        var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithComputeEnvironment(backendGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var frontendTarget = Assert.IsType<AzureSandboxContainerResource>(
+            frontend.Resource.GetDeploymentTargetAnnotation(frontendGroup.Resource)?.DeploymentTarget);
+        var backendTarget = Assert.IsType<AzureSandboxContainerResource>(
+            backend.Resource.GetDeploymentTargetAnnotation(backendGroup.Resource)?.DeploymentTarget);
+        Assert.Null(frontend.Resource.GetDeploymentTargetAnnotation(backendGroup.Resource));
+        Assert.Null(backend.Resource.GetDeploymentTargetAnnotation(frontendGroup.Resource));
+        Assert.Empty(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(frontendTarget));
+        Assert.Empty(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(backendTarget));
     }
 
     [Fact]
@@ -2388,7 +2806,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var container = builder.AddContainer("frontend", "example.azurecr.io/frontend", "latest")
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -2427,11 +2845,11 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var api = builder.AddContainer("api", "image")
             .WithHttpEndpoint(name: "http", targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
         var endpointExpression = ReferenceExpression.Create($"{api.GetEndpoint("http")}/v1");
         var web = builder.AddContainer("web", "image")
             .WithEnvironment("API_URL", endpointExpression)
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -2474,6 +2892,80 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task SandboxConnectionReferencesAreIncludedInEgressPolicy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureSandboxGroup("sandboxes");
+        var storage = builder.AddAzureStorage("storage");
+        var blobs = storage.AddBlobs("blobs");
+        var worker = builder.AddProject<TestProject>("worker", launchProfileName: null)
+            .WithReference(blobs)
+            .PublishAsAzureSandbox();
+
+        using var app = builder.Build();
+        storage.Resource.Outputs["blobEndpoint"] = "https://storage.blob.core.windows.net/";
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+
+        var environment = await AzureSandboxContainerDeployment.ResolveEnvironmentVariablesAsync(
+            stepContext,
+            worker.Resource);
+        var egressPolicy = AzureSandboxContainerDeployment.CreateEgressPolicy(environment.EgressHosts);
+
+        Assert.Equal("https://storage.blob.core.windows.net/", environment.Values["ConnectionStrings__blobs"]);
+        var hostRule = Assert.Single(egressPolicy.HostRules);
+        Assert.Equal("storage.blob.core.windows.net", hostRule.Pattern);
+    }
+
+    [Fact]
+    public async Task SandboxConnectionReferencesDoNotTreatCredentialsAsEgressHosts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureSandboxGroup("sandboxes");
+        var connection = builder.AddConnectionString(
+            "external",
+            ReferenceExpression.Create($"Endpoint=https://api.example.test;Password=https://credential.example.test"));
+        var worker = builder.AddProject<TestProject>("worker", launchProfileName: null)
+            .WithReference(connection)
+            .PublishAsAzureSandbox();
+
+        using var app = builder.Build();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+
+        var environment = await AzureSandboxContainerDeployment.ResolveEnvironmentVariablesAsync(
+            stepContext,
+            worker.Resource);
+
+        Assert.Equal(
+            "Endpoint=https://api.example.test;Password=https://credential.example.test",
+            environment.Values["ConnectionStrings__external"]);
+        Assert.Equal(["api.example.test"], environment.EgressHosts);
+    }
+
+    [Fact]
     public async Task SandboxDeployStepsFollowReferencedEndpointDependencies()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -2482,10 +2974,10 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var api = builder.AddContainer("api", "image")
             .WithHttpEndpoint(name: "http", targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
         var web = builder.AddContainer("web", "image")
             .WithEnvironment("API_URL", ReferenceExpression.Create($"{api.GetEndpoint("http")}/v1"))
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -2521,10 +3013,12 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var api = builder.AddContainer("api", "image")
             .WithHttpEndpoint(name: "http", targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(producerGroup);
+            .WithComputeEnvironment(producerGroup)
+            .PublishAsAzureSandbox();
         builder.AddContainer("web", "image")
             .WithEnvironment("API_URL", api.GetEndpoint("http"))
-            .PublishAsAzureSandbox(consumerGroup);
+            .WithComputeEnvironment(consumerGroup)
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -2557,11 +3051,11 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var first = builder.AddContainer("first", "image")
             .WithHttpEndpoint(name: "http", targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
         var second = builder.AddContainer("second", "image")
             .WithHttpEndpoint(name: "http", targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
         first.WithEnvironment("SECOND_URL", second.GetEndpoint("http"));
         second.WithEnvironment("FIRST_URL", first.GetEndpoint("http"));
 
@@ -2638,11 +3132,11 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var api = builder.AddContainer("api", "image")
             .WithHttpEndpoint(name: "http", targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
         var worker = builder.AddContainer("worker", "image")
             .WithArgs(ReferenceExpression.Create(
                 $"https://{api.GetEndpoint("http").Property(EndpointProperty.HostAndPort)}/v1"))
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -2688,7 +3182,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var worker = builder.AddContainer("worker", "image")
             .WithEnvironment("LITERAL_URL", "https://literal.example")
             .WithEnvironment("SECRET", secret)
-            .PublishAsAzureSandbox(sandboxGroup);
+            .PublishAsAzureSandbox();
 
         using var app = builder.Build();
         var pipelineContext = new PipelineContext(
@@ -2750,11 +3244,14 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         }
     }
 
-    private static async Task<List<PipelineStep>> CreateStepsAsync(DistributedApplication app, IResource resource)
+    private static async Task<List<PipelineStep>> CreateStepsAsync(
+        DistributedApplication app,
+        IResource resource,
+        DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)
     {
         var pipelineContext = new PipelineContext(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
-            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            new DistributedApplicationExecutionContext(operation),
             app.Services,
             NullLogger.Instance,
             CancellationToken.None);
@@ -2826,6 +3323,18 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "testproject";
+
+        public LaunchSettings LaunchSettings { get; } = new()
+        {
+            Profiles =
+            {
+                ["http"] = new()
+                {
+                    CommandName = "Project",
+                    ApplicationUrl = "https://localhost:7001;http://localhost:5000"
+                }
+            }
+        };
     }
 
     private sealed class TemporaryDirectory : IDisposable

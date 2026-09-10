@@ -14,6 +14,8 @@ namespace Aspire.Dashboard.Components.Controls;
 
 public partial class UserProfile : ComponentBase
 {
+    private readonly string _profileButtonId = $"profile-menu-button-{Guid.NewGuid():N}";
+
     [Inject]
     public required IOptionsMonitor<DashboardOptions> DashboardOptions { get; init; }
 
@@ -33,6 +35,7 @@ public partial class UserProfile : ComponentBase
     public string ImageSize { get; set; } = "52px";
 
     private bool _showUserProfileMenu;
+    private bool _profileMenuOpen;
     private string? _name;
     private string? _username;
     private string? _initials;

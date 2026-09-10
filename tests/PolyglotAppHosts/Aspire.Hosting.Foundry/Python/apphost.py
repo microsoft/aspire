@@ -18,12 +18,14 @@ with create_builder() as builder:
 
     _chat_from_model = foundry.add_deployment("chat-from-model", model)
 
-    local_foundry = builder.add_foundry("local-foundry").run_as_foundry_local()
+    local_foundry = builder.add_foundry("local-foundry").run_as_foundry_local(
+        endpoint="http://windows-host:5273")
     _local_chat = local_foundry.add_deployment(
         "local-chat",
         "Phi-3.5-mini-instruct",
         model_version="1",
         format="Microsoft")
+    _local_chat.local_model_id = "Phi-3.5-mini-instruct-generic-gpu:1"
 
     registry = builder.add_azure_container_registry("registry")
     key_vault = builder.add_azure_key_vault("vault")

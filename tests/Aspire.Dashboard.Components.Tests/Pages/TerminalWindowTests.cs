@@ -171,18 +171,20 @@ public class TerminalWindowTests : DashboardTestContext
             Assert.False(intermediateRoute.IsCompleted);
             Assert.False(latestRoute.IsCompleted);
             Assert.Equal(1, client.TerminalSubscriptionCount);
+            Assert.Equal(latestId, head.Find("title").TextContent);
 
             releaseUpdate.TrySetResult();
             await Task.WhenAll(intermediateRoute, latestRoute).DefaultTimeout();
+            // The replacement watch starts on a worker and doesn't render until it receives an update.
+            // Observe that update before asserting subscription counts, which don't trigger a render themselves.
+            await latestUpdates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Retitled, latestId, "Latest title"));
+            head.WaitForAssertion(() => Assert.Equal("Latest title", head.Find("title").TextContent));
             cut.WaitForAssertion(() =>
             {
                 Assert.Equal(2, client.TerminalSubscriptionCount);
                 Assert.Equal(1, client.ActiveTerminalSubscriptionCount);
                 Assert.Single(cut.FindComponents<TerminalView>());
-                Assert.Equal(latestId, head.Find("title").TextContent);
             });
-            await latestUpdates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Retitled, latestId, "Latest title"));
-            head.WaitForAssertion(() => Assert.Equal("Latest title", head.Find("title").TextContent));
         }
         finally
         {

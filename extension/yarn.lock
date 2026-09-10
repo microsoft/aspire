@@ -1582,9 +1582,9 @@ base64-js@^1.3.1:
   integrity sha1-GxtEAWClv3rUC2UPCVljSBkDkwo=
 
 baseline-browser-mapping@^2.10.12:
-  version "2.10.13"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/baseline-browser-mapping/-/baseline-browser-mapping-2.10.13.tgz"
-  integrity sha1-WhVMxFiRkwFaJ049GDGbDXa5Ik4=
+  version "2.11.20"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/baseline-browser-mapping/-/baseline-browser-mapping-2.11.20.tgz#26078c7a4b08299656ea7ddceaebec955dc44303"
+  integrity sha1-JgeMeksIKZZW6n3c6uvslV3EQwM=
 
 binary-extensions@^2.0.0:
   version "2.3.0"

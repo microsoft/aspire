@@ -25,6 +25,11 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
 {
     internal const string ImagePullIdentityClientIdOutputName = "imagePullIdentityClientId";
 
+    // The sandbox group ARM response exposes its data-plane management endpoint, but not a dashboard URL.
+    // Sandboxes currently supports Azure public cloud only, so use its public portal until ARM provides
+    // cloud-specific dashboard metadata.
+    private const string DashboardBaseUrl = "https://sandboxes.azure.com";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureSandboxGroupResource"/> class.
     /// </summary>
@@ -45,6 +50,15 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
                     Action = PrepareDeploymentTargetsAsync,
                     DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
                     RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+                },
+                new()
+                {
+                    Name = $"print-azure-sandboxes-dashboard-{Name}",
+                    Description = $"Adds the Azure sandbox dashboard for {Name} to the deployment summary.",
+                    Action = AddDashboardToPipelineSummaryAsync,
+                    DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
+                    RequiredBySteps = [WellKnownPipelineSteps.Deploy],
+                    Tags = ["print-summary"]
                 }
             };
 
@@ -142,6 +156,28 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
 
             return azureRegistry;
         }
+    }
+
+    internal static string GetDashboardUrl(string subscriptionId, string resourceGroupName, string sandboxGroupName)
+    {
+        return $"{DashboardBaseUrl}/sandbox-groups/{Uri.EscapeDataString(subscriptionId)}/{Uri.EscapeDataString(resourceGroupName)}/{Uri.EscapeDataString(sandboxGroupName)}";
+    }
+
+    private async Task AddDashboardToPipelineSummaryAsync(PipelineStepContext context)
+    {
+        if (this.IsExcludedFromPublish())
+        {
+            return;
+        }
+
+        var scope = AzureSandboxContainerDeployment.CreateDataPlaneScope(this);
+        var dashboardUrl = GetDashboardUrl(scope.SubscriptionId, scope.ResourceGroupName, scope.SandboxGroupName);
+        context.Summary.Add($"{Name} sandbox dashboard", new MarkdownString($"[{dashboardUrl}]({dashboardUrl})"));
+
+        await context.ReportingStep.CompleteAsync(
+            new MarkdownString($"Sandbox dashboard available at [{dashboardUrl}]({dashboardUrl})"),
+            CompletionState.Completed,
+            context.CancellationToken).ConfigureAwait(false);
     }
 
     private async Task PrepareDeploymentTargetsAsync(PipelineStepContext context)

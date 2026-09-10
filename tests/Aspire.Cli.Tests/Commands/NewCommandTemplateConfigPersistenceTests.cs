@@ -23,9 +23,8 @@ namespace Aspire.Cli.Tests.Commands;
 /// persists into <c>aspire.config.json</c>. Drives <see cref="NewCommand"/> end-to-end
 /// through real <c>CliTemplateFactory</c> + real <c>ScaffoldingService</c> /
 /// <c>TypeScriptStarterTemplate</c> / <c>{Go,Python}StarterTemplate</c> writers, with only
-/// <see cref="IAppHostServerProjectFactory"/> swapped for a fake whose
-/// <see cref="IAppHostServerProject.PrepareAsync"/> returns failure so the early on-disk
-/// side-effect is captured without touching the network, the dotnet CLI, npm, or RPC.
+/// the process and RPC boundaries replaced by successful in-memory fakes so the tests do
+/// not touch the network, the dotnet CLI, npm, or RPC.
 /// <para>
 /// This is the integration-level regression net for the channel-pin/SDK-version mismatch
 /// bug class (PR #17120 + davidfowl follow-up). The original fix landed in the TS starter
@@ -267,8 +266,10 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         services.AddSingleton<IAppHostServerProjectFactory>(_ => new TestAppHostServerProjectFactory
         {
             CreateAsyncCallback = (path, _) =>
-                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(path))
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
         });
+        services.AddSingleton<IAppHostServerSessionFactory>(
+            FakeAppHostServerSessionFactory.CreateForScaffolding());
 
         using var serviceProvider = services.BuildServiceProvider();
         var newCommand = serviceProvider.GetRequiredService<NewCommand>();
@@ -292,6 +293,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
 
         var parseResult = newCommand.Parse(string.Join(" ", commandArguments));
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal((int)CliExitCodes.Success, exitCode);
 
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, outputDirectoryName);
         switch (testCase.Contract)
@@ -320,7 +322,6 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 break;
 
             case PrDogfoodNewTemplateContract.DotNetTemplate:
-                Assert.Equal((int)CliExitCodes.Success, exitCode);
                 var install = Assert.Single(dotNetTemplateInstalls);
                 Assert.Equal(TemplateNuGetConfigService.TemplatesPackageName, install.PackageName);
                 Assert.Equal(s_prVersion, install.Version);
@@ -343,9 +344,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     /// <summary>
     /// Drives <c>aspire new &lt;templateId&gt;</c> against the real <see cref="NewCommand"/>,
     /// real <c>CliTemplateFactory</c>, and real <see cref="Aspire.Cli.Scaffolding.ScaffoldingService"/>
-    /// — only the <see cref="IAppHostServerProjectFactory"/> is swapped out for a fake whose
-    /// <c>PrepareAsync</c> returns failure, so the run terminates cleanly after the early
-    /// channel write side-effect we want to inspect.
+    /// while replacing the process and RPC boundaries with successful in-memory fakes.
     /// </summary>
     /// <returns>
     /// The <c>channel</c> value persisted to <c>aspire.config.json</c> in the scaffolded
@@ -377,17 +376,16 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             ];
         });
 
-        // Override the real IAppHostServerProjectFactory so PrepareAsync returns failure
-        // and the (real) scaffolding / starter writer terminates without touching the
-        // network, the dotnet CLI, or template restore. The earlier channel-write
-        // side-effect still runs (when a channel was resolved), which is exactly what
-        // this test inspects. Last AddSingleton wins for GetRequiredService, so this
-        // replaces the default registration from CliTestHelper.
+        // Run through the complete scaffolding path without touching the network, the dotnet
+        // CLI, or template restore. Last AddSingleton wins for GetRequiredService, so these
+        // replace the default registrations from CliTestHelper.
         services.AddSingleton<IAppHostServerProjectFactory>(_ => new TestAppHostServerProjectFactory
         {
             CreateAsyncCallback = (path, _) =>
-                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(path))
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
         });
+        services.AddSingleton<IAppHostServerSessionFactory>(
+            FakeAppHostServerSessionFactory.CreateForScaffolding());
 
         using var serviceProvider = services.BuildServiceProvider();
         var newCommand = serviceProvider.GetRequiredService<NewCommand>();
@@ -399,13 +397,9 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         // test is non-interactive. The value doesn't affect channel persistence.
         var parseResult = newCommand.Parse(
             $"new {templateId} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false{channelArg}");
-        _ = await parseResult.InvokeAsync().DefaultTimeout();
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        // We don't assert the exit code — the fake AppHostServerProject deliberately
-        // fails, so the run exits non-success after the on-disk write. The contract we
-        // test is the *side-effect*: whatever channel the writer decided to persist is
-        // what landed in aspire.config.json (or no channel if none was resolved /
-        // template doesn't pin).
+        Assert.Equal((int)CliExitCodes.Success, exitCode);
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, outputDirectoryName);
         var config = AspireConfigFile.Load(outputDirectory);
         return config?.Channel;

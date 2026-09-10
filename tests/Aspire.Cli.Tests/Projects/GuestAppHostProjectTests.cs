@@ -19,8 +19,10 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
+using Aspire.TypeSystem;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 
@@ -1176,6 +1178,74 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_SignalsBuildCompletionAfterGuestAppHostLaunches()
+    {
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var appHostFile = new FileInfo(appHostPath);
+        var buildCompletionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowLaunchToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (capability, _) => Task.FromResult(capability == "node")
+        };
+        using var extensionServices = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var interactionService = new TestExtensionInteractionService(extensionServices)
+        {
+            LaunchAppHostAsyncCallback = async () =>
+            {
+                launchStarted.TrySetResult();
+                await allowLaunchToComplete.Task;
+            }
+        };
+
+        var runtimeSpec = new RuntimeSpec
+        {
+            Language = "typescript/nodejs",
+            DisplayName = "TypeScript (Node.js)",
+            CodeGenLanguage = "TypeScript",
+            DetectionPatterns = ["apphost.ts"],
+            Execute = new CommandSpec { Command = "node", Args = ["apphost.js"] },
+            ExtensionLaunchCapability = "node"
+        };
+        var serverSession = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtimeSpec });
+        var sessionFactory = new FakeAppHostServerSessionFactory { Session = serverSession };
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+        var project = CreateGuestAppHostProject(
+            interactionService: interactionService,
+            appHostServerProjectFactory: projectFactory,
+            serverSessionFactory: sessionFactory);
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>(),
+            BuildCompletionSource = buildCompletionSource,
+            BackchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        using var cancellationSource = new CancellationTokenSource();
+
+        var runTask = project.RunAsync(context, cancellationSource.Token);
+        await launchStarted.Task.DefaultTimeout();
+
+        Assert.False(buildCompletionSource.Task.IsCompleted);
+
+        allowLaunchToComplete.TrySetResult();
+        Assert.True(await buildCompletionSource.Task.DefaultTimeout());
+
+        await cancellationSource.CancelAsync();
+        Assert.Equal(CliExitCodes.Cancelled, await runTask.DefaultTimeout());
+    }
+
+    [Fact]
     public async Task PublishAsync_PassesResolvedAspireHomeToAppHostServerEnvironment()
     {
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
@@ -1449,7 +1519,7 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     private GuestAppHostProject CreateGuestAppHostProject(
-        TestInteractionService? interactionService = null,
+        IInteractionService? interactionService = null,
         string identityChannel = "local",
         TestAppHostBackchannel? backchannel = null,
         TestAppHostServerProjectFactory? appHostServerProjectFactory = null,

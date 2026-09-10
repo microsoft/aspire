@@ -133,12 +133,12 @@ public partial class ConsoleLogsTests
             instance.LogsMenuItemsForTest,
             item =>
             {
-                Assert.Equal(MenuItemRole.MenuItemCheckbox, item.Role);
+                Assert.Equal(MenuItemRole.Checkbox, item.Role);
                 Assert.False(item.Checked);
             },
             item =>
             {
-                Assert.Equal(MenuItemRole.MenuItemCheckbox, item.Role);
+                Assert.Equal(MenuItemRole.Checkbox, item.Role);
                 Assert.True(item.Checked);
             },
             // The window action is not a view toggle, so it carries no checkable role.
@@ -446,8 +446,8 @@ public partial class ConsoleLogsTests
             });
         };
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("plain-resource");
+        var selectedResource = resourceSelect.Instance.Resources!.Single(resource => resource.Name == "plain-resource");
+        await resourceSelect.InvokeAsync(() => resourceSelect.Instance.SelectedResourceChanged.InvokeAsync(selectedResource));
 
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == plainResource.Name);
         // For a non-terminal resource the TerminalView is not mounted at all
@@ -499,7 +499,7 @@ public partial class ConsoleLogsTests
         // resource restores the filter UI.
         await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Terminal)));
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
-        Assert.Empty(cut.FindComponents<FluentSearch>());
+        Assert.Empty(cut.FindComponents<FluentTextInput>());
 
         navigationManager.LocationChanged += (sender, e) =>
         {
@@ -509,8 +509,9 @@ public partial class ConsoleLogsTests
             });
         };
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("plain-resource");
+        var selectedResource = resourceSelect.Instance.Resources!.Single(resource => resource.Name == "plain-resource");
+        var innerSelect = resourceSelect.FindComponent<FluentSelect<SelectViewModel<ResourceTypeDetails>, SelectViewModel<ResourceTypeDetails>>>();
+        await innerSelect.InvokeAsync(() => innerSelect.Instance.ValueChanged.InvokeAsync(selectedResource));
 
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == plainResource.Name);
         cut.WaitForState(() => cut.FindComponents<LogViewer>().Count > 0);
@@ -521,7 +522,7 @@ public partial class ConsoleLogsTests
         ]);
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".log-content").Count));
 
-        var search = Assert.Single(cut.FindComponents<FluentSearch>());
+        var search = Assert.Single(cut.FindComponents<FluentTextInput>());
         await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("filtered"));
 
         cut.WaitForAssertion(() =>

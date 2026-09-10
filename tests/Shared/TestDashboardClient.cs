@@ -14,6 +14,7 @@ namespace Aspire.Dashboard.Tests.Shared;
 
 public class TestDashboardClient : IDashboardClient
 {
+    private DashboardConnectionState _connectionState = DashboardConnectionState.Connected;
     private readonly Func<string, Channel<IReadOnlyList<ResourceLogLine>>>? _consoleLogsChannelProvider;
     private readonly Func<Channel<IReadOnlyList<ResourceViewModelChange>>>? _resourceChannelProvider;
     private readonly Func<Channel<WatchInteractionsResponseUpdate>>? _interactionChannelProvider;
@@ -32,16 +33,14 @@ public class TestDashboardClient : IDashboardClient
     public Task WhenConnected { get; }
     public string ApplicationName { get; } = "TestApp";
     public string? MinRequiredVersion => null;
-    public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
+    public DashboardConnectionState ConnectionState => _connectionState;
     public ConcurrentQueue<(IReadOnlyList<string> ResourceNames, DateTime ClearDate)> ClearedConsoleLogs { get; } = new();
     public ConcurrentQueue<string> ClosedTerminals { get; } = new();
     public Action? OnTerminalSubscriptionDisposed { get; set; }
     public Func<WatchTerminalsUpdate, Task>? BeforeTerminalUpdateAsync { get; set; }
     public int TerminalSubscriptionCount => Volatile.Read(ref _terminalSubscriptionCount);
     public int ActiveTerminalSubscriptionCount => Volatile.Read(ref _activeTerminalSubscriptionCount);
-#pragma warning disable CS0067 // Event is never used - required by interface
     public event Action<DashboardConnectionState>? ConnectionStateChanged;
-#pragma warning restore CS0067
     public Task ReconnectAsync() => Task.CompletedTask;
 
     public TestDashboardClient(
@@ -79,6 +78,12 @@ public class TestDashboardClient : IDashboardClient
     public ValueTask DisposeAsync()
     {
         return default;
+    }
+
+    public void SetConnectionState(DashboardConnectionState state)
+    {
+        _connectionState = state;
+        ConnectionStateChanged?.Invoke(state);
     }
 
     public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)

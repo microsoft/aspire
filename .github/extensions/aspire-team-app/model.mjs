@@ -126,12 +126,15 @@ function isCommunityAuthor(author, authorType) {
 export function isCommunityPullRequest(pr) {
   return !pr.isMine && !pr.repoPrivate && isCommunityAuthor(pr.author, pr.authorType) && !isCommunityToolkitPullRequest(pr);
 }
+export function reviewAgeStartedAt(pr) {
+  return pr.readyForReviewAt ?? pr.createdAt;
+}
 export function isAgedOutCommunityPullRequest(pr) {
   return isCommunityPullRequest(pr) && ageMs(pr.updatedAt) > focusAgeLimitMs;
 }
 function isCommunityWaiting(pr) {
   return !pr.isMine && !pr.repoPrivate && isCommunityAuthor(pr.author, pr.authorType) && (
-    (pr.review.state === "waiting" && ageMs(pr.createdAt) >= communityWaitMs) ||
+    (pr.review.state === "waiting" && ageMs(reviewAgeStartedAt(pr)) >= communityWaitMs) ||
     (pr.review.state === "reviewed" && isIdle(pr))
   );
 }
@@ -357,7 +360,7 @@ function reviewSignal(pr, bucketLabel) {
     case "Docs": return "generated docs";
     case "Community Toolkit": return "CommunityToolkit/Aspire";
     case "Bots / automation": return "bot";
-    case "Community": return isCommunityWaiting(pr) ? `Community · waiting ${formatAge(pr.createdAt)}` : "community";
+    case "Community": return isCommunityWaiting(pr) ? `Community · waiting ${formatAge(reviewAgeStartedAt(pr))}` : "community";
     case agedOutCommunityBucketLabel: return agedOutCommunityBucketLabel;
     case "Quick wins": return reviewFootprint(pr);
     case "Needs review": return "No reviews";
@@ -465,9 +468,10 @@ export function createAttentionSignals(item) {
     signals.push(ageSignal);
   }
 
+  const reviewAgeAt = reviewAgeStartedAt(pullRequest);
   signals.push({
-    label: `open ${formatAge(pullRequest.createdAt)}`,
-    tone: Date.now() - new Date(pullRequest.createdAt).getTime() >= 7 * dayMs ? "warning" : "muted",
+    label: `open ${formatAge(reviewAgeAt)}`,
+    tone: ageMs(reviewAgeAt) >= 7 * dayMs ? "warning" : "muted",
   });
 
   if (progress && !prioritizeProgress) {
@@ -919,12 +923,12 @@ function pickScore(item) {
   if (st === "reviewed") score += 25;
   if (st === "approved") score += 5;
   if (isBotAuthor(item.pullRequest.author, item.pullRequest.authorType)) score -= 120;
-  return score + Math.min(3, Math.floor(ageMs(item.pullRequest.createdAt) / dayMs)) +
+  return score + Math.min(3, Math.floor(ageMs(reviewAgeStartedAt(item.pullRequest)) / dayMs)) +
     Math.min(1, Math.floor(ageMs(item.pullRequest.updatedAt) / dayMs));
 }
 
 function pickReason(pr) {
-  const signals = [`open ${formatAge(pr.createdAt)}`];
+  const signals = [`open ${formatAge(reviewAgeStartedAt(pr))}`];
   if (pr.review.approvalCount > 0) signals.push(formatCount(pr.review.approvalCount, "approval"));
   else if (pr.review.reviewerCount > 0) signals.push(`${formatCount(pr.review.reviewerCount, "reviewer")} · 0 approvals`);
   else signals.push("no reviews");

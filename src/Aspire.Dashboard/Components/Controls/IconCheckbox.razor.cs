@@ -24,7 +24,7 @@ public partial class IconCheckbox : ComponentBase, IAsyncDisposable
 
     // The control owns the mapping from state to icon so callers only describe the
     // checked state via CheckState rather than wiring up icons and aria values themselves.
-    private static readonly Icon s_uncheckedIcon = new Icons.Regular.Size20.CheckboxUnchecked().WithColor(Color.FillInverse);
+    private static readonly Icon s_uncheckedIcon = new Icons.Regular.Size20.CheckboxUnchecked().WithColor(Color.Lightweight);
     private static readonly Icon s_checkedIcon = new Icons.Filled.Size20.CheckboxChecked();
     private static readonly Icon s_indeterminateIcon = new Icons.Filled.Size20.CheckboxIndeterminate();
 

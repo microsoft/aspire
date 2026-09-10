@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
@@ -15,7 +14,8 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
-using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageIntent;
+using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageBarIntent;
+using INotificationService = Aspire.Dashboard.Model.INotificationService;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
 
@@ -343,8 +343,7 @@ public class TerminalDockTests : DashboardTestContext
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var toasts = new ConcurrentQueue<ToastParameters>();
-        Services.GetRequiredService<IToastService>().OnShow += (_, parameters, _) => toasts.Enqueue(parameters);
+        var toasts = RenderComponent<FluentToastProvider>();
         var notifications = Services.GetRequiredService<INotificationService>();
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -370,7 +369,7 @@ public class TerminalDockTests : DashboardTestContext
         Assert.Equal("Terminal close timed out", notification.Title);
         Assert.Equal("Timed out waiting for terminal 'Setup shell' to shut down. Cleanup is continuing in the background.", notification.Body);
         Assert.Equal(FluentMessageIntent.Warning, notification.Intent);
-        var toast = Assert.Single(toasts);
+        var toast = Assert.Single(toasts.FindComponents<FluentToast>()).Instance;
         Assert.Equal(ToastIntent.Warning, toast.Intent);
         Assert.Equal(notification.Body, toast.Title);
         Assert.Equal(1, notifications.UnreadCount);
@@ -476,8 +475,7 @@ public class TerminalDockTests : DashboardTestContext
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var toasts = new ConcurrentQueue<ToastParameters>();
-        Services.GetRequiredService<IToastService>().OnShow += (_, parameters, _) => toasts.Enqueue(parameters);
+        var toasts = RenderComponent<FluentToastProvider>();
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("terminal"));
@@ -490,7 +488,7 @@ public class TerminalDockTests : DashboardTestContext
         await close.DefaultTimeout();
 
         Assert.Empty(Services.GetRequiredService<INotificationService>().GetNotifications());
-        Assert.Empty(toasts);
+        Assert.Empty(toasts.FindComponents<FluentToast>());
     }
 
     [Fact]

@@ -38,7 +38,7 @@ internal sealed class AppHostLauncher(
     AspireCliTelemetry telemetry,
     ProfilingTelemetry profilingTelemetry,
     FileLoggerProvider fileLoggerProvider,
-    ProcessTreeGracefulShutdownService processShutdownService,
+    IAppHostStopper processShutdownService,
     IProcessExecutionFactory processExecutionFactory,
     IConfiguration configuration,
     ILogger<AppHostLauncher> logger,
@@ -403,7 +403,10 @@ internal sealed class AppHostLauncher(
     /// </param>
     internal static Dictionary<string, string> CreateDetachedChildEnvironment(Activity? activity, string? appHostSelectionOrigin)
     {
-        var environment = new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" };
+        var environment = new Dictionary<string, string>
+        {
+            [KnownConfigNames.CliRunDetached] = "true"
+        };
 
         // Record the foreground launcher's identity (PID + start time) so the detached child can watch
         // it during startup and tear the AppHost tree down if the launcher is killed before the app
@@ -481,7 +484,10 @@ internal sealed class AppHostLauncher(
         var childStableStartedAt = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(childProcess.ProcessId);
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.ProcessId);
 
-        var startTime = timeProvider.GetUtcNow();
+        // The detached child publishes its backchannel only after restore/build succeeds. Start this
+        // fallback readiness budget after the connection appears so the launcher cannot time out first
+        // while the child is still building.
+        DateTimeOffset? readinessStartTime = null;
         var canonicalAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostPath);
         using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.ProcessId);
         var scanCount = 0;
@@ -493,7 +499,7 @@ internal sealed class AppHostLauncher(
 
         try
         {
-            while (timeProvider.GetUtcNow() - startTime < timeout)
+            while (true)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
@@ -514,6 +520,7 @@ internal sealed class AppHostLauncher(
                     candidate => IsUnattributedAppHostAtPath(candidate, canonicalAppHostPath, childProcess.ProcessId, childStableStartedAt));
                 if (connection is not null)
                 {
+                    readinessStartTime ??= timeProvider.GetUtcNow();
                     waitForBackchannelActivity.SetBackchannelScanCount(scanCount);
                     waitForBackchannelActivity.AddStartAppHostBackchannelConnectedEvent();
                     if (dashboardUrls is null)
@@ -531,7 +538,7 @@ internal sealed class AppHostLauncher(
                         }
                     }
 
-                    var remainingTimeout = timeout - (timeProvider.GetUtcNow() - startTime);
+                    var remainingTimeout = timeout - (timeProvider.GetUtcNow() - readinessStartTime.Value);
                     if (remainingTimeout <= TimeSpan.Zero)
                     {
                         break;

@@ -20,7 +20,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
-using IToastService = Microsoft.FluentUI.AspNetCore.Components.IToastService;
+using IToastService = Microsoft.FluentUI.AspNetCore.Components.INotificationService;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 using MenuItemRole = Microsoft.FluentUI.AspNetCore.Components.MenuItemRole;
 
@@ -321,7 +321,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         // (selected resource modified, or resources added/removed). Frequent property
                         // updates on non-selected resources (health checks, state transitions) don't
                         // require a full page re-render. Avoiding unnecessary re-renders prevents
-                        // FluentSearch's ImmediateDelay input buffer from being clobbered by stale
+                        // FluentTextInput's ImmediateDelay input buffer from being clobbered by stale
                         // parameter values pushed during the debounce window.
                         if (changeType == ResourceViewModelChangeType.Delete ||
                             isNewResource ||
@@ -631,7 +631,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Console)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)],
-                Role = MenuItemRole.MenuItemCheckbox,
+                Role = MenuItemRole.Checkbox,
                 Checked = _activeView == ConsoleLogsView.Console,
             });
 
@@ -639,7 +639,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Terminal)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)],
-                Role = MenuItemRole.MenuItemCheckbox,
+                Role = MenuItemRole.Checkbox,
                 Checked = _activeView == ConsoleLogsView.Terminal,
             });
 
@@ -1399,7 +1399,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
             if (result is TerminalWindowOpenResult.Blocked)
             {
-                ToastService.ShowError(Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarOpenInWindowBlocked)]);
+                await ToastService.ShowErrorToastAsync(Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarOpenInWindowBlocked)]);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
