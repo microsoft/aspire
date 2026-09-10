@@ -452,9 +452,7 @@ public static class EFResourceBuilderExtensions
 #pragma warning restore ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var executor = new EFCoreOperationExecutor(
-            migrationResource.StartupProjectResource,
-            migrationResource.MigrationsProjectPath,
-            migrationResource.DbContextTypeName,
+            migrationResource,
             logger,
             stepContext.CancellationToken,
             stepContext.Services,
@@ -946,9 +944,7 @@ public static class EFResourceBuilderExtensions
             logger.LogInformation("Executing EF Core {Operation} command...", operationDisplayName);
 
             using var executor = new EFCoreOperationExecutor(
-                migrationResource.StartupProjectResource,
-                migrationResource.MigrationsProjectPath,
-                migrationResource.DbContextTypeName,
+                migrationResource,
                 logger,
                 context.CancellationToken,
                 context.Services,

@@ -263,7 +263,9 @@ public static class EFMigrationResourceBuilderExtensions
     public static IResourceBuilder<EFMigrationResource> WithMigrationsProject<TProject>(this IResourceBuilder<EFMigrationResource> builder)
         where TProject : IProjectMetadata, new()
     {
-        builder.Resource.MigrationsProjectPath = new TProject().ProjectPath;
+        var metadata = new TProject();
+        builder.Resource.MigrationsProjectPath = metadata.ProjectPath;
+        builder.Resource.MigrationsProjectMetadata = metadata;
         return builder;
     }
 
@@ -297,7 +299,11 @@ public static class EFMigrationResourceBuilderExtensions
                 $"EF Core migrations require a project file. Resource '{projectResource.Name}' is a file-based app.");
         }
 
-        return builder.WithMigrationsProject(metadata.ProjectPath);
+        builder.WithMigrationsProject(metadata.ProjectPath);
+        // A path alone loses the build-readiness capability and configured providers on this resource.
+        builder.Resource.MigrationsProjectResource = projectResource;
+        builder.Resource.MigrationsProjectMetadata = metadata;
+        return builder;
     }
 
     // Base image repositories used when publishing the migration bundle as a container. The

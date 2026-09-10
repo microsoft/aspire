@@ -741,7 +741,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void KubernetesWithDotnetProjectUsesImageParameterAndProjectEndpoint()
+    public async Task KubernetesWithDotnetProjectUsesImageParameterAndProjectEndpoint()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
@@ -752,13 +752,11 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 
         app.Run();
 
-        var values = File.ReadAllText(Path.Combine(workspace.Path, "values.yaml"));
-        var deployment = File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "deployment.yaml"));
-        var service = File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "service.yaml"));
-        Assert.Contains("api_image:", values);
-        Assert.Contains("api_image", deployment);
-        Assert.Contains("containerPort:", deployment);
-        Assert.Contains("targetPort:", service);
+        await Verify(File.ReadAllText(Path.Combine(workspace.Path, "Chart.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "deployment.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "service.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "config.yaml")), "yaml");
     }
 
     [Fact]
