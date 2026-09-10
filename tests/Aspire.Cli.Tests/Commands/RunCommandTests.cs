@@ -452,31 +452,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
         };
 
-        var buildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var cleanupCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var cleanupCanFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var projectFactory = new TestAppHostProjectFactory
-        {
-            RunAsyncCallback = async (context, cancellationToken) =>
-            {
-                buildStarted.TrySetResult();
-
-                try
-                {
-                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    cleanupStarted.TrySetResult();
-                    await cleanupCanFinish.Task;
-                    cleanupCompleted.TrySetResult();
-                    context.BuildCompletionSource?.TrySetResult(false);
-                }
-
-                return CliExitCodes.Cancelled;
-            }
-        };
+        var projectFactory = new TestAppHostProjectFactory();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -490,28 +466,38 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var cancellationManager = provider.GetRequiredService<ConsoleCancellationManager>();
         var rpcTarget = provider.GetRequiredService<IExtensionRpcTarget>();
+        var runCompletionSource = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runStarted = false;
+        projectFactory.RunAsyncCallback = (_, runCancellationToken) =>
+        {
+            // Cancel before RunAsync returns so the build wait observes an already-canceled token.
+            // With synchronous setup fakes, InvokeAsync cannot yield until cleanup is waiting on this task.
+            Assert.True(rpcTarget.StopCliAsync().IsCompletedSuccessfully);
+            Assert.True(runCancellationToken.IsCancellationRequested);
+            runStarted = true;
+            return runCompletionSource.Task;
+        };
         var result = command.Parse($"run --apphost {appHostFile.FullName}");
         var pendingCommand = result.InvokeAsync(cancellationToken: cancellationManager.Token);
 
-        await buildStarted.Task.DefaultTimeout();
-        await rpcTarget.StopCliAsync();
-        await cleanupStarted.Task.DefaultTimeout();
+        int exitCode;
+        try
+        {
+            Assert.True(runStarted, "The setup must reach RunAsync synchronously before inspecting cancellation cleanup.");
 
-        // The old path armed the five-second local startup-cancellation timeout here. Advance beyond
-        // that boundary and confirm manager-owned cancellation still keeps the handler attached to the
-        // project task; BaseCommand's process-wide deadline is the only allowed escape hatch.
-        timeProvider.Advance(TimeSpan.FromSeconds(6));
-        await Task.Yield();
+            // Advance beyond the old local timeout only after the command has entered its cleanup wait.
+            timeProvider.Advance(TimeSpan.FromSeconds(6));
 
-        Assert.False(timeProvider.TimerCreated.Task.IsCompleted, "Manager-owned cancellation armed the local startup timeout.");
-        Assert.False(pendingCommand.IsCompleted, "The CLI exited before build cleanup completed.");
-
-        cleanupCanFinish.TrySetResult();
-
-        var exitCode = await pendingCommand.DefaultTimeout();
+            Assert.False(timeProvider.TimerCreated.Task.IsCompleted, "Manager-owned cancellation armed the local startup timeout.");
+            Assert.False(pendingCommand.IsCompleted, "The CLI exited before build cleanup completed.");
+        }
+        finally
+        {
+            runCompletionSource.TrySetResult(CliExitCodes.Cancelled);
+            exitCode = await pendingCommand.DefaultTimeout();
+        }
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.True(cleanupCompleted.Task.IsCompletedSuccessfully);
         Assert.Empty(interactionService.DisplayedErrors);
     }
 
@@ -3980,22 +3966,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => utcNow;
-    }
-
-    private sealed class SignalingFakeTimeProvider(TimeSpan signaledDueTime) : FakeTimeProvider
-    {
-        public TaskCompletionSource TimerCreated { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            var timer = base.CreateTimer(callback, state, dueTime, period);
-            if (dueTime == signaledDueTime)
-            {
-                TimerCreated.TrySetResult();
-            }
-
-            return timer;
-        }
     }
 
     [Fact]
