@@ -1592,7 +1592,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         Assert.Equal([NormalizeProjectPath(apiPath), NormalizeProjectPath(workerPath)], buildResource.ProjectPaths);
-        Assert.Equal(sourceRoot, buildResource.WorkingDirectory);
+        Assert.Equal(TestPathNormalizer.ResolveSymlinks(sourceRoot), buildResource.WorkingDirectory);
         Assert.Equal(runtimeWorkingDirectory, worker.Resource.WorkingDirectory);
     }
 

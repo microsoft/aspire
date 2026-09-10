@@ -27,16 +27,21 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
         string? builderName = null;
         var resourceName = ResourceExtensions.FlattenContainerImageName(imageName);
+        var exportsArchive = !string.IsNullOrEmpty(options?.OutputPath);
 
-        // Docker requires a custom buildkit instance for the image when
-        // targeting the OCI format so we construct it and remove it here.
         if (options?.ImageFormat == ContainerImageFormat.Oci)
         {
-            if (string.IsNullOrEmpty(options?.OutputPath))
+            if (!exportsArchive)
             {
                 throw new ArgumentException("OutputPath must be provided when ImageFormat is Oci.", nameof(options));
             }
+        }
 
+        if (exportsArchive)
+        {
+            // Docker's in-daemon builder cannot reliably write Docker or OCI archive exporters.
+            // Use an isolated BuildKit container for archive output and remove it after the build.
+            // https://docs.docker.com/build/exporters/
             builderName = $"{resourceName}-builder";
             await CreateBuildkitInstanceAsync(builderName, cancellationToken).ConfigureAwait(false);
         }
@@ -45,7 +50,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
         {
             var arguments = $"buildx build --file \"{dockerfilePath}\" --tag \"{imageName}\"";
 
-            // Use the specific builder for OCI builds
+            // Archive exports use the isolated builder created above.
             if (!string.IsNullOrEmpty(builderName))
             {
                 arguments += $" --builder \"{builderName}\"";

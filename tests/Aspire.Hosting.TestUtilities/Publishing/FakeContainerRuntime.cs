@@ -14,10 +14,12 @@ using Aspire.Hosting.ApplicationModel;
 public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning = true, string name = "fake-runtime") : IContainerRuntime, IContainerRuntimeResolver
 {
     private int _checkIfRunningCallCount;
+    private int _resolveAsyncCallCount;
 
     public string Name => name;
     public bool WasHealthCheckCalled => CheckIfRunningCallCount > 0;
     public int CheckIfRunningCallCount => Volatile.Read(ref _checkIfRunningCallCount);
+    public int ResolveAsyncCallCount => Volatile.Read(ref _resolveAsyncCallCount);
     public bool WasTagImageCalled { get; private set; }
     public bool WasRemoveImageCalled { get; private set; }
     public bool WasPushImageCalled { get; private set; }
@@ -40,6 +42,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
     public Func<string, string, ContainerImageBuildOptions?, Dictionary<string, string?>, Dictionary<string, BuildImageSecretValue>, string?, CancellationToken, Task>? BuildImageAsyncCallback { get; set; }
     public Func<string, CancellationToken, Task<ContainerImageManifestInspectionResult>>? InspectImageManifestAsyncCallback { get; set; }
     public Func<CancellationToken, Task<bool>>? CheckIfRunningAsyncCallback { get; set; }
+    public Func<CancellationToken, Task<IContainerRuntime>>? ResolveAsyncCallback { get; set; }
     public string? InspectedImageDigest { get; set; }
     public string? InspectedImageOperatingSystem { get; set; }
     public string? InspectedImageArchitecture { get; set; }
@@ -184,6 +187,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
 
     public Task<IContainerRuntime> ResolveAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<IContainerRuntime>(this);
+        Interlocked.Increment(ref _resolveAsyncCallCount);
+        return ResolveAsyncCallback?.Invoke(cancellationToken) ?? Task.FromResult<IContainerRuntime>(this);
     }
 }

@@ -128,7 +128,7 @@ public class EFBuildCustomizationWarningTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task PublishingWarnsBeforeToolStartAndPreservesNoBuildArguments(bool bundle)
+    public async Task PublishingWarnsBeforeToolStartAndBuildsParticipatingProjects(bool bundle)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var callbackCalls = 0;
@@ -158,7 +158,7 @@ public class EFBuildCustomizationWarningTests
         Assert.Equal(0, callbackCalls);
         Assert.Equal(ExpectedWarning("migrations", bundle ? "bundle" : "script", "'api'"),
             Assert.Single(sink.Writes, write => write.LogLevel == LogLevel.Warning).Message);
-        var expected = ExpectedArguments(executor, migrations.Resource, "migrations", bundle ? "bundle" : "script", noBuild: !bundle);
+        var expected = ExpectedArguments(executor, migrations.Resource, "migrations", bundle ? "bundle" : "script", noBuild: false);
         expected.AddRange(bundle ? ["--target-runtime", "linux-x64", "--self-contained", "--force"] : ["--idempotent"]);
         Assert.Equal(expected, Assert.Single(tool.Invocations));
     }
