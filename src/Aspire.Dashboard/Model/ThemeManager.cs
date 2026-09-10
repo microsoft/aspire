@@ -74,7 +74,7 @@ public sealed class ThemeManager
     }
 
     /// <summary>
-    /// The effective theme, from app-theme.js, which is the theme that is actually applied to the browser window.
+    /// The effective theme applied to the browser window.
     /// To ensure the theme is loaded from the browser, <see cref="EnsureInitializedAsync"/> must be called before accessing.
     /// </summary>
     public string EffectiveTheme

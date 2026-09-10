@@ -4,10 +4,11 @@
     <div hidden @ref="_selectionTemplateElement">
         <div class="terminal-selection-actions">
             <FluentButton Class="terminal-selection-copy"
-                          Appearance="Appearance.Neutral"
+                          Appearance="ButtonAppearance.Default"
+                          IconOnly="true"
                           Title="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
                           aria-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]">
-                <FluentIcon Value="new Icons.Regular.Size16.Copy()" Color="Color.Neutral" />
+                <FluentIcon Value="new Icons.Regular.Size16.Copy()" Color="Color.Default" />
             </FluentButton>
         </div>
     </div>

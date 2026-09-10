@@ -650,6 +650,9 @@ suite('E2E launch profile', () => {
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
         const spec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'winUiDebug.e2e.test.ts'), 'utf8');
+        const openWinUiSourceIndex = spec.indexOf("await executeE2eControlCommand({ name: 'openFile', filePath: winUiAppPath });");
+        const projectLoadIndex = spec.indexOf('await waitForCSharpProjectLoad(winUiAppPath, 120000);');
+        const debugLaunchIndex = spec.indexOf("name: 'debugAppHost'");
 
         assert.ok(workflow.includes('shardName: winui-debug'));
         assert.ok(workflow.includes('spec: out/test-e2e/test-e2e/winUiDebug.e2e.test.js'));
@@ -667,6 +670,11 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('<PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />'));
         assert.ok(runner.includes('File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");'));
         assert.ok(spec.includes('this.timeout(1_200_000);'));
+        assert.ok(spec.includes("const symbol = 'InitializeComponent';"));
+        assert.ok(spec.includes("name: 'getDefinitions'"));
+        assert.ok(openWinUiSourceIndex >= 0);
+        assert.ok(projectLoadIndex > openWinUiSourceIndex);
+        assert.ok(debugLaunchIndex > projectLoadIndex);
         assert.ok(spec.includes("await waitForReadyMarker(readyMarkerPath, 240000);"));
         assert.ok(spec.includes("await waitForResourceState('e2e-winui', ['Running'], 30000);"));
     });

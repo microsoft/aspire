@@ -317,7 +317,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         // (selected resource modified, or resources added/removed). Frequent property
                         // updates on non-selected resources (health checks, state transitions) don't
                         // require a full page re-render. Avoiding unnecessary re-renders prevents
-                        // FluentSearch's ImmediateDelay input buffer from being clobbered by stale
+                        // FluentTextInput's ImmediateDelay input buffer from being clobbered by stale
                         // parameter values pushed during the debounce window.
                         if (changeType == ResourceViewModelChangeType.Delete ||
                             isNewResource ||
@@ -643,7 +643,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Console)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)],
-                Role = MenuItemRole.MenuItemCheckbox,
+                Role = MenuItemRole.Checkbox,
                 Checked = _activeView == ConsoleLogsView.Console,
             });
 
@@ -651,7 +651,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Terminal)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)],
-                Role = MenuItemRole.MenuItemCheckbox,
+                Role = MenuItemRole.Checkbox,
                 Checked = _activeView == ConsoleLogsView.Terminal,
             });
 

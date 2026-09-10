@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, prebuiltProjectOutputMissing, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, resolvedRunCommandDisablesDebugger, failedToGetProjectRunProperties, invalidMsBuildRunCommandResponse, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties, failedToCleanUpMsBuildTemporaryDirectory } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
@@ -35,18 +35,44 @@ import { getAppHostLaunchProfileOptions } from '../../utils/launchProfile';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
-    buildDotNetProject(projectFile: string): Promise<void>;
-    getDotNetProjectLaunchProperties(projectFile: string): Promise<DotNetProjectLaunchProperties>;
-    getDotNetTargetPath(projectFile: string): Promise<string>;
+    buildDotNetProject(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<void>;
+    getDotNetProjectLaunchProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<DotNetProjectLaunchProperties>;
+    getDotNetTargetPath(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<string>;
+    getDotNetProjectRunProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<DotNetProjectRunProperties>;
     getDotNetRunApiOutput(projectFile: string, environment?: NodeJS.ProcessEnv): Promise<string>;
+    getDotNetFileAppRunProperties(projectFile: string, buildConfiguration: string, suppressRestore: boolean, environment?: NodeJS.ProcessEnv): Promise<DotNetFileAppRunProperties>;
+}
+
+interface DotNetFileAppRunProperties {
+    runCommand: string;
+    runArguments: string;
 }
 
 interface DotNetProjectLaunchProperties {
     targetPath: string;
     runCommand?: string;
-    useAppHost: boolean;
-    useWinUI: boolean;
+    useAppHost?: boolean;
+    useWinUI?: boolean;
     windowsPackageType?: string;
+}
+
+interface DotNetProjectRunProperties extends DotNetFileAppRunProperties {
+    targetPath: string;
+    useAppHost?: boolean;
+    useWinUI?: boolean;
+    windowsPackageType?: string;
+    runWorkingDirectory?: string;
+}
+
+function createDotNetProcessEnvironment(
+    resolvedCliPath: string | undefined,
+    environment?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+    const processEnvironment = { ...process.env };
+    for (const [name, value] of Object.entries(environment ?? {})) {
+        setEnvironmentVariable(processEnvironment, name, value);
+    }
+
+    return createResolvedAspireCliPathProcessEnvironment(resolvedCliPath, processEnvironment);
 }
 
 export class DotNetService implements IDotNetService {
@@ -78,108 +104,288 @@ export class DotNetService implements IDotNetService {
         return Promise.resolve(true);
     }
 
-    async buildDotNetProject(projectFile: string): Promise<void> {
-        return new Promise<void>((resolve, reject) => {
-            extensionLogOutputChannel.info(`Building .NET project: ${projectFile} using dotnet CLI`);
-
+    async buildDotNetProject(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<void> {
+        await withMsBuildTemporaryFiles(environment, async responseFileArgument => {
             const args = ['build', projectFile];
+            if (buildConfiguration) {
+                args.push('--configuration', buildConfiguration);
+            }
+            if (responseFileArgument) {
+                args.push(responseFileArgument);
+            }
 
-            void (async () => {
-                const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
-                const buildProcess = spawn('dotnet', args, {
-                    // The .NET SDK searches for global.json from the process working directory, not the
-                    // project argument. Run from the project directory so extension and CLI builds select
-                    // the same SDK and repository configuration.
-                    cwd: path.dirname(projectFile),
-                    env: createResolvedAspireCliPathProcessEnvironment(cliPath)
-                });
+            extensionLogOutputChannel.info(`Building .NET project: ${projectFile} using dotnet CLI`);
+            await new Promise<void>((resolve, reject) => {
+                void (async () => {
+                    const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
+                    const buildProcess = spawn('dotnet', args, {
+                        // The .NET SDK searches for global.json from the process working directory, not the project
+                        // argument. Coordinated builds provide their directory so IDE evaluation selects the same SDK.
+                        cwd: workingDirectory ?? path.dirname(projectFile),
+                        env: createDotNetProcessEnvironment(cliPath, environment)
+                    });
 
-                let stdoutOutput = '';
-                let stderrOutput = '';
+                    const stdoutChunks: Buffer[] = [];
+                    const stderrChunks: Buffer[] = [];
+                    buildProcess.stdout?.on('data', (data: Buffer) => {
+                        stdoutChunks.push(data);
+                        this.writeToDebugConsole(data.toString(), 'stdout');
+                    });
 
-                // Stream stdout in real-time
-                buildProcess.stdout?.on('data', (data: Buffer) => {
-                    const output = data.toString();
-                    stdoutOutput += output;
-                    this.writeToDebugConsole(output, 'stdout');
-                });
+                    // Keep stdout and stderr separate so their debug-console categories remain intact.
+                    buildProcess.stderr?.on('data', (data: Buffer) => {
+                        stderrChunks.push(data);
+                        this.writeToDebugConsole(data.toString(), 'stderr');
+                    });
 
-                // Stream stderr in real-time
-                buildProcess.stderr?.on('data', (data: Buffer) => {
-                    const output = data.toString();
-                    stderrOutput += output;
-                    this.writeToDebugConsole(output, 'stderr');
-                });
+                    buildProcess.on('error', (err) => {
+                        extensionLogOutputChannel.error(`dotnet build process error: ${err.message}`);
+                        reject(new Error(buildFailedForProjectWithError(projectFile, err.message)));
+                    });
 
-                buildProcess.on('error', (err) => {
-                    extensionLogOutputChannel.error(`dotnet build process error: ${err}`);
-                    reject(new Error(buildFailedForProjectWithError(projectFile, err.message)));
-                });
-
-                buildProcess.on('close', (code) => {
-                    if (code === 0) {
-                        // if build succeeds, simply return. otherwise throw to trigger error handling
-                        if (stderrOutput) {
-                            reject(createErrorWithStreamedDebugConsoleOutput(stderrOutput));
+                    buildProcess.on('close', (code) => {
+                        const stdoutOutput = Buffer.concat(stdoutChunks).toString();
+                        const stderrOutput = Buffer.concat(stderrChunks).toString();
+                        if (code === 0) {
+                            // if build succeeds, simply return. otherwise throw to trigger error handling
+                            if (stderrOutput) {
+                                reject(createErrorWithStreamedDebugConsoleOutput(stderrOutput));
+                            } else {
+                                resolve();
+                            }
                         } else {
-                            resolve();
+                            const output = stdoutOutput || stderrOutput || `Exit code ${code}`;
+                            reject(createErrorWithStreamedDebugConsoleOutput(
+                                buildFailedForProjectWithError(projectFile, output)));
                         }
-                    } else {
-                        reject(createErrorWithStreamedDebugConsoleOutput(buildFailedForProjectWithError(projectFile, stdoutOutput || stderrOutput || `Exit code ${code}`)));
-                    }
-                });
-            })().catch(reject);
+                    });
+                })().catch(reject);
+            });
         });
     }
 
-    async getDotNetTargetPath(projectFile: string): Promise<string> {
-        return (await this.getDotNetProjectLaunchProperties(projectFile)).targetPath;
+    async getDotNetTargetPath(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<string> {
+        return withMsBuildTemporaryFiles(environment, async responseFileArgument => {
+            const args = [
+                'msbuild',
+                projectFile,
+                '-nologo',
+                '-getProperty:TargetPath',
+                '-v:q'
+            ];
+            if (buildConfiguration) {
+                args.push(`-property:Configuration=${buildConfiguration}`);
+            }
+            if (responseFileArgument) {
+                args.push(responseFileArgument);
+            }
+            args.push('-property:GenerateFullPaths=true');
+
+            try {
+                const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
+                const { stdout } = await this.execFileAsync('dotnet', args, {
+                    cwd: workingDirectory ?? path.dirname(projectFile),
+                    encoding: 'utf8',
+                    env: createDotNetProcessEnvironment(cliPath, environment)
+                });
+                const output = stdout.trim();
+                if (!output) {
+                    throw new Error(noOutputFromMsbuild);
+                }
+
+                return output;
+            } catch (err) {
+                throw new Error(failedToGetTargetPath(formatDotNetProcessError(err)));
+            }
+        });
     }
 
-    async getDotNetProjectLaunchProperties(projectFile: string): Promise<DotNetProjectLaunchProperties> {
-        const args = [
-            'msbuild',
-            projectFile,
-            '-nologo',
-            '-getProperty:TargetPath,RunCommand,UseAppHost,UseWinUI,WindowsPackageType',
-            '-v:q',
-            '-property:GenerateFullPaths=true'
-        ];
-        try {
-            const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
-            const { stdout } = await this.execFileAsync('dotnet', args, {
-                cwd: path.dirname(projectFile),
-                encoding: 'utf8',
-                env: createResolvedAspireCliPathProcessEnvironment(cliPath)
-            });
-            const output = stdout.trim();
-            if (!output) {
-                throw new Error(noOutputFromMsbuild);
+    async getDotNetProjectLaunchProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<DotNetProjectLaunchProperties> {
+        return withMsBuildTemporaryFiles(environment, async responseFileArgument => {
+            const args = [
+                'msbuild',
+                projectFile,
+                '-nologo',
+                '-getProperty:TargetPath,RunCommand,UseAppHost,UseWinUI,WindowsPackageType',
+                '-v:q'
+            ];
+            if (buildConfiguration) {
+                args.push(`-property:Configuration=${buildConfiguration}`);
+            }
+            if (responseFileArgument) {
+                args.push(responseFileArgument);
+            }
+            args.push('-property:GenerateFullPaths=true');
+
+            try {
+                const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
+                const { stdout } = await this.execFileAsync('dotnet', args, {
+                    cwd: workingDirectory ?? path.dirname(projectFile),
+                    encoding: 'utf8',
+                    env: createDotNetProcessEnvironment(cliPath, environment)
+                });
+                const output = stdout.trim();
+                if (!output) {
+                    throw new Error(noOutputFromMsbuild);
+                }
+
+                // Asking MSBuild for multiple properties produces:
+                //   { "Properties": { "TargetPath": "...dll", "RunCommand": "...exe", "UseAppHost": "true", ... } }
+                // Property values are strings even when the evaluated MSBuild value is boolean.
+                const parsed = JSON.parse(output) as { Properties?: Record<string, unknown> };
+                const properties = parsed.Properties;
+                if (!properties || typeof properties.TargetPath !== 'string' || properties.TargetPath.length === 0) {
+                    throw new Error(noOutputFromMsbuild);
+                }
+
+                return {
+                    targetPath: properties.TargetPath,
+                    runCommand: typeof properties.RunCommand === 'string' && properties.RunCommand.length > 0
+                        ? properties.RunCommand
+                        : undefined,
+                    useAppHost: isTrueMsbuildProperty(properties.UseAppHost),
+                    useWinUI: isTrueMsbuildProperty(properties.UseWinUI),
+                    windowsPackageType: typeof properties.WindowsPackageType === 'string'
+                        ? properties.WindowsPackageType
+                        : undefined
+                };
+            } catch (err) {
+                throw new Error(failedToGetTargetPath(formatDotNetProcessError(err)));
+            }
+        });
+    }
+
+    async getDotNetProjectRunProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<DotNetProjectRunProperties> {
+        return withMsBuildTemporaryFiles(environment, async (responseFileArgument, temporaryDirectory) => {
+            const resultOutputPath = path.join(temporaryDirectory, 'run-properties.json');
+            const args = [
+                'msbuild',
+                projectFile,
+                '-nologo',
+                '-target:ComputeRunArguments',
+                '-getProperty:TargetPath,RunCommand,RunArguments,RunWorkingDirectory,UseAppHost,UseWinUI,WindowsPackageType',
+                `-getResultOutputFile:${resultOutputPath}`,
+                '-v:q'
+            ];
+            if (buildConfiguration) {
+                args.push(`-property:Configuration=${buildConfiguration}`);
+            }
+            if (responseFileArgument) {
+                args.push(responseFileArgument);
+            }
+            args.push('-property:GenerateFullPaths=true');
+
+            try {
+                const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
+                await this.execFileAsync('dotnet', args, {
+                    cwd: workingDirectory ?? path.dirname(projectFile),
+                    encoding: 'utf8',
+                    env: createDotNetProcessEnvironment(cliPath, environment)
+                });
+
+                // Multiple -getProperty values produce:
+                //   { "Properties": { "TargetPath": "...", "RunCommand": "...",
+                //     "RunArguments": "...", "RunWorkingDirectory": "...", "UseAppHost": "true", ... } }
+                // Keep the machine-readable result separate so SDK diagnostics on stdout cannot corrupt it.
+                const resultOutput = await fs.promises.readFile(resultOutputPath, 'utf8');
+                const properties = JSON.parse(resultOutput).Properties as Record<string, unknown> | undefined;
+                const targetPath = typeof properties?.TargetPath === 'string'
+                    ? properties.TargetPath.trim()
+                    : '';
+                const runCommand = typeof properties?.RunCommand === 'string'
+                    ? properties.RunCommand.trim().replace(/^"+|"+$/g, '')
+                    : '';
+                if (!properties ||
+                    !targetPath ||
+                    !runCommand ||
+                    typeof properties.RunArguments !== 'string' ||
+                    typeof properties.RunWorkingDirectory !== 'string') {
+                    throw new Error(invalidMsBuildRunCommandResponse);
+                }
+
+                const runWorkingDirectory = properties.RunWorkingDirectory || undefined;
+                return {
+                    targetPath,
+                    runCommand,
+                    runArguments: properties.RunArguments,
+                    useAppHost: isTrueMsbuildProperty(properties.UseAppHost),
+                    useWinUI: isTrueMsbuildProperty(properties.UseWinUI),
+                    windowsPackageType: typeof properties.WindowsPackageType === 'string'
+                        ? properties.WindowsPackageType
+                        : undefined,
+                    // ComputeRunArguments extensions can replace the SDK-normalized value with a relative path.
+                    // MSBuild interprets that path from the project directory, not the SDK-discovery directory.
+                    runWorkingDirectory: runWorkingDirectory
+                        ? path.resolve(path.dirname(projectFile), runWorkingDirectory)
+                        : undefined
+                };
+            } catch (err) {
+                throw new Error(failedToGetProjectRunProperties(projectFile, formatDotNetProcessError(err)));
+            }
+        });
+    }
+
+    async getDotNetFileAppRunProperties(projectFile: string, buildConfiguration: string, suppressRestore: boolean, environment?: NodeJS.ProcessEnv): Promise<DotNetFileAppRunProperties> {
+        return withMsBuildTemporaryFiles(undefined, async (_, temporaryDirectory) => {
+            const resultOutputPath = path.join(temporaryDirectory, 'run-properties.json');
+            const args = [
+                'build',
+                projectFile,
+                '--configuration',
+                buildConfiguration
+            ];
+            if (suppressRestore) {
+                // The coordinated build already restored this file app. Restoring again here could race
+                // another file app that writes the same referenced project's bin/obj directories.
+                args.push('--no-restore');
+            }
+            args.push(
+                '--nologo',
+                '--verbosity',
+                'quiet',
+                '-target:ComputeRunArguments',
+                '-getProperty:RunCommand,RunArguments',
+                `-getResultOutputFile:${resultOutputPath}`
+            );
+
+            try {
+                const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
+                await this.execFileAsync('dotnet', args, {
+                    cwd: path.dirname(projectFile),
+                    encoding: 'utf8',
+                    env: createDotNetProcessEnvironment(cliPath, environment)
+                });
+            } catch (err) {
+                throw new Error(buildFailedForProjectWithError(projectFile, formatDotNetProcessError(err)));
             }
 
-            // Asking MSBuild for multiple properties produces:
-            //   { "Properties": { "TargetPath": "...dll", "RunCommand": "...exe", "UseAppHost": "true", ... } }
-            // Property values are strings even when the evaluated MSBuild value is boolean.
-            const parsed = JSON.parse(output) as { Properties?: Record<string, unknown> };
-            const properties = parsed.Properties;
-            if (!properties || typeof properties.TargetPath !== 'string' || properties.TargetPath.length === 0) {
-                throw new Error(noOutputFromMsbuild);
+            // `dotnet build -getProperty:RunCommand,RunArguments -getResultOutputFile:<path>` writes:
+            //   { "Properties": { "RunCommand": "/workspace/bin/Debug/app", "RunArguments": "" } }
+            // RunArguments may legitimately be empty, but both properties must be present as strings.
+            let parsed: {
+                Properties?: {
+                    RunCommand?: unknown;
+                    RunArguments?: unknown;
+                };
+            };
+            try {
+                const resultOutput = await fs.promises.readFile(resultOutputPath, 'utf8');
+                parsed = JSON.parse(resultOutput);
+            } catch {
+                throw new Error(invalidLaunchConfiguration(projectFile));
+            }
+
+            if (typeof parsed.Properties?.RunCommand !== 'string'
+                || !parsed.Properties.RunCommand
+                || typeof parsed.Properties.RunArguments !== 'string') {
+                throw new Error(invalidLaunchConfiguration(projectFile));
             }
 
             return {
-                targetPath: properties.TargetPath,
-                runCommand: typeof properties.RunCommand === 'string' && properties.RunCommand.length > 0
-                    ? properties.RunCommand
-                    : undefined,
-                useAppHost: isTrueMsbuildProperty(properties.UseAppHost),
-                useWinUI: isTrueMsbuildProperty(properties.UseWinUI),
-                windowsPackageType: typeof properties.WindowsPackageType === 'string'
-                    ? properties.WindowsPackageType
-                    : undefined
+                runCommand: parsed.Properties.RunCommand,
+                runArguments: parsed.Properties.RunArguments
             };
-        } catch (err) {
-            throw new Error(failedToGetTargetPath(String(err)));
-        }
+        });
     }
 
     async getDotNetRunApiOutput(projectPath: string, environment?: NodeJS.ProcessEnv): Promise<string> {
@@ -197,7 +403,7 @@ export class DotNetService implements IDotNetService {
 
                 childProcess = spawn('dotnet', ['run-api'], {
                     cwd: path.dirname(projectPath),
-                    env: createResolvedAspireCliPathProcessEnvironment(cliPath, { ...process.env, ...environment }),
+                    env: createDotNetProcessEnvironment(cliPath, environment),
                     stdio: ['pipe', 'pipe', 'pipe']
                 });
 
@@ -401,27 +607,25 @@ function parseSdkSerializedArguments(argumentsText: string): string[] {
     return parsedArguments;
 }
 
-// Combine the SDK host arguments from `dotnet run-api` (the built app DLL that is passed to the `dotnet`
-// launcher) with the user/launch-profile application arguments that were already resolved onto the debug
-// configuration. `hostArguments` is present only when the program is the `dotnet` launcher; 
-// for an apphost-executable build it is undefined and only the application arguments remain.
-// The host arguments must come first because they identify what to run. Preserve the existing string form
-// when application arguments are absent or launch-profile-authored text, but deserialize SDK host text when
-// the application arguments are already tokens so the complete result can remain losslessly tokenized.
-function combineRunApiArguments(hostArguments: string | undefined, applicationArguments: DebugConfigurationArguments | undefined): DebugConfigurationArguments | undefined {
-    if (!hostArguments) {
+// Combine SDK-computed RunArguments with the user/launch-profile application arguments that were already
+// resolved onto the debug configuration. The computed arguments must come first because they can identify
+// what the RunCommand should execute. Preserve the existing string form when application arguments are absent
+// or launch-profile-authored text, but deserialize SDK text when the application arguments are already tokens
+// so the complete result can remain losslessly tokenized.
+function combineRunArguments(runArguments: string | undefined, applicationArguments: DebugConfigurationArguments | undefined): DebugConfigurationArguments | undefined {
+    if (!runArguments) {
         return applicationArguments;
     }
 
     if (applicationArguments === undefined) {
-        return hostArguments;
+        return runArguments;
     }
 
     if (Array.isArray(applicationArguments)) {
-        return [...parseSdkSerializedArguments(hostArguments), ...applicationArguments];
+        return [...parseSdkSerializedArguments(runArguments), ...applicationArguments];
     }
 
-    return `${hostArguments} ${applicationArguments}`;
+    return `${runArguments} ${applicationArguments}`;
 }
 
 function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
@@ -432,7 +636,7 @@ function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
     return error;
 }
 
-async function shouldLaunchProjectWithDotNetRun(outputPath: string): Promise<boolean> {
+async function isFrameworklessProjectOutput(outputPath: string): Promise<boolean> {
     if (path.extname(outputPath).toLowerCase() !== '.dll') {
         return false;
     }
@@ -460,6 +664,43 @@ async function shouldLaunchProjectWithDotNetRun(outputPath: string): Promise<boo
     }
 }
 
+function pathsEqual(left: string, right: string): boolean {
+    const normalizedLeft = path.normalize(left);
+    const normalizedRight = path.normalize(right);
+    return process.platform === 'win32'
+        ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+        : normalizedLeft === normalizedRight;
+}
+
+function canDebugResolvedProjectRunCommand(
+    outputPath: string,
+    runProperties: DotNetProjectRunProperties): boolean {
+    if (pathsEqual(runProperties.runCommand, outputPath)) {
+        return true;
+    }
+
+    const output = path.parse(outputPath);
+    const appHostPath = path.join(
+        output.dir,
+        `${output.name}${process.platform === 'win32' ? '.exe' : ''}`);
+    if (pathsEqual(runProperties.runCommand, appHostPath)) {
+        return true;
+    }
+
+    if (!isDotnetLauncher(runProperties.runCommand)) {
+        return false;
+    }
+
+    // The SDK's framework-dependent form is:
+    //   dotnet exec "/workspace/bin/Debug/net10.0/app.dll"
+    // CoreCLR can debug that host directly. Arbitrary dotnet subcommands can spawn a different process,
+    // so they must use the no-debug fallback to preserve the resolved launch contract.
+    const runArguments = parseSdkSerializedArguments(runProperties.runArguments);
+    return runArguments[0]?.toLowerCase() === 'exec' &&
+        runArguments.length > 1 &&
+        pathsEqual(runArguments[1], outputPath);
+}
+
 export function quoteCommandLineArgument(argument: string): string {
     // Backslashes before a quote must be doubled so the command-line parser does not consume the
     // quote itself. The closing quote follows the same rule when the argument ends in backslashes.
@@ -470,13 +711,39 @@ export function quoteCommandLineArgument(argument: string): string {
     return `"${escapedArgument}"`;
 }
 
-function createDotNetRunBaseArguments(projectPath: string, fileBased: boolean, skipBuild: boolean = false, runWorkingDirectory?: string, suppressCliRunHook: boolean = false): string[] {
+interface DotNetRunOptions {
+    fileBased?: boolean;
+    skipBuild?: boolean;
+    buildConfiguration?: string;
+    runWorkingDirectory?: string;
+    suppressCliRunHook?: boolean;
+}
+
+function createDotNetRunBaseArguments(projectPath: string, options: DotNetRunOptions = {}): string[] {
+    const {
+        fileBased = false,
+        skipBuild = false,
+        buildConfiguration,
+        runWorkingDirectory,
+        suppressCliRunHook = false
+    } = options;
+
     // File-based resources use --no-cache to avoid stale SDK cache entries. When the CLI already built a
     // file-based AppHost, use --no-build so this fallback launches that output without rebuilding it.
-    // Project files launch with `dotnet run --project <proj>`.
+    // Coordinated project builds also use --no-build so the IDE cannot rebuild an individual service.
     const dotnetRunArgs = fileBased
-        ? ['run', '--file', projectPath, skipBuild ? '--no-build' : '--no-cache', '--no-launch-profile']
-        : ['run', '--project', projectPath, '--no-launch-profile'];
+        ? ['run', '--file', projectPath, skipBuild ? '--no-build' : '--no-cache']
+        : ['run', '--project', projectPath];
+
+    if (!fileBased && skipBuild) {
+        dotnetRunArgs.push('--no-build');
+    }
+
+    if (buildConfiguration) {
+        dotnetRunArgs.push('--configuration', buildConfiguration);
+    }
+
+    dotnetRunArgs.push('--no-launch-profile');
 
     if (suppressCliRunHook) {
         dotnetRunArgs.push('--property:_AspireSuppressCliRunHook=true');
@@ -489,8 +756,94 @@ function createDotNetRunBaseArguments(projectPath: string, fileBased: boolean, s
     return dotnetRunArgs;
 }
 
-function createDotNetRunArguments(projectPath: string, baseProfileArgs: string | undefined, runSessionArgs: string[] | undefined, fileBased: boolean = false, skipBuild: boolean = false, runWorkingDirectory?: string, suppressCliRunHook: boolean = false): string[] | string {
-    const dotnetRunArgs = createDotNetRunBaseArguments(projectPath, fileBased, skipBuild, runWorkingDirectory, suppressCliRunHook);
+async function withMsBuildTemporaryFiles<T>(
+    buildProperties: NodeJS.ProcessEnv | undefined,
+    action: (responseFileArgument: string | undefined, temporaryDirectory: string) => Promise<T>): Promise<T> {
+    const propertyArguments = Object.entries(buildProperties ?? {})
+        .filter((entry): entry is [string, string] => entry[1] !== undefined)
+        // MSBuild's response-file tokenizer splits on all Unicode whitespace. Quote the complete switch,
+        // while percent escaping embedded quotes, backslashes, and line-breaking whitespace.
+        .map(([name, value]) => `"--property:${escapeMsBuildPropertyValue(name)}=${escapeMsBuildPropertyValue(value)}"`);
+    const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'aspire-msbuild-'));
+    const responseFilePath = path.join(directory, 'build-properties.rsp');
+    let handle: fs.promises.FileHandle | undefined;
+    try {
+        let responseFileArgument: string | undefined;
+        if (propertyArguments.length > 0) {
+            // Passing the final mode to open avoids a window in which another local user could read the values.
+            handle = await fs.promises.open(responseFilePath, 'wx', 0o600);
+            await handle.writeFile(`${propertyArguments.join(os.EOL)}${os.EOL}`, 'utf8');
+            await handle.close();
+            handle = undefined;
+            responseFileArgument = `@${responseFilePath}`;
+        }
+
+        return await action(responseFileArgument, directory);
+    } finally {
+        let cleanupError: unknown;
+        try {
+            await handle?.close();
+        } catch (err) {
+            cleanupError = err;
+        }
+        try {
+            await fs.promises.rm(directory, { recursive: true, force: true });
+        } catch (err) {
+            cleanupError ??= err;
+        }
+        if (cleanupError) {
+            extensionLogOutputChannel.warn(failedToCleanUpMsBuildTemporaryDirectory(
+                directory,
+                cleanupError instanceof Error ? cleanupError.message : String(cleanupError)));
+        }
+    }
+}
+
+function formatDotNetProcessError(error: unknown): string {
+    if (!(error instanceof Error)) {
+        return String(error);
+    }
+
+    const execError = error as Error & {
+        cmd?: unknown;
+        stdout?: unknown;
+        stderr?: unknown;
+    };
+    let message = error.message;
+    if (typeof execError.cmd === 'string') {
+        message = message
+            .replace(`Command failed: ${execError.cmd}\r\n`, '')
+            .replace(`Command failed: ${execError.cmd}\n`, '')
+            .replace(`Command failed: ${execError.cmd}`, '');
+    }
+
+    const diagnostics = [message, processOutputToString(execError.stdout), processOutputToString(execError.stderr)]
+        .filter((value): value is string => Boolean(value?.trim()));
+    const distinctDiagnostics = [...new Set(diagnostics)];
+    return distinctDiagnostics.length > 0 ? distinctDiagnostics.join(os.EOL) : error.name;
+}
+
+function processOutputToString(output: unknown): string | undefined {
+    if (typeof output === 'string') {
+        return output;
+    }
+
+    return Buffer.isBuffer(output) ? output.toString() : undefined;
+}
+
+function escapeMsBuildPropertyValue(value: string): string {
+    // MSBuild decodes %-escaped special characters in property values. Response files are
+    // line-oriented command input, so quotes, backslashes, and ASCII whitespace are escaped
+    // before the complete switch is quoted by the caller.
+    // https://learn.microsoft.com/visualstudio/msbuild/msbuild-response-files
+    // Escape '%' first so an existing sequence such as "%3B" remains literal.
+    // https://learn.microsoft.com/visualstudio/msbuild/how-to-escape-special-characters-in-msbuild
+    return value.replace(/[%$@()*\\"',;?=\t\r\n ]/g, character =>
+        `%${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`);
+}
+
+function createDotNetRunArguments(projectPath: string, baseProfileArgs: string | undefined, runSessionArgs: string[] | undefined, options: DotNetRunOptions = {}): string[] | string {
+    const dotnetRunArgs = createDotNetRunBaseArguments(projectPath, options);
     if (runSessionArgs !== undefined) {
         if (runSessionArgs.length > 0) {
             dotnetRunArgs.push('--', ...runSessionArgs);
@@ -506,10 +859,15 @@ function createDotNetRunArguments(projectPath: string, baseProfileArgs: string |
         // handles escaping consistently with normal project launches. Only the path token needs quoting.
         const quotedRunArgs = createDotNetRunBaseArguments(
             quoteCommandLineArgument(projectPath),
-            fileBased,
-            skipBuild,
-            runWorkingDirectory ? quoteCommandLineArgument(runWorkingDirectory) : undefined,
-            suppressCliRunHook);
+            {
+                ...options,
+                buildConfiguration: options.buildConfiguration
+                    ? quoteCommandLineArgument(options.buildConfiguration)
+                    : undefined,
+                runWorkingDirectory: options.runWorkingDirectory
+                    ? quoteCommandLineArgument(options.runWorkingDirectory)
+                    : undefined
+            });
         return `${quotedRunArgs.join(' ')} -- ${baseProfileArgs}`;
     }
 
@@ -777,9 +1135,11 @@ function getEnvironmentVariable(environment: NodeJS.ProcessEnv, name: string): s
     return matchingName ? environment[matchingName] : undefined;
 }
 
-export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
+export function createProjectDebuggerExtension(
+    dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService,
+    resourceType: ProjectLaunchConfiguration['type'] = 'project'): ResourceDebuggerExtension {
     return {
-        resourceType: 'project',
+        resourceType,
         debugAdapter: 'coreclr',
         extensionId: csharpExtensionId,
         getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => `C#: ${path.basename((launchConfig as ProjectLaunchConfiguration).project_path)}`,
@@ -799,9 +1159,16 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
 
             const projectPath = launchConfig.project_path;
             const isFileBasedProject = isFileBasedApp(projectPath);
+            const buildConfiguration = launchConfig.build_configuration;
+            const suppressBuild = launchConfig.suppress_build === true;
+            const buildEnvironment = launchConfig.build_environment;
+            const buildWorkingDirectory = launchConfig.build_working_directory;
+            // Classic AppHost builds and coordinated project builds can both produce output before this launch
+            // and suppress extension-owned builds. File-based AppHosts use forceBuild=false after the CLI builds them.
             // Newer CLIs build file-based AppHosts before asking the extension to launch them. Keep
             // extension-owned builds for file-based resources and older CLIs.
-            const shouldBuildProject = !isFileBasedProject || !launchOptions.isApphost || launchOptions.forceBuild !== false;
+            const shouldBuildProject = !suppressBuild &&
+                (!isFileBasedProject || !launchOptions.isApphost || launchOptions.forceBuild !== false);
 
             extensionLogOutputChannel.info(`Reading launch settings for: ${projectPath}`);
 
@@ -924,7 +1291,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 // Expand environment variable references (e.g. $(HOME)) that VS handles natively
                 // but aren't expanded by the coreclr debugger.
                 if (shouldBuildProject) {
-                    await dotNetService.buildDotNetProject(projectPath);
+                    await dotNetService.buildDotNetProject(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
                 }
 
                 debugConfiguration.program = expandEnvironmentVariables(baseProfile.executablePath);
@@ -941,31 +1308,82 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             }
             else if (!isFileBasedProject) {
                 const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
-                const projectLaunchProperties = await dotNetService.getDotNetProjectLaunchProperties(projectPath);
+                let runProperties = launchConfig.type === 'project-with-external-build.v1'
+                    ? await dotNetService.getDotNetProjectRunProperties(
+                        projectPath,
+                        buildConfiguration,
+                        buildEnvironment,
+                        buildWorkingDirectory)
+                    : undefined;
+                const projectLaunchProperties = runProperties ??
+                    await dotNetService.getDotNetProjectLaunchProperties(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
                 const outputPath = projectLaunchProperties.targetPath;
-                const debugProgram = getProjectDebugProgram(projectLaunchProperties);
-                if (debugProgram !== outputPath) {
-                    extensionLogOutputChannel.info(`Using generated apphost executable for unpackaged WinUI project: ${debugProgram}`);
-                }
-                const outputExists = await doesFileExist(outputPath);
-                const debugProgramExists = debugProgram === outputPath
-                    ? outputExists
-                    : await doesFileExist(debugProgram);
-                if (!outputExists || !debugProgramExists || launchOptions.forceBuild) {
-                    await dotNetService.buildDotNetProject(projectPath);
+                // A custom ComputeRunArguments target can launch an unrelated executable without producing
+                // TargetPath. Only validate project artifacts for the SDK launch forms that consume them.
+                const runCommandUsesProjectOutput = !runProperties ||
+                    canDebugResolvedProjectRunCommand(outputPath, runProperties);
+                let debugProgram = outputPath;
+                let missingOutputPath: string | undefined;
+                if (runCommandUsesProjectOutput) {
+                    debugProgram = getProjectDebugProgram(projectLaunchProperties);
+                    if (debugProgram !== outputPath) {
+                        extensionLogOutputChannel.info(`Using generated apphost executable for unpackaged WinUI project: ${debugProgram}`);
+                    }
+                    const outputExists = await doesFileExist(outputPath);
+                    const debugProgramExists = debugProgram === outputPath
+                        ? outputExists
+                        : await doesFileExist(debugProgram);
+                    missingOutputPath = !outputExists
+                        ? outputPath
+                        : !debugProgramExists
+                            ? debugProgram
+                            : undefined;
                 }
 
-                if (await shouldLaunchProjectWithDotNetRun(outputPath)) {
-                    const fallbackMessage = dotNetRunFallbackDisablesDebugger(outputPath, projectPath);
-                    extensionLogOutputChannel.warn(fallbackMessage);
-                    if (launchOptions.debug) {
-                        vscode.window.showInformationMessage(fallbackMessage);
+                if (missingOutputPath && suppressBuild) {
+                    throw new Error(prebuiltProjectOutputMissing(projectPath, missingOutputPath));
+                }
+
+                if (!suppressBuild && (missingOutputPath || launchOptions.forceBuild)) {
+                    await dotNetService.buildDotNetProject(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
+                }
+
+                const frameworklessOutput = runCommandUsesProjectOutput &&
+                    await isFrameworklessProjectOutput(outputPath);
+                if (!runProperties && frameworklessOutput) {
+                    runProperties = await dotNetService.getDotNetProjectRunProperties(
+                        projectPath,
+                        buildConfiguration,
+                        buildEnvironment,
+                        buildWorkingDirectory);
+                }
+
+                if (runProperties) {
+                    if (frameworklessOutput || !canDebugResolvedProjectRunCommand(outputPath, runProperties)) {
+                        const fallbackMessage = resolvedRunCommandDisablesDebugger(outputPath, projectPath);
+                        extensionLogOutputChannel.warn(fallbackMessage);
+                        if (launchOptions.debug) {
+                            vscode.window.showInformationMessage(fallbackMessage);
+                        }
+
+                        debugConfiguration.noDebug = true;
                     }
 
-                    configureDotNetRunDebugConfiguration(
-                        debugConfiguration,
-                        createDotNetRunArguments(projectPath, profileCommandLineArgs, args),
-                        createProjectEnvironment(launchSettings, baseProfile, profileName, effectiveLaunchConfig.disable_launch_profile === true, debugConfiguration.env, env, launchOptions));
+                    debugConfiguration.program = runProperties.runCommand;
+                    resolvedArguments = combineRunArguments(runProperties.runArguments, resolvedArguments);
+                    debugConfiguration.args = resolvedArguments;
+                    debugConfiguration.executablePath = undefined;
+                    if (!workingDirectoryProfile) {
+                        debugConfiguration.cwd = runProperties.runWorkingDirectory ?? debugConfiguration.cwd;
+                    }
+                    debugConfiguration.env = createProjectEnvironment(
+                        launchSettings,
+                        baseProfile,
+                        profileName,
+                        effectiveLaunchConfig.disable_launch_profile === true,
+                        debugConfiguration.env,
+                        env,
+                        launchOptions);
                 } else {
                     debugConfiguration.program = debugProgram;
                     debugConfiguration.env = createProjectEnvironment(
@@ -1003,7 +1421,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
 
                     if (shouldBuildProject) {
                         // There may be an older cached version of the file-based app, so force a build.
-                        await dotNetService.buildDotNetProject(projectPath);
+                        await dotNetService.buildDotNetProject(projectPath, buildConfiguration, buildEnvironment);
                     }
 
                     const projectDirectory = path.dirname(projectPath);
@@ -1014,10 +1432,13 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                             projectPath,
                             profileCommandLineArgs,
                             args,
-                            /* fileBased */ true,
-                            /* skipBuild */ !shouldBuildProject,
-                            runWorkingDirectory,
-                            /* suppressCliRunHook */ launchOptions.isApphost),
+                            {
+                                fileBased: true,
+                                skipBuild: !shouldBuildProject,
+                                buildConfiguration,
+                                runWorkingDirectory,
+                                suppressCliRunHook: launchOptions.isApphost
+                            }),
                         createProjectEnvironment(launchSettings, baseProfile, profileName, effectiveLaunchConfig.disable_launch_profile === true, debugConfiguration.env, env, launchOptions),
                         projectDirectory);
                 }
@@ -1026,19 +1447,31 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                     // file-based app itself and can be trusted.
                     // The Aspire SDK run hook would rewrite an AppHost RunCommand to `aspire run`, but the CLI
                     // already owns this launch. Suppress the hook so run-api returns the generated executable.
-                    const runApiEnvironment = launchOptions.isApphost ? { ASPIRE_SUPPRESS_CLI_RUN_HOOK: 'true' } : undefined;
+                    let runApiEnvironment = buildEnvironment ? { ...buildEnvironment } : undefined;
+                    if (launchOptions.isApphost) {
+                        runApiEnvironment ??= {};
+                        setEnvironmentVariable(runApiEnvironment, 'ASPIRE_SUPPRESS_CLI_RUN_HOOK', 'true');
+                    }
                     const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath, runApiEnvironment);
                     const runApiConfig = getRunApiConfigFromOutput(runApiOutput);
+                    const configuredRunProperties = buildConfiguration
+                        ? await dotNetService.getDotNetFileAppRunProperties(projectPath, buildConfiguration, suppressBuild, runApiEnvironment)
+                        : undefined;
 
                     if (shouldBuildProject) {
                         // There may be an older cached version of the file-based app, so force a build.
-                        await dotNetService.buildDotNetProject(projectPath);
+                        await dotNetService.buildDotNetProject(projectPath, buildConfiguration, buildEnvironment);
                     }
 
-                    debugConfiguration.program = runApiConfig.executablePath;
+                    const executablePath = configuredRunProperties?.runCommand ?? runApiConfig.executablePath;
+                    debugConfiguration.program = executablePath;
 
-                    const hostArguments = isDotnetLauncher(runApiConfig.executablePath) ? runApiConfig.commandLineArguments : undefined;
-                    resolvedArguments = combineRunApiArguments(hostArguments, resolvedArguments);
+                    // ComputeRunArguments describes the selected build configuration and remains authoritative
+                    // for every RunCommand. The run-api fallback instead contains default launch-profile arguments,
+                    // so consume those only when they are the host prefix for the bare `dotnet` launcher.
+                    const runArguments = configuredRunProperties?.runArguments ??
+                        (isDotnetLauncher(runApiConfig.executablePath) ? runApiConfig.commandLineArguments : undefined);
+                    resolvedArguments = combineRunArguments(runArguments, resolvedArguments);
                     debugConfiguration.args = resolvedArguments;
 
                     // Intentionally do NOT consume run-api's WorkingDirectory: it carries the SDK default profile's
@@ -1086,3 +1519,6 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
 }
 
 export const projectDebuggerExtension: ResourceDebuggerExtension = createProjectDebuggerExtension(debugSession => new DotNetService(debugSession));
+export const externalBuildProjectDebuggerExtension: ResourceDebuggerExtension = createProjectDebuggerExtension(
+    debugSession => new DotNetService(debugSession),
+    'project-with-external-build.v1');

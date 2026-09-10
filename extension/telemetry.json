@@ -665,6 +665,21 @@
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "comment": "Whether the current workspace contains an AppHost."
+    },
+    "is_microsoft_internal": {
+      "classification": "SystemMetaData",
+      "purpose": "BusinessInsight",
+      "comment": "Whether VS Code reports an account whose home tenant is the Microsoft corporate tenant."
+    },
+    "microsoft_internal_alias": {
+      "classification": "EndUserPseudonymizedInformation",
+      "purpose": "BusinessInsight",
+      "comment": "The normalized Microsoft corporate alias from the tenant-bound VS Code account login."
+    },
+    "microsoft_internal_domain": {
+      "classification": "SystemMetaData",
+      "purpose": "BusinessInsight",
+      "comment": "The normalized Microsoft corporate domain from the tenant-bound VS Code account login."
     }
   }
 }

@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, FoundryModels, FoundryRole, HostedAgentProtocol, type FoundryModel, createBuilder } from './.aspire/modules/aspire.mjs';
+import { AzureContainerRegistryRole, FoundryModels, FoundryRole, FoundryToolboxMcpGlobalApprovalMode, HostedAgentProtocol, type FoundryModel, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -31,6 +31,8 @@ const appInsights = await builder.addAzureApplicationInsights('insights');
 const cosmos = await builder.addAzureCosmosDB('cosmos');
 const storage = await builder.addAzureStorage('storage');
 const search = await builder.addAzureSearch('search');
+const api = await builder.addContainer('api', 'nginx')
+    .withHttpEndpoint();
 
 const project = await foundry.addProject('project');
 await project.withContainerRegistry(registry);
@@ -83,6 +85,41 @@ await _promptAgent.withTool(fabric);
 await _promptAgent.withTool(azFunc);
 await _promptAgent.withTool(funcTool);
 
+// Foundry Toolbox
+const toolbox = await project.addToolbox('field-tools', { version: '7' });
+await toolbox.withDescription('Tools for field technicians.');
+await toolbox.withWebSearchTool({
+    name: 'web-search',
+    description: 'Search the public web.'
+});
+await toolbox.withMcpTool('inventory', 'https://inventory.example.com/mcp', {
+    serverLabel: 'inventory-server',
+    serverDescription: 'Inventory MCP server.',
+    approvalPolicy: {
+        global: FoundryToolboxMcpGlobalApprovalMode.Always
+    }
+});
+await toolbox.withMcpTool('inventory-custom', 'https://inventory.example.com/mcp', {
+    approvalPolicy: {
+        always: {
+            toolNames: ['delete-item'],
+            readOnly: false
+        },
+        never: {
+            toolNames: ['get-item'],
+            readOnly: true
+        }
+    }
+});
+await toolbox.withAISearchTool('knowledge-base', search, 'docs');
+
+const existingInRun = await project.addToolbox('existing-in-run');
+await existingInRun.runAsExisting();
+const existingInPublish = await project.addToolbox('existing-in-publish');
+await existingInPublish.publishAsExisting();
+const alwaysExisting = await project.addToolbox('always-existing', { version: '3' });
+await alwaysExisting.asExisting();
+
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
 const builderProject = await builderProjectFoundry.addProject('builder-project');
 const _builderProjectModel = await builderProject.addModelDeployment('builder-project-model', 'Phi-4-mini', { modelVersion: '1', format: 'Microsoft' });
@@ -117,6 +154,7 @@ const hostedAgent = await builder.addExecutable(
     '.',
     ['-e', hostedAgentScript]);
 
+await hostedAgent.withReference(toolbox);
 await hostedAgent.asHostedAgent(project, {
     description: 'Validation hosted agent',
     cpu: 1,
@@ -135,7 +173,6 @@ const hostedAgentWithProtocol = await builder.addExecutable(
 await hostedAgentWithProtocol.withHttpEndpoint({ targetPort: 8089 });
 await hostedAgentWithProtocol.asHostedAgentWithProtocol(project, HostedAgentProtocol.Invocations, '1.0.0');
 
-const api = await builder.addContainer('api', 'nginx');
 await foundry.withContainerRegistryRoleAssignments(registry, [AzureContainerRegistryRole.AcrPull]);
 await api.withFoundryRoleAssignments(foundry, [FoundryRole.CognitiveServicesOpenAIUser]);
 

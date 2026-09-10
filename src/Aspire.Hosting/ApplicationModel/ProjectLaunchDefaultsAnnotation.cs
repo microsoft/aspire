@@ -35,6 +35,11 @@ public sealed class ProjectLaunchDefaultsAnnotation : IResourceAnnotation
     internal bool HasKestrelEndpoints => KestrelEndpointAnnotationHosts.Count > 0;
 
     /// <summary>
+    /// Gets or sets the AppHost build configuration that IDE launchers should use for this project.
+    /// </summary>
+    internal string? BuildConfiguration { get; set; }
+
+    /// <summary>
     /// Records the project metadata used to materialize project defaults.
     /// </summary>
     internal bool TrySetAppliedProjectMetadata(IProjectMetadata projectMetadata)

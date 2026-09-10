@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
+using Aspire.Shared;
 
 namespace Aspire.Hosting;
 
@@ -34,8 +35,11 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
 
         var resource = new KubernetesAspireDashboardResource(name);
 
+        // Pin the image to the app's Aspire major.minor version instead of the default (untagged)
+        // reference, which resolves to a mutable ":latest" and makes the published chart
+        // non-reproducible.
         return builder.CreateResourceBuilder(resource)
-                      .WithImage("mcr.microsoft.com/dotnet/nightly/aspire-dashboard")
+                      .WithImage(DashboardImage.Name, DashboardImage.ResolveTag())
                       .WithHttpEndpoint(targetPort: 18888)
                       // Expose the HTTP endpoint so ingress or explicit host port mapping can route browser traffic to the dashboard.
                       .WithEndpoint("http", e => e.IsExternal = true)

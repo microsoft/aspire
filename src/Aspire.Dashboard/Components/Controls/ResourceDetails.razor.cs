@@ -75,9 +75,6 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private readonly HashSet<string> _unmaskedItemNames = new();
     private const string StateDescriptionPropertyKey = "resource-state-description";
 
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
-
     internal IQueryable<EnvironmentVariableViewModel> FilteredEnvironmentVariables =>
         Resource.Environment
             .Where(vm => (_showAll || vm.FromSpec) && ((IPropertyGridItem)vm).MatchesFilter(_filter))
@@ -259,7 +256,6 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlStringsLoc);
     }
 
     private void UpdateResourceActionsMenu()
