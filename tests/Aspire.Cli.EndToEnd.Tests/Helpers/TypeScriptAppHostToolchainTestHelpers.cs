@@ -68,7 +68,13 @@ internal static class TypeScriptAppHostToolchainTestHelpers
     /// Gets the restore/install command for a toolchain.
     /// </summary>
     internal static string GetInstallCommand(string toolchain) =>
-        $"{GetCommandName(toolchain)} install";
+        NormalizeToolchain(toolchain) switch
+        {
+            // create-vite@latest can require packages published within Deno's minimum dependency age.
+            // Allow those releases in the test fixture: https://docs.deno.com/runtime/reference/cli/install/#options
+            "deno" => "deno install --minimum-dependency-age=0",
+            _ => $"{GetCommandName(toolchain)} install"
+        };
 
     /// <summary>
     /// Gets the no-emit type-check command for a toolchain.

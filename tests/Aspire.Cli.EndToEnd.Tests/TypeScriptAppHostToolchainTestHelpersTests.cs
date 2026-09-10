@@ -8,6 +8,20 @@ namespace Aspire.Cli.EndToEnd.Tests;
 
 public sealed class TypeScriptAppHostToolchainTestHelpersTests
 {
+    [Theory]
+    [InlineData("npm", "npm install")]
+    [InlineData("bun", "bun install")]
+    [InlineData("yarn", "yarn install")]
+    [InlineData("pnpm", "pnpm install")]
+    [InlineData("deno", "deno install --minimum-dependency-age=0")]
+    [InlineData("DENO", "deno install --minimum-dependency-age=0")]
+    public void GetInstallCommand_ReturnsToolchainCommand(string toolchain, string expectedCommand)
+    {
+        var installCommand = TypeScriptAppHostToolchainTestHelpers.GetInstallCommand(toolchain);
+
+        Assert.Equal(expectedCommand, installCommand);
+    }
+
     [Fact]
     public void GetTypeCheckCommand_WhenToolchainIsDeno_EnablesSloppyImports()
     {
