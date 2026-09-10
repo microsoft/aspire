@@ -1,8 +1,8 @@
 {
   "id": "build-test-project-widespread-exit1-unrelated",
   "type": "infra-failure",
-  "title": "Multiple unrelated 'Build test project' jobs (Hosting.Azure, Hosting.Azure.Kubernetes, Playground) fail with generic exit code 1",
-  "error_pattern": "Process completed with exit code 1. (Build test project step failed across Hosting.Azure (ubuntu/windows), Hosting.Azure.Kubernetes (ubuntu/windows), and Playground (ubuntu) jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job'). PR only modifies unrelated VS Code extension e2e workflow files.",
+  "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground) fail with generic exit code 1",
+  "error_pattern": "Process completed with exit code 1. (Build test project step failed across multiple unrelated jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job').",
   "occurrences": [
     {
       "run_id": 33494022725,
@@ -17,6 +17,13 @@
       "job": "Tests / Microsoft.Data.SqlClient / Microsoft.Data.SqlClient (windows-latest)",
       "pr_number": 19760,
       "observed_at": "2026-09-01T13:43:06Z"
+    },
+    {
+      "run_id": 34508764231,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34508764231",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHost... / Hosting.RemoteHost (windows-latest)",
+      "pr_number": 20036,
+      "observed_at": "2026-09-10T18:10:08Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"

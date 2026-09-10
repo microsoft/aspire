@@ -11,6 +11,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
       "pr_number": 19682,
       "observed_at": "2026-09-10T04:46:54Z"
+    },
+    {
+      "run_id": 34508764231,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34508764231",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHost... / Hosting.RemoteHost (windows-latest)",
+      "pr_number": 20036,
+      "observed_at": "2026-09-10T18:10:08Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20029"

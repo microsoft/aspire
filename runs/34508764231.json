@@ -1,0 +1,64 @@
+{
+  "run_id": 34508764231,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34508764231",
+  "analyzed_at": "2026-09-10T18:10:08Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20036,
+    "title": "Restrict automated Copilot reviews to authors with write access",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-organization-funded-copilot-reviews",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20036"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHost... / Hosting.RemoteHost (windows-latest)",
+      "id": 102978446381,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34508764231/job/102978446381",
+      "classification": "flaky-test",
+      "reason": "'Build test project' step failed with a generic exit code 1 and job logs were unavailable ('Failed to fetch logs for job'). No TRX test failures were extracted for this job. The PR only modifies GitHub Actions workflow files (.github/workflows/organization-funded-copilot-reviews.yml, docs, and Infrastructure.Tests workflow-script tests), which are entirely unrelated to the Aspire.Hosting.RemoteHost.Tests project build on windows-latest. This matches the recurring 'Build test project' generic exit-1 pattern seen across multiple unrelated jobs/PRs.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 102978468078,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34508764231/job/102978468078",
+      "classification": "flaky-test",
+      "reason": "Failed due to Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings, a known flaky test (tracked in prior cause 'cli-sdkdumpcommandtests-doesnotemitwarnings-flaky', issue #20029) where a remote-executed dotnet build of Aspire.Hosting.csproj unexpectedly emits 6 warnings instead of 0. The PR only touches Copilot review workflow config and related tests/docs, unrelated to Aspire.Hosting build warnings.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 102978468480,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34508764231/job/102978468480",
+      "classification": "flaky-test",
+      "reason": "Same underlying flaky test failure as the macOS Cli job: Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings fails because a remote-executed dotnet build of Aspire.Hosting.csproj emits 6 unexpected warnings instead of 0, unrelated to this PR's changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Cli (ubuntu-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception.",
+      "stack_trace": "Child exception:\n  Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   6\n   at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/SdkDumpCommandTests.cs:line 280\n--- End of stack trace from previous location ---\n   at Microsoft.DotNet.RemoteExecutor.Program.Main(String[] args) in /_/src/Microsoft.DotNet.RemoteExecutor/src/Program.cs:line 65",
+      "classification": "flaky",
+      "reason": "Matches known prior flaky-test cause 'cli-sdkdumpcommandtests-doesnotemitwarnings-flaky' (issue #20029). The test expects zero warnings from a fresh dotnet build of Aspire.Hosting.csproj but observed 6; the PR under analysis does not touch Aspire.Hosting or the SDK dump command code."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Cli (macos-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception.",
+      "stack_trace": "Child exception:\n  Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   6\n   at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/SdkDumpCommandTests.cs:line 280\n--- End of stack trace from previous location ---\n   at Microsoft.DotNet.RemoteExecutor.Program.Main(String[] args) in /_/src/Microsoft.DotNet.RemoteExecutor/src/Program.cs:line 65",
+      "classification": "flaky",
+      "reason": "Same known flaky test as above (cause 'cli-sdkdumpcommandtests-doesnotemitwarnings-flaky', issue #20029), reproduced on macos-latest. Unrelated to this PR's changes to Copilot review workflow gating."
+    }
+  ],
+  "causes": ["cli-sdkdumpcommandtests-doesnotemitwarnings-flaky", "build-test-project-widespread-exit1-unrelated"]
+}
