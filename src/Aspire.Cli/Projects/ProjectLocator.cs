@@ -1079,7 +1079,7 @@ internal sealed class ProjectLocator(
                     }
                 }
 
-                // If no handler matched, for .cs files check if we should search the parent directory
+                // An invalid apphost.cs can still identify a directory containing a project-based AppHost.
                 if (projectFile.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase) && projectFile.Directory is { } parentDirectory)
                 {
                     // File exists but is not a valid single-file apphost. Search in the parent directory.
@@ -1092,6 +1092,13 @@ internal sealed class ProjectLocator(
                         displayProgress,
                         projectOptionSpecifiedAsDirectory,
                         cancellationToken);
+                }
+
+                if (handler is not null)
+                {
+                    throw new ProjectLocatorException(
+                        ErrorStrings.ProjectFileNotAppHostProject,
+                        ProjectLocatorFailureReason.ProjectFileNotAppHostProject);
                 }
 
                 // No handler can process this file

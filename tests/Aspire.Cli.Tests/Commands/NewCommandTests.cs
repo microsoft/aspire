@@ -286,17 +286,23 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommand_IntegrationTestTemplateReportsExplicitAppHostResolutionFailure()
+    public async Task NewCommand_IntegrationTestTemplateReportsExplicitNonAppHostFailure()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "MissingAppHost", "AppHost.csproj"));
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "WebApp.csproj"));
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Tests");
         var runner = CreateTestRunnerWithStandardPackages();
+        TestInteractionService? interactionService = null;
 
         var services = CreateServiceCollection(workspace, options =>
         {
             options.DotNetCliRunnerFactory = _ => runner;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ =>
+            {
+                interactionService = new TestInteractionService();
+                return interactionService;
+            };
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
                 UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (projectFile, behavior, createSettingsFile, _) =>
@@ -305,8 +311,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     Assert.Equal(MultipleAppHostProjectsFoundBehavior.Throw, behavior);
                     Assert.False(createSettingsFile);
                     throw new ProjectLocatorException(
-                        "The specified AppHost project does not exist.",
-                        ProjectLocatorFailureReason.ProjectFileDoesntExist);
+                        ErrorStrings.ProjectFileNotAppHostProject,
+                        ProjectLocatorFailureReason.ProjectFileNotAppHostProject);
                 }
             };
         });
@@ -320,6 +326,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.NotNull(interactionService);
+        Assert.Equal(InteractionServiceStrings.SpecifiedProjectFileNotAppHostProject, Assert.Single(interactionService.DisplayedErrors));
         Assert.Null(runner.LastNewProjectExtraArgs);
     }
 

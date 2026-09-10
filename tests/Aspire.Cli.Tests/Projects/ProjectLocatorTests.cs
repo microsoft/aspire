@@ -739,8 +739,12 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
                 CancellationToken.None).DefaultTimeout();
         });
 
-        Assert.Equal(ErrorStrings.ProjectFileDoesntExist, ex.Message);
-        Assert.Equal(ProjectLocatorFailureReason.ProjectFileDoesntExist, ex.FailureReason);
+        Assert.Equal(ErrorStrings.ProjectFileNotAppHostProject, ex.Message);
+        Assert.Equal(ProjectLocatorFailureReason.ProjectFileNotAppHostProject, ex.FailureReason);
+
+        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Equal(InteractionServiceStrings.SpecifiedProjectFileNotAppHostProject, errorMessage);
     }
 
     [Fact]
