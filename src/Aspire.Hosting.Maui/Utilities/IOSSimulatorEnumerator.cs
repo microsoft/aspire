@@ -82,7 +82,10 @@ internal static class IOSSimulatorEnumerator
             var simctlJson = GetSimctlJsonDocument(json);
             if (simctlJson is null)
             {
-                return results;
+                throw new DistributedApplicationException(
+                    "Unable to parse xcrun simctl list devices available -j output. " +
+                    "The command completed successfully but did not return a parseable JSON object with a 'devices' property. " +
+                    "Open Xcode and verify the simulator runtimes are installed, or run xcrun simctl list devices available -j to inspect the output.");
             }
 
             using var doc = JsonDocument.Parse(simctlJson);

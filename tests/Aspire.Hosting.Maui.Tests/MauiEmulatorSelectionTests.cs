@@ -185,6 +185,31 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ParseSimctlOutput_WithNoDevicesJson_ThrowsActionableError()
+    {
+        var ex = Assert.Throws<DistributedApplicationException>(() =>
+            IOSSimulatorEnumerator.ParseSimctlOutput("""
+                2026-06-29 10:00:00.000 simctl[1234:5678] diagnostic noise {not JSON}
+                trailing noise {"ignored": true}
+                """, NullLogger.Instance));
+
+        Assert.Contains("Unable to parse xcrun simctl list devices available -j output", ex.Message);
+        Assert.Contains("'devices' property", ex.Message);
+    }
+
+    [Fact]
+    public void ParseSimctlOutput_WithEmptyDevicesObject_ReturnsEmpty()
+    {
+        var result = IOSSimulatorEnumerator.ParseSimctlOutput("""
+            {
+              "devices": {}
+            }
+            """, NullLogger.Instance);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
     public void FormatRuntimeName_FormatsAppleRuntimeIdentifier()
     {
         Assert.Equal("iOS 18.2", IOSSimulatorEnumerator.FormatRuntimeName("com.apple.CoreSimulator.SimRuntime.iOS-18-2"));
