@@ -283,7 +283,6 @@ public class AspireSkillsBundleTests
             var bundle = await LoadBundleAsync(s_bundleProvider, bundleDirectory);
             var skill = Assert.Single(bundle.Assets);
 
-            Assert.Same(bundle.Assets, bundle.GetAssetDefinitions());
             Assert.Equal(AgentAssetKind.Skill, skill.AssetKind);
             Assert.Equal(CommonAgentApplicators.AspireSkillName, skill.Name);
             Assert.Equal(AspireSkillDescription, skill.Description);

@@ -2032,33 +2032,42 @@ public class AspireSkillsInstallerTests
         }
     }
 
-    [Fact]
-    public async Task InstallAsync_WhenEmbeddedArchiveHashDoesNotMatch_ReturnsFailure()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallAsync_WhenEmbeddedArchiveHashDoesNotMatch_ReturnsFailure(bool isExtension)
     {
         var rootDirectory = CreateTempDirectory();
 
         try
         {
-            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var assetKind = isExtension ? AgentAssetKind.Extension : AgentAssetKind.Skill;
+            var kindName = isExtension ? "extensions" : "skills";
+            var expectedHash = new string('0', 128);
+            var embeddedBundleProvider = isExtension
+                ? await CreateExtensionEmbeddedBundleProviderAsync()
+                : await CreateEmbeddedBundleProviderAsync();
+            var actualHash = ComputeSha512(embeddedBundleProvider.ArchiveBytes!);
             embeddedBundleProvider.Metadata = new EmbeddedAspireSkillsBundleMetadata
             {
                 Version = AspireSkillsInstaller.Version,
                 Repository = AspireSkillsInstaller.GitHubRepository,
                 Tag = $"v{AspireSkillsInstaller.Version}",
-                AssetName = $"aspire-skills-v{AspireSkillsInstaller.Version}.tgz",
-                Sha512 = new string('0', 128)
+                AssetName = $"aspire-{kindName}-v{AspireSkillsInstaller.Version}.tgz",
+                Sha512 = expectedHash
             };
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var installer = CreateInstaller(
                 executionContext,
-                embeddedBundleProvider: embeddedBundleProvider);
+                embeddedBundleProvider: isExtension ? null : embeddedBundleProvider,
+                embeddedExtensionBundleProvider: isExtension ? embeddedBundleProvider : null);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(assetKind, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
-            Assert.NotNull(result.Message);
-            Assert.Contains("SHA-512", result.Message, StringComparison.Ordinal);
-            Assert.Contains(new string('0', 128), result.Message, StringComparison.Ordinal);
+            Assert.Equal(
+                $"The Aspire {kindName} bundle is invalid: Embedded Aspire {kindName} archive failed SHA-512 verification. Expected '{expectedHash}', got '{actualHash}'.",
+                result.Message);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
         }
         finally

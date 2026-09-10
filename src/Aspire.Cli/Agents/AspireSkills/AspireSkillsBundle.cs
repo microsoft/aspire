@@ -36,11 +36,6 @@ internal sealed class AspireSkillsBundle
     public IReadOnlyList<AgentAssetDefinition> Assets { get; }
 
     /// <summary>
-    /// Gets the installable definitions declared by the bundle manifest.
-    /// </summary>
-    public IReadOnlyList<AgentAssetDefinition> GetAssetDefinitions() => Assets;
-
-    /// <summary>
     /// Gets validated files for an asset, applying its install exclusions.
     /// </summary>
     public Task<IReadOnlyList<AgentAssetFile>> GetAssetFilesAsync(

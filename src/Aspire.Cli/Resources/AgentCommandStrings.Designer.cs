@@ -529,7 +529,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Installing Aspire skills....
+        ///   Looks up a localized string similar to Installing {0}....
         /// </summary>
         internal static string AspireSkillsInstaller_InstallingStatus {
             get {
@@ -538,7 +538,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available..
+        ///   Looks up a localized string similar to {0} could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available..
         /// </summary>
         internal static string AspireSkillsInstaller_GitHubUnavailable {
             get {
@@ -547,7 +547,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The Aspire skills bundle is invalid: {0}.
+        ///   Looks up a localized string similar to The {0} bundle is invalid: {1}.
         /// </summary>
         internal static string AspireSkillsInstaller_InvalidBundle {
             get {
@@ -556,7 +556,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills bundle metadata is invalid: {0}.
+        ///   Looks up a localized string similar to Embedded {0} bundle metadata is invalid: {1}.
         /// </summary>
         internal static string AspireSkillsInstaller_InvalidMetadata {
             get {
@@ -565,7 +565,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a version..
+        ///   Looks up a localized string similar to Embedded {0} metadata must specify a version..
         /// </summary>
         internal static string AspireSkillsInstaller_MissingMetadataVersion {
             get {
@@ -574,7 +574,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'..
+        ///   Looks up a localized string similar to Embedded {0} metadata repository '{1}' does not match expected repository '{2}'..
         /// </summary>
         internal static string AspireSkillsInstaller_MetadataRepositoryMismatch {
             get {
@@ -583,7 +583,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a GitHub release tag..
+        ///   Looks up a localized string similar to Embedded {0} metadata must specify a GitHub release tag..
         /// </summary>
         internal static string AspireSkillsInstaller_MissingMetadataTag {
             get {
@@ -592,7 +592,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a release asset name..
+        ///   Looks up a localized string similar to Embedded {0} metadata must specify a release asset name..
         /// </summary>
         internal static string AspireSkillsInstaller_MissingMetadataAssetName {
             get {
@@ -601,7 +601,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify the release asset SHA-512 hash..
+        ///   Looks up a localized string similar to Embedded {0} metadata must specify the release asset SHA-512 hash..
         /// </summary>
         internal static string AspireSkillsInstaller_MissingMetadataSha512 {
             get {
@@ -610,7 +610,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'..
+        ///   Looks up a localized string similar to Embedded {0} archive failed SHA-512 verification. Expected '{1}', got '{2}'..
         /// </summary>
         internal static string AspireSkillsInstaller_ArchiveHashVerificationFailed {
             get {
