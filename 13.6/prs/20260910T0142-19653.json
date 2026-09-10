@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Internal Microsoft user telemetry detection/enrichment for CLI and VS Code extension. No user-visible product behavior change; purely internal diagnostics/telemetry infrastructure.",
+  "mergedAt": "2026-09-10T01:42:36Z",
+  "number": 19653,
+  "runDate": "2026-09-10T06:07:49Z",
+  "status": "excluded",
+  "title": "Improve internal Microsoft user telemetry"
+}

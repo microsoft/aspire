@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Repository build SDK bump to .NET 11 RC1 and related CI/build tooling updates. Routine engineering/build infrastructure with no user-facing product change.",
+  "mergedAt": "2026-09-10T03:17:50Z",
+  "number": 19999,
+  "runDate": "2026-09-10T06:07:49Z",
+  "status": "excluded",
+  "title": "Update to .NET 11 RC1 SDK"
+}

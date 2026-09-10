@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Fixes internal Microsoft-user detection parsing for macOS Platform SSO telemetry (stacked on #19653). Internal diagnostics only, no user-visible behavior change.",
+  "mergedAt": "2026-09-10T03:21:57Z",
+  "number": 19682,
+  "runDate": "2026-09-10T06:07:49Z",
+  "status": "excluded",
+  "title": "Fix macOS Platform SSO internal detection"
+}
