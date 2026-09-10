@@ -88,13 +88,13 @@ For a requested discovery directory, the operation:
 
 1. Loads the normal NuGet hierarchy with `Settings.LoadDefaultSettings`.
 2. Returns configuration paths in highest-to-lowest precedence order.
-3. Returns non-secret source descriptors containing the source name, resolved location, and enabled state.
+3. Returns non-secret source descriptors containing the source name, enabled state, credential-material flag, and a per-invocation keyed identity of the resolved location.
 4. Returns the effective package-source mapping entries produced by NuGet after applying the configuration hierarchy.
 5. Returns disabled and reserved source keys needed to avoid accidentally inheriting name-bound credentials, certificates, or disabled state when Aspire introduces a source.
 
-The operation does not return credentials, passwords, client certificates, trusted signers, or serialized configuration sections.
+The operation does not return source locations, credentials, passwords, client certificates, trusted signers, or serialized configuration sections. The CLI supplies a random identity key through the helper's private process environment, and both sides use that key to calculate opaque source identities. Credential-bearing source URLs therefore remain inside NuGet-owned configuration while the CLI can still correlate a selected source with an ambient alias.
 
-The CLI matches effective Aspire source locations to these descriptors using NuGet-compatible source identity rules. Every matching descriptor supplies a source key used by the policy overlay, preserving NuGet's association between each alias and its ambient authentication or transport settings.
+The CLI matches effective Aspire source locations to these opaque identities using NuGet-compatible normalization rules. Every matching descriptor supplies a source key used by the policy overlay, preserving NuGet's association between each alias and its ambient authentication or transport settings. Captured restore diagnostics are sanitized by recognizing credential-bearing HTTP URL shapes rather than requiring the settings bridge to return the original secret-bearing value. If a malformed credential-bearing source cannot be safely recognized from diagnostic output, the helper reports that constraint and the CLI discards detailed restore output rather than risk exposing the source.
 
 ## Aspire policy overlay
 

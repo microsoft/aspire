@@ -482,8 +482,10 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.True(Directory.Exists(Directory.GetParent(manifestPath)!.FullName));
     }
 
-    [Fact]
-    public async Task RestorePackagesAsync_RedactsCredentialBearingSourcesFromFailures()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RestorePackagesAsync_RedactsCredentialBearingSourcesFromFailures(bool suppressFailureOutput)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -527,11 +529,13 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
-            additionalSensitiveSources: [credentialBearingSource],
-            workingDirectory: appHostDirectory.FullName));
+            workingDirectory: appHostDirectory.FullName,
+            suppressFailureOutput: suppressFailureOutput));
 
         Assert.DoesNotContain(credentialBearingSource, exception.Message);
-        Assert.Contains("packages.example.com", exception.Message);
+        Assert.Equal(
+            suppressFailureOutput,
+            !exception.Message.Contains("packages.example.com", StringComparison.Ordinal));
         Assert.DoesNotContain(sink.Writes, write => write.Message?.Contains(credentialBearingSource, StringComparison.Ordinal) == true);
         Assert.NotNull(restoreOutputPath);
     }
@@ -548,16 +552,30 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
             string.Empty);
         var configPath = Path.Combine(appHostDirectory.FullName, "NuGet.Config");
+        const string packageSource = "https://example.com/feed";
+        var sourceIdentityKey = new byte[NuGetSourceIdentity.KeySizeInBytes];
         string[]? invocation = null;
+        IDictionary<string, string>? invocationEnvironment = null;
         var executionFactory = new TestProcessExecutionFactory
         {
-            AssertionCallback = (args, _, _, _) => invocation = args,
+            AssertionCallback = (args, environment, _, _) =>
+            {
+                invocation = args;
+                invocationEnvironment = environment;
+            },
             AttemptCallback = (_, _) => (0, System.Text.Json.JsonSerializer.Serialize(new
             {
                 ConfigPaths = new[] { configPath },
                 Sources = new[]
                 {
-                    new { Name = "private", Source = "https://example.com/feed", IsEnabled = true }
+                    new
+                    {
+                        Name = "private",
+                        Identity = NuGetSourceIdentity.Compute(packageSource, sourceIdentityKey),
+                        IsEnabled = true,
+                        HasCredentialMaterial = false,
+                        RequiresFullOutputSuppression = false
+                    }
                 },
                 PackageSourceMappingEnabled = true,
                 PackageSourceMappings = new[]
@@ -573,13 +591,24 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
             new TestEnvironment(),
-            NullLogger<BundleNuGetService>.Instance);
+            NullLogger<BundleNuGetService>.Instance)
+        {
+            SourceIdentityKeyFactory = () => sourceIdentityKey
+        };
 
         var settings = await service.GetNuGetSettingsAsync(appHostDirectory.FullName, CancellationToken.None);
 
         Assert.Equal([configPath], settings.ConfigPaths);
         var source = Assert.Single(settings.Sources);
-        Assert.Equal(new NuGetSourceInfo("private", "https://example.com/feed", IsEnabled: true), source);
+        Assert.Equal(
+            new NuGetSourceInfo(
+                "private",
+                NuGetSourceIdentity.Compute(packageSource, sourceIdentityKey),
+                IsEnabled: true,
+                HasCredentialMaterial: false,
+                RequiresFullOutputSuppression: false),
+            source);
+        Assert.Same(sourceIdentityKey, settings.SourceIdentityKey);
         Assert.True(settings.PackageSourceMappingEnabled);
         var mapping = Assert.Single(settings.PackageSourceMappings);
         Assert.Equal("private", mapping.SourceKey);
@@ -587,6 +616,9 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(["disabled"], settings.DisabledPackageSourceKeys);
         Assert.Equal(["private", "disabled", "credentials-only"], settings.ReservedPackageSourceKeys);
         Assert.Equal(["nuget", "settings", "--working-dir", appHostDirectory.FullName], invocation!);
+        Assert.Equal(
+            Convert.ToBase64String(sourceIdentityKey),
+            invocationEnvironment![NuGetSourceIdentity.KeyEnvironmentVariable]);
     }
 
     [Fact]

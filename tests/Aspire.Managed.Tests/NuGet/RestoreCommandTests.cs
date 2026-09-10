@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Managed.NuGet.Commands;
+using Aspire.Shared;
 using Microsoft.DotNet.RemoteExecutor;
 using NuGet.Configuration;
 using NuGet.Frameworks;
@@ -12,6 +13,7 @@ namespace Aspire.Managed.Tests.NuGet;
 
 public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
 {
+    private static readonly byte[] s_sourceIdentityKey = new byte[NuGetSourceIdentity.KeySizeInBytes];
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
 
     public void Dispose() => _workspace.Dispose();
@@ -295,15 +297,67 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
             </configuration>
             """);
 
-        var settings = SettingsCommand.GetSettings(_workspace.Path);
+        var settings = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
 
         Assert.Contains(nugetConfigPath, settings.ConfigPaths, StringComparer.OrdinalIgnoreCase);
         Assert.Contains(
             settings.Sources,
             source => source.Name == "private" &&
-                source.Source == sourcePath &&
+                source.Identity == NuGetSourceIdentity.Compute(sourcePath, s_sourceIdentityKey) &&
                 source.IsEnabled);
         Assert.True(settings.PackageSourceMappingEnabled);
+    }
+
+    [Fact]
+    public void SettingsCommand_DoesNotSerializeCredentialBearingSourceLocations()
+    {
+        const string credential = "fake-sas-token";
+        const string source = $"https://example.invalid/v3/index.json?sig={credential}";
+        File.WriteAllText(
+            Path.Combine(_workspace.Path, "NuGet.Config"),
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="private" value="{source}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var settings = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
+        var serializedSettings = JsonSerializer.Serialize(
+            settings,
+            SettingsJsonContext.Default.NuGetSettingsResult);
+
+        var packageSource = Assert.Single(settings.Sources);
+        Assert.Equal("private", packageSource.Name);
+        Assert.Equal(NuGetSourceIdentity.Compute(source, s_sourceIdentityKey), packageSource.Identity);
+        Assert.True(packageSource.HasCredentialMaterial);
+        Assert.False(packageSource.RequiresFullOutputSuppression);
+        Assert.DoesNotContain(credential, serializedSettings);
+        Assert.DoesNotContain(source, serializedSettings);
+    }
+
+    [Fact]
+    public void SettingsCommand_RequiresOutputSuppressionForMalformedCredentialBearingSources()
+    {
+        const string source = "https://user:p#word@packages.example.com/private";
+        File.WriteAllText(
+            Path.Combine(_workspace.Path, "NuGet.Config"),
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="private" value="{source}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var settings = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
+
+        var packageSource = Assert.Single(settings.Sources);
+        Assert.True(packageSource.HasCredentialMaterial);
+        Assert.True(packageSource.RequiresFullOutputSuppression);
     }
 
     [Fact]
@@ -331,7 +385,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
             </configuration>
             """);
 
-        var settings = SettingsCommand.GetSettings(projectDirectory.FullName);
+        var settings = SettingsCommand.GetSettings(projectDirectory.FullName, s_sourceIdentityKey);
 
         Assert.False(settings.PackageSourceMappingEnabled);
     }
@@ -404,7 +458,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
             </configuration>
             """);
 
-        var ambient = SettingsCommand.GetSettings(appHostDirectory.FullName);
+        var ambient = SettingsCommand.GetSettings(appHostDirectory.FullName, s_sourceIdentityKey);
         Assert.Contains("credential-only", ambient.ReservedPackageSourceKeys, StringComparer.OrdinalIgnoreCase);
         Assert.Contains("certificate-only", ambient.ReservedPackageSourceKeys, StringComparer.OrdinalIgnoreCase);
         Assert.Contains("dormant", ambient.ReservedPackageSourceKeys, StringComparer.OrdinalIgnoreCase);

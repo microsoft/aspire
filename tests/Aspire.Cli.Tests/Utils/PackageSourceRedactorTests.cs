@@ -65,4 +65,21 @@ public class PackageSourceRedactorTests
 
         Assert.Equal(expected, result);
     }
+
+    [Theory]
+    [InlineData(
+        "Restore failed for https://feed.example.com/v3/index.json?sig=secret.",
+        "Restore failed for https://feed.example.com/v3/index.json")]
+    [InlineData(
+        "Restore failed for ******feed.example.com/v3/index.json?sig=secret.",
+        "Restore failed for ******feed.example.com/v3/index.json")]
+    [InlineData(
+        "See https://feed.example.com/v3/index.json for help.",
+        "See https://feed.example.com/v3/index.json for help.")]
+    public void RedactCredentialBearingUrls_DoesNotRequireOriginalCredential(
+        string value,
+        string expected)
+    {
+        Assert.Equal(expected, PackageSourceRedactor.RedactCredentialBearingUrls(value));
+    }
 }

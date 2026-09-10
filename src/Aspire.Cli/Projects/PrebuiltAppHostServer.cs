@@ -46,6 +46,15 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private const string ProjectAssetsFileName = "project.assets.json";
     internal const string IntegrationHostingVersionPropertyName = "AspireIntegrationHostingVersion";
     private const string RestoreStampFileName = "aspire-restore.stamp";
+    private static readonly string[] s_safeBuildDiagnosticMarkers =
+    [
+        "NETSDK1004",
+        "NETSDK1064",
+        "NU1101",
+        "NU1102",
+        "NU1605",
+        ProjectAssetsFileName
+    ];
 
     private readonly string _appDirectoryPath;
     private readonly string _socketPath;
@@ -340,7 +349,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var configSources = ResolveNuGetConfigSources(
             restoreSources.PackageSourceMappings,
             settings.Sources,
-            settings.ReservedPackageSourceKeys);
+            settings.ReservedPackageSourceKeys,
+            settings.SourceIdentityKey);
         using var restoreOverlay = await CreateRestoreOverlayAsync(
             restoreSources,
             configSources,
@@ -359,8 +369,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             sources: sources,
             nugetConfigPaths: configPaths,
             nugetConfigOverlayCacheIdentity: restoreOverlay?.CacheIdentity,
-            additionalSensitiveSources: settings.Sources.Select(static source => source.Source),
+            additionalSensitiveSources: restoreSources.PackageSourceMappings?
+                .Select(static mapping => mapping.Source),
             globalPackagesFolderOverride: GetIntegrationRestoreGlobalPackagesFolder(restoreSources, restoreOverlay),
+            suppressFailureOutput: settings.Sources.Any(static source => source.RequiresFullOutputSuppression),
             ct: cancellationToken).ConfigureAwait(false);
     }
 
@@ -842,6 +854,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         string integrationHostingVersion,
         bool suppressLogging,
         IReadOnlyList<string> sensitiveSources,
+        bool suppressCapturedOutput,
         CancellationToken cancellationToken)
     {
         var buildOutput = new OutputCollector();
@@ -861,8 +874,28 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             noRestore,
             new ProcessInvocationOptions
             {
-                StandardOutputCallback = line => buildOutput.AppendOutput(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
-                StandardErrorCallback = line => buildOutput.AppendError(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
+                StandardOutputCallback = line =>
+                {
+                    if (suppressCapturedOutput)
+                    {
+                        AppendSafeBuildDiagnosticMarker(line, buildOutput.AppendOutput);
+                    }
+                    else
+                    {
+                        buildOutput.AppendOutput(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources));
+                    }
+                },
+                StandardErrorCallback = line =>
+                {
+                    if (suppressCapturedOutput)
+                    {
+                        AppendSafeBuildDiagnosticMarker(line, buildOutput.AppendError);
+                    }
+                    else
+                    {
+                        buildOutput.AppendError(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources));
+                    }
+                },
                 EnvironmentVariableFilter = name =>
                     string.Equals(name, IntegrationHostingVersionPropertyName, StringComparison.OrdinalIgnoreCase) ||
                     (globalPackagesFolder is not null &&
@@ -873,6 +906,17 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             cancellationToken).ConfigureAwait(false);
 
         return (exitCode, buildOutput);
+    }
+
+    private static void AppendSafeBuildDiagnosticMarker(string line, Action<string> append)
+    {
+        foreach (var marker in s_safeBuildDiagnosticMarkers)
+        {
+            if (line.Contains(marker, StringComparison.Ordinal))
+            {
+                append(marker);
+            }
+        }
     }
 
     /// <summary>
@@ -921,7 +965,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var configSources = ResolveNuGetConfigSources(
             restoreSources.PackageSourceMappings,
             settings.Sources,
-            settings.ReservedPackageSourceKeys);
+            settings.ReservedPackageSourceKeys,
+            settings.SourceIdentityKey);
         if (restoreSources.PackageSourceMappings is null)
         {
             restoreOverlayFile = null;
@@ -942,11 +987,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var rootAdditionalSources = restoreSources.PackageSourceMappings is null
             ? GetNuGetSources(restoreSources)?.ToArray() ?? []
             : [];
-        var sensitiveRestoreSources = settings.Sources
-            .Select(static source => source.Source)
-            .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+        var hasSensitiveAmbientSources = settings.Sources
+            .Any(static source => source.HasCredentialMaterial);
+        var suppressCapturedOutput = settings.Sources
+            .Any(static source => source.RequiresFullOutputSuppression);
         var intermediateOutputPath = Path.Combine(restoreDir, "obj");
         var projectContent = GenerateIntegrationProjectFile(
             packageRefs,
@@ -1027,8 +1071,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             noRestore: skipRestore,
             globalPackagesFolder,
             integrationHostingVersion: sdkVersion,
-            suppressLogging: sensitiveRestoreSources.Length > 0,
-            sensitiveRestoreSources,
+            suppressLogging: hasSensitiveAmbientSources,
+            sensitiveSources: [],
+            suppressCapturedOutput,
             cancellationToken).ConfigureAwait(false);
         if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
         {
@@ -1039,8 +1084,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 noRestore: false,
                 globalPackagesFolder,
                 integrationHostingVersion: sdkVersion,
-                suppressLogging: sensitiveRestoreSources.Length > 0,
-                sensitiveRestoreSources,
+                suppressLogging: hasSensitiveAmbientSources,
+                sensitiveSources: [],
+                suppressCapturedOutput,
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -1179,7 +1225,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     internal static NuGetConfigSource[] ResolveNuGetConfigSources(
         PackageMapping[]? mappings,
         IReadOnlyList<NuGetSourceInfo> ambientSources,
-        IReadOnlyList<string> reservedPackageSourceKeys)
+        IReadOnlyList<string> reservedPackageSourceKeys,
+        ReadOnlySpan<byte> sourceIdentityKey)
     {
         if (mappings is null)
         {
@@ -1195,8 +1242,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             .Select(static mapping => mapping.Source)
             .Distinct(PackageSourceIdentity.Comparer))
         {
+            var sourceIdentity = NuGetSourceIdentity.Compute(source, sourceIdentityKey);
             var ambientMatches = ambientSources
-                .Where(candidate => PackageSourceIdentity.Comparer.Equals(candidate.Source, source))
+                .Where(candidate => string.Equals(candidate.Identity, sourceIdentity, StringComparison.Ordinal))
                 .ToArray();
             if (ambientMatches.Length > 0)
             {

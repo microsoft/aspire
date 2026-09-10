@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.IO.Hashing;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Bundles;
@@ -22,9 +23,15 @@ internal sealed record NuGetSettingsInfo(
     bool PackageSourceMappingEnabled,
     IReadOnlyList<NuGetPackageSourceMappingInfo> PackageSourceMappings,
     IReadOnlyList<string> DisabledPackageSourceKeys,
-    IReadOnlyList<string> ReservedPackageSourceKeys);
+    IReadOnlyList<string> ReservedPackageSourceKeys,
+    byte[] SourceIdentityKey);
 
-internal sealed record NuGetSourceInfo(string Name, string Source, bool IsEnabled);
+internal sealed record NuGetSourceInfo(
+    string Name,
+    string Identity,
+    bool IsEnabled,
+    bool HasCredentialMaterial,
+    bool RequiresFullOutputSuppression);
 
 internal sealed record NuGetPackageSourceMappingInfo(string SourceKey, string[] Patterns);
 
@@ -55,6 +62,7 @@ internal interface INuGetService
     /// <param name="nugetConfigOverlayCacheIdentity">A stable cache identity for the first config path when it is an invocation-scoped overlay.</param>
     /// <param name="additionalSensitiveSources">Additional source values that must be redacted from restore output.</param>
     /// <param name="globalPackagesFolderOverride">An optional global packages folder override for the restore process.</param>
+    /// <param name="suppressFailureOutput">Whether restore and manifest failure output must be discarded because it can contain credential material that cannot be safely recognized without the original value.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The path to the package probe manifest.</returns>
     Task<string> RestorePackagesAsync(
@@ -67,6 +75,7 @@ internal interface INuGetService
         string? nugetConfigOverlayCacheIdentity = null,
         IEnumerable<string>? additionalSensitiveSources = null,
         string? globalPackagesFolderOverride = null,
+        bool suppressFailureOutput = false,
         CancellationToken ct = default);
 }
 
@@ -82,6 +91,9 @@ internal sealed class BundleNuGetService : INuGetService
     private readonly IEnvironment _environment;
     private readonly ILogger<BundleNuGetService> _logger;
     private readonly IBundleService? _bundleService;
+
+    internal Func<byte[]> SourceIdentityKeyFactory { get; init; }
+        = static () => RandomNumberGenerator.GetBytes(NuGetSourceIdentity.KeySizeInBytes);
 
     public BundleNuGetService(
         ILayoutDiscovery layoutDiscovery,
@@ -109,6 +121,7 @@ internal sealed class BundleNuGetService : INuGetService
         string? nugetConfigOverlayCacheIdentity = null,
         IEnumerable<string>? additionalSensitiveSources = null,
         string? globalPackagesFolderOverride = null,
+        bool suppressFailureOutput = false,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
@@ -256,8 +269,12 @@ internal sealed class BundleNuGetService : INuGetService
         killOnParentExit: true,
         ct: ct);
 
-        var redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
-        var redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
+        var redactedError = suppressFailureOutput
+            ? string.Empty
+            : PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
+        var redactedOutput = suppressFailureOutput
+            ? string.Empty
+            : PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
 
         // NuGet errors often repeat the feed URL. Redact helper output separately from the
         // invocation arguments so SAS tokens and URL user-info cannot reach logs or exceptions.
@@ -309,8 +326,12 @@ internal sealed class BundleNuGetService : INuGetService
         killOnParentExit: true,
         ct: ct);
 
-        redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
-        redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
+        redactedError = suppressFailureOutput
+            ? string.Empty
+            : PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
+        redactedOutput = suppressFailureOutput
+            ? string.Empty
+            : PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
         if (!string.IsNullOrWhiteSpace(redactedError))
         {
             _logger.LogDebug("NuGetHelper manifest stderr: {Error}", redactedError);
@@ -344,9 +365,20 @@ internal sealed class BundleNuGetService : INuGetService
             throw new InvalidOperationException(ManagedComponentNotFoundMessage);
         }
 
+        var sourceIdentityKey = SourceIdentityKeyFactory();
+        if (sourceIdentityKey.Length != NuGetSourceIdentity.KeySizeInBytes)
+        {
+            throw new InvalidOperationException(
+                $"The NuGet source identity key must be {NuGetSourceIdentity.KeySizeInBytes} bytes.");
+        }
+
         var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
             ["nuget", "settings", "--working-dir", workingDirectory],
+            environmentVariables: new Dictionary<string, string>
+            {
+                [NuGetSourceIdentity.KeyEnvironmentVariable] = Convert.ToBase64String(sourceIdentityKey)
+            },
             killOnParentExit: true,
             ct: cancellationToken).ConfigureAwait(false);
         if (exitCode != 0)
@@ -374,9 +406,11 @@ internal sealed class BundleNuGetService : INuGetService
                 .Select(static element => new NuGetSourceInfo(
                     element.GetProperty("Name").GetString()
                         ?? throw new InvalidDataException("The NuGet settings response contained a source without a name."),
-                    element.GetProperty("Source").GetString()
-                        ?? throw new InvalidDataException("The NuGet settings response contained a source without a location."),
-                    element.GetProperty("IsEnabled").GetBoolean()))
+                    element.GetProperty("Identity").GetString()
+                        ?? throw new InvalidDataException("The NuGet settings response contained a source without an identity."),
+                    element.GetProperty("IsEnabled").GetBoolean(),
+                    element.GetProperty("HasCredentialMaterial").GetBoolean(),
+                    element.GetProperty("RequiresFullOutputSuppression").GetBoolean()))
                 .ToArray();
             var packageSourceMappingEnabled = document.RootElement
                 .GetProperty("PackageSourceMappingEnabled")
@@ -408,7 +442,8 @@ internal sealed class BundleNuGetService : INuGetService
                 packageSourceMappingEnabled,
                 packageSourceMappings,
                 disabledPackageSourceKeys,
-                reservedPackageSourceKeys);
+                reservedPackageSourceKeys,
+                sourceIdentityKey);
         }
         catch (JsonException ex)
         {
