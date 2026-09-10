@@ -7,6 +7,7 @@
 #pragma warning disable ASPIREPROJECTS001
 #pragma warning disable ASPIRECSHARPAPPS001
 
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
@@ -1088,6 +1089,94 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         await Verify(dockerfile)
             .UseParameters(fileBased)
             .ScrubLinesWithReplace(line => Regex.Replace(line, "FROM program:temp-.*", "FROM program:temp-"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuildImageAsync_MultiPlatformArgumentsSurviveMsBuildParsing(bool fileBased)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["/release-app"]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(name: "Docker"));
+
+        var source = builder.AddContainer("assets", "assets-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, fileBased ? "app.cs" : "app.csproj");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source.Resource,
+                DestinationPath = "wwwroot"
+            })
+            .WithContainerBuildOptions(context => context.TargetPlatform = ContainerTargetPlatform.AllLinux);
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+
+        const string runtimeIdentifiersArgument = "--property:RuntimeIdentifiers=linux-x64%3Blinux-arm64";
+        const string containerRuntimeIdentifiersArgument = "--property:ContainerRuntimeIdentifiers=linux-x64%3Blinux-arm64";
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            publish => Assert.Equal(
+                [
+                    "publish", projectPath, "--configuration", "Release", "/t:PublishContainer",
+                    "/p:ContainerRepository=program", "/p:ContainerImageTag=latest",
+                    "/p:LocalRegistry=Docker", runtimeIdentifiersArgument, containerRuntimeIdentifiersArgument
+                ],
+                publish.ArgumentList),
+            query => Assert.Equal(
+                [
+                    fileBased ? "build" : "msbuild", projectPath, "-p:Configuration=Release",
+                    "-getProperty:ContainerWorkingDirectory", "-v:q",
+                    runtimeIdentifiersArgument, containerRuntimeIdentifiersArgument
+                ],
+                query.ArgumentList));
+
+        // A fake runner cannot detect MSBuild splitting a single argv entry on ';'.
+        // Round-trip each command's emitted properties through a project with no SDK or restore.
+        var probePath = Path.Combine(workspace.WorkspaceRoot.FullName, "properties.proj");
+        await File.WriteAllTextAsync(probePath, """
+            <Project>
+              <PropertyGroup>
+                <ContainerWorkingDirectory Condition="'$(RuntimeIdentifiers)' == 'linux-x64;linux-arm64' and '$(ContainerRuntimeIdentifiers)' == 'linux-x64;linux-arm64'">/release-app</ContainerWorkingDirectory>
+              </PropertyGroup>
+            </Project>
+            """, TestContext.Current.CancellationToken);
+
+        foreach (var command in processRunner.ProcessSpecs)
+        {
+            var propertyArguments = command.ArgumentList!
+                .Where(static argument => argument.StartsWith("--property:", StringComparison.Ordinal));
+            var probe = new ProcessSpec(DotnetFileAppProcess.ResolvedExecutablePath)
+            {
+                ArgumentList =
+                [
+                    "msbuild", probePath, "-nologo",
+                    "-getProperty:RuntimeIdentifiers,ContainerRuntimeIdentifiers,ContainerWorkingDirectory",
+                    .. propertyArguments
+                ],
+                WorkingDirectory = workspace.WorkspaceRoot.FullName,
+                ThrowOnNonZeroReturnCode = true
+            };
+            var (pendingResult, processDisposable) = ProcessUtil.Run(probe);
+            await using (processDisposable)
+            {
+                var result = await pendingResult.WaitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+                Assert.Equal(0, result.ExitCode);
+                using var document = JsonDocument.Parse(string.Join(Environment.NewLine, result.ProcessOutput));
+                var properties = document.RootElement.GetProperty("Properties");
+                Assert.Equal("linux-x64;linux-arm64", properties.GetProperty("RuntimeIdentifiers").GetString());
+                Assert.Equal("linux-x64;linux-arm64", properties.GetProperty("ContainerRuntimeIdentifiers").GetString());
+                Assert.Equal("/release-app", properties.GetProperty("ContainerWorkingDirectory").GetString());
+            }
+        }
     }
 
     [Fact]

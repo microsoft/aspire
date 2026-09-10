@@ -176,7 +176,20 @@ public class EFMigrationResource : ContainerResource
     /// If not specified, migrations are assumed to be in the startup project.
     /// When specified, this project's path will be used as the target for migration operations.
     /// </remarks>
-    public string? MigrationsProjectPath { get; set; }
+    public string? MigrationsProjectPath
+    {
+        get;
+        set
+        {
+            field = value;
+            MigrationsProjectResource = null;
+            MigrationsProjectMetadata = null;
+        }
+    }
+
+    internal IDotnetProgramResource? MigrationsProjectResource { get; set; }
+
+    internal IProjectMetadata? MigrationsProjectMetadata { get; set; }
 
     /// <summary>
     /// Gets or sets the callback to configure the dotnet-ef tool resource.

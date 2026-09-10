@@ -145,7 +145,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void DockerComposeWithDotnetProjectUsesImagePlaceholderAndWaitDependency()
+    public async Task DockerComposeWithDotnetProjectUsesImagePlaceholderAndWaitDependency()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
@@ -160,13 +160,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         var compose = File.ReadAllText(Path.Combine(workspace.Path, "docker-compose.yaml"));
         var environment = File.ReadAllText(Path.Combine(workspace.Path, ".env"));
-        Assert.Contains("image: \"${API_IMAGE}\"", compose);
-        Assert.Contains("image: \"${WORKER_IMAGE}\"", compose);
-        Assert.Contains("depends_on:", compose);
-        Assert.Contains("api:", compose);
-        Assert.Contains("condition: \"service_started\"", compose);
-        Assert.Contains("API_IMAGE=", environment);
-        Assert.Contains("WORKER_IMAGE=", environment);
+        await Verify(compose, "yaml")
+            .AppendContentAsFile(environment, "env");
     }
 
     [Fact]
