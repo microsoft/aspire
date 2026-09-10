@@ -862,6 +862,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             Assert.Equal(ContainerImageFormat.Docker, options.ImageFormat);
             Assert.NotEqual(archivePath, options.OutputPath);
             Assert.True(Directory.Exists(options.OutputPath));
+            Assert.True(options.RequiresLocalImageStore);
 
             var stagedArchivePath = ResourceExtensions.GetContainerImageArchivePath(
                 options.OutputPath!,
