@@ -171,6 +171,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, Hosti... / Hosting.Azure.Kubernetes (windows-latest)",
       "pr_number": 20016,
       "observed_at": "2026-09-10T13:34:02Z"
+    },
+    {
+      "run_id": 34512081344,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34512081344",
+      "job": "Tests / Build native CLI archive (Windows) / Build CLI (win-x64)",
+      "pr_number": 20035,
+      "observed_at": "2026-09-10T19:06:56Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19596"

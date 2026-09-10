@@ -1,0 +1,47 @@
+{
+  "run_id": 34512081344,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34512081344",
+  "analyzed_at": "2026-09-10T19:06:56Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20035,
+    "title": "Derive Azure Front Door origin names from backend hostnames",
+    "author": "eerhardt",
+    "state": "closed",
+    "head_branch": "eerhardt-front-door-origin-names",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20035"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Build native CLI archive (Windows) / Build CLI (win-x64)",
+      "id": 102989062712,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34512081344/job/102989062712",
+      "classification": "infra-failure",
+      "reason": "Failed at 'Build RID-specific packages' step with generic exit code 1. Job logs were unavailable to fetch, and the PR only modifies Aspire.Hosting.Azure.FrontDoor source and bicep test snapshots, completely unrelated to CLI native archive packaging for win-x64. This failed concurrently with two other unrelated jobs (RemoteHost build, Homebrew cask), suggesting a shared transient infrastructure issue during this run.",
+      "failed_steps": ["Build RID-specific packages"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHost) / Hosting.RemoteHost (windows-latest)",
+      "id": 102989872326,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34512081344/job/102989872326",
+      "classification": "infra-failure",
+      "reason": "Failed at 'Build test project' step with generic exit code 1. Job logs unavailable. Matches known recurring pattern 'build-test-project-widespread-exit1-unrelated' where multiple unrelated 'Build test project' jobs fail simultaneously with no relation to PR content; the PR here only touches Azure Front Door hosting code, unrelated to Aspire.Hosting.RemoteHost.Tests.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 102992628446,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34512081344/job/102992628446",
+      "classification": "flaky-test",
+      "reason": "Failed at 'Prepare Homebrew cask artifact' step with exit code 1 and annotation '1 problem in 1 cask detected'. Job logs unavailable. Matches recurring known pattern 'cli-smoke-test-homebrew-winget-unrelated' (24 prior occurrences) affecting the Homebrew/WinGet installer artifact preparation jobs regardless of PR content; this PR only touches Azure Front Door hosting code, unrelated to CLI packaging/installer artifacts.",
+      "failed_steps": ["Prepare Homebrew cask artifact"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["cli-archive-windows-build-rid-packages-exit1", "build-test-project-widespread-exit1-unrelated", "cli-smoke-test-homebrew-winget-unrelated"]
+}

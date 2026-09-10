@@ -1,0 +1,16 @@
+{
+  "id": "cli-archive-windows-build-rid-packages-exit1",
+  "type": "infra-failure",
+  "title": "Build native CLI archive (Windows win-x64) fails at 'Build RID-specific packages' step with generic exit code 1",
+  "error_pattern": "Process completed with exit code 1. Failure occurs in the 'Build RID-specific packages' step of the 'Build native CLI archive (Windows) / Build CLI (win-x64)' job. Job logs unavailable ('Failed to fetch logs for job'). Occurred concurrently with unrelated 'Build test project' and 'Prepare Homebrew cask' job failures in the same run, and the PR only modified Aspire.Hosting.Azure.FrontDoor source/tests, unrelated to CLI native packaging.",
+  "occurrences": [
+    {
+      "run_id": 34512081344,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34512081344",
+      "job": "Tests / Build native CLI archive (Windows) / Build CLI (win-x64)",
+      "pr_number": 20035,
+      "observed_at": "2026-09-10T19:06:56Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20044"
+}
