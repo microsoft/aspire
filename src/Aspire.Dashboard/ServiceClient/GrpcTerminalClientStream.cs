@@ -12,8 +12,8 @@ namespace Aspire.Dashboard.ServiceClient;
 /// duplex <see cref="Stream"/> carrying opaque HMP1 bytes.
 /// </summary>
 /// <remarks>
-/// The dashboard is a byte-level relay between the browser WebSocket and the AppHost, so it never interprets HMP1
-/// framing. gRPC message boundaries are unrelated to HMP1 frame boundaries: reads hand back whatever bytes are
+/// The stream carries HMP1 unchanged between the AppHost and the dashboard's Hex1b workload adapter.
+/// gRPC message boundaries are unrelated to HMP1 frame boundaries: reads hand back whatever bytes are
 /// available and keep the unread remainder of a message for the next read.
 /// </remarks>
 internal sealed class GrpcTerminalClientStream : Stream
@@ -28,8 +28,9 @@ internal sealed class GrpcTerminalClientStream : Stream
     private ReadOnlyMemory<byte> _remainder;
     private bool _completed;
     private bool _disposed;
+    private bool _terminalEnded;
 
-    public bool TerminalEnded { get; private set; }
+    public bool TerminalEnded => Volatile.Read(ref _terminalEnded);
 
     public GrpcTerminalClientStream(
         AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame> call,
@@ -79,7 +80,23 @@ internal sealed class GrpcTerminalClientStream : Stream
                 return 0;
             }
 
-            if (!await _call.ResponseStream.MoveNext(cancellationToken).ConfigureAwait(false))
+            bool hasNext;
+            try
+            {
+                hasNext = await _call.ResponseStream.MoveNext(cancellationToken).ConfigureAwait(false);
+            }
+            catch (RpcException ex) when (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException("Terminal read was cancelled.", ex, cancellationToken);
+            }
+            catch (RpcException ex)
+            {
+                // Hex1b's transport reader handles Stream errors, not gRPC exceptions. Keep the
+                // original status available to the HTTP endpoint while preserving the Stream contract.
+                throw new IOException("The AppHost terminal transport disconnected.", ex);
+            }
+
+            if (!hasNext)
             {
                 _completed = true;
                 return 0;
@@ -87,7 +104,7 @@ internal sealed class GrpcTerminalClientStream : Stream
 
             if (_call.ResponseStream.Current.Ended)
             {
-                TerminalEnded = true;
+                Volatile.Write(ref _terminalEnded, true);
                 _completed = true;
                 return 0;
             }
@@ -112,13 +129,21 @@ internal sealed class GrpcTerminalClientStream : Stream
         // Copy rather than UnsafeWrap: the caller owns the buffer and may reuse it as soon as this method returns,
         // and gRPC does not guarantee the payload is serialized before the write task completes.
         //
-        // The interaction id and input name are only set on the selector frame; the AppHost ignores them afterwards.
+        // The terminal id is only set on the selector frame; subsequent frames carry opaque transport bytes.
         var frame = new TerminalClientFrame { Data = ByteString.CopyFrom(buffer.Span) };
 
         await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await _call.RequestStream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RpcException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException("Terminal write was cancelled.", ex, cancellationToken);
+        }
+        catch (RpcException ex)
+        {
+            throw new IOException("The AppHost terminal transport disconnected.", ex);
         }
         finally
         {

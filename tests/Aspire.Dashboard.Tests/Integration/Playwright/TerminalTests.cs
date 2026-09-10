@@ -1,10 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Buffers.Binary;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
@@ -19,100 +15,11 @@ using Xunit;
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
 [RequiresFeature(TestFeature.Playwright)]
-public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDashboardServerFixture>
+public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture fixture)
+    : PlaywrightTestsBase<TerminalTests.TerminalDashboardServerFixture>(fixture)
 {
     private const string ResourceName = "terminal-resource";
-    private const int ProducerColumns = 137;
-    private const int ProducerRows = 41;
-    private readonly TerminalDashboardServerFixture _dashboardServerFixture;
-
-    public TerminalTests(TerminalDashboardServerFixture dashboardServerFixture)
-        : base(dashboardServerFixture)
-    {
-        _dashboardServerFixture = dashboardServerFixture;
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task AppHostWorkloadEnded_DisablesInputAndReconnectUntilEndpointChanges(bool beforeHandshake)
-    {
-        await RunTestAsync(async page =>
-        {
-            await page.GotoAsync("/").DefaultTimeout();
-            await page.Clock.InstallAsync();
-            var connections = Channel.CreateUnbounded<IWebSocketRoute>();
-            var connectionCount = 0;
-            await page.RouteWebSocketAsync("**/api/apphost-terminal?*", route =>
-            {
-                Interlocked.Increment(ref connectionCount);
-                connections.Writer.TryWrite(route);
-            });
-            var terminalId = await page.EvaluateAsync<int>("""
-                async () => {
-                    const module = await import('/Components/Controls/TerminalView.razor.js');
-                    const container = document.createElement('div');
-                    container.style.cssText = 'position:fixed;inset:0;z-index:10000';
-                    document.body.appendChild(container);
-                    const endpoint = new URL('/api/apphost-terminal?terminalId=ended', location.href);
-                    endpoint.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    return await module.initTerminal(container, endpoint.href, null, {
-                        chromeless: true,
-                        terminalEnded: 'Terminal ended'
-                    });
-                }
-                """);
-            var connection = await connections.Reader.ReadAsync().AsTask().DefaultTimeout();
-            if (!beforeHandshake)
-            {
-                var payload = JsonSerializer.SerializeToUtf8Bytes(new
-                {
-                    peerId = "viewer",
-                    width = ProducerColumns,
-                    height = ProducerRows
-                });
-                var hello = new byte[5 + payload.Length];
-                hello[0] = (byte)TestHmp1FrameType.Hello;
-                BinaryPrimitives.WriteInt32LittleEndian(hello.AsSpan(1), payload.Length);
-                payload.CopyTo(hello.AsSpan(5));
-                connection.Send(hello);
-                await page.WaitForFunctionAsync("""
-                    async id => {
-                        const module = await import('/Components/Controls/TerminalView.razor.js');
-                        return module.getToolbarState(id)?.connected === true;
-                    }
-                    """, terminalId).DefaultTimeout();
-            }
-
-            connection.Send("terminal-ended");
-            var terminalInput = page.Locator(".xterm-helper-textarea");
-            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", "true");
-            await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "Terminal ended" }))
-                .ToBeVisibleAsync();
-            await SetReadOnlyAsync(page, terminalId, false);
-            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", "true");
-            await page.Clock.RunForAsync(5_000);
-            Assert.Equal(1, Volatile.Read(ref connectionCount));
-            Assert.Equal("ended", await page.EvaluateAsync<string>("""
-                async id => {
-                    const module = await import('/Components/Controls/TerminalView.razor.js');
-                    return module.getToolbarState(id).status;
-                }
-                """, terminalId));
-
-            await page.EvaluateAsync("""
-                async id => {
-                    const module = await import('/Components/Controls/TerminalView.razor.js');
-                    const endpoint = new URL('/api/apphost-terminal?terminalId=next', location.href);
-                    endpoint.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    module.reconnectTerminal(id, endpoint.href);
-                }
-                """, terminalId);
-            await connections.Reader.ReadAsync().AsTask().DefaultTimeout();
-            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", "false");
-        });
-    }
+    private const string Endpoint = "/api/terminal?resource=terminal-resource&replica=0";
 
     [Theory]
     [InlineData(false, false)]
@@ -124,94 +31,79 @@ public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDa
     {
         await RunTestAsync(async page =>
         {
-            await _dashboardServerFixture.TerminalResolver.DiscardPendingConnectionsAsync();
+            await fixture.TerminalResolver.DiscardPendingConnectionsAsync();
             await page.GotoAsync("/").DefaultTimeout();
-            var terminalId = await page.EvaluateAsync<int>("""
-                async ({ resourceName, initialReadOnly, chromeless }) => {
-                    const module = await import('/Components/Controls/TerminalView.razor.js');
-                    const container = document.createElement('div');
-                    container.style.cssText = 'position:fixed;inset:0;z-index:10000';
-                    document.body.appendChild(container);
-                    const endpoint = new URL('/api/terminal', location.href);
-                    endpoint.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    endpoint.searchParams.set('resource', resourceName);
-                    endpoint.searchParams.set('replica', '0');
-                    return await module.initTerminal(container, endpoint.href, null, { readOnly: initialReadOnly, chromeless });
-                }
-                """, new { resourceName = ResourceName, initialReadOnly, chromeless });
+            using var session = fixture.DashboardApp.Services.GetRequiredService<TerminalViewSessionRegistry>()
+                .Create(Endpoint, initialReadOnly);
+            var terminalId = await MountModuleAsync(page, session, chromeless);
+            await using var connection = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
+            await WaitForConnectedAsync(page, terminalId);
+            await MountObserverAsync(page, requestPrimary: true);
+            await connection.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
+            var primaryId = connection.Presentation.PrimaryPeerId;
+            Assert.NotNull(primaryId);
 
-            await using var connection = await _dashboardServerFixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
-            await connection.ReadUntilFrameAsync(TestHmp1FrameType.ClientHello, CancellationToken.None).DefaultTimeout();
-            await connection.SendHelloAsync(ProducerColumns, ProducerRows, CancellationToken.None).DefaultTimeout();
-            await connection.SendStateSyncAsync(CancellationToken.None).DefaultTimeout();
-            await page.WaitForFunctionAsync("""
+            var terminal = page.GetByTestId("module-terminal");
+            var terminalElement = await terminal.Locator("textarea").ElementHandleAsync();
+            Assert.NotNull(terminalElement);
+            var input = terminal.GetByRole(AriaRole.Textbox);
+            await ExpectReadOnlyAsync(page, initialReadOnly);
+            await SetReadOnlyAsync(page, terminalId, session, true);
+            await ExpectReadOnlyAsync(page, true);
+
+            connection.Workload.Write("\u001b[?25lOutput while read-only\r\n");
+            await connection.WaitForProducerTextAsync("Output while read-only", CancellationToken.None).DefaultTimeout();
+            await ExpectObserverTextAsync(page, "Output while read-only");
+            await Assertions.Expect(terminal.Locator("canvas")).ToBeVisibleAsync();
+            await input.FocusAsync();
+            await page.Keyboard.TypeAsync("blocked-keyboard");
+            await PasteAsync(input, "blocked-paste");
+            await page.EvaluateAsync("""
                 async id => {
                     const module = await import('/Components/Controls/TerminalView.razor.js');
-                    return module.getToolbarState(id)?.role === 'secondary';
+                    module.setFontSizeFromHost(id, 20);
+                    module.setSizeModeFromHost(id, '80x24');
                 }
-                """, terminalId).DefaultTimeout();
-            if (chromeless && !initialReadOnly)
-            {
-                Assert.Equal(TestHmp1FrameType.RequestPrimary, (await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout()).Type);
-            }
+                """, terminalId);
 
-            var terminalInput = page.Locator(".xterm-helper-textarea");
-            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", initialReadOnly ? "true" : "false");
-            if (!initialReadOnly)
-            {
-                await SetReadOnlyAsync(page, terminalId, true);
-            }
+            // The independent viewer remains usable while this view is read-only.
+            // Its ordered input also provides a barrier for the blocked input above.
+            await page.EvaluateAsync("() => window.terminalObserver.paste('other-view')");
+            Assert.Equal("other-view", await connection.ReadInputTextAsync("other-view".Length, CancellationToken.None).DefaultTimeout());
+            Assert.Equal(primaryId, connection.Presentation.PrimaryPeerId);
+            Assert.True(await page.EvaluateAsync<bool>("""
+                async id => {
+                    const module = await import('/Components/Controls/TerminalView.razor.js');
+                    const state = module.getToolbarState(id);
+                    return state.fontPx === 13 && state.cols === 137 && state.rows === 41;
+                }
+                """, terminalId));
 
-            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", "true");
-            await connection.SendOutputAsync("Output while read-only\r\n", CancellationToken.None).DefaultTimeout();
-            await Assertions.Expect(page.Locator(".xterm-rows")).ToContainTextAsync("Output while read-only");
-
-            await terminalInput.FocusAsync();
-            await page.Keyboard.TypeAsync("blocked-keyboard");
-            await PasteAsync(terminalInput, "blocked-paste");
-            await page.Keyboard.PressAsync("F6");
-            await Assertions.Expect(page.Locator("#font-minus")).ToBeFocusedAsync();
-            await page.Locator("#font-plus").ClickAsync();
-
-            await SetReadOnlyAsync(page, terminalId, false);
-            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", "false");
-            await terminalInput.FocusAsync();
+            await SetReadOnlyAsync(page, terminalId, session, false);
+            await ExpectReadOnlyAsync(page, false);
+            await input.FocusAsync();
             await page.Keyboard.TypeAsync("x");
-            await PasteAsync(terminalInput, "allowed-paste");
+            await PasteAsync(input, "allowed-paste");
+            Assert.Equal("xallowed-paste", await connection.ReadInputTextAsync("xallowed-paste".Length, CancellationToken.None).DefaultTimeout());
+            Assert.Equal(primaryId, connection.Presentation.PrimaryPeerId);
 
-            // HMP preserves frame ordering. Only enabling a chromeless viewer and enabled input can request primary.
-            // Disabled typing, paste and font controls must not claim control from an automation peer.
-            if (chromeless)
-            {
-                Assert.Equal(TestHmp1FrameType.RequestPrimary, (await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout()).Type);
-            }
-            Assert.Equal(TestHmp1FrameType.RequestPrimary, (await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout()).Type);
-            var keyboard = await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout();
-            Assert.Equal(TestHmp1FrameType.Input, keyboard.Type);
-            Assert.Equal(TestHmp1FrameType.RequestPrimary, (await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout()).Type);
-            var paste = await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout();
-            Assert.Equal(TestHmp1FrameType.Input, paste.Type);
-            Assert.Equal("x", Encoding.UTF8.GetString(keyboard.Payload));
-            Assert.Equal("allowed-paste", Encoding.UTF8.GetString(paste.Payload));
+            await SetReadOnlyAsync(page, terminalId, session, true);
+            await ExpectReadOnlyAsync(page, true);
+            await input.FocusAsync();
+            await page.Keyboard.TypeAsync("blocked-again");
+            await PasteAsync(input, "blocked-paste-again");
+            await page.EvaluateAsync("() => window.terminalObserver.paste('still-active')");
+            Assert.Equal("still-active", await connection.ReadInputTextAsync("still-active".Length, CancellationToken.None).DefaultTimeout());
+            await SetReadOnlyAsync(page, terminalId, session, false);
+            await PasteAsync(input, "final-check");
+            Assert.Equal("final-check", await connection.ReadInputTextAsync("final-check".Length, CancellationToken.None).DefaultTimeout());
+            connection.Workload.Write("Output after policy changes\r\n");
+            await ExpectObserverTextAsync(page, "Output after policy changes");
+            await WaitForConnectedAsync(page, terminalId);
+            Assert.True(await terminalElement.EvaluateAsync<bool>("element => element.isConnected"));
+            Assert.Equal(2, connection.ConnectionCount);
         });
     }
-
-    private static Task SetReadOnlyAsync(IPage page, int terminalId, bool readOnly) =>
-        page.EvaluateAsync("""
-            async ({ terminalId, readOnly }) => {
-                const module = await import('/Components/Controls/TerminalView.razor.js');
-                module.setReadOnly(terminalId, readOnly);
-            }
-            """, new { terminalId, readOnly });
-
-    private static Task PasteAsync(ILocator terminalInput, string text) =>
-        terminalInput.EvaluateAsync("""
-            (element, text) => {
-                const data = new DataTransfer();
-                data.setData('text/plain', text);
-                element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
-            }
-            """, text);
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
@@ -220,71 +112,121 @@ public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDa
         await RunTestAsync(async page =>
         {
             await using var connection = await OpenTerminalAsync(page);
+            var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
+            var decreaseFontButton = page.GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true });
+            var precedingControl = page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true });
 
-            var terminalScreen = page.Locator(".xterm-screen");
-            var decreaseFontButton = page.Locator("#font-minus");
-            var resourceSelect = page.Locator("[id^='resource-select-']");
-
-            await Assertions.Expect(terminalScreen).ToBeVisibleAsync();
             await Assertions.Expect(decreaseFontButton).ToBeEnabledAsync();
-
-            await terminalScreen.ClickAsync();
+            await input.FocusAsync();
             await page.Keyboard.PressAsync("F6");
-            Assert.Equal("font-minus", await page.EvaluateAsync<string?>("() => document.activeElement?.id"));
+            await Assertions.Expect(decreaseFontButton).ToBeFocusedAsync();
 
-            var resourceSelectId = await resourceSelect.GetAttributeAsync("id");
-            Assert.False(string.IsNullOrEmpty(resourceSelectId));
-
-            await terminalScreen.ClickAsync();
+            await input.FocusAsync();
             await page.Keyboard.PressAsync("Shift+F6");
-            Assert.Equal(resourceSelectId, await page.EvaluateAsync<string?>("() => document.activeElement?.id"));
+            await Assertions.Expect(precedingControl).ToBeFocusedAsync();
 
-            // Follow the intercepted F6 events with ordinary input. HMP preserves
-            // frame ordering, so the first Input frame must be this character; an
-            // earlier F6 escape sequence would make the assertion fail.
-            await terminalScreen.ClickAsync();
+            // The producer's first key must be this character, not either intercepted F6.
+            await input.FocusAsync();
             await page.Keyboard.TypeAsync("x");
-
-            var input = await connection.ReadUntilFrameAsync(TestHmp1FrameType.Input, CancellationToken.None).DefaultTimeout();
-            Assert.Equal("x", Encoding.UTF8.GetString(input.Payload));
+            Assert.Equal("x", await connection.ReadInputTextAsync(1, CancellationToken.None).DefaultTimeout());
         });
     }
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task SecondaryTyping_RequestsPrimaryAtProducerDimensions()
+    public async Task SecondaryTypingAndPaste_PreservePrimaryAndProducerDimensions()
     {
         await RunTestAsync(async page =>
         {
             await using var connection = await OpenTerminalAsync(page);
+            await MountObserverAsync(page, requestPrimary: true);
+            var primaryId = connection.Presentation.PrimaryPeerId;
+            Assert.NotNull(primaryId);
+            await ExpectProducerDimensionsAsync(page);
 
-            var dimensions = page.Locator("#terminal-dims");
-            await Assertions.Expect(dimensions).ToHaveValueAsync($"{ProducerColumns}x{ProducerRows}");
-
-            var terminalScreen = page.Locator(".xterm-screen");
-            await terminalScreen.ClickAsync();
+            var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
+            await input.FocusAsync();
             await page.Keyboard.TypeAsync("x");
-
-            var requestPrimary = await connection.ReadUntilFrameAsync(TestHmp1FrameType.RequestPrimary, CancellationToken.None).DefaultTimeout();
-            using var payload = JsonDocument.Parse(requestPrimary.Payload);
-            Assert.Equal(ProducerColumns, payload.RootElement.GetProperty("cols").GetInt32());
-            Assert.Equal(ProducerRows, payload.RootElement.GetProperty("rows").GetInt32());
-
-            var input = await connection.ReadUntilFrameAsync(TestHmp1FrameType.Input, CancellationToken.None).DefaultTimeout();
-            Assert.Equal("x", Encoding.UTF8.GetString(input.Payload));
+            await PasteAsync(input, "paste");
+            Assert.Equal("xpaste", await connection.ReadInputTextAsync(6, CancellationToken.None).DefaultTimeout());
+            Assert.Equal(primaryId, connection.Presentation.PrimaryPeerId);
+            await ExpectProducerDimensionsAsync(page);
         });
     }
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task InitialPrimaryHello_UsesProducerDimensions()
+    public async Task InitialConnection_UsesProducerDimensions()
     {
         await RunTestAsync(async page =>
         {
-            await using var connection = await OpenTerminalAsync(page, makeClientPrimary: true);
+            await using var connection = await OpenTerminalAsync(page);
+            await ExpectProducerDimensionsAsync(page);
+        });
+    }
 
-            var dimensions = page.Locator("#terminal-dims");
-            await Assertions.Expect(dimensions).ToHaveValueAsync($"{ProducerColumns}x{ProducerRows}");
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ExplicitSizing_TakesPrimaryAndAppliesRequestedGrid()
+    {
+        await RunTestAsync(async page =>
+        {
+            await using var connection = await OpenTerminalAsync(page);
+            await MountObserverAsync(page, requestPrimary: true);
+            var primaryId = connection.Presentation.PrimaryPeerId;
+            var dimensions = page.GetByRole(AriaRole.Combobox, new() { Name = "Terminal dimensions", Exact = true });
+            await dimensions.ClickAsync();
+            await page.GetByRole(AriaRole.Option, new() { Name = "80×24", Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator(".terminal-dimensions")).ToHaveTextAsync("80 × 24");
+            Assert.NotNull(connection.Presentation.PrimaryPeerId);
+            Assert.NotEqual(primaryId, connection.Presentation.PrimaryPeerId);
+            await page.WaitForFunctionAsync("() => window.terminalObserver.geometry.columns === 80 && window.terminalObserver.geometry.rows === 24").DefaultTimeout();
+        });
+    }
+
+    [Theory]
+    [InlineData("Decrease font size", 8, -1)]
+    [InlineData("Increase font size", 32, 1)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task FontSizeControls_TakePrimaryAndRespectPackageBounds(string name, int bound, int delta)
+    {
+        await RunTestAsync(async page =>
+        {
+            await using var connection = await OpenTerminalAsync(page);
+            await MountObserverAsync(page, requestPrimary: true);
+            var primaryId = connection.Presentation.PrimaryPeerId;
+            var button = page.GetByRole(AriaRole.Button, new() { Name = name, Exact = true });
+            for (var fontSize = 13 + delta; fontSize != bound + delta; fontSize += delta)
+            {
+                await button.ClickAsync();
+                await Assertions.Expect(page.Locator(".terminal-font-size")).ToHaveTextAsync($"{fontSize}px");
+            }
+            await Assertions.Expect(button).ToBeDisabledAsync();
+            Assert.NotNull(connection.Presentation.PrimaryPeerId);
+            Assert.NotEqual(primaryId, connection.Presentation.PrimaryPeerId);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ProducerOutput_RendersInCanvasAndPublicClientSnapshot()
+    {
+        await RunTestAsync(async page =>
+        {
+            await using var connection = await OpenTerminalAsync(page);
+            await MountObserverAsync(page, requestPrimary: false);
+            connection.Workload.Write("\u001b[?25lready");
+            await ExpectObserverTextAsync(page, "ready");
+            var canvas = page.Locator(".terminal-view canvas");
+            var before = await canvas.ScreenshotAsync();
+            connection.Workload.Write("\r\nTerminal browser output is visible");
+            await ExpectObserverTextAsync(page, "Terminal browser output is visible");
+            await Assertions.Expect(canvas).ToBeVisibleAsync();
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(async () =>
+            {
+                var after = await canvas.ScreenshotAsync();
+                return !before.AsSpan().SequenceEqual(after);
+            }, "The dashboard canvas should present the producer's new output.");
         });
     }
 
@@ -295,35 +237,126 @@ public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDa
         await RunTestAsync(async page =>
         {
             await using var connection = await OpenTerminalAsync(page);
-
-            var terminalScreen = page.Locator(".xterm-screen");
-            var terminalInput = page.Locator(".xterm-helper-textarea");
+            var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
             foreach (var key in new[] { "Control+F6", "Alt+F6", "Meta+F6" })
             {
-                await terminalScreen.ClickAsync();
+                await input.FocusAsync();
                 await page.Keyboard.PressAsync(key);
-
-                await Assertions.Expect(terminalInput).ToBeFocusedAsync();
+                await Assertions.Expect(input).ToBeFocusedAsync();
             }
         });
     }
 
-    private async Task<TestTerminalConnection> OpenTerminalAsync(IPage page, bool makeClientPrimary = false)
+    private async Task<TestTerminalConnection> OpenTerminalAsync(IPage page)
     {
-        await _dashboardServerFixture.TerminalResolver.DiscardPendingConnectionsAsync();
+        await fixture.TerminalResolver.DiscardPendingConnectionsAsync();
         await page.GotoAsync($"/consolelogs/resource/{ResourceName}").DefaultTimeout();
-
-        var connection = await _dashboardServerFixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
-        var clientHello = await connection.ReadUntilFrameAsync(TestHmp1FrameType.ClientHello, CancellationToken.None).DefaultTimeout();
-        Assert.NotEmpty(clientHello.Payload);
-
-        await connection.SendHelloAsync(
-            ProducerColumns,
-            ProducerRows,
-            CancellationToken.None,
-            makeClientPrimary).DefaultTimeout();
-        await connection.SendStateSyncAsync(CancellationToken.None).DefaultTimeout();
+        var connection = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
+        await connection.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
+        await ExpectProducerDimensionsAsync(page);
         return connection;
+    }
+
+    private static Task ExpectProducerDimensionsAsync(IPage page) =>
+        Assertions.Expect(page.Locator(".terminal-dimensions"))
+            .ToHaveTextAsync($"{TestTerminalConnection.Columns} × {TestTerminalConnection.Rows}");
+
+    private static Task SetReadOnlyAsync(IPage page, int terminalId, TerminalViewSession session, bool readOnly)
+    {
+        // Match the component ordering: enforce policy on the server before changing UI.
+        session.ReadOnly = readOnly;
+        return page.EvaluateAsync("""
+            async ({ terminalId, readOnly }) => {
+                const module = await import('/Components/Controls/TerminalView.razor.js');
+                module.setReadOnly(terminalId, readOnly);
+            }
+            """, new { terminalId, readOnly });
+    }
+
+    private static async Task ExpectReadOnlyAsync(IPage page, bool readOnly)
+    {
+        // Until Hex1b exposes a live read-only setter, the adapter's input policy and
+        // server gate change together without replacing the native terminal textarea.
+        await page.WaitForFunctionAsync("""
+            async readOnly => {
+                const module = await import('/Components/Controls/TerminalView.razor.js');
+                return module.getTerminalSnapshot(document.querySelector('[data-testid="module-terminal"]'))?.readOnly === readOnly;
+            }
+            """, readOnly).DefaultTimeout();
+    }
+
+    private static Task PasteAsync(ILocator input, string text) =>
+        input.EvaluateAsync("""
+            (element, text) => {
+                const data = new DataTransfer();
+                data.setData('text/plain', text);
+                element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+            }
+            """, text);
+
+    private static async Task WaitForConnectedAsync(IPage page, int terminalId)
+    {
+        await page.WaitForFunctionAsync("""
+            async id => {
+                const module = await import('/Components/Controls/TerminalView.razor.js');
+                return module.getToolbarState(id)?.connected === true;
+            }
+            """, terminalId).DefaultTimeout();
+    }
+
+    private static Task<int> MountModuleAsync(IPage page, TerminalViewSession session, bool chromeless) =>
+        page.EvaluateAsync<int>("""
+            async ({ endpoint, viewId, readOnly, chromeless }) => {
+                const module = await import('/Components/Controls/TerminalView.razor.js');
+                const container = document.createElement('div');
+                container.dataset.testid = 'module-terminal';
+                container.style.cssText = 'position:fixed;left:0;top:0;width:700px;height:500px;z-index:10000';
+                document.body.appendChild(container);
+                const template = document.createElement('div');
+                template.innerHTML = '<div><fluent-button aria-label="Copy">Copy</fluent-button></div>';
+                template.hidden = true;
+                document.body.appendChild(template);
+                const footer = document.createElement('div');
+                footer.tabIndex = -1;
+                document.body.appendChild(footer);
+                const url = new URL(endpoint, location.href);
+                url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                url.searchParams.set('viewId', viewId);
+                return module.initTerminal(container, url.href, null, {
+                    label: 'Test terminal input', readOnly, chromeless
+                }, template, footer);
+            }
+            """, new { endpoint = Endpoint, viewId = session.Id, readOnly = session.ReadOnly, chromeless });
+
+    private static async Task MountObserverAsync(IPage page, bool requestPrimary)
+    {
+        await page.EvaluateAsync("""
+            async ({ endpoint, requestPrimary, columns, rows }) => {
+                const { WebTerminal } = await import('/js/hex1b-web-terminal/dist/index.js');
+                const container = document.createElement('div');
+                container.dataset.testid = 'observer-terminal';
+                container.style.cssText = 'position:fixed;right:0;top:0;width:400px;height:200px';
+                document.body.appendChild(container);
+                // Use only the package's public client surface, never worker state or HWT frames.
+                window.terminalObserver = await WebTerminal.mount(container, {
+                    url: new URL(endpoint, location.href),
+                    label: 'Observer terminal input',
+                    sizing: { mode: 'fixed', columns, rows, fontSize: 13 }
+                });
+                if (requestPrimary) {
+                    window.terminalObserver.requestPrimary();
+                }
+            }
+            """, new { endpoint = Endpoint, requestPrimary, columns = TestTerminalConnection.Columns, rows = TestTerminalConnection.Rows });
+        if (requestPrimary)
+        {
+            await page.WaitForFunctionAsync("() => window.terminalObserver.peer.isPrimary").DefaultTimeout();
+        }
+    }
+
+    private static async Task ExpectObserverTextAsync(IPage page, string text)
+    {
+        await page.WaitForFunctionAsync("text => window.terminalObserver.screenText.includes(text)", text).DefaultTimeout();
     }
 
     public sealed class TerminalDashboardServerFixture : DashboardServerFixture
@@ -345,19 +378,11 @@ public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDa
 
         protected override void ConfigureServices(IServiceCollection services)
         {
-            services.AddSingleton<ITerminalConnectionResolver>(TerminalResolver);
+            services.AddSingleton<ITerminalConnectionResolver>(_ => TerminalResolver);
         }
 
-        private static ResourcePropertyViewModel StringProperty(string name, string value)
-        {
-            return new ResourcePropertyViewModel(
-                name,
-                new Value { StringValue = value },
-                isValueSensitive: false,
-                knownProperty: null,
-                sortOrder: 0,
-                displayName: null,
-                isHighlighted: false);
-        }
+        private static ResourcePropertyViewModel StringProperty(string name, string value) =>
+            new(name, new Value { StringValue = value }, isValueSensitive: false, knownProperty: null,
+                sortOrder: 0, displayName: null, isHighlighted: false);
     }
 }

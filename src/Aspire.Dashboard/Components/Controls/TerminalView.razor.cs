@@ -1,74 +1,49 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Controls;
 
 /// <summary>
-/// Renders an interactive terminal using xterm.js, connected to the resource's
-/// per-replica terminal session via a WebSocket bridge to the AppHost-owned
-/// terminal host (HMP v1 over Unix domain socket).
+/// Renders a GPU terminal through the dashboard's HWT1 presentation endpoint.
 /// </summary>
 public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 {
     private ElementReference _terminalElement;
+    private ElementReference _selectionTemplateElement;
+    private ElementReference _footerElement;
     private IJSObjectReference? _jsModule;
     private DotNetObjectReference<TerminalView>? _selfRef;
     private int _terminalId;
-    // The endpoint (path + query) the JS terminal is currently bound to. A single string is used as the identity for
-    // rebind detection because a TerminalView can be addressed either by resource/replica or by an explicit endpoint
-    // (terminal-typed interaction inputs), and both collapse to one URL.
-    private string? _connectedEndpoint;
-    // Highest reconnect generation we've observed from JS via a toolbar
-    // snapshot. The JS side bumps `state.reconnect.generation` on every
-    // initTerminal / reconnectTerminal / auto-reconnect. `reconnectTerminal`
-    // keeps the same terminal id, so terminal id alone can't tell us whether
-    // a late-arriving `onExit` or `OnTerminalStateChanged` callback belongs
-    // to the currently bound connection or to a superseded one. Any callback
-    // whose generation is below _connectedGeneration is stale and dropped.
     private int _connectedGeneration = -1;
-    // Guards against concurrent or re-entrant initialization. OnAfterRenderAsync
-    // can fire again while the first InitializeTerminalAsync await is still in
-    // flight (Blazor does not serialize OnAfterRenderAsync calls when re-renders
-    // happen during awaits). Without this latch, the non-firstRender branch
-    // below would see _connectedResourceName == null, mistake that for "rebind
-    // needed", call ReconnectAsync, and — because _terminalId is also still 0
-    // — fall through to InitializeTerminalAsync a second time. Each
-    // initTerminal call appends a brand-new xterm host element to the same
-    // Blazor container, leaving multiple stacked terminals in the DOM that
-    // mirror the same input/output stream. This pattern is easy to trigger
-    // on a resource stop+restart where the dashboard fires a burst of
-    // resource-snapshot-driven re-renders right after the page mounts.
-    private bool _initStarted;
+    private string? _connectedEndpoint;
     private bool _appliedReadOnly;
-    private bool _readOnlyUpdatePending;
+    private bool _initializationFailed;
+    private string? _failedEndpoint;
+    private bool _disposed;
+    private bool _reconciling;
+    private Task? _initializationTask;
+    private string? _terminalError;
+    private TerminalToolbarState _state = new();
+    private IReadOnlyList<TerminalSizePreset> _sizePresets = [];
+    private TerminalViewSession? _viewSession;
+    private string? _sessionEndpoint;
 
-    /// <summary>
-    /// Gets or sets the user-facing display name of the resource that owns the
-    /// terminal session (e.g. <c>myapp</c>, not the per-replica DCP suffix).
-    /// </summary>
+    /// <summary>Gets or sets the display name of the resource that owns the terminal.</summary>
     [Parameter]
     public string? ResourceName { get; set; }
 
-    /// <summary>
-    /// Gets or sets the stable 0-based replica index for the terminal session.
-    /// Defaults to <c>0</c> for single-replica resources.
-    /// </summary>
+    /// <summary>Gets or sets the zero-based resource replica index.</summary>
     [Parameter]
     public int ReplicaIndex { get; set; }
 
-    /// <summary>
-    /// Gets or sets the accessible label for decreasing the font size.
-    /// </summary>
-    /// <remarks>
-    /// The label parameters all default to the shared <c>ConsoleLogs</c> resources so the four hosts that render a
-    /// terminal (resource page, dock, detached window, interaction dialog) don't each have to thread the same five
-    /// strings through. Set them only to override.
-    /// </remarks>
+    /// <summary>Gets or sets the accessible label for decreasing the font size.</summary>
     [Parameter]
     public string? DecreaseFontSizeLabel { get; set; }
 
@@ -84,71 +59,37 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Parameter]
     public string? FitLabel { get; set; }
 
-    /// <summary>Gets or sets the hint describing how to move focus from the terminal to its controls.</summary>
+    /// <summary>Gets or sets the hint describing focus navigation to the terminal controls.</summary>
     [Parameter]
     public string? FocusControlsHintLabel { get; set; }
 
     /// <summary>
-    /// Gets or sets an explicit endpoint (path and query) to connect to, overriding
-    /// <see cref="ResourceName"/> and <see cref="ReplicaIndex"/>.
+    /// Gets or sets an explicit endpoint path and query, overriding the resource and replica.
     /// </summary>
-    /// <remarks>
-    /// Used for terminals that are not backed by a resource replica — currently terminal-typed interaction inputs,
-    /// whose process is owned by the AppHost and reached via <c>/api/apphost-terminal</c>.
-    /// </remarks>
     [Parameter]
     public string? EndpointPathAndQuery { get; set; }
 
-    /// <summary>
-    /// Gets or sets a value indicating whether user input is blocked while terminal output continues to display.
-    /// </summary>
-    /// <remarks>
-    /// Changing this value does not reconnect the terminal or change the lifetime of its process.
-    /// </remarks>
+    /// <summary>Gets or sets whether user input is blocked while terminal output continues.</summary>
+    /// <remarks>Changing this value does not reconnect or change the lifetime of the process.</remarks>
     [Parameter]
     public bool ReadOnly { get; set; }
 
-    /// <summary>
-    /// Gets or sets a value indicating whether the terminal renders without its surrounding chrome — no card border,
-    /// titlebar or internal padding, just the xterm grid and its footer.
-    /// </summary>
-    /// <remarks>
-    /// Used by the terminal dock, detached terminal windows and the interaction dialog's terminal input, all of which
-    /// supply their own surrounding chrome. Chromeless terminals also size their grid to fill the available space at
-    /// the dashboard's base font size, rather than shrinking the font to fit the producer's grid.
-    /// </remarks>
+    /// <summary>Gets or sets whether the terminal omits its border, titlebar and internal padding.</summary>
+    /// <remarks>The dock, interaction dialog and detached windows provide their own surrounding chrome.</remarks>
     [Parameter]
     public bool Chromeless { get; set; }
 
-    /// <summary>
-    /// Gets or sets an opaque key identifying this terminal surface for font-size persistence.
-    /// </summary>
-    /// <remarks>
-    /// When set, the font size the user selects is remembered for the lifetime of the page and restored if a
-    /// <see cref="TerminalView"/> with the same key is mounted again. The dock uses this so a pane that is detached
-    /// into a window — which unmounts the pane — comes back at the size it had when it was detached, rather than
-    /// resetting to the dashboard's base font. Keys are per-surface, so a dock pane and a detached window of the same
-    /// terminal do not overwrite each other.
-    /// </remarks>
+    /// <summary>Gets or sets the per-surface key for page-lifetime font-size persistence.</summary>
+    /// <remarks>Dock panes and detached windows use separate keys even when they show the same terminal.</remarks>
     [Parameter]
     public string? SizeMemoryKey { get; set; }
 
-    /// <summary>
-    /// Gets or sets a value indicating whether the footer offers the fixed-resolution picker.
-    /// </summary>
-    /// <remarks>
-    /// Defaults to <see langword="true"/>. Surfaces whose size is dictated by their container set this to
-    /// <see langword="false"/> — a dock pane is sized by the dock splitter and the interaction dialog's terminal by the
-    /// dialog, so both always fit their grid to the available space and a fixed resolution has nothing to act on. The
-    /// font stepper stays available regardless, so those terminals can still be zoomed.
-    /// </remarks>
+    /// <summary>Gets or sets whether the footer offers fixed-resolution presets. Defaults to true.</summary>
+    /// <remarks>The font stepper remains available on surfaces sized by a splitter or dialog.</remarks>
     [Parameter]
     public bool ShowDimensionsPicker { get; set; } = true;
 
-    /// <summary>
-    /// Raised when the JS side pushes a fresh terminal state snapshot (role,
-    /// dimensions, font size, etc.) for hosts that need to observe it.
-    /// </summary>
+    /// <summary>Raised when the terminal's role, dimensions, font or connection state changes.</summary>
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
 
@@ -156,348 +97,252 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public required IJSRuntime JS { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Dashboard.Resources.ConsoleLogs> Loc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
-
-    [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    [Inject]
+    public required IStringLocalizer<Resources.ConsoleLogs> Loc { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Resources.ControlsStrings> ControlsLoc { get; init; }
+
+    [Inject]
+    public required TerminalViewSessionRegistry ViewSessions { get; init; }
+
+    protected override void OnParametersSet()
     {
-        var endpoint = ResolveEndpoint();
-        if (endpoint is null)
-        {
-            return;
-        }
-
-        if (firstRender)
-        {
-            _initStarted = true;
-            // Snapshot the endpoint BEFORE the JS init await: a parameter push from the parent can change it while
-            // initTerminal is in flight. Recording the *post-await* value would falsely mark the terminal as connected
-            // to the new endpoint, so the rebind branch below would never fire and the JS terminal would keep
-            // streaming the previous session.
-            var initEndpoint = endpoint;
-            await InitializeTerminalAsync(initEndpoint);
-            // Only record the connected endpoint when JS init actually produced a terminal. If _terminalId is still 0,
-            // InitializeTerminalAsync caught an exception; leaving _connectedEndpoint null lets the rebind branch below
-            // (and future renders) notice and retry rather than silently masking the failure.
-            if (_terminalId != 0)
-            {
-                _connectedEndpoint = initEndpoint;
-            }
-
-            var currentEndpoint = ResolveEndpoint();
-            while (!string.Equals(currentEndpoint, _connectedEndpoint, StringComparison.Ordinal))
-            {
-                try
-                {
-                    await ReconnectAsync(currentEndpoint);
-                }
-                catch (JSDisconnectedException)
-                {
-                    return;
-                }
-                catch (Exception)
-                {
-                    return;
-                }
-
-                _connectedEndpoint = _terminalId != 0 ? currentEndpoint : null;
-                if (_terminalId == 0)
-                {
-                    break;
-                }
-
-                currentEndpoint = ResolveEndpoint();
-            }
-            await UpdateReadOnlyAsync();
-            return;
-        }
-
-        // Initialization and its retries can yield while parameters change. Let the active operation reconcile
-        // the latest endpoint when it resumes rather than creating a second xterm in the same container.
-        if (_initStarted && _terminalId == 0)
-        {
-            return;
-        }
-
-        // The same TerminalView instance is reused across resource/replica
-        // switches in the parent (e.g. ConsoleLogs page selects a different
-        // terminal-enabled resource). Detect that here and rebind the
-        // underlying WebSocket; xterm.js is preserved and just gets cleared
-        // and refilled by the new connection's StateSync replay.
-        //
-        // ALL exceptions are swallowed at this layer because OnAfterRenderAsync
-        // is a Blazor lifecycle method: an unhandled exception here can fail
-        // the SignalR circuit and tear down the entire dashboard tab. Failing
-        // to switch terminals is a localized, recoverable issue (the JS side
-        // will keep retrying or the user can reload); a circuit failure is not.
-        while (!string.Equals(endpoint, _connectedEndpoint, StringComparison.Ordinal))
-        {
-            try
-            {
-                await ReconnectAsync(endpoint);
-            }
-            catch (JSDisconnectedException)
-            {
-                // Component is being disposed; don't bother updating tracked state.
-                return;
-            }
-            catch (Exception)
-            {
-                // Defensive: any other JS-side error must not bubble out of
-                // a Blazor lifecycle method. The reconnect loop on the JS
-                // side keeps retrying so a transient hiccup heals itself.
-                return;
-            }
-            _connectedEndpoint = _terminalId != 0 ? endpoint : null;
-            if (_terminalId == 0)
-            {
-                break;
-            }
-
-            // OnAfterRenderAsync completion does not cause a render. Apply selections that arrived while JS
-            // initialization was pending now, including removing the endpoint entirely.
-            endpoint = ResolveEndpoint();
-        }
-
-        await UpdateReadOnlyAsync();
+        // Update the authoritative input gate immediately, including while initialization
+        // or an earlier JS policy update is awaiting its Blazor interop round trip.
+        _viewSession?.ReadOnly = ReadOnly ||
+            !string.Equals(_sessionEndpoint, ResolveEndpoint(), StringComparison.Ordinal);
     }
 
-    private async Task UpdateReadOnlyAsync()
+    protected override Task OnAfterRenderAsync(bool firstRender) => ReconcileAsync();
+
+    private async Task ReconcileAsync()
     {
-        if (_readOnlyUpdatePending || _jsModule is null || _terminalId == 0)
+        if (_disposed || _reconciling ||
+            (_initializationFailed && string.Equals(_failedEndpoint, ResolveEndpoint(), StringComparison.Ordinal)))
         {
             return;
         }
+        _initializationFailed = false;
 
-        _readOnlyUpdatePending = true;
+        // Blazor can render again while interop awaits. One reconciler owns initialization, endpoint changes
+        // (including removal), and input policy changes; it rereads parameters after every interop round trip.
+        _reconciling = true;
         try
         {
-            // A render can arrive while JS interop is pending. Reconcile the latest value here because completing
-            // OnAfterRenderAsync does not trigger another render.
-            while (_appliedReadOnly != ReadOnly)
+            while (!_disposed)
             {
-                var readOnly = ReadOnly;
-                await _jsModule.InvokeVoidAsync("setReadOnly", _terminalId, readOnly);
-                _appliedReadOnly = readOnly;
+                var endpoint = ResolveEndpoint();
+                if (!string.Equals(endpoint, _connectedEndpoint, StringComparison.Ordinal))
+                {
+                    await ReconnectAsync(endpoint);
+                    if (_disposed || _initializationFailed)
+                    {
+                        return;
+                    }
+                    continue;
+                }
+
+                if (_terminalId != 0 && _appliedReadOnly != ReadOnly)
+                {
+                    var readOnly = ReadOnly;
+                    _viewSession!.ReadOnly = readOnly;
+                    await _jsModule!.InvokeVoidAsync("setReadOnly", _terminalId, readOnly);
+                    _appliedReadOnly = readOnly;
+                    continue;
+                }
+                break;
             }
         }
         catch (JSDisconnectedException)
         {
-            // The browser disconnected while the presentation state was being updated.
+            // The browser disconnected during the interop round trip.
+        }
+        catch (Exception)
+        {
+            // Keep failures local to this view without silently swallowing rendering or input-policy errors.
+            ShowInitializationError();
         }
         finally
         {
-            _readOnlyUpdatePending = false;
+            _reconciling = false;
         }
     }
 
-    /// <summary>
-    /// Resolves the endpoint this terminal should be bound to, or <see langword="null"/> when the component has not
-    /// been given enough information to connect yet.
-    /// </summary>
     private string? ResolveEndpoint()
     {
         if (!string.IsNullOrEmpty(EndpointPathAndQuery))
         {
-            return EndpointPathAndQuery;
+            return new Uri(new Uri(NavigationManager.BaseUri), EndpointPathAndQuery).PathAndQuery;
         }
 
         if (string.IsNullOrEmpty(ResourceName))
         {
             return null;
         }
-
-        return $"/api/terminal?resource={Uri.EscapeDataString(ResourceName)}&replica={ReplicaIndex}";
+        return new Uri(new Uri(NavigationManager.BaseUri),
+            $"api/terminal?resource={Uri.EscapeDataString(ResourceName)}&replica={ReplicaIndex}").PathAndQuery;
     }
 
-    private async Task InitializeTerminalAsync(string endpoint)
+    private Task InitializeTerminalAsync(string endpoint)
     {
-        // Retries need the same reentrancy guard as the first render while JS creates the terminal.
-        _initStarted = true;
-        try
-        {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/Components/Controls/TerminalView.razor.js");
+        return _initializationTask = InitializeTerminalCoreAsync(endpoint);
+    }
 
-            if (OnToolbarStateChanged.HasDelegate)
+    private async Task InitializeTerminalCoreAsync(string endpoint)
+    {
+        var moduleUri = new Uri(new Uri(NavigationManager.BaseUri), "Components/Controls/TerminalView.razor.js");
+        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", moduleUri.PathAndQuery);
+        if (_disposed)
+        {
+            return;
+        }
+
+        // Internal chrome/error updates need the callback even when the host has no subscriber.
+        _selfRef ??= DotNetObjectReference.Create(this);
+        _connectedGeneration = -1;
+        var readOnly = ReadOnly;
+        _terminalId = await _jsModule.InvokeAsync<int>(
+            "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef,
+            new TerminalViewOptions
             {
-                _selfRef ??= DotNetObjectReference.Create(this);
+                ViewId = _viewSession!.Id,
+                ReadOnly = readOnly,
+                Chromeless = Chromeless,
+                ShowDimensions = ShowDimensionsPicker,
+                SizeMemoryKey = SizeMemoryKey,
+                Label = Loc[nameof(Resources.ConsoleLogs.TerminalInputLabel)],
+                DecreaseFontSize = DecreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
+                IncreaseFontSize = IncreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
+                TerminalDimensions = TerminalDimensionsLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSize)],
+                Fit = FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)],
+                FocusControlsHint = FocusControlsHintLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalFocusControlsHint)],
+            }, _selectionTemplateElement, _footerElement);
+        _appliedReadOnly = readOnly;
+        if (!_disposed)
+        {
+            _sizePresets = await GetSizePresetsAsync();
+            if (!_disposed)
+            {
+                StateHasChanged();
             }
-
-            _connectedGeneration = -1;
-            var readOnly = ReadOnly;
-            _terminalId = await _jsModule.InvokeAsync<int>(
-                "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef, new TerminalViewOptions
-                {
-                    ReadOnly = readOnly,
-                    Chromeless = Chromeless,
-                    ShowDimensions = ShowDimensionsPicker,
-                    SizeMemoryKey = SizeMemoryKey,
-                    DecreaseFontSize = DecreaseFontSizeLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
-                    IncreaseFontSize = IncreaseFontSizeLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
-                    TerminalDimensions = TerminalDimensionsLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)],
-                    Fit = FitLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)],
-                    FocusControlsHint = FocusControlsHintLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalFocusControlsHint)],
-                    TerminalEnded = LayoutLoc[nameof(Dashboard.Resources.Layout.TerminalWindowEnded)],
-                });
-            _appliedReadOnly = readOnly;
-        }
-        catch (JSDisconnectedException)
-        {
-            // Component disposed during initialization. Clear _initStarted so
-            // that if a later render *does* fire (e.g. reconnection scenarios
-            // that re-mount the JS module), OnAfterRenderAsync's
-            // `_initStarted && _terminalId == 0` short-circuit doesn't
-            // permanently wedge us with no terminal.
-            _initStarted = false;
-        }
-        catch (Exception)
-        {
-            // Defensive: any other JS-side error (e.g. JSException while
-            // importing the module or during initTerminal) must not bubble
-            // out of a Blazor lifecycle method — that can tear down the
-            // SignalR circuit and take the whole dashboard tab with it.
-            // Clear _initStarted so a subsequent render can retry, and leave
-            // _terminalId == 0 so the firstRender path in OnAfterRenderAsync
-            // does not record a connected resource for a terminal that was
-            // never created.
-            _initStarted = false;
         }
     }
 
-    /// <summary>
-    /// Reconnects the terminal to a different endpoint. When the endpoint matches the current value this is a no-op.
-    /// </summary>
+    /// <summary>Rebinds the view to an endpoint, or explicitly retries the current endpoint.</summary>
+    /// <param name="newEndpoint">The endpoint path and query, or null to detach the view.</param>
     public async Task ReconnectAsync(string? newEndpoint)
     {
-        if (_jsModule is null || _terminalId == 0)
+        if (_disposed)
         {
-            if (!string.IsNullOrEmpty(newEndpoint))
+            return;
+        }
+
+        if (string.IsNullOrEmpty(newEndpoint))
+        {
+            ReleaseViewSession();
+            if (_jsModule is not null && _terminalId != 0)
+            {
+                var id = _terminalId;
+                _terminalId = 0;
+                _connectedGeneration = -1;
+                await _jsModule.InvokeVoidAsync("disposeTerminal", id);
+            }
+            _state = new();
+            _terminalError = null;
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        }
+        else
+        {
+            // Registry identity must match Request.PathBase + Request.Path + Request.QueryString,
+            // including when a caller supplied a relative explicit endpoint.
+            newEndpoint = new Uri(new Uri(NavigationManager.BaseUri), newEndpoint).PathAndQuery;
+            EnsureViewSession(newEndpoint);
+            if (_terminalId == 0)
             {
                 await InitializeTerminalAsync(newEndpoint);
             }
-            return;
-        }
-
-        try
-        {
-            if (string.IsNullOrEmpty(newEndpoint))
+            else
             {
-                await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
-                _terminalId = 0;
-                _initStarted = false;
-                _connectedGeneration = -1;
-                return;
-            }
-
-            var generation = await _jsModule.InvokeAsync<int>(
-                "reconnectTerminal",
-                _terminalId,
-                BuildWebSocketUrl(newEndpoint));
-            if (generation > 0)
-            {
-                _connectedGeneration = generation;
+                var generation = await _jsModule!.InvokeAsync<int>(
+                    "reconnectTerminal", _terminalId, BuildWebSocketUrl(newEndpoint));
+                _connectedGeneration = Math.Max(_connectedGeneration, generation);
             }
         }
-        catch (JSDisconnectedException)
-        {
-            // Component disposed mid-call; nothing to do.
-        }
+
+        _connectedEndpoint = newEndpoint;
     }
 
-    /// <summary>
-    /// Invoked by the JS terminal whenever its role/size/font state changes.
-    /// Forwards the snapshot to the host page via <see cref="OnToolbarStateChanged"/>.
-    /// JS remains the source of truth for terminal state.
-    /// </summary>
+    private void EnsureViewSession(string endpoint)
+    {
+        if (_viewSession is not null && string.Equals(_sessionEndpoint, endpoint, StringComparison.Ordinal))
+        {
+            return;
+        }
+        ReleaseViewSession();
+        _sessionEndpoint = endpoint;
+        _viewSession = ViewSessions.Create(endpoint, ReadOnly);
+    }
+
+    private void ReleaseViewSession()
+    {
+        _viewSession?.Dispose();
+        _viewSession = null;
+        _sessionEndpoint = null;
+    }
+
+    /// <summary>Checks authoritative completion before retrying a failed native connection.</summary>
+    /// <param name="viewId">The opaque identifier of the view requesting the check.</param>
+    /// <returns>True when the view ended or has been released; otherwise false.</returns>
     [JSInvokable]
-    public Task OnTerminalStateChanged(TerminalToolbarState state)
+    public bool IsTerminalEnded(string viewId) =>
+        _disposed || _viewSession is null || _viewSession.Id != viewId || _viewSession.Ended.IsCompletedSuccessfully;
+
+    /// <summary>Updates this view's chrome and forwards the current terminal state to its host.</summary>
+    /// <param name="state">The generation-tagged state supplied by the JS adapter.</param>
+    [JSInvokable]
+    public async Task OnTerminalStateChanged(TerminalToolbarState state)
     {
-        if (IsStaleTerminalCallback(state.TerminalId, state.Generation))
-        {
-            return Task.CompletedTask;
-        }
-
-        return OnToolbarStateChanged.InvokeAsync(state);
-    }
-
-    private bool IsStaleTerminalCallback(int terminalId, int generation)
-    {
-        // Drop stale callbacks that arrive after this view was rebound. The
-        // terminal id changes when initTerminal allocates a new xterm host;
-        // explicit reconnect keeps the id but bumps the JS-side generation.
-        if (_terminalId != 0 && terminalId != _terminalId)
-        {
-            return true;
-        }
-
-        if (generation < _connectedGeneration)
-        {
-            return true;
-        }
-
-        if (generation > _connectedGeneration)
-        {
-            _connectedGeneration = generation;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Sets the terminal font size and switches sizing back to "Auto" (font-
-    /// driven) mode. Out-of-range values are clamped by the JS side.
-    /// </summary>
-    public async Task SetFontSizeAsync(int fontPx)
-    {
-        if (_jsModule is null || _terminalId == 0)
+        if (_disposed || (_terminalId != 0 && state.TerminalId != _terminalId) ||
+            (_terminalId == 0 && _initializationTask is not { IsCompleted: false }) ||
+            state.Generation < _connectedGeneration)
         {
             return;
         }
-        try
+
+        _connectedGeneration = state.Generation;
+        if (_state != state)
         {
-            await _jsModule.InvokeVoidAsync("setFontSizeFromHost", _terminalId, fontPx);
+            _state = state;
+            if (!_initializationFailed)
+            {
+                _terminalError = state.Error;
+            }
+            StateHasChanged();
         }
-        catch (JSDisconnectedException)
-        {
-        }
+        await OnToolbarStateChanged.InvokeAsync(state);
     }
 
-    /// <summary>
-    /// Sets the sizing mode by preset key (<c>auto</c> or one of the
-    /// <see cref="TerminalToolbarState.SizeKey"/> values). Unknown keys are
-    /// ignored by the JS side.
-    /// </summary>
-    public async Task SetSizeModeAsync(string sizeKey)
-    {
-        if (_jsModule is null || _terminalId == 0)
-        {
-            return;
-        }
-        try
-        {
-            await _jsModule.InvokeVoidAsync("setSizeModeFromHost", _terminalId, sizeKey);
-        }
-        catch (JSDisconnectedException)
-        {
-        }
-    }
+    /// <summary>Sets the font size in automatic sizing mode, clamped to the package's public bounds.</summary>
+    /// <param name="fontPx">The desired font size in CSS pixels.</param>
+    public Task SetFontSizeAsync(int fontPx) => InvokeTerminalAsync("setFontSizeFromHost", fontPx);
 
-    /// <summary>
-    /// Fetches the set of size presets exposed by the JS terminal so the
-    /// host page's size dropdown stays in sync with the values JS knows
-    /// how to handle.
-    /// </summary>
+    /// <summary>Selects automatic sizing or one of the terminal's fixed grid presets.</summary>
+    /// <param name="sizeKey">The preset key, or <c>auto</c>.</param>
+    public Task SetSizeModeAsync(string sizeKey) => InvokeTerminalAsync("setSizeModeFromHost", sizeKey);
+
+    /// <summary>Gets the supported grid presets from the JS adapter.</summary>
+    /// <returns>The available preset values and dimensions.</returns>
     public async Task<IReadOnlyList<TerminalSizePreset>> GetSizePresetsAsync()
     {
         if (_jsModule is null)
         {
-            return Array.Empty<TerminalSizePreset>();
+            return [];
         }
         try
         {
@@ -505,173 +350,190 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
         catch (JSDisconnectedException)
         {
-            return Array.Empty<TerminalSizePreset>();
+            return [];
         }
     }
 
-    /// <summary>
-    /// Asks the JS terminal to re-push its current toolbar snapshot,
-    /// bypassing the change-detection cache. Called by the host page when
-    /// it has lost its cached snapshot (e.g. across a layout transition)
-    /// but the JS terminal is still live and the cached "last pushed JSON"
-    /// would otherwise suppress a fresh push.
-    /// </summary>
-    public async Task RefreshToolbarStateAsync()
+    /// <summary>Requests a fresh state notification even if the state has not changed.</summary>
+    public Task RefreshToolbarStateAsync() => InvokeTerminalAsync("refreshToolbarState");
+
+    /// <summary>Starts a deferred mount or refreshes a view that became visible without reconnecting.</summary>
+    public Task RefreshLayoutAsync() => InvokeTerminalAsync("refreshLayout");
+
+    private async Task InvokeTerminalAsync(string method, params object?[] arguments)
     {
-        if (_jsModule is null || _terminalId == 0)
+        if (_disposed || _jsModule is null || _terminalId == 0)
         {
             return;
         }
         try
         {
-            await _jsModule.InvokeVoidAsync("refreshToolbarState", _terminalId);
+            await _jsModule.InvokeVoidAsync(method, [_terminalId, .. arguments]);
         }
         catch (JSDisconnectedException)
         {
-        }
-    }
-
-    /// <summary>
-    /// Asks the JS terminal to recompute its layout. Called by the host
-    /// page when the terminal element transitions from hidden back to
-    /// visible (e.g. the user flips the page-level View dropdown from
-    /// Console back to Terminal) — display:none → visible does not always
-    /// trigger ResizeObserver, so forcing a relayout here guarantees the
-    /// terminal fills the available space immediately.
-    /// </summary>
-    public async Task RefreshLayoutAsync()
-    {
-        if (_jsModule is null || _terminalId == 0)
-        {
-            return;
-        }
-        try
-        {
-            await _jsModule.InvokeVoidAsync("refreshLayout", _terminalId);
-        }
-        catch (JSDisconnectedException)
-        {
+            // Expected when the browser leaves this page.
         }
     }
 
     private string BuildWebSocketUrl(string pathAndQuery)
     {
-        var baseUri = new Uri(NavigationManager.BaseUri);
-        var wsScheme = baseUri.Scheme == "https" ? "wss" : "ws";
-        return $"{wsScheme}://{baseUri.Authority}{pathAndQuery}";
+        var endpoint = new Uri(new Uri(NavigationManager.BaseUri), pathAndQuery);
+        var scheme = endpoint.Scheme == "https" ? "wss" : "ws";
+        var boundPathAndQuery = QueryHelpers.AddQueryString(endpoint.PathAndQuery, "viewId", _viewSession!.Id);
+        return $"{scheme}://{endpoint.Authority}{boundPathAndQuery}";
+    }
+
+    private string GetErrorMessage() => Loc[_terminalError switch
+    {
+        "disconnected" => nameof(Resources.ConsoleLogs.TerminalDisconnected),
+        "input-failed" => nameof(Resources.ConsoleLogs.TerminalInputFailed),
+        "sizing-failed" => nameof(Resources.ConsoleLogs.TerminalSizingFailed),
+        _ => nameof(Resources.ConsoleLogs.TerminalMountFailed)
+    }];
+
+    private async Task RetryAsync()
+    {
+        if (_reconciling || _disposed)
+        {
+            return;
+        }
+        _initializationFailed = false;
+        _terminalError = null;
+        _reconciling = true;
+        try
+        {
+            await ReconnectAsync(ResolveEndpoint());
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (Exception)
+        {
+            ShowInitializationError();
+        }
+        finally
+        {
+            _reconciling = false;
+        }
+        await ReconcileAsync();
+    }
+
+    private void ShowInitializationError()
+    {
+        _initializationFailed = true;
+        _failedEndpoint = ResolveEndpoint();
+        _terminalError = "mount-failed";
+        if (!_disposed)
+        {
+            StateHasChanged();
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_jsModule is not null && _terminalId != 0)
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+        ReleaseViewSession();
+        // Wait for the interop result before disposing the module so a worker created during disposal isn't orphaned.
+        if (_initializationTask is not null)
         {
             try
             {
-                await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
+                await _initializationTask;
             }
-            catch (JSDisconnectedException)
+            catch (Exception)
             {
-                // Expected during shutdown
+                // Initialization already surfaces its failure while the component is alive.
             }
         }
         if (_jsModule is not null)
         {
+            if (_terminalId != 0)
+            {
+                try
+                {
+                    await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
+                }
+                catch (JSDisconnectedException)
+                {
+                }
+            }
             await JSInteropHelpers.SafeDisposeAsync(_jsModule);
+            _jsModule = null;
         }
+        _terminalId = 0;
         _selfRef?.Dispose();
         _selfRef = null;
     }
 }
 
-/// <summary>
-/// Options passed to the JS <c>initTerminal</c> entry point. Serialized with camelCase property names by the default
-/// JS interop options, so <c>Chromeless</c> arrives as <c>options.chromeless</c>.
-/// </summary>
+/// <summary>Localized options serialized to the JS adapter using camelCase property names.</summary>
 public sealed record TerminalViewOptions
 {
-    /// <summary>Whether user input is blocked without interrupting terminal output.</summary>
+    /// <summary>The opaque registry identity for this view's input policy.</summary>
+    public required string ViewId { get; init; }
+    /// <summary>Whether application input is blocked.</summary>
     public bool ReadOnly { get; init; }
-
-    /// <summary>Whether to render without the card border, titlebar and internal padding.</summary>
+    /// <summary>Whether the host supplies its own surrounding chrome.</summary>
     public bool Chromeless { get; init; }
-
-    /// <summary>Whether the footer offers the fixed-resolution picker.</summary>
+    /// <summary>Whether fixed-resolution presets are offered.</summary>
     public bool ShowDimensions { get; init; } = true;
-
-    /// <summary>Opaque key identifying this surface for font-size persistence, or <see langword="null"/> to not persist.</summary>
+    /// <summary>The per-surface key for remembering the font size.</summary>
     public string? SizeMemoryKey { get; init; }
-
-    /// <summary>Accessible label for the footer's decrease-font-size button.</summary>
+    /// <summary>The accessible label for the terminal's keyboard input.</summary>
+    public required string Label { get; init; }
+    /// <summary>The accessible decrease-font-size label.</summary>
     public required string DecreaseFontSize { get; init; }
-
-    /// <summary>Accessible label for the footer's increase-font-size button.</summary>
+    /// <summary>The accessible increase-font-size label.</summary>
     public required string IncreaseFontSize { get; init; }
-
-    /// <summary>Accessible label for the footer's dimensions selector.</summary>
+    /// <summary>The accessible grid-size label.</summary>
     public required string TerminalDimensions { get; init; }
-
-    /// <summary>Label for the option that fits the grid to the available space.</summary>
+    /// <summary>The localized automatic-sizing option.</summary>
     public required string Fit { get; init; }
-
-    /// <summary>Hint describing how to move focus from the terminal to its controls.</summary>
+    /// <summary>The localized focus-navigation hint.</summary>
     public required string FocusControlsHint { get; init; }
-
-    /// <summary>Message displayed when the AppHost terminal's workload has ended.</summary>
-    public required string TerminalEnded { get; init; }
 }
 
-/// <summary>
-/// Snapshot of the JS terminal's current role, sizing, and dimensions.
-/// </summary>
+/// <summary>A generation-tagged snapshot of terminal role, sizing and connection state.</summary>
 public sealed record TerminalToolbarState
 {
-    /// <summary>Unique JS-side terminal id (allocated by <c>initTerminal</c>).</summary>
+    /// <summary>The unique JS-side view identifier.</summary>
     public int TerminalId { get; init; }
-
-    /// <summary>Reconnect generation; bumped on every (re)connect.</summary>
+    /// <summary>The connection generation.</summary>
     public int Generation { get; init; }
-
-    /// <summary>
-    /// One of <c>connecting</c>, <c>primary</c>, <c>viewer</c>, <c>no-primary</c>, <c>ended</c>.
-    /// </summary>
+    /// <summary>One of connecting, primary, viewer or no-primary.</summary>
     public string Status { get; init; } = "connecting";
-
-    /// <summary>True once the HMP1 client has a peer id assigned.</summary>
+    /// <summary>Whether a connected frame has been presented.</summary>
     public bool Connected { get; init; }
-
-    /// <summary>True when this client owns primary input on the producer.</summary>
+    /// <summary>Whether this view owns resize authority.</summary>
     public bool IsPrimary { get; init; }
-
-    /// <summary>True when "Take control" is meaningful to surface.</summary>
+    /// <summary>Whether requesting resize authority is available.</summary>
     public bool CanTakeControl { get; init; }
-
-    /// <summary>Current sizing mode (<c>font</c> or <c>fixed</c>).</summary>
+    /// <summary>The current sizing mode: font or fixed.</summary>
     public string SizeMode { get; init; } = "font";
-
-    /// <summary>
-    /// Dropdown key — <c>auto</c> for font-driven sizing or <c>{cols}x{rows}</c>
-    /// for a preset.
-    /// </summary>
+    /// <summary>The selected preset key, or auto.</summary>
     public string SizeKey { get; init; } = "auto";
-
-    /// <summary>Current xterm font size in CSS pixels.</summary>
+    /// <summary>The font size in CSS pixels.</summary>
     public int FontPx { get; init; }
-
-    /// <summary>Whether font ± buttons should be enabled (Auto mode + primary).</summary>
+    /// <summary>Whether font controls are available.</summary>
     public bool FontControlsEnabled { get; init; }
-
-    /// <summary>Whether the size dropdown should be enabled (primary).</summary>
+    /// <summary>Whether decreasing the font respects the public package bounds.</summary>
+    public bool CanDecreaseFontSize { get; init; }
+    /// <summary>Whether increasing the font respects the public package bounds.</summary>
+    public bool CanIncreaseFontSize { get; init; }
+    /// <summary>Whether grid presets are available.</summary>
     public bool SizeSelectEnabled { get; init; }
-
-    /// <summary>Current xterm grid width.</summary>
+    /// <summary>The server-authoritative grid width.</summary>
     public int Cols { get; init; }
-
-    /// <summary>Current xterm grid height.</summary>
+    /// <summary>The server-authoritative grid height.</summary>
     public int Rows { get; init; }
+    /// <summary>The localized error category, or null when healthy.</summary>
+    public string? Error { get; init; }
 }
 
-/// <summary>
-/// A named size preset surfaced by the JS terminal (used to populate the
-/// host page's size dropdown).
-/// </summary>
+/// <summary>A named grid preset exposed by the JS terminal.</summary>
 public sealed record TerminalSizePreset(string Value, string Label, int Cols, int Rows);

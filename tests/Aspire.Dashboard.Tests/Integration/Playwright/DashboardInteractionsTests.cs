@@ -36,7 +36,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                 <button id="control">Control</button>
                 <input id="input">
                 <textarea id="textarea"></textarea>
-                <textarea id="terminal" class="xterm-helper-textarea"></textarea>
+                <div id="terminal"></div>
                 <fluent-text-field id="fluent"></fluent-text-field>
                 """);
             await page.AddScriptTagAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "wwwroot", "js", "app.js") });
@@ -44,6 +44,9 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                 () => {
                     const host = document.getElementById('fluent');
                     host.attachShadow({ mode: 'open' }).appendChild(document.createElement('input'));
+                    const terminal = document.getElementById('terminal');
+                    const view = terminal.attachShadow({ mode: 'open' }).appendChild(document.createElement('div'));
+                    view.attachShadow({ mode: 'open' }).appendChild(document.createElement('textarea'));
                 }
                 """);
 
@@ -79,7 +82,10 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                         });
                         try {
                             const host = document.getElementById(target);
-                            const input = host.shadowRoot?.querySelector('input') ?? host;
+                            let input = host;
+                            while (input.shadowRoot?.firstElementChild) {
+                                input = input.shadowRoot.firstElementChild;
+                            }
                             input.focus();
                             input.dispatchEvent(new KeyboardEvent('keydown', {
                                 key, code, shiftKey, altKey, ctrlKey, metaKey,

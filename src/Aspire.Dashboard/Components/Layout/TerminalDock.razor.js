@@ -175,7 +175,7 @@ export function registerTabNavigation(dockElement) {
     };
 
     // Automatic activation follows https://www.w3.org/WAI/ARIA/apg/patterns/tabs/.
-    // Only tab headers handle these keys. Native buttons provide Enter/Space, while xterm, close buttons and
+    // Only tab headers handle these keys. Native buttons provide Enter/Space, while terminal input, close buttons and
     // browser shortcuts keep their own input handling. Moving focus locally avoids waiting for a circuit round-trip.
     const onKeyDown = (event) => {
         const tab = event.target.closest?.('.terminal-dock-tab-select');

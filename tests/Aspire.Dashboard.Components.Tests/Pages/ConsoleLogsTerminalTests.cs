@@ -596,11 +596,9 @@ public partial class ConsoleLogsTests
     [Fact]
     public void TerminalView_InitialRender_ReconnectsWhenResourceChangesDuringInitialization()
     {
-        // This test renders TerminalView on its own rather than through the page, so the localization the
-        // component injects has to be registered here; the page-level tests get it from FluentUI setup.
-        Services.AddLocalization();
-
-        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var initTerminal = module.Setup<int>("initTerminal", _ => true);
         var reconnectTerminal = module.Setup<int>("reconnectTerminal", _ => true);
         reconnectTerminal.SetResult(2);

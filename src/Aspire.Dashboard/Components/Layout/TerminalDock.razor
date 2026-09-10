@@ -3,7 +3,7 @@
 @using Microsoft.FluentUI.AspNetCore.Components
 
 @* The dock is always rendered once it has been opened for the first time. Collapsing translates it off-screen
-   rather than unmounting it so xterm keeps its buffer, its measured cell metrics, and its WebSocket. *@
+   rather than unmounting it so the terminal keeps its renderer, measured cell metrics, and WebSocket. *@
 @if (_hasBeenOpened)
 {
     <div class="terminal-dock @(_isVisible ? "visible" : "collapsed")"
@@ -85,8 +85,8 @@
         <div class="terminal-dock-body">
             @foreach (var terminal in _terminals)
             {
-                @* Inactive panes use visibility rather than display so they keep real dimensions — xterm measures
-                   its grid from the element box, and a display:none pane would refit to zero columns. *@
+                @* Inactive panes use visibility rather than display so the terminal retains its measured grid
+                   instead of deferring its mount until the user selects the tab. *@
                 <div class="terminal-dock-pane @(IsPaneActive(terminal.TerminalId) ? "active" : "inactive")"
                      id="@GetPaneId(terminal.TerminalId)"
                      role="tabpanel"

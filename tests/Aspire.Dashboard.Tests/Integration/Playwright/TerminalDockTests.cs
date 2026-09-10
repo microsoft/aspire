@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Xunit;
@@ -17,6 +19,90 @@ namespace Aspire.Dashboard.Tests.Integration.Playwright;
 public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardServerFixture fixture)
     : PlaywrightTestsBase<TerminalDockTests.TerminalDockDashboardServerFixture>(fixture)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task AppHostWorkloadEnded_RetainedSocketKeepsTabUntilExplicitClose(bool beforeHandshake)
+    {
+        await RunTestAsync(async page =>
+        {
+            var (updates, closes) = await fixture.StartSessionAsync();
+            await page.Clock.InstallAsync();
+            var parkedConnections = Channel.CreateUnbounded<IWebSocketRoute>();
+            var terminalSocket = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            page.WebSocket += (_, socket) =>
+            {
+                if (new Uri(socket.Url).AbsolutePath == "/api/apphost-terminal")
+                {
+                    terminalSocket.TrySetResult(socket.Url);
+                }
+            };
+            var connectionCount = 0;
+            if (beforeHandshake)
+            {
+                await page.RouteWebSocketAsync("**/api/apphost-terminal?*", route =>
+                {
+                    Interlocked.Increment(ref connectionCount);
+                    route.OnMessage(_ => { });
+                    parkedConnections.Writer.TryWrite(route);
+                });
+            }
+
+            await page.GotoAsync("/").DefaultTimeout();
+            await updates.Writer.WriteAsync(Change(TerminalChangeType.Added, "ended"));
+            await updates.Writer.WriteAsync(Change(TerminalChangeType.Activated, "ended"));
+            await Assertions.Expect(Tab(page, "ended")).ToBeVisibleAsync();
+            TestTerminalConnection? producer = null;
+            string socketUrl;
+            if (beforeHandshake)
+            {
+                socketUrl = (await parkedConnections.Reader.ReadAsync().AsTask().DefaultTimeout()).Url;
+            }
+            else
+            {
+                producer = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
+                await producer.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
+                await Assertions.Expect(page.Locator(".terminal-dock-pane.active")
+                    .GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true })).ToBeEnabledAsync();
+                socketUrl = await terminalSocket.Task.DefaultTimeout();
+            }
+
+            var endpoint = new Uri(socketUrl);
+            var viewId = QueryHelpers.ParseQuery(endpoint.Query)["viewId"].ToString();
+            Assert.True(fixture.DashboardApp.Services.GetRequiredService<TerminalViewSessionRegistry>()
+                .TryGet(viewId, endpoint.PathAndQuery, out var session));
+            session.MarkEnded();
+
+            // Transport tests cover how gRPC sets the retained completion state. Before
+            // the first frame the native mount times out and removes its input, but the
+            // containing view must remain and consult that state instead of reconnecting.
+            var terminal = await page.Locator(".terminal-dock .terminal-container").ElementHandleAsync();
+            Assert.NotNull(terminal);
+            await page.Clock.FastForwardAsync(35_000);
+            if (beforeHandshake)
+            {
+                await page.WaitForFunctionAsync("""
+                    async () => {
+                        const module = await import('/Components/Controls/TerminalView.razor.js');
+                        return module.getTerminalSnapshot(document.querySelector('.terminal-dock .terminal-container'))?.ended;
+                    }
+                    """).DefaultTimeout();
+            }
+            await page.Clock.FastForwardAsync(5_000);
+            await Assertions.Expect(Tab(page, "ended")).ToHaveAttributeAsync("aria-selected", "true");
+            Assert.True(await terminal.EvaluateAsync<bool>("element => element.isConnected"));
+            Assert.Equal(1, producer?.ConnectionCount ?? Volatile.Read(ref connectionCount));
+            Assert.Empty(fixture.Client.ClosedTerminals);
+
+            await page.GetByRole(AriaRole.Button, new() { Name = "Close terminal 'ended'", Exact = true }).ClickAsync();
+            Assert.Equal("ended", await closes.Reader.ReadAsync().AsTask().DefaultTimeout());
+            await updates.Writer.WriteAsync(Change(TerminalChangeType.Removed, "ended"));
+            await Assertions.Expect(Tab(page, "ended")).ToHaveCountAsync(0);
+            Assert.False(await terminal.EvaluateAsync<bool>("element => element.isConnected"));
+        });
+    }
+
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResizeHandle_KeyboardAndPointerResizingRespectFocusAndBounds()
@@ -24,7 +110,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
         await RunTestAsync(async page =>
         {
             await OpenDockAsync(page);
-            var terminals = await page.Locator(".terminal-dock .xterm").ElementHandlesAsync();
+            var terminals = await page.Locator(".terminal-dock textarea").ElementHandlesAsync();
             var handle = page.GetByRole(AriaRole.Separator, new() { Name = "Terminals", Exact = true });
             var viewportHeight = await page.EvaluateAsync<int>("window.innerHeight");
             var maximum = Math.Min(1200, viewportHeight);
@@ -68,7 +154,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             await page.Keyboard.PressAsync("ArrowUp");
             await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", (draggedHeight + 10).ToString());
 
-            var input = page.Locator(".terminal-dock-pane.active .xterm-helper-textarea");
+            var input = page.Locator(".terminal-dock-pane.active").GetByRole(AriaRole.Textbox);
             await input.FocusAsync();
             foreach (var key in new[] { "ArrowUp", "ArrowDown", "Shift+ArrowUp", "Shift+ArrowDown", "Home", "End" })
             {
@@ -117,7 +203,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
         await RunTestAsync(async page =>
         {
             await OpenDockAsync(page);
-            var terminals = await page.Locator(".terminal-dock .xterm").ElementHandlesAsync();
+            var terminals = await page.Locator(".terminal-dock textarea").ElementHandlesAsync();
             await Tab(page, "first").FocusAsync();
 
             foreach (var (key, expected) in new[]
@@ -146,7 +232,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             await page.Keyboard.PressAsync("Tab");
             await Assertions.Expect(Tab(page, "second")).ToBeFocusedAsync();
 
-            var input = page.Locator(".terminal-dock-pane.active .xterm-helper-textarea");
+            var input = page.Locator(".terminal-dock-pane.active").GetByRole(AriaRole.Textbox);
             await input.FocusAsync();
             foreach (var key in new[] { "ArrowLeft", "ArrowRight", "Home", "End", "Delete" })
             {
@@ -156,8 +242,8 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             }
 
             await page.Keyboard.PressAsync("F6");
-            Assert.True(await input.EvaluateAsync<bool>(
-                "input => input !== document.activeElement && input.closest('.terminal-dock-pane').contains(document.activeElement)"));
+            await Assertions.Expect(page.Locator(".terminal-dock-pane.active")
+                .GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true })).ToBeFocusedAsync();
             await input.FocusAsync();
             await page.Keyboard.PressAsync("Shift+F6");
             Assert.True(await page.EvaluateAsync<bool>("!!document.activeElement.closest('.terminal-dock-tabstrip')"));
@@ -165,7 +251,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             Assert.Empty(fixture.Client.ClosedTerminals);
             foreach (var terminal in terminals)
             {
-                Assert.True(await terminal.EvaluateAsync<bool>("element => element.isConnected && element.getBoundingClientRect().width > 0"));
+                Assert.True(await terminal.EvaluateAsync<bool>("element => element.isConnected"));
             }
         });
     }
@@ -245,7 +331,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             else
             {
                 await Tab(page, "second").ClickAsync();
-                focusTarget = page.Locator(".terminal-dock-pane.active .xterm-helper-textarea");
+                focusTarget = page.Locator(".terminal-dock-pane.active").GetByRole(AriaRole.Textbox);
             }
 
             await focusTarget.FocusAsync();
@@ -257,9 +343,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
 
     private async Task<(Channel<WatchTerminalsUpdate> Updates, Channel<string> Closes)> OpenDockAsync(IPage page)
     {
-        var channels = fixture.StartSession();
-        // Keep the real xterm views connected without needing a PTY; this fixture exercises dock input and focus.
-        await page.RouteWebSocketAsync("**/api/apphost-terminal?*", route => route.OnMessage(_ => { }));
+        var channels = await fixture.StartSessionAsync();
         await page.GotoAsync("/").DefaultTimeout();
         foreach (var id in new[] { "first", "second", "third" })
         {
@@ -267,7 +351,16 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
         }
         await channels.Updates.Writer.WriteAsync(Change(TerminalChangeType.Activated, "first"));
         await Assertions.Expect(Tab(page, "first")).ToBeVisibleAsync();
-        await Assertions.Expect(page.Locator(".terminal-dock .xterm")).ToHaveCountAsync(3);
+        // Hidden views mount when first shown. Visit each pane so subsequent keyboard
+        // navigation proves an existing WebTerminal is retained rather than recreated.
+        foreach (var id in new[] { "first", "second", "third" })
+        {
+            await Tab(page, id).ClickAsync();
+            await Assertions.Expect(page.Locator(".terminal-dock-pane.active")
+                .GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true })).ToBeEnabledAsync();
+        }
+        await Tab(page, "first").ClickAsync();
+        await Assertions.Expect(page.Locator(".terminal-dock textarea")).ToHaveCountAsync(3);
         return channels;
     }
 
@@ -286,6 +379,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
     {
         private Channel<WatchTerminalsUpdate> _updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         private Channel<string> _closes = Channel.CreateUnbounded<string>();
+        internal TestTerminalConnectionResolver TerminalResolver { get; } = new();
 
         public TestDashboardClient Client { get; }
 
@@ -294,11 +388,13 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             Client = new TestDashboardClient(
                 isEnabled: true,
                 terminalChannelProvider: () => Volatile.Read(ref _updates),
+                attachTerminal: async (id, token) => (await TerminalResolver.ConnectAsync(id, 0, token))!,
                 closeTerminal: (id, token) => Volatile.Read(ref _closes).Writer.WriteAsync(id, token).AsTask());
         }
 
-        public (Channel<WatchTerminalsUpdate> Updates, Channel<string> Closes) StartSession()
+        public async Task<(Channel<WatchTerminalsUpdate> Updates, Channel<string> Closes)> StartSessionAsync()
         {
+            await TerminalResolver.DiscardPendingConnectionsAsync();
             var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
             var closes = Channel.CreateUnbounded<string>();
             Volatile.Write(ref _updates, updates);
@@ -310,6 +406,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
         protected override void ConfigureServices(IServiceCollection services)
         {
             services.AddSingleton<IDashboardClient>(Client);
+            services.AddSingleton<ITerminalConnectionResolver>(_ => TerminalResolver);
         }
     }
 }

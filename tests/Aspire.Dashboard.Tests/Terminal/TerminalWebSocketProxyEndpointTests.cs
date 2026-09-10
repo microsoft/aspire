@@ -5,6 +5,8 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Terminal;
+using Aspire.Dashboard.Tests.Shared;
+using Grpc.Core;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -31,8 +33,10 @@ public class TerminalWebSocketProxyEndpointTests
     private const string DashboardScheme = "https";
     private const string DashboardHost = "dashboard.example.com";
 
-    [Fact]
-    public async Task TerminalEndpoint_MissingOrigin_Returns403_AndDoesNotCallResolver()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalEndpoint_MissingOrigin_Returns403_AndDoesNotCallResolver(bool useGrpc)
     {
         var resolver = new TrackingTerminalConnectionResolver();
         using var host = await BuildHostAsync(resolver);
@@ -42,15 +46,17 @@ public class TerminalWebSocketProxyEndpointTests
         {
             // No SetRequestHeader("Origin", ...) — TestHost will not synthesise
             // one, so the proxy sees a missing Origin header.
-            await client.ConnectAsync(BuildTerminalUri(), CancellationToken.None);
+            await client.ConnectAsync(BuildTerminalUri(useGrpc), CancellationToken.None);
         });
 
         Assert.Contains("403", ex.Message);
         Assert.False(resolver.ResolveCalled, "Resolver must not be invoked when the Origin gate rejects the upgrade.");
     }
 
-    [Fact]
-    public async Task TerminalEndpoint_DisallowedOrigin_Returns403_AndDoesNotCallResolver()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalEndpoint_DisallowedOrigin_Returns403_AndDoesNotCallResolver(bool useGrpc)
     {
         var resolver = new TrackingTerminalConnectionResolver();
         using var host = await BuildHostAsync(resolver);
@@ -62,15 +68,17 @@ public class TerminalWebSocketProxyEndpointTests
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await client.ConnectAsync(BuildTerminalUri(), CancellationToken.None);
+            await client.ConnectAsync(BuildTerminalUri(useGrpc), CancellationToken.None);
         });
 
         Assert.Contains("403", ex.Message);
         Assert.False(resolver.ResolveCalled, "Resolver must not be invoked when the Origin gate rejects the upgrade.");
     }
 
-    [Fact]
-    public async Task TerminalEndpoint_SameOrigin_ProceedsToResolver()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalEndpoint_SameOrigin_ProceedsToResolver(bool useGrpc)
     {
         // Resolver returns null so the endpoint reports the resource as unavailable.
         // We don't care about the response code here — only that the resolver was
@@ -91,16 +99,59 @@ public class TerminalWebSocketProxyEndpointTests
         // reached at all.
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await client.ConnectAsync(BuildTerminalUri(), CancellationToken.None);
+            await client.ConnectAsync(BuildTerminalUri(useGrpc), CancellationToken.None);
         });
 
         Assert.True(resolver.ResolveCalled, "Same-origin requests must proceed past the Origin gate to resource resolution.");
     }
 
-    private static Uri BuildTerminalUri()
+    [Theory]
+    [InlineData("/api/terminal?replica=0")]
+    [InlineData("/api/terminal?resource=test&replica=-1")]
+    [InlineData("/api/terminal?resource=test&replica=invalid")]
+    [InlineData("/api/apphost-terminal?resource=test")]
+    public async Task TerminalEndpoint_InvalidIdentity_Returns400BeforeConnecting(string path)
+    {
+        var resolver = new TrackingTerminalConnectionResolver();
+        using var host = await BuildHostAsync(resolver);
+        var client = host.GetTestServer().CreateWebSocketClient();
+        client.ConfigureRequest = request => request.Headers["Origin"] = $"{DashboardScheme}://{DashboardHost}";
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            client.ConnectAsync(new Uri($"{DashboardScheme}://{DashboardHost}{path}"), CancellationToken.None));
+
+        Assert.Contains("400", exception.Message);
+        Assert.False(resolver.ResolveCalled);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task TerminalEndpoint_UnknownOrMismatchedView_Returns404BeforeConnecting(bool useGrpc, bool mismatchedTarget)
+    {
+        var resolver = new TrackingTerminalConnectionResolver();
+        using var host = await BuildHostAsync(resolver);
+        using var session = host.Services.GetRequiredService<TerminalViewSessionRegistry>()
+            .Create("/api/apphost-terminal?terminalId=other", readOnly: true);
+        var viewId = mismatchedTarget ? session.Id : "unknown";
+        var client = host.GetTestServer().CreateWebSocketClient();
+        client.ConfigureRequest = request => request.Headers["Origin"] = $"{DashboardScheme}://{DashboardHost}";
+        var endpoint = BuildTerminalUri(useGrpc);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            client.ConnectAsync(new Uri($"{endpoint}&viewId={viewId}"), CancellationToken.None));
+
+        Assert.Contains("404", exception.Message);
+        Assert.False(resolver.ResolveCalled);
+    }
+
+    private static Uri BuildTerminalUri(bool useGrpc)
     {
         // TestHost rewrites Scheme/Host on dispatch; only the path+query matter.
-        return new Uri($"{DashboardScheme}://{DashboardHost}/api/terminal?resource=myapp&replica=0");
+        var path = useGrpc ? "/api/apphost-terminal?terminalId=test" : "/api/terminal?resource=myapp&replica=0";
+        return new Uri($"{DashboardScheme}://{DashboardHost}{path}");
     }
 
     private static async Task<IHost> BuildHostAsync(ITerminalConnectionResolver resolver)
@@ -114,6 +165,12 @@ public class TerminalWebSocketProxyEndpointTests
                     {
                         services.AddRouting();
                         services.AddSingleton(resolver);
+                        services.AddSingleton<TerminalViewSessionRegistry>();
+                        services.AddSingleton<IDashboardClient>(new TestDashboardClient(attachTerminal: async (terminalId, cancellationToken) =>
+                        {
+                            await resolver.ConnectAsync(terminalId, 0, cancellationToken);
+                            throw new RpcException(new Status(StatusCode.NotFound, "Terminal was not found."));
+                        }));
 
                         // Permissive auth/authorization stack — these tests
                         // target the Origin gate, not RequireAuthorization.
@@ -154,10 +211,19 @@ public class TerminalWebSocketProxyEndpointTests
                         {
                             endpoints.Map("/api/terminal", async (HttpContext context,
                                                                   ITerminalConnectionResolver r,
+                                                                  TerminalViewSessionRegistry sessions,
                                                                   ILoggerFactory loggerFactory) =>
                             {
                                 var logger = loggerFactory.CreateLogger("Aspire.Dashboard.Terminal.TerminalWebSocketProxy");
-                                await TerminalWebSocketProxy.HandleAsync(context, r, logger, "test");
+                                await TerminalWebSocketProxy.HandleAsync(context, r, sessions, logger, "test");
+                            }).RequireAuthorization(FrontendAuthorizationDefaults.PolicyName);
+                            endpoints.Map("/api/apphost-terminal", async (HttpContext context,
+                                                                          IDashboardClient dashboardClient,
+                                                                          TerminalViewSessionRegistry sessions,
+                                                                          ILoggerFactory loggerFactory) =>
+                            {
+                                var logger = loggerFactory.CreateLogger("Aspire.Dashboard.Terminal.TerminalWebSocketProxy");
+                                await TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, logger, "test");
                             }).RequireAuthorization(FrontendAuthorizationDefaults.PolicyName);
                         });
                     });

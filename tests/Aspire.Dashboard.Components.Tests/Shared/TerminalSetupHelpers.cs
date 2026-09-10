@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
 
@@ -23,12 +26,22 @@ internal static class TerminalSetupHelpers
 
     public static void SetupTerminalView(TestContext context)
     {
-        var module = context.JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
+        var module = SetupTerminalViewModule(context, "/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        module.SetupVoid("setReadOnly", _ => true).SetVoidResult();
+    }
+
+    public static BunitJSModuleInterop SetupTerminalViewModule(TestContext context, string modulePath)
+    {
+        context.Services.TryAddSingleton<TerminalViewSessionRegistry>();
+        FluentUISetupHelpers.SetupFluentList(context);
+        var module = context.JSInterop.SetupModule(modulePath);
         module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);
         module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
         module.SetupVoid("refreshLayout", _ => true).SetVoidResult();
-        module.SetupVoid("setReadOnly", _ => true).SetVoidResult();
+        module.Setup<TerminalSizePreset[]>("getSizePresets").SetResult(
+            [new("auto", "Auto", 0, 0), new("80x24", "80×24", 80, 24)]);
+        return module;
     }
 
     public static void SetupTerminalDock(TestContext context)

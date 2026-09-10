@@ -380,6 +380,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // path the AppHost stamped onto the snapshot.
         builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver>(services =>
             new Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver(services.GetRequiredService<DashboardClient>()));
+        builder.Services.TryAddSingleton<TerminalViewSessionRegistry>();
 
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();

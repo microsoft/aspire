@@ -15,7 +15,7 @@ builder.AddProject<Projects.MyAgent>("agent")
     .WithTerminal();
 ```
 
-The dashboard then renders an xterm.js terminal per replica, and the CLI
+The dashboard then renders a Hex1b web terminal per replica, and the CLI
 exposes the same session as `aspire terminal agent --replica 0`.
 
 ## Process topology
@@ -60,13 +60,14 @@ version 1), which already handles:
 - Hello/StateSync replay so a late-attaching consumer sees the current
   scrollback
 - Connection lifecycle (close, disconnect, reconnect)
-- Authenticated stream factory hooks (we only use Unix-socket transport
-  today)
+- Authenticated stream factory hooks for Unix sockets and the AppHost's
+  dashboard gRPC terminal stream
 
-The `Hmp1WorkloadAdapter` is what the AppHost-side terminal host uses to
-multiplex DCP's PTY traffic to the consumer-facing listener; the
-`Hmp1PresentationAdapter` is what consumers (Dashboard WebSocket proxy and
-the CLI) use to attach.
+The terminal host uses `DcpUpstreamAdapter` for DCP's minimal single-peer
+protocol and `Hmp1PresentationAdapter` for its consumer-facing listener.
+The dashboard and CLI attach using `Hmp1WorkloadAdapter`. The dashboard
+adds a per-browser `Hex1bTerminal` mirror with `Hwt1PresentationAdapter`;
+the browser receives authoritative terminal state rather than parsing ANSI.
 
 ## Property contract (gRPC `ResourceService` snapshots)
 
@@ -93,34 +94,106 @@ endpoint at `/api/terminal?resource=<displayName>&replica=<index>`.
 
 `TerminalWebSocketProxy` resolves the connection entirely server-side:
 
-1. `ITerminalConnectionResolver.ConnectAsync(resourceName, replicaIndex, ct)`
+1. The same-origin WebSocket gate rejects missing or cross-origin `Origin`
+   headers before resolving a resource, in addition to frontend authorization.
+2. `ITerminalConnectionResolver.ConnectAsync(resourceName, replicaIndex, ct)`
    walks `IDashboardClient.GetResources()`, matches by `DisplayName` +
    `TryGetTerminalReplicaInfo`, and connects via
    `Hmp1Transports.ConnectUnixSocket(consumerUdsPath, ct)`.
-2. The proxy wraps the resulting stream in `Hmp1WorkloadAdapter` and runs
-   two pumps:
-   - **Inbound (browser → producer):** binary frames are forwarded as HMP v1
-     `Input` (keystrokes); text frames are parsed as JSON resize control
-     messages (`{"type":"resize","cols":N,"rows":N}`).
-   - **Outbound (producer → browser):** VT bytes from the producer become
-     binary WebSocket frames; resize hints from the producer become JSON
-     text frames.
-3. Frame type — not content — distinguishes keystroke from control. This
-   keeps the proxy's parser cheap and avoids ambiguity around binary input
-   that happens to look like JSON.
-4. Multi-fragment WS reads are reassembled in `ReassembledFrame` using
-   `ArrayPool<byte>`.
+3. The handler connects a public `Hmp1WorkloadAdapter`, attaches a per-view
+   terminal and `Hwt1PresentationAdapter`, and runs the two transport pumps.
+   Incoming UTF-8 JSON messages are reassembled up to 64 KiB and passed to
+   `HandleMessageAsync`. Each `ReadFrameAsync` result is sent as one complete
+   binary WebSocket message, without dropping or reordering frames.
+4. Hex1b owns input encoding, primary-role negotiation, selection, history,
+   graphics projection, acknowledgements and state resynchronization. The
+   dashboard bounds handshake and send times and cancels both pumps when
+   either transport ends. Disposing a view disconnects only that peer, not
+   the AppHost-owned producer.
 
 The browser never sees `consumerUdsPath` and cannot induce the dashboard
 to connect to an arbitrary local socket — it can only ask for
 `(resource, replica)` pairs that are present in the resource snapshot
 stream.
 
+### AppHost-owned terminal views
+
+`/api/apphost-terminal?terminalId=<id>` uses the same frontend authorization,
+same-origin validation, and HWT presentation bridge. Its upstream is the opaque
+HMP byte stream from `AttachTerminal`, tunneled over the existing dashboard
+gRPC connection. Closing a viewer releases only that attachment; the creator
+continues to own the terminal.
+
+The paired web client does not expose WebSocket close details or a native
+completed-terminal state. As a temporary workaround, an authoritative gRPC
+`Ended` notification leaves the browser connection in place until the user
+closes the view. Input is no longer forwarded, and no Aspire-specific messages
+are injected into HWT. This also avoids automatic reconnect attempts against a
+completed process. Completion before the initial handshake can leave an empty
+view; preserving the final screen and displaying an explicit ended indicator
+are not guaranteed by this workaround. If the native mount times out before
+its first frame, the adapter asks its existing Blazor component whether this
+view has received authoritative completion before deciding to retry. An
+unavailable Blazor circuit surfaces an error requiring explicit retry rather
+than guessing. An actual transport failure remains retryable rather than
+being treated as completion.
+
+Each component registers a separate input policy with the dashboard and passes
+its opaque `viewId` with the WebSocket URL. Changes to an interaction's disabled
+state update that policy before updating browser input behavior. The bridge
+rejects input, pointer, paste, resize, and primary-role requests for read-only
+views while allowing output, acknowledgements, selection, copy, and history.
+This is a per-view presentation policy, not a new user authorization boundary:
+it does not lock the terminal, its creator's automation, or other viewers.
+
+### Browser requirements and package pairing
+
+The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
+exactly `0.167.0-alpha.1547.1.798b26c`. HWT1 is experimental state transfer
+between these paired packages, not a stable wire contract implemented by
+Aspire. Upgrade both together. The full npm `dist` tree is vendored, including
+module workers, relative imports, fonts and licenses.
+
+The dashboard uses the package's automatic renderer selection: WebGPU is
+preferred, with WebGL2 used when WebGPU capabilities or device acquisition are
+unavailable. WebGPU requires a secure context (HTTPS or localhost); WebGL2 can
+render on ordinary HTTP. Clipboard API restrictions still apply, and renderer
+selection does not relax transport security, authorization or origin checks.
+Both backends require OffscreenCanvas and module workers. Initialization and
+runtime rendering failures remain visible errors; there is no xterm.js fallback.
+Sixel and Kitty Graphics Protocol are rendered
+from server-authoritative state. Historical rendering is text-only. The
+dashboard's independent console-log view remains available.
+
+Text selections use a translucent Aspire accent highlight. A Fluent copy button
+appears below and to the right of the last visible selected line, clamping to the
+canvas edges and moving above the line when there is not enough room below.
+The dashboard uses Hex1b's public selection overlay and copy action; Hex1b retains
+ownership of authoritative selection text, history and clipboard handling.
+After a successful copy, the selection and copy overlay are cleared and focus
+returns to the terminal, ready for Cmd+V or Ctrl+V. A failed copy leaves the
+selection available for retry.
+
+HMP checkpoints retain uploaded Kitty image data even when an animation
+temporarily removes its placements. They also preserve partially received ANSI
+sequences, so late and reconnected viewers can resume placement-only updates
+without losing pixels or displaying fragments of graphics commands. See the
+[graphics and partial-sequence replay fix](https://github.com/mitchdenny/hex1b/pull/496).
+
+The package handles Ctrl/Cmd+click on authoritative OSC 8 hyperlinks in live
+output and history. HMP state replay preserves link destinations across late
+attachment and reconnect. It only opens absolute HTTP, HTTPS and mailto destinations
+with `noopener,noreferrer`; plain clicks and drags retain selection/application
+behavior. Aspire adds no custom opener or plain-text URL detection. See the
+[hyperlink PR](https://github.com/mitchdenny/hex1b/pull/489),
+[renderer PR](https://github.com/mitchdenny/hex1b/pull/491), and
+[hyperlink replay fix](https://github.com/mitchdenny/hex1b/pull/493).
+
 ### Console / Terminal view toggle
 
 For a terminal-enabled resource the dashboard `ConsoleLogs` page mounts
 **both** `LogViewer` (the resource's standard log stream) and
-`TerminalView` (the interactive xterm.js terminal) at the same time and
+`TerminalView` (the interactive Hex1b web terminal) at the same time and
 flips between them via a pair of **Console logs** / **Terminal** items
 rendered inside the toolbar's options (⋯) `AspireMenuButton`:
 
@@ -133,19 +206,19 @@ rendered inside the toolbar's options (⋯) `AspireMenuButton`:
   or a different resource is selected (which resets to Console).
 - Both views stay mounted across flips (visibility is toggled with
   `display:none` on a wrapper `<div>`); the log subscription and the
-  xterm/HMP1 consumer session are kept alive so neither view loses
+  Hex1b/HMP1 consumer session are kept alive so neither view loses
   scrollback or has to re-handshake on toggle. After a `display:none →
   visible` transition the page calls `refreshLayout` on the JS terminal
-  to guarantee xterm rebinds to the new available space.
+  to fit the terminal to the new available space.
 
 The terminal frame keeps font decrease/increase buttons, the current font
 size, and the live columns-by-rows selector together in its bottom-right
 footer. The selector offers Fit mode and predefined terminal dimensions,
 keeping both sizing operations available without opening the page options
 menu. A terminal starts at 132×50. A viewer adopts the producer's current
-dimensions, and taking control by typing preserves those dimensions; only an
-explicit footer sizing action or a resize from another controlling peer changes
-the grid. The bottom-left footer hint advertises <kbd>F6</kbd>, which moves
+dimensions. Ordinary keyboard and paste input do not take resize control;
+explicit footer sizing actions request primary and wait for confirmation before
+changing the grid. The bottom-left footer hint advertises <kbd>F6</kbd>, which moves
 keyboard focus from terminal input to the footer controls; <kbd>Shift+F6</kbd>
 moves focus to the preceding dashboard control.
 
@@ -156,7 +229,7 @@ Console view non-empty for a `WithTerminal()` resource.
 ## CLI
 
 `aspire terminal <resource> [--replica N]` (`Aspire.Cli/Commands/TerminalCommand.cs`)
-opens its own `Hmp1PresentationAdapter` against the consumer UDS path
+opens its own `Hmp1WorkloadAdapter` against the consumer UDS path
 returned by `IBackchannel.GetTerminalInfoAsync(resource, replica)` and
 renders frames into the host terminal via Hex1b's `Hex1bTerminal`. When the
 resource has more than one replica and the CLI is interactive, it prompts
@@ -182,8 +255,16 @@ when the executable (or container) spec carries a populated `terminal` block:
 process owns the listener). The dimensions are the initial PTY size; both
 sides exchange resize frames over HMP afterwards.
 
-Desktop PTY support is implemented across all three platforms (Unix98 `/dev/ptmx` on Linux and macOS; ConPTY on Windows). Container PTYs are tracked
-as a Phase 3 follow-up on the parent issue.
+Desktop PTY support is implemented across all three platforms (Unix98 `/dev/ptmx` on Linux and macOS; ConPTY on Windows).
+Container PTYs use the container runtime's attach command. DCP currently starts the
+container before attaching, so one-time startup output, including terminal capability
+queries, can be lost. See the [DCP startup ordering](https://github.com/microsoft/dcp/blob/v0.25.13/controllers/container_controller.go#L1843-L1855).
+
+The `notcurses` resource in `playground/Terminals` installs Ubuntu's `notcurses-bin`
+package and starts an interactive Bash shell. Open its dashboard Terminal view, then
+run `notcurses-demo` to exercise graphics, color and Unicode rendering. Starting the
+demo from the attached shell avoids losing its initial capability queries. Press
+`q` to return to the shell; run the command again to repeat the stress workload.
 
 ## Files of interest
 
@@ -198,6 +279,6 @@ as a Phase 3 follow-up on the parent issue.
 | CLI command                          | `src/Aspire.Cli/Commands/TerminalCommand.cs`                        |
 | Dashboard WebSocket proxy            | `src/Aspire.Dashboard/Terminal/TerminalWebSocketProxy.cs`           |
 | Dashboard resolver                   | `src/Aspire.Dashboard/Terminal/DefaultTerminalConnectionResolver.cs`|
-| `TerminalView` (xterm.js host)       | `src/Aspire.Dashboard/Components/Controls/TerminalView.razor.*`     |
+| `TerminalView` (Hex1b web host)      | `src/Aspire.Dashboard/Components/Controls/TerminalView.razor.*`     |
 | Property keys                        | `src/Shared/Model/KnownProperties.cs` (`Terminal.*`)                |
 | Playground sample                    | `playground/Terminals/Terminals.AppHost/AppHost.cs`                 |

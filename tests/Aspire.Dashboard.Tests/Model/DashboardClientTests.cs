@@ -4,7 +4,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.WebSockets;
-using System.Text;
 using System.Threading.Channels;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
@@ -35,13 +34,21 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
     [Fact]
-    public async Task TerminalStream_ProxySendsEndedMessageBeforeClosingWebSocket()
+    public async Task TerminalStream_EndedBeforeHandshakeRetainsEmptyViewerUntilBrowserCloses()
     {
         var channel = Channel.CreateUnbounded<TerminalServerFrame>();
         channel.Writer.TryWrite(new TerminalServerFrame { Ended = true });
         var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writes = new ConcurrentQueue<TerminalClientFrame>();
         using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
-            new ClientStreamWriter<TerminalClientFrame>(),
+            new ClientStreamWriter<TerminalClientFrame>
+            {
+                OnWrite = frame =>
+                {
+                    writes.Enqueue(frame);
+                    return Task.CompletedTask;
+                }
+            },
             new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
             Task.FromResult(new Metadata()),
             () => Status.DefaultSuccess,
@@ -49,6 +56,8 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
             () => disposed.TrySetResult());
         using var stream = new GrpcTerminalClientStream(call, "terminal");
         var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
+        var sessions = new TerminalViewSessionRegistry();
+        using var session = sessions.Create("/api/apphost-terminal?terminalId=terminal", readOnly: false);
         using var server = new TestServer(new WebHostBuilder().Configure(app =>
         {
             app.UseWebSockets();
@@ -56,20 +65,28 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
             {
                 context.Request.Scheme = "https";
                 context.Request.Host = new HostString("dashboard.example.com");
-                return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, NullLogger.Instance, "test");
+                return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
             });
         }));
         var client = server.CreateWebSocketClient();
         client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
         using var socket = await client.ConnectAsync(
-            new Uri("wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal"), CancellationToken.None).DefaultTimeout();
+            new Uri($"wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal&viewId={session.Id}"), CancellationToken.None).DefaultTimeout();
         var buffer = new byte[64];
 
+        Assert.True(stream.TerminalEnded);
+        await session.Ended.DefaultTimeout();
+        Assert.False(disposed.Task.IsCompleted);
+        var handshakeWrites = writes.ToArray();
+        Assert.NotEmpty(handshakeWrites);
+        await socket.SendAsync("""{"type":"input","text":"ignored"}"""u8.ToArray(), WebSocketMessageType.Text,
+            true, CancellationToken.None).DefaultTimeout();
+        await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "User dismissed the terminal", CancellationToken.None).DefaultTimeout();
         var message = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None).DefaultTimeout();
-        Assert.Equal(WebSocketMessageType.Text, message.MessageType);
-        Assert.True(message.EndOfMessage);
-        Assert.Equal("terminal-ended", Encoding.UTF8.GetString(buffer, 0, message.Count));
+        Assert.Equal(WebSocketMessageType.Close, message.MessageType);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, message.CloseStatus);
         await disposed.Task.DefaultTimeout();
+        Assert.Equal(handshakeWrites, writes);
     }
 
     [Theory]
@@ -120,6 +137,69 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         // The server keeps the RPC open until the proxy consumes this status and disconnects.
         Assert.Equal(0, await stream.ReadAsync(new byte[1]).AsTask().DefaultTimeout());
         Assert.True(stream.TerminalEnded);
+    }
+
+    [Theory]
+    [InlineData(StatusCode.Unavailable)]
+    [InlineData(StatusCode.Cancelled)]
+    [InlineData(StatusCode.NotFound)]
+    public async Task TerminalStream_RpcReadFailurePreservesStatusAsStreamError(StatusCode statusCode)
+    {
+        var error = new RpcException(new Status(statusCode, "Terminal transport failed."));
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryComplete(error);
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>(),
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => { });
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+
+        var exception = await Assert.ThrowsAsync<IOException>(() => stream.ReadAsync(new byte[1]).AsTask());
+
+        Assert.Same(error, exception.InnerException);
+        Assert.False(stream.TerminalEnded);
+    }
+
+    [Theory]
+    [InlineData(StatusCode.NotFound, StatusCodes.Status404NotFound)]
+    [InlineData(StatusCode.Unavailable, StatusCodes.Status503ServiceUnavailable)]
+    public async Task TerminalStream_HandshakeFailureReturnsHttpErrorBeforeUpgrade(StatusCode statusCode, int expectedStatus)
+    {
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryComplete(new RpcException(new Status(statusCode, "Terminal is unavailable.")));
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame> { OnWrite = _ => Task.CompletedTask },
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => disposed.TrySetResult());
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+        var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
+        var sessions = new TerminalViewSessionRegistry();
+        using var server = new TestServer(new WebHostBuilder().Configure(app =>
+        {
+            app.UseWebSockets();
+            app.Run(context =>
+            {
+                context.Request.Scheme = "https";
+                context.Request.Host = new HostString("dashboard.example.com");
+                return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
+            });
+        }));
+        var client = server.CreateWebSocketClient();
+        client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.ConnectAsync(
+            new Uri("wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal"), CancellationToken.None).DefaultTimeout());
+
+        Assert.Contains(expectedStatus.ToString(System.Globalization.CultureInfo.InvariantCulture), exception.Message);
+        await disposed.Task.DefaultTimeout();
+        Assert.False(stream.TerminalEnded);
     }
 
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder =>
@@ -1038,6 +1118,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     private sealed class ClientStreamWriter<T> : IClientStreamWriter<T>
     {
         public WriteOptions? WriteOptions { get; set; }
+        public Func<T, Task>? OnWrite { get; init; }
 
         public Task CompleteAsync()
         {
@@ -1046,7 +1127,13 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
 
         public Task WriteAsync(T message)
         {
-            throw new NotImplementedException();
+            return OnWrite?.Invoke(message) ?? throw new NotImplementedException();
+        }
+
+        public Task WriteAsync(T message, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return WriteAsync(message);
         }
     }
 

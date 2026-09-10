@@ -50,6 +50,42 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsHeader", resourceCulture);
             }
         }
+
+        public static string TerminalInputLabel {
+            get {
+                return ResourceManager.GetString("TerminalInputLabel", resourceCulture);
+            }
+        }
+
+        public static string TerminalMountFailed {
+            get {
+                return ResourceManager.GetString("TerminalMountFailed", resourceCulture);
+            }
+        }
+
+        public static string TerminalDisconnected {
+            get {
+                return ResourceManager.GetString("TerminalDisconnected", resourceCulture);
+            }
+        }
+
+        public static string TerminalInputFailed {
+            get {
+                return ResourceManager.GetString("TerminalInputFailed", resourceCulture);
+            }
+        }
+
+        public static string TerminalSizingFailed {
+            get {
+                return ResourceManager.GetString("TerminalSizingFailed", resourceCulture);
+            }
+        }
+
+        public static string TerminalRetry {
+            get {
+                return ResourceManager.GetString("TerminalRetry", resourceCulture);
+            }
+        }
         
         public static string ConsoleLogsSelectResourceToolbar {
             get {

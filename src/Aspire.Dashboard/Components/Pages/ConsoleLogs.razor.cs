@@ -182,9 +182,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // ⋯ menu picker.
     private ConsoleLogsView _activeView = ConsoleLogsView.Console;
     // Tracks the view that was rendered to the DOM on the previous render
-    // pass. When the active view flips back to Terminal we need to nudge
-    // xterm.js to relayout because the wrapper's display:none → visible
-    // transition may not trigger ResizeObserver in every browser.
+    // pass. Revealing Terminal starts a deferred mount or refreshes selection
+    // overlays without disposing the client or changing producer dimensions.
     private ConsoleLogsView? _lastRenderedView;
 
     // UI
@@ -463,11 +462,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Detect a view-flip TO Terminal and prod xterm to relayout. The
-        // wrapper element transitions from display:none to visible on this
-        // render and ResizeObserver is not guaranteed to fire for that
-        // box-tree change. Without this nudge xterm can stay sized to its
-        // pre-hide dimensions until the next external resize.
+        // Notify the terminal after its wrapper becomes visible so a deferred
+        // mount and selection overlays see the new layout.
         if (_selectedResourceHasTerminal &&
             _activeView == ConsoleLogsView.Terminal &&
             _lastRenderedView != ConsoleLogsView.Terminal &&
@@ -1427,7 +1423,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         /// <summary>The resource's standard log stream (LogViewer).</summary>
         Console,
-        /// <summary>The interactive xterm.js terminal (TerminalView).</summary>
+        /// <summary>The interactive Hex1b terminal (TerminalView).</summary>
         Terminal,
     }
 }
