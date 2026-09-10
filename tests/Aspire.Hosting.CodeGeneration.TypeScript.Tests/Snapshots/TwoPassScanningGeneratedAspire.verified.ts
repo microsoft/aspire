@@ -1,4 +1,4 @@
-// aspire.mts - Capability-based Aspire SDK
+﻿// aspire.mts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -2531,7 +2531,14 @@ export interface ContainerBuildOptionsCallbackContext {
         get: () => Promise<ContainerImageDestination | null>;
         set: (value: ContainerImageDestination | null) => Promise<void>;
     };
-    /** Gets or sets the output path for the container archive. */
+    /**
+     * Gets or sets the output path for the container archive.
+     *
+     * For .NET SDK publishing, a non-existent path with any filename extension is an archive filename.
+     * End a directory path with the platform's directory separator to make directory intent explicit,
+     * especially when its name contains a period. Prefer an explicit archive filename to avoid ambiguity.
+     * Other container image builders may interpret this path as an output directory.
+     */
     outputPath: {
         get: () => Promise<string | null>;
         set: (value: string | null) => Promise<void>;

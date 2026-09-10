@@ -202,6 +202,8 @@ public class RadiusExtensionsTests
         Assert.Equal("ghcr.io", annotation.Registry);
         Assert.Equal("owner/webapp", annotation.Image);
         Assert.Equal("v1", annotation.Tag);
+        Assert.True(project.Resource.SupportsDotnetProgramPublishing());
+        Assert.False(project.Resource.RequiresImageBuild());
     }
 
     private sealed class ParseImageReferenceProjectMetadata : IProjectMetadata

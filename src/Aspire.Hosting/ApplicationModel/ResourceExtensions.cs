@@ -996,13 +996,14 @@ public static class ResourceExtensions
     /// <remarks>
     /// Resources require an image build if they provide their own Dockerfile or are a project.
     /// Resources that are excluded from publishing are not considered to require image building.
+    /// Resources with a prebuilt container image and no Dockerfile build annotation do not require a build.
     /// </remarks>
     /// <param name="resource">The resource to evaluate for image build requirements.</param>
     /// <returns>True if the resource requires image building; otherwise, false.</returns>
     [AspireExportIgnore(Reason = "Publishing inspection helper — not part of the ATS surface.")]
     public static bool RequiresImageBuild(this IResource resource)
     {
-        if (resource.IsExcludedFromPublish())
+        if (resource.IsExcludedFromPublish() || resource.HasPrebuiltContainerImage())
         {
             return false;
         }
@@ -1031,6 +1032,12 @@ public static class ResourceExtensions
     {
         return resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuild) &&
             !dockerfileBuild.HasEntrypoint;
+    }
+
+    internal static bool HasPrebuiltContainerImage(this IResource resource)
+    {
+        return resource.TryGetLastAnnotation<ContainerImageAnnotation>(out _) &&
+            !resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>

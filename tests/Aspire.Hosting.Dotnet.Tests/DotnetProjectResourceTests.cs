@@ -282,7 +282,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.ContainerImageBuild)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task AddDotnetProject_FileBasedAppWithContainerFilesBuildsContainerArchive()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

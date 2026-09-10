@@ -220,10 +220,9 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
         // Build the EF command arguments (these go after the -- in dotnet tool exec).
         // `--no-build` is normally added because all interactive run-mode commands assume the
-        // project was already built by the AppHost. Bundle generation during `aspire publish`
-        // intentionally omits it: the publish pipeline doesn't pre-build the startup project,
-        // and `dotnet ef migrations bundle` needs the migrations and startup projects compiled
-        // (and matching the requested target runtime) before it can package the bundle.
+        // project was already built by the AppHost. Publish-time script and bundle generation
+        // intentionally omit it: the publish pipeline doesn't pre-build path-based projects, and
+        // dotnet-ef must compile the participating projects before reading or packaging migrations.
         var efArgs = new List<string> { command, subCommand };
         if (noBuild)
         {
@@ -796,7 +795,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
             args["--output"] = outputPath;
         }
 
-        return await ExecuteEfCommandAsync("migrations", "script", args).ConfigureAwait(false);
+        return await ExecuteEfCommandAsync("migrations", "script", args, noBuild: false).ConfigureAwait(false);
     }
 
     /// <summary>

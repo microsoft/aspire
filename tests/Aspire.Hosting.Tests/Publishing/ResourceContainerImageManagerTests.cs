@@ -111,7 +111,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Check for success logs
         Assert.Contains(logs, log => log.Message.Contains("Building container image for resource servicea"));
-        Assert.Contains(logs, log => log.Message.Contains("/p:ContainerBaseImage=mcr.microsoft.com/dotnet/sdk:8.0-alpine"));
+        Assert.Contains(logs, log => log.Message.Contains("--property:ContainerBaseImage=mcr.microsoft.com/dotnet/sdk:8.0-alpine"));
         Assert.Contains(logs, log => log.Message.Contains(".NET CLI completed with exit code: 0"));
     }
 
@@ -770,7 +770,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var collector = app.Services.GetFakeLogCollector();
         var logs = collector.GetSnapshot();
 
-        Assert.Contains(logs, log => log.Message.Contains("/p:LocalRegistry=Podman"));
+        Assert.Contains(logs, log => log.Message.Contains("--property:LocalRegistry=Podman"));
     }
 
     [Fact]
@@ -889,7 +889,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             processRunner.ProcessSpecs,
             publish => Assert.DoesNotContain(
                 publish.ArgumentList!,
-                static argument => argument.StartsWith("/p:ContainerArchiveOutputPath=", StringComparison.Ordinal)),
+                static argument => argument.StartsWith("--property:ContainerArchiveOutputPath=", StringComparison.Ordinal)),
             workingDirectory => Assert.Contains(
                 "-getProperty:ContainerWorkingDirectory",
                 workingDirectory.ArgumentList!));
@@ -1069,8 +1069,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             publish => Assert.Equal(
                 [
                     "publish", projectPath, "--configuration", "Release", "/t:PublishContainer",
-                    "/p:ContainerRepository=program", "/p:ContainerImageTag=latest",
-                    "/p:LocalRegistry=Docker", "/p:RuntimeIdentifier=linux-x64", "/p:ContainerRuntimeIdentifier=linux-x64"
+                    "--property:ContainerRepository=program", "--property:ContainerImageTag=latest",
+                    "--property:LocalRegistry=Docker", "--property:RuntimeIdentifier=linux-x64",
+                    "--property:ContainerRuntimeIdentifier=linux-x64"
                 ],
                 publish.ArgumentList),
             query =>
@@ -1080,7 +1081,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                     [
                         fileBased ? "build" : "msbuild", projectPath, "-p:Configuration=Release",
                         "-getProperty:ContainerWorkingDirectory", "-v:q",
-                        "/p:RuntimeIdentifier=linux-x64", "/p:ContainerRuntimeIdentifier=linux-x64"
+                        "--property:RuntimeIdentifier=linux-x64", "--property:ContainerRuntimeIdentifier=linux-x64"
                     ],
                     query.ArgumentList);
             });
@@ -1127,8 +1128,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             publish => Assert.Equal(
                 [
                     "publish", projectPath, "--configuration", "Release", "/t:PublishContainer",
-                    "/p:ContainerRepository=program", "/p:ContainerImageTag=latest",
-                    "/p:LocalRegistry=Docker", runtimeIdentifiersArgument, containerRuntimeIdentifiersArgument
+                    "--property:ContainerRepository=program", "--property:ContainerImageTag=latest",
+                    "--property:LocalRegistry=Docker", runtimeIdentifiersArgument, containerRuntimeIdentifiersArgument
                 ],
                 publish.ArgumentList),
             query => Assert.Equal(
@@ -1176,6 +1177,72 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 Assert.Equal("linux-x64;linux-arm64", properties.GetProperty("ContainerRuntimeIdentifiers").GetString());
                 Assert.Equal("/release-app", properties.GetProperty("ContainerWorkingDirectory").GetString());
             }
+        }
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_DynamicPropertiesSurviveMsBuildParsing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(name: "Docker"));
+
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.csproj");
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "archive;100%.tar");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.OutputPath = outputPath;
+                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
+            });
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+
+        var publish = Assert.Single(processRunner.ProcessSpecs);
+        var propertyArguments = publish.ArgumentList!
+            .Where(static argument => argument.StartsWith("--property:", StringComparison.Ordinal))
+            .ToArray();
+        var outputArgument = Assert.Single(
+            propertyArguments,
+            static argument => argument.StartsWith("--property:ContainerArchiveOutputPath=", StringComparison.Ordinal));
+        Assert.Contains("%3B", outputArgument);
+        Assert.Contains("%25", outputArgument);
+
+        // MSBuild performs a second parsing pass over property switches. Use a project with no SDK
+        // or restore to verify that every emitted value survives that pass unchanged.
+        var probePath = Path.Combine(workspace.WorkspaceRoot.FullName, "properties.proj");
+        await File.WriteAllTextAsync(probePath, "<Project />", TestContext.Current.CancellationToken);
+        var probe = new ProcessSpec(DotnetFileAppProcess.ResolvedExecutablePath)
+        {
+            ArgumentList =
+            [
+                "msbuild", probePath, "-nologo",
+                "-getProperty:ContainerRepository,ContainerImageTag,LocalRegistry,ContainerArchiveOutputPath,RuntimeIdentifier,ContainerRuntimeIdentifier",
+                .. propertyArguments
+            ],
+            WorkingDirectory = workspace.WorkspaceRoot.FullName,
+            ThrowOnNonZeroReturnCode = true
+        };
+        var (pendingResult, processDisposable) = ProcessUtil.Run(probe);
+        await using (processDisposable)
+        {
+            var result = await pendingResult.WaitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+            Assert.Equal(0, result.ExitCode);
+            using var document = JsonDocument.Parse(string.Join(Environment.NewLine, result.ProcessOutput));
+            var properties = document.RootElement.GetProperty("Properties");
+            Assert.Equal("program", properties.GetProperty("ContainerRepository").GetString());
+            Assert.Equal("latest", properties.GetProperty("ContainerImageTag").GetString());
+            Assert.Equal("Docker", properties.GetProperty("LocalRegistry").GetString());
+            Assert.Equal(outputPath, properties.GetProperty("ContainerArchiveOutputPath").GetString());
+            Assert.Equal("linux-x64", properties.GetProperty("RuntimeIdentifier").GetString());
+            Assert.Equal("linux-x64", properties.GetProperty("ContainerRuntimeIdentifier").GetString());
         }
     }
 

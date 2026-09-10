@@ -254,11 +254,22 @@ internal sealed class ResourceContainerImageManager(
 
     public async Task BuildImagesAsync(IEnumerable<IResource> resources, CancellationToken cancellationToken = default)
     {
-        var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         logger.LogInformation("Starting to build container images");
 
+        var resourcesToBuild = resources
+            .Where(static resource => !resource.HasPrebuiltContainerImage())
+            .ToList();
+        if (resourcesToBuild.Count == 0)
+        {
+            logger.LogDebug("Building container images completed");
+            return;
+        }
+
+        var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
+
         // Only check container runtime health if there are resources that need it
-        if (await ResourcesRequireContainerRuntimeAsync(resources, cancellationToken).ConfigureAwait(false))
+        if (await ResourcesRequireContainerRuntimeAsync(resourcesToBuild, cancellationToken).ConfigureAwait(false))
         {
             logger.LogDebug("Checking {ContainerRuntimeName} health", containerRuntime.Name);
 
@@ -273,7 +284,7 @@ internal sealed class ResourceContainerImageManager(
             logger.LogDebug("{ContainerRuntimeName} is healthy", containerRuntime.Name);
         }
 
-        foreach (var resource in resources)
+        foreach (var resource in resourcesToBuild)
         {
             // TODO: Consider parallelizing this.
             await BuildImageAsync(resource, cancellationToken).ConfigureAwait(false);
@@ -284,6 +295,16 @@ internal sealed class ResourceContainerImageManager(
 
     public async Task BuildImageAsync(IResource resource, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (resource.HasPrebuiltContainerImage())
+        {
+            logger.LogDebug(
+                "Resource {ResourceName} already has a container image associated and no build annotation. Skipping build.",
+                resource.Name);
+            return;
+        }
+
         if (resource.SupportsDotnetProgramPublishing())
         {
             using var result = await BuildDotnetProgramImageAsync(
@@ -342,16 +363,7 @@ internal sealed class ResourceContainerImageManager(
                 cancellationToken).ConfigureAwait(false);
             return;
         }
-        else if (resource.TryGetLastAnnotation<ContainerImageAnnotation>(out var _))
-        {
-            // This resource already has a container image associated with it so no build is needed.
-            logger.LogDebug("Resource {ResourceName} already has a container image associated and no build annotation. Skipping build.", resource.Name);
-            return;
-        }
-        else
-        {
-            throw new NotSupportedException($"The resource '{resource.Name}' of type '{resource.GetType().Name}' is not supported.");
-        }
+        throw new NotSupportedException($"The resource '{resource.Name}' of type '{resource.GetType().Name}' is not supported.");
     }
 
     async Task<DotnetProgramImageBuildResult> IDotnetProgramContainerImageManager.BuildDotnetProgramImageAsync(
@@ -475,18 +487,18 @@ internal sealed class ResourceContainerImageManager(
             "--configuration",
             "Release",
             "/t:PublishContainer",
-            $"/p:ContainerRepository={options.LocalImageName}",
-            $"/p:ContainerImageTag={options.LocalImageTag}"
+            MsBuildResponseFileFactory.CreatePropertyArgument("ContainerRepository", options.LocalImageName),
+            MsBuildResponseFileFactory.CreatePropertyArgument("ContainerImageTag", options.LocalImageTag)
         };
 
         if (GetLocalRegistryName(containerRuntime) is string localRegistry)
         {
-            arguments.Add($"/p:LocalRegistry={localRegistry}");
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("LocalRegistry", localRegistry));
         }
 
         if (!string.IsNullOrEmpty(options.OutputPath))
         {
-            arguments.Add($"/p:ContainerArchiveOutputPath={options.OutputPath}");
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerArchiveOutputPath", options.OutputPath));
         }
 
         if (options.ImageFormat is not null)
@@ -497,7 +509,7 @@ internal sealed class ResourceContainerImageManager(
                 ContainerImageFormat.Oci => "OCI",
                 _ => throw new ArgumentOutOfRangeException(nameof(options), options.ImageFormat, "Invalid container image format")
             };
-            arguments.Add($"/p:ContainerImageFormat={format}");
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerImageFormat", format));
         }
 
         AddTargetPlatformArguments(arguments, options.TargetPlatform);
@@ -505,7 +517,7 @@ internal sealed class ResourceContainerImageManager(
         if (resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation) &&
             baseImageAnnotation.RuntimeImage is string baseImage)
         {
-            arguments.Add($"/p:ContainerBaseImage={baseImage}");
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerBaseImage", baseImage));
         }
 
         if (buildContext.ResponseFile is not null)
@@ -773,8 +785,8 @@ internal sealed class ResourceContainerImageManager(
         }
         else
         {
-            arguments.Add($"/p:RuntimeIdentifier={runtimeIdentifiers}");
-            arguments.Add($"/p:ContainerRuntimeIdentifier={runtimeIdentifiers}");
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("RuntimeIdentifier", runtimeIdentifiers));
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerRuntimeIdentifier", runtimeIdentifiers));
         }
     }
 
@@ -930,6 +942,11 @@ internal sealed class ResourceContainerImageManager(
     {
         foreach (var resource in resources)
         {
+            if (resource.HasPrebuiltContainerImage())
+            {
+                continue;
+            }
+
             // Dockerfile resources always need container runtime
             if (resource.TryGetLastAnnotation<ContainerImageAnnotation>(out _) &&
                 resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _))
