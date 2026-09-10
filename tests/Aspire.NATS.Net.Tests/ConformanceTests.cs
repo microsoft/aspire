@@ -70,7 +70,7 @@ public class ConformanceTests : ConformanceTests<INatsConnection, NatsClientSett
         => options.DisableTracing = !enabled;
 
     protected override void SetMetrics(NatsClientSettings options, bool enabled)
-        => options.DisableMetrics = !enabled;
+        => throw new NotImplementedException();
 
     protected override string ValidJsonConfig => """
                                                  {

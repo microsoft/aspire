@@ -185,17 +185,7 @@ public static class AspireNatsClientExtensions
                 .AddOpenTelemetry()
                 .WithTracing(tracer =>
                 {
-                    tracer.AddSource(NatsTelemetry.SourceName);
-                });
-        }
-
-        if (!settings.DisableMetrics)
-        {
-            builder.Services
-                .AddOpenTelemetry()
-                .WithMetrics(meter =>
-                {
-                    meter.AddMeter(NatsTelemetry.SourceName);
+                    tracer.AddSource("NATS.Net");
                 });
         }
     }

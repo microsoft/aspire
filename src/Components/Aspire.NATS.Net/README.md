@@ -1,6 +1,6 @@
 # Aspire.NATS.Net library
 
-Registers [INatsClient](https://nats-io.github.io/nats.net/api/NATS.Client.Core.INatsClient.html) and [INatsConnection](https://nats-io.github.io/nats.net/api/NATS.Client.Core.INatsConnection.html) in the DI container for connecting to a NATS server. Enables corresponding health check, metrics, logging and telemetry.
+Registers [INatsClient](https://nats-io.github.io/nats.net/api/NATS.Client.Core.INatsClient.html) and [INatsConnection](https://nats-io.github.io/nats.net/api/NATS.Client.Core.INatsConnection.html) in the DI container for connecting to a NATS server. Enables corresponding health check, logging and telemetry.
 
 ## Getting started
 
