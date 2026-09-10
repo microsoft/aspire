@@ -95,6 +95,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
       "pr_number": 19985,
       "observed_at": "2026-09-08T20:21:19Z"
+    },
+    {
+      "run_id": 34432786645,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34432786645",
+      "job": "Tests / Package tests - macOS (class, Aspire.Templates.Tests, Templates-XUnit_V3MTP_NewUpAndBuildSupportP... / Templates-XUnit_V3MTP_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "pr_number": 19999,
+      "observed_at": "2026-09-10T04:16:16Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19576"

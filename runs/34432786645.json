@@ -1,0 +1,51 @@
+{
+  "run_id": 34432786645,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34432786645",
+  "analyzed_at": "2026-09-10T04:16:16Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19999,
+    "title": "Update to .NET 11 RC1 SDK",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "update-dotnet-11-rc1-sdk",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19999"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Package tests - macOS (class, Aspire.Templates.Tests, Templates-XUnit_V3MTP_NewUpAndBuildSupportP... / Templates-XUnit_V3MTP_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "id": 102733676383,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34432786645/job/102733676383",
+      "classification": "transient-infra",
+      "reason": "Job failed on 'Upload logs, and test results' step with 'Failed to CreateArtifact: Unable to make request: ETIMEDOUT'. This is a GitHub Actions artifact-upload network timeout unrelated to PR changes (which only touch .NET SDK version pinning and unrelated code).",
+      "failed_steps": ["Upload logs, and test results"]
+    },
+    {
+      "name": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-LocalhostTldHostnameTests, Temp... / Templates-LocalhostTldHostnameTests (windows-latest)",
+      "id": 102733711158,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34432786645/job/102733711158",
+      "classification": "transient-infra",
+      "reason": "Job failed on the 'Set up .NET Core' step with a 'read ECONNRESET' network error, an infrastructure/network reset issue while downloading the .NET SDK, unrelated to the PR's version bump content itself.",
+      "failed_steps": ["Set up .NET Core"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 102733821358,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34432786645/job/102733821358",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic 'Process completed with exit code 1' on 'Run extension E2E tests' step, with no job logs available and no TRX test failures extracted. This matches a previously identified recurring flaky failure pattern for this specific shard (VS Code extension E2E Windows dynamic-debug-configuration) that has occurred across many unrelated PRs. The PR only changes .NET SDK versioning and unrelated hosting/test code, not the VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "artifact-upload-etimedout",
+    "setup-dotnet-core-econnreset",
+    "vscode-e2e-windows-dynamic-debug-configuration-flaky"
+  ]
+}
