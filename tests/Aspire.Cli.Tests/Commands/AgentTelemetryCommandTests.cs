@@ -264,7 +264,13 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         {
             ShouldListenTo = source => source.Name == sourceName,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activity => captured.Add(activity)
+            ActivityStopped = activity =>
+            {
+                if (activity.OperationName == TelemetryConstants.Activities.AgentTelemetry)
+                {
+                    captured.Add(activity);
+                }
+            }
         };
         ActivitySource.AddActivityListener(listener);
 

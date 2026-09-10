@@ -10,15 +10,19 @@ namespace Aspire.Hosting
 {
     public static partial class GitHubModelsExtensions
     {
+        [System.Obsolete("GitHub Models is no longer available to new customers, so the Aspire GitHub Models integration is deprecated and will be removed in a future release. See https://github.com/microsoft/aspire/issues/18402 for details.")]
         [AspireExportIgnore(Reason = "GitHubModel is a .NET-specific descriptor type not compatible with ATS. Use the GitHubModelName enum-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, string name, GitHub.GitHubModel model, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? organization = null) { throw null; }
 
+        [System.Obsolete("GitHub Models is no longer available to new customers, so the Aspire GitHub Models integration is deprecated and will be removed in a future release. See https://github.com/microsoft/aspire/issues/18402 for details.")]
         [AspireExportIgnore(Reason = "The polyglot overload uses the GitHubModelName enum instead. See the internal AddGitHubModel(GitHubModelName) overload.")]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, string name, string model, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? organization = null) { throw null; }
 
+        [System.Obsolete("GitHub Models is no longer available to new customers, so the Aspire GitHub Models integration is deprecated and will be removed in a future release. See https://github.com/microsoft/aspire/issues/18402 for details.")]
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> WithApiKey(this ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> apiKey) { throw null; }
 
+        [System.Obsolete("GitHub Models is no longer available to new customers, so the Aspire GitHub Models integration is deprecated and will be removed in a future release. See https://github.com/microsoft/aspire/issues/18402 for details.")]
         [AspireExport("enableHealthCheck")]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> WithHealthCheck(this ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> builder) { throw null; }
     }
@@ -26,6 +30,7 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.GitHub
 {
+    [System.Obsolete("GitHub Models is no longer available to new customers, so the Aspire GitHub Models integration is deprecated and will be removed in a future release. See https://github.com/microsoft/aspire/issues/18402 for details.")]
     public partial class GitHubModel
     {
         public required string Id { get { throw null; } init { } }
@@ -131,6 +136,7 @@ namespace Aspire.Hosting.GitHub
 
 namespace Aspire.Hosting.GitHub.Models
 {
+    [System.Obsolete("GitHub Models is no longer available to new customers, so the Aspire GitHub Models integration is deprecated and will be removed in a future release. See https://github.com/microsoft/aspire/issues/18402 for details.")]
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Model = {Model}")]
     public partial class GitHubModelResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {

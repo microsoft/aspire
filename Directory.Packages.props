@@ -33,7 +33,7 @@
     <PackageVersion Include="Azure.Storage.Files.DataLake" Version="12.26.0" />
     <PackageVersion Include="Azure.Storage.Files.Shares" Version="12.26.0" />
     <PackageVersion Include="Azure.Storage.Queues" Version="12.26.0" />
-    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.61.0" />
+    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.62.1" />
     <PackageVersion Include="Microsoft.Azure.Kusto.Data" Version="14.1.2" />
     <PackageVersion Include="Microsoft.Azure.Kusto.Ingest" Version="14.1.2" />
     <PackageVersion Include="Microsoft.Azure.SignalR" Version="1.33.0" />
@@ -125,7 +125,7 @@
     <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.17.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
-    <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.12" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="$(MicrosoftFluentUIAspNetCoreComponentsVersion)" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.0.0-rc.6.26241.1" />
     <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
@@ -147,7 +147,7 @@
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
     <PackageVersion Include="Spectre.Console" Version="0.57.2" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.1" />
-    <PackageVersion Include="System.IO.Hashing" Version="10.0.11" />
+    <PackageVersion Include="System.IO.Hashing" Version="10.0.12" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <PackageVersion Include="StreamJsonRpc" Version="2.25.29" />
