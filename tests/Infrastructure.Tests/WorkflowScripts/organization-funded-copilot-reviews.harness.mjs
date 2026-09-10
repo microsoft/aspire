@@ -45,8 +45,51 @@ const writes = [];
 const calls = [];
 const messages = [];
 const getCounts = new Map();
+let authorPermission = { permission: 'write', role_name: 'write' };
+let permissionChecks = 0;
 
 switch (scenario) {
+    case 'author-read':
+    case 'author-none':
+    case 'author-triage':
+    case 'external-author':
+    case 'external-author-maintainer-push':
+    case 'external-author-scheduled':
+    case 'external-author-manual':
+    case 'external-author-dry-run':
+        authorPermission = { permission: scenario === 'author-none' ? 'none' : 'read', role_name: scenario === 'author-triage' ? 'triage' : 'read' };
+        context.actor = 'maintainer';
+        pull.author_association = 'MEMBER';
+        if (scenario === 'external-author-scheduled') {
+            context.eventName = 'schedule';
+        } else if (scenario === 'external-author-manual') {
+            context.eventName = 'workflow_dispatch';
+        } else if (scenario === 'external-author-dry-run') {
+            env.COPILOT_REVIEW_MODE = 'dry-run';
+        }
+        expectedDecision = 'PR author does not have repository write access';
+        break;
+    case 'author-maintain':
+    case 'author-admin':
+    case 'author-custom-write':
+        authorPermission = { permission: scenario === 'author-admin' ? 'admin' : 'write', role_name: scenario === 'author-maintain' ? 'maintain' : 'custom-role' };
+        expectedWrites = 1;
+        break;
+    case 'author-unknown-permission':
+        authorPermission = { permission: 'unexpected' };
+        expectedError = 'Unexpected author permission';
+        break;
+    case 'author-missing':
+        pull.user = null;
+        expectedError = 'Missing author login';
+        break;
+    case 'author-permission-revoked':
+        expectedDecision = 'PR author does not have repository write access';
+        break;
+    case 'api-permission-error':
+        failEndpoint = 'getCollaboratorPermissionLevel';
+        expectedError = 'API unavailable';
+        break;
     case 'default-dry-run':
         env.COPILOT_REVIEW_MODE = '';
         expectedDecision = 'Dry run: would request';
@@ -115,12 +158,13 @@ switch (scenario) {
         }
         expectedWrites = 1;
         break;
-    case 'external-author':
     case 'bot-author':
     case 'release-branch':
     case 'metadata-injection':
         if (scenario === 'bot-author') {
             pull.user = { login: 'dependabot[bot]', type: 'Bot' };
+            authorPermission = { permission: 'none', role_name: '' };
+            expectedDecision = 'PR author does not have repository write access';
         }
         if (scenario === 'release-branch') {
             pull.base.ref = 'release/13.5';
@@ -129,13 +173,14 @@ switch (scenario) {
             pull.title = pull.body = pull.head.ref = '${{ secrets.TOKEN }}"; throw new Error("injected"); //';
             pull.user.login = '<script>alert(1)</script>';
         }
-        expectedWrites = 1;
+        expectedWrites = scenario === 'bot-author' ? 0 : 1;
         break;
     case 'dependabot-scheduled':
     case 'dependabot-manual':
         pull.user = { login: 'dependabot[bot]', type: 'Bot' };
         context.eventName = scenario === 'dependabot-scheduled' ? 'schedule' : 'workflow_dispatch';
-        expectedWrites = 1;
+        authorPermission = { permission: 'none', role_name: '' };
+        expectedDecision = 'PR author does not have repository write access';
         break;
     case 'draft':
     case 'draft-scheduled':
@@ -283,6 +328,16 @@ const pulls = {
         pull.requested_reviewers = [reviewer];
     }
 };
+const repos = {
+    getCollaboratorPermissionLevel: async (args) => {
+        request('getCollaboratorPermissionLevel', args);
+        assert.equal(args.username, pull.user.login);
+        permissionChecks++;
+        return { data: scenario === 'author-permission-revoked' && permissionChecks > 1
+            ? { permission: 'read', role_name: 'read' }
+            : authorPermission };
+    }
+};
 const paginate = Object.assign(
     async (endpoint, args) => {
         assert.equal(endpoint, pulls.listReviews);
@@ -310,7 +365,7 @@ async function execute() {
     // Execute the exact YAML-extracted script with only mocked APIs and env.
     // No production token, process object, or network implementation is exposed.
     await runInNewContext(`(async () => { ${source}\n })()`, {
-        github: { rest: { pulls }, paginate },
+        github: { rest: { pulls, repos }, paginate },
         core: { info: (message) => messages.push(message), summary },
         context,
         Date: class extends Date {
@@ -348,7 +403,7 @@ if (scenario === 'disabled' || scenario === 'pilot-other-pr' || scenario === 'in
     assert.deepEqual(calls, []);
 }
 if (scenario === 'pilot-scheduled') {
-    assert.deepEqual(calls, ['get', 'listReviews', 'get', 'requestReviewers']);
+    assert.deepEqual(calls, ['get', 'getCollaboratorPermissionLevel', 'listReviews', 'get', 'getCollaboratorPermissionLevel', 'requestReviewers']);
 }
 if (scenario.startsWith('scheduled-') && scenario !== 'scheduled-recent') {
     // Stale PRs and invalid activity metadata must never reach review-history

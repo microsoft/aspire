@@ -99,6 +99,22 @@ jobs:
             function isCopilot(user) {
               return user?.type === 'Bot' && user.login === reviewer;
             }
+            async function authorCanWrite(pull) {
+              if (typeof pull.user?.login !== 'string' || pull.user.login.length === 0) {
+                throw new Error(`Missing author login for PR #${pull.number}.`);
+              }
+              // Check the author, not the triggering actor or author_association:
+              // a maintainer pushing to an external PR must not opt its author in.
+              // The API maps maintain to write and triage to read, including custom roles.
+              // https://docs.github.com/en/rest/collaborators/collaborators#get-repository-permissions-for-a-user
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner, repo, username: pull.user.login
+              });
+              if (!['admin', 'write', 'read', 'none'].includes(data.permission)) {
+                throw new Error(`Unexpected author permission for PR #${pull.number}.`);
+              }
+              return data.permission === 'admin' || data.permission === 'write';
+            }
             function validatePull(pull, number) {
               if (pull.number !== number || pull.base?.repo?.full_name !== `${owner}/${repo}` ||
                   !/^[a-f0-9]{40}$/.test(pull.head?.sha ?? '')) {
@@ -146,6 +162,10 @@ jobs:
                 record(number, sha, reason);
                 return;
               }
+              if (!await authorCanWrite(pull)) {
+                record(number, sha, 'Skipped: PR author does not have repository write access.');
+                return;
+              }
               if (pull.requested_reviewers.some(isCopilot)) {
                 record(number, sha, 'Deferred: Copilot review is pending.');
                 return;
@@ -165,6 +185,11 @@ jobs:
               if (ineligibleReason(current) || current.head.sha !== sha ||
                   current.base.ref !== pull.base.ref || current.requested_reviewers.some(isCopilot)) {
                 record(number, sha, 'Deferred: PR changed during reconciliation.');
+                return;
+              }
+              // Do not reuse an earlier permission result across the review-history lookup.
+              if (!await authorCanWrite(current)) {
+                record(number, sha, 'Skipped: PR author does not have repository write access.');
                 return;
               }
               if (mode === 'dry-run') {

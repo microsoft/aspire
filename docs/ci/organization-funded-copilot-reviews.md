@@ -4,8 +4,9 @@ The `Organization-funded Copilot reviews` workflow requests Copilot code review
 (CCR) using an installation token for `aspire-repo-bot`, not the workflow's
 `GITHUB_TOKEN` or a contributor's personal token. Organization funding is the
 goal, not a verified billing guarantee.
-It covers open PRs (including drafts) targeting `main` or `release/**`, including forks
-and bot-authored PRs. There is no author permission or license filter.
+It covers open PRs (including drafts and forks) targeting `main` or `release/**`
+only when the PR author currently has write, maintain, or admin access to
+`microsoft/aspire`. There is no license filter or guarantee of available quota.
 
 **The default is dry-run only when the mode variable is unset. If it is already
 `enabled`, merging this change switches subsequent runs to the App immediately.
@@ -44,6 +45,21 @@ run separately when stopping an incident.
 
 ## Trigger and reconciliation behavior
 
+All processing paths (PR events, scheduled scans, manual dispatch, and dry-run)
+check the PR author's current effective repository permission through GitHub's
+collaborator-permission API. Read, triage, and no-access authors are skipped,
+including bot authors without write access. A maintainer pushing a commit to
+someone else's PR or manually dispatching the workflow does not bypass this
+gate. Organization membership and `author_association` are not used as proxies
+for write access. Custom roles use the API's effective base permission, which
+maps maintain to write and triage to read.
+
+The permission is checked again after fetching review history and current PR
+state, before a request (or dry-run decision). Lookup failures or unexpected
+permission values fail visibly without requesting a review. GitHub offers no
+atomic operation combining a permission check and review request, so a permission
+change concurrent with the final request can still race this check.
+
 PR creation and new pushes trigger a metadata-only `pull_request_target` run,
 including for draft PRs. Reopening a PR or marking a draft ready does not trigger
 an additional run. Manual dispatch on `main` and a scheduled
@@ -52,11 +68,10 @@ scan every 15 minutes reconcile open PRs. GitHub can delay scheduled runs.
 `pull_request_target` runs initiated by `dependabot[bot]` skip the entire job,
 before App token creation, because [Dependabot PR events can lack Actions
 secrets](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-on-actions#restrictions-when-dependabot-triggers-events).
-Dependabot-authored PRs remain eligible for scheduled scans and maintainer
-manual dispatches, which use their own execution context and credentials.
-Their reviews therefore normally wait for the next scan rather than running
-immediately on creation or push. Do not copy the App private key into Dependabot
-secrets; it is not needed for this recovery path.
+Scheduled scans and maintainer manual dispatches use their own execution
+context and credentials, but still enforce the author-permission gate:
+Dependabot PRs without repository write access are skipped there as well.
+Do not copy the App private key into Dependabot secrets.
 
 Scheduled scans skip PRs with no activity in the last 14 days, using GitHub's
 `updated_at` timestamp (not the PR creation date or latest commit date). The
@@ -125,8 +140,8 @@ removes someone else's review request to force a retry.
 Dry-run uses a read-only App token and never calls the write endpoint. It still
 requires the App secrets for token creation; disabled mode skips the entire job.
 The single-PR scope and kill switch are rollout controls, not a hard spending
-limit. Once enabled for everyone, contributors can generate potentially billable
-reviews by pushing changes. Configure appropriate budgets/alerts and monitor
+limit. Eligible authors can generate potentially billable reviews by pushing
+changes. Configure appropriate budgets/alerts and monitor
 usage; reconsider cadence if this becomes expensive or is abused.
 
 ## Billing and rollout
@@ -143,8 +158,11 @@ changes the requesting identity, not a documented billing-account selector.
 
 GitHub documents
 [requesting the Copilot reviewer through REST](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review).
-Actual execution, quota enforcement, and billing under Microsoft's policies must
-be confirmed separately before broad rollout.
+An App-token retry on #17949 also received a quota-limit rejection. Restricting
+automation to authors with write access avoids automatically opting other
+contributors into potentially personal usage; it does not fix attribution or
+ensure eligible authors have budget. Actual execution, quota enforcement, and
+billing under Microsoft's policies must be confirmed separately before broad rollout.
 
 1. Before merging, set `COPILOT_REVIEW_MODE=dry-run` and
    `COPILOT_REVIEW_PR_NUMBER` to an agreed team-owned pilot PR. Cancel existing
@@ -163,7 +181,7 @@ be confirmed separately before broad rollout.
 5. Have a billing administrator confirm organization attribution and no
    contributor allowance consumption for these bot-requested reviews. An API
    success or a posted review alone is not proof of billing attribution.
-6. Clear the pilot variable to cover all eligible open PRs. Keep human approval
+6. Clear the pilot variable to cover all eligible write-access authors' open PRs. Keep human approval
    requirements unchanged and monitor spend and failed workflow runs.
 
 If the App cannot initiate CCR or attribution remains unclear, leave writes
