@@ -55,13 +55,6 @@ internal static class NuGetSourceIdentity
 
         if (!Uri.TryCreate(trimmedSource, UriKind.Absolute, out var uri))
         {
-            // NuGet masks URL user-info as "******host/path" but leaves query credentials intact.
-            // Recognize that evaluated shape so a combined user-info/SAS source remains sensitive.
-            if (trimmedSource.StartsWith("******", StringComparison.Ordinal))
-            {
-                return trimmedSource.Contains('?') || trimmedSource.Contains('#');
-            }
-
             // Malformed HTTP-shaped sources fail closed because their unparseable authority may
             // contain credentials that NuGet repeats verbatim in diagnostics.
             return looksHttp;

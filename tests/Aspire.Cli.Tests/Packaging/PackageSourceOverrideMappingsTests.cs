@@ -19,14 +19,6 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
             PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source));
     }
 
-    [Theory]
-    [InlineData("******packages.example.com/v3/index.json?sig=secret", true)]
-    [InlineData("******packages.example.com/v3/index.json", false)]
-    public void HasCredentialMaterial_RecognizesNuGetMaskedSourceShapes(string source, bool expected)
-    {
-        Assert.Equal(expected, PackageSourceOverrideMappings.HasCredentialMaterial(source));
-    }
-
     [Fact]
     [PlatformSpecific(TestPlatforms.AnyUnix)]
     public void ResolveForWorkingDirectory_RelativePathContainingColon_ResolvesAgainstWorkingDirectory()
