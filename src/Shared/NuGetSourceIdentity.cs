@@ -75,19 +75,6 @@ internal static class NuGetSourceIdentity
                 !string.IsNullOrEmpty(uri.Fragment));
     }
 
-    public static bool CanRedactCredentialMaterialWithoutOriginalValue(string source)
-    {
-        var trimmedSource = source.Trim();
-        if (trimmedSource.StartsWith("******", StringComparison.Ordinal))
-        {
-            return trimmedSource.Contains('?') || trimmedSource.Contains('#');
-        }
-
-        return Uri.TryCreate(trimmedSource, UriKind.Absolute, out var uri) &&
-            (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
-                uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
-    }
-
     private static string NormalizePath(string path)
     {
         var normalized = Path.GetFullPath(path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));

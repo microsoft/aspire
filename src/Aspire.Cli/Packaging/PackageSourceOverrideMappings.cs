@@ -51,6 +51,7 @@ internal static class PackageSourceOverrideMappings
         string? packagePattern = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
+        ThrowIfCredentialBearingSourceOverride(packageSourceOverride);
 
         if (string.IsNullOrWhiteSpace(packagePattern))
         {
@@ -122,6 +123,7 @@ internal static class PackageSourceOverrideMappings
     public static PackageMapping[] CreateForSourceOnlyOperations(string packageSourceOverride)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
+        ThrowIfCredentialBearingSourceOverride(packageSourceOverride);
 
         // NuGet package search queries every configured source without applying package source
         // mapping. Keep the temporary config exclusive to --source so discovery and installation
@@ -135,6 +137,16 @@ internal static class PackageSourceOverrideMappings
 
     public static bool HasCredentialMaterial(string source)
         => NuGetSourceIdentity.HasCredentialMaterial(source);
+
+    private static void ThrowIfCredentialBearingSourceOverride(string source)
+    {
+        if (HasCredentialMaterial(source))
+        {
+            throw new ArgumentException(
+                "Credential-bearing HTTP sources cannot be supplied through --source. Configure credentials through NuGet instead.",
+                nameof(source));
+        }
+    }
 
     public static string? GetNormalizedLocalDirectory(string source)
     {

@@ -20,6 +20,7 @@ namespace Aspire.Cli.NuGet;
 internal sealed record NuGetSettingsInfo(
     IReadOnlyList<string> ConfigPaths,
     IReadOnlyList<NuGetSourceInfo> Sources,
+    IReadOnlyList<string> SensitiveSourceValues,
     bool PackageSourceMappingEnabled,
     IReadOnlyList<NuGetPackageSourceMappingInfo> PackageSourceMappings,
     IReadOnlyList<string> DisabledPackageSourceKeys,
@@ -29,9 +30,7 @@ internal sealed record NuGetSettingsInfo(
 internal sealed record NuGetSourceInfo(
     string Name,
     string Identity,
-    bool IsEnabled,
-    bool HasCredentialMaterial,
-    bool RequiresFullOutputSuppression);
+    bool IsEnabled);
 
 internal sealed record NuGetPackageSourceMappingInfo(string SourceKey, string[] Patterns);
 
@@ -62,7 +61,6 @@ internal interface INuGetService
     /// <param name="nugetConfigOverlayCacheIdentity">A stable cache identity for the first config path when it is an invocation-scoped overlay.</param>
     /// <param name="additionalSensitiveSources">Additional source values that must be redacted from restore output.</param>
     /// <param name="globalPackagesFolderOverride">An optional global packages folder override for the restore process.</param>
-    /// <param name="suppressFailureOutput">Whether restore and manifest failure output must be discarded because it can contain credential material that cannot be safely recognized without the original value.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The path to the package probe manifest.</returns>
     Task<string> RestorePackagesAsync(
@@ -75,7 +73,6 @@ internal interface INuGetService
         string? nugetConfigOverlayCacheIdentity = null,
         IEnumerable<string>? additionalSensitiveSources = null,
         string? globalPackagesFolderOverride = null,
-        bool suppressFailureOutput = false,
         CancellationToken ct = default);
 }
 
@@ -121,7 +118,6 @@ internal sealed class BundleNuGetService : INuGetService
         string? nugetConfigOverlayCacheIdentity = null,
         IEnumerable<string>? additionalSensitiveSources = null,
         string? globalPackagesFolderOverride = null,
-        bool suppressFailureOutput = false,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
@@ -269,12 +265,7 @@ internal sealed class BundleNuGetService : INuGetService
         killOnParentExit: true,
         ct: ct);
 
-        var redactedError = suppressFailureOutput
-            ? string.Empty
-            : PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
-        var redactedOutput = suppressFailureOutput
-            ? string.Empty
-            : PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
+        var redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
 
         // NuGet errors often repeat the feed URL. Redact helper output separately from the
         // invocation arguments so SAS tokens and URL user-info cannot reach logs or exceptions.
@@ -285,6 +276,7 @@ internal sealed class BundleNuGetService : INuGetService
 
         if (exitCode != 0)
         {
+            var redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
             _logger.LogError("Package restore failed with exit code {ExitCode}", exitCode);
             _logger.LogError("Package restore stderr: {Error}", redactedError);
             _logger.LogError("Package restore stdout: {Output}", redactedOutput);
@@ -326,12 +318,7 @@ internal sealed class BundleNuGetService : INuGetService
         killOnParentExit: true,
         ct: ct);
 
-        redactedError = suppressFailureOutput
-            ? string.Empty
-            : PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
-        redactedOutput = suppressFailureOutput
-            ? string.Empty
-            : PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
+        redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
         if (!string.IsNullOrWhiteSpace(redactedError))
         {
             _logger.LogDebug("NuGetHelper manifest stderr: {Error}", redactedError);
@@ -339,6 +326,7 @@ internal sealed class BundleNuGetService : INuGetService
 
         if (exitCode != 0)
         {
+            var redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
             _logger.LogError("Manifest creation failed with exit code {ExitCode}", exitCode);
             _logger.LogError("Manifest creation stderr: {Error}", redactedError);
             _logger.LogError("Manifest creation stdout: {Output}", redactedOutput);
@@ -408,10 +396,12 @@ internal sealed class BundleNuGetService : INuGetService
                         ?? throw new InvalidDataException("The NuGet settings response contained a source without a name."),
                     element.GetProperty("Identity").GetString()
                         ?? throw new InvalidDataException("The NuGet settings response contained a source without an identity."),
-                    element.GetProperty("IsEnabled").GetBoolean(),
-                    element.GetProperty("HasCredentialMaterial").GetBoolean(),
-                    element.GetProperty("RequiresFullOutputSuppression").GetBoolean()))
+                    element.GetProperty("IsEnabled").GetBoolean()))
                 .ToArray();
+            var sensitiveSourceValues = ReadStringArray(
+                document.RootElement,
+                "SensitiveSourceValues",
+                "The NuGet settings response contained a null sensitive source value.");
             var packageSourceMappingEnabled = document.RootElement
                 .GetProperty("PackageSourceMappingEnabled")
                 .GetBoolean();
@@ -439,6 +429,7 @@ internal sealed class BundleNuGetService : INuGetService
             return new NuGetSettingsInfo(
                 configPaths,
                 sources,
+                sensitiveSourceValues,
                 packageSourceMappingEnabled,
                 packageSourceMappings,
                 disabledPackageSourceKeys,

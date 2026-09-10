@@ -41,9 +41,16 @@ internal static class SettingsCommand
             workingDirectory,
             configFileName: null,
             new XPlatMachineWideSetting());
-        var sources = new PackageSourceProvider(settings)
+        var packageSources = new PackageSourceProvider(settings)
             .LoadPackageSources()
+            .ToArray();
+        var sources = packageSources
             .Select(source => CreateSourceResult(source, identityKey))
+            .ToArray();
+        var sensitiveSourceValues = packageSources
+            .Select(static source => source.Source)
+            .Where(NuGetSourceIdentity.HasCredentialMaterial)
+            .Distinct(StringComparer.Ordinal)
             .ToArray();
         var packageSourceMappings = new PackageSourceMappingProvider(settings)
             .GetPackageSourceMappingItems()
@@ -80,6 +87,7 @@ internal static class SettingsCommand
         return new NuGetSettingsResult(
             settings.GetConfigFilePaths().ToArray(),
             sources,
+            sensitiveSourceValues,
             packageSourceMappings.Length > 0,
             packageSourceMappings,
             disabledPackageSourceKeys,
@@ -87,16 +95,10 @@ internal static class SettingsCommand
     }
 
     private static NuGetSourceResult CreateSourceResult(PackageSource source, byte[] identityKey)
-    {
-        var hasCredentialMaterial = NuGetSourceIdentity.HasCredentialMaterial(source.Source);
-        return new NuGetSourceResult(
+        => new(
             source.Name,
             NuGetSourceIdentity.Compute(source.Source, identityKey),
-            source.IsEnabled,
-            hasCredentialMaterial,
-            hasCredentialMaterial &&
-                !NuGetSourceIdentity.CanRedactCredentialMaterialWithoutOriginalValue(source.Source));
-    }
+            source.IsEnabled);
 
     private static byte[] ReadIdentityKey()
     {
@@ -126,6 +128,7 @@ internal static class SettingsCommand
 internal sealed record NuGetSettingsResult(
     string[] ConfigPaths,
     NuGetSourceResult[] Sources,
+    string[] SensitiveSourceValues,
     bool PackageSourceMappingEnabled,
     NuGetPackageSourceMappingResult[] PackageSourceMappings,
     string[] DisabledPackageSourceKeys,
@@ -134,9 +137,7 @@ internal sealed record NuGetSettingsResult(
 internal sealed record NuGetSourceResult(
     string Name,
     string Identity,
-    bool IsEnabled,
-    bool HasCredentialMaterial,
-    bool RequiresFullOutputSuppression);
+    bool IsEnabled);
 
 [JsonSerializable(typeof(NuGetConfigOverlayRequest))]
 [JsonSerializable(typeof(NuGetSettingsResult))]

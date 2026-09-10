@@ -1385,6 +1385,90 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommandUsesChannelMappingsWhenSearchingForSpecifiedVersion()
+    {
+        const string source = "https://packages.example.com/v3/index.json";
+        var selectedPackageVersion = string.Empty;
+        string? exactVersionNuGetConfig = null;
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [CreatePackage("Aspire.Hosting.Redis", "13.3.0")]),
+            GetPackageVersionsAsyncCallback = (_, _, _, nugetConfigFile, _, _) =>
+            {
+                exactVersionNuGetConfig = nugetConfigFile is null
+                    ? null
+                    : File.ReadAllText(nugetConfigFile.FullName);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [CreatePackage("Aspire.Hosting.Redis", "13.2.0")]);
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily",
+            PackageChannelQuality.Stable,
+            [new PackageMapping("Aspire*", source)],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "daily"
+            }
+            """);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+            };
+        });
+        var tsFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        tsFactory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            selectedPackageVersion = context.PackageVersion;
+            return Task.FromResult(true);
+        };
+        services.AddSingleton<IAppHostProjectFactory>(tsFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add redis --version 13.2.0");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("13.2.0", selectedPackageVersion);
+        Assert.NotNull(exactVersionNuGetConfig);
+        var config = XDocument.Parse(exactVersionNuGetConfig);
+        Assert.Equal(
+            source,
+            config.Root?
+                .Element("packageSources")?
+                .Elements("add")
+                .Single()
+                .Attribute("value")?
+                .Value);
+        Assert.Equal(
+            "Aspire*",
+            config.Root?
+                .Element("packageSourceMapping")?
+                .Element("packageSource")?
+                .Element("package")?
+                .Attribute("pattern")?
+                .Value);
+    }
+
+    [Fact]
     public async Task AddCommandInteractiveDoesNotPromptForVersionWhenSpecifiedVersionIsFoundViaExactMatchSearch()
     {
         var promptedForIntegration = false;
@@ -2078,6 +2162,28 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             Assert.True(searchConfig.HasClear);
             Assert.Equal([expectedSource], searchConfig.Sources);
         });
+    }
+
+    [Fact]
+    public async Task AddCommandRejectsCredentialBearingSourceBeforeDiscovery()
+    {
+        const string source = "https://user:secret@custom-nuget-source.test/v3/index.json";
+        var testInteractionService = new TestInteractionService();
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add redis --source {source}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Contains(AddCommandStrings.SourceWithCredentialsNotSupported, testInteractionService.DisplayedErrors);
     }
 
     [Fact]

@@ -112,6 +112,13 @@ internal sealed class AddCommand : BaseCommand
             var version = parseResult.GetValue(s_versionOption);
             var source = parseResult.GetValue(s_sourceOption);
             var includeAllIntegrations = parseResult.GetValue(s_allOption);
+            if (!string.IsNullOrWhiteSpace(source) &&
+                PackageSourceOverrideMappings.HasCredentialMaterial(source))
+            {
+                InteractionService.DisplayError(AddCommandStrings.SourceWithCredentialsNotSupported);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand);
+            }
+
             addActivity = _profilingTelemetry.StartAddCommand(integrationName, version, source, passedAppHostProjectFile);
 
             AppHostProjectSearchResult searchResult;
@@ -626,7 +633,7 @@ internal sealed class AddCommand : BaseCommand
                 var packages = await channel.GetPackageVersionsAsync(
                     package.Package.Id,
                     workingDirectory,
-                    sourceMappings,
+                    sourceMappings ?? channel.Mappings,
                     cancellationToken);
                 versions.AddRange(packages.Select(p => (FriendlyName: package.FriendlyName, Package: p, Channel: channel)));
             }

@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text;
-
 namespace Aspire.Cli.Utils;
 
 /// <summary>
@@ -78,6 +76,11 @@ internal static class PackageSourceRedactor
     /// </summary>
     public static string RedactOccurrences(string value, IReadOnlyList<string> sensitiveSources)
     {
+        if (string.IsNullOrEmpty(value) || sensitiveSources.Count == 0)
+        {
+            return value;
+        }
+
         var replacements = sensitiveSources
             .SelectMany(static source => GetDiagnosticSpellings(source)
                 .Select(spelling => (Spelling: spelling, Replacement: RedactForDisplay(source))))
@@ -89,53 +92,7 @@ internal static class PackageSourceRedactor
             value = value.Replace(spelling, replacement, StringComparison.Ordinal);
         }
 
-        return RedactCredentialBearingUrls(value);
-    }
-
-    /// <summary>
-    /// Redacts credential-bearing components from HTTP URLs without requiring the original
-    /// credential value.
-    /// </summary>
-    public static string RedactCredentialBearingUrls(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return value;
-        }
-
-        StringBuilder? builder = null;
-        var copyStart = 0;
-        var searchStart = 0;
-        while (TryFindSourceCandidate(value, searchStart, out var candidateStart))
-        {
-            var candidateEnd = candidateStart;
-            while (candidateEnd < value.Length && !IsSourceTerminator(value[candidateEnd]))
-            {
-                candidateEnd++;
-            }
-
-            var candidate = value[candidateStart..candidateEnd];
-            var replacement = candidate.StartsWith("******", StringComparison.Ordinal)
-                ? RedactMaskedSource(candidate)
-                : RedactForDisplay(candidate);
-            if (!string.Equals(candidate, replacement, StringComparison.Ordinal))
-            {
-                builder ??= new StringBuilder(value.Length);
-                builder.Append(value, copyStart, candidateStart - copyStart);
-                builder.Append(replacement);
-                copyStart = candidateEnd;
-            }
-
-            searchStart = candidateEnd;
-        }
-
-        if (builder is null)
-        {
-            return value;
-        }
-
-        builder.Append(value, copyStart, value.Length - copyStart);
-        return builder.ToString();
+        return value;
     }
 
     private static IEnumerable<string> GetDiagnosticSpellings(string source)
@@ -163,33 +120,4 @@ internal static class PackageSourceRedactor
         }
     }
 
-    private static bool TryFindSourceCandidate(string value, int startIndex, out int candidateStart)
-    {
-        var httpIndex = value.IndexOf("http://", startIndex, StringComparison.OrdinalIgnoreCase);
-        var httpsIndex = value.IndexOf("https://", startIndex, StringComparison.OrdinalIgnoreCase);
-        var maskedIndex = value.IndexOf("******", startIndex, StringComparison.Ordinal);
-
-        candidateStart = httpIndex;
-        if (candidateStart < 0 || httpsIndex >= 0 && httpsIndex < candidateStart)
-        {
-            candidateStart = httpsIndex;
-        }
-        if (candidateStart < 0 || maskedIndex >= 0 && maskedIndex < candidateStart)
-        {
-            candidateStart = maskedIndex;
-        }
-
-        return candidateStart >= 0;
-    }
-
-    private static string RedactMaskedSource(string source)
-    {
-        var queryIndex = source.IndexOfAny(['?', '#']);
-        return queryIndex < 0 ? source : source[..queryIndex];
-    }
-
-    private static bool IsSourceTerminator(char value)
-        => char.IsWhiteSpace(value) ||
-            char.IsControl(value) ||
-            value is '"' or '\'' or '<' or '>' or '(' or ')' or '[' or ']' or '{' or '}';
 }

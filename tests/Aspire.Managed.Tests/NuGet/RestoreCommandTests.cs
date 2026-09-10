@@ -305,11 +305,12 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
             source => source.Name == "private" &&
                 source.Identity == NuGetSourceIdentity.Compute(sourcePath, s_sourceIdentityKey) &&
                 source.IsEnabled);
+        Assert.Empty(settings.SensitiveSourceValues);
         Assert.True(settings.PackageSourceMappingEnabled);
     }
 
     [Fact]
-    public void SettingsCommand_DoesNotSerializeCredentialBearingSourceLocations()
+    public void SettingsCommand_ReturnsCredentialBearingSourceLocationsForExactRedaction()
     {
         const string credential = "fake-sas-token";
         const string source = $"https://example.invalid/v3/index.json?sig={credential}";
@@ -332,14 +333,13 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         var packageSource = Assert.Single(settings.Sources);
         Assert.Equal("private", packageSource.Name);
         Assert.Equal(NuGetSourceIdentity.Compute(source, s_sourceIdentityKey), packageSource.Identity);
-        Assert.True(packageSource.HasCredentialMaterial);
-        Assert.False(packageSource.RequiresFullOutputSuppression);
-        Assert.DoesNotContain(credential, serializedSettings);
-        Assert.DoesNotContain(source, serializedSettings);
+        Assert.Equal([source], settings.SensitiveSourceValues);
+        Assert.Contains(credential, serializedSettings);
+        Assert.Contains(source, serializedSettings);
     }
 
     [Fact]
-    public void SettingsCommand_RequiresOutputSuppressionForMalformedCredentialBearingSources()
+    public void SettingsCommand_ReturnsMalformedCredentialBearingSourceForExactRedaction()
     {
         const string source = "https://user:p#word@packages.example.com/private";
         File.WriteAllText(
@@ -355,9 +355,8 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
 
         var settings = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
 
-        var packageSource = Assert.Single(settings.Sources);
-        Assert.True(packageSource.HasCredentialMaterial);
-        Assert.True(packageSource.RequiresFullOutputSuppression);
+        Assert.Single(settings.Sources);
+        Assert.Equal([source], settings.SensitiveSourceValues);
     }
 
     [Fact]
