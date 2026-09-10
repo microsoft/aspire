@@ -443,7 +443,7 @@ internal sealed class RunCommand : BaseCommand
                 catch (TimeoutException)
                 {
                     runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                    await CancelAppHostStartupAsync(runCts, runTask, cancellationToken).ConfigureAwait(false);
+                    await CancelAppHostRunAsync(runCts, runTask, s_appHostStartupCancellationTimeout, cancellationToken).ConfigureAwait(false);
                     return CreateStartupTimeoutResult(timeoutSeconds);
                 }
 
@@ -676,15 +676,20 @@ internal sealed class RunCommand : BaseCommand
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
 
-            // Extension cancellation can interrupt RunCommand's build wait before the linked run token
-            // has reached the project task. Keep manager-owned cancellation attached to that task so a
-            // late-starting build cannot outlive the CLI and retain the workspace directory on Windows.
+            // Extension cancellation can interrupt the build wait before the project task unwinds.
+            // Keep cleanup owned by this handler so a late build cannot outlive the CLI and retain
+            // the workspace directory on Windows.
             if (!buildWaitCompleted &&
                 runCts is not null &&
                 runTask is not null &&
                 !runTask.IsCompleted)
             {
-                await CancelAppHostBuildAsync(runCts, runTask).ConfigureAwait(false);
+                // BaseCommand already races manager-owned cancellation against the process-wide
+                // shutdown deadline. Only direct callers with an unrelated token need a local bound.
+                var cleanupTimeout = _cancellationManager.IsCancellationRequested
+                    ? Timeout.InfiniteTimeSpan
+                    : s_appHostStartupCancellationTimeout;
+                await CancelAppHostRunAsync(runCts, runTask, cleanupTimeout, CancellationToken.None).ConfigureAwait(false);
             }
 
             // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
@@ -1492,41 +1497,22 @@ internal sealed class RunCommand : BaseCommand
         return elapsed >= startupTimeout ? TimeSpan.Zero : startupTimeout - elapsed;
     }
 
-    private async Task CancelAppHostStartupAsync(CancellationTokenSource runCancellationTokenSource, Task<int> pendingRun, CancellationToken cancellationToken)
+    private async Task CancelAppHostRunAsync(
+        CancellationTokenSource runCancellationTokenSource,
+        Task<int> pendingRun,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
     {
         runCancellationTokenSource.Cancel();
-        await WaitForAppHostRunCancellationAsync(pendingRun, cancellationToken).ConfigureAwait(false);
-    }
 
-    private async Task CancelAppHostBuildAsync(CancellationTokenSource runCancellationTokenSource, Task<int> pendingRun)
-    {
-        runCancellationTokenSource.Cancel();
-
-        if (_cancellationManager.IsCancellationRequested)
-        {
-            // BaseCommand is already racing this handler against the process-wide shutdown deadline.
-            // Keep the handler pending until the project task unwinds so the manager cannot mistake an
-            // unfinished build teardown for completed shutdown.
-            await DrainAppHostRunAfterCancellationAsync(pendingRun).ConfigureAwait(false);
-            return;
-        }
-
-        // Embedded callers can supply a cancellation token that is not owned by the console manager.
-        // Retain the local timeout for that path because no process-level deadline will release a
-        // permanently wedged project task.
-        await WaitForAppHostRunCancellationAsync(pendingRun, CancellationToken.None).ConfigureAwait(false);
-    }
-
-    private async Task WaitForAppHostRunCancellationAsync(Task<int> pendingRun, CancellationToken cancellationToken)
-    {
         try
         {
-            await pendingRun.WaitAsync(s_appHostStartupCancellationTimeout, _timeProvider, cancellationToken).ConfigureAwait(false);
+            await pendingRun.WaitAsync(timeout, _timeProvider, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
         }
-        catch (TimeoutException ex)
+        catch (TimeoutException ex) when (timeout != Timeout.InfiniteTimeSpan)
         {
             _logger.LogDebug(ex, "Timed out waiting for AppHost startup cancellation to complete.");
             _ = DrainAppHostRunAfterCancellationAsync(pendingRun);

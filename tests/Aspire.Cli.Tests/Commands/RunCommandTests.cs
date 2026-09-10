@@ -694,7 +694,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     public async Task RunCommand_WhenCancelledDuringStartupTimeout_ExitsWithoutWaitingForFullTimeout()
     {
         // Verifies that when Ctrl+C fires (cancellationToken) during startup, the command exits
-        // promptly rather than blocking for the 5-second CancelAppHostStartupAsync timeout.
+        // promptly rather than blocking for the five-second startup-cancellation timeout.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cts = new CancellationTokenSource();
         var interactionService = new TestInteractionService();
@@ -746,7 +746,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         stopwatch.Stop();
 
         // Without the cancellationToken plumbing, this would block for the full 5-second
-        // CancelAppHostStartupAsync timeout. With the fix, it exits promptly.
+        // startup-cancellation timeout. With the fix, it exits promptly.
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"Expected prompt exit after Ctrl+C, but took {stopwatch.Elapsed}.");
         Assert.Equal(CliExitCodes.Success, exitCode);
     }
