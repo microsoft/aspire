@@ -72,7 +72,8 @@ public class EFMigrationPipelineTests
             await step.Action(stepContext);
         }
 
-        Assert.Single(tool.Invocations);
+        var invocation = Assert.Single(tool.Invocations);
+        Assert.DoesNotContain("--no-build", invocation);
         Assert.Single(sink.Writes, write => write.LogLevel == LogLevel.Warning);
         Assert.Equal(0, callbackCalls);
     }

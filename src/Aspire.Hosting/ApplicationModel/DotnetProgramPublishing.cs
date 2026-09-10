@@ -40,7 +40,7 @@ internal static class DotnetProgramPublishing
                 .ToArray();
             var steps = new List<PipelineStep>();
 
-            if (stepResource.IsExcludedFromPublish())
+            if (!stepResource.RequiresImageBuild())
             {
                 return steps;
             }

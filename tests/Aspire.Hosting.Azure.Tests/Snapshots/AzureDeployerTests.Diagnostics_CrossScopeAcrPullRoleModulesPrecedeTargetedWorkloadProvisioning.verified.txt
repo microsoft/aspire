@@ -2,9 +2,9 @@
   ApiService:
 If targeting 'deploy-api-service':
   Direct dependencies: print-api-service-summary
-  Total steps: 20
+  Total steps: 19
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context

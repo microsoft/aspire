@@ -23,10 +23,10 @@ Steps with no dependencies run first, followed by steps that depend on them.
   7. before-start
   8. process-parameters
   9. build-prereq
- 10. check-container-runtime
- 11. validate-build-only-container-references
- 12. deploy-prereq
- 13. build-api-service
+ 10. validate-build-only-container-references
+ 11. deploy-prereq
+ 12. build-api-service
+ 13. check-container-runtime
  14. build-python-app
  15. build
  16. validate-azure-login
@@ -85,7 +85,7 @@ Step: build
 
 Step: build-api-service
     Description: Builds the container image for the api-service project.
-    Dependencies: ✓ build-prereq, ✓ check-container-runtime, ✓ deploy-prereq, ✓ deploy-prereq
+    Dependencies: ✓ build-prereq, ✓ deploy-prereq, ✓ deploy-prereq
     Resource: api-service (ProjectResource)
     Tags: build-compute
 
@@ -353,10 +353,10 @@ If targeting 'build':
     [3] build
 
 If targeting 'build-api-service':
-  Direct dependencies: build-prereq, check-container-runtime, deploy-prereq, deploy-prereq
-  Total steps: 6
+  Direct dependencies: build-prereq, deploy-prereq, deploy-prereq
+  Total steps: 5
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service
 
@@ -409,9 +409,9 @@ If targeting 'deploy':
 
 If targeting 'deploy-api-service':
   Direct dependencies: print-api-service-summary
-  Total steps: 18
+  Total steps: 17
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -526,9 +526,9 @@ If targeting 'prepare-azure-container-apps-aca-env':
 
 If targeting 'print-api-service-summary':
   Direct dependencies: provision-api-service-website
-  Total steps: 17
+  Total steps: 16
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -649,9 +649,9 @@ If targeting 'provision-aca-env-acr':
 
 If targeting 'provision-api-service-website':
   Direct dependencies: create-provisioning-context, provision-aas-env, push-api-service
-  Total steps: 16
+  Total steps: 15
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -758,9 +758,9 @@ If targeting 'push':
 
 If targeting 'push-api-service':
   Direct dependencies: build-api-service, push-prereq
-  Total steps: 14
+  Total steps: 13
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context

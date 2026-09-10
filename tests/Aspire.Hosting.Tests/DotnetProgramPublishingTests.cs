@@ -153,6 +153,57 @@ public class DotnetProgramPublishingTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrebuiltProgramParticipatesInComputeWithoutBuildOrPushSteps()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var processRunner = new TestProcessRunner();
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        var runtime = new FakeContainerRuntime
+        {
+            ResolveAsyncCallback = _ => throw new InvalidOperationException("Prebuilt images must not resolve a container runtime.")
+        };
+        builder.Services.AddFakeContainerRuntime(runtime);
+        var resource = builder.AddResource(new TestDotnetProgramResource("program"))
+            .WithAnnotation(new TestProjectMetadata("program.csproj"))
+            .WithDotnetProgramPublishing()
+            .WithAnnotation(new ContainerImageAnnotation
+            {
+                Registry = "example.com",
+                Image = "program",
+                Tag = "v1"
+            });
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Contains(resource.Resource, model.GetComputeResources());
+        Assert.DoesNotContain(resource.Resource, model.GetBuildResources());
+        Assert.DoesNotContain(resource.Resource, model.GetBuildAndPushResources());
+        Assert.False(resource.Resource.RequiresImageBuild());
+        Assert.True(resource.Resource.SupportsDotnetProgramPublishing());
+
+        var pipelineContext = new PipelineContext(
+            model,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<PipelineStepAnnotation>());
+        var steps = await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+        {
+            PipelineContext = pipelineContext,
+            Resource = resource.Resource
+        });
+
+        Assert.Empty(steps);
+
+        var imageManager = app.Services.GetRequiredService<IResourceContainerImageManager>();
+        await imageManager.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+        await imageManager.BuildImagesAsync([resource.Resource], TestContext.Current.CancellationToken);
+        Assert.Empty(processRunner.ProcessSpecs);
+        Assert.Equal(0, runtime.ResolveAsyncCallCount);
+    }
+
+    [Fact]
     public void DotnetProgramReplicasProduceDistinctDcpInstances()
     {
         var resource = new TestDotnetProgramResource("program");
