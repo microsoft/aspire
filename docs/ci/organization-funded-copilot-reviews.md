@@ -54,6 +54,13 @@ gate. Organization membership and `author_association` are not used as proxies
 for write access. Custom roles use the API's effective base permission, which
 maps maintain to write and triage to read.
 
+GitHub's coding-agent author identity (`login: Copilot`, `type: Bot`) is skipped
+before the permission lookup: the collaborator endpoint rejects it with
+`404: Copilot is not a user`. The PR receives the normal no-write-access skip
+decision and scheduled scans continue to subsequent PRs. This exception requires
+both the bot type and exact login; other authors still use the permission API.
+Unrelated 404 responses and other lookup failures are not swallowed.
+
 The permission is checked again after fetching review history and current PR
 state, before a request (or dry-run decision). Lookup failures or unexpected
 permission values fail visibly without requesting a review. GitHub offers no
