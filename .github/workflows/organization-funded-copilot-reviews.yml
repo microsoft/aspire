@@ -1,0 +1,229 @@
+# Request reviews through the Aspire App; organization billing still needs verification.
+# See docs/ci/organization-funded-copilot-reviews.md before enabling writes.
+name: Organization-funded Copilot reviews
+
+on:
+  pull_request_target:
+    branches: [main, 'release/**']
+    # opened: a contributor creates a PR (including a draft); request its initial review.
+    # synchronize: commits are pushed or force-pushed to the PR branch; review the new head.
+    types: [opened, synchronize]
+  # Reconcile pushes made while a review was pending, and events coalesced by
+  # concurrency. Never consume PR artifacts or run a PR's workflow/code.
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+# Only one request-making run executes at a time, across all PRs, so a push
+# handler and the scheduled scan cannot both request a review for the same PR.
+# Runs submit requests without waiting for Copilot: reviews of different PRs
+# can still proceed concurrently after those requests are accepted.
+# Keep the active run, but GitHub may replace an older queued run with a newer
+# one. The scheduled scan catches any PR updates whose queued runs were replaced.
+concurrency:
+  group: organization-funded-copilot-reviews
+  cancel-in-progress: false
+
+jobs:
+  request-reviews:
+    # Dependabot PR events can lack Actions secrets. Skip before token creation;
+    # scheduled/manual runs still reconcile those PRs using their own credentials.
+    # https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-on-actions#restrictions-when-dependabot-triggers-events
+    if: >-
+      github.repository == 'microsoft/aspire' &&
+      vars.COPILOT_REVIEW_MODE != 'disabled' &&
+      (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') &&
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      # Explicit scope avoids inheriting the App's broader installation permissions.
+      # Dry-run gets read access only; the action revokes the token during job cleanup.
+      - name: Create Aspire App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire
+          permission-pull-requests: ${{ vars.COPILOT_REVIEW_MODE == 'enabled' && 'write' || 'read' }}
+          skip-token-revoke: false
+      # Intentionally inline: this privileged workflow never checks out code.
+      - name: Reconcile Copilot reviews
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          COPILOT_REVIEW_MODE: ${{ vars.COPILOT_REVIEW_MODE }}
+          COPILOT_REVIEW_PR_NUMBER: ${{ vars.COPILOT_REVIEW_PR_NUMBER }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          # A timed-out POST may already have started a billable review.
+          retries: 0
+          script: |
+            const owner = 'microsoft';
+            const repo = 'aspire';
+            const reviewer = 'copilot-pull-request-reviewer[bot]';
+            const mode = process.env.COPILOT_REVIEW_MODE || 'dry-run';
+            const staleCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+            if (!['disabled', 'dry-run', 'enabled'].includes(mode)) {
+              throw new Error('COPILOT_REVIEW_MODE must be disabled, dry-run, or enabled.');
+            }
+            if (context.repo.owner !== owner || context.repo.repo !== repo) {
+              throw new Error('This workflow only operates on microsoft/aspire.');
+            }
+            if (mode === 'disabled') {
+              core.info('Copilot review automation is disabled.');
+              return;
+            }
+            if (!['pull_request_target', 'schedule', 'workflow_dispatch'].includes(context.eventName) ||
+                (context.eventName === 'workflow_dispatch' && context.ref !== 'refs/heads/main')) {
+              throw new Error('Unsupported event or workflow dispatch ref.');
+            }
+
+            // Optional pilot scope: a positive decimal PR number, e.g. "12345".
+            // Reject whitespace, signs, and trailing text instead of parseInt's
+            // permissive truncation (e.g. "12345-untrusted" must not select a PR).
+            const pilotValue = process.env.COPILOT_REVIEW_PR_NUMBER || '';
+            const pilot = pilotValue === '' ? null : Number(pilotValue);
+            if (pilot !== null && (!/^[1-9][0-9]*$/.test(pilotValue) || !Number.isSafeInteger(pilot))) {
+              throw new Error('COPILOT_REVIEW_PR_NUMBER must be a positive decimal PR number.');
+            }
+            const rows = [];
+            function record(number, sha, decision) {
+              core.info(`PR #${number} (${sha}): ${decision}`);
+              rows.push([String(number), sha, decision]);
+            }
+            function isCopilot(user) {
+              return user?.type === 'Bot' && user.login === reviewer;
+            }
+            async function authorCanWrite(pull) {
+              if (typeof pull.user?.login !== 'string' || pull.user.login.length === 0) {
+                throw new Error(`Missing author login for PR #${pull.number}.`);
+              }
+              // GitHub represents coding-agent PR authors as { login: "Copilot", type: "Bot" },
+              // but the collaborator endpoint rejects this identity with 404 "Copilot is not a user".
+              // It cannot satisfy the author-write gate; skip it without hiding other lookup failures.
+              // https://github.com/microsoft/aspire/actions/runs/34510935899
+              if (pull.user.type === 'Bot' && pull.user.login === 'Copilot') {
+                return false;
+              }
+              // Check the author, not the triggering actor or author_association:
+              // a maintainer pushing to an external PR must not opt its author in.
+              // The API maps maintain to write and triage to read, including custom roles.
+              // https://docs.github.com/en/rest/collaborators/collaborators#get-repository-permissions-for-a-user
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner, repo, username: pull.user.login
+              });
+              if (!['admin', 'write', 'read', 'none'].includes(data.permission)) {
+                throw new Error(`Unexpected author permission for PR #${pull.number}.`);
+              }
+              return data.permission === 'admin' || data.permission === 'write';
+            }
+            function validatePull(pull, number) {
+              if (pull.number !== number || pull.base?.repo?.full_name !== `${owner}/${repo}` ||
+                  !/^[a-f0-9]{40}$/.test(pull.head?.sha ?? '')) {
+                throw new Error(`Invalid repository, number, or head SHA for PR #${number}.`);
+              }
+              if (!Array.isArray(pull.requested_reviewers)) {
+                throw new Error(`Missing requested reviewers for PR #${number}.`);
+              }
+            }
+            function ineligibleReason(pull) {
+              if (pull.state !== 'open') {
+                return 'Skipped: PR is not open.';
+              }
+              if (pull.base.ref !== 'main' && !pull.base.ref.startsWith('release/')) {
+                return 'Skipped: target branch is outside main/release.';
+              }
+              if (context.eventName === 'schedule') {
+                // GitHub reports PR activity as an ISO timestamp, e.g.
+                // updated_at: "2026-09-08T19:40:00Z". Use it rather than
+                // creation/commit dates so activity can revive an old PR.
+                const updatedAt = Date.parse(pull.updated_at);
+                if (!Number.isFinite(updatedAt)) {
+                  throw new Error(`Invalid updated_at timestamp for PR #${pull.number}.`);
+                }
+                if (updatedAt <= staleCutoff) {
+                  return 'Skipped: no PR activity in the last 14 days.';
+                }
+              }
+              return null;
+            }
+            async function reconcile(number) {
+              if (!Number.isSafeInteger(number) || number <= 0) {
+                throw new Error('Invalid PR number.');
+              }
+              if (pilot !== null && number !== pilot) {
+                record(number, '-', 'Skipped: outside pilot scope.');
+                return;
+              }
+              const args = { owner, repo, pull_number: number };
+              const { data: pull } = await github.rest.pulls.get(args);
+              validatePull(pull, number);
+              const sha = pull.head.sha;
+              const reason = ineligibleReason(pull);
+              if (reason) {
+                record(number, sha, reason);
+                return;
+              }
+              if (!await authorCanWrite(pull)) {
+                record(number, sha, 'Skipped: PR author does not have repository write access.');
+                return;
+              }
+              if (pull.requested_reviewers.some(isCopilot)) {
+                record(number, sha, 'Deferred: Copilot review is pending.');
+                return;
+              }
+              const reviews = await github.paginate(github.rest.pulls.listReviews, { ...args, per_page: 100 });
+              // Dismissed reviews still consumed a review for this SHA. Human
+              // comments and reviews of an older head do not suppress new work.
+              if (reviews.some(review => isCopilot(review.user) &&
+                  review.commit_id === sha && review.state !== 'PENDING')) {
+                record(number, sha, 'Skipped: Copilot already reviewed this head.');
+                return;
+              }
+              // Re-fetch before writing: the PR may have changed while we read
+              // reviews. A later scheduled scan handles a changed head safely.
+              const { data: current } = await github.rest.pulls.get(args);
+              validatePull(current, number);
+              if (ineligibleReason(current) || current.head.sha !== sha ||
+                  current.base.ref !== pull.base.ref || current.requested_reviewers.some(isCopilot)) {
+                record(number, sha, 'Deferred: PR changed during reconciliation.');
+                return;
+              }
+              // Do not reuse an earlier permission result across the review-history lookup.
+              if (!await authorCanWrite(current)) {
+                record(number, sha, 'Skipped: PR author does not have repository write access.');
+                return;
+              }
+              if (mode === 'dry-run') {
+                record(number, sha, 'Dry run: would request Copilot review.');
+                return;
+              }
+              await github.rest.pulls.requestReviewers({ ...args, reviewers: [reviewer] });
+              record(number, sha, 'Requested Copilot review as the Aspire App.');
+            }
+
+            if (context.eventName === 'pull_request_target') {
+              await reconcile(context.payload.pull_request?.number);
+            } else if (pilot !== null) {
+              await reconcile(pilot);
+            } else {
+              for await (const page of github.paginate.iterator(github.rest.pulls.list, {
+                owner, repo, state: 'open', sort: 'created', direction: 'asc', per_page: 100
+              })) {
+                for (const pull of page.data) {
+                  await reconcile(pull.number);
+                }
+              }
+            }
+            await core.summary
+              .addHeading(`Organization-funded Copilot reviews (${mode})`)
+              .addTable([
+                [{ data: 'PR', header: true }, { data: 'Head SHA', header: true }, { data: 'Decision', header: true }],
+                ...rows
+              ])
+              .write();

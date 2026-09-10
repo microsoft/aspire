@@ -34,7 +34,8 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
                 // may still contribute optional launch metadata, matching the existing MAUI behavior, but its
                 // success does not determine whether the Process invocation can run.
                 var metadataProducer = supportsDebugging &&
-                    debugSupport is { LaunchConfigurationType: not KnownLaunchConfigurationTypes.Project }
+                    debugSupport is not null &&
+                    !KnownLaunchConfigurationTypes.IsProject(debugSupport.LaunchConfigurationType)
                         ? debugSupport
                         : null;
                 return new(
@@ -104,7 +105,7 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
 
     private string GetLaunchMode(string? launchConfigurationType)
     {
-        if (launchConfigurationType is KnownLaunchConfigurationTypes.Project)
+        if (KnownLaunchConfigurationTypes.IsProject(launchConfigurationType))
         {
             return GetProjectLaunchMode();
         }

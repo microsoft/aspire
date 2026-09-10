@@ -20,14 +20,18 @@ export interface ExecutableLaunchConfiguration {
 }
 
 export interface ProjectLaunchConfiguration extends ExecutableLaunchConfiguration {
-    type: "project";
+    type: "project" | "project-with-external-build.v1";
     launch_profile?: string;
     disable_launch_profile?: boolean;
     project_path: string;
+    build_configuration?: string;
+    build_environment?: Record<string, string>;
+    build_working_directory?: string;
+    suppress_build?: boolean;
 }
 
 export function isProjectLaunchConfiguration(obj: any): obj is ProjectLaunchConfiguration {
-    return obj && obj.type === 'project';
+    return obj && (obj.type === 'project' || obj.type === 'project-with-external-build.v1');
 }
 
 export interface PythonLaunchConfiguration extends ExecutableLaunchConfiguration {

@@ -37,4 +37,8 @@ with create_builder() as builder:
     tunnel5.with_tunnel_reference_anonymous(web5_endpoint, False)
     # Test 10: Chained configuration
     builder.add_dev_tunnel("resource")
+    # Test 11: Idle expiration in hours
+    expiring_tunnel = builder.add_dev_tunnel("expiring-tunnel")
+    expiring_tunnel.with_expiration(24)
+    expiring_tunnel.with_tunnel_reference_all(web, False)
     builder.run()

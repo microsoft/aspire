@@ -10,7 +10,7 @@
     "SERVER_PASSWORD": "{server-password.value}",
     "SERVER_AUTHENTICATIONDATABASE": "admin",
     "SERVER_AUTHENTICATIONMECHANISM": "SCRAM-SHA-256",
-    "SERVER_URI": "mongodb://admin:{server-password-uri-encoded.value}@{server.bindings.tcp.host}:{server.bindings.tcp.port}/?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
+    "SERVER_URI": "mongodb://admin:{server-password-uri-encoded.value}@{server.bindings.tcp.host}:{server.bindings.tcp.port}/?authSource=admin\u0026authMechanism=SCRAM-SHA-256{cond-server-bindings-tcp-tlsenabled-f696b72f.connectionString}",
     "ConnectionStrings__db": "{db.connectionString}",
     "DB_HOST": "{server.bindings.tcp.host}",
     "DB_PORT": "{server.bindings.tcp.port}",
@@ -18,7 +18,7 @@
     "DB_PASSWORD": "{server-password.value}",
     "DB_AUTHENTICATIONDATABASE": "admin",
     "DB_AUTHENTICATIONMECHANISM": "SCRAM-SHA-256",
-    "DB_URI": "mongodb://admin:{server-password-uri-encoded.value}@{server.bindings.tcp.host}:{server.bindings.tcp.port}/db%23test?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
+    "DB_URI": "mongodb://admin:{server-password-uri-encoded.value}@{server.bindings.tcp.host}:{server.bindings.tcp.port}/db%23test?authSource=admin\u0026authMechanism=SCRAM-SHA-256{cond-server-bindings-tcp-tlsenabled-f696b72f.connectionString}",
     "DB_DATABASENAME": "db#test",
     "ConnectionStrings__serverWithParameters": "{serverWithParameters.connectionString}",
     "SERVERWITHPARAMETERS_HOST": "{serverWithParameters.bindings.tcp.host}",
@@ -27,7 +27,7 @@
     "SERVERWITHPARAMETERS_PASSWORD": "{password.value}",
     "SERVERWITHPARAMETERS_AUTHENTICATIONDATABASE": "admin",
     "SERVERWITHPARAMETERS_AUTHENTICATIONMECHANISM": "SCRAM-SHA-256",
-    "SERVERWITHPARAMETERS_URI": "mongodb://{username-uri-encoded.value}:{password-uri-encoded.value}@{serverWithParameters.bindings.tcp.host}:{serverWithParameters.bindings.tcp.port}/?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
+    "SERVERWITHPARAMETERS_URI": "mongodb://{username-uri-encoded.value}:{password-uri-encoded.value}@{serverWithParameters.bindings.tcp.host}:{serverWithParameters.bindings.tcp.port}/?authSource=admin\u0026authMechanism=SCRAM-SHA-256{cond-serverwithparameters-bindings-tcp-tlsenabled-06c53d17.connectionString}",
     "ConnectionStrings__dbWithParameters": "{dbWithParameters.connectionString}",
     "DBWITHPARAMETERS_HOST": "{serverWithParameters.bindings.tcp.host}",
     "DBWITHPARAMETERS_PORT": "{serverWithParameters.bindings.tcp.port}",
@@ -35,7 +35,7 @@
     "DBWITHPARAMETERS_PASSWORD": "{password.value}",
     "DBWITHPARAMETERS_AUTHENTICATIONDATABASE": "admin",
     "DBWITHPARAMETERS_AUTHENTICATIONMECHANISM": "SCRAM-SHA-256",
-    "DBWITHPARAMETERS_URI": "mongodb://{username-uri-encoded.value}:{password-uri-encoded.value}@{serverWithParameters.bindings.tcp.host}:{serverWithParameters.bindings.tcp.port}/db%23test?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
+    "DBWITHPARAMETERS_URI": "mongodb://{username-uri-encoded.value}:{password-uri-encoded.value}@{serverWithParameters.bindings.tcp.host}:{serverWithParameters.bindings.tcp.port}/db%23test?authSource=admin\u0026authMechanism=SCRAM-SHA-256{cond-serverwithparameters-bindings-tcp-tlsenabled-06c53d17.connectionString}",
     "DBWITHPARAMETERS_DATABASENAME": "db#test"
   }
 }

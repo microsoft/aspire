@@ -28,7 +28,7 @@ public partial class FilterDialog : IAsyncDisposable
         new SelectViewModel<FilterCondition> { Id = condition, Name = FieldTelemetryFilter.ConditionToString(condition, FilterLoc) };
 
     [CascadingParameter]
-    public FluentDialog? Dialog { get; set; }
+    public IDialogInstance? Dialog { get; set; }
 
     [Parameter]
     public FilterDialogViewModel Content { get; set; } = default!;
@@ -52,6 +52,7 @@ public partial class FilterDialog : IAsyncDisposable
     private List<SelectViewModel<FieldValue>>? _allValues;
     private bool _loadingPropertyKeys = true;
     private bool _loadingFieldValues = true;
+    private SelectViewModel<FieldValue>? _selectedValue;
 
     public EditContext EditContext { get; private set; } = default!;
 
@@ -186,7 +187,7 @@ public partial class FilterDialog : IAsyncDisposable
         if (_formModel.ValueIsNumeric)
         {
             _formModel.Value = null;
-            _formModel.NumericValue = double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var numericValue) && double.IsFinite(numericValue)
+            _formModel.NumericValue = int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numericValue)
                 ? numericValue
                 : null;
         }
@@ -229,6 +230,14 @@ public partial class FilterDialog : IAsyncDisposable
                     .ThenBy(v => v.Value, StringComparers.OtlpFieldValue)
                     .Select(v => new SelectViewModel<FieldValue> { Id = v, Name = v.Value })
                     .ToList();
+
+                _selectedValue = _formModel.Value is { Length: > 0 } value
+                    ? _allValues.FirstOrDefault(vm => vm.Name == value) ?? new SelectViewModel<FieldValue>
+                    {
+                        Id = new FieldValue { Value = value, Count = 0 },
+                        Name = value
+                    }
+                    : null;
                 _loadingFieldValues = false;
             }
             catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
@@ -256,6 +265,7 @@ public partial class FilterDialog : IAsyncDisposable
         {
             _allValues = null;
             _loadingFieldValues = false;
+            _selectedValue = null;
         }
 
         return true;
@@ -314,6 +324,35 @@ public partial class FilterDialog : IAsyncDisposable
         }
     }
 
+    private void UpdateValueState()
+    {
+        // Fluent copies the selected option's text back into the input on blur. Keep the selection
+        // synchronized with typed text so losing focus doesn't restore a stale value.
+        // Reuse an exact match to retain its metadata, or represent custom text (including an empty
+        // value) with a standalone option that isn't added to the suggestions.
+        if (_selectedValue?.Name != _formModel.Value)
+        {
+            var value = _formModel.Value ?? string.Empty;
+            _selectedValue = _allValues?.FirstOrDefault(vm => vm.Name == value) ?? new SelectViewModel<FieldValue>
+            {
+                Id = new FieldValue { Value = value, Count = 0 },
+                Name = value
+            };
+        }
+
+        EditContext.NotifyFieldChanged(new FieldIdentifier(_formModel, nameof(_formModel.Value)));
+        ValueChanged();
+    }
+
+    private void SelectedValueChanged()
+    {
+        if (_selectedValue is not null)
+        {
+            _formModel.Value = _selectedValue.Name;
+        }
+        UpdateValueState();
+    }
+
     private void Cancel()
     {
         Dialog!.CancelAsync();
@@ -339,7 +378,7 @@ public partial class FilterDialog : IAsyncDisposable
         string value;
         if (_formModel.ValueIsNumeric)
         {
-            value = _formModel.NumericValue!.Value.ToString("R", CultureInfo.InvariantCulture);
+            value = _formModel.NumericValue!.Value.ToString(CultureInfo.InvariantCulture);
         }
         else
         {

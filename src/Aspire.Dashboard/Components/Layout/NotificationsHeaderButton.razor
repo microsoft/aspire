@@ -2,27 +2,26 @@
 
 @if (UnreadCount > 0)
 {
-    <FluentButton Class="header-button"
-                  Appearance="Appearance.Stealth" OnClick="@HandleClick"
-                  Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
-        <FluentCounterBadge Count="@UnreadCount"
-                            Max="9"
-                            ShowOverflow="true"
-                            BackgroundColor="@Color.FillInverse"
-                            Color="Color.Fill"
-                            Appearance="Appearance.Accent"
-                            Style="border: 0;">
-            <ChildContent>
-                <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" Style="vertical-align: bottom;" />
-            </ChildContent>
-        </FluentCounterBadge>
-    </FluentButton>
+    <FluentCounterBadge Count="@UnreadCount"
+                        OverflowCount="9"
+                        Color="BadgeColor.Brand"
+                        Appearance="BadgeAppearance.Filled"
+                        Class="notification-counter-badge"
+                        Style="border: 0;">
+        <AnchorContent>
+            <FluentButton Class="header-button"
+                          Appearance="ButtonAppearance.Default" OnClick="@HandleClick"
+                          Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
+                <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Default" Style="vertical-align: bottom;" />
+            </FluentButton>
+        </AnchorContent>
+    </FluentCounterBadge>
 }
 else
 {
     <FluentButton Class="header-button"
-                  Appearance="Appearance.Stealth" OnClick="@HandleClick"
+                  Appearance="ButtonAppearance.Default" OnClick="@HandleClick"
                   Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
-        <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" />
+        <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Default" />
     </FluentButton>
 }

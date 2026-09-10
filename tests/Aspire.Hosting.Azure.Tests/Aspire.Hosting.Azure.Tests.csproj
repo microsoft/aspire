@@ -20,6 +20,7 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppContainers\Aspire.Hosting.Azure.AppContainers.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ApplicationInsights\Aspire.Hosting.Azure.ApplicationInsights.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.CognitiveServices\Aspire.Hosting.Azure.CognitiveServices.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ConnectorNamespace\Aspire.Hosting.Azure.ConnectorNamespace.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ContainerRegistry\Aspire.Hosting.Azure.ContainerRegistry.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.CosmosDB\Aspire.Hosting.Azure.CosmosDB.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.EventHubs\Aspire.Hosting.Azure.EventHubs.csproj" />

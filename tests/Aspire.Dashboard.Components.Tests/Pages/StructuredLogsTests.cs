@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -249,8 +250,7 @@ public partial class StructuredLogsTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, viewport);
         });
 
-        // FluentSearch writes the autocomplete attribute through JS interop, so bUnit can only verify the component parameter.
-        var search = Assert.Single(cut.FindComponents<FluentSearch>());
+        var search = Assert.Single(cut.FindComponents<FluentTextInput>());
         Assert.Equal("off", search.Instance.AutoComplete);
     }
 
@@ -285,20 +285,11 @@ public partial class StructuredLogsTests : DashboardTestContext
     [InlineData(true, 0)]
     public async Task Render_AtLogLimit_LimitMessageOnlyDisplayedForLiveRun(bool isReadOnly, int expectedMessageCount)
     {
-        var messageCount = 0;
-        var messageService = new TestMessageService(_ =>
-        {
-            messageCount++;
-            return Task.FromResult(new Message());
-        });
-
         SetupStructureLogsServices();
-        Services.AddSingleton<IMessageService>(messageService);
         Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions
         {
             TelemetryLimits = { MaxLogCount = 1 }
         }));
-
         await FluentUISetupHelpers.ConfigureTelemetryRepository(this, isReadOnly, telemetryRepository => telemetryRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
@@ -314,12 +305,13 @@ public partial class StructuredLogsTests : DashboardTestContext
                 }
             }
         }));
-
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
-        var cut = RenderComponent<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
+        var cut = FluentUISetupHelpers.RenderMessageBarProviderWithPage<StructuredLogs>(this, viewport);
 
-        cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, messageCount));
+        var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
+        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, cut.FindComponents<DashboardMessageBar>().Count));
     }
 
     private void SetupStructureLogsServices()

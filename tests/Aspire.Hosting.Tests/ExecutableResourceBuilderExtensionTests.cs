@@ -5,6 +5,8 @@
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable IDE0005 // Using directive is unnecessary.
 
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
@@ -27,6 +29,7 @@ public class ExecutableResourceBuilderExtensionTests
         var expectedPath = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, workingDirectory));
         var annotation = executable.Resource.Annotations.OfType<ExecutableAnnotation>().Single();
         Assert.Equal(expectedPath, annotation.WorkingDirectory);
+        Assert.False(annotation.WorkingDirectoryExplicitlySet);
     }
 
     [Fact]
@@ -53,6 +56,7 @@ public class ExecutableResourceBuilderExtensionTests
         var expectedPath = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, workingDirectory));
         var annotation = executable.Resource.Annotations.OfType<ExecutableAnnotation>().Single();
         Assert.Equal(expectedPath, annotation.WorkingDirectory);
+        Assert.True(annotation.WorkingDirectoryExplicitlySet);
     }
 
     [Fact]
@@ -74,6 +78,17 @@ public class ExecutableResourceBuilderExtensionTests
 
         var annotation = executable.Resource.Annotations.OfType<ExecutableAnnotation>().Single();
         Assert.Equal(builder.AppHostDirectory, annotation.WorkingDirectory);
+        Assert.True(annotation.WorkingDirectoryExplicitlySet);
+    }
+
+    [Fact]
+    public void WorkingDirectoryProvenanceIsTaggedWithExpectedExperimentalDiagnostic()
+    {
+        var property = typeof(ExecutableAnnotation).GetProperty(nameof(ExecutableAnnotation.WorkingDirectoryExplicitlySet));
+        var attribute = Assert.Single(property!.GetCustomAttributes<ExperimentalAttribute>());
+
+        Assert.Equal("ASPIREEXTENSION001", attribute.DiagnosticId);
+        Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
     }
 
     [Fact]

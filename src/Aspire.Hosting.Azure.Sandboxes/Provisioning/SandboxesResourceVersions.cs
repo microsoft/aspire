@@ -5,6 +5,5 @@ namespace Aspire.Hosting.Azure.Sandboxes.Provisioning;
 
 internal static class SandboxesResourceVersions
 {
-
     public const string SandboxGroup = "2026-02-01-preview";
 }

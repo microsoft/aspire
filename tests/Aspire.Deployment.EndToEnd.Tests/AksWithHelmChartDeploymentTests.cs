@@ -151,7 +151,7 @@ aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1"
 
             // Step 9: Deploy to AKS
             output.WriteLine("Step 9: Starting AKS deployment with external Helm chart...");
-            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.TypeAsync("aspire deploy");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
@@ -215,19 +215,21 @@ aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1"
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
-            // Step 15: Destroy and verify the external Helm chart was uninstalled too.
-            output.WriteLine("Step 15: Destroying deployment...");
-            await auto.AspireDestroyAsync(counter);
-
-            // Step 16: Verify the podinfo release is gone (this is the WithDestroy() contract).
-            output.WriteLine("Step 16: Verifying podinfo Helm release was uninstalled by aspire destroy...");
-            await auto.TypeAsync(
-                "RELEASES=$(helm list -n podinfo -q 2>/dev/null); " +
-                "if [ -z \"$RELEASES\" ]; then echo 'VERIFY_OK: podinfo release was uninstalled'; " +
-                "else echo \"FAIL: podinfo release still exists: $RELEASES\"; exit 1; fi");
+            // Step 15: Replace the ambient kubeconfig so destroy proves it acquires AKS
+            // credentials itself instead of reusing the context configured in Step 10.
+            output.WriteLine("Step 15: Clearing ambient Kubernetes credentials...");
+            await auto.TypeAsync("export KUBECONFIG=$(mktemp)");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("VERIFY_OK", timeout: TimeSpan.FromMinutes(2));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
+
+            // Step 16: Destroy the application and opted-in external Helm chart before
+            // deleting the AKS resource group.
+            output.WriteLine("Step 16: Destroying deployment...");
+            await auto.TypeAsync("aspire destroy --yes");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("helm-uninstall-podinfo", timeout: TimeSpan.FromMinutes(10));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(20));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
 
             // Step 17: Exit terminal
             await auto.TypeAsync("exit");

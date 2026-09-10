@@ -1,20 +1,23 @@
 ::deep .span-messages-container {
     background: var(--main-container-background-color);
-    color: var(--neutral-foreground-rest);
-    border: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-layer-rest);
-    border-radius: calc(var(--layer-corner-radius) * 1px);
+    color: var(--colorNeutralForeground1);
+    border: var(--strokeWidthThin) solid var(--colorNeutralBackground3);
+    border-radius: 10px;
     padding: 8px 8px 16px 16px;
     height: 65vh;
     display: grid;
     grid-template-rows: auto 1fr auto;
 }
 
-::deep .span-messages-container fluent-button.message-copy-button::part(control):not(:hover) {
+::deep .span-messages-container fluent-button.back-button::part(control):not(:hover) {
     background: var(--main-container-background-color);
 }
 
-::deep .span-messages-container fluent-button.back-button::part(control):not(:hover) {
-    background: var(--main-container-background-color);
+.dialog-title-grid ::deep .genai-dialog-title {
+    display: block;
+    overflow: hidden;
+    color: inherit;
+    font: inherit;
 }
 
 ::deep .span-messages-sidebar {
@@ -24,8 +27,8 @@
 
 ::deep .message-container {
     padding: 12px;
-    border: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-hover);
-    border-radius: calc(var(--layer-corner-radius) * 0.5px);
+    border: var(--strokeWidthThin) solid var(--aspire-button-hover-border);
+    border-radius: 5px;
     display: flex;
     flex-direction: column;
     row-gap: 12px;
@@ -33,17 +36,19 @@
 }
 
 ::deep .message-container .message-title {
-    font-size: var(--type-ramp-plus-1-font-size);
+    font-size: var(--fontSizeBase400);
     display: flex;
     align-items: center;
 }
 
 ::deep .section-title {
-    font-size: var(--type-ramp-plus-1-font-size);
+    font-family: var(--aspire-font-display);
+    font-size: var(--fontSizeBase400);
     font-weight: 600;
 }
 
 .dialog-title-grid ::deep .trace-id {
+    display: inline;
     color: var(--foreground-subtext-rest);
     padding-left: 0.5rem;
     font-size: 12px;
@@ -51,17 +56,34 @@
     line-height: 1;
 }
 
-.genai-visualizer-container ::deep .fluent-splitter::part(median) {
+.genai-visualizer-container ::deep .fluent-multi-splitter-bar {
+    margin-inline: 0;
+    flex-shrink: 0;
+}
+
+.genai-visualizer-container ::deep .fluent-multi-splitter-bar:not(:hover)::before {
     opacity: 0;
 }
 
 ::deep .genai-message-tree {
-    --base-height-multiplier: 9;
     min-width: auto;
 }
 
 ::deep fluent-tree-item::part(positioning-region) {
+    min-height: 33px;
+    box-sizing: border-box;
+    padding: 0;
     margin-bottom: 1px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+
+::deep fluent-tree-item[selected]::part(positioning-region) {
+    background-color: var(--colorNeutralBackground3);
+}
+
+::deep fluent-tree-item:not([selected])::part(positioning-region):hover {
+    background-color: var(--colorNeutralBackground3);
 }
 
 ::deep fluent-tree-item:not([selected])::part(positioning-region):not(:hover) {
@@ -152,7 +174,7 @@
 }
 
 ::deep .message-header-date {
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
     font-size: 12px;
 }
 
@@ -203,10 +225,6 @@
     word-break: normal;
 }
 
-::deep .text-visualizer-line-number {
-    min-width: 33px;
-}
-
 ::deep .message-container .defaultHidden {
     position: absolute;
     top: 0.5rem;
@@ -218,8 +236,9 @@
     display: block;
 }
 
-::deep .no-message-content {
-    color: var(--foreground-subtext-rest);
+::deep .no-message-content,
+::deep .no-message-content-content {
+    color: var(--colorNeutralForeground3);
     font-size: 12px;
 }
 
@@ -238,48 +257,84 @@
 }
 
 ::deep .no-message-content-content {
-    color: var(--foreground-subtext-rest);
-    font-size: 12px;
     padding-bottom: 12px;
 }
 
 ::deep .message-copy-button {
+    --aspire-button-border-color: transparent;
+    --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
+    --colorNeutralStroke1Hover: transparent;
+    --colorNeutralStroke1Pressed: transparent;
+    width: auto;
+    height: 28px;
+    min-height: 28px;
+    padding-inline: 2px;
+    border-color: transparent;
+    border-radius: 6px;
+    color: var(--colorNeutralForeground1);
+    font-weight: var(--fontWeightRegular);
     margin-left: auto;
     margin-top: 4px;
     margin-right: 4px;
+}
+
+::deep fluent-button.message-copy-button::part(control) {
+    height: 28px;
+    min-height: 28px;
+    padding-inline: 2px;
+    border-color: transparent;
+    border-radius: 6px;
+    background: var(--main-container-background-color);
+}
+
+::deep fluent-button.message-copy-button:hover::part(control),
+::deep fluent-button.message-copy-button:active::part(control) {
+    background: var(--colorNeutralBackground3);
+}
+
+::deep fluent-button.message-copy-button > [slot="start"] {
+    margin-inline-end: 3px;
 }
 
 ::deep .markdown-container {
     width: 100%;
 }
 
-.genai-visualizer-container ::deep .tab-text {
-    padding-right: 4px;
-}
-
 ::deep .tools-list {
     width: 100%;
-}
-
-::deep .tab-container .tools-list fluent-accordion-item {
-    --fill-color: var(--property-grid-genai-dialog-background-color);
+    align-items: stretch;
+    gap: 4px;
 }
 
 ::deep .tab-container .tools-list fluent-accordion-item.tool-highlighted {
-    border: 2px solid var(--accent-fill-rest);
+    border: 2px solid var(--colorBrandBackground);
 }
 
 ::deep .tab-container .tools-list fluent-accordion-item,
-::deep .tab-container .tools-list fluent-accordion-item::part(region) {
+::deep .tab-container .tools-list fluent-accordion-item::part(heading),
+::deep .tab-container .tools-list fluent-accordion-item::part(content) {
     background-color: var(--property-grid-genai-dialog-background-color);
 }
 
-/* This is a hack because we can't do a selector that selects inside of a ::part,
-   which is what we'd need to do to access `::part(heading):not(:hover) .icon`.
-   So instead we just change the color token the non-hovered state uses.
-*/
-::deep .tab-container .tools-list fluent-accordion-item::part(icon) {
-    --neutral-fill-stealth-rest-on-neutral-fill-layer-rest: var(--property-grid-genai-dialog-background-color);
+::deep .tab-container .tools-list fluent-accordion-item {
+    display: block;
+    width: 100%;
+    max-width: none;
+    overflow: hidden;
+    border: var(--strokeWidthThin) solid var(--colorNeutralBackground3);
+    border-radius: 10px;
+}
+
+::deep .tab-container .tools-list fluent-accordion-item::part(heading) {
+    --accordion-marker-background: transparent;
+}
+
+::deep .tab-container .tools-list fluent-accordion-item::part(heading):hover {
+    --accordion-marker-background: var(--aspire-menu-item-hover-background);
+}
+
+::deep .tab-container .tools-list fluent-accordion-item::part(button) {
+    text-align: left;
 }
 
 ::deep .tab-container .tool-heading {
@@ -328,7 +383,7 @@
 ::deep .tab-container .tool-cell {
     text-align: left;
     padding: 8px;
-    border-bottom: 1px solid var(--neutral-stroke-divider-rest);
+    border-bottom: 1px solid var(--colorNeutralStroke3);
 }
 
 ::deep .tab-container strong {
@@ -345,8 +400,8 @@
 
 ::deep .tab-container .evaluation-container {
     padding: 12px;
-    border: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-hover);
-    border-radius: calc(var(--layer-corner-radius) * 0.5px);
+    border: var(--strokeWidthThin) solid var(--colorNeutralStroke1Hover);
+    border-radius: 5px;
     width: 100%;
     row-gap: 12px;
     display: flex;
@@ -363,9 +418,5 @@
 
 ::deep .tab-container .evaluation-divider {
     height: 20px;
-    border-color: var(--neutral-stroke-hover);
-}
-
-::deep .tab-label > svg {
-    margin-right: calc(var(--design-unit) * 1px);
+    border-color: var(--colorNeutralStroke1Hover);
 }

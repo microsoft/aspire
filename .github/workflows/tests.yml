@@ -47,6 +47,7 @@ jobs:
       run_winget_installer: ${{ fromJSON(steps.select_tests.outputs.selection).run_winget_installer }}
       run_homebrew_installer: ${{ fromJSON(steps.select_tests.outputs.selection).run_homebrew_installer }}
       run_nix_package: ${{ fromJSON(steps.select_tests.outputs.selection).run_nix_package }}
+      run_cli_starter_validation: ${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         # This job runs PR-authored code; don't leave the checkout's GITHUB_TOKEN persisted in
@@ -472,8 +473,8 @@ jobs:
 
   cli_starter_validation_linux_x64:
     name: Aspire CLI Starter Validation (Ubuntu x64)
-    needs: [build_packages, build_cli_archive_linux]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: ubuntu-latest
@@ -486,8 +487,8 @@ jobs:
 
   cli_starter_validation_linux_arm64:
     name: Aspire CLI Starter Validation (Ubuntu ARM64)
-    needs: [build_packages, build_cli_archive_linux_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux_arm64]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: ubuntu-24.04-arm
@@ -500,8 +501,8 @@ jobs:
 
   cli_starter_validation_windows_x64:
     name: Aspire CLI Starter Validation (Windows x64)
-    needs: [build_packages, build_cli_archive_windows]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_windows]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: windows-latest
@@ -514,8 +515,8 @@ jobs:
 
   cli_starter_validation_windows_arm64:
     name: Aspire CLI Starter Validation (Windows ARM64)
-    needs: [build_packages, build_cli_archive_windows_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_windows_arm64]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: windows-11-arm
@@ -528,8 +529,8 @@ jobs:
 
   cli_starter_validation_macos_x64:
     name: Aspire CLI Starter Validation (macOS x64)
-    needs: [build_packages, build_cli_archive_macos_x64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_macos_x64]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: macos-15-intel
@@ -542,8 +543,8 @@ jobs:
 
   cli_starter_validation_macos_arm64:
     name: Aspire CLI Starter Validation (macOS ARM64)
-    needs: [build_packages, build_cli_archive_macos]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_macos]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: macos-latest
@@ -756,8 +757,9 @@ jobs:
         #   any bucket can be legitimately empty -> its job is 'skipped'. Each is therefore gated on its
         #   matrix being non-empty (include[0] != null); a 'skipped' result is only a failure when the
         #   bucket actually had work. Before selective CI these were always populated on a full run.
-        # - cli_starter_validation_*: these jobs run for every pull request and are expected
-        #   to be skipped for other workflow events.
+        # - cli_starter_validation_*: these jobs run on pull requests when the selector routes the
+        #   change to job:cli-starter-validation, and are expected to be skipped otherwise (a
+        #   non-selecting PR, or any other workflow event).
         # - extension_e2e_tests: this job only runs when the PR/push changes the VS Code extension,
         #   Aspire CLI, or the extension E2E workflow wiring.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
@@ -771,12 +773,13 @@ jobs:
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
                  (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
-                 needs.cli_starter_validation_linux_x64.result == 'skipped' ||
-                 needs.cli_starter_validation_linux_arm64.result == 'skipped' ||
-                 needs.cli_starter_validation_windows_x64.result == 'skipped' ||
-                 needs.cli_starter_validation_windows_arm64.result == 'skipped' ||
-                 needs.cli_starter_validation_macos_x64.result == 'skipped' ||
-                 needs.cli_starter_validation_macos_arm64.result == 'skipped' ||
+                 (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' &&
+                  (needs.cli_starter_validation_linux_x64.result == 'skipped' ||
+                   needs.cli_starter_validation_linux_arm64.result == 'skipped' ||
+                   needs.cli_starter_validation_windows_x64.result == 'skipped' ||
+                   needs.cli_starter_validation_windows_arm64.result == 'skipped' ||
+                   needs.cli_starter_validation_macos_x64.result == 'skipped' ||
+                   needs.cli_starter_validation_macos_arm64.result == 'skipped')) ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  (needs.typescript_api_compat.result == 'skipped' &&

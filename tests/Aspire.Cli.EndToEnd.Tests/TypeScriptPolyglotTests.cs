@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
@@ -21,7 +22,8 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         "npm",
         "bun",
         "yarn",
-        "pnpm"
+        "pnpm",
+        "deno"
     };
 
     [Theory]
@@ -285,12 +287,105 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
             File.Exists(lockFilePath),
             $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(toolchain)} install to create '{lockFilePath}'.");
 
-        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetRunScriptCommand(toolchain, "aspire:dev"));
+        if (toolchain == "deno")
+        {
+            // Keep Deno and Node available for package tasks and local npm-package binaries, but
+            // deliberately exclude npm. A successful build proves the convenience task runs both
+            // ESLint and tsc without relying on npm lifecycle hooks.
+            await auto.TypeAsync("""
+                mkdir -p /tmp/deno-task-path &&
+                ln -sf "$(command -v deno)" /tmp/deno-task-path/deno &&
+                ln -sf "$(command -v node)" /tmp/deno-task-path/node &&
+                PATH=/tmp/deno-task-path deno task build
+                """.ReplaceLineEndings(" "));
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        }
+
+        var watchCommand = TypeScriptAppHostToolchainTestHelpers.GetRunScriptCommand(toolchain, "aspire:dev");
+        if (toolchain == "deno")
+        {
+            watchCommand = "PATH=/tmp/deno-task-path deno task watch";
+        }
+
+        await auto.TypeAsync(watchCommand);
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
-            s => s.ContainsText("Watching for file changes."),
+            s => s.ContainsText(TypeScriptAppHostToolchainTestHelpers.GetWatchModeReadyText(toolchain)),
             timeout: TimeSpan.FromMinutes(2),
             description: $"{toolchain} watch mode to start");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForAnyPromptAsync(counter);
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task AspireRun_WithDenoWatchMode_RestartsOnAppHostChange()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
+            ["Aspire.Hosting.CodeGeneration.TypeScript."]);
+        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
+        await auto.DeclineAgentInitPromptAsync(counter);
+
+        TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, "deno", cleanInstallState: true);
+        if (localChannel is not null)
+        {
+            CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
+        }
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
+        config["features"] = new JsonObject
+        {
+            ["defaultWatchEnabled"] = true
+        };
+        File.WriteAllText(configPath, config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
+        var restartCountPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".deno-watch-restart-count");
+        var appHostContent = File.ReadAllText(appHostPath);
+        File.WriteAllText(appHostPath, $$"""
+            const restartCountUrl = new URL("./.deno-watch-restart-count", import.meta.url);
+            let restartCount = 0;
+            try {
+                restartCount = Number(await Deno.readTextFile(restartCountUrl));
+            } catch (error) {
+                if (!(error instanceof Deno.errors.NotFound)) {
+                    throw error;
+                }
+            }
+            await Deno.writeTextFile(restartCountUrl, String(restartCount + 1));
+
+            {{appHostContent}}
+            """);
+
+        await auto.TypeAsync("deno install");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync("aspire run");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Press CTRL+C to stop the AppHost and exit.", timeout: TimeSpan.FromMinutes(3));
+        Assert.Equal("1", File.ReadAllText(restartCountPath));
+
+        File.AppendAllText(appHostPath, $"{Environment.NewLine}// Trigger Deno watch restart.{Environment.NewLine}");
+        await WaitForFileContentAsync(restartCountPath, "2", TimeSpan.FromMinutes(2));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForAnyPromptAsync(counter);
@@ -463,5 +558,23 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    private static async Task WaitForFileContentAsync(string path, string expectedContent, TimeSpan timeout)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        while (stopwatch.Elapsed < timeout)
+        {
+            if (File.Exists(path) &&
+                string.Equals(File.ReadAllText(path), expectedContent, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
+        }
+
+        var actualContent = File.Exists(path) ? File.ReadAllText(path) : "<missing>";
+        throw new TimeoutException($"Timed out waiting for '{path}' to contain '{expectedContent}'. Actual content: '{actualContent}'.");
     }
 }

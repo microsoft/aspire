@@ -88,4 +88,33 @@ public class CliTagEnrichmentProcessorTests
         Assert.Contains(activity.Tags, t => t.Key == "aspire.cli.version" && (string?)t.Value == "1.0.0-test");
         Assert.Contains(activity.Tags, t => t.Key == "machine.device_id" && (string?)t.Value == "test-device-id");
     }
+
+    [Fact]
+    public async Task OnEnd_DetectorActivitySuppressesRawInternalIdentityTags()
+    {
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        tagsSource.StartCalculation(() => Task.FromResult<IReadOnlyList<KeyValuePair<string, object?>>>(
+        [
+            new(TelemetryConstants.Tags.CliVersion, "1.0.0-test"),
+            new(TelemetryConstants.Tags.InternalMicrosoftAlias, "test.alias"),
+            new(TelemetryConstants.Tags.InternalMicrosoftDomain, "REDMOND")
+        ]));
+        await tagsSource.TagsTask;
+        var processor = new CliTagEnrichmentProcessor(tagsSource);
+
+        using var source = new ActivitySource($"Test.{Path.GetRandomFileName()}");
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = s => s.Name == source.Name,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
+        };
+        ActivitySource.AddActivityListener(listener);
+        using var activity = source.StartActivity(TelemetryConstants.Activities.InternalMicrosoftDetector)!;
+
+        processor.OnEnd(activity);
+
+        Assert.Equal("1.0.0-test", activity.GetTagItem(TelemetryConstants.Tags.CliVersion));
+        Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftAlias));
+        Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDomain));
+    }
 }

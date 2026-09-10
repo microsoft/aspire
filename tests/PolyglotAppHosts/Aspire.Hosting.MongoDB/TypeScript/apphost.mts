@@ -47,6 +47,29 @@ const mongoChained = await builder.addMongoDB("mongo-chained")
 await mongoChained.addDatabase("app-db");
 await mongoChained.addDatabase("analytics-db", { databaseName: "analytics" });
 
+// Test 11: Test withBindIpAll
+await builder.addMongoDB("mongo-bind-all")
+    .withBindIpAll();
+
+// Test 12: Test withReplicaSet with KeyFile and TLS configuration
+const keyFileParam = await builder.addParameter("rs-keyfile", { secret: true, value: "my-secret-key" });
+await builder.addMongoDB("mongo-rs-member")
+    .withReplicaSet("rs0")
+    .withKeyFile(keyFileParam, { keyFilePath: "/etc/rs.key" })
+    .withTlsMode()
+    .withTlsAllowInvalidCertificates();
+
+// Test 13: Test AddMongoDBReplicaSet with WithMember
+// NOTE: The members are not given a key file of their own here. withMember gives them the replica set's shared one,
+// and a member carrying a different key file is rejected.
+const mongo1 = await builder.addMongoDB("mongo-rs-1");
+
+const mongo2 = await builder.addMongoDB("mongo-rs-2");
+
+const replicaSet = await builder.addMongoDBReplicaSet("rs0")
+    .withMember(mongo1)
+    .withMember(mongo2);
+
 // ---- Property access on MongoDBServerResource ----
 const _endpoint = await mongo.primaryEndpoint();
 const _host = await mongo.host();

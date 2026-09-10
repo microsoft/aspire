@@ -54,6 +54,38 @@ public sealed class ExtensionE2eWorkflowTests
     }
 
     [Fact]
+    public void DenoIsInstalledOnlyForDenoE2eShards()
+    {
+        var job = LoadExtensionE2eJob();
+        var rows = MatrixIncludeRows(job).ToList();
+        var denoRows = rows
+            .Where(row => Scalar(row, "installDeno") == "true")
+            .ToList();
+
+        Assert.Contains(denoRows, row => Scalar(row, "name") == "Linux" && Scalar(row, "shardName") == "launch-profiles");
+        Assert.Contains(denoRows, row => Scalar(row, "name") == "Windows" && Scalar(row, "shardName") == "launch-profiles");
+        Assert.All(denoRows, row =>
+        {
+            var name = Scalar(row, "name");
+            var shardName = Scalar(row, "shardName");
+            Assert.True(
+                (shardName == "launch-profiles" && name is "Linux" or "Windows") ||
+                (shardName == "deno-debugger" && name == "Linux"),
+                $"Deno should not be installed for the {name}/{shardName} shard.");
+        });
+
+        var installDenoStep = Assert.Single(
+            ExtensionE2eWorkflow.Steps(job),
+            step => Scalar(step, "name") == "Install Deno");
+        Assert.Equal("${{ matrix.installDeno }}", Scalar(installDenoStep, "if"));
+        Assert.Equal("pwsh", Scalar(installDenoStep, "shell"));
+        var installScript = Scalar(installDenoStep, "run") ?? string.Empty;
+        Assert.Contains("https://github.com/denoland/deno/releases/download/v2.9.0/deno-$target.zip", installScript, StringComparison.Ordinal);
+        Assert.Contains("$installDirectory | Out-File -FilePath $env:GITHUB_PATH", installScript, StringComparison.Ordinal);
+        Assert.Contains("--version", installScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SelectedExtensionE2eWorkflowMustRun()
     {
         var yaml = new YamlStream();
