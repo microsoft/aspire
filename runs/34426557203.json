@@ -1,0 +1,29 @@
+{
+  "run_id": 34426557203,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34426557203",
+  "analyzed_at": "2026-09-10T02:13:25Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19653,
+    "title": "Improve internal Microsoft user telemetry",
+    "author": "DamianEdwards",
+    "state": "closed",
+    "head_branch": "damianedwards-internal-telemetry-improvements",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19653"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "id": 102714980686,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34426557203/job/102714980686",
+      "classification": "flaky-test",
+      "reason": "Job failed with a generic 'Process completed with exit code 1' during the 'Run extension E2E tests' step. Job logs could not be fetched, and no TRX test failures were extracted. The PR only modifies internal Microsoft telemetry detection code in the Aspire CLI (extension.ts, telemetry.ts, InternalMicrosoftDetector.cs, etc.), which is unrelated to the VS Code extension E2E test infrastructure for the apphost-tree shard. This matches the known recurring pattern `vscode-e2e-windows-apphost-tree-flaky` which has occurred 3 times previously with the same generic failure signature on this specific shard.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-apphost-tree-flaky"]
+}
