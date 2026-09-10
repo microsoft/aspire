@@ -1,0 +1,55 @@
+{
+  "run_id": 34480468710,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34480468710",
+  "analyzed_at": "2026-09-10T13:34:02Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20016,
+    "title": "Use a scoped Aspire App token for Copilot review requests",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-organization-funded-copilot-reviews",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20016"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, Hosti... / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 102882482584,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34480468710/job/102882482584",
+      "classification": "flaky-test",
+      "reason": "Two AzureKubernetesInfrastructureTests DestroyPipeline tests timed out on windows-latest. This matches the prior recurring cause 'hosting-azure-kubernetes-destroypipeline-timeout' (4 prior occurrences). The PR only changes GitHub workflow/docs/Copilot-review-related test files, none of which touch AzureKubernetesInfrastructureTests or the AKS destroy pipeline code.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 102885749798,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34480468710/job/102885749798",
+      "classification": "flaky-test",
+      "reason": "Prepare Homebrew cask artifact step failed with generic exit code 1 and a cask problem annotation, unrelated to the PR's workflow/docs/test changes. Matches the prior recurring cause 'cli-smoke-test-homebrew-winget-unrelated' (23 prior occurrences).",
+      "failed_steps": ["Prepare Homebrew cask artifact"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, Hosti... / Hosting.Azure.Kubernetes (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 565\n   at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 575",
+      "classification": "flaky",
+      "reason": "Timeout in AKS destroy pipeline test on windows-latest; PR does not touch AKS/Kubernetes hosting code, matches known recurring flaky pattern 'hosting-azure-kubernetes-destroypipeline-timeout'."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksOutputAndScopeWithoutProvisioning",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, Hosti... / Hosting.Azure.Kubernetes (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksOutputAndScopeWithoutProvisioning() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 487\n   at Aspire.Hosting.Azure.Tests.AzureKubernetesInfrastructureTests.DestroyPipelineUsesPersistedAksOutputAndScopeWithoutProvisioning() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Kubernetes.Tests\\AzureKubernetesInfrastructureTests.cs:line 497",
+      "classification": "flaky",
+      "reason": "Timeout in AKS destroy pipeline test on windows-latest; PR does not touch AKS/Kubernetes hosting code, matches known recurring flaky pattern 'hosting-azure-kubernetes-destroypipeline-timeout'."
+    }
+  ],
+  "causes": ["hosting-azure-kubernetes-destroypipeline-timeout", "cli-smoke-test-homebrew-winget-unrelated"]
+}

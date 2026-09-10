@@ -164,6 +164,13 @@
       "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
       "pr_number": 19641,
       "observed_at": "2026-08-25T21:24:24Z"
+    },
+    {
+      "run_id": 34480468710,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34480468710",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kubernetes.Tests, Hosting.Azure.Kubernetes, Hosti... / Hosting.Azure.Kubernetes (windows-latest)",
+      "pr_number": 20016,
+      "observed_at": "2026-09-10T13:34:02Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19596"
