@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Reflection;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.TestServices;
@@ -9,6 +11,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 
@@ -616,6 +619,121 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetNuGetSettingsAsync_ParsesActualManagedSettingsOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var localSourceDirectory = workspace.CreateDirectory("local-source");
+        var marker = $"redaction-marker-{Guid.NewGuid():N}";
+        var sensitiveSource = CreateSensitiveSource(marker);
+        var configPath = Path.Combine(appHostDirectory.FullName, "NuGet.Config");
+        File.WriteAllText(
+            configPath,
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="local" value="{localSourceDirectory.FullName}" />
+                <add key="sensitive" value="{sensitiveSource}" />
+              </packageSources>
+              <disabledPackageSources>
+                <add key="local" value="false" />
+              </disabledPackageSources>
+              <packageSourceMapping>
+                <packageSource key="local">
+                  <package pattern="Contoso.*" />
+                </packageSource>
+                <packageSource key="sensitive">
+                  <package pattern="Aspire*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var sourceIdentityKey = new byte[NuGetSourceIdentity.KeySizeInBytes];
+        var service = CreateServiceWithActualManagedHelper(
+            NullLogger<BundleNuGetService>.Instance,
+            sourceIdentityKey);
+
+        var settings = await service.GetNuGetSettingsAsync(
+            appHostDirectory.FullName,
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(configPath, settings.ConfigPaths, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(
+            settings.Sources,
+            source => source.Name == "local" &&
+                source.Identity == NuGetSourceIdentity.Compute(localSourceDirectory.FullName, sourceIdentityKey) &&
+                !source.IsEnabled);
+        Assert.Contains(
+            settings.Sources,
+            source => source.Name == "sensitive" &&
+                source.Identity == NuGetSourceIdentity.Compute(sensitiveSource, sourceIdentityKey) &&
+                source.IsEnabled);
+        Assert.Equal([sensitiveSource], settings.SensitiveSourceValues);
+        Assert.True(settings.PackageSourceMappingEnabled);
+        Assert.Contains(
+            settings.PackageSourceMappings,
+            mapping => mapping.SourceKey == "local" && mapping.Patterns.SequenceEqual(["Contoso.*"]));
+        Assert.Contains(
+            settings.PackageSourceMappings,
+            mapping => mapping.SourceKey == "sensitive" && mapping.Patterns.SequenceEqual(["Aspire*"]));
+        Assert.Contains("local", settings.DisabledPackageSourceKeys, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("local", settings.ReservedPackageSourceKeys, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("sensitive", settings.ReservedPackageSourceKeys, StringComparer.OrdinalIgnoreCase);
+        Assert.Same(sourceIdentityKey, settings.SourceIdentityKey);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_RedactsAmbientSourceReportedByActualManagedHelper()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var marker = $"redaction-marker-{Guid.NewGuid():N}";
+        var sensitiveSource = CreateSensitiveSource(marker);
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "NuGet.Config"),
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="unavailable" value="{sensitiveSource}" />
+              </packageSources>
+            </configuration>
+            """);
+        var sink = new TestSink();
+        var logger = new TestLogger<BundleNuGetService>(new TestLoggerFactory(sink, enabled: true));
+        var service = CreateServiceWithActualManagedHelper(
+            logger,
+            new byte[NuGetSourceIdentity.KeySizeInBytes]);
+        var settings = await service.GetNuGetSettingsAsync(
+            appHostDirectory.FullName,
+            TestContext.Current.CancellationToken);
+        Assert.Equal([sensitiveSource], settings.SensitiveSourceValues);
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestorePackagesAsync(
+            [("Aspire.RedactionProbe.DoesNotExist", "0.0.0")],
+            workingDirectory: appHostDirectory.FullName,
+            nugetConfigPaths: settings.ConfigPaths,
+            additionalSensitiveSources: settings.SensitiveSourceValues,
+            ct: timeout.Token));
+
+        var redactedSource = PackageSourceRedactor.RedactForDisplay(sensitiveSource);
+        Assert.Contains(redactedSource, exception.Message);
+        Assert.DoesNotContain(marker, exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(sensitiveSource, exception.ToString(), StringComparison.Ordinal);
+        Assert.Contains(
+            sink.Writes,
+            write => write.Message?.Contains(redactedSource, StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(
+            sink.Writes,
+            write => write.Message?.Contains(marker, StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
     public async Task WriteNuGetConfigOverlayAsync_UsesBundledHelperAndDeletesRequest()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1105,6 +1223,72 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, invocations.Count);
         Assert.DoesNotContain(invocations, args => args.Contains("layout"));
         Assert.Equal("manifest", invocations[1][1]);
+    }
+
+    private static BundleNuGetService CreateServiceWithActualManagedHelper(
+        ILogger<BundleNuGetService> logger,
+        byte[] sourceIdentityKey)
+    {
+        var managedPath = GetBuiltManagedPath();
+        var environment = new TestEnvironment();
+        var layout = new LayoutConfiguration
+        {
+            LayoutPath = Path.GetDirectoryName(managedPath),
+            Components = new LayoutComponents { Managed = "." }
+        };
+
+        return new BundleNuGetService(
+            new FixedLayoutDiscovery(layout),
+            new LayoutProcessRunner(
+                new ProcessExecutionFactory(
+                    environment,
+                    NullLogger<ProcessExecutionFactory>.Instance)),
+            new TestFeatures(),
+            environment,
+            logger)
+        {
+            SourceIdentityKeyFactory = () => sourceIdentityKey
+        };
+    }
+
+    private static string CreateSensitiveSource(string marker)
+        => new UriBuilder(Uri.UriSchemeHttp, "127.0.0.1", 1, "v3/index.json")
+        {
+            Query = $"opaque={Uri.EscapeDataString(marker)}"
+        }.Uri.AbsoluteUri;
+
+    private static string GetBuiltManagedPath()
+    {
+        var configuration = typeof(BundleNuGetServiceTests).Assembly
+            .GetCustomAttribute<AssemblyConfigurationAttribute>()?
+            .Configuration
+            ?? throw new InvalidOperationException("The test assembly build configuration was unavailable.");
+        var repoRoot = FindRepoRoot();
+        var managedPath = Path.Combine(
+            repoRoot,
+            "artifacts",
+            "bin",
+            "Aspire.Managed",
+            configuration,
+            "net10.0",
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+
+        Assert.True(File.Exists(managedPath), $"The built aspire-managed executable was not found at '{managedPath}'.");
+        return managedPath;
+    }
+
+    private static string FindRepoRoot()
+    {
+        for (DirectoryInfo? directory = new(Directory.GetCurrentDirectory()); directory is not null; directory = directory.Parent)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, ".git")) ||
+                File.Exists(Path.Combine(directory.FullName, ".git")))
+            {
+                return directory.FullName;
+            }
+        }
+
+        throw new InvalidOperationException("Unable to find the repository root.");
     }
 
     private static string GetArgumentValue(string[] arguments, string optionName)
