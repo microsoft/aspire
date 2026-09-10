@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency bump (yarn.lock in extension), not user-facing.",
+  "mergedAt": "2026-09-09T20:35:25Z",
+  "number": 19994,
+  "runDate": "2026-09-10T00:07:33Z",
+  "status": "excluded",
+  "title": "Bump baseline-browser-mapping from 2.10.13 to 2.11.20 in /extension"
+}

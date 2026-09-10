@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Routine .NET servicing dependency update (Directory.Packages.props, global.json), not user-facing.",
+  "mergedAt": "2026-09-09T23:04:33Z",
+  "number": 19993,
+  "runDate": "2026-09-10T00:07:33Z",
+  "status": "excluded",
+  "title": "Update dependencies from September .NET servicing"
+}
