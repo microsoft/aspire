@@ -150,6 +150,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [configPath],
             integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -163,6 +164,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [configPath],
             integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -194,6 +196,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             [configPath],
             integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -240,6 +243,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: Path.GetFullPath("packages-a"),
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -250,6 +254,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: Path.GetFullPath("packages-b"),
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -266,6 +271,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: [Path.GetFullPath("fallback-a")],
             CancellationToken.None);
@@ -276,6 +282,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: null,
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: [Path.GetFullPath("fallback-b")],
             CancellationToken.None);
@@ -292,6 +299,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: "13.4.0",
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
@@ -302,11 +310,40 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             [],
             nugetConfigPaths: null,
             integrationHostingVersion: "13.5.0",
+            integrationPackageSources: null,
             nugetPackagesPath: null,
             nugetFallbackPackagesPaths: null,
             CancellationToken.None);
 
         Assert.NotEqual(initial.Fingerprint, changedVersion.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenIntegrationPackageSourcesChange()
+    {
+        var initial = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project />",
+            [],
+            [],
+            nugetConfigPaths: null,
+            integrationHostingVersion: null,
+            integrationPackageSources: "https://example.invalid/feed-a",
+            nugetPackagesPath: null,
+            nugetFallbackPackagesPaths: null,
+            CancellationToken.None);
+
+        var changedSources = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project />",
+            [],
+            [],
+            nugetConfigPaths: null,
+            integrationHostingVersion: null,
+            integrationPackageSources: "https://example.invalid/feed-b",
+            nugetPackagesPath: null,
+            nugetFallbackPackagesPaths: null,
+            CancellationToken.None);
+
+        Assert.NotEqual(initial.Fingerprint, changedSources.Fingerprint);
     }
 
     [Fact]
@@ -3057,10 +3094,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 Assert.NotNull(options.EnvironmentVariableFilter);
                 Assert.True(options.EnvironmentVariableFilter(CliPathHelper.NuGetPackagesEnvironmentVariable));
                 Assert.True(options.EnvironmentVariableFilter(PrebuiltAppHostServer.IntegrationHostingVersionPropertyName));
+                Assert.True(options.EnvironmentVariableFilter(PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName));
                 Assert.False(options.EnvironmentVariableFilter("PATH"));
                 Assert.Equal(
                     "13.4.0-pr.17141.gf142085f",
                     options.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationHostingVersionPropertyName]);
+                Assert.Equal(
+                    channelSource,
+                    options.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName]);
                 Assert.False(options.EnvironmentVariables?.ContainsKey("RestoreAdditionalProjectSources"));
                 Assert.Equal(
                     generatedPolicyOverlay?
@@ -3112,6 +3153,82 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Contains(packageElements, e =>
                 e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" &&
                 e.Attribute("Version")?.Value == "13.4.0-pr.17141.gf142085f");
+        }
+        finally
+        {
+            server.Dispose();
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithCredentialBearingChannelSource_OmitsProjectSourceHint()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var credentialMarker = $"credential-marker-{Guid.NewGuid():N}";
+        var channelSource = $"https://packages.example.invalid/v3/index.json?opaque={credentialMarker}";
+        ProcessInvocationOptions? buildOptions = null;
+
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            """
+            {
+              "channel": "daily"
+            }
+            """);
+
+        var dotNetCliRunner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFilePath, _, options, _) =>
+            {
+                buildOptions = options;
+                WriteClosureInputs(
+                    projectFilePath.Directory!,
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["MyIntegration.dll"] = "integration-v1"
+                    },
+                    ["MyIntegration"]);
+                return 0;
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            name: "daily",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            logger: NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            dotNetCliRunner: dotNetCliRunner,
+            packagingService: packagingService);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0-pr.17141.gf142085f"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(buildOptions);
+            Assert.True(buildOptions.SuppressLogging);
+            Assert.NotNull(buildOptions.EnvironmentVariableFilter);
+            Assert.True(buildOptions.EnvironmentVariableFilter(
+                PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName));
+            Assert.False(buildOptions.EnvironmentVariables?.ContainsKey(
+                PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName));
+            Assert.DoesNotContain(
+                buildOptions.EnvironmentVariables?.Values ?? [],
+                value => value.Contains(credentialMarker, StringComparison.Ordinal));
         }
         finally
         {
@@ -3670,6 +3787,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Equal(
                 "13.4.0-pr.17166.ga49d604d",
                 buildOptions?.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationHostingVersionPropertyName]);
+            Assert.Equal(
+                packageSourceOverride,
+                buildOptions?.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName]);
             Assert.False(buildOptions?.EnvironmentVariables?.ContainsKey("RestoreAdditionalProjectSources"));
 
             var packageElements = generatedProject.Descendants("PackageReference").ToList();
