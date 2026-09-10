@@ -27,6 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <AssemblyMetadata Include="AspireDashboardImageTag" Value="$(AspireDashboardImageTag)" Condition="'$(AspireDashboardImageTag)' != ''" />
     <InternalsVisibleTo Include="Aspire.Hosting.Docker.Tests" />
   </ItemGroup>
 
