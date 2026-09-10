@@ -3,6 +3,7 @@ export declare const LIMITS: Readonly<{
     commandBytes: number;
     frameBytes: number;
     metadataBytes: number;
+    titleUnits: 4096;
     cells: 262144;
     images: 4096;
     placements: 16384;

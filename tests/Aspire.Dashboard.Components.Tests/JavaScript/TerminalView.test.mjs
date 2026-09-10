@@ -599,7 +599,7 @@ test("frontend manifest, lockfile, vendored package and backend use the exact pa
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
     const vendored = JSON.parse(await readFile(new URL("package.json", assets), "utf8"));
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.167.0-alpha.1522.1.3085d8b");
+    assert.equal(version, "0.167.0-alpha.1547.1.798b26c");
     assert.equal(vendored.version, version);
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);

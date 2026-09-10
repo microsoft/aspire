@@ -4,6 +4,7 @@ export const LIMITS = Object.freeze({
     commandBytes: 64 * 1024,
     frameBytes: 96 * 1024 * 1024,
     metadataBytes: 8 * 1024 * 1024,
+    titleUnits: 4096,
     cells: 262144,
     images: 4096,
     placements: 16384,
@@ -98,6 +99,31 @@ function validateMetadata(metadata) {
     }
     integer(metadata.revision, "revision", 1);
     integer(metadata.baseRevision, "base revision");
+    if (typeof metadata.title !== "string" || metadata.title.length > LIMITS.titleUnits ||
+        /[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/u.test(metadata.title)) {
+        throw new Error("Invalid terminal title");
+    }
+    const progress = metadata.progress;
+    if (!isRecord(progress) || typeof progress.state !== "string" ||
+        !["none", "normal", "error", "indeterminate", "warning"].includes(progress.state)) {
+        throw new Error("Invalid terminal progress");
+    }
+    if (progress.state === "none" || progress.state === "indeterminate") {
+        if (progress.percentage !== null)
+            throw new Error("Unexpected terminal progress percentage");
+    }
+    else {
+        integer(progress.percentage, "terminal progress percentage", 0, 100);
+    }
+    const shell = metadata.shellIntegration;
+    if (!isRecord(shell) || typeof shell.phase !== "string" ||
+        !["unknown", "prompt", "commandLine", "executing", "finished"].includes(shell.phase)) {
+        throw new Error("Invalid terminal shell integration");
+    }
+    if (shell.lastExitCode !== null)
+        integer(shell.lastExitCode, "terminal shell exit code", -2147483648, 2147483647);
+    if (shell.phase === "unknown" && shell.lastExitCode !== null)
+        throw new Error("Unknown terminal shell phase has an exit code");
     const columns = integer(metadata.columns, "columns", 1, 1024);
     const rows = integer(metadata.rows, "rows", 1, 512);
     if (typeof metadata.mouseTracking !== "number" || ![0, 9, 1000, 1002, 1003].includes(metadata.mouseTracking)) {

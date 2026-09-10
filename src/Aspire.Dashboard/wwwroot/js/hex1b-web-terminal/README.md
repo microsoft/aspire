@@ -137,6 +137,8 @@ workers, fonts, and the intended WebSocket endpoint.
 | `sizing` | `{ mode: "auto", fontSize?: number }` or `{ mode: "fixed", columns, rows, fontSize?: number }`. |
 | `readOnly` | Disable application input while retaining history inspection and selection. |
 | `label` | Accessible label for the terminal's hidden keyboard input. |
+| `onTitleChange` | Initial authoritative workload title, then distinct presented changes; see below. |
+| `onProgressChange`, `onShellIntegrationChange` | Initial authoritative activity, then distinct presented changes for host-owned chrome. |
 | `inputBindings`, `onInput`, `actions` | Per-view input policy and custom actions. |
 | `onSelectionUI` | Synchronous, cancelable UI notification hook. |
 
@@ -147,7 +149,7 @@ Font size is an integer from 8–32, defaulting to 16. Import `MIN_FONT_SIZE` an
 ownership. `requestPrimary()` explicitly requests ownership; inspect `peer` or
 `onRoleChange` to observe the result.
 
-The handle exposes `geometry`, `peer`, `connected`, `stats`, `screenText`,
+The handle exposes `geometry`, `peer`, `connected`, `title`, `progress`, `shellIntegration`, `stats`, `screenText`,
 `sizing`, `viewport`, `selection`, `inputBindings`, and `inputContext`.
 Metrics start empty; check optional fields before using them. History may be
 unavailable, and selection can be unavailable, none, pending, valid, or
@@ -155,8 +157,159 @@ invalidated. Narrow `viewport.available` and `selection.status` before using
 their state-specific values. `screenText` reflects the presented viewport, not
 an independently reconstructed ANSI buffer.
 
-Callbacks include `onGeometry`, `onRoleChange`, `onSizingChange`, `onStats`,
-`onViewportChange`, `onSelectionChange`, `onStatus`, and `onInputError`.
+Callbacks include `onGeometry`, `onRoleChange`, `onTitleChange`, `onSizingChange`, `onStats`,
+`onProgressChange`, `onShellIntegrationChange`, `onViewportChange`, `onSelectionChange`, `onStatus`, and `onInputError`.
+
+### Workload titles
+
+The read-only `terminal.title` is the current presented workload title. An empty
+string means unset or explicitly cleared; choose your own fallback. The optional
+`onTitleChange(title)` callback runs once with the first authoritative presented
+value, **including `""`, before mount resolves**. The getter is updated before
+the callback. Later notifications report only distinct presented values. Identical
+updates, same-title resyncs, cursor blinking, and statistics do not notify again.
+Intermediate workload changes can coalesce; this is not an event for every OSC
+sequence.
+
+```ts
+import { WebTerminal } from "@hex1b/web-terminal";
+
+const container = document.getElementById("terminal");
+const header = document.getElementById("terminal-header");
+if (!container || !header) throw new Error("Missing terminal elements");
+const resourceName = "Build service";
+
+const terminal = await WebTerminal.mount(container, {
+  url: "/ws/terminal",
+  onTitleChange(title) {
+    header.textContent = title || resourceName;
+  }
+});
+console.log(terminal.title);
+```
+
+The callback uses elements and fallback text captured **before** mounting, not
+the still-pending `terminal` result. The component does not change `document.title`,
+your header, or the input's accessible `label` automatically. There is no title
+subscription method or DOM title event.
+
+Titles are normalized by the core to at most 4,096 UTF-16 code units, with C0,
+DEL, and C1 controls removed, malformed surrogates replaced with U+FFFD, and
+truncation at a Unicode scalar boundary. They remain **untrusted text**: markup
+and bidi characters are preserved. Use `textContent`, not `innerHTML`; apply your
+own presentation and bidi policies.
+
+OSC 0 and OSC 2 set or explicitly clear the window title; OSC 1 is icon-only.
+Use `ESC ] 0 ; text BEL` or `ESC ] 2 ; text BEL`; `ESC \` (ST) may replace BEL.
+The UTF-8 input path also accepts Unicode C1 OSC (`U+009D`) and ST (`U+009C`).
+Semicolons within `text` are literal. Existing OSC 22/23 saved-title extensions
+update the same state, including after a late HMP1 attachment.
+RIS, soft reset, screen clearing, and buffer switching preserve the title and
+existing saved-title behavior. History inspection retains the current workload
+title rather than a title associated with an old row.
+
+Disconnect and disposal retain the last known title without a synthetic clear.
+Disposal (including abort) stops title callbacks. Attach a new view to reconnect;
+it receives its own initial current title. Preliminary disconnected relay frames
+do not trigger the initial notification. Callbacks run directly like the other
+state callbacks; thrown host errors are not swallowed or retried.
+
+The required title field needs the matching server build. Missing or malformed
+title metadata fails the connection; an older server is not silently treated as
+an empty title.
+The per-title bound is not a limit on all parser buffering or saved-stack depth.
+An HMP1 snapshot with too much saved title state fails its 16 MiB replay limit
+rather than silently discarding saved titles.
+
+### Application progress and shell activity
+
+`terminal.progress` exposes OSC 9;4 state as `{ state, percentage }`.
+The states are `"none"`, `"normal"`, `"error"`, `"indeterminate"`, and `"warning"`.
+Normal/error/warning percentages are integers from 0 through 100. None and
+indeterminate have `percentage: null`; none means the host should hide its indicator.
+This is application-reported progress, not inferred from output or CPU activity.
+It is independent of `ProgressWidget`, which draws inside terminal cells.
+
+`terminal.shellIntegration` exposes OSC 133 as `{ phase, lastExitCode }`.
+The phases are `"unknown"`, `"prompt"` (A), `"commandLine"` (B),
+`"executing"` (C), and `"finished"` (D). B means input after the prompt, **not**
+command execution. Unknown does not mean idle. `lastExitCode` is a signed
+32-bit integer, or null when no status was reported; null is not success.
+A/B/C preserve the last reported result, and D replaces it, including clearing
+it to null when the shell omits its status. No command text, history, or output
+locations are retained by these APIs.
+
+Both getters return defensive copies. Their callbacks receive the first
+authoritative presented state before mount resolves, then distinct presented
+changes. Both getters are updated before either activity callback. Callbacks
+use the same direct, synchronous host-callback convention as title changes;
+host exceptions are not swallowed or retried.
+
+Frames coalesce: the browser might see only Finished for a fast command, or
+miss an entire command whose final state is unchanged. These callbacks are
+**current-state notifications, not a lossless start/finish event stream**.
+Resync/replay never invent commands, unchanged state does not notify again,
+and a new mount receives its own baseline.
+
+This example creates optional chrome outside the terminal:
+
+```ts
+import { WebTerminal } from "@hex1b/web-terminal";
+
+const status = document.createElement("span");
+const progress = document.createElement("progress");
+progress.max = 100;
+progress.hidden = true;
+const container = document.createElement("div");
+container.style.cssText = "width:800px;height:480px";
+document.body.append(status, progress, container);
+
+const terminal = await WebTerminal.mount(container, {
+  url: "/ws/terminal",
+  onProgressChange(value) {
+    progress.hidden = value.state === "none";
+    progress.dataset.state = value.state; // Host CSS can distinguish error/warning.
+    if (value.percentage === null) progress.removeAttribute("value");
+    else progress.value = value.percentage;
+  },
+  onShellIntegrationChange(value) {
+    status.textContent = value.phase +
+      (value.lastExitCode === null ? "" : ` (last exit ${value.lastExitCode})`);
+  },
+  onStats(stats) {
+    if (!stats.connected) {
+      progress.hidden = true;
+      status.textContent = "Disconnected";
+    }
+  }
+});
+console.log(terminal.progress, terminal.shellIntegration);
+```
+
+No title, document chrome, or progress UI is changed automatically by the
+component. The sample endpoint must be supplied by your application.
+Callbacks can run before the `terminal` variable is assigned; use their
+arguments during initial mounting.
+
+RIS resets progress to None and shell integration to Unknown. Soft reset,
+screen clearing, resize, and buffer switches preserve them. OSC 9;4 state 0
+clears only progress; a shell completion does not implicitly clear it.
+Disconnect, process exit, and disposal retain the last reported values
+without inventing a completion or progress clear. Check `connected` before
+showing active chrome, and remount to reconnect. Disposal stops callbacks.
+Snapshots and historical viewports carry current activity, not activity at
+the time a particular row was printed.
+
+The core accepts BEL, ESC-backslash ST, and decoded Unicode C1 terminators
+through its UTF-8 input path. Determinate progress requires unsigned decimal
+0-100; clear/indeterminate allow an omitted percentage and ignore its optional
+value. OSC 133 supports the basic A/B/C forms and D with an optional signed
+decimal exit status (an empty field also means no status). Missing required,
+malformed, overflowed, excess, or unsupported arguments do not change state.
+The raw-output presentation path still forwards the original sequences to
+supporting outer terminals. Required activity metadata needs the matching
+server build; invalid/missing wire fields fail the connection, not silently
+fall back to default state.
 
 ## Input and clipboard
 

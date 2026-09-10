@@ -14,9 +14,9 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.167.0-alpha.1522.1.3085d8b**,
+`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.167.0-alpha.1547.1.798b26c**,
 paired with the Hex1b NuGet build from commit
-`3085d8bd20c7579f27e873e98b740daf8cf57a11`. The client and server use the evolving
+`798b26c8a297e3060bb9e3a509f76668be6b9022`. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
 different client based only on a similar version number.
 
@@ -100,8 +100,10 @@ preserves link destinations when a browser attaches or reconnects. See
 [the replay fix](https://github.com/mitchdenny/hex1b/pull/493).
 
 The public API supports auto/fixed sizing, primary requests, keyboard and mouse
-input, paste/copy, selection, and producer-backed history. It has no terminal
-theme setter, search API, clear-buffer API, or title-change callback. Terminal
+input, paste/copy, selection, and producer-backed history. It exposes workload
+title, progress, and shell-integration state with change callbacks; the dashboard
+does not yet consume these and still labels the terminal with the resource name.
+It has no terminal theme setter, search API, or clear-buffer API. Terminal
 colors and content are server-authoritative; inspection UI uses the package's
 theme defaults/tokens. The previous terminal hardcoded dark xterm colors rather
 than offering a theme control. Search, filtering, clearing the log display, and

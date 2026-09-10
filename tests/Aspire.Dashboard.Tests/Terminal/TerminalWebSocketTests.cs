@@ -323,9 +323,15 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
         await host.StartAsync(timeout.Token);
         using var browser = await host.ConnectBrowserAsync(timeout.Token);
         var buffer = new byte[64 * 1024];
-        var initial = await browser.ReceiveAsync(buffer, timeout.Token);
-        Assert.Equal(WebSocketMessageType.Binary, initial.MessageType);
-        Assert.True(initial.EndOfMessage);
+        // A snapshot can exceed one receive buffer. Drain the complete message without
+        // acknowledging it so the producer disconnect happens while the next frame waits.
+        WebSocketReceiveResult initial;
+        do
+        {
+            initial = await browser.ReceiveAsync(buffer, timeout.Token);
+            Assert.Equal(WebSocketMessageType.Binary, initial.MessageType);
+        }
+        while (!initial.EndOfMessage);
 
         await host.Presentation.DisposeAsync();
 

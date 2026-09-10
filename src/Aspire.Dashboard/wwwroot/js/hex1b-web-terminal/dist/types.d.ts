@@ -267,6 +267,21 @@ export interface SelectionUIDetail extends SelectionUIState {
     readonly rects: readonly Readonly<SelectionRectangle>[];
 }
 export type SelectionUIEvent = CustomEvent<SelectionUIDetail>;
+/** Application-reported OSC 9;4 indicator, independent of shell execution. */
+export type TerminalProgressState = "none" | "normal" | "error" | "indeterminate" | "warning";
+/** Immutable current progress; a hidden or indeterminate indicator has no percentage. */
+export interface TerminalProgress {
+    readonly state: TerminalProgressState;
+    readonly percentage: number | null;
+}
+/** Last reported OSC 133 phase. Unknown does not mean idle; commandLine is not execution. */
+export type TerminalShellIntegrationPhase = "unknown" | "prompt" | "commandLine" | "executing" | "finished";
+/** Current shell phase and latest reported completion status, not command history. */
+export interface TerminalShellIntegration {
+    readonly phase: TerminalShellIntegrationPhase;
+    /** Null means no reported status, not success. Preserved across the next prompt/command. */
+    readonly lastExitCode: number | null;
+}
 export interface WebTerminalOptions extends InputPolicyOptions {
     url: string | URL;
     /** Optional module-worker entry, resolved against the page URL. Defaults to the bundled worker. */
@@ -283,6 +298,25 @@ export interface WebTerminalOptions extends InputPolicyOptions {
     onGeometry?: (geometry: TerminalGeometry) => void;
     onSizingChange?: (sizing: TerminalSizingState) => void;
     onRoleChange?: (peer: TerminalPeer) => void;
+    /**
+     * Receives the first authoritative presented title (including "") before mount resolves,
+     * then distinct presented changes. The title getter is updated first. Titles are untrusted
+     * text; render with textContent, not HTML. No notifications after disposal.
+     */
+    onTitleChange?: (title: string) => void;
+    /**
+     * Receives the first authoritative presented progress before mount resolves, then distinct
+     * presented changes. Both activity getters update before either callback. Intermediate
+     * states may coalesce; this is not a callback for every OSC sequence. None hides the indicator.
+     * No notifications after disposal; connection loss does not manufacture a progress clear.
+     */
+    onProgressChange?: (progress: TerminalProgress) => void;
+    /**
+     * Receives the first authoritative presented shell state before mount resolves, then distinct
+     * presented changes. This is not a lossless command-start/finish stream: entire commands may
+     * occur between frames. Replays provide current state, never synthetic command executions.
+     */
+    onShellIntegrationChange?: (shellIntegration: TerminalShellIntegration) => void;
     onStats?: (stats: TerminalStats, text: string | undefined) => void;
     onViewportChange?: (viewport: TerminalViewport) => void;
     onSelectionChange?: (selection: TerminalSelection) => void;
@@ -296,6 +330,12 @@ export interface WebTerminalHandle {
     readonly geometry: TerminalGeometry;
     readonly peer: TerminalPeer;
     readonly connected: boolean;
+    /** Current presented workload title, or "" when unset/cleared. Retained on disconnect/dispose. */
+    readonly title: string;
+    /** Current presented progress, initially none. Retained on disconnect/dispose; check connected. */
+    readonly progress: TerminalProgress;
+    /** Current presented shell state, initially unknown. Retained on disconnect/dispose. */
+    readonly shellIntegration: TerminalShellIntegration;
     readonly stats: TerminalStats;
     readonly screenText: string;
     readonly sizing: TerminalSizingState;

@@ -46,6 +46,11 @@ export class WebTerminal {
     #readyTimer;
     #stats = {};
     #screenText = "";
+    #title = "";
+    #hasTitle = false;
+    #progress = { state: "none", percentage: null };
+    #shellIntegration = { phase: "unknown", lastExitCode: null };
+    #hasActivity = false;
     #history;
     #highlights;
     #inspection;
@@ -106,6 +111,10 @@ export class WebTerminal {
     get geometry() { return { ...this.#geometry }; }
     get peer() { return { ...this.#peer }; }
     get connected() { return this.#connected; }
+    /** Current presented workload title; retained on disconnect/dispose. Treat as untrusted text. */
+    get title() { return this.#title; }
+    get progress() { return { ...this.#progress }; }
+    get shellIntegration() { return { ...this.#shellIntegration }; }
     get stats() { return { ...this.#stats }; }
     get screenText() { return this.#screenText; }
     get sizing() { return { ...this.#sizing }; }
@@ -323,6 +332,24 @@ export class WebTerminal {
             if (oldPeer.id !== this.#peer.id || oldPeer.primaryId !== this.#peer.primaryId || oldPeer.isPrimary !== this.#peer.isPrimary) {
                 this.#options.onRoleChange?.(this.peer);
             }
+            if (!this.#disposed && this.#connected && (this.#peer.id !== null || this.#peer.isPrimary)) {
+                const titleChanged = !this.#hasTitle || this.#title !== message.title;
+                const progressChanged = !this.#hasActivity || this.#progress.state !== message.progress.state ||
+                    this.#progress.percentage !== message.progress.percentage;
+                const shellChanged = !this.#hasActivity || this.#shellIntegration.phase !== message.shellIntegration.phase ||
+                    this.#shellIntegration.lastExitCode !== message.shellIntegration.lastExitCode;
+                this.#title = message.title;
+                this.#hasTitle = true;
+                this.#progress = { ...message.progress };
+                this.#shellIntegration = { ...message.shellIntegration };
+                this.#hasActivity = true;
+                if (titleChanged)
+                    this.#options.onTitleChange?.(this.#title);
+                if (!this.#disposed && progressChanged)
+                    this.#options.onProgressChange?.(this.progress);
+                if (!this.#disposed && shellChanged)
+                    this.#options.onShellIntegrationChange?.(this.shellIntegration);
+            }
         }
         else if (message.type === "history") {
             this.#screenText = message.text;
@@ -332,7 +359,8 @@ export class WebTerminal {
             this.#stats = message.stats;
             if (message.text !== undefined)
                 this.#screenText = message.text;
-            if (message.stats.revision > 0 && this.#connected && (this.#peer.id !== null || this.#peer.isPrimary)) {
+            if (message.stats.revision > 0 && this.#hasTitle && this.#hasActivity && this.#connected &&
+                (this.#peer.id !== null || this.#peer.isPrimary)) {
                 clearTimeout(this.#readyTimer);
                 this.#ready.resolve(this);
             }
