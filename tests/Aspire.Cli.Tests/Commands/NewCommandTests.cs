@@ -1424,6 +1424,54 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWithoutTemplateKeepsOriginalTemplateOrder()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        string[]? promptedTemplateNames = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                ConfirmCallback = (_, defaultValue) => defaultValue
+            };
+            options.NewCommandPrompterFactory = sp =>
+            {
+                var prompter = new TestNewCommandPrompter(sp.GetRequiredService<IInteractionService>())
+                {
+                    PromptForTemplateCallback = templates =>
+                    {
+                        promptedTemplateNames = templates.Select(template => template.Name).ToArray();
+                        return templates[0];
+                    }
+                };
+
+                return prompter;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new --name TestApp --output ./output --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var actualTemplateNames = Assert.IsType<string[]>(promptedTemplateNames);
+        Assert.Equal(
+            [
+                "aspire-starter",
+                "aspire-ts-cs-starter",
+                KnownTemplateId.TypeScriptStarter,
+                KnownTemplateId.PythonStarter,
+                KnownTemplateId.IntegrationTest,
+                KnownTemplateId.CSharpEmptyAppHost,
+            ],
+            actualTemplateNames);
+    }
+
+    [Fact]
     public void NewCommandTemplateSubcommandsListTechnicalNamesForNonInteractiveFlows()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

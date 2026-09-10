@@ -269,7 +269,8 @@ internal sealed class NewCommand : BaseCommand
                 .ToList();
         }
 
-        // Sort templates alphabetically by description, keeping empty templates at the end
+        // Keep the established AppHost templates first so adding secondary scaffolding templates
+        // does not change the default selection for `aspire new`. Empty templates remain last.
         templates.Sort((a, b) =>
         {
             var aIsEmpty = a.IsEmpty;
@@ -278,6 +279,14 @@ internal sealed class NewCommand : BaseCommand
             if (aIsEmpty != bIsEmpty)
             {
                 return aIsEmpty ? 1 : -1;
+            }
+
+            var aIsIntegrationTest = a.Name.Equals(KnownTemplateId.IntegrationTest, StringComparison.OrdinalIgnoreCase);
+            var bIsIntegrationTest = b.Name.Equals(KnownTemplateId.IntegrationTest, StringComparison.OrdinalIgnoreCase);
+
+            if (aIsIntegrationTest != bIsIntegrationTest)
+            {
+                return aIsIntegrationTest ? 1 : -1;
             }
 
             return string.Compare(a.Description, b.Description, StringComparison.OrdinalIgnoreCase);
