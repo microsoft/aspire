@@ -45,9 +45,17 @@ public sealed class IntegrationTestScaffoldingTests(ITestOutputHelper output)
 
         await auto.RunCommandAsync(
             "aspire new aspire-test " +
-            "--apphost IntegrationTestApp " +
+            "--apphost IntegrationTestApp/IntegrationTestApp.AppHost/IntegrationTestApp.AppHost.csproj " +
             "--test-framework MSTest --name IntegrationTestApp.Explicit.Tests " +
             "--output IntegrationTestApp/IntegrationTestApp.Explicit.Tests --non-interactive --suppress-agent-init",
+            counter,
+            TimeSpan.FromMinutes(5));
+
+        await auto.RunCommandAsync(
+            "aspire new aspire-test " +
+            "--apphost IntegrationTestApp " +
+            "--test-framework MSTest --name IntegrationTestApp.Directory.Tests " +
+            "--output IntegrationTestApp/IntegrationTestApp.Directory.Tests --non-interactive --suppress-agent-init",
             counter,
             TimeSpan.FromMinutes(5));
 
@@ -57,6 +65,10 @@ public sealed class IntegrationTestScaffoldingTests(ITestOutputHelper output)
             TimeSpan.FromMinutes(5));
         await auto.RunCommandAsync(
             "dotnet test IntegrationTestApp/IntegrationTestApp.Explicit.Tests/IntegrationTestApp.Explicit.Tests.csproj -- --filter-method \"*.AppHostBuilds\"",
+            counter,
+            TimeSpan.FromMinutes(5));
+        await auto.RunCommandAsync(
+            "dotnet test IntegrationTestApp/IntegrationTestApp.Directory.Tests/IntegrationTestApp.Directory.Tests.csproj -- --filter-method \"*.AppHostBuilds\"",
             counter,
             TimeSpan.FromMinutes(5));
     }
