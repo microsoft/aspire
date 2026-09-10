@@ -1,6 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers;
+using System.Net;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Authentication;
 using Aspire;
 using Aspire.StackExchange.Redis;
 using Microsoft.Extensions.Configuration;
@@ -215,7 +220,7 @@ public static class AspireRedisExtensions
     private static ConfigurationOptions BindToConfiguration(ConfigurationOptions options, IConfiguration configuration)
     {
         var configurationOptionsSection = configuration.GetSection("ConfigurationOptions");
-        configurationOptionsSection.Bind(options);
+        configurationOptionsSection.Bind(new BindableConfigurationOptions(options));
 
         return options;
     }
@@ -277,5 +282,281 @@ public static class AspireRedisExtensions
     {
         // Disable aborting on connect fail since we want to retry, even in local development.
         public override bool AbortOnConnectFail => false;
+
+        // StackExchange.Redis 3 prefers RESP3 and falls back to RESP2 when the server doesn't support it.
+        public override RedisProtocol? Protocol => RedisProtocol.Resp3;
+    }
+
+    /// <summary>
+    /// Limits source-generated configuration binding to supported Redis options.
+    /// </summary>
+    /// <remarks>
+    /// StackExchange.Redis 3.2 retains several properties that are marked as compile-time errors or experimental.
+    /// A forwarding type lets the configuration binder remain AOT-compatible without generating references to
+    /// those properties.
+    /// </remarks>
+    internal sealed class BindableConfigurationOptions(ConfigurationOptions options)
+    {
+        private readonly ConfigurationOptions _options = options;
+
+        public bool AbortOnConnectFail
+        {
+            get => _options.AbortOnConnectFail;
+            set => _options.AbortOnConnectFail = value;
+        }
+
+        public bool AllowAdmin
+        {
+            get => _options.AllowAdmin;
+            set => _options.AllowAdmin = value;
+        }
+
+        public int AsyncTimeout
+        {
+            get => _options.AsyncTimeout;
+            set => _options.AsyncTimeout = value;
+        }
+
+        public BacklogPolicy BacklogPolicy
+        {
+            get => _options.BacklogPolicy;
+            set => _options.BacklogPolicy = value;
+        }
+
+        public Action<EndPoint, ConnectionType, Socket>? BeforeSocketConnect
+        {
+            get => _options.BeforeSocketConnect;
+            set => _options.BeforeSocketConnect = value;
+        }
+
+        public RedisChannel ChannelPrefix
+        {
+            get => _options.ChannelPrefix;
+            set => _options.ChannelPrefix = value;
+        }
+
+        public bool CheckCertificateRevocation
+        {
+            get => _options.CheckCertificateRevocation;
+            set => _options.CheckCertificateRevocation = value;
+        }
+
+        public string? ClientName
+        {
+            get => _options.ClientName;
+            set => _options.ClientName = value;
+        }
+
+        public CommandMap CommandMap
+        {
+            get => _options.CommandMap;
+            set => _options.CommandMap = value;
+        }
+
+        public int ConfigCheckSeconds
+        {
+            get => _options.ConfigCheckSeconds;
+            set => _options.ConfigCheckSeconds = value;
+        }
+
+        public string ConfigurationChannel
+        {
+            get => _options.ConfigurationChannel;
+            set => _options.ConfigurationChannel = value;
+        }
+
+        public int ConnectRetry
+        {
+            get => _options.ConnectRetry;
+            set => _options.ConnectRetry = value;
+        }
+
+        public int ConnectTimeout
+        {
+            get => _options.ConnectTimeout;
+            set => _options.ConnectTimeout = value;
+        }
+
+        public int? DefaultDatabase
+        {
+            get => _options.DefaultDatabase;
+            set => _options.DefaultDatabase = value;
+        }
+
+        public DefaultOptionsProvider Defaults
+        {
+            get => _options.Defaults;
+            set => _options.Defaults = value;
+        }
+
+        public Version DefaultVersion
+        {
+            get => _options.DefaultVersion;
+            set => _options.DefaultVersion = value;
+        }
+
+        public EndPointCollection EndPoints => _options.EndPoints;
+
+        public bool HeartbeatConsistencyChecks
+        {
+            get => _options.HeartbeatConsistencyChecks;
+            set => _options.HeartbeatConsistencyChecks = value;
+        }
+
+        public TimeSpan HeartbeatInterval
+        {
+            get => _options.HeartbeatInterval;
+            set => _options.HeartbeatInterval = value;
+        }
+
+        public bool HighIntegrity
+        {
+            get => _options.HighIntegrity;
+            set => _options.HighIntegrity = value;
+        }
+
+        public bool IncludeDetailInExceptions
+        {
+            get => _options.IncludeDetailInExceptions;
+            set => _options.IncludeDetailInExceptions = value;
+        }
+
+        public bool IncludePerformanceCountersInExceptions
+        {
+            get => _options.IncludePerformanceCountersInExceptions;
+            set => _options.IncludePerformanceCountersInExceptions = value;
+        }
+
+        public int KeepAlive
+        {
+            get => _options.KeepAlive;
+            set => _options.KeepAlive = value;
+        }
+
+        public string? LibraryName
+        {
+            get => _options.LibraryName;
+            set => _options.LibraryName = value;
+        }
+
+        public ILoggerFactory? LoggerFactory
+        {
+            get => _options.LoggerFactory;
+            set => _options.LoggerFactory = value;
+        }
+
+        public string? Password
+        {
+            get => _options.Password;
+            set => _options.Password = value;
+        }
+
+        public RedisProtocol? Protocol
+        {
+            get => _options.Protocol;
+            set => _options.Protocol = value;
+        }
+
+        public Proxy Proxy
+        {
+            get => _options.Proxy;
+            set => _options.Proxy = value;
+        }
+
+        public MemoryPool<byte>? RequestBufferPool
+        {
+            get => _options.RequestBufferPool;
+            set => _options.RequestBufferPool = value;
+        }
+
+        public bool ResolveDns
+        {
+            get => _options.ResolveDns;
+            set => _options.ResolveDns = value;
+        }
+
+        public MemoryPool<byte>? ResponseBufferPool
+        {
+            get => _options.ResponseBufferPool;
+            set => _options.ResponseBufferPool = value;
+        }
+
+        public string? SentinelPassword
+        {
+            get => _options.SentinelPassword;
+            set => _options.SentinelPassword = value;
+        }
+
+        public string? SentinelUser
+        {
+            get => _options.SentinelUser;
+            set => _options.SentinelUser = value;
+        }
+
+        public string? ServiceName
+        {
+            get => _options.ServiceName;
+            set => _options.ServiceName = value;
+        }
+
+        public bool SetClientLibrary
+        {
+            get => _options.SetClientLibrary;
+            set => _options.SetClientLibrary = value;
+        }
+
+        public bool Ssl
+        {
+            get => _options.Ssl;
+            set => _options.Ssl = value;
+        }
+
+        public Func<string, SslClientAuthenticationOptions>? SslClientAuthenticationOptions
+        {
+            get => _options.SslClientAuthenticationOptions;
+            set => _options.SslClientAuthenticationOptions = value;
+        }
+
+        public string? SslHost
+        {
+            get => _options.SslHost;
+            set => _options.SslHost = value;
+        }
+
+        public SslProtocols? SslProtocols
+        {
+            get => _options.SslProtocols;
+            set => _options.SslProtocols = value;
+        }
+
+        public int SyncTimeout
+        {
+            get => _options.SyncTimeout;
+            set => _options.SyncTimeout = value;
+        }
+
+        public bool TcpKeepAlive
+        {
+            get => _options.TcpKeepAlive;
+            set => _options.TcpKeepAlive = value;
+        }
+
+        public string TieBreaker
+        {
+            get => _options.TieBreaker;
+            set => _options.TieBreaker = value;
+        }
+
+        public Tunnel? Tunnel
+        {
+            get => _options.Tunnel;
+            set => _options.Tunnel = value;
+        }
+
+        public string? User
+        {
+            get => _options.User;
+            set => _options.User = value;
+        }
     }
 }
