@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- Run on the repo SDK's runtime. Microsoft.Build 18.3.x supplies compatible net10.0 managed
+    <!-- Run on the repo SDK's runtime. Microsoft.Build 18.10.x supplies compatible net11.0 managed
          assets, and the graph is loaded from the repo-local SDK via MSBuildLocator. -->
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
