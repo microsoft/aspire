@@ -18,4 +18,8 @@ public class ConfigurationTests
     [Fact]
     public void TracingIsEnabledByDefault()
         => Assert.False(new NatsClientSettings().DisableTracing);
+
+    [Fact]
+    public void MetricsAreEnabledByDefault()
+        => Assert.False(new NatsClientSettings().DisableMetrics);
 }
