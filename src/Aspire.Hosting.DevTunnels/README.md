@@ -131,7 +131,7 @@ Set an idle expiration period to clean up tunnels that are no longer used:
 
 ```csharp
 var tunnel = builder.AddDevTunnel("mytunnel")
-                    .WithExpiration(TimeSpan.FromDays(1))
+                    .WithExpiration(24)
                     .WithReference(web);
 ```
 
@@ -141,12 +141,11 @@ Alternatively, set `Expiration` on `DevTunnelOptions` when calling `AddDevTunnel
 
 ```typescript
 const tunnel = await builder.addDevTunnel("mytunnel")
-                    .withExpiration(24 * 60 * 60 * 1000)
+                    .withExpiration(24)
                     .withTunnelReferenceAll(web, false);
 ```
 
-TypeScript durations are expressed in milliseconds. Expiration must be a whole number of hours,
-from one hour through 30 days, inclusive. Invalid values throw rather than being rounded.
+Expiration is expressed as a whole number of hours, from one hour through 30 days, inclusive.
 The setting applies to both new tunnels and existing tunnels reused by the AppHost.
 If omitted, new tunnels use the service default and existing tunnels keep their configured expiration period.
 

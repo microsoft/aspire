@@ -57,19 +57,20 @@ public class DevTunnelExpirationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void WithExpiration_ConfiguresOptions(bool polyglot)
+    [InlineData(false, 1)]
+    [InlineData(true, 24)]
+    [InlineData(false, 720)]
+    public void WithExpiration_ConfiguresOptions(bool polyglot, int hours)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var tunnel = polyglot
             ? builder.AddDevTunnelForPolyglot("tunnel")
             : builder.AddDevTunnel("tunnel");
 
-        var result = tunnel.WithExpiration(TimeSpan.FromDays(1));
+        var result = tunnel.WithExpiration(hours);
 
         Assert.Same(tunnel, result);
-        Assert.Equal(TimeSpan.FromDays(1), tunnel.Resource.Options.Expiration);
+        Assert.Equal(TimeSpan.FromHours(hours), tunnel.Resource.Options.Expiration);
     }
 
     [Fact]
@@ -77,19 +78,24 @@ public class DevTunnelExpirationTests
     {
         IResourceBuilder<DevTunnelResource> builder = null!;
 
-        var exception = Assert.Throws<ArgumentNullException>(() => builder.WithExpiration(TimeSpan.FromDays(1)));
+        var exception = Assert.Throws<ArgumentNullException>(() => builder.WithExpiration(24));
 
         Assert.Equal("tunnelBuilder", exception.ParamName);
     }
 
-    [Fact]
-    public void WithExpiration_RejectsInvalidExpiration()
+    [Theory]
+    [InlineData(int.MinValue)]
+    [InlineData(0)]
+    [InlineData(721)]
+    [InlineData(int.MaxValue)]
+    public void WithExpiration_RejectsInvalidExpiration(int hours)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var tunnel = builder.AddDevTunnel("tunnel");
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => tunnel.WithExpiration(TimeSpan.FromMinutes(90)));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => tunnel.WithExpiration(hours));
 
+        Assert.Equal("expirationHours", exception.ParamName);
         Assert.Null(tunnel.Resource.Options.Expiration);
     }
 

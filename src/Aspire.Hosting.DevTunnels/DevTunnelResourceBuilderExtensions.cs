@@ -375,26 +375,28 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// Configures how long the tunnel can remain unused or unmodified before it expires.
     /// </summary>
     /// <param name="tunnelBuilder">The resource builder.</param>
-    /// <param name="expiration">The idle expiration period, in whole hours from one hour through 30 days, inclusive.</param>
+    /// <param name="expirationHours">The idle expiration period, in whole hours from one hour through 30 days, inclusive.</param>
     /// <returns>The resource builder.</returns>
     /// <remarks>
     /// Applies to both new and existing tunnels. This does not limit hosting duration or access-token lifetime.
     /// </remarks>
     /// <exception cref="ArgumentNullException">The <paramref name="tunnelBuilder"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">The <paramref name="expiration"/> is outside the supported range or is not a whole number of hours.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The <paramref name="expirationHours"/> is outside the supported range.</exception>
     /// <example>
     /// <code lang="csharp">
     /// var tunnel = builder.AddDevTunnel("mytunnel")
-    ///     .WithExpiration(TimeSpan.FromDays(1))
+    ///     .WithExpiration(24)
     ///     .WithReference(web);
     /// </code>
     /// </example>
     [AspireExport]
-    public static IResourceBuilder<DevTunnelResource> WithExpiration(this IResourceBuilder<DevTunnelResource> tunnelBuilder, TimeSpan expiration)
+    public static IResourceBuilder<DevTunnelResource> WithExpiration(this IResourceBuilder<DevTunnelResource> tunnelBuilder, int expirationHours)
     {
         ArgumentNullException.ThrowIfNull(tunnelBuilder);
+        ArgumentOutOfRangeException.ThrowIfLessThan(expirationHours, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(expirationHours, 30 * 24);
 
-        tunnelBuilder.Resource.Options.Expiration = expiration;
+        tunnelBuilder.Resource.Options.Expiration = TimeSpan.FromHours(expirationHours);
 
         return tunnelBuilder;
     }
