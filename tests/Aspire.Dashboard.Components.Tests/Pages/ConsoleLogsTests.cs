@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
@@ -70,7 +70,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act 1
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -115,7 +115,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act 1
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -143,7 +143,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
             var expectedUrl = DashboardUrls.ConsoleLogsUrl(resource: "test-resource2");
             Assert.EndsWith(expectedUrl, e.Location);
 
-            cut.SetParametersAndRender(builder =>
+            cut.Render(builder =>
             {
                 builder.Add(m => m.ResourceName, "test-resource2");
             });
@@ -192,7 +192,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act & Assert 1: Render component - initially hidden resource should not be visible
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -281,7 +281,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act: Render component with a specific resource selected
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
             builder.Add(p => p.ResourceName, "test-resource");
@@ -337,7 +337,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -514,7 +514,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -563,7 +563,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -610,7 +610,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -714,7 +714,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var consoleLogsManager = Services.GetRequiredService<ConsoleLogsManager>();
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -811,7 +811,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act 1
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -923,7 +923,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
         var dashboardCommandExecutor = Services.GetRequiredService<DashboardCommandExecutor>();
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -980,7 +980,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -1132,7 +1132,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        return RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        return Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, resourceName);
             builder.Add(p => p.ViewportInformation, viewport);
@@ -1144,7 +1144,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         return new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
     }
 
-    private static IRenderedComponent<FluentTextInput> OpenMobileToolbarAndFindSearch(IRenderedComponent<Components.Pages.ConsoleLogs> cut, IRenderedFragment dialogProvider)
+    private static IRenderedComponent<FluentTextInput> OpenMobileToolbarAndFindSearch(IRenderedComponent<Components.Pages.ConsoleLogs> cut, IRenderedComponent<IComponent> dialogProvider)
     {
         cut.Find(".mobile-toolbar").Click();
 
@@ -1153,7 +1153,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         return Assert.Single(dialogProvider.FindComponents<FluentTextInput>());
     }
 
-    private IRenderedFragment RenderDialogProvider(ViewportInformation viewport)
+    private IRenderedComponent<IComponent> RenderDialogProvider(ViewportInformation viewport)
     {
         return Render(builder =>
         {
