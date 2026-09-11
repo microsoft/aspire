@@ -35,8 +35,8 @@ internal static class DotnetProgramPublishing
         resource.Annotations.Add(new PipelineStepAnnotation(factoryContext =>
         {
             var stepResource = factoryContext.Resource;
-            var buildEnvironmentProviders = stepResource.Annotations
-                .OfType<IDotnetProgramBuildEnvironmentProvider>()
+            var buildEnvironmentCallbacks = stepResource.Annotations
+                .OfType<DotnetProgramBuildEnvironmentCallbackAnnotation>()
                 .ToArray();
             var steps = new List<PipelineStep>();
 
@@ -49,7 +49,7 @@ internal static class DotnetProgramPublishing
             {
                 Name = $"build-{stepResource.Name}",
                 Description = $"Builds the container image for the {stepResource.Name} project.",
-                Action = context => BuildImageAsync(stepResource, buildEnvironmentProviders, context),
+                Action = context => BuildImageAsync(stepResource, buildEnvironmentCallbacks, context),
                 Tags = [WellKnownPipelineTags.BuildCompute],
                 RequiredBySteps = [WellKnownPipelineSteps.Build],
                 DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
@@ -102,12 +102,12 @@ internal static class DotnetProgramPublishing
 
     private static async Task BuildImageAsync(
         IResource resource,
-        IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> buildEnvironmentProviders,
+        IReadOnlyList<DotnetProgramBuildEnvironmentCallbackAnnotation> buildEnvironmentCallbacks,
         PipelineStepContext context)
     {
-        var currentProviders = resource.Annotations
-            .OfType<IDotnetProgramBuildEnvironmentProvider>();
-        if (!currentProviders.SequenceEqual(buildEnvironmentProviders, ReferenceEqualityComparer.Instance))
+        var currentCallbacks = resource.Annotations
+            .OfType<DotnetProgramBuildEnvironmentCallbackAnnotation>();
+        if (!currentCallbacks.SequenceEqual(buildEnvironmentCallbacks, ReferenceEqualityComparer.Instance))
         {
             throw new DistributedApplicationException(
                 $"The build environment of .NET program resource '{resource.Name}' changed after the publish pipeline was resolved.");
@@ -128,7 +128,7 @@ internal static class DotnetProgramPublishing
         var readiness = context.Services.GetRequiredService<ContainerRuntimeReadiness>();
         using var buildResult = await dotnetProgramImageBuilder.BuildDotnetProgramImageAsync(
             resource,
-            buildEnvironmentProviders,
+            buildEnvironmentCallbacks,
             readiness.EnsureRunningAsync,
             context.CancellationToken).ConfigureAwait(false);
 

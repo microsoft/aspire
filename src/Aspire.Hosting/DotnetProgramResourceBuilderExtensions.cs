@@ -65,6 +65,39 @@ public static class DotnetProgramResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a callback that configures build-only environment variables for .NET SDK container publishing.
+    /// </summary>
+    /// <typeparam name="T">The .NET program resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="callback">The callback that configures the build environment.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="builder"/> or <paramref name="callback"/> is <see langword="null"/>.
+    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// Values supplied through this callback affect the publishing MSBuild evaluation and may appear in build
+    /// diagnostics. They are not a secret transport. Callbacks are evaluated in registration order for each publish build.
+    /// </para>
+    /// <para>
+    /// When publishing a container, Aspire rejects values that control the output artifact's identity, destination,
+    /// format, or target platform because downstream publishing steps use the corresponding container build options.
+    /// Configure those values with <c>WithContainerBuildOptions</c>.
+    /// </para>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Integration authoring API with a raw delegate callback that is not ATS-compatible.")]
+    public static IResourceBuilder<T> WithDotnetProgramBuildEnvironment<T>(
+        this IResourceBuilder<T> builder,
+        Func<EnvironmentCallbackContext, Task> callback)
+        where T : IDotnetProgramResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.WithAnnotation(new DotnetProgramBuildEnvironmentCallbackAnnotation(callback));
+    }
+
+    /// <summary>
     /// Configures a .NET program resource to publish a container image through the .NET SDK.
     /// </summary>
     /// <typeparam name="T">The .NET program resource type.</typeparam>
