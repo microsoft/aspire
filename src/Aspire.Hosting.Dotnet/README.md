@@ -77,6 +77,14 @@ builds instead of a shared traversal build. Build environment variables are not 
 configure the same variable with `WithEnvironment` as well when it is needed at runtime. The same build-only
 values are applied when the project is published through the .NET SDK container targets.
 
+Container publishing rejects build environment properties that can redirect the artifact tracked by Aspire:
+`ContainerRepository`, `ContainerImageTag`, `ContainerImageTags`, `ContainerRegistry`,
+`ContainerImageName`, `PublishImageTag`, `AutoGenerateImageTag`, `RegistryUrl`,
+`ContainerArchiveOutputPath`, `ContainerImageFormat`, `LocalRegistry`, `RuntimeIdentifier`,
+`RuntimeIdentifiers`, `ContainerRuntimeIdentifier`, and `ContainerRuntimeIdentifiers`. Configure
+supported image identity, destination, format, and target platform settings with
+`WithContainerBuildOptions` instead.
+
 Do not use `WithBuildEnvironment` for secrets. Aspire carries these values in IDE launch metadata and
 process environments. Protected temporary MSBuild response files preserve global-property semantics
 without exposing values in process command lines, but values can appear in build diagnostics and are

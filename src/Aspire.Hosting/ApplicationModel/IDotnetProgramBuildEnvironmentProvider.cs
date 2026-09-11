@@ -11,6 +11,8 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// Values supplied through this contract affect MSBuild evaluation and may appear in build diagnostics. They are
 /// not a secret transport. Implementations are evaluated in registration order for each publish build.
+/// When publishing a container, Aspire rejects values that control the output artifact's identity, destination,
+/// format, or target platform because downstream publishing steps use the corresponding container build options.
 /// </remarks>
 [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public interface IDotnetProgramBuildEnvironmentProvider : IResourceAnnotation
