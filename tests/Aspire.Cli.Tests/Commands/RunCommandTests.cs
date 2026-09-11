@@ -2084,6 +2084,128 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("unexpected error", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, true)]
+    public async Task RunCommand_WhenCancelledDuringFinalTeardown_AwaitsRunCleanup(bool managerOwned, bool teardownFails, bool extensionCancelled)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(5));
+        var runCompletion = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var configurationProvider = new CallbackConfigurationProvider();
+        var rpcFailed = false;
+        var cancellationRequested = false;
+        var runToken = CancellationToken.None;
+        if (extensionCancelled)
+        {
+            // Expire the initial extension-operation cancellation wait synchronously.
+            // A later stopCli must upgrade that already-handled local wait to manager ownership.
+            timeProvider.TimerCreatedCallback = () => timeProvider.Advance(TimeSpan.FromSeconds(5));
+        }
+
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, token) =>
+            {
+                runToken = token;
+                context.BuildCompletionSource!.SetResult(true);
+                context.BackchannelCompletionSource!.SetResult(new TestAppHostBackchannel
+                {
+                    GetDashboardUrlsAsyncCallback = _ =>
+                    {
+                        rpcFailed = true;
+                        return Task.FromException<DashboardUrlsState>(extensionCancelled
+                            ? new ExtensionOperationCanceledException("Extension operation canceled.")
+                            : new InvalidOperationException("Dashboard RPC failed."));
+                    }
+                });
+                return runCompletion.Task;
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.TimeProvider = timeProvider;
+        });
+        var originalConfiguration = Assert.IsAssignableFrom<IConfiguration>(
+            services.Single(service => service.ServiceType == typeof(IConfiguration)).ImplementationInstance);
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+            .AddConfiguration(originalConfiguration)
+            .Add(configurationProvider)
+            .Build());
+
+        using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<ConsoleCancellationManager>();
+        var rpcTarget = provider.GetRequiredService<IExtensionRpcTarget>();
+        configurationProvider.Reading = key =>
+        {
+            if (!rpcFailed || cancellationRequested || key != KnownConfigNames.CliRunDetached)
+            {
+                return;
+            }
+
+            // The final detached-child check used to run after the cancellation snapshot.
+            // Deliver cancellation at that exact boundary, without a scheduler-dependent delay.
+            cancellationRequested = true;
+            if (managerOwned)
+            {
+                Assert.True(rpcTarget.StopCliAsync().IsCompletedSuccessfully);
+            }
+            else
+            {
+                cts.Cancel();
+            }
+
+            if (teardownFails)
+            {
+                throw new InvalidOperationException("Final teardown failed.");
+            }
+        };
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var pendingCommand = command.Parse($"run --apphost {appHostFile.FullName}")
+            .InvokeAsync(cancellationToken: managerOwned ? manager.Token : cts.Token);
+        int exitCode;
+        try
+        {
+            Assert.True(cancellationRequested);
+            Assert.True(runToken.IsCancellationRequested);
+            Assert.False(pendingCommand.IsCompleted, "Final teardown bypassed cancellation cleanup.");
+
+            timeProvider.Advance(TimeSpan.FromSeconds(6));
+            Assert.Equal(!managerOwned || extensionCancelled, timeProvider.TimerCreated.Task.IsCompleted);
+            if (managerOwned)
+            {
+                Assert.False(pendingCommand.IsCompleted, "Manager-owned cleanup used a local deadline.");
+            }
+            else
+            {
+                await pendingCommand.DefaultTimeout();
+                Assert.False(runCompletion.Task.IsCompleted);
+            }
+        }
+        finally
+        {
+            runCompletion.TrySetResult(CliExitCodes.Cancelled);
+            exitCode = await pendingCommand.DefaultTimeout();
+        }
+
+        Assert.Equal(teardownFails ? CliExitCodes.InvalidCommand :
+            extensionCancelled ? CliExitCodes.Success : CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+    }
+
     [Fact]
     public async Task RunCommand_WhenAppHostExitsDuringStartup_DisplaysCapturedAppHostOutput()
     {
