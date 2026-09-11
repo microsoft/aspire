@@ -117,6 +117,98 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GetAndroidSdkRoots_UsesEnvironmentVariablesBeforePlatformDefaults()
+    {
+        var userProfile = Path.Combine("home", "user");
+        var localApplicationData = Path.Combine(userProfile, "AppData", "Local");
+
+        var roots = AndroidEmulatorEnumerator.GetAndroidSdkRoots(
+            androidHome: Path.Combine("custom", "android-home"),
+            androidSdkRoot: Path.Combine("custom", "android-sdk-root"),
+            userProfile,
+            localApplicationData,
+            isWindows: true,
+            isMacOS: false);
+
+        Assert.Equal(
+            [
+                Path.Combine("custom", "android-home"),
+                Path.Combine("custom", "android-sdk-root"),
+                Path.Combine(localApplicationData, "Android", "Sdk")
+            ],
+            roots);
+    }
+
+    [Fact]
+    public void GetAndroidSdkRoots_AddsPlatformDefaultSdkRoots()
+    {
+        var userProfile = Path.Combine("home", "user");
+        var localApplicationData = Path.Combine(userProfile, "AppData", "Local");
+
+        var windowsRoots = AndroidEmulatorEnumerator.GetAndroidSdkRoots(
+            androidHome: null,
+            androidSdkRoot: null,
+            userProfile,
+            localApplicationData,
+            isWindows: true,
+            isMacOS: false);
+        var macOSRoots = AndroidEmulatorEnumerator.GetAndroidSdkRoots(
+            androidHome: null,
+            androidSdkRoot: null,
+            userProfile,
+            localApplicationData,
+            isWindows: false,
+            isMacOS: true);
+        var linuxRoots = AndroidEmulatorEnumerator.GetAndroidSdkRoots(
+            androidHome: null,
+            androidSdkRoot: null,
+            userProfile,
+            localApplicationData,
+            isWindows: false,
+            isMacOS: false);
+        var windowsRootsFromUserProfile = AndroidEmulatorEnumerator.GetAndroidSdkRoots(
+            androidHome: null,
+            androidSdkRoot: null,
+            userProfile,
+            localApplicationData: null,
+            isWindows: true,
+            isMacOS: false);
+
+        Assert.Equal([Path.Combine(localApplicationData, "Android", "Sdk")], windowsRoots);
+        Assert.Equal([Path.Combine(userProfile, "Library", "Android", "sdk")], macOSRoots);
+        Assert.Equal([Path.Combine(userProfile, "Android", "Sdk")], linuxRoots);
+        Assert.Equal([Path.Combine(userProfile, "AppData", "Local", "Android", "Sdk")], windowsRootsFromUserProfile);
+    }
+
+    [Fact]
+    public void FindAndroidToolPath_FallsBackToDefaultSdkRoot()
+    {
+        using var userProfile = TemporaryWorkspace.Create(outputHelper);
+        using var localApplicationData = TemporaryWorkspace.Create(outputHelper);
+        var relativePath = Path.Combine("emulator", "emulator");
+        var roots = AndroidEmulatorEnumerator.GetAndroidSdkRoots(
+            androidHome: null,
+            androidSdkRoot: null,
+            userProfile.Path,
+            localApplicationData.Path,
+            isWindows: false,
+            isMacOS: true);
+
+        var expectedPath = Path.Combine(userProfile.Path, "Library", "Android", "sdk", relativePath);
+        if (OperatingSystem.IsWindows())
+        {
+            expectedPath += ".exe";
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(expectedPath)!);
+        File.WriteAllText(expectedPath, string.Empty);
+
+        var path = AndroidEmulatorEnumerator.FindAndroidToolPath("emulator", relativePath, roots);
+
+        Assert.Equal(expectedPath, path);
+    }
+
+    [Fact]
     public void FindAndroidToolPath_ReturnsPathExecutableWhenNoSdkRootContainsTool()
     {
         using var androidHome = TemporaryWorkspace.Create(outputHelper);

@@ -393,7 +393,7 @@ internal static class AndroidEmulatorEnumerator
         return FindAndroidToolPath(executableName, androidSdkRelativePath, GetAndroidSdkRoots());
     }
 
-    private static string FindAndroidToolPath(string executableName, string androidSdkRelativePath, IEnumerable<string> androidSdkRoots)
+    internal static string FindAndroidToolPath(string executableName, string androidSdkRelativePath, IEnumerable<string> androidSdkRoots)
     {
         var executable = OperatingSystem.IsWindows() ? $"{executableName}.exe" : executableName;
         foreach (var androidSdkRoot in androidSdkRoots)
@@ -420,17 +420,55 @@ internal static class AndroidEmulatorEnumerator
 
     private static IEnumerable<string> GetAndroidSdkRoots()
     {
-        var androidHome = Environment.GetEnvironmentVariable("ANDROID_HOME");
-        if (!string.IsNullOrWhiteSpace(androidHome))
+        return GetAndroidSdkRoots(
+            Environment.GetEnvironmentVariable("ANDROID_HOME"),
+            Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT"),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            OperatingSystem.IsWindows(),
+            OperatingSystem.IsMacOS());
+    }
+
+    internal static IReadOnlyList<string> GetAndroidSdkRoots(
+        string? androidHome,
+        string? androidSdkRoot,
+        string? userProfile,
+        string? localApplicationData,
+        bool isWindows,
+        bool isMacOS)
+    {
+        var roots = new List<string>();
+
+        AddRoot(androidHome);
+        AddRoot(androidSdkRoot);
+
+        if (isWindows)
         {
-            yield return androidHome;
+            AddRoot(CombineIfNotEmpty(localApplicationData, "Android", "Sdk"));
+            AddRoot(CombineIfNotEmpty(userProfile, "AppData", "Local", "Android", "Sdk"));
+        }
+        else if (isMacOS)
+        {
+            AddRoot(CombineIfNotEmpty(userProfile, "Library", "Android", "sdk"));
+        }
+        else
+        {
+            AddRoot(CombineIfNotEmpty(userProfile, "Android", "Sdk"));
         }
 
-        var androidSdkRoot = Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
-        if (!string.IsNullOrWhiteSpace(androidSdkRoot) &&
-            !string.Equals(androidSdkRoot, androidHome, StringComparison.Ordinal))
+        return roots;
+
+        void AddRoot(string? path)
         {
-            yield return androidSdkRoot;
+            if (!string.IsNullOrWhiteSpace(path) && !roots.Contains(path, StringComparer.Ordinal))
+            {
+                roots.Add(path);
+            }
+        }
+
+        static string? CombineIfNotEmpty(string? root, params string[] paths)
+        {
+            return string.IsNullOrWhiteSpace(root) ? null : Path.Combine([root, .. paths]);
         }
     }
 
