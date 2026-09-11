@@ -1,0 +1,29 @@
+{
+  "run_id": 34571189358,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34571189358",
+  "analyzed_at": "2026-09-11T07:14:59Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19965,
+    "title": "Fix deprecated Homebrew cask DSL usage",
+    "author": "askpt",
+    "state": "closed",
+    "head_branch": "worktree-20260905-133602",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19965"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Tests, Dashboard, Dashboard, tests/Aspire.Dashboard.T... / Dashboard (windows-latest)",
+      "id": 103173950463,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34571189358/job/103173950463",
+      "classification": "transient-infra",
+      "reason": "Job failed at the 'Build test project' step with a generic 'Process completed with exit code 1' annotation and no retrievable job logs. The PR only changes Homebrew release scripts, docs, and an Acquisition test file (tests/Aspire.Acquisition.Tests/Scripts/PRScriptInstallerModeTests.cs), none of which touch Aspire.Dashboard.Tests or the Dashboard project, so the build failure cannot be attributed to the PR's changes. This matches a known recurring pattern of unrelated 'Build test project' jobs failing with a generic exit code 1 across multiple projects (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard) with logs unavailable, tracked under issue #19838.",
+      "failed_steps": ["Build test project"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["build-test-project-widespread-exit1-unrelated"]
+}
