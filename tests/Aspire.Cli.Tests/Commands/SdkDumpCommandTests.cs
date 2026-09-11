@@ -3,7 +3,11 @@
 
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.DotNet.RemoteExecutor;
@@ -243,6 +247,51 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
 
         // "Aspire.Hosting.Redis@" is not a valid semver, so it should fail version validation
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SdkDump_PreparesRepositoryNuGetConfigBeforeCreatingScanner(bool outputDirectory)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(workspace.Path);
+        if (repoRoot is null)
+        {
+            Assert.Skip("This test requires repository-development mode.");
+            return;
+        }
+
+        Assert.True(NuGetConfigMerger.TryFindNuGetConfigInDirectory(new DirectoryInfo(repoRoot), out var repoConfig));
+        var expectedConfig = await File.ReadAllTextAsync(repoConfig.FullName);
+        string? scannerPath = null;
+        string? scannerConfig = null;
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = async (appPath, cancellationToken) =>
+            {
+                scannerPath = appPath;
+                var configPath = Path.Combine(appPath, "nuget.config");
+                scannerConfig = File.Exists(configPath)
+                    ? await File.ReadAllTextAsync(configPath, cancellationToken)
+                    : null;
+                return new FakeFailingAppHostServerProject(appPath);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        services.AddSingleton<IAppHostServerProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var outputOption = outputDirectory ? "--output-directory" : "--output";
+        var result = command.Parse(["sdk", "dump", "--format", "ci", outputOption,
+            Path.Combine(workspace.Path, "output"), "Aspire.Hosting.Redis@13.2.0"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.NotNull(scannerPath);
+        Assert.Equal(expectedConfig, scannerConfig);
+        Assert.False(Directory.Exists(scannerPath));
     }
 
     [Fact]

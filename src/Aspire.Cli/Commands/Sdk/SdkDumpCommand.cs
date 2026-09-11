@@ -9,7 +9,9 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 using Aspire.Shared.Json;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -160,6 +162,19 @@ internal sealed class SdkDumpCommand : BaseCommand
             emoji: KnownEmojis.MagnifyingGlassTiltedLeft));
     }
 
+    private Task<IAppHostServerProject> CreateCapabilityScannerProjectAsync(string tempDir, CancellationToken cancellationToken)
+    {
+        var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(tempDir);
+        if (repoRoot is not null && NuGetConfigMerger.TryFindNuGetConfigInDirectory(new DirectoryInfo(repoRoot), out var nugetConfig))
+        {
+            // The scanner's temporary app directory is outside the checkout. Preserve the
+            // repository's source names and mappings so its project references can restore.
+            nugetConfig.CopyTo(Path.Combine(tempDir, "nuget.config"));
+        }
+
+        return _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
+    }
+
     private async Task<int> DumpCapabilitiesAsync(
         List<IntegrationReference> integrations,
         FileInfo? outputFile,
@@ -171,7 +186,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
         try
         {
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
+            var appHostServerProject = await CreateCapabilityScannerProjectAsync(tempDir, cancellationToken);
 
             _logger.LogDebug("Building AppHost server for capability scanning with {Count} integrations", integrations.Count);
 
@@ -270,7 +285,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
         try
         {
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
+            var appHostServerProject = await CreateCapabilityScannerProjectAsync(tempDir, cancellationToken);
 
             _logger.LogDebug("Building AppHost server for batched capability scanning with {Count} integrations", integrations.Count);
 
