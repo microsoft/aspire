@@ -4,9 +4,13 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREPIPELINES003
 
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests.Publishing;
 
@@ -86,6 +90,87 @@ public class DockerContainerRuntimeTests
             .ToArray();
         Assert.Equal(2, builderNames.Length);
         Assert.Equal(2, builderNames.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_CancellationWaitsForIsolatedBuilderCleanup()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult();
+        var buildResult = new TaskCompletionSource<ProcessResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupResult = new TaskCompletionSource<ProcessResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processRunner.EnqueuePending(buildResult.Task);
+        processRunner.EnqueuePending(cleanupResult.Task);
+        var runtime = new DockerContainerRuntime(
+            NullLogger<DockerContainerRuntime>.Instance,
+            processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            OutputPath = "out",
+            ImageFormat = ContainerImageFormat.Docker
+        };
+        using var cancellation = new CancellationTokenSource();
+
+        var buildTask = runtime.BuildImageAsync(
+            contextPath: "context",
+            dockerfilePath: "Dockerfile",
+            options: options,
+            buildArguments: [],
+            buildSecrets: [],
+            stage: null,
+            cancellationToken: cancellation.Token);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => processRunner.ProcessSpecs.Count == 3,
+            "The Docker build should start.");
+        await cancellation.CancelAsync();
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => processRunner.ProcessSpecs.Count == 4,
+            "The isolated builder cleanup should start after cancellation.");
+
+        var builderName = AssertAndGetBuilderName(processRunner.ProcessSpecs[1].Arguments);
+        Assert.Equal($"buildx rm \"{builderName}\"", processRunner.ProcessSpecs[3].Arguments);
+        try
+        {
+            Assert.False(buildTask.IsCompleted);
+        }
+        finally
+        {
+            cleanupResult.TrySetResult(new ProcessResult(0));
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => buildTask).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_CleanupFailureDoesNotMaskBuildFailure()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(exitCode: 42, output: ["build failed"]);
+        processRunner.EnqueueException(new InvalidOperationException("cleanup failed"));
+        var logger = new FakeLogger<DockerContainerRuntime>();
+        var runtime = new DockerContainerRuntime(logger, processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            OutputPath = "out",
+            ImageFormat = ContainerImageFormat.Docker
+        };
+
+        var exception = await Assert.ThrowsAsync<ProcessFailedException>(
+            () => BuildImageAsync(runtime, options));
+
+        Assert.Equal(42, exception.ExitCode);
+        Assert.Contains(
+            logger.Collector.GetSnapshot(),
+            log => log.Level == LogLevel.Warning &&
+                log.Message.Contains("Failed to remove buildkit instance aspire-", StringComparison.Ordinal));
     }
 
     [Theory]
