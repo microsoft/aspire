@@ -1,0 +1,7 @@
+{
+  "name": "aspire-cli-e2e-dependencies",
+  "private": true,
+  "devDependencies": {
+    "create-vite": "9.2.0"
+  }
+}
