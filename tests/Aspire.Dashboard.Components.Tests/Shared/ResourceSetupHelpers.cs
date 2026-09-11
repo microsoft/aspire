@@ -22,7 +22,7 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class ResourceSetupHelpers
 {
-    public static void SetupResourceDetails(BunitContext context)
+    public static void SetupResourceDetails(TestContext context)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
@@ -43,7 +43,7 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentUIComponents(context);
     }
 
-    public static void SetupResourcesPage(BunitContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)
+    public static void SetupResourcesPage(TestContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)
     {
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);

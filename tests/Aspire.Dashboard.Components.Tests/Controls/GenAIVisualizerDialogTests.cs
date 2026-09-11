@@ -385,7 +385,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         });
     }
 
-    private Func<IRenderedComponent<IComponent>> SetUpDialog(out DashboardDialogService dialogService)
+    private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentTab(this);
@@ -393,11 +393,11 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         JSInterop.SetupModule("/Components/Controls/TextVisualizer.razor.js").SetupVoid();
         JSInterop.SetupModule("/Components/Controls/MarkdownRenderer.razor.js").SetupVoid();
 
-        IRenderedComponent<IComponent>? cut = null;
+        IRenderedFragment? cut = null;
         TestDialogService? testDialogService = null;
         testDialogService = new TestDialogService((content, _) =>
         {
-            cut = Render<CascadingValue<IDialogInstance>>(builder =>
+            cut = RenderComponent<CascadingValue<IDialogInstance>>(builder =>
             {
                 builder.Add(cascadingValue => cascadingValue.Value, testDialogService!.LastInstance!);
                 builder.AddChildContent<GenAIVisualizerDialog>(childBuilder =>

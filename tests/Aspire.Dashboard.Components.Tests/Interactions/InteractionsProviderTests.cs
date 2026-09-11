@@ -42,7 +42,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient);
 
         // Act
-        var cut = Render<Components.Interactions.InteractionsProvider>();
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>();
 
         var instance = cut.Instance;
 
@@ -66,7 +66,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient);
 
         // Act
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -114,7 +114,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
 
         SetupInteractionProviderServices(liveDashboardClient, selectedDashboardClient: selectedDashboardClient);
 
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -156,7 +156,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
         // Act 1
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -209,7 +209,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
         // Act 1
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -267,7 +267,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
         // Act 1
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -327,7 +327,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
         // Act 1
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -382,7 +382,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient: dashboardClient);
 
         // Act 1
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -451,7 +451,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient);
 
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -495,7 +495,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
         // Act 1
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -576,7 +576,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
         // Act
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -631,7 +631,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
         // Act 1
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -684,7 +684,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
         // Act 1
-        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -743,7 +743,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         Services.AddScoped<DashboardDialogService>();
         Services.AddScoped<DashboardMessageBarService>();
 
-        _messageBarProvider = Render<FluentMessageBarProvider>(builder =>
+        _messageBarProvider = RenderComponent<FluentMessageBarProvider>(builder =>
         {
             builder.Add(p => p.Section, DashboardUIHelpers.MessageBarSection);
         });

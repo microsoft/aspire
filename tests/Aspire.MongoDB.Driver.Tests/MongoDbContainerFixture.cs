@@ -22,7 +22,8 @@ public sealed class MongoDbContainerFixture : IAsyncLifetime
         {
             // testcontainers uses mongo:mongo by default,
             // resetting that for tests
-            Container = new MongoDbBuilder($"{ComponentTestConstants.AspireTestContainerRegistry}/{MongoDBContainerImageTags.Image}:{MongoDBContainerImageTags.Tag}")
+            Container = new MongoDbBuilder()
+                .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{MongoDBContainerImageTags.Image}:{MongoDBContainerImageTags.Tag}")
                 .WithUsername(null)
                 .WithPassword(null)
                 .Build();

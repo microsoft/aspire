@@ -40,7 +40,7 @@ public sealed class NotificationEntryComponentTests : DashboardTestContext
             }
         };
 
-        var cut = Render<NotificationEntryComponent>(builder => builder
+        var cut = RenderComponent<NotificationEntryComponent>(builder => builder
             .Add(component => component.Entry, entry)
             .Add(component => component.OnDismiss, () => dismissed = true));
 

@@ -25,7 +25,7 @@ public sealed class ResourceSelectTests : DashboardTestContext
             Name = "frontend"
         };
 
-        var cut = Render<ResourceSelect>(parameters => parameters
+        var cut = RenderComponent<ResourceSelect>(parameters => parameters
             .Add(component => component.Resources, [selectedResource])
             .Add(component => component.SelectedResource, selectedResource));
 

@@ -12,7 +12,7 @@ public class TotalItemsFooterTests : DashboardTestContext
     [Fact]
     public async Task UpdateDisplayedCount_WithDisplayedItemCount_DisplaysPartialCount()
     {
-        var cut = Render<TotalItemsFooter>(builder => builder
+        var cut = RenderComponent<TotalItemsFooter>(builder => builder
             .Add(p => p.TotalItemCount, 0)
             .Add(p => p.SingularText, "Showing <strong>{0} item</strong>")
             .Add(p => p.PluralText, "Showing <strong>{0} items</strong>")

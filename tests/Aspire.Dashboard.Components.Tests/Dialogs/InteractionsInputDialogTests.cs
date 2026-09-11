@@ -690,7 +690,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         }
     }
 
-    private Func<IRenderedComponent<IComponent>> SetUpDialog(out DashboardDialogService dialogService)
+    private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
@@ -703,11 +703,11 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         var module = JSInterop.SetupModule("./Components/Dialogs/InteractionsInputDialog.razor.js");
         module.SetupVoid("togglePasswordVisibility", _ => true);
 
-        IRenderedComponent<IComponent>? cut = null;
+        IRenderedFragment? cut = null;
         TestDialogService? testDialogService = null;
         testDialogService = new TestDialogService((content, _) =>
         {
-            cut = Render<CascadingValue<IDialogInstance>>(builder =>
+            cut = RenderComponent<CascadingValue<IDialogInstance>>(builder =>
             {
                 builder.Add(p => p.Value, testDialogService!.LastInstance!);
                 builder.AddChildContent<InteractionsInputDialog>(childBuilder =>

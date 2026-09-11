@@ -254,7 +254,7 @@ public class ChartFiltersTests : DashboardTestContext
         DimensionFilterViewModel dimensionFilter,
         Action<DimensionFilterViewModel>? onDimensionValuesChanged = null)
     {
-        return Render<ChartFilters>(builder =>
+        return RenderComponent<ChartFilters>(builder =>
         {
             builder.Add(p => p.InstrumentType, OtlpInstrumentType.Sum);
             builder.Add(p => p.ShowCount, false);

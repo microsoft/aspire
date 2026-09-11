@@ -47,7 +47,7 @@ public class AspireMenuTests : DashboardTestContext
             return Task.CompletedTask;
         };
 
-        var menuHost = Render<AspireMenu>(builder =>
+        var menuHost = RenderComponent<AspireMenu>(builder =>
         {
             builder.Add(p => p.Anchor, "menu-anchor");
             builder.Add(p => p.Open, true);
@@ -84,7 +84,7 @@ public class AspireMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        var menuHost = Render<AspireMenu>(builder =>
+        var menuHost = RenderComponent<AspireMenu>(builder =>
         {
             builder.Add(p => p.Anchor, "menu-anchor");
             builder.Add(p => p.Anchored, false);
@@ -120,7 +120,7 @@ public class AspireMenuTests : DashboardTestContext
             Text = "Resource1",
             Icon = new Icons.Regular.Size16.Info()
         };
-        var menuHost = Render<AspireMenu>(builder =>
+        var menuHost = RenderComponent<AspireMenu>(builder =>
         {
             builder.Add(p => p.Anchor, "menu-anchor");
             builder.Add(p => p.Anchored, false);
@@ -147,7 +147,7 @@ public class AspireMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        var menuHost = Render<AspireMenu>(builder =>
+        var menuHost = RenderComponent<AspireMenu>(builder =>
         {
             builder.Add(p => p.Anchor, "menu-anchor");
             builder.Add(p => p.Items, new[]
@@ -180,7 +180,7 @@ public class AspireMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        var menuHost = Render<CascadingValue<bool>>(builder =>
+        var menuHost = RenderComponent<CascadingValue<bool>>(builder =>
         {
             builder.Add(p => p.Value, false);
             builder.AddChildContent<AspireMenu>(menuBuilder =>
@@ -193,7 +193,7 @@ public class AspireMenuTests : DashboardTestContext
 
         await menuHost.InvokeAsync(() => menuHost.FindComponent<AspireMenu>().Instance.OpenAsync(10, 10));
 
-        menuHost.Render(builder =>
+        menuHost.SetParametersAndRender(builder =>
         {
             builder.Add(p => p.Value, false);
             builder.Add(p => p.ChildContent, (RenderFragment)(_ => { }));
@@ -230,7 +230,7 @@ public class AspireMenuTests : DashboardTestContext
             }
         };
 
-        var menuButton = Render<AspireMenuButton>(builder =>
+        var menuButton = RenderComponent<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, anchor);
             builder.Add(p => p.Title, "View options");
@@ -271,7 +271,7 @@ public class AspireMenuTests : DashboardTestContext
             }
         };
 
-        var menuButton = Render<AspireMenuButton>(builder =>
+        var menuButton = RenderComponent<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, anchor);
             builder.Add(p => p.Title, "View options");
@@ -306,7 +306,7 @@ public class AspireMenuTests : DashboardTestContext
             new() { Text = "Terminal", Role = MenuItemRole.Checkbox, Checked = true },
         };
 
-        var menuButton = Render<AspireMenuButton>(builder =>
+        var menuButton = RenderComponent<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, anchor);
             builder.Add(p => p.Title, "View options");
@@ -352,7 +352,7 @@ public class AspireMenuTests : DashboardTestContext
                 return Task.CompletedTask;
             }
         };
-        var menuHost = Render<AspireMenu>(builder =>
+        var menuHost = RenderComponent<AspireMenu>(builder =>
         {
             builder.Add(p => p.Anchor, "menu-anchor");
             builder.Add(p => p.Open, true);
@@ -396,7 +396,7 @@ public class AspireMenuTests : DashboardTestContext
                 return Task.CompletedTask;
             }
         };
-        var menuHost = Render<AspireMenu>(builder =>
+        var menuHost = RenderComponent<AspireMenu>(builder =>
         {
             builder.Add(p => p.Anchor, "menu-anchor");
             builder.Add(p => p.Open, true);

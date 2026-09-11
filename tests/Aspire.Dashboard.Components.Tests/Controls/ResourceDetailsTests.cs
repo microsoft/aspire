@@ -39,7 +39,7 @@ public class ResourceDetailsTests : DashboardTestContext
             }.ToImmutableArray());
 
         // Act
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.ShowSpecOnlyToggle, true);
             builder.Add(p => p.Resource, resource1);
@@ -95,7 +95,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 new EnvironmentVariableViewModel("envvar3", "value!", fromSpec: true)
             }.ToImmutableArray());
 
-        cut.Render(builder =>
+        cut.SetParametersAndRender(builder =>
         {
             builder.Add(p => p.Resource, resource2);
         });
@@ -133,7 +133,7 @@ public class ResourceDetailsTests : DashboardTestContext
             }.ToImmutableArray());
 
         // Act
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.ShowSpecOnlyToggle, true);
             builder.Add(p => p.Resource, resource1);
@@ -187,7 +187,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 new EnvironmentVariableViewModel("envvar3", "value!", fromSpec: true)
             }.ToImmutableArray());
 
-        cut.Render(builder =>
+        cut.SetParametersAndRender(builder =>
         {
             builder.Add(p => p.Resource, resource2);
         });
@@ -225,7 +225,7 @@ public class ResourceDetailsTests : DashboardTestContext
             }.ToImmutableArray());
 
         // Act
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.ShowSpecOnlyToggle, true);
             builder.Add(p => p.Resource, resource1);
@@ -271,7 +271,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 new EnvironmentVariableViewModel("envvar3", "value!", fromSpec: true)
             }.ToImmutableArray());
 
-        cut.Render(builder =>
+        cut.SetParametersAndRender(builder =>
         {
             builder.Add(p => p.Resource, resource2);
         });
@@ -309,7 +309,7 @@ public class ResourceDetailsTests : DashboardTestContext
             }.ToImmutableArray());
 
         // Act
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.ShowSpecOnlyToggle, true);
             builder.Add(p => p.Resource, resource1);
@@ -355,7 +355,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 new EnvironmentVariableViewModel("envvar3", "value!", fromSpec: true)
             }.ToImmutableArray());
 
-        cut.Render(builder =>
+        cut.SetParametersAndRender(builder =>
         {
             builder.Add(p => p.Resource, resource2);
         });
@@ -387,7 +387,7 @@ public class ResourceDetailsTests : DashboardTestContext
             resourceName: "app1",
             state: KnownResourceState.Waiting);
 
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
@@ -407,7 +407,7 @@ public class ResourceDetailsTests : DashboardTestContext
             resourceName: "app1",
             state: KnownResourceState.NotStarted);
 
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
@@ -441,7 +441,7 @@ public class ResourceDetailsTests : DashboardTestContext
                     isHighlighted: false)
             });
 
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([
@@ -480,7 +480,7 @@ public class ResourceDetailsTests : DashboardTestContext
             resourceName: "app1",
             properties: properties);
 
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
@@ -529,7 +529,7 @@ public class ResourceDetailsTests : DashboardTestContext
             stateStyle: "error",
             properties: properties);
 
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
@@ -597,7 +597,7 @@ public class ResourceDetailsTests : DashboardTestContext
             resourceName: "redis",
             properties: properties);
 
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
@@ -633,7 +633,7 @@ public class ResourceDetailsTests : DashboardTestContext
             }.ToImmutableArray());
 
         // Act
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.ShowSpecOnlyToggle, true);
             builder.Add(p => p.Resource, resource);
@@ -669,7 +669,7 @@ public class ResourceDetailsTests : DashboardTestContext
             }.ToImmutableArray());
 
         // Act
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.ShowSpecOnlyToggle, true);
             builder.Add(p => p.Resource, resource);
@@ -705,7 +705,7 @@ public class ResourceDetailsTests : DashboardTestContext
             }.ToImmutableArray());
 
         // Act
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.ShowSpecOnlyToggle, true);
             builder.Add(p => p.Resource, resource);
@@ -752,7 +752,7 @@ public class ResourceDetailsTests : DashboardTestContext
             commands: ImmutableArray.Create(setCommand));
 
         CommandViewModel? capturedCommand = null;
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
@@ -798,7 +798,7 @@ public class ResourceDetailsTests : DashboardTestContext
             commands: ImmutableArray.Create(setCommand));
 
         CommandViewModel? capturedCommand = null;
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
@@ -843,7 +843,7 @@ public class ResourceDetailsTests : DashboardTestContext
             properties: properties,
             commands: ImmutableArray.Create(setCommand));
 
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
@@ -872,7 +872,7 @@ public class ResourceDetailsTests : DashboardTestContext
             stateStyle: "error",
             properties: properties);
 
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
@@ -899,7 +899,7 @@ public class ResourceDetailsTests : DashboardTestContext
             state: KnownResourceState.Running,
             properties: properties);
 
-        var cut = Render<ResourceDetails>(builder =>
+        var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));

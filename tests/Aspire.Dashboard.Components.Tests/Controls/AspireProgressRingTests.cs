@@ -13,7 +13,7 @@ public class AspireProgressRingTests : DashboardTestContext
     [Fact]
     public void Render_WithoutValue_IsIndeterminate()
     {
-        var cut = Render<AspireProgressRing>(builder => builder
+        var cut = RenderComponent<AspireProgressRing>(builder => builder
             .Add(p => p.AriaLabel, "Loading")
             .Add(p => p.Width, "20px"));
 
@@ -31,7 +31,7 @@ public class AspireProgressRingTests : DashboardTestContext
     [Fact]
     public void Render_WithValue_IsDeterminate()
     {
-        var cut = Render<AspireProgressRing>(builder => builder
+        var cut = RenderComponent<AspireProgressRing>(builder => builder
             .Add(p => p.Min, 10)
             .Add(p => p.Max, 30)
             .Add(p => p.Value, 20)
@@ -53,7 +53,7 @@ public class AspireProgressRingTests : DashboardTestContext
     [InlineData(101, "100")]
     public void Render_ValueOutsideRange_ClampsValue(double value, string expectedValue)
     {
-        var cut = Render<AspireProgressRing>(builder => builder
+        var cut = RenderComponent<AspireProgressRing>(builder => builder
             .Add(p => p.AriaLabel, "Duration")
             .Add(p => p.Value, value));
 

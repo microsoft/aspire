@@ -69,7 +69,7 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         // Act
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -130,7 +130,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -174,7 +174,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -244,7 +244,7 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         // Act
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -260,7 +260,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         }, "Expected rows to be rendered.", logger);
 
         traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("2"));
-        cut.Render(builder =>
+        cut.SetParametersAndRender(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
         });
@@ -312,7 +312,7 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         // Act
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -394,7 +394,7 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         // Act
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -488,7 +488,7 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         // Act
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -584,7 +584,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             });
 
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -711,7 +711,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             });
 
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("2"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -786,7 +786,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             });
 
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -869,7 +869,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             });
 
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);
@@ -944,7 +944,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             });
 
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
-        var cut = Render<TraceDetail>(builder =>
+        var cut = RenderComponent<TraceDetail>(builder =>
         {
             builder.Add(p => p.TraceId, traceId);
             builder.AddCascadingValue(viewport);

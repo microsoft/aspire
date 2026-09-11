@@ -30,7 +30,7 @@ public class PlotlyChartTests : DashboardTestContext
         var model = new InstrumentViewModel();
 
         // Act
-        var cut = Render<PlotlyChart>(builder =>
+        var cut = RenderComponent<PlotlyChart>(builder =>
         {
             builder.Add(p => p.InstrumentViewModel, model);
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
@@ -85,7 +85,7 @@ public class PlotlyChartTests : DashboardTestContext
         await model.UpdateDataAsync(instrumentSummary, [dimension]);
 
         // Act
-        var cut = Render<PlotlyChart>(builder =>
+        var cut = RenderComponent<PlotlyChart>(builder =>
         {
             builder.Add(p => p.InstrumentViewModel, model);
             builder.Add(p => p.Duration, TimeSpan.FromSeconds(1));

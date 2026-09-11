@@ -105,7 +105,7 @@
     <PackageVersion Include="NuGet.Protocol" Version="7.9.0" />
     <PackageVersion Include="NuGet.Resolver" Version="7.9.0" />
     <!-- external dependencies -->
-    <PackageVersion Include="Confluent.Kafka" Version="2.15.1" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.15.0" />
     <PackageVersion Include="Dapper" Version="2.1.79" />
     <!-- axe-core accessibility engine wrapper for Playwright. The MIT-licensed .NET wrapper's
          major.minor tracks the embedded axe-core version, so 4.13.x runs axe-core 4.13.x.
@@ -256,7 +256,7 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsLTSVersion)" />
     <PackageVersion Include="MongoDB.EntityFrameworkCore" Version="8.4.1" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
-    <PackageVersion Include="Oracle.EntityFrameworkCore" Version="8.23.26301" />
+    <PackageVersion Include="Oracle.EntityFrameworkCore" Version="8.23.26200" />
     <!-- ASP.NET Core -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateLTSVersion)" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftAspNetCoreAuthenticationJwtBearerLTSVersion)" />
@@ -280,7 +280,7 @@
     <PackageVersion Update="MongoDB.Driver" Version="3.3.0" />
     <PackageVersion Update="MongoDB.EntityFrameworkCore" Version="9.0.0" />
     <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
-    <PackageVersion Update="Oracle.EntityFrameworkCore" Version="9.23.26301" />
+    <PackageVersion Update="Oracle.EntityFrameworkCore" Version="9.23.26000" />
     <!-- ASP.NET Core -->
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftAspNetCoreAuthenticationJwtBearerVersion)" />
@@ -302,7 +302,7 @@
     <PackageVersion Update="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsPreviewVersion)" />
     <!-- MongoDB.EntityFrameworkCore does not support EF Core 10 yet, so no version override here -->
     <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
-    <PackageVersion Update="Oracle.EntityFrameworkCore" Version="10.23.26301" />
+    <PackageVersion Update="Oracle.EntityFrameworkCore" Version="10.23.26000" />
     <!-- ASP.NET Core -->
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificatePreviewVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftAspNetCoreAuthenticationJwtBearerPreviewVersion)" />

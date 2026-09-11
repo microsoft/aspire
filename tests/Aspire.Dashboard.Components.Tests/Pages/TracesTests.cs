@@ -36,7 +36,7 @@ public class TracesTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = Render<Traces>(builder =>
+        var cut = RenderComponent<Traces>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });

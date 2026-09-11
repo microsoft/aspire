@@ -4,7 +4,7 @@
 using Bunit;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
-public abstract class DashboardTestContext : BunitContext
+public abstract class DashboardTestContext : TestContext
 {
     public DashboardTestContext()
     {

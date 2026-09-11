@@ -46,7 +46,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             resourceChannelProvider: () => resourcesChannel);
         SetupManageDataDialogServices(dashboardClient);
 
-        var cut = Render<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
+        var cut = RenderComponent<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
         Assert.Single(cut.FindComponents<FluentDialogBody>());
 
         cut.WaitForAssertion(() =>
@@ -140,7 +140,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         SetupIconCheckboxJs();
 
-        var cut = Render<IconCheckbox>(parameters => parameters
+        var cut = RenderComponent<IconCheckbox>(parameters => parameters
             .Add(p => p.CheckState, IconCheckboxState.Checked)
             .Add(p => p.Disabled, true)
             .Add(p => p.AccessibleLabel, "All data")
@@ -196,7 +196,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             }
         });
 
-        var cut = Render<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
+        var cut = RenderComponent<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
 
         cut.WaitForAssertion(() =>
         {
@@ -260,7 +260,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             resourceChannelProvider: () => resourcesChannel);
         SetupManageDataDialogServices(dashboardClient);
 
-        var cut = Render<ManageDataDialog>();
+        var cut = RenderComponent<ManageDataDialog>();
         cut.WaitForAssertion(() => AssertButtonDisabled(cut, "Remove selected", expectedDisabled: false));
 
         cut.Find("fluent-button[aria-label='Remove selected']").Click();

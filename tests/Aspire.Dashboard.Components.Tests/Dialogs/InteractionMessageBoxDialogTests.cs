@@ -101,16 +101,16 @@ public sealed class InteractionMessageBoxDialogTests : DashboardTestContext
         }
     }
 
-    private Func<IRenderedComponent<IComponent>> SetUpDialog(out DashboardDialogService dialogService)
+    private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentButton(this);
 
-        IRenderedComponent<IComponent>? cut = null;
+        IRenderedFragment? cut = null;
         TestDialogService? testDialogService = null;
         testDialogService = new TestDialogService((content, _) =>
         {
-            cut = Render<CascadingValue<IDialogInstance>>(builder =>
+            cut = RenderComponent<CascadingValue<IDialogInstance>>(builder =>
             {
                 builder.Add(component => component.Value, testDialogService!.LastInstance!);
                 builder.AddChildContent<InteractionMessageBoxDialog>(childBuilder =>

@@ -35,7 +35,8 @@ public class AspireRabbitMQLoggingTests
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task EndToEndLoggingTest()
     {
-        await using var rabbitMqContainer = new RabbitMqBuilder($"{ComponentTestConstants.AspireTestContainerRegistry}/{RabbitMQContainerImageTags.Image}:{RabbitMQContainerImageTags.Tag}")
+        await using var rabbitMqContainer = new RabbitMqBuilder()
+            .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{RabbitMQContainerImageTags.Image}:{RabbitMQContainerImageTags.Tag}")
             .Build();
         await rabbitMqContainer.StartAsync();
 

@@ -18,7 +18,7 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class MetricsSetupHelpers
 {
-    public static void SetupChartContainer(BunitContext context)
+    public static void SetupChartContainer(TestContext context)
     {
         var metricTableModule = context.JSInterop.SetupModule("/Components/Controls/Chart/MetricTable.razor.js");
         metricTableModule.SetupVoid("announceDataGridRows", _ => true);
@@ -29,7 +29,7 @@ internal static class MetricsSetupHelpers
         SetupPlotlyChart(context);
     }
 
-    internal static void SetupPlotlyChart(BunitContext context)
+    internal static void SetupPlotlyChart(TestContext context)
     {
         var module = context.JSInterop.SetupModule("/js/app-metrics.js");
         module.SetupVoid("initializeChart", _ => true);
@@ -38,7 +38,7 @@ internal static class MetricsSetupHelpers
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
     }
 
-    internal static void SetupMetricsPage(BunitContext context, ISessionStorage? sessionStorage = null)
+    internal static void SetupMetricsPage(TestContext context, ISessionStorage? sessionStorage = null)
     {
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);

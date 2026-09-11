@@ -16,7 +16,7 @@ public class AspirePropertyDetailsAccordionItemTests : DashboardTestContext
     {
         FluentUISetupHelpers.SetupFluentUIComponents(this);
 
-        var cut = Render<AspirePropertyDetailsAccordionItem>(builder => builder
+        var cut = RenderComponent<AspirePropertyDetailsAccordionItem>(builder => builder
             .Add(component => component.Header, "Properties")
             .Add(component => component.Count, 3)
             .Add(component => component.Expanded, true)
@@ -48,7 +48,7 @@ public class AspirePropertyDetailsAccordionItemTests : DashboardTestContext
     {
         FluentUISetupHelpers.SetupFluentUIComponents(this);
 
-        var cut = Render<AspirePropertyDetailsAccordionItem>(builder => builder
+        var cut = RenderComponent<AspirePropertyDetailsAccordionItem>(builder => builder
             .Add(component => component.Header, "Properties")
             .Add(component => component.Expanded, true)
             .AddChildContent("Content"));
