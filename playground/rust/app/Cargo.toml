@@ -12,5 +12,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["registry", "env-filter"] }
 tracing-opentelemetry = "0.33.0"
 opentelemetry-appender-tracing = "0.32.0"
-opentelemetry-otlp = { version = "0.32.0", features = ["grpc-tonic", "tls-roots", "tls-ring", "internal-logs", "metrics", "logs", "trace"] }
-tonic = { version = "0.14.6", default-features = false, features = ["transport", "tls-native-roots", "tls-ring"] }
+# Select the same provider on both paths: Cargo features are additive, so leaving
+# either on tls-ring would compile both providers rather than replace ring.
+opentelemetry-otlp = { version = "0.32.0", features = ["grpc-tonic", "tls-roots", "tls-aws-lc", "internal-logs", "metrics", "logs", "trace"] }
+tonic = { version = "0.14.6", default-features = false, features = ["transport", "tls-native-roots", "tls-aws-lc"] }
