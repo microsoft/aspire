@@ -16,9 +16,11 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
     private const string LocalImageOciArchiveNotSupportedMessage =
         "Docker cannot export an OCI archive when container-file layering references locally built images. " +
         "Use ContainerImageFormat.Docker for this archive or run the publish with Podman.";
+    private readonly ILogger<DockerContainerRuntime> _logger;
 
     public DockerContainerRuntime(ILogger<DockerContainerRuntime> logger, IProcessRunner processRunner) : base(logger, processRunner)
     {
+        _logger = logger;
     }
 
     protected override string RuntimeExecutable => KnownContainerRuntimes.Docker;
@@ -139,10 +141,9 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
         }
         finally
         {
-            // Clean up the buildkit instance if we created one
             if (!string.IsNullOrEmpty(builderName))
             {
-                await RemoveBuildkitInstanceAsync(builderName, cancellationToken).ConfigureAwait(false);
+                await RemoveBuildkitInstanceBestEffortAsync(builderName).ConfigureAwait(false);
             }
         }
     }
@@ -303,5 +304,20 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             "Successfully removed buildkit instance {BuilderName}.",
             cancellationToken,
             new object[] { builderName }).ConfigureAwait(false);
+    }
+
+    private async Task RemoveBuildkitInstanceBestEffortAsync(string builderName)
+    {
+        // Cleanup must outlive a canceled publish, but it is bounded so an unresponsive Docker
+        // daemon cannot delay cancellation indefinitely.
+        using var cleanupCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            await RemoveBuildkitInstanceAsync(builderName, cleanupCancellation.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to remove buildkit instance {BuilderName}", builderName);
+        }
     }
 }
