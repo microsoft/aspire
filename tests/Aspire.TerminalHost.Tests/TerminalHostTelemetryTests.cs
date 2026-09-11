@@ -19,6 +19,10 @@ public class TerminalHostTelemetryTests
     [Theory]
     [InlineData(null)]
     [InlineData("false")]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("not-a-bool")]
+    [InlineData("1")]
     public void TelemetryRequiresExplicitOptIn(string? enabled)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
