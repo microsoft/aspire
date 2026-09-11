@@ -432,7 +432,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         }
 
         var affectedProjects = projects
-            .Where(project => project.Annotations.OfType<IDotnetProgramBuildEnvironmentProvider>().Any() ||
+            .Where(project => project.Annotations.OfType<DotnetProgramBuildEnvironmentCallbackAnnotation>().Any() ||
                 (project.TryGetLastAnnotation<IProjectMetadata>(out var metadata) && metadata.BuildEnvironment.Count > 0))
             .Select(project => $"'{project.Name}'")
             .ToList();
@@ -447,12 +447,12 @@ internal sealed class EFCoreOperationExecutor : IDisposable
             return;
         }
 
-        // Provider presence deliberately includes no-op callbacks. Never evaluate a callback just for logging,
+        // Callback presence deliberately includes no-op callbacks. Never evaluate a callback just for logging,
         // and never disclose values. One executor represents one requested operation, including nested EF calls.
         _buildCustomizationWarningLogged = true;
         _logger.LogWarning(
             "EF command '{Command} {SubCommand}' is continuing with Aspire-specific build customizations configured on {Projects} " +
-            "(WithBuildEnvironment, IDotnetProgramBuildEnvironmentProvider, or custom build-property metadata). " +
+            "(WithBuildEnvironment, WithDotnetProgramBuildEnvironment, or custom build-property metadata). " +
             "These customizations are not forwarded as MSBuild global properties to dotnet-ef. " +
             "EF may use suitable output, select different or stale output, or fail if the expected output is missing. " +
             "Where equivalent, define the required settings in shared .csproj or Directory.Build.props configuration " +

@@ -217,7 +217,7 @@ public class EFBuildCustomizationWarningTests
 
     private static string ExpectedWarning(string command, string subCommand, string affected) =>
         $"EF command '{command} {subCommand}' is continuing with Aspire-specific build customizations configured on {affected} " +
-        "(WithBuildEnvironment, IDotnetProgramBuildEnvironmentProvider, or custom build-property metadata). " +
+        "(WithBuildEnvironment, WithDotnetProgramBuildEnvironment, or custom build-property metadata). " +
         "These customizations are not forwarded as MSBuild global properties to dotnet-ef. " +
         "EF may use suitable output, select different or stale output, or fail if the expected output is missing. " +
         "Where equivalent, define the required settings in shared .csproj or Directory.Build.props configuration " +

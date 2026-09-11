@@ -165,7 +165,8 @@ public static class DotnetProjectHostingExtensions
             ValidateBuildEnvironmentSupport(builder.Resource, metadata);
         }
 
-        return builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+        builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+        return builder.WithDotnetProgramBuildEnvironment(callback);
     }
 
     internal static void ValidateBuildEnvironmentSupport(IResource resource, IProjectMetadata metadata)

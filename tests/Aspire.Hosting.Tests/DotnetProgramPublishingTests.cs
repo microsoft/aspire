@@ -38,6 +38,37 @@ public class DotnetProgramPublishingTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void WithDotnetProgramBuildEnvironmentPreservesCallbackOrder()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddResource(new TestDotnetProgramResource("program"));
+        Func<EnvironmentCallbackContext, Task> first = _ => Task.CompletedTask;
+        Func<EnvironmentCallbackContext, Task> second = _ => Task.CompletedTask;
+
+        resource.WithDotnetProgramBuildEnvironment(first);
+        resource.WithDotnetProgramBuildEnvironment(second);
+
+        Assert.Collection(
+            resource.Resource.Annotations.OfType<DotnetProgramBuildEnvironmentCallbackAnnotation>(),
+            annotation => Assert.Same(first, annotation.Callback),
+            annotation => Assert.Same(second, annotation.Callback));
+    }
+
+    [Fact]
+    public void WithDotnetProgramBuildEnvironmentRejectsNullCallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddResource(new TestDotnetProgramResource("program"));
+        Func<EnvironmentCallbackContext, Task> callback = null!;
+
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            resource.WithDotnetProgramBuildEnvironment(callback));
+
+        Assert.Equal(nameof(callback), exception.ParamName);
+        Assert.Empty(resource.Resource.Annotations.OfType<DotnetProgramBuildEnvironmentCallbackAnnotation>());
+    }
+
+    [Fact]
     public void WithDotnetProgramPublishingRequiresProjectMetadata()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

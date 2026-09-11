@@ -799,11 +799,11 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         var resource = builder.AddResource(new ProjectResource("program"))
             .WithAnnotation(new TestProjectMetadata(Path.Combine(workspace.WorkspaceRoot.FullName, "program.csproj")))
-            .WithAnnotation(new TestBuildEnvironmentProvider(context =>
+            .WithDotnetProgramBuildEnvironment(context =>
             {
                 context.EnvironmentVariables[propertyName] = "override";
                 return Task.CompletedTask;
-            }))
+            })
             .WithContainerBuildOptions(context =>
             {
                 context.Destination = ContainerImageDestination.Archive;
@@ -839,12 +839,12 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "program.csproj");
         var resource = builder.AddResource(new ProjectResource("program"))
             .WithAnnotation(new TestProjectMetadata(projectPath))
-            .WithAnnotation(new TestBuildEnvironmentProvider(context =>
+            .WithDotnetProgramBuildEnvironment(context =>
             {
                 callbackCount++;
                 context.EnvironmentVariables["BUILD_FLAVOR"] = $"value-{callbackCount}";
                 return Task.CompletedTask;
-            }))
+            })
             .WithContainerBuildOptions(context =>
             {
                 context.Destination = ContainerImageDestination.Archive;
@@ -2173,12 +2173,4 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 file sealed class TestProjectMetadata(string projectPath) : IProjectMetadata
 {
     public string ProjectPath { get; } = projectPath;
-}
-
-file sealed class TestBuildEnvironmentProvider(
-    Func<EnvironmentCallbackContext, Task> callback) : IDotnetProgramBuildEnvironmentProvider
-{
-    public Task ApplyAsync(EnvironmentCallbackContext context) => callback(context);
-
-    public LaunchSettings LaunchSettings { get; } = new();
 }
