@@ -6,6 +6,29 @@ namespace Aspire.Cli.Tests.Utils;
 public class TemporaryWorkspaceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public void Create_PreservesWorkspaceWhenFailureCaptureRequested()
+    {
+        TestContext.Current.KeyValueStorage["PreserveWorkspaceOnFailure"] = true;
+        var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var workspacePath = workspace.WorkspaceRoot.FullName;
+
+        try
+        {
+            workspace.Dispose();
+
+            Assert.True(Directory.Exists(workspacePath));
+
+            TemporaryWorkspace.ReleasePreservation(workspacePath);
+
+            Assert.False(Directory.Exists(workspacePath));
+        }
+        finally
+        {
+            TemporaryWorkspace.ReleasePreservation(workspacePath);
+        }
+    }
+
+    [Fact]
     public void ReleasePreservation_DeletesPreservedWorkspaceWhenRequested()
     {
         var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
