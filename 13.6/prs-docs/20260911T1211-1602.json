@@ -1,0 +1,9 @@
+{
+  "author": "dependabot",
+  "comment": "Dependency version bump, not related to any changelog entry",
+  "mergedAt": "2026-09-11T12:11:16Z",
+  "number": 1602,
+  "runDate": "2026-09-11T18:05:10Z",
+  "status": "excluded",
+  "title": "Bump OpenTelemetry.Exporter.OpenTelemetryProtocol and 4 others"
+}

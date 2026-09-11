@@ -1,0 +1,9 @@
+{
+  "author": "dependabot",
+  "comment": "GitHub Actions dependency bump, not related to any changelog entry",
+  "mergedAt": "2026-09-11T12:11:24Z",
+  "number": 1601,
+  "runDate": "2026-09-11T18:05:10Z",
+  "status": "excluded",
+  "title": "build(deps): bump the github-actions group across 1 directory with 2 updates"
+}

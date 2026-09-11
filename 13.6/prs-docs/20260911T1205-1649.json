@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents Dashboard run history and persistence feature (matched to PR #18924 changelog entry)",
+  "mergedAt": "2026-09-11T12:05:23Z",
+  "number": 1649,
+  "runDate": "2026-09-11T18:05:10Z",
+  "status": "included",
+  "title": "Document dashboard data persistence"
+}

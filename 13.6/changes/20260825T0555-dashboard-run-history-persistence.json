@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "The Dashboard can now persist resources and telemetry to SQLite, so you can inspect completed application runs, compare telemetry before and after code changes, or resume a standalone Dashboard's data across restarts. A new run selector in the header lets you switch between the live run and historical runs.",
-  "docsPrs": [],
+  "docsPrs": [
+    1649
+  ],
   "docsRequired": true,
   "emoji": "🗄️",
   "firstMergedAt": "2026-08-25T05:55:23Z",
