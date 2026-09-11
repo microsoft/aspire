@@ -78,6 +78,14 @@ export async function waitForResourceState(resourceName: string, states: readonl
     return await waitForExtensionState(file => getResources(file.state).some(resource => isResourceMatch(resource, resourceName) && resource.state !== null && states.includes(resource.state)), `resource '${resourceName}' state ${states.join(' or ')}`, timeoutMs);
 }
 
+export async function waitForRunningResourceWithUrl(resourceName: string, protocol: string, timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
+    return await waitForExtensionState(file => {
+        const resource = findResource(file.state, resourceName);
+        return resource?.state === 'Running'
+            && resource.urls?.some(url => new URL(url.url).protocol === protocol) === true;
+    }, `resource '${resourceName}' to be Running with a '${protocol}' URL`, timeoutMs);
+}
+
 export async function waitForDashboardUrl(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
     return await waitForExtensionState(file => typeof file.dashboardUrl === 'string' && file.dashboardUrl.length > 0, 'dashboard URL', timeoutMs);
 }
