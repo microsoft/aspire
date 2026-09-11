@@ -1,0 +1,9 @@
+{
+  "author": "askpt",
+  "comment": "Fixed Homebrew cask deprecation warnings and preserved signing verification",
+  "mergedAt": "2026-09-11T06:43:53Z",
+  "number": 19965,
+  "runDate": "2026-09-11T12:07:23Z",
+  "status": "included",
+  "title": "Fix deprecated Homebrew cask DSL usage"
+}

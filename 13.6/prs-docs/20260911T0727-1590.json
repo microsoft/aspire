@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Restores third-party CommunityToolkit Floci integration docs; not tied to a product PR in this milestone's changelog and no matching changelog entry",
+  "mergedAt": "2026-09-11T07:27:20Z",
+  "number": 1590,
+  "runDate": "2026-09-11T12:07:23Z",
+  "status": "excluded",
+  "title": "docs: restore Floci integration documentation"
+}

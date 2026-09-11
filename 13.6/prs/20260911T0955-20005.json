@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Made terminal-host telemetry opt-in, fixing hidden helper resources in dashboard",
+  "mergedAt": "2026-09-11T09:55:34Z",
+  "number": 20005,
+  "runDate": "2026-09-11T12:07:23Z",
+  "status": "included",
+  "title": "Make terminal-host telemetry opt-in"
+}

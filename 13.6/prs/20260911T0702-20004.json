@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "New --file-based option for aspire init CLI command",
+  "mergedAt": "2026-09-11T07:02:27Z",
+  "number": 20004,
+  "runDate": "2026-09-11T12:07:23Z",
+  "status": "included",
+  "title": "Add --file-based to aspire init"
+}

@@ -1,0 +1,21 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@askpt"
+  ],
+  "description": "Fixed the Homebrew cask template so `brew update` and cask validation no longer emit deprecation warnings, and preserved release-binary signing/notarization verification during cask audits.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🍺",
+  "firstMergedAt": "2026-09-11T06:43:53Z",
+  "lastMergedAt": "2026-09-11T06:43:53Z",
+  "name": "Fixed Homebrew cask deprecation warnings",
+  "owner": "JamesNK",
+  "prs": [
+    19965
+  ]
+}
