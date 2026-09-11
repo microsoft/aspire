@@ -203,9 +203,7 @@ public static class BlazorHostedExtensions
             return null;
         }
 
-        // ResolveWebAssemblyProjectReferences is temporarily defined by the BlazorHosted sample
-        // because Aspire currently builds with the .NET 10 SDK. The target has moved into the
-        // .NET 11 Static Web Assets SDK, so the sample copy can be removed once Aspire adopts it:
+        // ResolveWebAssemblyProjectReferences is provided by the .NET 11 Static Web Assets SDK:
         // https://github.com/dotnet/sdk/blob/c0fb107a5474a2993546bc574fd7a6daac9fd7aa/src/StaticWebAssetsSdk/Sdk/Sdk.targets
         //
         // The target returns each evaluated WASM ProjectReference. An empty collection is valid

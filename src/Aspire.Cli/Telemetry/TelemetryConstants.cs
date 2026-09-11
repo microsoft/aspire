@@ -120,6 +120,76 @@ internal static class TelemetryConstants
         public const string InternalMicrosoftDomain = "aspire.cli.microsoft_internal_domain";
 
         /// <summary>
+        /// Low-cardinality outcome of the Microsoft-internal detector.
+        /// </summary>
+        public const string InternalMicrosoftDetectorOutcome = "aspire.cli.microsoft_internal_detector.outcome";
+
+        /// <summary>
+        /// Cache status for the Microsoft-internal detector run.
+        /// </summary>
+        public const string InternalMicrosoftDetectorCacheStatus = "aspire.cli.microsoft_internal_detector.cache_status";
+
+        /// <summary>
+        /// Detector duration in milliseconds.
+        /// </summary>
+        public const string InternalMicrosoftDetectorDurationMs = "aspire.cli.microsoft_internal_detector.duration_ms";
+
+        /// <summary>
+        /// Whether the detector result has a canonical alias.
+        /// </summary>
+        public const string InternalMicrosoftDetectorHasAlias = "aspire.cli.microsoft_internal_detector.has_alias";
+
+        /// <summary>
+        /// Whether the detector result has a domain.
+        /// </summary>
+        public const string InternalMicrosoftDetectorHasDomain = "aspire.cli.microsoft_internal_detector.has_domain";
+
+        /// <summary>
+        /// Low-cardinality outcome of one Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeOutcome = "aspire.cli.microsoft_internal_probe.outcome";
+
+        /// <summary>
+        /// Probe duration in milliseconds.
+        /// </summary>
+        public const string InternalMicrosoftProbeDurationMs = "aspire.cli.microsoft_internal_probe.duration_ms";
+
+        /// <summary>
+        /// Whether a probe result included a canonical alias.
+        /// </summary>
+        public const string InternalMicrosoftProbeHasAlias = "aspire.cli.microsoft_internal_probe.has_alias";
+
+        /// <summary>
+        /// Whether a probe result included a domain.
+        /// </summary>
+        public const string InternalMicrosoftProbeHasDomain = "aspire.cli.microsoft_internal_probe.has_domain";
+
+        /// <summary>
+        /// Low-cardinality failure classification for one Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeFailureCode = "aspire.cli.microsoft_internal_probe.failure_code";
+
+        /// <summary>
+        /// Static stage within a Microsoft-internal probe where a failure occurred.
+        /// </summary>
+        public const string InternalMicrosoftProbeFailureStage = "aspire.cli.microsoft_internal_probe.failure_stage";
+
+        /// <summary>
+        /// Allow-listed exception type for one Microsoft-internal probe failure.
+        /// </summary>
+        public const string InternalMicrosoftProbeExceptionType = "aspire.cli.microsoft_internal_probe.exception_type";
+
+        /// <summary>
+        /// Exit code returned by a process-backed Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeProcessExitCode = "aspire.cli.microsoft_internal_probe.process_exit_code";
+
+        /// <summary>
+        /// HTTP status code returned by a network-backed Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeHttpStatusCode = "aspire.cli.microsoft_internal_probe.http_status_code";
+
+        /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
         /// </summary>
         public const string DeploymentEnvironmentName = "deployment.environment.name";
@@ -242,6 +312,11 @@ internal static class TelemetryConstants
         /// agent telemetry hook scripts.
         /// </summary>
         public const string AgentTelemetry = "aspire/cli/agent_telemetry";
+
+        /// <summary>
+        /// Activity name for Microsoft-internal detector diagnostics.
+        /// </summary>
+        public const string InternalMicrosoftDetector = "aspire/cli/internal_microsoft_detector";
     }
 
     /// <summary>
@@ -253,5 +328,10 @@ internal static class TelemetryConstants
         /// Event name for recording errors in the CLI.
         /// </summary>
         public const string Error = "aspire/cli/error";
+
+        /// <summary>
+        /// Event name for a single Microsoft-internal detector probe.
+        /// </summary>
+        public const string InternalMicrosoftProbe = "aspire/cli/internal_microsoft_probe";
     }
 }

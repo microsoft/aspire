@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker;
+using Aspire.Shared;
 
 namespace Aspire.Hosting;
 
@@ -33,9 +34,11 @@ public static class DockerComposeAspireDashboardResourceBuilderExtensions
 
         var resource = new DockerComposeAspireDashboardResource(name);
 
-        // Initialize the dashboard resource
+        // Initialize the dashboard resource. Pin the image to the app's Aspire major.minor version
+        // instead of the default (untagged) reference, which resolves to a mutable ":latest" and
+        // makes the published compose file non-reproducible.
         return builder.CreateResourceBuilder(resource)
-                      .WithImage("mcr.microsoft.com/dotnet/nightly/aspire-dashboard")
+                      .WithImage(DashboardImage.Name, DashboardImage.ResolveTag())
                       .WithHttpEndpoint(targetPort: 18888)
                       // Expose the HTTP endpoint externally for the dashboard, it is password protected
                       // and disabled by default so an explicit call is required to turn it on.
