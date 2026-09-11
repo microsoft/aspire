@@ -129,9 +129,9 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string ForceEmptyOptionDescription {
+        internal static string FileBasedOptionDescription {
             get {
-                return ResourceManager.GetString("ForceEmptyOptionDescription", resourceCulture);
+                return ResourceManager.GetString("FileBasedOptionDescription", resourceCulture);
             }
         }
 

@@ -15,7 +15,7 @@ public sealed class CSharpInitTests(ITestOutputHelper output)
 {
     [CaptureWorkspaceOnFailure]
     [Fact]
-    public async Task ForceEmptyCSharpInitIgnoresIncidentalSolutions()
+    public async Task FileBasedCSharpInitIgnoresIncidentalSolutions()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -55,10 +55,10 @@ public sealed class CSharpInitTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Multiple solutions would require a selection without --force-empty. Non-interactive
+        // Multiple solutions would require a selection without --file-based. Non-interactive
         // execution must succeed without selecting either the root or nested solution.
         await auto.RunCommandAsync(
-            "aspire init --force-empty --language csharp --non-interactive --suppress-agent-init",
+            "aspire init --file-based --language csharp --non-interactive --suppress-agent-init",
             counter,
             TimeSpan.FromMinutes(2));
 

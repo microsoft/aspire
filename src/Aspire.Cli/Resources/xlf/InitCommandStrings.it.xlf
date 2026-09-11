@@ -77,14 +77,14 @@
         <target state="new">{0} already exists — skipping.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FileBasedOptionDescription">
+        <source>Create a file-based AppHost in the current directory. For C#, skips .NET solution discovery and creates apphost.cs.</source>
+        <target state="new">Create a file-based AppHost in the current directory. For C#, skips .NET solution discovery and creates apphost.cs.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FixOrRemoveConfigAndRerun">
         <source>Fix or remove {0} and re-run `aspire init`.</source>
         <target state="new">Fix or remove {0} and re-run `aspire init`.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ForceEmptyOptionDescription">
-        <source>Skip .NET solution discovery and create an empty AppHost. For C#, creates apphost.cs in the current directory.</source>
-        <target state="new">Skip .NET solution discovery and create an empty AppHost. For C#, creates apphost.cs in the current directory.</target>
         <note />
       </trans-unit>
       <trans-unit id="InstallingAspireProjectTemplates">

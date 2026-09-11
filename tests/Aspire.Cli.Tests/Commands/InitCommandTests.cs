@@ -111,7 +111,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("")]
-    [InlineData(" --force-empty false")]
+    [InlineData(" --file-based false")]
     public async Task InitCommand_WhenSolutionDirectoryHasNoProjectFiles_CreatesProjectModeAppHost(string additionalArgs)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -153,7 +153,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_ForceEmpty_SkipsSolutionDiscovery()
+    public async Task InitCommand_FileBased_SkipsSolutionDiscovery()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -161,13 +161,13 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             options.SolutionLocatorFactory = _ => new TestSolutionLocator
             {
-                FindSolutionFileAsyncCallback = (_, _) => throw new InvalidOperationException("Force-empty must not discover solutions.")
+                FindSolutionFileAsyncCallback = (_, _) => throw new InvalidOperationException("File-based initialization must not discover solutions.")
             };
         });
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        var parseResult = initCommand.Parse("init --force-empty");
+        var parseResult = initCommand.Parse("init --file-based");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -183,7 +183,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     [InlineData("incidental/Test.sln", false)]
     [InlineData("incidental/Test.slnx", false)]
     [InlineData("incidental/Test.sln", true)]
-    public async Task InitCommand_ForceEmpty_WithSolutions_CreatesSingleFileAppHostInWorkingDirectory(string solutionPath, bool multipleSolutions)
+    public async Task InitCommand_FileBased_WithSolutions_CreatesSingleFileAppHostInWorkingDirectory(string solutionPath, bool multipleSolutions)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, solutionPath));
@@ -203,19 +203,19 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => new TestInteractionService
             {
-                PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("Force-empty must not prompt for a solution.")
+                PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("File-based initialization must not prompt for a solution.")
             };
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
-                GetSolutionProjectsAsyncCallback = (_, _, _) => throw new InvalidOperationException("Force-empty must not enumerate solution projects."),
-                InstallTemplateAsyncCallback = (_, _, _, _, _, _, _) => throw new InvalidOperationException("Force-empty must not install project templates."),
-                NewProjectAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("Force-empty must not create an AppHost project.")
+                GetSolutionProjectsAsyncCallback = (_, _, _) => throw new InvalidOperationException("File-based initialization must not enumerate solution projects."),
+                InstallTemplateAsyncCallback = (_, _, _, _, _, _, _) => throw new InvalidOperationException("File-based initialization must not install project templates."),
+                NewProjectAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("File-based initialization must not create an AppHost project.")
             };
         });
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var parseResult = command.Parse("init --force-empty --language csharp --non-interactive --suppress-agent-init");
+        var parseResult = command.Parse("init --file-based --language csharp --non-interactive --suppress-agent-init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -232,7 +232,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_Help_ShowsForceEmptyOption()
+    public async Task InitCommand_Help_ShowsFileBasedOption()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
@@ -465,7 +465,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("")]
-    [InlineData(" --force-empty")]
+    [InlineData(" --file-based")]
     public async Task InitCommand_WhenTypeScriptSelected_CreatesAppHostAndAspireConfig(string additionalArgs)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -504,7 +504,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("")]
-    [InlineData(" --force-empty")]
+    [InlineData(" --file-based")]
     public async Task InitCommand_WhenLegacyTypeScriptAppHostExists_DoesNotCreateMtsAppHost(string additionalArgs)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -533,7 +533,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("")]
-    [InlineData(" --force-empty")]
+    [InlineData(" --file-based")]
     public async Task InitCommand_WhenBrownfieldTypeScriptSelected_DisplaysNestedAppHostPath(string additionalArgs)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -821,7 +821,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("")]
-    [InlineData(" --force-empty")]
+    [InlineData(" --file-based")]
     public async Task InitCommand_WhenAppHostAlreadyExists_DoesNotOverwriteIt(string additionalArgs)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
