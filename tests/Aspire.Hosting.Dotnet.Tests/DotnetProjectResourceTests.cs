@@ -17,6 +17,7 @@ using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Resources;
+using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
@@ -360,6 +361,34 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(archivePath));
         Assert.Empty(resource.Resource.GetProjectMetadata().BuildEnvironment);
         Assert.Null(resource.Resource.GetProjectMetadata().BuildWorkingDirectory);
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_ProjectBuildEnvironmentRejectsContainerArtifactPropertyCaseInsensitively()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime());
+        var projectPath = Path.Combine(workspace.Path, "Project.csproj");
+        var resource = builder.AddDotnetProject("project", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment("containerrepository", "override")
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Oci;
+                context.OutputPath = Path.Combine(workspace.Path, "project.tar");
+            });
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            "The build environment property 'containerrepository' for .NET program resource 'project' " +
+            "is reserved by Aspire container publishing because it controls the image artifact used by downstream steps. " +
+            "Configure container publishing with WithContainerBuildOptions instead.",
+            exception.Message);
     }
 
     [Fact]

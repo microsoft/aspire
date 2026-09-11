@@ -47,6 +47,11 @@ public static class DotnetProjectHostingExtensions
     /// Configuring a build environment causes Aspire to build this project separately from traversal groups.
     /// </para>
     /// <para>
+    /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
+    /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
+    /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
+    /// </para>
+    /// <para>
     /// Do not use this API for secrets. Aspire must carry the value in IDE launch metadata and process environments,
     /// and the value can appear in build diagnostics. Protected temporary MSBuild response files preserve
     /// global-property semantics without exposing values in process command lines, but they are not a general-purpose
@@ -92,6 +97,11 @@ public static class DotnetProjectHostingExtensions
     /// build-only environment variables.
     /// </para>
     /// <para>
+    /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
+    /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
+    /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
+    /// </para>
+    /// <para>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
     /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
     /// temporary MSBuild response files, and the values can appear in build diagnostics.
@@ -129,6 +139,11 @@ public static class DotnetProjectHostingExtensions
     /// <para>
     /// This method supports project files (<c>.csproj</c>) only. File-based C# apps (<c>.cs</c>) do not support
     /// build-only environment variables.
+    /// </para>
+    /// <para>
+    /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
+    /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
+    /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
     /// </para>
     /// <para>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
