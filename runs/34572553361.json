@@ -1,0 +1,38 @@
+{
+  "run_id": 34572553361,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34572553361",
+  "analyzed_at": "2026-09-11T07:41:29Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20004,
+    "title": "Add --file-based to aspire init",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-aspire-force-empty",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20004"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, tree-actions)",
+      "id": 103182460729,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34572553361/job/103182460729",
+      "classification": "flaky-test",
+      "reason": "The job failed with a generic 'Process completed with exit code 1' annotation and no detailed job logs were retrievable. The PR only modifies Aspire.Cli InitCommand code, resources, and CLI/E2E init tests -- none of which touch the VS Code extension source or its E2E test infrastructure. This matches an established recurring pattern of VS Code extension E2E shard flakiness unrelated to PR changes (see similar causes vscode-e2e-windows-apphost-tree-flaky, vscode-e2e-linux-workspace-target-proof-flaky, etc.), so this is classified as a flaky/unreliable E2E shard rather than a code issue.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "VS Code extension E2E (Linux, tree-actions)",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, tree-actions)",
+      "error": "Process completed with exit code 1.",
+      "stack_trace": "No TRX test failures were extracted for this run; job logs were unavailable ('Failed to fetch logs for job').",
+      "classification": "flaky",
+      "reason": "Generic exit code 1 failure with no available logs or TRX failures, on a PR that does not touch VS Code extension code. Consistent with other known flaky VS Code extension E2E shard failures unrelated to PR changes."
+    }
+  ],
+  "causes": ["vscode-e2e-linux-tree-actions-flaky"]
+}
