@@ -230,7 +230,7 @@ start a new session to undo registration. `-NoProfile` deliberately skips profil
 | WinGet | Portable ZIP installation has no post-install hook. Installation notes point to manual setup above. |
 | npm global install | Use the manual setup above. npm lifecycle hooks do not reliably identify the user's shell, can be disabled, and have no uninstall hook. No profile edits occur during npm install. |
 | .NET global or `--tool-path` install | Use the manual setup above after putting the tool shim on PATH. `dotnet tool install` has no supported publisher post-install hook. |
-| Homebrew cask | Homebrew generates and owns completion files for all four shells. Shell activation remains user-controlled; see below. |
+| Homebrew cask | Homebrew owns generated Bash/Zsh/Fish scripts and a PowerShell loader. Shell activation remains user-controlled; see below. |
 
 Custom release scripts keep generated files at
 `$HOME/.aspire/completions/aspire.{bash,zsh,fish,ps1}`. Bash registration uses
@@ -272,6 +272,10 @@ For PowerShell, explicitly dot-source the generated file in your chosen profile:
 ```powershell
 . (Join-Path (brew --prefix) 'share/pwsh/completions/_aspire.ps1')
 ```
+
+This PowerShell file is a loader that gets the current script from `aspire` when
+sourced. Homebrew installs it as a managed artifact so fresh prefixes do not depend
+on the completion generator's sandbox being able to create `share/pwsh`.
 
 Homebrew removes its files on uninstall, but not your profile entry. Its native
 completion generator has no completion-specific opt-out; custom installer flags

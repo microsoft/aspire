@@ -259,6 +259,21 @@ if [[ "$VALIDATION_MODE" == "LiveRelease" ]]; then
     fi
   done
 
+  if command -v pwsh >/dev/null 2>&1; then
+    ASPIRE_HOMEBREW_COMPLETION_FILE="$brew_prefix/share/pwsh/completions/_aspire.ps1" \
+      pwsh -NoLogo -NoProfile -NonInteractive -Command '
+        $ErrorActionPreference = "Stop"
+        . $env:ASPIRE_HOMEBREW_COMPLETION_FILE
+        $line = "aspire comp"
+        $matches = (TabExpansion2 $line $line.Length).CompletionMatches
+        if ($matches.Count -ne 1 -or $matches[0].CompletionText -ne "completions") {
+          throw "Homebrew PowerShell completion loader did not register the CLI completer."
+        }
+      '
+  else
+    echo "PowerShell is unavailable; skipping the loader execution check."
+  fi
+
   brew uninstall --cask "$test_cask_ref"
   test_cask_installed=false
 

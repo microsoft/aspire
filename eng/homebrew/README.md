@@ -14,18 +14,24 @@ brew install --cask aspire              # stable
 
 The cask uses Homebrew's native
 [`generate_completions_from_executable`](https://docs.brew.sh/Cask-Cookbook#stanza-generate_completions_from_executable)
-artifact for Bash, Zsh, Fish, and PowerShell. Use a current Homebrew version with
+artifact for Bash, Zsh, and Fish. Use a current Homebrew version with
 this cask DSL. Generation is offline and does not depend on the postflight sidecar.
-The empty `shell_parameter_format` preserves Aspire's `pwsh` argument (Homebrew's
-default translates it to `powershell`).
+
+PowerShell uses a `generated_script` plus a managed `artifact` instead. The loader
+at `share/pwsh/completions/_aspire.ps1` asks the active CLI for its completion script
+when sourced, and only evaluates successful output. The native completion generator
+allows writes to the final completion directory but cannot create a missing
+`share/pwsh` parent inside its sandbox on a fresh prefix. The managed artifact
+handles that directory and uninstall normally, without relaxing the sandbox or
+editing a user profile.
 
 Homebrew regenerates these files on install/upgrade and removes them on uninstall.
 It does not edit user profiles; PowerShell in particular needs explicit dot-sourcing.
 See the [CLI shell completion guide](../../src/Aspire.Cli/README.md#shell-completion)
 for activation, conventional locations, and removal. There is no completion-specific
 Homebrew opt-out; `--no-binaries` does not disable generated completion artifacts.
-LiveRelease validation checks that all four generated files exist after install and
-are removed on uninstall.
+LiveRelease validation checks that all four completion files exist after install
+and are removed on uninstall, and exercises the PowerShell loader when `pwsh` is available.
 
 Changing this template does not update an already-submitted upstream cask:
 the initial/upstream cask change must include the generation stanza, not just a version bump.
