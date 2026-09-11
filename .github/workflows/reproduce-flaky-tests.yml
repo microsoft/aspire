@@ -1,4 +1,4 @@
-name: Investigation - Azure Functions E2E baseline
+name: Investigation - Azure Functions E2E verification
 
 # Investigation only: do not merge. Reuse the existing dispatchable workflow ID.
 on:
@@ -29,8 +29,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(uname -m)" = x86_64
-          git diff --exit-code 9c2af96f9163e2d89c2e9e789f5d40c395606f14 -- extension src global.json Directory.Packages.props NuGet.config
-          echo 'Baseline source/artifacts: 9c2af96f9163e2d89c2e9e789f5d40c395606f14, run 34519184641' >> "$GITHUB_STEP_SUMMARY"
+          git diff --exit-code 4f3de118e0 -- extension src global.json Directory.Packages.props NuGet.config
+          echo 'Source: 4f3de118e0 (parent fix dd7ad4051b). Product/VSIX artifacts: unchanged 9c2af96, run 34519184641. E2E tests compiled from source.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
@@ -201,7 +201,7 @@ jobs:
           corepack yarn compile-e2e
           if (-not (Test-Path out/test-e2e/test-e2e/azureFunctions.e2e.test.js)) { throw 'Compiled spec missing.' }
 
-      - name: Run up to ten fresh baseline iterations
+      - name: Run up to ten fresh verification iterations
         timeout-minutes: 150
         working-directory: extension
         env:
@@ -216,7 +216,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: functions-baseline-${{ github.run_id }}-attempt${{ github.run_attempt }}
+          name: functions-verification-${{ github.run_id }}-attempt${{ github.run_attempt }}
           path: |
             extension/.test-results/**
             extension/.test-storage/**/settings/User/**

@@ -1,4 +1,4 @@
-// Investigation-only external observer. The baseline runner, VSIX and Mocha assertion stay unchanged.
+// Investigation-only external observer. The product runner and VSIX stay unchanged.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -16,12 +16,13 @@ for (let iteration = 1; iteration <= 10; iteration++) {
     console.log('Stopping at the reproduction time budget.');
     break;
   }
-  const shard = `azure-functions-baseline-${iteration}`;
+  const shard = `azure-functions-verification-${iteration}`;
   const results = path.resolve('.test-results', 'e2e', shard);
   fs.mkdirSync(results, { recursive: true });
   const statePath = path.join(results, 'extension-state.json');
   const chronologyPath = path.join(results, 'resource-chronology.jsonl');
-  const log = fs.createWriteStream(path.join(results, 'raw-process.log'));
+  // run-e2e clears its results directory during setup; keep raw output outside that directory.
+  const log = fs.createWriteStream(path.join(root, `iteration-${iteration}-raw-process.log`));
   const started = new Date().toISOString();
   let previous = '';
   let readErrors = 0;
