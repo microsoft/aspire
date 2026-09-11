@@ -35,9 +35,10 @@ public partial class MainLayoutTests
             new("current", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, null, false, "TestApp", string.Empty, true),
             new("historical", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, true, "TestApp", string.Empty, false)
         ]);
-        SetupMainLayoutServices(dashboardRunStore: runStore, dashboardClient: client);
+        // Main layout setup renders the message bar provider, which freezes service registration.
         TerminalSetupHelpers.SetupTerminalView(this);
         TerminalSetupHelpers.SetupTerminalDock(this);
+        SetupMainLayoutServices(dashboardRunStore: runStore, dashboardClient: client);
         var selection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         selection.OnSelectRun = runId => client.IsReadOnly = runId is not null;
         if (startHistorical)

@@ -90,6 +90,10 @@ public class TerminalWindowTests : DashboardTestContext
         }
 
         await SetTerminalAsync(cut, "second").DefaultTimeout();
+        // Starting the background watch does not render, so observe its counters independently.
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => client.TerminalSubscriptionCount == 2 && client.ActiveTerminalSubscriptionCount == 1,
+            "The replacement terminal subscription did not start.");
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(2, client.TerminalSubscriptionCount);
@@ -144,7 +148,10 @@ public class TerminalWindowTests : DashboardTestContext
         Assert.Equal(1, client.TerminalSubscriptionCount);
 
         await SetTerminalAsync(cut, "next").DefaultTimeout();
-        cut.WaitForAssertion(() => Assert.Equal(2, client.TerminalSubscriptionCount));
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => client.TerminalSubscriptionCount == 2,
+            "The terminal subscription did not restart after leaving the resource route.");
+        Assert.Equal(2, client.TerminalSubscriptionCount);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Retitled, "next", "Next shell"));
         head.WaitForAssertion(() => Assert.Equal("Next shell", head.Find("title").TextContent));
         Assert.Equal("/api/apphost-terminal?terminalId=next", cut.FindComponent<TerminalView>().Instance.EndpointPathAndQuery);
