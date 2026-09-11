@@ -1,1430 +1,362 @@
 # Aspire Bundle - Self-Contained Distribution
 
 > **Status:** Draft Specification  
-> **Last Updated:** February 2026
+> **Last Updated:** September 2026
 
-This document specifies the **Aspire Bundle**, a self-contained distribution package that provides the Aspire CLI along with all runtime components (Dashboard, DCP) needed to run any Aspire application.
+This document describes the bundle implementation in this repository. It distinguishes the build payload, the installed layout, and compatibility with older AppHosts; these are not interchangeable layouts or launch contracts.
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Problem Statement](#problem-statement)
-3. [Goals and Non-Goals](#goals-and-non-goals)
-4. [Architecture](#architecture)
-5. [Bundle Layout](#bundle-layout)
-6. [Self-Extracting Binary](#self-extracting-binary)
-7. [Component Discovery](#component-discovery)
-8. [NuGet Operations](#nuget-operations)
+2. [Architecture](#architecture)
+3. [Bundle Layout](#bundle-layout)
+4. [Self-Extracting Binary](#self-extracting-binary)
+5. [Extraction and Lifetime](#extraction-and-lifetime)
+6. [Component Discovery](#component-discovery)
+7. [AppHost Compatibility](#apphost-compatibility)
+8. [NuGet and AppHost Server](#nuget-and-apphost-server)
 9. [Certificate Management](#certificate-management)
-10. [AppHost Server](#apphost-server)
-11. [CLI Integration](#cli-integration)
-12. [Installation](#installation)
-13. [Configuration](#configuration)
-14. [Size and Distribution](#size-and-distribution)
-15. [Security Considerations](#security-considerations)
-16. [Build Process](#build-process)
-
----
+10. [Installation and Configuration](#installation-and-configuration)
+11. [Build Process](#build-process)
+12. [Security Considerations](#security-considerations)
+13. [Validation](#validation)
 
 ## Overview
 
-The Aspire Bundle is a platform-specific archive containing the Aspire CLI and all runtime components:
+The Aspire Bundle distributes the CLI with its runtime components:
 
-- **Aspire CLI** (native AOT executable, includes native certificate management)
-- **Aspire Managed** (self-contained AppHost Server, NuGet Helper, and Terminal Host)
-- **Aspire Dashboard** (Native AOT executable)
-- **Developer Control Plane (DCP)** (no longer distributed via NuGet)
+| Component | Deployment | Purpose |
+|-----------|------------|---------|
+| `aspire[.exe]` | Native AOT | CLI, including native development-certificate management |
+| `managed/aspire-managed[.exe]` | Self-contained single-file executable | AppHost Server, NuGet operations, terminal hosting, and a Dashboard compatibility forwarder |
+| `dashboard/Aspire.Dashboard[.exe]` | Native AOT | Dashboard web application |
+| `dashboard/wwwroot/` and native dependencies | Publish assets | Dashboard scripts, styles, fonts, images, and SQLite native library |
+| `dcp/` | Platform-specific native binaries | Developer Control Plane |
 
-**Key change**: DCP and Dashboard are bundled with the CLI installation, not downloaded on first run. The Dashboard ships as a Native AOT executable, while AppHost Server, NuGet Helper, and Terminal Host share `aspire-managed`. Certificate management is handled natively in the CLI.
+The bundle removes the need to acquire DCP and Dashboard separately when using the bundled components. Its pre-built AppHost Server and NuGet helper do not require a globally installed .NET SDK.
 
-- Eliminates large NuGet package downloads on first run
-- Ensures version consistency between CLI and runtime components
-- Simplifies the Aspire.Hosting SDK (no more MSBuild magic for DCP/Dashboard)
-- Makes offline scenarios work reliably
+This does **not** mean every application can run without other prerequisites. .NET application development still requires the appropriate SDK, guest languages require their own toolchains, and container resources require a container runtime. Integration packages and application dependencies must be available locally or restored from their configured sources. Offline operation requires those dependencies to have been acquired already.
 
-Users download a single archive (~200 MB compressed, ~577 MB on disk), extract it, and have everything needed to run any Aspire application.
-
----
-
-## Problem Statement
-
-Currently, Aspire has two distribution challenges:
-
-### For Polyglot App Hosts
-The polyglot app host requires a globally-installed .NET SDK for:
-1. **Dynamic Project Build**: The AppHost Server project is generated and built at runtime
-2. **Package Operations**: `aspire add` uses `dotnet package search`
-3. **Component Resolution**: DCP and Dashboard come from NuGet
-
-### For All Applications
-DCP and Dashboard distribution via NuGet packages causes:
-1. **Large first-run downloads**: ~100+ MB of NuGet packages
-2. **Version skew**: Dashboard/DCP version can mismatch CLI version
-3. **Complex MSBuild targets**: Magic in Aspire.Hosting.AppHost SDK
-4. **Offline difficulties**: Needs NuGet cache or internet access
-
----
-
-## Goals and Non-Goals
-
-### Goals
-
-- **Zero .NET SDK dependency** for polyglot app host scenarios
-- **Single download** containing all required runtime components
-- **Unified DCP/Dashboard distribution** - bundled with CLI, not via NuGet
-- **Offline capable** once the bundle is installed
-- **Same functionality** as current approach, simpler distribution
-- **Backward compatible** with existing SDK-based workflows
-
-### Non-Goals
-
-- Replacing the .NET SDK for .NET app host development
-- Supporting `aspire new` for .NET project templates (requires SDK)
-- Auto-updating the bundle (manual download for now)
-
----
+The managed helper contains its own runtime. The CLI and Dashboard are Native AOT executables; there is no separate `runtime/` directory or `ASPIRE_RUNTIME_PATH` contract for the current bundle.
 
 ## Architecture
 
-### Component Interaction
-
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              ASPIRE BUNDLE                                   │
-│                          aspire-{version}-{platform}                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌──────────────┐     spawns      ┌───────────────────────────────────┐    │
-│  │   aspire     │ ───────────────▶│       ASPIRE-MANAGED              │    │
-│  │ (Native AOT) │                 │  (self-contained single binary)   │    │
-│  │              │                 │                                   │    │
-│  │  Commands:   │                 │  Subcommands:                     │    │
-│  │  • run       │                 │  • dashboard  (Aspire Dashboard)  │    │
-│  │  • add       │                 │  • server     (AppHost Server)    │    │
-│  │  • new       │                 │  • nuget      (NuGet operations)  │    │
-│  │  • publish   │                 └───────────────────────────────────┘    │
-│  │              │                              │                           │
-│  │  Native:     │                              ▼                           │
-│  │  • cert mgmt │              ┌───────────────────────────────────┐       │
-│  └──────┬───────┘              │        APPHOST SERVER             │       │
-│         │                      │  (aspire-managed server)          │       │
-│         │  JSON-RPC            │                                   │       │
-│         │◀────────────────────▶│  • Aspire.Hosting.* assemblies    │       │
-│         │   (socket)           │  • RemoteHostServer endpoint      │       │
-│         │                      │  • Dynamic integration loading    │       │
-│         │                      └───────────────┬───────────────────┘       │
-│         │                                      │                           │
-│         │              ┌───────────────────────┼───────────────────┐       │
-│         │              ▼                       ▼                   ▼       │
-│         │     ┌─────────────┐         ┌─────────────┐     ┌────────────┐  │
-│         │     │  DASHBOARD  │         │     DCP     │     │INTEGRATIONS│  │
-│         │     │ (aspire-    │         │             │     │            │  │
-│         │     │  managed    │         │ dcp/        │     │~/.aspire/  │  │
-│         │     │  dashboard) │         └─────────────┘     │ packages/  │  │
-│         │     └─────────────┘                              └────────────┘  │
-│         │                                                        ▲         │
-│         │     ┌─────────────────────────────────────────┐        │         │
-│         │     │         USER'S APPHOST                  │────────┘         │
-│         │     │    (TypeScript / Python / etc.)         │                  │
-│         │     │                                         │                  │
-│         │     │    apphost.ts / app.py                  │                  │
-│         │     └─────────────────────────────────────────┘                  │
-│         │                                                                  │
-└─────────┴──────────────────────────────────────────────────────────────────┘
+aspire (Native AOT CLI)
+  |
+  +-- managed/aspire-managed
+  |     +-- server: AppHost Server and integration loading
+  |     +-- nuget: package search, restore, and probe manifests
+  |     +-- terminalhost: terminal hosting
+  |     +-- dashboard: compatibility forwarder to native Dashboard
+  |
+  +-- dashboard/Aspire.Dashboard (Native AOT)
+  |     +-- wwwroot/ and native dependencies
+  |
+  +-- dcp/ (Developer Control Plane)
+
+Guest AppHost <---- JSON-RPC ----> AppHost Server
+                                      |
+                                      +-- DCP orchestration
+                                           +-- application resources
+                                           +-- Dashboard
 ```
 
-### Execution Flow
+For a guest-language AppHost, the CLI prepares integration dependencies, starts the AppHost Server, and starts the guest process that communicates with it. For a .NET AppHost, the CLI uses the .NET project workflow and supplies bundle component paths when available.
 
-When a user runs `aspire run` with a TypeScript app host:
+Standalone `aspire dashboard run` and CLI profile capture launch Dashboard directly. The Dashboard entry point sets `ContentRootPath = AppContext.BaseDirectory`, so its static assets are resolved beside the executable regardless of the caller's working directory.
 
-1. **CLI reads project configuration** from `.aspire/settings.json`
-2. **CLI discovers bundle layout** using priority-based resolution
-3. **CLI downloads missing integrations** using aspire-managed's NuGet subcommand
-4. **CLI generates `appsettings.json`** for the AppHost Server with integration list
-5. **CLI starts AppHost Server** using aspire-managed's server subcommand
-6. **CLI starts guest app host** (TypeScript) which connects via JSON-RPC
-7. **AppHost Server orchestrates** containers, the Native AOT Dashboard, and DCP
-
----
+`aspire-managed dashboard` does **not** host Blazor in the managed helper. It forwards arguments to the sibling native Dashboard and propagates its exit status. This preserves a launch contract used by older AppHosts without bringing the Dashboard back into the managed helper's dependency graph.
 
 ## Bundle Layout
 
-### Directory Structure
+### Build Payload
+
+`CreateLayout` assembles a payload containing these directories:
 
 ```text
-aspire-{version}-{platform}/
-│
-├── aspire[.exe]                        # Native AOT CLI (~25 MB)
-│                                       # (includes native certificate management)
-│
+{payload}/
 ├── managed/
-│   └── aspire-managed[.exe]            # Self-contained server/NuGet/terminal executable
-│
+│   └── aspire-managed[.exe]
 ├── dashboard/
-│   ├── Aspire.Dashboard[.exe]          # Native AOT Dashboard
-│   └── wwwroot/                        # Dashboard static assets
-│
-├── dcp/                                # Developer Control Plane (~127 MB)
-│   ├── dcp[.exe]                       # Native executable
-│   └── ...
-│
-└── (no more runtime/, aspire-server/, tools/ directories)
+│   ├── Aspire.Dashboard[.exe]
+│   ├── e_sqlite3.dll             # Windows
+│   │                             # Linux: libe_sqlite3.so
+│   │                             # macOS: libe_sqlite3.dylib
+│   ├── wwwroot/
+│   └── ...                      # Other publish assets, excluding debug symbols
+└── dcp/
+    ├── dcp[.exe]
+    └── ...                      # DCP extensions and supporting files
 ```
 
-The bundle keeps the Native AOT Dashboard and its static assets separate from the self-contained `aspire-managed` host used for server, NuGet, and terminal operations.
+The CLI is published separately with the payload embedded. `CreateLayout` does not copy the CLI into the payload or modify a CLI binary.
 
-**Total Bundle Size:**
-- **Unzipped:** ~220 MB (down from ~323 MB — eliminated separate runtime)
-- **Zipped:** ~80 MB
+Dashboard layout creation requires a RID-specific publish for the requested configuration. It fails if the executable, `wwwroot`, or a nonempty platform-specific SQLite library is missing. It copies the publish assets and native dependencies, excluding debug symbols. DCP must also be available for the requested target platform; it is acquired from build-time NuGet packages and copied into the payload.
+
+### Installed Layout
+
+For a script installation using the default prefix, the installed structure is:
+
+```text
+~/.aspire/
+├── bin/
+│   ├── aspire[.exe]
+│   └── .aspire-install.json      # Install-route sidecar
+├── .aspire-bundle-lock
+├── .aspire-bundle-version       # Current binary fingerprint
+├── bundle/ -> versions/{id}/    # Symlink or Windows junction
+├── versions/
+│   ├── {id}/
+│   │   ├── managed/
+│   │   ├── dashboard/
+│   │   ├── dcp/
+│   │   └── .leases/            # Live bundle users
+│   └── ...                     # Older versions retained while in use
+├── hives/
+└── globalsettings.json
+```
+
+This is an example of the script route, not a universal install location. Package-manager installations can keep their payload beside the resolved CLI binary. Sidecar-less installations use the Aspire home directory. See [installation routes](install-routes.md) for route-specific ownership and locations.
+
+The stable `bundle/` path selects the active version. Processes started through a leased layout use paths rooted in the selected `versions/{id}/` directory, so a later update cannot redirect them to another version mid-operation.
+
+Flat layouts with `managed/`, `dashboard/`, and `dcp/` directly under a root remain useful for build output and explicit layout discovery. They are distinct from the versioned extraction layout above.
 
 ## Self-Extracting Binary
 
-The Aspire CLI can be distributed as a **self-extracting binary** — a single native AOT executable with the full bundle tarball embedded inside. This is the simplest installation method: download one file, run `aspire setup`, done.
-
-### Binary Format
-
-The payload is embedded as a .NET assembly resource (`bundle.tar.gz`) in the native AOT CLI binary. This means the payload lives inside the PE/ELF binary's resource section, which is covered by code signing.
+The CLI embeds the compressed payload as the manifest resource `bundle.tar.gz`. `BundlePayloadPath` supplies that archive when publishing the CLI. The resource is part of the compiled executable and therefore within the executable's signing boundary; it is **not** appended after signing or described by a trailing bundle header.
 
 ```text
-┌─────────────────────────────────────────────────┐
-│        Native AOT CLI (~29 MB)                  │
-│        (fully functional without payload)       │
-│                                                 │
-│        Embedded resource: bundle.tar.gz         │
-│        (~100 MB compressed payload:             │
-│         runtime, dashboard, dcp, etc.)          │
-└─────────────────────────────────────────────────┘
+Native AOT CLI executable
+  +-- CLI code and resources
+  +-- embedded manifest resource: bundle.tar.gz
+        +-- managed/
+        +-- dashboard/
+        +-- dcp/
 ```
 
-**Detection**: `Assembly.GetManifestResourceInfo("bundle.tar.gz")` — metadata-only check, no I/O.
+`BundleService.IsBundle` detects the resource, and extraction opens its manifest resource stream. A build with no embedded payload returns `NoPayload` for explicit extraction; lazy extraction is a no-op. Discovery can still locate a separately supplied layout.
 
-**Payload access**: `Assembly.GetManifestResourceStream("bundle.tar.gz")` — demand-paged by the OS, zero memory overhead at startup until extraction is needed.
+Payload archives produced by `CreateLayout` use `.tar.gz` on **all** platforms, including Windows. They are build inputs for the self-extracting CLI, not an independently complete CLI installation. Acquisition archives containing the CLI executable are separate artifacts and may use a different format.
 
-A CLI binary without an embedded resource (dev build, dotnet tool install, or previously-extracted copy) has no payload. All extraction commands gracefully no-op.
+There is no fixed bundle-size guarantee. Measure the executable, compressed payload, and extracted layout for the target RID and configuration. A retained older version also contributes to installed disk usage while a process holds a lease.
 
-### BundleService
+## Extraction and Lifetime
 
-All extraction logic is centralized in `IBundleService` / `BundleService` (`src/Aspire.Cli/Bundles/`):
+All payload extraction is owned by [BundleService](../../src/Aspire.Cli/Bundles/BundleService.cs), through [IBundleService](../../src/Aspire.Cli/Bundles/IBundleService.cs):
 
-| Method | Purpose | Used by |
-|--------|---------|---------|
-| `EnsureExtractedAsync()` | Lazy extraction from `Environment.ProcessPath` | `AppHostServerProjectFactory` |
-| `ExtractAsync(dest, force)` | Explicit extraction, returns `BundleExtractResult` | `SetupCommand` |
-| `IsBundle` | Whether the CLI binary contains an embedded bundle | DI factory methods |
-| `EnsureExtractedAndGetLayoutAsync()` | Ensures extraction + returns discovered layout | `BundleNuGetPackageCache`, etc. |
+| Member | Purpose |
+|--------|---------|
+| `IsBundle` | Detect an embedded payload |
+| `EnsureExtractedAsync()` | Ensure the current CLI's payload is available |
+| `ExtractAsync(destinationPath, force, cancellationToken)` | Explicit extraction with a result describing success, reuse, absence, or validation failure |
+| `EnsureExtractedAndAcquireLayoutAsync(holderKind, commandName, cancellationToken)` | Resolve a version-rooted layout and acquire a lease under the extraction lock |
+| `GetDefaultExtractDir(processPath)` | Select the extraction root from the install route and resolved binary path |
 
-The service uses a file lock (`.aspire-bundle-lock`) in the extraction directory for cross-process synchronization and is registered as a singleton.
+### Extraction Sequence
 
-**Extraction flow:**
-1. Check for embedded `bundle.tar.gz` resource — if absent, return `NoPayload`
-2. Check version marker (`.aspire-bundle-version`) — if version matches, return `AlreadyUpToDate`
-3. Clean well-known layout directories (managed, dcp) — preserves `bin/`
-4. Extract payload using .NET `TarReader` with path-traversal and symlink validation
-5. Set Unix file permissions from tar entry metadata (execute bit, etc.)
-6. Write version marker with assembly informational version
-7. Validate layout via `LayoutDiscovery`
+1. Determine the extraction root and acquire `.aspire-bundle-lock` for cross-process synchronization.
+2. Compare the stored binary fingerprint and validate the active version. Reuse an up-to-date layout when possible.
+3. Derive the version directory ID from the fingerprint. If that version is already valid, reuse it; otherwise extract to a temporary sibling under `versions/`.
+4. Extract with .NET `TarReader`, validating archive paths and links and preserving Unix permissions. Validate required components before promoting the temporary directory.
+5. Promote the validated directory and switch the `bundle/` link. Validate discovery through the new link and attempt to restore the prior target if validation fails.
+6. Write the current fingerprint to `.aspire-bundle-version`.
+7. Perform best-effort cleanup of stale versions, temporary/failed directories, and obsolete layout paths, preserving versions that are still leased.
 
-### Extraction Modes
+The marker is an implementation-generated binary fingerprint, not just an assembly version string or a cryptographic authenticity check. `ComputeVersionId` produces a filesystem-safe version-directory name using XxHash3. `force` bypasses the initial up-to-date shortcut; a valid existing version directory can still be reused.
 
-#### Explicit: `aspire setup`
+### Leases and Child Processes
 
-```bash
-aspire setup [--install-path <path>]
-```
+Extraction, active-version selection, and lease acquisition share the bundle lock. Callers that start bundle-owned processes retain the lease until the child exits or has acquired its own lease. `ASPIRE_BUNDLE_VERSION_DIR` passes the selected version directory to children; `aspire-managed` and the native Dashboard acquire their own leases.
 
-Best for install scripts — reduces to:
+This protects the Dashboard's executable **and static assets** from cleanup during a CLI update. Parent-process watchdogs and Windows job handling provide separate process-lifetime protection; a bundle lease is not a substitute for child-process cleanup.
 
-```bash
-mkdir -p ~/.aspire/bin
-curl -fsSL .../aspire -o ~/.aspire/bin/aspire && chmod +x ~/.aspire/bin/aspire
-~/.aspire/bin/aspire setup
-export PATH="$HOME/.aspire/bin:$PATH"
-```
+### Entry Points
 
-#### Lazy: first polyglot command
-
-When a polyglot project runs `aspire run`, `AppHostServerProjectFactory.CreateAsync()` calls `BundleService.EnsureExtractedAsync()`. This transparently extracts on first use, before the normal command flow. C# projects never trigger extraction — they use `dotnet` directly.
-
-#### After self-update
-
-`aspire update --self` downloads the new self-extracting binary, swaps it, then calls `BundleService.ExtractAsync(force: true)` to proactively extract the updated payload.
-
-### Version Tracking
-
-The file `.aspire-bundle-version` in the layout root contains the assembly informational version string (e.g., `13.2.0-pr.14398.gabc1234`). This enables:
-
-- **Skip extraction** when version matches (normal startup is free)
-- **Re-extract** when CLI binary is updated (version changes)
-- **Force re-extract** with `aspire setup --force`
-
-### Platform Notes
-
-- **macOS**: Archives are created with `COPYFILE_DISABLE=1` to suppress `SCHILY.xattr` PAX headers that break .NET's `TarReader`.
-- **Unix**: `TarReader` extraction preserves file permissions from tar entry metadata (execute bit, etc.).
-- **Windows**: Uses .NET `TarReader` for extraction (no system `tar` dependency). Unix file permissions are not applicable.
-- **Layout cleanup**: Before re-extraction, well-known directories are removed to avoid file conflicts.
-
-### Shared Code
-
-| File | Purpose |
-|------|---------|
-| `src/Aspire.Cli/Bundles/IBundleService.cs` | Interface + `BundleExtractResult` enum |
-| `src/Aspire.Cli/Bundles/BundleService.cs` | Implementation with .NET TarReader extraction |
-
----
+- `aspire setup` is a hidden installer command that explicitly extracts the current CLI payload. `--install-path` selects the extraction destination and `--force` bypasses the up-to-date shortcut. Without an explicit destination, setup uses the parent of the CLI binary's directory, independently of the install-route sidecar. Its help states that non-default paths require `ASPIRE_LAYOUT_PATH` for automatic discovery.
+- Commands that require bundled components ensure extraction before using them. This includes Dashboard and AppHost workflows, not just guest-language projects.
+- For self-updatable installs, `aspire update --self` replaces and verifies the CLI executable. The new CLI extracts its payload lazily when a subsequent command needs bundled components. The update does not proactively extract the payload or overwrite a running leased version in place.
 
 ## Component Discovery
 
-The CLI and `Aspire.Hosting` both need to discover DCP, Dashboard, and .NET runtime locations. During the transition period, different versions of CLI and Aspire.Hosting may be used together, so both components implement discovery with graceful fallback.
+### CLI Layout Discovery
 
-### Discovery Priority
+[LayoutDiscovery](../../src/Aspire.Cli/Layout/LayoutDiscovery.cs) searches:
 
-Both CLI and Aspire.Hosting follow this priority order for DCP and Dashboard:
+1. An explicit `ASPIRE_LAYOUT_PATH`.
+2. The directory containing the CLI, then its parent, resolving the CLI symlink first and falling back to its original path.
+3. The Aspire home directory, which is also the extraction fallback for sidecar-less installs.
 
-1. **Environment variables** (`ASPIRE_DCP_PATH`, `ASPIRE_DASHBOARD_PATH`, `ASPIRE_RUNTIME_PATH`) - highest priority
-2. **Disk discovery** - check for bundle layout next to the executable, then in the parent directory
-3. **Assembly metadata** - NuGet package paths embedded at build time (Aspire.Hosting only)
+At a candidate root, discovery recognizes `bundle/{managed,dashboard,dcp}` or the flat `{managed,dashboard,dcp}` structure. The current CLI requires all three directories and their executables. A legacy layout accepted by an SDK compatibility resolver is not necessarily a valid current CLI layout.
 
-For .NET runtime resolution (used when launching Dashboard):
+`ASPIRE_USE_GLOBAL_DOTNET=true` (or `1`) disables bundle-mode availability. Individual component and launch overrides are handled by their consumers; they are not a single global precedence rule for every command.
 
-1. **Environment variable** (`ASPIRE_RUNTIME_PATH`) - set by CLI for guest apphosts
-2. **Disk discovery** - check for `runtime/` directory next to the app, then in the parent directory
-3. **PATH fallback** - use `dotnet` from system PATH
+### SDK Build-Time Resolution
 
-The parent directory check supports the installed layout where the CLI binary lives in `bin/` (`~/.aspire/bin/aspire`) while bundle components are siblings at the root (`~/.aspire/runtime/`, `~/.aspire/dashboard/`, etc.).
+[ResolveAspireCliBundle](../../src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs) resolves DCP, Dashboard, and terminal-host paths for AppHost build metadata. Its top-level order is:
 
-### Environment Variables
+1. Explicit `AspireCliBundlePath` MSBuild property.
+2. Explicit `AspireCliPath` MSBuild property.
+3. CLI discovery on `PATH`, when enabled.
+4. Aspire home fallback.
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `ASPIRE_LAYOUT_PATH` | Root of the bundle | `/opt/aspire` |
-| `ASPIRE_DCP_PATH` | DCP binaries location | `/opt/aspire/dcp` |
-| `ASPIRE_DASHBOARD_PATH` | Path used by Aspire.Hosting to locate the Native AOT Dashboard | `/opt/aspire/dashboard/Aspire.Dashboard` |
-| `ASPIRE_MANAGED_PATH` | CLI-only path for the `aspire-managed` binary | `/opt/aspire/managed/aspire-managed` |
-| `ASPIRE_HOME` | Default Aspire state root and fallback bundle extraction root when no install-route sidecar selects an install-owned location | `/home/user/.aspire` |
-| `ASPIRE_INTEGRATION_LIBS_PATH` | Path to copied project-reference integration DLLs for aspire-server assembly resolution | `/home/user/myapp/.aspire/integrations/apphosts/app-hash/project-layouts/items/fingerprint/libs` |
-| `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` | Path to the NuGet package probe manifest for package-backed integration assemblies | `/home/user/myapp/.aspire/integrations/package-restore/hash/integration-package-probe-manifest.json` |
-| `ASPIRE_USE_GLOBAL_DOTNET` | Force SDK mode | `true` |
-| `ASPIRE_REPO_ROOT` | Dev mode (Aspire repo path, DEBUG builds only) | `/home/user/aspire` |
+The resolver handles install roots, component roots, versioned layouts, and compatible older bundle shapes. An explicitly supplied invalid path is reported when warnings are enabled rather than silently replaced by another installation.
 
-**Note:** NuGet package-backed integrations are resolved from `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` and loaded directly from the NuGet package cache. `ASPIRE_INTEGRATION_LIBS_PATH` is only needed when project references produce copied integration DLLs.
+### Hosting Runtime Resolution
 
-### Transition Compatibility
+[DcpOptions](../../src/Aspire.Hosting/Dcp/DcpOptions.cs) resolves DCP and Dashboard using:
 
-During the transition from NuGet-based to bundle-based distribution, these version combinations must work:
+1. Explicit `DcpPublisher` configuration (`CliPath` or `DashboardPath`).
+2. `ASPIRE_DCP_PATH` or `ASPIRE_DASHBOARD_PATH` through configuration.
+3. AppHost assembly metadata populated during the build.
 
-#### Scenario 1: New CLI + New Aspire.Hosting
+Terminal-host resolution checks its environment/configuration keys and build metadata separately. The path and invocation arguments form a pair: the bundled `aspire-managed` requires the `terminalhost` argument.
 
-```text
-Bundle CLI ────► runs ────► .NET AppHost (new Aspire.Hosting)
-     │                           │
-     │ sets ASPIRE_DCP_PATH      │ reads ASPIRE_DCP_PATH
-     │ sets ASPIRE_DASHBOARD_PATH│ reads ASPIRE_DASHBOARD_PATH
-     │                           │
-     └──────────────────────────►│ Uses bundled DCP/Dashboard ✓
-```
+Hosting does not discover a separate Dashboard runtime beside the application. Native Dashboard executables run directly. A framework-dependent Dashboard supplied for development uses `dotnet exec` with the Dashboard's own runtime configuration, not one rewritten to use the AppHost's framework versions.
 
-**Behavior**: CLI detects bundle, sets environment variables. Aspire.Hosting reads them first.
+## AppHost Compatibility
 
-#### Scenario 2: New CLI + Old Aspire.Hosting
+The CLI and AppHost can use different versions, but compatibility is determined by the specific launch contract, not by a promise that every historical CLI/package combination is supported.
 
-```text
-Bundle CLI ────► runs ────► .NET AppHost (old Aspire.Hosting)
-     │                           │
-     │ sets ASPIRE_DCP_PATH      │ ignores (doesn't check env vars)
-     │ sets ASPIRE_DASHBOARD_PATH│
-     │                           │
-     │                           │ Uses NuGet package paths ✓
-```
+- The CLI's `DashboardLaunchHelper` checks the AppHost Hosting version before choosing the native Dashboard. Older or unknown versions use `aspire-managed` as the compatibility entry point. Explicit user-supplied Dashboard paths remain overrides.
+- The current managed helper's `dashboard` subcommand starts the sibling native Dashboard and forwards its arguments. It fails clearly if that executable is missing.
+- The SDK resolver also understands transitional layouts that put `Aspire.Dashboard` under `managed/`, and older layouts that use the managed dispatcher. An existing but incomplete `dashboard/` directory is rejected instead of being mistaken for a legacy layout.
+- Direct `dotnet run` uses the paths resolved into AppHost metadata or explicit configuration. It is not guaranteed to fall back to downloading Dashboard NuGet packages when the bundle is missing.
+- .NET AppHost projects still use the .NET SDK to build and run. A pre-built guest AppHost Server does not replace the .NET project toolchain.
 
-**Behavior**: CLI sets env vars, but old Aspire.Hosting doesn't read them. Falls back to assembly metadata (NuGet packages). Works correctly.
+The native-version gate and executable-selection behavior are defined in [LayoutConfiguration.cs](../../src/Aspire.Cli/Layout/LayoutConfiguration.cs). The compatibility forwarder is in [Aspire.Managed/Program.cs](../../src/Aspire.Managed/Program.cs).
 
-#### Scenario 3: Old CLI + New Aspire.Hosting
+## NuGet and AppHost Server
 
-```text
-Old CLI ────► runs ────► .NET AppHost (new Aspire.Hosting)
-     │                        │
-     │ (no env vars set)      │ checks env vars → empty
-     │                        │ does disk discovery → not found
-     │                        │ uses assembly metadata (NuGet) ✓
-```
+`aspire-managed nuget` provides package search, restore, and package probe-manifest generation without requiring a globally installed SDK. Its command definitions live in [Aspire.Managed/NuGet](../../src/Aspire.Managed/NuGet); use the subcommands' `--help` output for their current arguments.
 
-**Behavior**: No env vars set. New Aspire.Hosting tries disk discovery, doesn't find bundle, falls back to NuGet packages.
-
-#### Scenario 4: No CLI (direct `dotnet run`)
-
-```text
-dotnet run ────► .NET AppHost (any Aspire.Hosting)
-                      │
-                      │ checks env vars → empty
-                      │ does disk discovery → not found (unless bundle installed)
-                      │ uses assembly metadata (NuGet) ✓
-```
-
-**Behavior**: Standard SDK workflow. Uses NuGet packages as always.
-
-#### Scenario 5: Bundle installed system-wide
-
-```text
-dotnet run ────► .NET AppHost (new Aspire.Hosting)
-                      │
-                      │ checks env vars → empty
-                      │ does disk discovery → finds /opt/aspire/dcp ✓
-                      │ uses bundled DCP/Dashboard ✓
-```
-
-**Behavior**: Even without CLI, if bundle is installed to a well-known location and AppHost is run from there, disk discovery finds it.
-
-### Why Both Need Discovery
-
-| Component | When it discovers | What it does |
-|-----------|------------------|--------------|
-| **CLI** | Before launching AppHost | Sets `ASPIRE_DCP_PATH`, `ASPIRE_DASHBOARD_PATH` env vars |
-| **Aspire.Hosting** | At AppHost startup | Reads env vars OR does its own disk discovery OR uses NuGet |
-
-This dual-discovery approach ensures:
-- **Forward compatibility**: New CLI works with old Aspire.Hosting
-- **Backward compatibility**: Old CLI works with new Aspire.Hosting
-- **Standalone operation**: Aspire.Hosting works even without CLI
-
----
-
-## NuGet Operations
-
-The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, which provides package search, restore, and probe manifest generation without requiring the .NET SDK.
-
-### NuGet Helper Commands
-
-```bash
-# Search for packages
-{managed}/aspire-managed nuget search \
-  --query "Aspire.Hosting" \
-  --prerelease \
-  --take 50 \
-  --source https://api.nuget.org/v3/index.json \
-  --format json
-
-# Restore packages
-{managed}/aspire-managed nuget restore \
-  --package "Aspire.Hosting.Redis" \
-  --version "13.2.0" \
-  --framework net10.0 \
-  --output <workspace>/.aspire/integrations/package-restore/hash/obj
-
-# Create package probe manifest from restored packages
-{managed}/aspire-managed nuget manifest \
-  --assets <workspace>/.aspire/integrations/package-restore/hash/obj/project.assets.json \
-  --output <workspace>/.aspire/integrations/package-restore/hash/integration-package-probe-manifest.json \
-  --framework net10.0
-
-```
-
-### Search Output Format
-
-```json
-{
-  "packages": [
-    {
-      "id": "Aspire.Hosting.Redis",
-      "version": "13.2.0",
-      "allVersions": ["13.1.0", "13.2.0"],
-      "description": "Redis hosting integration for Aspire",
-      "authors": ["Microsoft"],
-      "source": "nuget.org",
-      "deprecated": false
-    }
-  ],
-  "totalHits": 42
-}
-```
-
-### AppHost Integration Cache Structure
+The pre-built AppHost Server loads the integrations required by the project. Package restore artifacts and probe manifests are cached beneath `<workspace>/.aspire/integrations/`:
 
 ```text
 <workspace>/.aspire/integrations/
 ├── package-restore/
-│   └── {package-restore-hash}/
-│       ├── obj/
-│       │   └── project.assets.json
+│   └── {restore-hash}/
+│       ├── obj/project.assets.json
 │       └── integration-package-probe-manifest.json
 └── apphosts/
     └── {app-path-hash}/
         ├── appsettings.json
         ├── integration-package-probe-manifest.json
-        ├── integration-restore/
-        └── project-layouts/
-            └── items/
-                └── {project-output-fingerprint}/
-                    └── libs/
-                        └── MyIntegration.dll
+        └── project-layouts/items/{fingerprint}/libs/
 ```
 
-NuGet package-backed assets are loaded directly from the NuGet package cache via the probe manifest. Project-reference outputs are the only integration assets copied into `libs`, and those layouts are immutable and fingerprinted by content.
+NuGet package-backed assemblies and native libraries are loaded from the package cache through `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH`. Project-reference outputs are copied into immutable fingerprinted directories and supplied through `ASPIRE_INTEGRATION_LIBS_PATH`.
 
----
+The integration load context keeps integration loading separate from the helper's default context, while sharing the type-system/code-generation contracts. This dynamic managed loading belongs to the self-contained AppHost Server, not to the Native AOT Dashboard.
 
 ## Certificate Management
 
-The CLI includes native HTTPS certificate management via ASP.NET Core's `CertificateManager` library, ported directly into the native AOT binary. This eliminates the need for a separate dev-certs tool or subprocess for certificate operations.
+The CLI's `NativeCertificateToolRunner` uses the vendored ASP.NET Core certificate-management implementation. It does not need to launch a bundled `dotnet dev-certs` tool. Platform-specific trust operations can still invoke operating-system utilities and require user interaction or permissions.
 
-### How It Works
+These development-certificate operations are separate from the Dashboard's configured client-certificate authentication. For Dashboard client-certificate formats and configuration, see the [Dashboard README](../../src/Aspire.Dashboard/README.md).
 
-The `CertificateManager` from `aspnetcore/src/Shared/CertificateGeneration/` is vendored into `src/Aspire.Cli/Certificates/CertificateGeneration/`. The original `EventSource`-based logging (AOT-incompatible) has been replaced with `ILogger`, making the code fully native AOT friendly.
+## Installation and Configuration
 
-Platform-specific implementations handle certificate store operations:
-- **Windows**: `WindowsCertificateManager` — Windows certificate store + ACLs
-- **macOS**: `MacOSCertificateManager` — Keychain management via `security` CLI
-- **Linux**: `UnixCertificateManager` — OpenSSL + NSS databases + .NET trust store
+The [installation-route specification](install-routes.md) documents script, PR, localhive, package-manager, and sidecar-less installations. `IBundleService.GetDefaultExtractDir` implements the root selection for automatic extraction:
 
-### Certificate Tool Abstraction
+| Install route | Extraction root |
+|---------------|-----------------|
+| Script, PR, or localhive sidecar | Parent of the CLI binary's directory, normally the install prefix above `bin/` |
+| Package-manager sidecar (`winget`, `brew`, `dotnet-tool`) | Directory containing the resolved CLI binary |
+| Nix sidecar | `ASPIRE_HOME`, or `~/.aspire` by default, outside the read-only Nix store |
+| No recognized install-route sidecar | `ASPIRE_HOME`, or `~/.aspire` by default |
 
-The CLI uses an `ICertificateToolRunner` abstraction with a single implementation:
+Installers can explicitly prepare the payload using `aspire setup`; otherwise, the CLI extracts it lazily when needed. Setup's route-independent default is distinct from the automatic extraction roots above. Self-update behavior depends on the installation route; package-manager ownership must be respected. See `aspire update --help` and the installation-route specification rather than assuming every installation is replaced in place by the CLI.
 
-| Implementation | Description |
-|----------------|-------------|
-| `NativeCertificateToolRunner` | Calls `CertificateManager` directly (no subprocess) |
+PR acquisition scripts also populate channel-specific NuGet hives. Hives, integration caches, and user settings are distinct from the versioned runtime payload and are not replaced when the active `bundle/` link changes.
 
-The `CertificateManager` is registered as a singleton via DI, with `ILogger` injected through the constructor:
+### Relevant Configuration
 
-```csharp
-// Register CertificateManager (platform-specific) and certificate tool runner
-builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>()));
-builder.Services.AddSingleton<ICertificateToolRunner, NativeCertificateToolRunner>();
-```
-
-### Key Operations
-
-- **Check trust status**: `CertificateManager.ListCertificates()` + `GetTrustLevel()` — returns structured certificate info
-- **Trust certificate**: `CertificateManager.EnsureAspNetCoreHttpsDevelopmentCertificate()` — creates and trusts dev cert
-- **Platform detection**: `CertificateManager.Create()` selects the right platform implementation at startup
-
----
-
-## AppHost Server
-
-### Pre-built vs Dynamic Mode
-
-The bundle includes a pre-built AppHost Server with core hosting only (no integrations). All integrations are downloaded on-demand:
-
-| Condition | Mode | Description |
-|-----------|------|-------------|
-| Bundle detected | **Pre-built + Dynamic Loading** | Use pre-built server, download integrations as needed |
-| No bundle detected | **Dynamic** | Generate and build project (requires SDK) |
-
-### Integration Download Flow
-
-When a project references integrations (e.g., `Aspire.Hosting.Redis`):
-
-1. CLI reads `.aspire/settings.json` for package list
-2. CLI checks local integration cache (`<workspace>/.aspire/integrations/`)
-3. Missing packages are downloaded via NuGet Helper
-4. Packages are represented by a probe manifest that points at the NuGet package cache
-5. Project-reference outputs are copied to immutable fingerprinted layouts when needed
-6. AppHost Server loads integration assemblies at startup
-
-### Pre-built Mode Execution
-
-```bash
-# CLI spawns the AppHost Server via aspire-managed
-{managed}/aspire-managed server \
-  --project {user-project-path} \
-  --socket {socket-path}
-```
-
-### Integration Assembly Loading Architecture
-
-When the user's project requires integrations not included in the bundle:
-
-1. CLI downloads missing packages using NuGet Helper to a project-specific cache
-2. NuGet Helper restores packages and writes a package probe manifest
-3. Project-reference outputs, when present, are copied to an immutable `ASPIRE_INTEGRATION_LIBS_PATH` layout
-4. AppHost Server loads integration assemblies via `IntegrationLoadContext`
-
-#### Aspire.TypeSystem
-
-`Aspire.TypeSystem` is a standalone assembly containing the ATS (Aspire Type System) scanner, model types, and codegen contracts (`ICodeGenerator`, `ILanguageSupport`, `AtsContext`). It was extracted from `Aspire.Hosting` to establish a clean boundary — `Aspire.Hosting` does **not** reference `Aspire.TypeSystem`. The ATS attributes (`[AspireExport]`, `[AspireDto]`, `[AspireValue]`) remain in `Aspire.Hosting` and are discovered by name-based matching via `AttributeDataReader`.
-
-All types in `Aspire.TypeSystem` are public. It is loaded in the default context and shared with the `IntegrationLoadContext`, so codegen contracts have the same type identity across the boundary.
-
-#### IntegrationLoadContext
-
-Integration assemblies are loaded in a custom `AssemblyLoadContext` ("Aspire.Integrations") that:
-
-- **Loads package assets by manifest** — `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` points at package-cache assemblies and native libraries
-- **Probes directories** for assemblies — `ASPIRE_INTEGRATION_LIBS_PATH` for copied project-reference outputs and `AppContext.BaseDirectory`
-- **Shares `Aspire.TypeSystem`** — always defers to the default context for type identity
-- **Performs version unification** — before loading an assembly from the probe directory, checks if the default context already provides it at a higher or equal version; if so, defers to the default
-
-```text
-┌──────────────────────────────────────────────────────┐
-│ Default Load Context (aspire-managed)                │
-│  Aspire.Hosting.RemoteHost.dll (aspire-server)       │
-│  Aspire.TypeSystem.dll  ◄── shared                   │
-│  Framework assemblies (runtime-provided)             │
-├──────────────────────────────────────────────────────┤
-│ IntegrationLoadContext ("Aspire.Integrations")       │
-│  Aspire.Hosting.dll                                  │
-│  Aspire.Hosting.JavaScript.dll                       │
-│  Aspire.Hosting.Azure.*.dll                          │
-│  Third-party deps (Google.Protobuf, etc.)            │
-│  Framework assemblies → deferred via unification     │
-└──────────────────────────────────────────────────────┘
-```
-
-#### Version Unification
-
-The NuGet restore for integration packages includes transitive dependencies on framework-provided assemblies at potentially older versions (e.g., `System.Diagnostics.DiagnosticSource` 6.0 when the runtime provides 9.0). Loading the old version causes `MissingMethodException` because `Aspire.Hosting` was compiled against newer runtime APIs.
-
-The `IntegrationLoadContext` handles this by attempting to load the assembly from the default context first. If the default context provides a version that is higher or equal, it wins. This works in all deployment models (framework-dependent, self-contained, single-file) because it checks the default context at runtime rather than scanning framework directories on disk.
-
-#### Cross-ALC Communication
-
-All communication between the default context (RemoteHost) and the integration ALC uses:
-
-- **Reflection** — `MethodInfo.Invoke()` for capability dispatch
-- **Opaque handles** — objects stored as `object` in `HandleRegistry`, passed by handle ID
-- **JSON marshalling** — `AtsMarshaller` converts between JSON and .NET types
-- **Shared contracts** — `ICodeGenerator`/`ILanguageSupport` from `Aspire.TypeSystem` have matching type identity, so `IsAssignableFrom` works
-
----
-
-## CLI Integration
-
-### Transparent Mode Detection
-
-The CLI automatically detects whether to use bundle or SDK mode based on its execution context:
-
-1. **Bundle mode**: CLI is running from within a bundle layout (detected via relative paths)
-2. **SDK mode**: CLI is installed via `dotnet tool` or running standalone
-
-No user configuration or flags are required - the experience is identical regardless of installation method.
-
-### Self-Update Command
-
-`aspire update --self` updates the CLI to the latest version:
-
-```bash
-# Update the CLI to the latest version
-aspire update --self
-
-# Update to a specific channel
-aspire update --self --channel daily
-```
-
-With self-extracting binaries, the update process is:
-1. User selects a channel (stable, staging, daily). When invoked without `--channel`, the CLI prompts; the chosen channel applies to this invocation only.
-2. Downloads the new self-extracting CLI binary (platform-specific archive)
-3. Extracts archive to temp, finds new binary
-4. Backs up current binary, swaps in the new one
-5. Verifies new binary with `--version`
-6. Calls `BundleService.ExtractAsync(force: true)` to proactively extract the embedded payload
-
-The selected channel is **not** persisted to global settings. The new binary identifies its own channel via the `AspireCliChannel` assembly metadata baked at build time (read by `IdentityChannelReader`); per-project channel overrides live in the project's `aspire.config.json#channel`. There is no global-channel write step.
-
-The old bundle-update path (downloading a full tarball and applying via `IBundleDownloader`) has been removed. The self-extracting binary IS the bundle — one download, one file, everything included.
-
-When running via `dotnet tool`, `aspire update --self` displays instructions to use `dotnet tool update`.
-
-### Mode Detection Algorithm
-
-```csharp
-bool ShouldUseBundleMode()
-{
-    // Check if explicitly disabled via environment variable
-    var useSdk = Environment.GetEnvironmentVariable("ASPIRE_USE_GLOBAL_DOTNET");
-    if (string.Equals(useSdk, "true", StringComparison.OrdinalIgnoreCase))
-        return false;
-
-    // Auto-detect: check if CLI is running from within a bundle layout
-    var layoutPath = DiscoverRelativeLayout();
-    if (layoutPath != null && ValidateLayout(layoutPath))
-        return true;
-
-    // Fall back to SDK mode
-    return false;
-}
-```
-
-### Environment Variable Override
-
-For advanced scenarios (testing, debugging), a single environment variable can force SDK mode:
-
-| Variable | Description |
-|----------|-------------|
-| `ASPIRE_USE_GLOBAL_DOTNET=true` | Force SDK mode even when running from bundle |
-
-This is not documented for end users - it's for internal testing and edge cases only.
-
-### Channel Identity
-
-Every CLI binary is built for a specific acquisition channel. The pipeline is:
-
-1. **MSBuild property** — `AspireCliChannel` is set by CI (for example, `/p:AspireCliChannel=stable`) or defaults to `local` for local developer builds.
-2. **Assembly metadata** — `Aspire.Cli.csproj` emits `<AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />`, which becomes a `[AssemblyMetadata]` attribute on the compiled assembly.
-3. **`IdentityChannelReader`** — registered as an `IIdentityChannelReader` singleton in DI, reading and validating the attribute on first access. The read is lazy, cached via `Lazy<string>`, and thread-safe. The reader is AOT-safe: it only enumerates a sealed, build-time-known attribute type.
-4. **`CliExecutionContext.IdentityChannel`** — the resolved string, available to all CLI components for hive selection and project reseeding.
-
-#### Supported channel names
-
-The following values are the only accepted `AspireCliChannel` values. Any other value causes `IdentityChannelReader` to throw `InvalidOperationException` at startup.
-
-| Channel | Built by | Package source |
-|---------|----------|----------------|
-| `stable` | Release pipeline | Official NuGet feeds |
-| `staging` | RC/preview pipeline | RC/preview NuGet feeds |
-| `daily` | Daily CI | Daily build NuGet feeds |
-| `local` | Developer build (default when no `/p:AspireCliChannel=` override) | `~/.aspire/hives/local/packages/` |
-| `pr-<N>` | PR CI build (N = PR number, for example `pr-16820`) | `~/.aspire/hives/pr-<N>/packages/` |
-
-Bare `pr` (without a numeric suffix) is explicitly rejected; CI bakes `pr-<N>` directly so no runtime join is needed. The `default` sentinel in `PackageChannelNames` is a project-level value for `aspire.config.json#channel` and is **not** a valid assembly-baked identity channel.
-
-`CliExecutionContext.IdentityChannel` is the CLI's own identity. It is distinct from the channel a project requests via `aspire.config.json#channel`: packaging decisions (such as PSM emission for an apphost) key on the project's channel, not the CLI's identity.
-
----
-
-## Installation
-
-### One-Line Install Scripts
-
-**Linux/macOS (bash):**
-```bash
-curl -fsSL https://aka.ms/install-aspire.sh | bash
-```
-
-**Windows (PowerShell):**
-```powershell
-irm https://aka.ms/install-aspire.ps1 | iex
-```
-
-### Script Behavior
-
-With self-extracting binaries, install scripts can be simplified to:
-1. Detect the current platform (OS + architecture)
-2. Download the self-extracting binary to `~/.aspire/bin/aspire`
-3. Run `aspire setup` to extract the embedded payload
-4. Add `~/.aspire/bin` to PATH
-5. Verify installation with `aspire --version`
-
-The install scripts now exclusively support this self-extracting binary flow; archive-based bundles are no longer downloaded or extracted, and CI uploads only the self-extracting CLI binary.
-
-### Installed Layout
-
-The bundle installs components as siblings under `~/.aspire/`, with the CLI binary placed in `bin/` so that both bundle and CLI-only installs share the same PATH entry:
-
-```text
-~/.aspire/
-├── bin/                    # CLI binary (shared path for both install methods)
-│   └── aspire              #   - Self-extracting native AOT CLI (bundle install)
-│                           #   - Or SDK-based CLI (CLI-only install)
-│
-├── .aspire-bundle-version  # Version marker (hex FNV-1a hash, written after extraction)
-│
-├── managed/
-│   └── aspire-managed      # Subcommands: server | nuget | terminalhost
-│
-├── dashboard/
-│   ├── Aspire.Dashboard    # Native AOT Dashboard
-│   └── wwwroot/            # Dashboard static assets
-│
-├── dcp/                    # Developer Control Plane
-│   └── dcp
-│
-├── hives/                  # NuGet package hives (preserved across installs)
-│   └── pr-{number}/
-│       └── packages/
-│
-└── globalsettings.json     # Global CLI settings (preserved across installs)
-```
-
-**Key behaviors:**
-- The CLI lives at `~/.aspire/bin/aspire` regardless of install method
-- With self-extracting binaries, the CLI in `bin/` contains the embedded payload; `aspire setup` extracts siblings
-- `.aspire-bundle-version` tracks the extracted version — extraction is skipped when hash matches
-- `aspire-managed` remains the self-contained server/NuGet/terminal binary; the Dashboard is a separate Native AOT executable
-- Certificate management is native to the CLI (no external tool needed)
-- NuGet hives and settings are preserved across installations and re-extractions
-- `LayoutDiscovery` finds the bundle by checking the CLI's parent directory for components
-
-### Script Options
-
-**Linux/macOS:**
-```bash
-# Install specific version
-curl -fsSL https://aka.ms/install-aspire.sh | bash -s -- --version 13.2.0
-
-# Install to custom location
-curl -fsSL https://aka.ms/install-aspire.sh | bash -s -- --install-dir /opt/aspire
-
-# Skip PATH modification
-curl -fsSL https://aka.ms/install-aspire.sh | bash -s -- --no-path
-```
-
-**Windows:**
-```powershell
-# Install specific version
-irm https://aka.ms/install-aspire.ps1 | iex -Args '--version', '13.2.0'
-
-# Install to custom location  
-irm https://aka.ms/install-aspire.ps1 | iex -Args '--install-dir', 'C:\aspire'
-```
-
-### Default Installation Locations
-
-| Component | Linux/macOS | Windows |
-|-----------|-------------|---------|
-| CLI (bundle or CLI-only) | `~/.aspire/bin/aspire` | `%USERPROFILE%\.aspire\bin\aspire.exe` |
-| NuGet Hives | `~/.aspire/hives/` | `%USERPROFILE%\.aspire\hives\` |
-| Settings | `~/.aspire/globalsettings.json` | `%USERPROFILE%\.aspire\globalsettings.json` |
-
-### PR Build Installation
-
-For testing PR builds before they are merged:
-
-**CLI from PR (bundle-backed):**
-```bash
-# Linux/macOS
-./eng/scripts/get-aspire-cli-pr.sh 1234
-
-# Windows
-.\eng\scripts\get-aspire-cli-pr.ps1 -PRNumber 1234
-```
-
-The PR script also downloads NuGet package artifacts (`built-nugets` and `built-nugets-for-{rid}`) and installs them as a NuGet hive at `~/.aspire/hives/pr-{N}/packages/`. This enables `aspire new` and `aspire add` to resolve PR-built package versions when the channel is set to `pr-{N}`.
-
-### Hive Types
-
-The CLI maintains per-channel NuGet package directories ("hives") under `~/.aspire/hives/`. On startup the CLI selects the hive whose directory name matches `CliExecutionContext.IdentityChannel`.
-
-| Hive directory | Channel | Package resolution |
-|----------------|---------|-------------------|
-| `hives/local/packages/` | `local` | Flat directory of `.nupkg` files. The CLI pins to the version found in `Aspire.Hosting.*.nupkg`. |
-| `hives/pr-<N>/packages/` | `pr-<N>` | Flat directory of `.nupkg` files populated by `get-aspire-cli-pr.sh` / `.ps1`. |
-| _(none)_ | `stable`, `staging`, `daily` | No on-disk hive. Packages are resolved from the appropriate public NuGet feeds. |
-
-Hive directories are preserved across CLI installations and re-extractions — only the binary and managed payload are overwritten.
-
----
-
-## Configuration
-
-Configuration is primarily done through environment variables. No user-editable configuration files are required.
-
-### Environment Variable Precedence
-
-```text
-ASPIRE_* env vars > relative path auto-detect > assembly metadata (NuGet packages)
-```
-
-### Integration Cache
-
-AppHost integration restore artifacts are cached under `<workspace>/.aspire/integrations/`.
-
----
-
-## Size and Distribution
-
-### Size Estimates (Windows x64)
-
-| Component | On Disk | Zipped |
-|-----------|---------|--------|
-| DCP (platform-specific) | ~286 MB | ~100 MB |
-| Aspire Managed (self-contained Server + NuGet + Terminal Host) | ~114 MB | varies |
-| Aspire Dashboard (Native AOT) | ~60 MB | varies |
-| CLI (native AOT, includes certificate management) | ~22 MB | ~10 MB |
-| **Total** | **~373 MB** | **~135 MB** |
-
-*Aspire Managed is a single self-contained binary that includes the .NET runtime, eliminating the need for a separate runtime directory.*
-*Certificate management is handled natively in the CLI — no separate tool needed.*
-*Sizes vary by platform. Linux tends to be smaller than Windows.*
-
-### Distribution Formats
-
-| Platform | Archive | Self-Extracting Binary |
-|----------|---------|----------------------|
-| Windows x64 | `aspire-{ver}-win-x64.zip` | `aspire.exe` (~134 MB) |
-| Linux x64 | `aspire-{ver}-linux-x64.tar.gz` | `aspire` (~134 MB) |
-| Linux ARM64 | `aspire-{ver}-linux-arm64.tar.gz` | `aspire` (~134 MB) |
-| macOS x64 | `aspire-{ver}-osx-x64.tar.gz` | `aspire` (~134 MB) |
-| macOS ARM64 | `aspire-{ver}-osx-arm64.tar.gz` | `aspire` (~134 MB) |
-
-The self-extracting binary is the **recommended distribution format** — one file containing the CLI and full bundle payload. Archive format is still produced for compatibility with existing install scripts.
-
-### Download Locations
-
-- **GitHub Releases**: `https://github.com/microsoft/aspire/releases`
-- **aspire.dev**: Direct download links on documentation site
-
----
-
-## Development Mode
-
-When developing Aspire itself, the bundle mode is **not** used even if `ASPIRE_REPO_ROOT` is set. This ensures developers can:
-
-1. Make changes to `Aspire.Hosting.*` assemblies
-2. Use project references instead of pre-built binaries
-3. See their changes reflected immediately without rebuilding a bundle
-
-### How It Works
-
-The layout discovery system detects development mode and creates a "dev layout" with `Version = "dev"`. When the CLI detects a dev layout, it falls back to the standard SDK-based flow:
-
-```csharp
-if (layout.IsDevLayout)
-{
-    // Continue using SDK mode with project references
-    return false;
-}
-```
-
-### Environment Variables for Development
-
-| Variable | Description |
-|----------|-------------|
-| `ASPIRE_REPO_ROOT` | Path to local Aspire repo (triggers dev layout detection) |
-| `ASPIRE_USE_GLOBAL_DOTNET=true` | Force SDK mode, skip bundle detection entirely |
-
-### Testing Bundle Infrastructure
-
-To test bundle infrastructure during development without affecting the normal dev workflow:
-
-1. Build the aspire-server standalone: `dotnet build src/Aspire.Hosting.RemoteHost`
-2. Create a test bundle layout manually with the built artifacts
-3. Set `ASPIRE_LAYOUT_PATH` to point to your test layout
-4. The dev layout detection only activates when `ASPIRE_REPO_ROOT` is set
-
----
-
-## Security Considerations
-
-### Package Signing
-
-| Platform | Mechanism |
-|----------|-----------|
-| Windows | Authenticode signature on CLI executable |
-| macOS | Notarization + code signing |
-| Linux | GPG signature file (`.asc`) |
-
-### Checksum Verification
-
-Each release publishes SHA-256 checksum files alongside the bundle binaries:
-
-```text
-aspire-13.2.0-linux-x64.tar.gz.sha256
-aspire-13.2.0-win-x64.zip.sha256
-```
-
-Install scripts and `aspire update --self` should verify the downloaded file's SHA-256 hash against the `.sha256` file before installing. This catches corruption from partial downloads, network errors, or disk issues. The checksum covers the entire file (CLI binary + payload + trailer), providing end-to-end integrity verification.
-
-The bundle trailer itself does **not** contain a payload hash. Integrity verification is the responsibility of the download/install path, not the extraction path. This keeps the trailer format simple and avoids a double-read of the ~150 MB payload during extraction.
-
-### Runtime Isolation
-
-The bundled .NET runtime is isolated from any globally-installed .NET:
-
-- `DOTNET_ROOT` is set to the bundle's runtime directory
-- `DOTNET_MULTILEVEL_LOOKUP=0` disables global probing
-- No modification to system PATH or environment
-
-### NuGet Security
-
-- Package downloads use HTTPS only
-- Package signatures are verified when available
-- Authenticated feeds require explicit credential configuration
-
----
-
-## Backward Compatibility
-
-A core design principle of the bundle feature is **complete backward compatibility**. Users with existing workflows must not experience any breaking changes.
-
-### Compatibility Requirements
-
-1. **Existing SDK-based workflows continue to work unchanged**
-   - If the .NET SDK is installed globally, all existing commands work identically
-   - No new CLI flags required to use existing functionality
-   - `aspire new`, `aspire add`, `aspire run` behave the same as before
-
-2. **Dotnet tool installation remains supported**
-   - `dotnet tool install -g Aspire.Cli` continues to work
-   - `aspire update --self` shows `dotnet tool update` instructions when running as a tool
-
-3. **Bundle mode is transparent**
-   - No user action required to switch between bundle and SDK mode
-   - CLI auto-detects which mode to use based on installation location
-   - All commands produce the same user-visible output regardless of mode
-
-### Detection Logic
-
-The CLI determines its execution mode using this priority order:
-
-```text
-1. ASPIRE_USE_GLOBAL_DOTNET=true → Force SDK mode (for testing/debugging)
-2. ASPIRE_REPO_ROOT is set       → Dev mode (use SDK with project refs)
-3. Valid bundle layout found     → Bundle mode
-4. .NET SDK available globally   → SDK mode
-5. Neither available             → Error with installation instructions
-```
-
-### API Compatibility
-
-Changes to internal CLI classes maintain backward compatibility through:
-
-1. **New dependencies are optional or have sensible defaults**
-   ```csharp
-   // IBundleDownloader is nullable - if not registered, bundle update is skipped
-   private readonly IBundleDownloader? _bundleDownloader;
-   
-   // ILayoutDiscovery always returns null if no layout found - SDK mode continues
-   var layout = _layoutDiscovery.DiscoverLayout();
-   if (layout is null) { /* fall back to SDK mode */ }
-   ```
-
-2. **DI registration is additive**
-   - New services are registered alongside existing ones
-   - Tests using full DI container continue to work
-   - Tests mocking specific services are unaffected
-
-3. **Graceful degradation**
-   - If bundle components are missing, fall back to SDK
-   - If NuGet operations are unavailable, fall back to `dotnet` commands
-   - Error messages guide users to resolution
-
-### Test Compatibility
-
-Tests continue to work because:
-
-1. **Integration tests use the full DI container**
-   - New services (`ILayoutDiscovery`, `IBundleDownloader`) are registered
-   - Tests discover no layout → SDK mode is used → existing behavior
-
-2. **Unit tests mock at service boundaries**
-   - Tests mocking `IProjectLocator`, `IPackagingService` etc. are unaffected
-   - New services can be mocked independently if needed
-
-3. **Test helpers register all services**
-   - `CliTestHelper.CreateServiceCollection()` uses the same registration as production
-   - No test-specific configuration needed for backward compatibility
-
-### Environment Variable Summary
-
-| Variable | Purpose | Effect |
-|----------|---------|--------|
-| `ASPIRE_USE_GLOBAL_DOTNET=true` | Force SDK mode | Bypasses bundle detection entirely |
-| `ASPIRE_REPO_ROOT` | Development mode | Uses SDK with project references |
-| `ASPIRE_LAYOUT_PATH` | Bundle location | Overrides auto-detection |
-| `ASPIRE_DCP_PATH` | DCP override | Works in both modes |
-| `ASPIRE_MANAGED_PATH` | Aspire-managed override (CLI only) | Works in both modes |
-
-### Migration Path
-
-Users migrating from SDK-based installation to bundle:
-
-1. **No migration required** - existing projects work with bundle CLI
-2. **Package references unchanged** - same NuGet packages, same versions
-3. **Configuration preserved** - `~/.aspire/` settings continue to work
-4. **Can switch back anytime** - reinstall via `dotnet tool` to return to SDK mode
-
-### Version Compatibility
-
-A key design principle is that the CLI and AppHost can be updated independently:
-
-#### CLI Updated, AppHost Unchanged
-
-When using a newer CLI with an older AppHost (NuGet packages):
-
-1. **Protocol stability** - The JSON-RPC protocol between CLI and AppHost is versioned
-2. **Feature detection** - CLI queries AppHost capabilities before using new features
-3. **Graceful fallback** - Unknown features are skipped, core functionality preserved
-4. **Package resolution** - NuGet packages from older Aspire versions continue to work
-
-```text
-CLI v10.0 ────► AppHost (Aspire.Hosting v9.x)
-    │
-    └── Uses SDK mode to build project with v9.x packages
-        Works identically to v9.x CLI
-```
-
-#### AppHost Updated, CLI Unchanged
-
-When using an older CLI with newer AppHost packages:
-
-1. **Forward compatibility** - Older CLI can run newer AppHost projects
-2. **New features unavailable** - Features requiring CLI support won't work
-3. **Clear error messages** - When incompatibility detected, show upgrade guidance
-4. **Core functionality works** - `aspire run`, `aspire add` continue to function
-
-```text
-CLI v9.x ────► AppHost (Aspire.Hosting v10.x)
-    │
-    └── Builds and runs project
-        New v10 features that need CLI support are unavailable
-        User sees: "Upgrade CLI for new features: aspire update --self"
-```
-
-#### Bundle Updated, SDK-based AppHost
-
-When using bundle CLI with SDK-installed Aspire packages:
-
-1. **Mode detection** - Bundle CLI detects SDK is available
-2. **SDK mode activation** - Uses `dotnet build` for AppHost, not pre-built server
-3. **Identical behavior** - Works exactly like dotnet-tool-installed CLI
-4. **No conflicts** - Bundle runtime isolated from global .NET
-
-```text
-Bundle CLI ────► AppHost (via SDK)
-    │
-    └── Detects .NET SDK is installed
-        Falls back to SDK mode
-        Uses dotnet build, not pre-built server
-```
-
-#### Version Mismatch Handling
-
-```csharp
-// CLI checks AppHost protocol version
-var serverVersion = await appHost.GetProtocolVersionAsync();
-if (serverVersion < MinSupportedVersion)
-{
-    // Show upgrade message but continue if possible
-    InteractionService.DisplayMessage("warning", 
-        $"AppHost uses protocol v{serverVersion}, CLI expects v{MinSupportedVersion}+. " +
-        "Some features may not work. Consider updating packages.");
-}
-```
-
----
-
-## Future Considerations
-
-### Out of Scope for Initial Release
-
-- **Auto-update mechanism**: Users manually download new versions
-- **Minimal bundle variant**: Full bundle only, no on-demand component download
-- **Template creation**: `aspire new` for .NET templates still requires SDK
-
-### Potential Enhancements
-
-1. **Modular bundles**: Base + optional integration packs
-2. **CDN distribution**: Faster downloads via global CDN
-3. **Update command**: `aspire update --self` for bundle updates (implemented)
-4. **Bundle compression**: Support for zstd in ZIP format (better ratios)
-5. **Single-file runtime bundle**: Consolidate runtime folder into single file (see below)
-
-### Single-File Runtime Bundle (Future Option)
-
-The current bundle layout includes a `runtime/` folder (~106 MB) containing the .NET runtime:
-
-```text
-runtime/
-├── dotnet.exe                 # Host/muxer
-├── host/fxr/{version}/        # hostfxr
-└── shared/
-    ├── Microsoft.NETCore.App/{version}/
-    └── Microsoft.AspNetCore.App/{version}/
-```
-
-A future enhancement could consolidate this into a **single-file runtime binary** using the `Microsoft.NET.HostModel.Bundle` API. This would:
-
-1. Create a single `dotnet-aspire` executable containing:
-   - The apphost (native executable stub)
-   - hostfxr and hostpolicy (statically linked or bundled)
-   - Microsoft.NETCore.App framework assemblies
-   - Microsoft.AspNetCore.App framework assemblies
-
-2. Use .NET's bundle format which:
-   - Memory-maps managed assemblies directly from the bundle (no extraction)
-   - Extracts only native libraries to a temp directory when needed
-   - Caches extracted files across runs
-
-#### Proposed Implementation
-
-**Step 1: Create a minimal host application**
-
-```csharp
-// tools/AspireRuntimeHost/Program.cs
-// Minimal app that forwards execution to the target DLL
-public class Program
-{
-    public static int Main(string[] args)
-    {
-        // The actual DLL to run is passed as first argument
-        // This app just provides the runtime context
-        return 0;
-    }
-}
-```
-
-**Step 2: Publish as single-file with shared frameworks**
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
-    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-  </PropertyGroup>
-</Project>
-```
-
-**Step 3: Use the Bundler API programmatically**
-
-```csharp
-using Microsoft.NET.HostModel.Bundle;
-
-var bundler = new Bundler(
-    hostName: "dotnet-aspire",
-    outputDir: outputPath,
-    options: new BundleOptions(
-        targetOS: targetOS,
-        targetArch: targetArch,
-        enableCompression: true));
-
-// Add framework assemblies
-foreach (var dll in frameworkAssemblies)
-{
-    bundler.AddToBundle(dll, BundlerFileType.Assembly);
-}
-
-// Add native libraries  
-foreach (var native in nativeLibs)
-{
-    bundler.AddToBundle(native, BundlerFileType.NativeBinary);
-}
-
-// Generate the bundle
-bundler.GenerateBundle();
-```
-
-#### Bundle Structure
-
-The resulting `dotnet-aspire` binary would have this internal structure:
-
-```text
-dotnet-aspire (single file, ~100-120 MB)
-├── [AppHost Header]
-├── [hostfxr + hostpolicy code]
-├── [Bundle Manifest]
-│   ├── File count, offsets, sizes
-│   └── Compression metadata
-├── [Framework Assemblies - Memory Mapped]
-│   ├── System.Runtime.dll
-│   ├── System.Collections.dll
-│   ├── Microsoft.AspNetCore.*.dll
-│   └── ... (~800 assemblies)
-└── [Native Libraries - Extracted on demand]
-    ├── coreclr.dll/libcoreclr.so
-    ├── clrjit.dll/libclrjit.so
-    └── System.*.Native.dll/so
-```
-
-#### Runtime Behavior
-
-1. **First run**: Native libraries extracted to `~/.aspire/runtime-cache/{bundle-hash}/`
-2. **Subsequent runs**: Cache hit, no extraction needed
-3. **Managed code**: Memory-mapped directly from bundle, no disk I/O
-
-#### Usage in CLI
-
-```csharp
-// LayoutProcessRunner would use the single-file runtime
-public async Task<int> RunAsync(string dllPath, string[] args)
-{
-    var runtimePath = _layout.GetSingleFileRuntime(); // "dotnet-aspire"
-    
-    var process = new Process();
-    process.StartInfo.FileName = runtimePath;
-    process.StartInfo.ArgumentList.Add("exec");
-    process.StartInfo.ArgumentList.Add(dllPath);
-    // ...
-}
-```
-
-#### Estimated Sizes
-
-| Component | Current | Single-File |
-|-----------|---------|-------------|
-| runtime/ folder | 106 MB | - |
-| dotnet-aspire binary | - | ~100-120 MB |
-| **Net change** | - | ~0-15 MB smaller |
-
-The main benefit is **simplicity** (one file vs folder tree) rather than size reduction.
-
-#### Trade-offs
-
-**Pros:**
-- Single file instead of ~200 files in runtime/ folder
-- Simpler xcopy deployment
-- Managed assemblies load faster (memory-mapped)
-- No need to manage runtime folder structure
-
-**Cons:**
-- Native libraries still extract to disk (required by OS loader)
-- More complex build process
-- Harder to debug/inspect
-- Updates require full binary replacement
-
-#### Implementation Effort
-
-- **Low**: Self-extracting archive (compress runtime/, extract on first use)
-- **Medium**: Use existing single-file publish infrastructure
-- **High**: Custom Bundler integration with proper framework resolution
-
-#### Dependencies
-
-- `Microsoft.NET.HostModel` NuGet package (contains Bundler API)
-- Understanding of deps.json and runtimeconfig.json generation
-- Platform-specific native library handling
-
----
-
-## Implementation Status
-
-This section tracks the implementation progress of the bundle feature.
-
-### Completed
-
-- [x] **Specification document** - This document (`docs/specs/bundle.md`)
-- [x] **Layout configuration classes** - `src/Aspire.Cli/Layout/LayoutConfiguration.cs`
-- [x] **Layout discovery service** - `src/Aspire.Cli/Layout/LayoutDiscovery.cs`
-- [x] **Layout process runner** - `src/Aspire.Cli/Layout/LayoutProcessRunner.cs`
-- [x] **Bundle NuGet service** - `src/Aspire.Cli/NuGet/BundleNuGetService.cs`
-- [x] **NuGet operations** - embedded in `src/Aspire.Managed/NuGet/`
-  - [x] Search command (NuGet v3 HTTP API)
-  - [x] Restore command (NuGet RestoreRunner)
-  - [x] Manifest command (package probe manifest from project.assets.json)
-- [x] **Layout services registered in DI** - `src/Aspire.Cli/Program.cs`
-- [x] **Pre-built AppHost server class** - `src/Aspire.Cli/Projects/PrebuiltAppHostServer.cs`
-- [x] **DCP/Dashboard/Runtime env var support** - `src/Aspire.Hosting/Dcp/DcpOptions.cs`, `src/Aspire.Hosting/Dashboard/DashboardEventHandlers.cs`
-  - `ASPIRE_DCP_PATH` environment variable
-  - `ASPIRE_DASHBOARD_PATH` environment variable
-  - `ASPIRE_RUNTIME_PATH` environment variable (guest apphosts only)
-- [x] **Shared discovery logic** - `src/Shared/BundleDiscovery.cs`
-  - `TryDiscoverDcpFromEntryAssembly()` / `TryDiscoverDcpFromDirectory()`
-  - `TryDiscoverDashboardFromEntryAssembly()` / `TryDiscoverDashboardFromDirectory()`
-  - `TryDiscoverRuntimeFromEntryAssembly()` / `TryDiscoverRuntimeFromDirectory()`
-  - `GetDotNetExecutablePath()` - env → disk → PATH fallback
-- [x] **GuestAppHostProject bundle mode integration** - `src/Aspire.Cli/Projects/GuestAppHostProject.cs`
-  - Automatic bundle mode detection via `TryGetBundleLayout()`
-  - `PrepareSdkModeAsync()` for traditional SDK-based server build
-  - `PrepareBundleModeAsync()` for pre-built server from bundle
-- [x] **Standalone aspire-server project** - `src/Aspire.Hosting.RemoteHost/`
-  - Pre-built server for bundle distribution
-  - Framework-dependent deployment (uses bundled runtime)
-- [x] **Certificate management** - `src/Aspire.Cli/Certificates/`
-  - `ICertificateToolRunner` abstraction
-  - `NativeCertificateToolRunner` - calls `CertificateManager` directly (no subprocess)
-  - `CertificateGeneration/` - vendored from aspnetcore, EventSource replaced with ILogger
-- [x] **Aspire Managed binary** - `src/Aspire.Managed/`
-  - Self-contained binary: `aspire-managed server|nuget|terminalhost`
-- [x] **Native AOT Dashboard** - `src/Aspire.Dashboard/`
-- [x] **Bundle build tooling** - `tools/CreateLayout/`
-  - Builds aspire-managed as a self-contained single-file binary
-  - Builds Aspire.Dashboard as a Native AOT executable
-  - Copies DCP
-  - `--embed-in-cli` option creates self-extracting binary
-- [x] **Installation scripts** - `eng/scripts/get-aspire-cli-pr.sh`, `eng/scripts/get-aspire-cli-pr.ps1`
-  - Downloads bundle archive from PR build artifacts
-  - Extracts to `~/.aspire/` with CLI in `bin/` subdirectory
-  - Downloads and installs NuGet hive packages for PR channel
-- [x] **Self-extracting binary** - `src/Shared/BundleTrailer.cs`, `src/Aspire.Cli/Bundles/`
-  - 32-byte trailer format (magic + offset + size + version hash)
-  - `IBundleService` / `BundleService` for centralized extraction logic
-  - Thread-safe extraction with `SemaphoreSlim`
-  - Platform-aware extraction (system `tar` on Unix, .NET `TarReader` on Windows)
-  - Version tracking via `.aspire-bundle-version` marker file
-- [x] **Setup command** - `src/Aspire.Cli/Commands/SetupCommand.cs`
-  - `aspire setup [--install-path]`
-  - Delegates to `IBundleService.ExtractAsync()`
-- [x] **Self-update simplified** - `src/Aspire.Cli/Commands/UpdateCommand.cs`
-  - `aspire update --self` downloads new CLI, swaps binary, extracts via `IBundleService`
-  - Removed old `ExecuteBundleSelfUpdateAsync` / `IBundleDownloader` dependency
-- [x] **Unit tests** - `tests/Aspire.Cli.Tests/BundleServiceTests.cs`
-  - 10 tests: roundtrip, edge cases, version marker, tar.gz extraction with strip-components
-
-### In Progress
-
-- [ ] Integrate NuGet service with AddCommand
-
-### Pending
-
-- [ ] Multi-platform build workflow (GitHub Actions)
-- [ ] Simplify install scripts to thin download + `aspire setup` wrappers
-
-### Key Files
-
-| File | Purpose |
+| Name | Purpose |
 |------|---------|
-| `src/Aspire.Cli/Layout/LayoutConfiguration.cs` | Configuration classes for layout structure |
-| `src/Aspire.Cli/Layout/LayoutDiscovery.cs` | Priority-based layout discovery (env > config > relative) |
-| `src/Aspire.Cli/Layout/LayoutProcessRunner.cs` | Run managed DLLs via layout's .NET runtime |
-| `src/Aspire.Cli/NuGet/BundleNuGetService.cs` | NuGet operations wrapper for bundle mode |
-| `src/Aspire.Managed/NuGet/` | NuGet search, restore, and manifest commands (embedded in aspire-managed) |
-| `src/Aspire.Cli/Projects/PrebuiltAppHostServer.cs` | Bundle-mode server runner |
-| `src/Aspire.Cli/Projects/GuestAppHostProject.cs` | Main polyglot handler with bundle/SDK mode switching |
-| `src/Aspire.Hosting/Dcp/DcpOptions.cs` | DCP/Dashboard path resolution with env var support |
-| `src/Aspire.Cli/Certificates/ICertificateToolRunner.cs` | Certificate tool abstraction |
-| `src/Aspire.Cli/Certificates/NativeCertificateToolRunner.cs` | Native certificate management (no subprocess) |
-| `src/Aspire.Cli/Certificates/CertificateGeneration/` | Vendored CertificateManager from aspnetcore (ILogger-based) |
-| `src/Aspire.Managed/Program.cs` | Unified managed binary entry point (dashboard/server/nuget) |
-| `src/Shared/BundleTrailer.cs` | (Deleted) Previously held trailer read/write logic |
-| `src/Aspire.Cli/Bundles/IBundleService.cs` | Bundle extraction interface + result enum |
-| `src/Aspire.Cli/Bundles/BundleService.cs` | Centralized extraction with .NET TarReader |
-| `src/Aspire.Cli/Commands/SetupCommand.cs` | `aspire setup` command for bundle extraction |
-| `src/Aspire.Cli/Utils/ArchiveHelper.cs` | Shared .zip/.tar.gz extraction utility |
-| `tools/CreateLayout/Program.cs` | Bundle build tool (layout assembly + self-extracting binary) |
-| `eng/Bundle.proj` | MSBuild orchestration for bundle creation |
-| `tests/Aspire.Cli.Tests/BundleServiceTests.cs` | Unit tests for bundle service and extraction |
+| `ASPIRE_LAYOUT_PATH` | Explicit layout root for CLI discovery |
+| `ASPIRE_HOME` | Default Aspire state root and fallback extraction location; portable install routes can use their own prefix for state |
+| `ASPIRE_DCP_PATH` | DCP directory override |
+| `ASPIRE_DASHBOARD_PATH` | Dashboard executable override |
+| `ASPIRE_MANAGED_PATH` | Managed component override for CLI consumers; accepted path shape depends on the consumer |
+| `ASPIRE_TERMINAL_HOST_PATH` | Terminal-host executable |
+| `ASPIRE_TERMINAL_HOST_INVOCATION_ARGS` | Arguments needed by the terminal-host entry point, normally `terminalhost` |
+| `ASPIRE_BUNDLE_VERSION_DIR` | Selected version directory passed to bundle-owned child processes for leases |
+| `ASPIRE_USE_GLOBAL_DOTNET` | Force the SDK-based server path instead of bundle mode |
+| `ASPIRE_REPO_ROOT` | Repository-development override used by CLI project and artifact resolution |
+| `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` | Manifest identifying package-cache integration assets |
+| `ASPIRE_INTEGRATION_LIBS_PATH` | Copied project-reference integration outputs |
 
----
+The repository-development path uses project references and local artifacts where supported. It is distinct from a deployed bundle. To test an assembled layout, use explicit layout configuration and the repository's bundle tools.
 
 ## Build Process
 
-The bundle is built using the `tools/CreateLayout` tool, which assembles all components into the final bundle layout.
+[eng/Bundle.proj](../../eng/Bundle.proj) orchestrates local bundle creation. Restore the repository toolchain first and install the target platform's Native AOT prerequisites.
 
-### Aspire Managed Build
-
-The `aspire-managed` binary is published as a self-contained single-file executable. The Dashboard is published separately with Native AOT so Blazor does not expand the reflection and dynamic-code requirements of the server, NuGet, and terminal tools.
-
-```text
-aspire-managed (self-contained)
-├── .NET 10 Runtime (embedded)
-├── Aspire.Hosting.RemoteHost / aspire-server (embedded)
-├── NuGet Commands (embedded)
-└── All managed dependencies
+```powershell
+# Windows example, from the repository root
+.\restore.cmd
+dotnet msbuild eng/Bundle.proj /t:Build /p:TargetRid=win-x64 /p:Configuration=Release
 ```
-
-**Advantages over the previous SDK-download approach:**
-1. **Simpler build**: No SDK download or extraction step
-2. **Smaller total size**: Single binary with tree-shaking vs full runtime directory
-3. **Single file**: One binary instead of hundreds of files across multiple directories
-4. **Version consistency**: All components compiled together
-
-### Build Steps
-
-1. **Build aspire-managed** as a self-contained single-file binary
-2. **Build Aspire.Dashboard** as a Native AOT executable
-3. **Download and copy DCP** binaries
-4. **Create archive** with both executables and Dashboard static assets
-5. **Create self-extracting binary** — appends tar.gz payload + 32-byte trailer to native AOT CLI
-
-### Self-Extracting Binary Build
-
-`Bundle.proj` passes `--embed-in-cli` to `CreateLayout`, which:
-
-1. Takes the native AOT CLI binary and the tar.gz archive
-2. Copies the CLI binary to `{output}.bundle`
-3. Appends the tar.gz payload
-4. Writes the 32-byte trailer (magic + offset + size + version hash)
-5. Replaces the original CLI binary with the bundle
 
 ```bash
-# Build command
-dotnet msbuild eng/Bundle.proj /p:TargetRid=osx-arm64 /p:Configuration=Release /p:BundleRuntimeVersion=10.0.102
-
-# Output: artifacts/bundle/osx-arm64/aspire (self-extracting, ~134 MB)
+# macOS example, from the repository root
+./restore.sh
+dotnet msbuild eng/Bundle.proj /t:Build /p:TargetRid=osx-arm64 /p:Configuration=Release
 ```
 
-The resulting binary is a valid native executable that also contains the full bundle. Running `aspire --version` works immediately; `aspire setup` extracts the payload.
+The build sequence is:
+
+1. Publish `Aspire.Managed` as a self-contained single-file executable.
+2. Publish `Aspire.Dashboard` with Native AOT for the same RID and configuration.
+3. Restore the matching DCP package, using the target OS/architecture rather than the build machine's defaults.
+4. Run `CreateLayout` to assemble the payload and create its `.tar.gz` archive.
+5. Publish the Native AOT CLI with `BundlePayloadPath` pointing to that archive.
+
+The assembled directories are under `artifacts/bundle/{rid}/`; the payload archive is `artifacts/bundle/aspire-{version}-{rid}.tar.gz`. The self-extracting CLI is in the CLI project's publish output, not in the payload directory.
+
+`Configuration` defaults to Debug. `SkipManagedBuild=true` reuses existing Managed **and Dashboard** publishes; `SkipNativeBuild=true` skips the final CLI publish. They do not make missing payload components optional.
+
+### CreateLayout
+
+For already-published components:
+
+```bash
+dotnet run --project tools/CreateLayout -- \
+  --output artifacts/bundle/linux-x64 \
+  --artifacts artifacts \
+  --rid linux-x64 \
+  --configuration Release \
+  --bundle-version local-test \
+  --archive
+```
+
+`--output`, `--artifacts`, `--rid`, and `--configuration` are required. `--bundle-version`, `--archive`, and `--verbose` are optional. The output directory is cleaned before assembly. There is no `--embed-in-cli`, `--runtime`, or runtime-download option; embedding happens in the subsequent CLI publish.
+
+For the complete tool contract, see [CreateLayout](../../tools/CreateLayout/README.md). CI packaging additionally uses [dashboardpack](../../eng/dashboardpack/Common.projitems), [clipack](../../eng/clipack/Common.projitems), signing targets, and the native-archive workflows.
+
+## Security Considerations
+
+- The embedded resource is part of the executable being signed. There is no post-signing appended payload or trailer whose integrity must be handled separately.
+- Download verification belongs to each acquisition/update route. A bundle-version fingerprint is for reuse and directory identity, not proof of publisher authenticity. Do not infer signature or checksum guarantees from successful extraction alone.
+- Extraction validates archive paths and links to prevent traversal outside the extraction root. Validate the staged layout before switching the active link.
+- Version-rooted paths and leases protect running consumers from cleanup and mixed-version component selection during updates.
+- Native Dashboard startup does not require a globally selected .NET runtime. The managed helper carries its runtime; SDK-based development remains a separate workflow.
+- Package source configuration, authentication, and package trust remain the responsibility of the NuGet acquisition path. Bundling the NuGet helper does not remove those requirements.
+
+## Validation
+
+Tests cover different parts of the distribution contract:
+
+| Area | Coverage |
+|------|----------|
+| Payload extraction and lifetime | `BundleServiceTests`, `BundleServiceIntegrationTests` |
+| CLI layout discovery and leases | `LayoutConfigurationTests`, `LayoutDiscoveryReparsePointTests`, `LayoutProcessRunnerTests` |
+| Layout assembly and required assets | `tests/Infrastructure.Tests/CreateLayout/` |
+| AppHost build and launch compatibility | SDK resolution, .NET project, pre-built server, and Hosting Dashboard tests |
+| Native startup and static assets | `eng/scripts/test-native-dashboard.ps1` |
+| Native browser interactivity | `NativeAotDashboardTests`, including a working directory outside the publish directory and lease cleanup |
+| CI selection and archives | Infrastructure workflow-selection and archive-download tests |
+
+The dedicated native-archive workflow explicitly opts into the native browser test's outerloop category. Native executables must be exercised on a compatible runner; a successful cross-publish is not evidence that the target binary ran. See [build-cli-native-archives.yml](../../.github/workflows/build-cli-native-archives.yml) for the current matrix and execution exclusions.
