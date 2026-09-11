@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Internal CI workflow fix for Copilot review scans; no user-facing impact",
+  "mergedAt": "2026-09-10T19:12:20Z",
+  "number": 20040,
+  "runDate": "2026-09-11T00:09:10Z",
+  "status": "excluded",
+  "title": "Keep Copilot review scans running past coding-agent PRs"
+}

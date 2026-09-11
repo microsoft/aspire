@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@krubenok"
+  ],
+  "description": "Added a `WithExpiration(int expirationHours)` option for DevTunnel resources so AppHosts can set the tunnel's idle expiration explicitly, from 1 hour up to 30 days. This helps keep dev tunnel usage under account limits without manually deleting tunnels.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-09-10T19:14:08Z",
+  "lastMergedAt": "2026-09-10T19:14:08Z",
+  "name": "Configurable DevTunnel idle expiration",
+  "owner": "krubenok",
+  "prs": [
+    19987
+  ]
+}

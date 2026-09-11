@@ -1,0 +1,9 @@
+{
+  "author": "krubenok",
+  "comment": "New configurable DevTunnel idle expiration option",
+  "mergedAt": "2026-09-10T19:14:08Z",
+  "number": 19987,
+  "runDate": "2026-09-11T00:09:10Z",
+  "status": "included",
+  "title": "Add configurable dev tunnel idle expiration"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Breaking change: Azure Front Door origin names now include backend hostname",
+  "mergedAt": "2026-09-10T18:04:26Z",
+  "number": 20035,
+  "runDate": "2026-09-11T00:09:10Z",
+  "status": "included",
+  "title": "Derive Azure Front Door origin names from backend hostnames"
+}
