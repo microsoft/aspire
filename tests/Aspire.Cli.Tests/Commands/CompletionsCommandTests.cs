@@ -57,6 +57,8 @@ public class CompletionsCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("--banner completions script bash", true)]
+    [InlineData("--help completions script bash", true)]
+    [InlineData("-v completions script bash", true)]
     [InlineData("--log-level Debug completions script bash", true)]
     [InlineData("--log-level=Debug completions script bash", true)]
     [InlineData("--log-level:Debug completions script bash", true)]

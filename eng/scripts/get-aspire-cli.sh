@@ -601,18 +601,31 @@ add_to_path()
 # Shell single-quoted literals: /home/it's $here becomes '/home/it'\''s $here'.
 # Fish uses backslash escaping inside single quotes instead of POSIX quote concatenation.
 quote_shell_literal() {
-    local value="$1" replacement
-    # Keep replacement text in variables and use assignment-context expansion. Bash 3.2
-    # interprets inline quote/backslash escapes differently inside a double-quoted replacement.
-    if [[ "$2" == fish ]]; then
-        replacement='\\'
-        value=${value//\\/$replacement}
-        replacement="\\'"
-    else
-        replacement="'\\''"
-    fi
-    value=${value//\'/$replacement}
-    printf "'%s'" "$value"
+    local value="$1" shell_name="$2" character i
+    # Emit literal characters rather than using replacement expansion: Bash 3.2 and newer
+    # releases interpret backslashes in parameter-substitution replacements differently.
+    printf "'"
+    for ((i = 0; i < ${#value}; i++)); do
+        character="${value:i:1}"
+        case "$character" in
+            "'")
+                if [[ "$shell_name" == fish ]]; then
+                    printf '%s' "\\'"
+                else
+                    printf '%s' "'\\''"
+                fi
+                ;;
+            \\)
+                if [[ "$shell_name" == fish ]]; then
+                    printf '%s' '\\'
+                else
+                    printf '%s' "$character"
+                fi
+                ;;
+            *) printf '%s' "$character" ;;
+        esac
+    done
+    printf "'"
 }
 
 # Never follow a profile/file symlink or a directory symlink outside the user's home.

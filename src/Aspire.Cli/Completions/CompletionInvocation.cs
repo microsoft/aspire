@@ -38,7 +38,8 @@ internal static class CompletionInvocation
 
             var separator = token.IndexOfAny(['=', ':']);
             var name = separator < 0 ? token : token[..separator];
-            if (CommonOptionNames.InformationalOptionNames.Contains(name) || name == CommonOptionNames.VersionShort)
+            if (name is CommonOptionNames.Version or CommonOptionNames.VersionShort or
+                CommonOptionNames.Help or CommonOptionNames.HelpShort or CommonOptionNames.HelpAlt)
             {
                 continue;
             }

@@ -87,10 +87,12 @@ public class CompletionScriptTests(ITestOutputHelper outputHelper)
         Assert.Equal("completions", output.Trim());
     }
 
-    [Fact]
+    [Theory]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "Uses a Unix executable shim and permissions.")]
-    public async Task Bash_UsesCursorAndPreservesSuggestionBoundaries()
+    [InlineData("na")]
+    [InlineData("naXYZ")]
+    public async Task Bash_UsesCursorAndPreservesSuggestionBoundaries(string word)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var completionPath = Path.Combine(workspace.WorkspaceRoot.FullName, "completion.bash");
@@ -107,9 +109,9 @@ public class CompletionScriptTests(ITestOutputHelper outputHelper)
         }
         var script = """
             source "$COMPLETION_SCRIPT"
-            COMP_LINE='aspire na --help'
+            COMP_LINE="aspire $COMPLETION_WORD --help"
             COMP_POINT=9
-            COMP_WORDS=(aspire na --help)
+            COMP_WORDS=(aspire "$COMPLETION_WORD" --help)
             COMP_CWORD=1
             _aspire_complete
             printf '%s\n' "${COMPREPLY[@]}"
@@ -118,6 +120,7 @@ public class CompletionScriptTests(ITestOutputHelper outputHelper)
             new Dictionary<string, string>
             {
                 ["COMPLETION_SCRIPT"] = completionPath,
+                ["COMPLETION_WORD"] = word,
                 ["PATH"] = workspace.WorkspaceRoot.FullName + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")
             });
 

@@ -35,6 +35,11 @@ internal static class CompletionScripts
                     COMPREPLY=()
                     line="${COMP_LINE:0:COMP_POINT}"
                     word="${COMP_WORDS[COMP_CWORD]}"
+                    # COMP_WORDS keeps the suffix after the cursor (for example, --app|XYZ).
+                    # Match only the token prefix at the end of the truncated command line.
+                    while [[ "$line" != *"$word" ]]; do
+                        word="${word%?}"
+                    done
                     while IFS= read -r suggestion; do
                         [[ -n "$suggestion" ]] || continue
                         [[ "$suggestion" == "$word"* ]] || continue

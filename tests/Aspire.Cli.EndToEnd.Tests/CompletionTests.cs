@@ -99,6 +99,19 @@ public sealed class CompletionTests(ITestOutputHelper output)
             Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "completion-executed")));
         }
 
+        await auto.RunCommandAsync("export COMPLETION_TEST_VALUE=--apphost", counter);
+        await auto.TypeAsync("aspire --appXYZ");
+        await auto.KeyAsync(Hex1bKey.LeftArrow);
+        await auto.KeyAsync(Hex1bKey.LeftArrow);
+        await auto.KeyAsync(Hex1bKey.LeftArrow);
+        await auto.KeyAsync(Hex1bKey.Tab);
+        await auto.KeyAsync(Hex1bKey.End);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
+        Assert.Equal(Encoding.UTF8.GetBytes("--apphostXYZ\0"),
+            await File.ReadAllBytesAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "completion-arguments.bin")));
+
         await auto.RunCommandAsync("export PATH=\"${PATH#\"$PWD/completion-source:\"}\"", counter);
     }
 }
