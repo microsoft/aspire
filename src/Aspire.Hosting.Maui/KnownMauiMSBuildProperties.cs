@@ -36,4 +36,9 @@ internal static class KnownMauiMSBuildProperties
     /// MSBuild property holding the semicolon-separated list of target frameworks of a multi-targeted project.
     /// </summary>
     public const string TargetFrameworks = "TargetFrameworks";
+
+    /// <summary>
+    /// MSBuild property that points to the Android SDK used by .NET Android targets.
+    /// </summary>
+    public const string AndroidSdkDirectory = "AndroidSdkDirectory";
 }
