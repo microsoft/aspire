@@ -13,7 +13,7 @@ The Aspire release process uses these main automation components:
    - Publishes Aspire CLI npm packages through ESRP/MicroBuild.
    - Promotes the build to the GA channel via darc.
    - Submits WinGet manifest PRs.
-   - Optionally validates the Homebrew cask against the live GitHub release when `SkipHomebrewValidation=false` (cask version bumps themselves are submitted by upstream autobump; see [Installer channels](#installer-channels)).
+   - Optionally validates the Homebrew cask against the live GitHub release when `SkipHomebrewValidation=false`, running `brew audit --cask --online`, explicit binary notarization verification, and a real `brew install`/`brew uninstall` cycle (cask version bumps themselves are submitted by upstream autobump; see [Installer channels](#installer-channels)).
    - Optionally publishes the signed VS Code extension to the Visual Studio Marketplace.
    - Dispatches the GitHub Actions workflow below as the `aspire-repo-bot` GitHub App and waits for it to complete.
    - Uploads `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the GitHub Release as the `aspire-repo-bot`.
@@ -372,6 +372,7 @@ Azure DevOps release-publish-nuget.yml
      -> upload aspire-cli-* assets to the GitHub release
      -> dispatch update-nix-cli-flake.yml as aspire-repo-bot (stable releases)
      -> validate Homebrew cask against the live release (only when SkipHomebrewValidation=false)
+        -> brew audit --cask --online + binary notarization verification + brew install/uninstall
 
 GitHub release-github-tasks.yml
   -> create tag

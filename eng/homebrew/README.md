@@ -129,8 +129,8 @@ cask URL points at validation time:
 
 | Mode | Cask URL resolves? | Audit args | Used by |
 |---|---|---|---|
-| `LiveRelease` | Yes — points at a live GitHub release | `brew audit --cask --online --signing` + `brew install`/`brew uninstall` | `release-publish-nuget.yml` `HomebrewValidateJob`, after `PublishReleaseAssetsJob` uploads the archives |
-| `LiveArchives` | Not yet — release for `v#{version}` hasn't been published | `brew audit --cask --no-signing` (no `--online`) | `azure-pipelines.yml` Homebrew Cask job; `.github/workflows/tests.yml`; `dogfood.sh` PR validation |
+| `LiveRelease` | Yes — points at a live GitHub release | `brew audit --cask --online` + binary notarization verification + `brew install`/`brew uninstall` | `release-publish-nuget.yml` `HomebrewValidateJob`, after `PublishReleaseAssetsJob` uploads the archives |
+| `LiveArchives` | Not yet — release for `v#{version}` hasn't been published | `brew audit --cask` (no `--online`) | `azure-pipelines.yml` Homebrew Cask job; `.github/workflows/tests.yml`; `dogfood.sh` PR validation |
 
 Common to both modes:
 
@@ -146,8 +146,7 @@ audit methods (`audit_download`, `audit_signing`, `audit_rosetta`,
 release that doesn't exist yet at source-build time. Excluding them
 individually with `--except` is brittle — any new `--online`-gated audit
 method that touches the archive in a future brew release would silently
-start failing. `--no-signing` is also used because PR-build /
-source-build archives are unsigned CI artifacts.
+start failing.
 
 The price is that LiveArchives doesn't run the `--online`-only checks:
 github/gitlab repo probes, homepage redirect/404 detection, livecheck
