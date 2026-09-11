@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)TestInteractionService.cs" Link="shared/TestInteractionService.cs" />
+    <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitializer.cs" />
   </ItemGroup>
 
 </Project>
