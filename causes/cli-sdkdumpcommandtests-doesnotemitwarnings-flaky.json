@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "Flaky: SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings fails because dotnet build of Aspire.Hosting.csproj emits unexpected warnings, unrelated to PR changes",
   "test_name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
-  "error_pattern": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception. Child exception: Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ Expected: 0 Actual: 6 at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmi",
+  "error_pattern": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception. Child exception: Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ Expected: 0 Actual: 6 at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
   "occurrences": [
     {
       "run_id": 34433050282,
@@ -32,6 +32,13 @@
       "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
       "pr_number": 20057,
       "observed_at": "2026-09-11T05:40:00Z"
+    },
+    {
+      "run_id": 34586660260,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34586660260",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "pr_number": 20005,
+      "observed_at": "2026-09-11T10:31:18Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20029"

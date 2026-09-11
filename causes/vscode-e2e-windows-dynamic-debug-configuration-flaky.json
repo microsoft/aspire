@@ -102,6 +102,13 @@
       "job": "Tests / Package tests - macOS (class, Aspire.Templates.Tests, Templates-XUnit_V3MTP_NewUpAndBuildSupportP... / Templates-XUnit_V3MTP_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
       "pr_number": 19999,
       "observed_at": "2026-09-10T04:16:16Z"
+    },
+    {
+      "run_id": 34586660260,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34586660260",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "pr_number": 20005,
+      "observed_at": "2026-09-11T10:31:18Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19576"

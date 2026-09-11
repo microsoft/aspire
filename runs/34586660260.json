@@ -1,0 +1,47 @@
+{
+  "run_id": 34586660260,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34586660260",
+  "analyzed_at": "2026-09-11T10:31:18Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20005,
+    "title": "Make terminal-host telemetry opt-in",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-terminal-host-traces",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20005"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 103223049438,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34586660260/job/103223049438",
+      "classification": "flaky-test",
+      "reason": "SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings fails because a remote-executed 'dotnet build' of Aspire.Hosting.csproj emits unexpected warnings (6 instead of 0). This is unrelated to the PR, which only touches TerminalHost/Hosting terminal telemetry code, and matches a known recurring flaky pattern (issue #20029, 4 prior occurrences).",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 103225738443,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34586660260/job/103225738443",
+      "classification": "flaky-test",
+      "reason": "VS Code extension E2E (Windows, dynamic-debug-configuration) shard fails with a generic exit code 1 and no TRX failures extracted. The PR does not touch the VS Code extension. This matches a known recurring flaky shard (issue #19576, 14 prior occurrences).",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception.",
+      "stack_trace": "Child exception:\n  Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   6\n   at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/SdkDumpCommandTests.cs:line 280",
+      "classification": "flaky",
+      "reason": "Test builds Aspire.Hosting.csproj in a remote process and expects zero warnings, but got 6. This is unrelated to the PR's terminal telemetry changes and matches a previously identified recurring flaky pattern (cause cli-sdkdumpcommandtests-doesnotemitwarnings-flaky, issue #20029, 4 prior occurrences, last seen just hours before this run)."
+    }
+  ],
+  "causes": ["cli-sdkdumpcommandtests-doesnotemitwarnings-flaky", "vscode-e2e-windows-dynamic-debug-configuration-flaky"]
+}
