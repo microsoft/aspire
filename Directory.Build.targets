@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <Import Project="$(RepositoryEngineeringDir)/NullablePolyfill.targets" />
+  <Import Project="$(MSBuildThisFileDirectory)src/Aspire.Hosting/buildTransitive/Aspire.Hosting.Hex1b.targets" />
 
   <!-- HACK: This resolves issues in CI builds where the extensions.json file is mapped to the incorrect directory. We only want
    to copy the updated extensions.json file once the `_FunctionsExtensionUpdateMetadata` target has completed. -->

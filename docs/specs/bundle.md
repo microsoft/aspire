@@ -169,6 +169,8 @@ aspire-{version}-{platform}/
 
 **Key change from previous layout**: The separate `.NET Runtime` (~106 MB), `dashboard/` (~42 MB), `aspire-server/` (~19 MB), `tools/aspire-nuget/` (~5 MB), and `tools/dev-certs/` directories have been consolidated into a single `managed/aspire-managed` self-contained binary. Certificate management has been moved natively into the CLI itself, eliminating the need for a separate dev-certs tool.
 
+Windows bundles also include `managed/hex1bpty.exe`, `managed/conpty.dll`, and `managed/arm64/OpenConsole.exe`; `win-x64` additionally includes `managed/x64/OpenConsole.exe`. These PTY sidecars stay outside the managed single-file executable because Hex1b locates its helper beside the application. ConPTY selects `OpenConsole.exe` relative to its DLL using the **OS architecture**, so the x64 bundle must retain the ARM64 helper for execution under emulation. `CreateLayout` preserves this layout and fails if a required sidecar is missing.
+
 **Total Bundle Size:**
 - **Unzipped:** ~220 MB (down from ~323 MB — eliminated separate runtime)
 - **Zipped:** ~80 MB

@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <None Include="buildTransitive\Aspire.Hosting.targets" Pack="true" PackagePath="buildTransitive\$(DefaultTargetFramework)" />
+    <None Include="buildTransitive\Aspire.Hosting.Hex1b.targets" Pack="true" PackagePath="buildTransitive\$(DefaultTargetFramework)" />
   </ItemGroup>
   
   <ItemGroup>
