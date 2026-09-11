@@ -1,0 +1,97 @@
+{
+  "run_id": 34655355873,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34655355873",
+  "analyzed_at": "2026-09-11T23:41:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20072,
+    "title": "Require patched Snappier for MongoDB v2 integration",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-fix-mongodb-v2-snappier",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20072"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-4, Hosting-4, tests/Aspire.Hosting.Tests) / Hosting-4 (windows-latest)",
+      "id": 103446865141,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34655355873/job/103446865141",
+      "classification": "flaky-test",
+      "reason": "Test WithPipelineStepFactory_MultipleStepsAsyncOverload_ExecutesAllSteps fails with UnauthorizedAccessException during the 'destroy' pipeline step. The PR only touches Aspire.MongoDB.Driver.v2 csproj and a new MongoDB test file; it does not touch Aspire.Hosting pipeline code, so this is unrelated to the PR changes and looks like a Windows file-locking race in the pipeline test.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScript) / Hosting.JavaScript (windows-latest)",
+      "id": 103446884005,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34655355873/job/103446884005",
+      "classification": "transient-infra",
+      "reason": "Multiple steps failed with exit code -1073741502 (0xC0000142 / STATUS_DLL_INIT_FAILED), a known transient Windows runner process-initialization failure unrelated to any PR code changes (matches prior cause windows-process-init-failure-0xc0000142).",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests) / Cli (macos-latest)",
+      "id": 103446884498,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34655355873/job/103446884498",
+      "classification": "flaky-test",
+      "reason": "Two known-flaky CLI tests failed (EnvironmentCheckerTests timing race and SdkDumpCommandTests build-warning count mismatch). Neither test is related to the MongoDB Snappier PR changes; both match prior recurring flaky causes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 103448835112,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34655355873/job/103448835112",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with no retrievable job logs or TRX failures. Matches a well-known recurring flaky shard (15 prior occurrences) unrelated to the MongoDB-only PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, deno-debugger)",
+      "id": 103448835319,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34655355873/job/103448835319",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with no retrievable job logs or TRX failures. Matches a recurring flaky shard (3 prior occurrences) unrelated to the MongoDB-only PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Tests.Pipelines.DistributedApplicationPipelineTests.WithPipelineStepFactory_MultipleStepsAsyncOverload_ExecutesAllSteps",
+      "job": "Hosting-4 (windows-latest)",
+      "error": "System.InvalidOperationException : Step 'destroy' failed: Access to the path is denied.\n---- System.UnauthorizedAccessException : Access to the path is denied.",
+      "stack_trace": "at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 1152\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepsAsTaskDag(List`1 steps, Dictionary`2 stepsByName, PipelineContext context) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 951\n   at Aspire.Hosting.Tests.Pipelines.DistributedApplicationPipelineTests.WithPipelineStepFactory_MultipleStepsAsyncOverload_ExecutesAllSteps() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\Pipelines\\DistributedApplicationPipelineTests.cs:line 1152",
+      "classification": "flaky",
+      "reason": "Windows file access race during pipeline 'destroy' step cleanup; test file and pipeline source are not touched by this PR (which only modifies MongoDB.Driver.v2 csproj and test)."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues",
+      "job": "Cli (macos-latest)",
+      "error": "Assert.Collection() Failure: Item comparison failure\nError: Assert.Same() Failure: Values are not the same instance\nExpected: EnvironmentCheckResult { Message = \"Completed\", ... }\nActual:   EnvironmentCheckResult { Message = \"Environment check 'test-environment' timed out aft\"..., ... }",
+      "stack_trace": "at Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Utils/EnvironmentCheckerTests.cs:line 55",
+      "classification": "flaky",
+      "reason": "Matches prior recurring cause cli-environmentchecker-timedout-flaky: a timing-sensitive check completes slower than expected under CI load, unrelated to this MongoDB-only PR."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Cli (macos-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception.\nChild exception:\n  Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   6",
+      "stack_trace": "at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/SdkDumpCommandTests.cs:line 280\n   at Microsoft.DotNet.RemoteExecutor.Program.Main(String[] args) in /_/src/Microsoft.DotNet.RemoteExecutor/src/Program.cs:line 65",
+      "classification": "flaky",
+      "reason": "Matches prior recurring cause cli-sdkdumpcommandtests-doesnotemitwarnings-flaky (5 prior occurrences): dotnet build of Aspire.Hosting.csproj emits unexpected warnings unrelated to PR changes to the MongoDB.Driver.v2 component."
+    }
+  ],
+  "causes": [
+    "aspire-hosting-pipelinetests-destroy-access-denied-windows",
+    "windows-process-init-failure-0xc0000142",
+    "cli-environmentchecker-timedout-flaky",
+    "cli-sdkdumpcommandtests-doesnotemitwarnings-flaky",
+    "vscode-e2e-windows-dynamic-debug-configuration-flaky",
+    "vscode-e2e-linux-deno-debugger-flaky"
+  ]
+}

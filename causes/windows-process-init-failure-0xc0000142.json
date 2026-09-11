@@ -122,6 +122,13 @@
       "job": "Tests / Hosting.GitHub.Models / Hosting.GitHub.Models (windows-latest)",
       "pr_number": 19670,
       "observed_at": "2026-09-02T01:58:54Z"
+    },
+    {
+      "run_id": 34655355873,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34655355873",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-4, Hosting-4, tests/Aspire.Hosting.Tests) / Hosting-4 (windows-latest)",
+      "pr_number": 20072,
+      "observed_at": "2026-09-11T23:41:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18720"

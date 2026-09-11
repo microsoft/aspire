@@ -1,0 +1,17 @@
+{
+  "id": "aspire-hosting-pipelinetests-destroy-access-denied-windows",
+  "type": "flaky-test",
+  "title": "Flaky: DistributedApplicationPipelineTests.WithPipelineStepFactory_MultipleStepsAsyncOverload_ExecutesAllSteps fails with UnauthorizedAccessException during 'destroy' step on Windows",
+  "test_name": "Aspire.Hosting.Tests.Pipelines.DistributedApplicationPipelineTests.WithPipelineStepFactory_MultipleStepsAsyncOverload_ExecutesAllSteps",
+  "error_pattern": "System.InvalidOperationException : Step 'destroy' failed: Access to the path is denied.\n---- System.UnauthorizedAccessException : Access to the path is denied.\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 1152",
+  "occurrences": [
+    {
+      "run_id": 34655355873,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34655355873",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-4, Hosting-4, tests/Aspire.Hosting.Tests) / Hosting-4 (windows-latest)",
+      "pr_number": 20072,
+      "observed_at": "2026-09-11T23:41:00Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20078"
+}
