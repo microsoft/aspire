@@ -1,0 +1,47 @@
+{
+  "run_id": 34554475071,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34554475071",
+  "analyzed_at": "2026-09-11T03:31:11Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20027,
+    "title": "Fix signing failures for dashboard SDK packages",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix-dashboard-third-party-signing",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20027"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Maui.Tests, Hosting.Maui, Hosting.Maui, tests/Aspire.Ho... / Hosting.Maui (windows-latest)",
+      "id": 103130624522,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34554475071/job/103130624522",
+      "classification": "flaky-test",
+      "reason": "Test times out in Aspire.Hosting.Maui.Tests.MauiBuildQueueTests, an area not touched by the PR (PR only modifies eng/Signing.props). This matches a known recurring timeout pattern in MauiBuildQueueTests semaphore-release tests.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 103132366366,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34554475071/job/103132366366",
+      "classification": "flaky-test",
+      "reason": "Prepare Homebrew cask artifact step fails with generic exit code 1 and cask problem detected; unrelated to PR changes (eng/Signing.props only). Matches known recurring 'cli-smoke-test-homebrew-winget-unrelated' pattern with 26 prior occurrences.",
+      "failed_steps": ["Prepare Homebrew cask artifact"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_AndroidReleasesWhenApplicationCancelsDuringTimeoutStop",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Maui.Tests, Hosting.Maui, Hosting.Maui, tests/Aspire.Ho... / Hosting.Maui (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_AndroidReleasesWhenApplicationCancelsDuringTimeoutStop() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 1001\n   at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_AndroidReleasesWhenApplicationCancelsDuringTimeoutStop() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 1007",
+      "classification": "flaky",
+      "reason": "Timeout in an unrelated test area (MauiBuildQueueTests semaphore/timeout handling) not touched by this PR, matching a recurring flaky timeout pattern already seen for sibling tests in the same test class."
+    }
+  ],
+  "causes": ["mauibuildqueue-releasesemaphoreafterlaunchasync", "cli-smoke-test-homebrew-winget-unrelated"]
+}

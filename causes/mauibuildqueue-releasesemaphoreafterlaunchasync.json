@@ -1,9 +1,9 @@
 {
   "id": "mauibuildqueue-releasesemaphoreafterlaunchasync",
   "type": "flaky-test",
-  "title": "Flaky: MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState times out intermittently",
-  "test_name": "Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState",
-  "error_pattern": "System.TimeoutException : The operation has timed out.\n   at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 663",
+  "title": "Flaky: MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_* tests time out intermittently",
+  "test_name": "Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_AndroidReleasesWhenApplicationCancelsDuringTimeoutStop",
+  "error_pattern": "System.TimeoutException : The operation has timed out.\n   at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_*() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs",
   "occurrences": [
     {
       "run_id": 28425753079,
@@ -53,6 +53,13 @@
       "job": "Tests / Build native CLI archive (macOS x64) / Build CLI (osx-x64)",
       "pr_number": 19709,
       "observed_at": "2026-08-27T07:10:53Z"
+    },
+    {
+      "run_id": 34554475071,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34554475071",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Maui.Tests, Hosting.Maui, Hosting.Maui, tests/Aspire.Ho... / Hosting.Maui (windows-latest)",
+      "pr_number": 20027,
+      "observed_at": "2026-09-11T03:31:11Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18592"
