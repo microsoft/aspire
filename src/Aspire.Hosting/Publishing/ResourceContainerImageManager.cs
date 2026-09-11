@@ -215,6 +215,29 @@ internal sealed class ResourceContainerImageManager(
 {
     private const string CrossOsAotDiagnostic = "Cross-OS native compilation is not supported.";
 
+    // These .NET SDK properties select the image artifact that Aspire passes to later layering,
+    // tagging, and deployment steps. Build-environment global properties cannot change them without
+    // desynchronizing the SDK output from the artifact tracked by the publishing pipeline.
+    // https://learn.microsoft.com/dotnet/core/containers/publish-configuration
+    private static readonly HashSet<string> s_containerArtifactProperties = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ContainerRepository",
+        "ContainerImageTag",
+        "ContainerImageTags",
+        "ContainerRegistry",
+        "ContainerImageName",
+        "PublishImageTag",
+        "AutoGenerateImageTag",
+        "RegistryUrl",
+        "ContainerArchiveOutputPath",
+        "ContainerImageFormat",
+        "LocalRegistry",
+        "RuntimeIdentifier",
+        "RuntimeIdentifiers",
+        "ContainerRuntimeIdentifier",
+        "ContainerRuntimeIdentifiers"
+    };
+
     // Disable concurrent builds for project resources to avoid issues with overlapping msbuild projects
     private readonly SemaphoreSlim _throttle = new(1);
 
@@ -679,6 +702,8 @@ internal sealed class ResourceContainerImageManager(
             environment[name] = stringValue;
         }
 
+        ValidateBuildEnvironmentForContainerPublishing(resource, environment);
+
         var responseFile = await MsBuildResponseFileFactory.CreateAsync(
             environment,
             logger,
@@ -687,6 +712,22 @@ internal sealed class ResourceContainerImageManager(
             Path.GetDirectoryName(projectMetadata.ProjectPath);
 
         return new DotnetProgramBuildContext(environment, workingDirectory, responseFile);
+    }
+
+    private static void ValidateBuildEnvironmentForContainerPublishing(
+        IResource resource,
+        IReadOnlyDictionary<string, string> environment)
+    {
+        foreach (var propertyName in environment.Keys)
+        {
+            if (s_containerArtifactProperties.Contains(propertyName))
+            {
+                throw new DistributedApplicationException(
+                    $"The build environment property '{propertyName}' for .NET program resource '{resource.Name}' " +
+                    "is reserved by Aspire container publishing because it controls the image artifact used by downstream steps. " +
+                    "Configure container publishing with WithContainerBuildOptions instead.");
+            }
+        }
     }
 
     private async Task<string> GetContainerWorkingDirectoryAsync(

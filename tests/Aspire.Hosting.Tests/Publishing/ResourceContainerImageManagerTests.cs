@@ -773,6 +773,57 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.Contains(logs, log => log.Message.Contains("--property:LocalRegistry=Podman"));
     }
 
+    [Theory]
+    [InlineData("ContainerRepository")]
+    [InlineData("ContainerImageTag")]
+    [InlineData("ContainerImageTags")]
+    [InlineData("ContainerRegistry")]
+    [InlineData("ContainerImageName")]
+    [InlineData("PublishImageTag")]
+    [InlineData("AutoGenerateImageTag")]
+    [InlineData("RegistryUrl")]
+    [InlineData("ContainerArchiveOutputPath")]
+    [InlineData("ContainerImageFormat")]
+    [InlineData("LocalRegistry")]
+    [InlineData("RuntimeIdentifier")]
+    [InlineData("RuntimeIdentifiers")]
+    [InlineData("ContainerRuntimeIdentifier")]
+    [InlineData("ContainerRuntimeIdentifiers")]
+    public async Task BuildImageAsync_DotnetProgramRejectsContainerArtifactBuildEnvironmentProperties(string propertyName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime());
+
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(Path.Combine(workspace.WorkspaceRoot.FullName, "program.csproj")))
+            .WithAnnotation(new TestBuildEnvironmentProvider(context =>
+            {
+                context.EnvironmentVariables[propertyName] = "override";
+                return Task.CompletedTask;
+            }))
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Oci;
+                context.OutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "program.tar");
+            });
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            $"The build environment property '{propertyName}' for .NET program resource 'program' " +
+            "is reserved by Aspire container publishing because it controls the image artifact used by downstream steps. " +
+            "Configure container publishing with WithContainerBuildOptions instead.",
+            exception.Message);
+        Assert.Empty(processRunner.ProcessSpecs);
+    }
+
     [Fact]
     public async Task BuildImageAsync_DotnetProgramBuildEnvironmentIsScopedToEachBuild()
     {
