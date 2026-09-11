@@ -453,6 +453,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ["Namespace"] = "default"
         });
         var azArguments = new List<string>();
+        var fakeHelm = new FakeHelmRunner();
 
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
@@ -460,6 +461,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             step: WellKnownPipelineSteps.Destroy);
         builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
         builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         aks.Resource.AzCliPathResolverForTesting = () => "/fake/az";
@@ -495,6 +497,10 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ],
             azArguments);
         Assert.Empty(aks.Resource.Outputs);
+        Assert.NotNull(aks.Resource.KubernetesEnvironment.KubeConfigPath);
+        Assert.Equal(
+            ["version --short", $"uninstall aks --namespace default --ignore-not-found --kubeconfig \"{aks.Resource.KubernetesEnvironment.KubeConfigPath}\""],
+            fakeHelm.Arguments);
     }
 
     [Fact]
@@ -527,6 +533,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ["Namespace"] = "default"
         });
         var azArguments = new List<string>();
+        var fakeHelm = new FakeHelmRunner();
 
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
@@ -534,6 +541,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             step: WellKnownPipelineSteps.Destroy);
         builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
         builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -573,6 +581,10 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ],
             azArguments);
         Assert.Empty(aks.Resource.Outputs);
+        Assert.NotNull(aks.Resource.KubernetesEnvironment.KubeConfigPath);
+        Assert.Equal(
+            ["version --short", $"uninstall aks --namespace default --ignore-not-found --kubeconfig \"{aks.Resource.KubernetesEnvironment.KubeConfigPath}\""],
+            fakeHelm.Arguments);
     }
 
     [Fact]
