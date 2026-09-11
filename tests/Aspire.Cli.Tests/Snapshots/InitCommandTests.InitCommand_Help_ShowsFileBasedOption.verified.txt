@@ -6,7 +6,7 @@ Usage:
 
 Options:
   --language <language>                                                  The programming language for the AppHost (csharp, typescript)
-  --file-based                                                           Create a file-based AppHost in the current directory. For C#, skips .NET solution discovery and creates apphost.cs.
+  --file-based                                                           Create a file-based AppHost in the current directory. For C#, this skips .NET solution discovery and creates apphost.cs.
   --suppress-agent-init                                                  Suppress AI agent environment configuration after project creation
   --skill-locations <skill-locations>                                    Comma-separated list of skill locations to install (e.g. standard,claudecode,github,opencode), 'all', or 'none'
   --skills <skills>                                                      Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include playwright-cli,dotnet-inspect. Use 'all' or 'none'
