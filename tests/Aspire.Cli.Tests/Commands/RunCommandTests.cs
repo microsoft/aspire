@@ -435,8 +435,10 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(interactionService.DisplayedErrors);
     }
 
-    [Fact]
-    public async Task RunCommand_WhenExtensionStopsCliDuringBuild_AwaitsRunCleanupPastLocalTimeout()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunCommand_WhenExtensionStopsCliDuringStartup_AwaitsRunCleanupPastLocalTimeout(bool buildCompleted)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
@@ -467,14 +469,29 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var cancellationManager = provider.GetRequiredService<ConsoleCancellationManager>();
         var rpcTarget = provider.GetRequiredService<IExtensionRpcTarget>();
         var runCompletionSource = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runStarted = false;
-        projectFactory.RunAsyncCallback = (_, runCancellationToken) =>
+        var stopRequested = false;
+        interactionService.ShowStatusCallback = status =>
         {
-            // Cancel before RunAsync returns so the build wait observes an already-canceled token.
-            // With synchronous setup fakes, InvokeAsync cannot yield until cleanup is waiting on this task.
-            Assert.True(rpcTarget.StopCliAsync().IsCompletedSuccessfully);
-            Assert.True(runCancellationToken.IsCancellationRequested);
-            runStarted = true;
+            if (buildCompleted && status == RunCommandStrings.ConnectingToAppHost)
+            {
+                Assert.True(rpcTarget.StopCliAsync().IsCompletedSuccessfully);
+                stopRequested = true;
+            }
+        };
+        projectFactory.RunAsyncCallback = (context, runCancellationToken) =>
+        {
+            // Cancel synchronously at the selected startup phase so InvokeAsync cannot yield
+            // until cleanup is waiting on the incomplete run task.
+            if (buildCompleted)
+            {
+                context.BuildCompletionSource!.SetResult(true);
+            }
+            else
+            {
+                Assert.True(rpcTarget.StopCliAsync().IsCompletedSuccessfully);
+                Assert.True(runCancellationToken.IsCancellationRequested);
+                stopRequested = true;
+            }
             return runCompletionSource.Task;
         };
         var result = command.Parse($"run --apphost {appHostFile.FullName}");
@@ -483,13 +500,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         int exitCode;
         try
         {
-            Assert.True(runStarted, "The setup must reach RunAsync synchronously before inspecting cancellation cleanup.");
+            Assert.True(stopRequested, "The setup must request cancellation synchronously before inspecting cleanup.");
 
             // Advance beyond the old local timeout only after the command has entered its cleanup wait.
             timeProvider.Advance(TimeSpan.FromSeconds(6));
 
             Assert.False(timeProvider.TimerCreated.Task.IsCompleted, "Manager-owned cancellation armed the local startup timeout.");
-            Assert.False(pendingCommand.IsCompleted, "The CLI exited before build cleanup completed.");
+            Assert.False(pendingCommand.IsCompleted, "The CLI exited before run cleanup completed.");
         }
         finally
         {
@@ -501,8 +518,10 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(interactionService.DisplayedErrors);
     }
 
-    [Fact]
-    public async Task RunCommand_WhenDirectlyCancelledDuringBuild_StopsWaitingAtLocalTimeout()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunCommand_WhenDirectlyCancelledDuringStartup_StopsWaitingAtLocalTimeout(bool buildCompleted)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cts = new CancellationTokenSource();
@@ -523,10 +542,22 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cleanupCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cleanupCanFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connectingToAppHost = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        interactionService.ShowStatusCallback = status =>
+        {
+            if (status == RunCommandStrings.ConnectingToAppHost)
+            {
+                connectingToAppHost.TrySetResult();
+            }
+        };
         var projectFactory = new TestAppHostProjectFactory
         {
             RunAsyncCallback = async (context, cancellationToken) =>
             {
+                if (buildCompleted)
+                {
+                    context.BuildCompletionSource!.SetResult(true);
+                }
                 buildStarted.TrySetResult();
 
                 try
@@ -559,20 +590,31 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var pendingCommand = result.InvokeAsync(cancellationToken: cts.Token);
 
         await buildStarted.Task.DefaultTimeout();
+        if (buildCompleted)
+        {
+            await connectingToAppHost.Task.DefaultTimeout();
+        }
         cts.Cancel();
         await cleanupStarted.Task.DefaultTimeout();
         await timeProvider.TimerCreated.Task.DefaultTimeout();
 
-        timeProvider.Advance(TimeSpan.FromSeconds(6));
+        try
+        {
+            Assert.False(pendingCommand.IsCompleted, "Direct cancellation did not wait for run cleanup.");
+            timeProvider.Advance(TimeSpan.FromSeconds(6));
 
-        var exitCode = await pendingCommand.DefaultTimeout();
+            var exitCode = await pendingCommand.DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.False(cleanupCompleted.Task.IsCompleted, "Direct cancellation waited past its local safety timeout.");
-        Assert.Empty(interactionService.DisplayedErrors);
-
-        cleanupCanFinish.TrySetResult();
-        await cleanupCompleted.Task.DefaultTimeout();
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.False(cleanupCompleted.Task.IsCompleted, "Direct cancellation waited past its local safety timeout.");
+            Assert.Empty(interactionService.DisplayedErrors);
+        }
+        finally
+        {
+            cleanupCanFinish.TrySetResult();
+            await cleanupCompleted.Task.DefaultTimeout();
+            await pendingCommand.DefaultTimeout();
+        }
     }
 
     [Fact]
@@ -674,67 +716,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 1, CliConfigNames.AppHostStartupTimeout),
             interactionService.DisplayedErrors);
         Assert.True(runCancellationObserved.Task.IsCompletedSuccessfully);
-    }
-
-    [Fact]
-    public async Task RunCommand_WhenCancelledDuringStartupTimeout_ExitsWithoutWaitingForFullTimeout()
-    {
-        // Verifies that when Ctrl+C fires (cancellationToken) during startup, the command exits
-        // promptly rather than blocking for the five-second startup-cancellation timeout.
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var cts = new CancellationTokenSource();
-        var interactionService = new TestInteractionService();
-        var buildCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
-        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
-        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
-
-        var projectLocator = new TestProjectLocator
-        {
-            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
-                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
-        };
-
-        var projectFactory = new TestAppHostProjectFactory
-        {
-            RunAsyncCallback = async (context, _) =>
-            {
-                context.BuildCompletionSource?.TrySetResult(true);
-                buildCompleted.SetResult();
-
-                // Never signal BackchannelCompletionSource and ignore cancellation to
-                // simulate a hung AppHost process.
-                await Task.Delay(TimeSpan.FromSeconds(30), CancellationToken.None);
-                return 0;
-            }
-        };
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-            options.ProjectLocatorFactory = _ => projectLocator;
-            options.AppHostProjectFactory = _ => projectFactory;
-        });
-
-        using var provider = services.BuildServiceProvider();
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"run --apphost {appHostFile.FullName}");
-
-        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
-
-        // Cancel after build completes to simulate Ctrl+C during startup.
-        await buildCompleted.Task.DefaultTimeout();
-        cts.Cancel();
-
-        var stopwatch = Stopwatch.StartNew();
-        var exitCode = await pendingRun.DefaultTimeout();
-        stopwatch.Stop();
-
-        // Without the cancellationToken plumbing, this would block for the full 5-second
-        // startup-cancellation timeout. With the fix, it exits promptly.
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"Expected prompt exit after Ctrl+C, but took {stopwatch.Elapsed}.");
-        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -1866,7 +1847,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_WhenCancelledDuringStartupRpc_CompletesSuccessfully()
+    public async Task RunCommand_WhenCancelledDuringStartupRpc_AwaitsRunCleanup()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cts = new CancellationTokenSource();
@@ -1913,17 +1894,21 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"run --apphost {appHostFile.FullName}");
 
+        var pendingCommand = result.InvokeAsync(cancellationToken: cts.Token);
+        int exitCode;
         try
         {
-            var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
-
-            Assert.Equal(CliExitCodes.Success, exitCode);
-            Assert.Empty(interactionService.DisplayedErrors);
+            Assert.True(cts.IsCancellationRequested, "The dashboard RPC must request cancellation synchronously.");
+            Assert.False(pendingCommand.IsCompleted, "The CLI exited before run cleanup completed.");
         }
         finally
         {
             runCanExit.TrySetResult();
+            exitCode = await pendingCommand.DefaultTimeout();
         }
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
     }
 
     [Fact]

@@ -252,7 +252,6 @@ internal sealed class RunCommand : BaseCommand
         LauncherLivenessMonitor? launcherMonitor = null;
         Task<int>? runTask = null;
         CancellationTokenSource? runCts = null;
-        var buildWaitCompleted = false;
 
         try
         {
@@ -390,7 +389,6 @@ internal sealed class RunCommand : BaseCommand
                 }
 
                 buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
-                buildWaitCompleted = true;
                 waitForBuildActivity.SetAppHostBuildSuccess(buildSuccess);
             }
             if (!buildSuccess)
@@ -676,11 +674,10 @@ internal sealed class RunCommand : BaseCommand
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
 
-            // Extension cancellation can interrupt the build wait before the project task unwinds.
+            // Cancellation can interrupt build or startup readiness waits before the project task unwinds.
             // Keep cleanup owned by this handler so a late build cannot outlive the CLI and retain
             // the workspace directory on Windows.
-            if (!buildWaitCompleted &&
-                runCts is not null &&
+            if (runCts is not null &&
                 runTask is not null &&
                 !runTask.IsCompleted)
             {
