@@ -1,0 +1,16 @@
+{
+  "id": "stackexchange-redis-windows-tests-unrelated-exit-code-1",
+  "type": "flaky-test",
+  "title": "StackExchange.Redis (windows-latest) test job fails with generic exit code 1, unrelated to PR changes",
+  "error_pattern": "Process completed with exit code 1. (Run tests (Windows) step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted for this job. Occurs on PRs that do not touch StackExchange.Redis or its tests.",
+  "occurrences": [
+    {
+      "run_id": 34553168379,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34553168379",
+      "job": "Tests / No-package tests (regular, Aspire.StackExchange.Redis.Tests, StackExchange.Redis, StackExchange.R... / StackExchange.Redis (windows-latest)",
+      "pr_number": 20054,
+      "observed_at": "2026-09-11T02:59:16Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20061"
+}

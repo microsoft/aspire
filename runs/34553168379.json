@@ -1,0 +1,60 @@
+{
+  "run_id": 34553168379,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34553168379",
+  "analyzed_at": "2026-09-11T02:59:16Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20054,
+    "title": "Detect coding agents from process environment variables",
+    "author": "DamianEdwards",
+    "state": "closed",
+    "head_branch": "damianedwards-ai-agent-detection-logic",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20054"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.StackExchange.Redis.Tests, StackExchange.Redis, StackExchange.R... / StackExchange.Redis (windows-latest)",
+      "id": 103120551967,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34553168379/job/103120551967",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic 'Process completed with exit code 1' during 'Run tests (Windows)'; job logs unavailable and no TRX failures were extracted for this job. The PR only touches Aspire.Cli telemetry/coding-agent detection code and CLI end-to-end test helpers, with no changes to StackExchange.Redis or its tests, so this failure is unrelated to the PR changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 103120561667,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34553168379/job/103120561667",
+      "classification": "flaky-test",
+      "reason": "The only TRX test failure in this job is Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings, which is a known flaky test (tracked as prior cause 'cli-sdkdumpcommandtests-doesnotemitwarnings-flaky') caused by unexpected warnings from an unrelated dotnet build of Aspire.Hosting.csproj, not by the PR's changes to CodingAgentDetector.cs or AspireCliTelemetryTests.cs.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, launch-profiles)",
+      "id": 103122239448,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34553168379/job/103122239448",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic 'Process completed with exit code 1' during 'Run extension E2E tests'; job logs unavailable and no TRX failures extracted. This matches the known recurring flaky pattern for the 'launch-profiles' VS Code extension E2E shard on Windows (prior cause 'vscode-e2e-launch-profiles-flaky'), and the PR does not touch VS Code extension code.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception.",
+      "stack_trace": "Child exception:\n  Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   6\n   at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/SdkDumpCommandTests.cs:line 280\n--- End of stack trace from previous location ---\n   at Microsoft.DotNet.RemoteExecutor.Program.Main(String[] args) in /_/src/Microsoft.DotNet.RemoteExecutor/src/Program.cs:line 65",
+      "classification": "flaky",
+      "reason": "This test asserts that building Aspire.Hosting.csproj produces zero warnings, but got 6 warnings unexpectedly. The PR does not modify Aspire.Hosting or its build configuration; this is a previously known and tracked flaky test (issue #20029) caused by unrelated build warnings, not by this PR's changes."
+    }
+  ],
+  "causes": [
+    "stackexchange-redis-windows-tests-unrelated-exit-code-1",
+    "cli-sdkdumpcommandtests-doesnotemitwarnings-flaky",
+    "vscode-e2e-launch-profiles-flaky"
+  ]
+}

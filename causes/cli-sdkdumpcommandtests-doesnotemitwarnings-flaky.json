@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "Flaky: SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings fails because dotnet build of Aspire.Hosting.csproj emits unexpected warnings, unrelated to PR changes",
   "test_name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
-  "error_pattern": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception. Child exception: Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ Expected: 0 Actual: 6 at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+  "error_pattern": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception. Child exception: Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ Expected: 0 Actual: 6 at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmi",
   "occurrences": [
     {
       "run_id": 34433050282,
@@ -18,6 +18,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHost... / Hosting.RemoteHost (windows-latest)",
       "pr_number": 20036,
       "observed_at": "2026-09-10T18:10:08Z"
+    },
+    {
+      "run_id": 34553168379,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34553168379",
+      "job": "Tests / No-package tests (regular, Aspire.StackExchange.Redis.Tests, StackExchange.Redis, StackExchange.R... / StackExchange.Redis (windows-latest)",
+      "pr_number": 20054,
+      "observed_at": "2026-09-11T02:59:16Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20029"
