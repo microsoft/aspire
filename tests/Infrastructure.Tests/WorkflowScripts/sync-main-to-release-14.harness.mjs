@@ -46,6 +46,7 @@ const calls = [];
 const messages = [];
 let getCount = 0;
 let delayCount = 0;
+let mergeRejected = false;
 
 switch (scenario) {
     case 'up-to-date':
@@ -66,12 +67,18 @@ switch (scenario) {
         context.eventName = 'workflow_dispatch';
         break;
     case 'ready':
+    case 'ready-has-hooks':
+    case 'ready-unstable':
     case 'merge-rejected':
+    case 'has-hooks-merge-rejected':
+    case 'unstable-merge-rejected':
     case 'merge-error':
-        pull.mergeable_state = 'clean';
+        pull.mergeable_state = scenario.includes('has-hooks') ? 'has_hooks'
+            : scenario.includes('unstable') ? 'unstable' : 'clean';
+        mergeRejected = scenario.endsWith('merge-rejected');
         expectedWrites = ['merge'];
         expectedMessage = 'Merged the ready synchronization PR';
-        if (scenario === 'merge-rejected') {
+        if (mergeRejected) {
             expectedError = 'GitHub did not merge';
         } else if (scenario === 'merge-error') {
             fail = 'merge-error';
@@ -222,7 +229,7 @@ const github = {
                 assert.equal(args.merge_method, 'merge');
                 assert.deepEqual(Object.keys(args).sort(), ['merge_method', 'owner', 'pull_number', 'repo', 'sha']);
                 writes.push('merge');
-                return { data: { merged: scenario !== 'merge-rejected', message: 'Branch policy prevented merging.' } };
+                return { data: { merged: !mergeRejected, message: 'Branch policy prevented merging.' } };
             },
             create: async args => {
                 check('create-pr-error', args);

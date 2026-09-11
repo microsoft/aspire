@@ -7,8 +7,9 @@ up to date while `main` develops 13.6. It runs daily at **08:23 UTC** and can be
 dispatched manually, but only from `main` in `microsoft/aspire`.
 
 The workflow uses the existing Aspire App secrets (`ASPIRE_BOT_APP_ID` and
-`ASPIRE_BOT_PRIVATE_KEY`) with repository-scoped contents and pull-request write
-permissions. It only calls GitHub APIs; it never checks out or executes branch
+`ASPIRE_BOT_PRIVATE_KEY`) with repository-scoped contents, pull-request, and workflow
+write permissions. Workflow write is needed to synchronize batches that change
+`.github/workflows` files. It only calls GitHub APIs; it never checks out or executes branch
 code with the bot token.
 
 Each batch creates a `sync/main-to-release-14.0/<main-sha>` branch pointing at a
@@ -20,6 +21,9 @@ while that PR is open are picked up by the next run after it merges.
 ### Auto-merge prerequisites
 
 - Enable **Allow merge commits** and **Allow auto-merge** in repository settings.
+- Grant the Aspire App **Workflows: Read and write** and approve the installation's
+  updated permissions if needed; the token action cannot grant permissions the
+  installation does not have.
 - Allow merge commits in every ruleset applying to `release/14.0`. A separate
   `main` ruleset can continue requiring squash merges for normal feature PRs.
 - Ensure branch push restrictions allow the Aspire App to merge. Required status
@@ -52,8 +56,10 @@ documentation.
 
 If repository merge commits or auto-merge are disabled, the workflow leaves the
 PR open, warns in the run summary, and retries on the next run. Conflicts likewise
-leave an actionable PR open. An already-ready PR is merged normally with a
-merge commit and an expected-head check, without an administrative bypass. If
+leave an actionable PR open. Immediately mergeable states (`clean`, `has_hooks`,
+and `unstable`, matching GitHub CLI) use a normal merge commit with an expected-head
+check, without an administrative bypass. GitHub still enforces non-bypassable
+required checks, and a rejected merge fails the run rather than being ignored. If
 GitHub has not computed mergeability after a short retry window, rerun the
 workflow from `main` or let the next daily run reconcile it. Other API or
 permission failures fail the run and are covered by the scheduled-workflow watchdog.

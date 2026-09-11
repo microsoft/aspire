@@ -30,6 +30,7 @@ jobs:
           repositories: aspire
           permission-contents: write
           permission-pull-requests: write
+          permission-workflows: write # Sync batches can include workflow-file changes.
           skip-token-revoke: false
 
       # Metadata-only: no checkout, local merge, or execution of either branch's code.
@@ -165,10 +166,11 @@ jobs:
               await report('Enable repository merge commits and auto-merge, and allow merge commits for release/14.0. The PR remains open; the next run will retry.', true);
               return;
             }
-            // Like `gh pr merge --auto`, merge an already-ready PR normally:
-            // GitHub rejects enabling auto-merge when its state is already clean.
-            // Pin the reviewed head; do not request an administrative bypass.
-            if (pull.mergeable_state === 'clean') {
+            // Match gh's isImmediatelyMergeable: auto-merge cannot be enabled
+            // for an already-mergeable PR, including has_hooks and unstable.
+            // https://github.com/cli/cli/blob/trunk/pkg/cmd/pr/merge/merge.go
+            // Pin the head; required CI must remain non-bypassable in branch policy.
+            if (['clean', 'has_hooks', 'unstable'].includes(pull.mergeable_state)) {
               const { data: result } = await github.rest.pulls.merge({
                 owner, repo, pull_number: pull.number,
                 sha: pull.head.sha, merge_method: 'merge'
