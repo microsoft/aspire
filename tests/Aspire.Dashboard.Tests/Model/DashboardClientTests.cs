@@ -34,7 +34,7 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
     [Fact]
-    public async Task TerminalStream_EndedBeforeHandshakeRetainsEmptyViewerUntilBrowserCloses()
+    public async Task TerminalStream_EndedBeforeHandshakeClosesWithCompletionStatusAndDisposesCall()
     {
         var channel = Channel.CreateUnbounded<TerminalServerFrame>();
         channel.Writer.TryWrite(new TerminalServerFrame { Ended = true });
@@ -76,15 +76,17 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
 
         Assert.True(stream.TerminalEnded);
         await session.Ended.DefaultTimeout();
-        Assert.False(disposed.Task.IsCompleted);
+        Assert.True(session.ReadOnly);
         var handshakeWrites = writes.ToArray();
         Assert.NotEmpty(handshakeWrites);
+        // Input already in flight must not reach the AppHost after authoritative completion.
         await socket.SendAsync("""{"type":"input","text":"ignored"}"""u8.ToArray(), WebSocketMessageType.Text,
             true, CancellationToken.None).DefaultTimeout();
-        await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "User dismissed the terminal", CancellationToken.None).DefaultTimeout();
         var message = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None).DefaultTimeout();
         Assert.Equal(WebSocketMessageType.Close, message.MessageType);
-        Assert.Equal(WebSocketCloseStatus.NormalClosure, message.CloseStatus);
+        Assert.Equal((WebSocketCloseStatus)4000, message.CloseStatus);
+        Assert.Equal("Terminal ended", message.CloseStatusDescription);
+        await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", CancellationToken.None).DefaultTimeout();
         await disposed.Task.DefaultTimeout();
         Assert.Equal(handshakeWrites, writes);
     }

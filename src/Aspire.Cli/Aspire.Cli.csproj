@@ -17,9 +17,6 @@
          emits code that touches them when we combine our serializer context with McpJsonUtilities.DefaultOptions
          in BackchannelJsonSerializerContext.cs. Suppress until MCP graduates these types. -->
     <NoWarn>$(NoWarn);CS1591;MCPEXP001</NoWarn>
-    <!-- Temporarily suppress moderate- and high-severity NuGet audit warnings while restoring Hex1b from nuget.org.
-         Remove this suppression with the nuget-hex1b source and mapping in NuGet.config. -->
-    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
     <PublishAot>true</PublishAot>
     <!-- Sigstore and Tuf packages are not strong-named. Aspire.Cli is an executable tool,
          not a library referenced by strong-named assemblies, so this is safe. -->

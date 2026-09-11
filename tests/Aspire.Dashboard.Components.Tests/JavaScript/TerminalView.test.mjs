@@ -1055,13 +1055,13 @@ test("frontend manifest, lockfile, vendored package and backend use the exact pa
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
     const vendored = JSON.parse(await readFile(new URL("package.json", assets), "utf8"));
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.167.0-alpha.1549.1.496ccf5");
+    assert.equal(version, "0.166.0");
     assert.equal(vendored.version, version);
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);
 
     // Central package rows have the form:
-    //   <PackageVersion Include="Hex1b" Version="0.167.0-alpha..." />
+    //   <PackageVersion Include="Hex1b" Version="0.166.0" />
     // Match the exact Include value, not Hex1b.Tool or Hex1b.McpServer;
     // whitespace, attribute order and either XML quote style are allowed.
     const packages = await readFile(new URL("../../Directory.Packages.props", dashboard), "utf8");

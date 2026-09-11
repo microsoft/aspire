@@ -1,6 +1,6 @@
 {
   "name": "@hex1b/web-terminal",
-  "version": "0.167.0-alpha.1549.1.496ccf5",
+  "version": "0.166.0",
   "description": "First-party WebGPU and WebGL2 browser terminal for Hex1b",
   "type": "module",
   "main": "./dist/index.js",
