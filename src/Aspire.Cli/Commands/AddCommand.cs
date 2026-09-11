@@ -28,8 +28,7 @@ internal sealed class AddCommand : BaseCommand
 
     private readonly IProjectLocator _projectLocator;
     private readonly IntegrationPackageSearchService _integrationPackageSearchService;
-    private readonly BundleNuGetService _bundleNuGetService;
-    private readonly IDotNetCliRunner _dotNetCliRunner;
+    private readonly INuGetSettingsProvider _nugetSettingsProvider;
     private readonly IAddCommandPrompter _prompter;
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly ICliHostEnvironment _hostEnvironment;
@@ -56,13 +55,12 @@ internal sealed class AddCommand : BaseCommand
         Description = AddCommandStrings.AllArgumentDescription
     };
 
-    public AddCommand(IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, BundleNuGetService bundleNuGetService, IDotNetCliRunner dotNetCliRunner, IAddCommandPrompter prompter, IDotNetSdkInstaller sdkInstaller, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry, CommonCommandServices services)
+    public AddCommand(IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, INuGetSettingsProvider nugetSettingsProvider, IAddCommandPrompter prompter, IDotNetSdkInstaller sdkInstaller, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry, CommonCommandServices services)
         : base("add", AddCommandStrings.Description, services)
     {
         _projectLocator = projectLocator;
         _integrationPackageSearchService = integrationPackageSearchService;
-        _bundleNuGetService = bundleNuGetService;
-        _dotNetCliRunner = dotNetCliRunner;
+        _nugetSettingsProvider = nugetSettingsProvider;
         _prompter = prompter;
         _sdkInstaller = sdkInstaller;
         _hostEnvironment = hostEnvironment;
@@ -140,7 +138,7 @@ internal sealed class AddCommand : BaseCommand
                 ? null
                 : PackageSourceOverrideMappings.ResolveForWorkingDirectory(
                     source,
-                    effectiveAppHostProjectFile.Directory!);
+                    ExecutionContext.WorkingDirectory);
 
             // Get the appropriate project handler
             var project = _projectFactory.GetProject(effectiveAppHostProjectFile);
@@ -364,7 +362,7 @@ internal sealed class AddCommand : BaseCommand
                     var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
                     if (!File.Exists(nugetConfigPath))
                     {
-                        var packageSourceMappingEnabled = await HasEffectivePackageSourceMappingAsync(
+                        var packageSourceMappingEnabled = await _nugetSettingsProvider.IsPackageSourceMappingEnabledAsync(
                             projectDir,
                             cancellationToken);
                         CreateAdditiveLocalSourceNuGetConfig(
@@ -497,76 +495,6 @@ internal sealed class AddCommand : BaseCommand
         // Aspire package from the implicit channel must instead retain ambient NuGet policy for
         // this operation, which is the stable-channel contract.
         return PackageChannelNames.Stable;
-    }
-
-    private async Task<bool> HasEffectivePackageSourceMappingAsync(
-        DirectoryInfo projectDirectory,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var settings = await _bundleNuGetService.GetNuGetSettingsAsync(
-                projectDirectory.FullName,
-                cancellationToken);
-            return settings.PackageSourceMappingEnabled;
-        }
-        catch (InvalidOperationException ex) when (ex.Message == BundleNuGetService.ManagedComponentNotFoundMessage)
-        {
-            // Source builds and unit tests do not always have an extracted bundle layout.
-            var (exitCode, configPaths) = await _dotNetCliRunner.GetNuGetConfigPathsAsync(
-                projectDirectory,
-                new ProcessInvocationOptions { SuppressLogging = true },
-                cancellationToken);
-            if (exitCode != 0)
-            {
-                throw new InvalidOperationException($"Unable to discover the NuGet configuration hierarchy for '{projectDirectory.FullName}'.");
-            }
-
-            return await HasPackageSourceMappingAsync(configPaths, cancellationToken);
-        }
-    }
-
-    internal static async Task<bool> HasPackageSourceMappingAsync(
-        IReadOnlyList<string> configPaths,
-        CancellationToken cancellationToken)
-    {
-        // NuGet returns paths from highest to lowest precedence. A clear in a higher-precedence
-        // config prevents lower mapping entries from contributing to the effective settings.
-        foreach (var configPath in configPaths)
-        {
-            await using var stream = File.OpenRead(configPath);
-            var document = await XDocument.LoadAsync(stream, LoadOptions.None, cancellationToken);
-            var section = document.Root?
-                .Elements()
-                .FirstOrDefault(static element => string.Equals(
-                    element.Name.LocalName,
-                    "packageSourceMapping",
-                    StringComparison.Ordinal));
-            if (section is null)
-            {
-                continue;
-            }
-
-            bool? hasPackageSourceMapping = null;
-            foreach (var element in section.Elements())
-            {
-                if (string.Equals(element.Name.LocalName, "clear", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasPackageSourceMapping = false;
-                }
-                else if (string.Equals(element.Name.LocalName, "packageSource", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasPackageSourceMapping = true;
-                }
-            }
-
-            if (hasPackageSourceMapping is not null)
-            {
-                return hasPackageSourceMapping.Value;
-            }
-        }
-
-        return false;
     }
 
     internal static void CreateAdditiveLocalSourceNuGetConfig(

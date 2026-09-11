@@ -19,12 +19,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
 
-internal sealed record NuGetConfigSource(
-    string Key,
-    string Source,
-    bool IsAmbient,
-    bool IsEnabled);
-
 /// <summary>
 /// Manages a pre-built AppHost server from the Aspire bundle layout.
 /// This is used when running in bundle mode (without .NET SDK) to avoid
@@ -144,8 +138,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
         var projectRefs = integrationList.Where(r => r.IsProjectReference).ToList();
         // Lifted to outer scope so the failure footer reflects the source actually used by
-        // restore — including the auto-discovered local hive resolved by
-        // ResolveLocalPackageSourceOverrideAsync — rather than the unset --source the user
+        // restore, including an auto-discovered local hive, rather than only the --source value
         // originally passed in.
         var effectivePackageSourceOverride = packageSourceOverride;
 
@@ -160,22 +153,6 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             // with a legacy .aspire/settings.json#channel fallback). This is independent of the
             // running CLI's identity hive (CliExecutionContext.IdentityChannel).
             requestedChannel ??= ResolveRequestedChannel();
-            if (string.IsNullOrWhiteSpace(effectivePackageSourceOverride))
-            {
-                var localPackageSourceChannel = requestedChannel;
-                if (localPackageSourceChannel is null &&
-                    string.Equals(sdkVersion, _executionContext.IdentitySdkVersion, StringComparison.OrdinalIgnoreCase))
-                {
-                    // An unpinned guest AppHost inherits the running CLI's SDK version. When that
-                    // version comes from a local package hive or ASPIRE_CLI_PACKAGES, restore must
-                    // use the same local source or it will request an unpublished build from the
-                    // ambient feeds. This remains a source-only override: the project has not
-                    // requested the CLI's channel policy.
-                    localPackageSourceChannel = _executionContext.IdentityChannel;
-                }
-
-                effectivePackageSourceOverride = await ResolveLocalPackageSourceOverrideAsync(localPackageSourceChannel, cancellationToken).ConfigureAwait(false);
-            }
 
             if (projectRefs.Count > 0)
             {
@@ -189,13 +166,23 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                 }
             }
 
+            IIntegrationRestorePlan? restorePlan = null;
+            if (packageRefs.Count > 0 || projectRefs.Count > 0)
+            {
+                restorePlan = await ResolveIntegrationRestorePlanAsync(
+                    sdkVersion,
+                    requestedChannel,
+                    effectivePackageSourceOverride,
+                    packageSourceOverridePattern,
+                    cancellationToken).ConfigureAwait(false);
+                effectivePackageSourceOverride = restorePlan.EffectivePackageSourceOverride;
+            }
+
             if (packageRefs.Count > 0)
             {
                 _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
                     packageRefs,
-                    requestedChannel,
-                    effectivePackageSourceOverride,
-                    packageSourceOverridePattern,
+                    restorePlan!,
                     cancellationToken).ConfigureAwait(false);
             }
 
@@ -208,9 +195,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                     packageRefs,
                     projectRefs,
                     sdkVersion,
-                    requestedChannel,
-                    effectivePackageSourceOverride,
-                    packageSourceOverridePattern,
+                    restorePlan!,
                     cancellationToken).ConfigureAwait(false);
 
                 _selectedProjectLayout = await _projectLayoutStore.GetOrCreateAsync(closureManifest, cancellationToken).ConfigureAwait(false);
@@ -304,53 +289,28 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// </summary>
     private async Task<string> RestoreNuGetPackagesAsync(
         List<IntegrationReference> packageRefs,
-        string? requestedChannel,
-        string? packageSourceOverride,
-        string? packageSourceOverridePattern,
+        IIntegrationRestorePlan restorePlan,
         CancellationToken cancellationToken)
     {
         _logger.LogDebug("Restoring {Count} integration packages via bundled NuGet", packageRefs.Count);
 
-        var useExactPackageVersions = !string.IsNullOrWhiteSpace(packageSourceOverride);
         var packages = packageRefs
-            .Select(r => (r.Name, Version: GetRestoreVersion(r.Name, r.Version!, useExactPackageVersions)))
+            .Select(r => (r.Name, Version: restorePlan.GetRestoreVersion(r.Name, r.Version!)))
             .ToList();
-        var restoreSources = NormalizeIntegrationRestoreSources(
-            await ResolveIntegrationRestoreSourcesAsync(
-                requestedChannel,
-                packageSourceOverride,
-                packageSourceOverridePattern,
-                cancellationToken).ConfigureAwait(false));
-        var settings = await _nugetService.GetNuGetSettingsAsync(_appDirectoryPath, cancellationToken).ConfigureAwait(false);
-        var configSources = ResolveNuGetConfigSources(
-            restoreSources.PackageSourceMappings,
-            settings.Sources,
-            settings.ReservedPackageSourceKeys,
-            settings.SourceIdentityKey);
-        using var restoreOverlay = await CreateRestoreOverlayAsync(
-            restoreSources,
-            configSources,
-            settings,
+        using var restoreConfiguration = await restorePlan.CreatePackageRestoreConfigurationAsync(
             cancellationToken).ConfigureAwait(false);
-        var sources = GetNuGetSources(restoreSources)?.ToArray();
-        IReadOnlyList<string> configPaths = restoreOverlay is null
-            ? settings.ConfigPaths
-            : [restoreOverlay.ConfigFile.FullName, .. settings.ConfigPaths];
 
         return await _nugetService.RestorePackagesAsync(
             packages,
             workingDirectory: _appDirectoryPath,
             targetFramework: DotNetBasedAppHostServerProject.TargetFramework,
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
-            sources: sources,
-            nugetConfigPaths: configPaths,
-            nugetSettingsCacheIdentity: settings.CacheIdentity,
-            nugetConfigOverlayCacheIdentity: restoreOverlay?.CacheIdentity,
-            additionalSensitiveSources: settings.SensitiveSourceValues.Concat(
-                restoreSources.PackageSourceMappings?
-                    .Select(static mapping => mapping.Source)
-                    .Where(PackageSourceOverrideMappings.HasCredentialMaterial) ?? []),
-            globalPackagesFolderOverride: GetIntegrationRestoreGlobalPackagesFolder(restoreSources, restoreOverlay),
+            sources: restoreConfiguration.Sources,
+            nugetConfigPaths: restoreConfiguration.ConfigPaths,
+            nugetSettingsCacheIdentity: restoreConfiguration.SettingsCacheIdentity,
+            nugetConfigOverlayCacheIdentity: restoreConfiguration.OverlayCacheIdentity,
+            additionalSensitiveSources: restoreConfiguration.SensitiveSources,
+            globalPackagesFolderOverride: restoreConfiguration.GlobalPackagesFolder,
             ct: cancellationToken).ConfigureAwait(false);
     }
 
@@ -447,74 +407,26 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
         string sdkVersion,
-        string? requestedChannel,
-        string? packageSourceOverride,
-        string? packageSourceOverridePattern,
+        IIntegrationRestorePlan restorePlan,
         CancellationToken cancellationToken)
     {
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
-        var restoreSources = NormalizeIntegrationRestoreSources(
-            await ResolveIntegrationRestoreSourcesAsync(
-                requestedChannel,
-                packageSourceOverride,
-                packageSourceOverridePattern,
-                cancellationToken).ConfigureAwait(false));
-        var selectedSensitiveRestoreSources = restoreSources.AdditionalSources
-            .Concat(restoreSources.PackageSourceMappings?.Select(static mapping => mapping.Source) ?? [])
-            .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        var globalPackagesFolder = GetIntegrationRestoreGlobalPackagesFolder(restoreSources, restoreOverlay: null);
         var policyDirectory = IntegrationClosureBuilder.GetAppHostIntegrationPolicyDirectory(
             new DirectoryInfo(_appDirectoryPath));
-        FileInfo? restoreOverlayFile = new(Path.Combine(policyDirectory.FullName, "NuGet.Config"));
-        if (restoreOverlayFile.Exists)
-        {
-            restoreOverlayFile.Delete();
-        }
-        var settings = await _nugetService.GetNuGetSettingsAsync(_appDirectoryPath, cancellationToken).ConfigureAwait(false);
-        var configSources = ResolveNuGetConfigSources(
-            restoreSources.PackageSourceMappings,
-            settings.Sources,
-            settings.ReservedPackageSourceKeys,
-            settings.SourceIdentityKey);
-        if (restoreSources.PackageSourceMappings is null)
-        {
-            restoreOverlayFile = null;
-        }
-        else
-        {
-            var overlay = CreateNuGetConfigOverlay(
-                restoreSources.PackageSourceMappings,
-                settings,
-                configSources,
-                globalPackagesFolder);
-            await _nugetService.WriteNuGetConfigOverlayAsync(
-                overlay,
-                restoreOverlayFile!.FullName,
-                cancellationToken).ConfigureAwait(false);
-        }
-
-        var rootAdditionalSources = restoreSources.PackageSourceMappings is null
-            ? GetNuGetSources(restoreSources)?.ToArray() ?? []
-            : [];
+        var restoreConfiguration = await restorePlan.ApplyProjectRestoreConfigurationAsync(
+            policyDirectory,
+            cancellationToken).ConfigureAwait(false);
         var integrationPackageSources = IntegrationClosureBuilder.CreateRestoreAdditionalProjectSourcesValue(
             existingValue: null,
-            GetIntegrationPackageSourceHints(restoreSources));
-        var sensitiveSources = settings.SensitiveSourceValues
-            .Concat(selectedSensitiveRestoreSources)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+            restoreConfiguration.PackageSourceHints);
         var intermediateOutputPath = Path.Combine(restoreDir, "obj");
         var projectContent = GenerateIntegrationProjectFile(
             projectRefs,
-            sdkVersion,
+            restorePlan.GetRestoreVersion("Aspire.Hosting", sdkVersion),
             restoreDir,
-            rootAdditionalSources,
-            useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride));
+            restoreConfiguration.RootAdditionalSources);
         var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
         await WriteIfChangedAsync(projectFilePath, projectContent, cancellationToken);
 
@@ -536,7 +448,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
                 restoreDir,
                 intermediateOutputPath,
-                restoreOverlayFile?.DirectoryName ?? _appDirectoryPath,
+                restoreConfiguration.RestoreRootConfigDirectory,
                 globalPackagesFolder: null).ToString(),
             cancellationToken);
 
@@ -549,11 +461,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
             projectFilePath,
             noRestore: false,
-            globalPackagesFolder,
+            restoreConfiguration.GlobalPackagesFolder,
             integrationHostingVersion: sdkVersion,
             integrationPackageSources,
-            suppressLogging: sensitiveSources.Length > 0,
-            sensitiveSources,
+            suppressLogging: restoreConfiguration.SensitiveSources.Length > 0,
+            restoreConfiguration.SensitiveSources,
             cancellationToken).ConfigureAwait(false);
 
         if (exitCode != 0)
@@ -594,12 +506,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// </summary>
     internal static string GenerateIntegrationProjectFile(
         List<IntegrationReference> projectRefs,
-        string sdkVersion,
+        string hostingPackageVersion,
         string restoreDir,
-        IEnumerable<string>? additionalSources = null,
-        bool useExactPackageVersions = false)
+        IEnumerable<string>? additionalSources = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(sdkVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostingPackageVersion);
 
         var projectFile = IntegrationClosureBuilder.CreateClosureProjectFile(
             restoreDir,
@@ -609,7 +520,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         // project-referenced integrations. All other integration packages use the package-only path.
         projectFile.PackageReferences.Add(new CSharpPackageReference(
             "Aspire.Hosting",
-            GetRestoreVersion("Aspire.Hosting", sdkVersion, useExactPackageVersions)));
+            hostingPackageVersion));
 
         projectFile.ProjectReferences.AddRange(projectRefs.Select(p => new CSharpProjectReference(
             p.ProjectPath!,
@@ -638,440 +549,24 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         return channelName;
     }
 
-    internal Task<IntegrationRestoreSources> ResolveIntegrationRestoreSourcesAsync(
+    internal Task<IIntegrationRestorePlan> ResolveIntegrationRestorePlanAsync(
+        string sdkVersion,
         string? requestedChannel,
         string? packageSourceOverride,
         string? packageSourceOverridePattern,
         CancellationToken cancellationToken)
-        => new IntegrationRestoreSourceResolver(_packagingService, _logger, _executionContext.NuGetServiceIndexOverride)
+        => new IntegrationRestorePlanResolver(
+            _packagingService,
+            _nugetService,
+            _executionContext,
+            _logger)
             .ResolveAsync(
+                _appDirectoryPath,
+                sdkVersion,
                 requestedChannel,
                 packageSourceOverride,
                 packageSourceOverridePattern,
                 cancellationToken);
-
-    private static IEnumerable<string>? GetNuGetSources(IntegrationRestoreSources restoreSources)
-        => restoreSources.PackageSourceMappings is null && restoreSources.AdditionalSources.Count > 0
-            ? restoreSources.AdditionalSources
-            : null;
-
-    private static string[] GetIntegrationPackageSourceHints(IntegrationRestoreSources restoreSources)
-    {
-        IEnumerable<string> candidateSources;
-        if (restoreSources.PackageSourceMappings is { Length: > 0 } mappings)
-        {
-            var integrationSpecificSources = mappings
-                .Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
-                .Select(static mapping => mapping.Source)
-                .ToArray();
-            candidateSources = integrationSpecificSources.Length > 0
-                ? integrationSpecificSources
-                : mappings
-                    .Where(static mapping => mapping.PackageFilter == PackageMapping.AllPackages)
-                    .Select(static mapping => mapping.Source);
-        }
-        else
-        {
-            candidateSources = restoreSources.AdditionalSources;
-        }
-
-        // Source hints flow through the MSBuild environment and can be persisted in restore
-        // artifacts. Redacting an inline credential would also make the source unusable, so omit
-        // credential-bearing URLs and require those projects to use NuGet-owned authentication.
-        return candidateSources
-            .Where(static source => !PackageSourceOverrideMappings.HasCredentialMaterial(source))
-            .Distinct(PackageSourceIdentity.Comparer)
-            .ToArray();
-    }
-
-    private IntegrationRestoreSources NormalizeIntegrationRestoreSources(IntegrationRestoreSources restoreSources)
-    {
-        var appDirectory = new DirectoryInfo(_appDirectoryPath);
-        var normalizedAdditionalSources = restoreSources.AdditionalSources
-            .Select(source => PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, appDirectory))
-            .ToArray();
-        var normalizedMappings = restoreSources.PackageSourceMappings?
-            .Select(mapping => new PackageMapping(
-                mapping.PackageFilter,
-                PackageSourceOverrideMappings.ResolveForWorkingDirectory(mapping.Source, appDirectory)))
-            .ToArray();
-
-        return restoreSources with
-        {
-            AdditionalSources = normalizedAdditionalSources,
-            PackageSourceMappings = normalizedMappings,
-            GlobalPackagesFolderIdentity = restoreSources.ConfigureGlobalPackagesFolder
-                ? IntegrationRestoreSourceResolver.CreateGlobalPackagesFolderIdentity(
-                    normalizedAdditionalSources,
-                    normalizedMappings)
-                : null
-        };
-    }
-
-    internal static NuGetConfigSource[] ResolveNuGetConfigSources(
-        PackageMapping[]? mappings,
-        IReadOnlyList<NuGetSourceInfo> ambientSources,
-        IReadOnlyList<string> reservedPackageSourceKeys,
-        ReadOnlySpan<byte> sourceIdentityKey)
-    {
-        if (mappings is null)
-        {
-            return [];
-        }
-
-        var usedKeys = reservedPackageSourceKeys
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var nextAspireKey = 0;
-
-        var resolvedSources = new List<NuGetConfigSource>();
-        foreach (var source in mappings
-            .Select(static mapping => mapping.Source)
-            .Distinct(PackageSourceIdentity.Comparer))
-        {
-            var sourceIdentity = NuGetSourceIdentity.Compute(source, sourceIdentityKey);
-            var ambientMatches = ambientSources
-                .Where(candidate => string.Equals(candidate.Identity, sourceIdentity, StringComparison.Ordinal))
-                .ToArray();
-            if (ambientMatches.Length > 0)
-            {
-                var enabledMatches = ambientMatches
-                    .Where(static ambientSource => ambientSource.IsEnabled)
-                    .ToArray();
-                var selectedMatches = enabledMatches;
-                if (selectedMatches.Length == 0)
-                {
-                    // Credentials and client certificates are attached to source aliases. When an equivalent
-                    // source must be re-enabled, preserve the alias that carries its authentication configuration.
-                    var preferredDisabledMatch = ambientMatches.FirstOrDefault(static ambientSource =>
-                        ambientSource.HasCredentials || ambientSource.HasClientCertificates);
-                    selectedMatches = [preferredDisabledMatch ?? ambientMatches[0]];
-                }
-
-                foreach (var ambientSource in selectedMatches)
-                {
-                    resolvedSources.Add(new NuGetConfigSource(
-                        ambientSource.Name,
-                        source,
-                        IsAmbient: true,
-                        ambientSource.IsEnabled));
-                }
-
-                continue;
-            }
-
-            string key;
-            do
-            {
-                key = $"aspire-{nextAspireKey++}";
-            }
-            while (!usedKeys.Add(key));
-
-            resolvedSources.Add(new NuGetConfigSource(key, source, IsAmbient: false, IsEnabled: true));
-        }
-
-        return [.. resolvedSources];
-    }
-
-    internal static NuGetConfigOverlayInfo CreateNuGetConfigOverlay(
-        PackageMapping[] selectedMappings,
-        NuGetSettingsInfo settings,
-        IReadOnlyList<NuGetConfigSource> selectedSources,
-        string? globalPackagesFolder)
-    {
-        ArgumentNullException.ThrowIfNull(selectedMappings);
-        ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(selectedSources);
-
-        var enabledSourceKeys = selectedSources
-            .Where(static source => source.IsAmbient && !source.IsEnabled)
-            .Select(static source => source.Key)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var clearDisabledPackageSources = enabledSourceKeys.Count > 0;
-        var disabledPackageSourceKeys = clearDisabledPackageSources
-            ? settings.DisabledPackageSourceKeys
-                .Where(key => !enabledSourceKeys.Contains(key))
-                .ToArray()
-            : [];
-
-        return new NuGetConfigOverlayInfo(
-            selectedSources
-                .Where(static source => !source.IsAmbient)
-                .Select(static source => new NuGetConfigSourceDefinition(source.Key, source.Source))
-                .ToArray(),
-            ComposePackageSourceMappings(
-                selectedMappings,
-                settings.PackageSourceMappings,
-                settings.Sources,
-                selectedSources),
-            clearDisabledPackageSources,
-            disabledPackageSourceKeys,
-            globalPackagesFolder);
-    }
-
-    internal static NuGetPackageSourceMappingInfo[] ComposePackageSourceMappings(
-        IReadOnlyList<PackageMapping> selectedMappings,
-        IReadOnlyList<NuGetPackageSourceMappingInfo> ambientMappings,
-        IReadOnlyList<NuGetSourceInfo> ambientSources,
-        IReadOnlyList<NuGetConfigSource> selectedSources)
-    {
-        ArgumentNullException.ThrowIfNull(selectedMappings);
-        ArgumentNullException.ThrowIfNull(ambientMappings);
-        ArgumentNullException.ThrowIfNull(ambientSources);
-        ArgumentNullException.ThrowIfNull(selectedSources);
-
-        var patternsBySourceKey = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-
-        if (ambientMappings.Count == 0)
-        {
-            // Enabling package-source mapping changes NuGet from "every enabled source can serve
-            // every package" to deny-by-default. Reproduce that existing eligibility with wildcard
-            // mappings before adding the more-specific Aspire channel policy.
-            foreach (var ambientSource in ambientSources.Where(static source => source.IsEnabled))
-            {
-                AddPattern(patternsBySourceKey, ambientSource.Name, PackageMapping.AllPackages);
-            }
-        }
-        else
-        {
-            foreach (var ambientMapping in ambientMappings)
-            {
-                foreach (var pattern in ambientMapping.Patterns)
-                {
-                    AddPattern(patternsBySourceKey, ambientMapping.SourceKey, pattern);
-                }
-            }
-        }
-
-        var authoritativePatterns = selectedMappings
-            .Select(static mapping => mapping.PackageFilter)
-            .Where(static pattern => pattern != PackageMapping.AllPackages)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var authoritativeSources = selectedMappings
-            .Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
-            .Select(static mapping => mapping.Source)
-            .ToHashSet(PackageSourceIdentity.Comparer);
-        foreach (var patterns in patternsBySourceKey.Values)
-        {
-            patterns.RemoveAll(pattern => authoritativePatterns.Any(
-                authoritativePattern => CompetesWithAuthoritativePattern(pattern, authoritativePattern)));
-        }
-
-        foreach (var mapping in selectedMappings)
-        {
-            if (ambientMappings.Count > 0 &&
-                mapping.PackageFilter == PackageMapping.AllPackages &&
-                !authoritativeSources.Contains(mapping.Source))
-            {
-                // An existing mapping policy already defines eligibility for non-Aspire packages.
-                // Channel fallback sources must not broaden that unrelated ambient policy. An
-                // explicitly selected source remains generally eligible because --source is direct
-                // user intent, while its exact package pattern still guarantees the root origin.
-                continue;
-            }
-
-            foreach (var source in selectedSources.Where(
-                source => PackageSourceIdentity.Comparer.Equals(source.Source, mapping.Source)))
-            {
-                AddPattern(patternsBySourceKey, source.Key, mapping.PackageFilter);
-            }
-        }
-
-        return patternsBySourceKey
-            .Where(static mapping => mapping.Value.Count > 0)
-            .Select(static mapping => new NuGetPackageSourceMappingInfo(
-                mapping.Key,
-                [.. mapping.Value]))
-            .ToArray();
-    }
-
-    private static void AddPattern(
-        Dictionary<string, List<string>> patternsBySourceKey,
-        string sourceKey,
-        string pattern)
-    {
-        if (!patternsBySourceKey.TryGetValue(sourceKey, out var patterns))
-        {
-            patterns = [];
-            patternsBySourceKey.Add(sourceKey, patterns);
-        }
-
-        if (!patterns.Contains(pattern, StringComparer.OrdinalIgnoreCase))
-        {
-            patterns.Add(pattern);
-        }
-    }
-
-    private static bool CompetesWithAuthoritativePattern(
-        string ambientPattern,
-        string authoritativePattern)
-    {
-        if (authoritativePattern == PackageMapping.AllPackages)
-        {
-            return false;
-        }
-
-        if (!authoritativePattern.EndsWith('*'))
-        {
-            return string.Equals(
-                ambientPattern,
-                authoritativePattern,
-                StringComparison.OrdinalIgnoreCase);
-        }
-
-        var authoritativePrefix = authoritativePattern[..^1];
-        if (ambientPattern == PackageMapping.AllPackages)
-        {
-            return false;
-        }
-
-        var ambientPrefix = ambientPattern.EndsWith('*')
-            ? ambientPattern[..^1]
-            : ambientPattern;
-        return ambientPrefix.Length >= authoritativePrefix.Length &&
-            ambientPrefix.StartsWith(authoritativePrefix, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private string? GetIntegrationRestoreGlobalPackagesFolder(
-        IntegrationRestoreSources restoreSources,
-        TemporaryNuGetConfig? restoreOverlay)
-        => restoreSources.ConfigureGlobalPackagesFolder
-            ? CliPathHelper.GetStagingNuGetPackagesIdentityDirectory(
-                _executionContext.AspireHomeDirectory,
-                restoreOverlay?.CacheIdentity ?? restoreSources.GlobalPackagesFolderIdentity)
-            : null;
-
-    internal async Task<TemporaryNuGetConfig?> CreateRestoreOverlayAsync(
-        IntegrationRestoreSources restoreSources,
-        IReadOnlyList<NuGetConfigSource> sources,
-        NuGetSettingsInfo settings,
-        CancellationToken cancellationToken)
-    {
-        if (restoreSources.PackageSourceMappings is null)
-        {
-            return null;
-        }
-
-        var overlay = CreateNuGetConfigOverlay(
-            restoreSources.PackageSourceMappings,
-            settings,
-            sources,
-            globalPackagesFolder: null);
-        var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
-            path => _nugetService.WriteNuGetConfigOverlayAsync(
-                overlay,
-                path,
-                cancellationToken)).ConfigureAwait(false);
-        return await ConfigureGlobalPackagesFolderAsync(
-            config,
-            restoreSources,
-            overlay,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<TemporaryNuGetConfig> ConfigureGlobalPackagesFolderAsync(
-        TemporaryNuGetConfig config,
-        IntegrationRestoreSources restoreSources,
-        NuGetConfigOverlayInfo overlay,
-        CancellationToken cancellationToken)
-    {
-        var globalPackagesFolder = GetIntegrationRestoreGlobalPackagesFolder(restoreSources, config);
-        if (globalPackagesFolder is null)
-        {
-            return config;
-        }
-
-        try
-        {
-            await config.RegenerateAsync(
-                path => _nugetService.WriteNuGetConfigOverlayAsync(
-                    overlay with { GlobalPackagesFolder = globalPackagesFolder },
-                    path,
-                    cancellationToken)).ConfigureAwait(false);
-            return config;
-        }
-        catch
-        {
-            config.Dispose();
-            throw;
-        }
-    }
-
-    private async Task<string?> ResolveLocalPackageSourceOverrideAsync(string? requestedChannel, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(requestedChannel))
-        {
-            return null;
-        }
-
-        PackageChannel? channel;
-        try
-        {
-            var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
-            channel = channels.FirstOrDefault(c =>
-                c.Type == PackageChannelType.Explicit &&
-                c.Mappings is { Length: > 0 } &&
-                string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            // A transient packaging-service failure during auto-discovery must not turn
-            // `aspire new` into a hard failure. Returning null leaves the resolved channel
-            // sources and ambient NuGet settings unchanged.
-            _logger.LogWarning(ex, "Failed to resolve local Aspire package source for channel '{Channel}'.", requestedChannel);
-            return null;
-        }
-
-        var source = channel is null ? null : GetExistingLocalAspirePackageSource(channel);
-
-        if (!string.IsNullOrWhiteSpace(source))
-        {
-            _logger.LogDebug("Using local package source '{Source}' for channel '{Channel}'.", source, requestedChannel);
-        }
-
-        return source;
-    }
-
-    private static string? GetExistingLocalAspirePackageSource(PackageChannel channel)
-    {
-        if (channel.Mappings is null)
-        {
-            return null;
-        }
-
-        foreach (var mapping in channel.Mappings)
-        {
-            if (!IsAspireSpecificMapping(mapping) ||
-                PackageSourceOverrideMappings.GetNormalizedLocalDirectory(mapping.Source) is not { } localDirectory ||
-                !Directory.Exists(localDirectory))
-            {
-                continue;
-            }
-
-            return mapping.Source;
-        }
-
-        return null;
-    }
-
-    private static bool IsAspireSpecificMapping(PackageMapping mapping) =>
-        mapping.PackageFilter != PackageMapping.AllPackages &&
-        mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase);
-
-    private static string GetRestoreVersion(string packageName, string version, bool useExactPackageVersions)
-    {
-        var shouldUseExactAspirePackageVersion = useExactPackageVersions && packageName.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase);
-        if (!shouldUseExactAspirePackageVersion || version.Length == 0 || version[0] is '[' or '(')
-        {
-            return version;
-        }
-
-        return $"[{version}]";
-    }
 
     // Display-safe form of a NuGet source used in user-visible error footers. Delegates to the
     // shared helper so the same redaction is applied wherever sources appear (failure context,

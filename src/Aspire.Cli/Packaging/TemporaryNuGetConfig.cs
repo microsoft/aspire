@@ -204,17 +204,9 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             return;
         }
 
-        try
+        if (_configFile.DirectoryName is { } directory)
         {
-            if (_configFile.Exists)
-            {
-                _configFile.Delete();
-                _configFile.Directory?.Delete(recursive: true);
-            }
-        }
-        catch
-        {
-            // Temporary configuration cleanup is best effort.
+            TryDeleteDirectory(directory);
         }
 
         _disposed = true;
@@ -228,7 +220,7 @@ internal sealed class TemporaryNuGetConfig : IDisposable
         }
         catch
         {
-            // Preserve the original creation failure.
+            // Temporary configuration cleanup is best effort.
         }
     }
 }

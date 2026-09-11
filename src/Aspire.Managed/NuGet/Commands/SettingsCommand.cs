@@ -29,14 +29,14 @@ internal static class SettingsCommand
             var workingDirectory = parseResult.GetValue(workingDirectoryOption)!;
             Console.WriteLine(JsonSerializer.Serialize(
                 GetSettings(workingDirectory, ReadIdentityKey()),
-                SettingsJsonContext.Default.NuGetSettingsResult));
+                SettingsJsonContext.Default.NuGetSettingsResponse));
             return 0;
         });
 
         return command;
     }
 
-    internal static NuGetSettingsResult GetSettings(string workingDirectory, byte[] identityKey)
+    internal static NuGetSettingsResponse GetSettings(string workingDirectory, byte[] identityKey)
     {
         ArgumentNullException.ThrowIfNull(identityKey);
 
@@ -58,7 +58,7 @@ internal static class SettingsCommand
             .ToArray();
         var packageSourceMappings = new PackageSourceMappingProvider(settings)
             .GetPackageSourceMappingItems()
-            .Select(static mapping => new NuGetPackageSourceMappingResult(
+            .Select(static mapping => new NuGetPackageSourceMapping(
                 mapping.Key,
                 mapping.Patterns.Select(static pattern => pattern.Pattern).ToArray()))
             .ToArray();
@@ -88,7 +88,7 @@ internal static class SettingsCommand
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        return new NuGetSettingsResult(
+        return new NuGetSettingsResponse(
             settings.GetConfigFilePaths().ToArray(),
             ComputeCacheIdentity(settings, packageSources, auditSources, packageSourceMappings),
             sources,
@@ -103,7 +103,7 @@ internal static class SettingsCommand
         ISettings settings,
         IReadOnlyList<PackageSource> packageSources,
         IReadOnlyList<PackageSource> auditSources,
-        IReadOnlyList<NuGetPackageSourceMappingResult> packageSourceMappings)
+        IReadOnlyList<NuGetPackageSourceMapping> packageSourceMappings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(packageSources);
@@ -182,7 +182,7 @@ internal static class SettingsCommand
         hash.Append("\n"u8);
     }
 
-    private static NuGetSourceResult CreateSourceResult(PackageSource source, byte[] identityKey)
+    private static NuGetSourceInfo CreateSourceResult(PackageSource source, byte[] identityKey)
         => new(
             source.Name,
             NuGetSourceIdentity.Compute(source.Source, identityKey),
@@ -215,23 +215,6 @@ internal static class SettingsCommand
     }
 }
 
-internal sealed record NuGetSettingsResult(
-    string[] ConfigPaths,
-    string CacheIdentity,
-    NuGetSourceResult[] Sources,
-    string[] SensitiveSourceValues,
-    bool PackageSourceMappingEnabled,
-    NuGetPackageSourceMappingResult[] PackageSourceMappings,
-    string[] DisabledPackageSourceKeys,
-    string[] ReservedPackageSourceKeys);
-
-internal sealed record NuGetSourceResult(
-    string Name,
-    string Identity,
-    bool IsEnabled,
-    bool HasCredentials,
-    bool HasClientCertificates);
-
 [JsonSerializable(typeof(NuGetConfigOverlayRequest))]
-[JsonSerializable(typeof(NuGetSettingsResult))]
+[JsonSerializable(typeof(NuGetSettingsResponse))]
 internal sealed partial class SettingsJsonContext : JsonSerializerContext;

@@ -130,6 +130,27 @@ public class TemporaryNuGetConfigTests
     }
 
     [Fact]
+    public async Task Dispose_RemovesDirectoryWhenFailedRegenerationDeletedConfig()
+    {
+        using var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+            path => File.WriteAllTextAsync(path, "<configuration />"));
+        var directory = config.ConfigFile.Directory!.FullName;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => config.RegenerateAsync(path =>
+        {
+            File.Delete(path);
+            return Task.FromException(new InvalidOperationException("Failed to regenerate the configuration."));
+        }));
+
+        Assert.False(config.ConfigFile.Exists);
+        Assert.True(Directory.Exists(directory));
+
+        config.Dispose();
+
+        Assert.False(Directory.Exists(directory));
+    }
+
+    [Fact]
     public async Task CacheIdentity_DoesNotDependOnGlobalPackagesFolderLocation()
     {
         using var first = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(

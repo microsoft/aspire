@@ -49,7 +49,7 @@ The generated root's assets graph still includes packages contributed transitive
 
 ## Effective source policy
 
-`IntegrationRestoreSourceResolver` resolves channel and source customization before the package-only and SDK paths diverge. The service is shared by those two polyglot restore implementations; C# AppHosts do not consume it. C# AppHosts use their own `dotnet package add` flow and local or PR hive configuration behavior, including package-source mappings emitted when ambient mapping is enabled.
+`IntegrationRestorePlanResolver` resolves channel, source, and ambient NuGet settings once before the package-only and SDK paths diverge. It returns an immutable `IIntegrationRestorePlan` that owns the resolved data and the standard package-path and project-path configuration projections. The two paths therefore consume the same channel and NuGet settings snapshot without sharing their restore execution or output models. C# AppHosts do not consume this plan; they use their own `dotnet package add` flow and local or PR hive configuration behavior, including package-source mappings emitted when ambient mapping is enabled.
 
 ### Source precedence
 
@@ -171,7 +171,7 @@ The overlay never copies arbitrary user settings. Authentication, trusted signer
 
 The package-only path:
 
-1. Resolves native settings from the AppHost directory.
+1. Uses the native settings snapshot resolved from the AppHost directory by the integration restore plan.
 2. Creates a temporary policy overlay at highest precedence when the effective policy requires package-source mappings.
 3. Passes the ordered overlay and ambient config paths to `Aspire.Managed`.
 4. Defines selected sources in the overlay when no ambient source key represents them.
