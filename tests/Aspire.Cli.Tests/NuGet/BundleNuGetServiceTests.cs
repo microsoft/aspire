@@ -846,6 +846,61 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(requestPath));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task WriteNuGetConfigOverlayAsync_RequestCleanupDoesNotMaskCommandResult(int exitCode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            DefaultExitCode = exitCode,
+            AssertionCallback = (args, _, _, _) =>
+            {
+                var requestPath = GetArgumentValue(args, "--request");
+                Assert.True(File.Exists(requestPath));
+                Directory.Delete(Path.GetDirectoryName(requestPath)!, recursive: true);
+
+                if (exitCode == 0)
+                {
+                    File.WriteAllText(GetArgumentValue(args, "--output"), "<configuration />");
+                }
+            }
+        };
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+        var overlay = new NuGetConfigOverlayRequest(
+            [new NuGetConfigSourceDefinition("aspire-0", "https://example.com/feed")],
+            [],
+            ClearDisabledPackageSources: false,
+            DisabledPackageSourceKeys: [],
+            GlobalPackagesFolder: null);
+
+        var writeTask = service.WriteNuGetConfigOverlayAsync(overlay, outputPath, CancellationToken.None);
+
+        if (exitCode == 0)
+        {
+            await writeTask;
+            Assert.True(File.Exists(outputPath));
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writeTask);
+            Assert.StartsWith("Unable to generate the NuGet configuration overlay:", exception.Message);
+        }
+    }
+
     [Fact]
     public async Task WriteNuGetConfigOverlayAsync_RoundTripsThroughActualManagedHelper()
     {

@@ -433,7 +433,7 @@ internal sealed class BundleNuGetService : INuGetService
         }
         finally
         {
-            requestDirectory.Delete(recursive: true);
+            FileDeleteHelper.TryDeleteDirectory(requestDirectory.FullName);
         }
     }
 
