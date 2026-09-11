@@ -63,12 +63,13 @@
     <FileSignInfo Include="OpenTelemetry.Instrumentation.AspNetCore.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.Abstractions.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.FileSystem.dll" CertificateName="3PartySHA2" />
-    <FileSignInfo Include="BouncyCastle.Cryptography.dll" CertificateName="3PartySHA2" />
-    <FileSignInfo Include="Semver.dll" CertificateName="3PartySHA2" />
-    <FileSignInfo Include="Sigstore.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="SQLitePCLRaw.batteries_v2.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="SQLitePCLRaw.core.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="SQLitePCLRaw.provider.e_sqlite3.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="BouncyCastle.Cryptography.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="e_sqlite3.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="Semver.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="Sigstore.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Tuf.dll" CertificateName="3PartySHA2" />
 
     <!-- Aspire is a Microsoft product rather than a .NET runtime binary, so use Arcade's general Microsoft certificate. -->
