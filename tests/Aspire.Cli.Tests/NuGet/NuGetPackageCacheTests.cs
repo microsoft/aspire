@@ -293,4 +293,37 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             package => Assert.Equal("13.2.0", package.Version),
             package => Assert.Equal("13.3.0", package.Version));
     }
+
+    [Fact]
+    public async Task GetPackageVersionsAsync_IncludesDeprecatedPackage()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.DotNetCliRunnerFactory = _ =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                        (0,
+                        [
+                            new NuGetPackage { Id = "Aspire.Hosting.Dapr", Version = "13.4.0", Source = "nuget.org" }
+                        ])
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
+        var package = Assert.Single(await nuGetPackageCache.GetPackageVersionsAsync(
+            workspace.WorkspaceRoot,
+            "Aspire.Hosting.Dapr",
+            prerelease: false,
+            nugetConfigFile: null,
+            useCache: true,
+            CancellationToken.None));
+
+        Assert.Equal("Aspire.Hosting.Dapr", package.Id);
+    }
 }

@@ -95,6 +95,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Use the SDK's canonical RID compatibility graph when selecting package runtime assets. -->
+    <EmbeddedResource Include="$(BundledRuntimeIdentifierGraphFile)" LogicalName="Aspire.Cli.RuntimeIdentifierGraph.json" />
+
     <RuntimeHostConfigurationOption Include="NuGet.UseSystemTextJsonDeserialization"
                                     Value="true"
                                     Trim="true" />

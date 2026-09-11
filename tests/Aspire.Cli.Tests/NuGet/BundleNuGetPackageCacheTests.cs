@@ -288,6 +288,101 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             });
     }
 
+    [Fact]
+    public async Task GetPackageVersionsAsync_IncludesDeprecatedPackage()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.NuGetClientFactory = _ =>
+            {
+                return new FakeNuGetClient
+                {
+                    SearchCallback = (_, _, _, _, _, _, _, _, _) =>
+                        Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                        [
+                            new("Aspire.Hosting.Dapr", "13.4.0", "nuget.org", ["13.4.0"])
+                        ])
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var nuGetPackageCache = CreateCache(provider);
+        var package = Assert.Single(await nuGetPackageCache.GetPackageVersionsAsync(
+            workspace.WorkspaceRoot,
+            "Aspire.Hosting.Dapr",
+            prerelease: false,
+            nugetConfigFile: null,
+            useCache: true,
+            CancellationToken.None));
+
+        Assert.Equal("Aspire.Hosting.Dapr", package.Id);
+    }
+
+    [Fact]
+    public async Task SearchFailureIsWrappedInNuGetPackageCacheException()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var expectedException = new IOException("Search failed.");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.NuGetClientFactory = _ =>
+            {
+                return new FakeNuGetClient
+                {
+                    SearchCallback = (_, _, _, _, _, _, _, _, _) => throw expectedException
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var nuGetPackageCache = CreateCache(provider);
+        var exception = await Assert.ThrowsAsync<NuGetPackageCacheException>(() =>
+            nuGetPackageCache.GetPackageVersionsAsync(
+                workspace.WorkspaceRoot,
+                "Aspire.Hosting.Redis",
+                prerelease: false,
+                nugetConfigFile: null,
+                useCache: true,
+                CancellationToken.None));
+
+        Assert.Same(expectedException, exception.InnerException);
+    }
+
+    [Fact]
+    public async Task SearchCancellationIsNotWrapped()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cancellationSource = new CancellationTokenSource();
+        cancellationSource.Cancel();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.NuGetClientFactory = _ =>
+            {
+                return new FakeNuGetClient
+                {
+                    SearchCallback = (_, _, _, _, _, _, _, _, cancellationToken) =>
+                        Task.FromCanceled<IReadOnlyList<NuGetSearchResult>>(cancellationToken)
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var nuGetPackageCache = CreateCache(provider);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            nuGetPackageCache.GetPackageVersionsAsync(
+                workspace.WorkspaceRoot,
+                "Aspire.Hosting.Redis",
+                prerelease: false,
+                nugetConfigFile: null,
+                useCache: true,
+                cancellationSource.Token));
+    }
+
     private static INuGetPackageCache CreateCache(IServiceProvider provider) =>
         new BundleNuGetPackageCache(
             provider.GetRequiredService<INuGetClient>(),

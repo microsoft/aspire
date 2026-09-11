@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using NuGet.Credentials;
 using NuGet.Configuration;
 using NuGet.Frameworks;
@@ -13,6 +15,7 @@ using NuGet.Packaging.Signing;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Resolver;
+using NuGet.RuntimeModel;
 using NuGet.Versioning;
 using INuGetLogger = NuGet.Common.ILogger;
 using NuGetLogLevel = NuGet.Common.LogLevel;
@@ -68,7 +71,9 @@ internal sealed class NuGetClient(
     ILogger<NuGetClient> logger) : INuGetClient
 {
     private const string NuGetOrgUrl = "https://api.nuget.org/v3/index.json";
+    private const string RuntimeIdentifierGraphResourceName = "Aspire.Cli.RuntimeIdentifierGraph.json";
     private readonly NuGetLogger _nuGetLogger = new(logger);
+    private static readonly Lazy<RuntimeGraph> s_runtimeGraph = new(LoadRuntimeGraph);
     private static readonly Lock s_credentialServiceLock = new();
     private static bool s_credentialServiceInitialized;
 
@@ -138,8 +143,11 @@ internal sealed class NuGetClient(
         foreach (var identity in resolvedIdentities)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var installPath = pathResolver.GetInstallPath(identity.Id, identity.Version);
-            if (installPath is null || !Directory.Exists(installPath))
+            using var existingPackage = GlobalPackagesFolderUtility.GetPackage(identity, globalPackagesFolder);
+            var installPath = existingPackage is null
+                ? null
+                : pathResolver.GetInstallPath(identity.Id, identity.Version);
+            if (installPath is null)
             {
                 var dependencyInfo = availablePackages[identity];
                 installPath = await DownloadPackageAsync(
@@ -225,31 +233,70 @@ internal sealed class NuGetClient(
         InitializeCredentialService();
         var settings = LoadSettings(nugetConfigPath, workingDirectory);
         var packageSources = LoadPackageSources(settings, explicitSources);
-        var sourceSearches = packageSources.Select(source => exactMatch
-            ? GetPackageMetadataAsync(source, query, prerelease, useCache, cancellationToken)
-            : SearchSourceAsync(
-                source,
-                query,
-                new global::NuGet.Protocol.Core.Types.SearchFilter(prerelease),
-                take,
-                cancellationToken));
+        var sourceSearches = packageSources.Select(source => SearchSourceSafelyAsync(
+            source,
+            query,
+            exactMatch,
+            prerelease,
+            take,
+            useCache,
+            cancellationToken));
 
         var sourceResults = await Task.WhenAll(sourceSearches).ConfigureAwait(false);
+        var results = sourceResults.SelectMany(result => result.Packages).ToArray();
+        var failures = sourceResults.Where(result => result.Exception is not null).ToArray();
+        if (results.Length == 0 && failures.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Failed to search NuGet package source(s): {string.Join(", ", failures.Select(result => result.Source))}.",
+                new AggregateException(failures.Select(result => result.Exception!)));
+        }
+
         if (exactMatch)
         {
-            return sourceResults
-                .SelectMany(results => results)
+            return results
                 .OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(package => NuGetVersion.Parse(package.Version))
                 .ToArray();
         }
 
-        return sourceResults
-            .SelectMany(results => results)
+        return results
             .GroupBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.OrderByDescending(package => NuGetVersion.Parse(package.Version)).First())
             .OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private async Task<NuGetSourceSearchResult> SearchSourceSafelyAsync(
+        PackageSource source,
+        string query,
+        bool exactMatch,
+        bool prerelease,
+        int take,
+        bool useCache,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var packages = exactMatch
+                ? await GetPackageMetadataAsync(source, query, prerelease, useCache, cancellationToken).ConfigureAwait(false)
+                : await SearchSourceAsync(
+                    source,
+                    query,
+                    new global::NuGet.Protocol.Core.Types.SearchFilter(prerelease),
+                    take,
+                    cancellationToken).ConfigureAwait(false);
+            return new(packages, PackageSourceRedactor.RedactForDisplay(source.Source), Exception: null);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var displaySource = PackageSourceRedactor.RedactForDisplay(source.Source);
+            logger.LogWarning(
+                ex,
+                "Failed to search NuGet package source '{PackageSource}'.",
+                displaySource);
+            return new([], displaySource, ex);
+        }
     }
 
     private void InitializeCredentialService()
@@ -285,12 +332,13 @@ internal sealed class NuGetClient(
     {
         var availablePackages = new Dictionary<PackageIdentity, SourcePackageDependencyInfo>(
             PackageIdentity.Comparer);
-        var pendingRanges = new Queue<(string Id, VersionRange Range)>(rootRequirements);
+        var pendingRanges = new Queue<(string Id, VersionRange Range, bool IsRoot)>(
+            rootRequirements.Select(requirement => (requirement.Id, requirement.Range, IsRoot: true)));
         var processedRanges = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         while (pendingRanges.Count > 0)
         {
-            var (packageId, versionRange) = pendingRanges.Dequeue();
+            var (packageId, versionRange, isRoot) = pendingRanges.Dequeue();
             var rangeKey = $"{packageId}|{versionRange.ToNormalizedString()}";
             if (!processedRanges.Add(rangeKey))
             {
@@ -309,7 +357,8 @@ internal sealed class NuGetClient(
                     .GetResourceAsync<DependencyInfoResource>(cancellationToken)
                     .ConfigureAwait(false)
                     ?? throw new InvalidOperationException(
-                        $"NuGet source '{repository.PackageSource.Source}' does not support dependency resolution.");
+                        $"NuGet source '{PackageSourceRedactor.RedactForDisplay(repository.PackageSource.Source)}' " +
+                        "does not support dependency resolution.");
                 var sourceCandidates = await dependencyResource.ResolvePackages(
                     packageId,
                     targetFramework,
@@ -339,8 +388,15 @@ internal sealed class NuGetClient(
                 .ToArray();
             if (distinctCandidates.Length == 0)
             {
-                throw new InvalidOperationException(
-                    $"Unable to resolve NuGet package '{packageId}' in version range '{versionRange}'.");
+                if (isRoot)
+                {
+                    throw new InvalidOperationException(
+                        $"Unable to resolve NuGet package '{packageId}' in version range '{versionRange}'.");
+                }
+
+                // PackageResolver decides which candidate versions are selected. A dependency
+                // required only by an unselected candidate must not fail the graph pre-walk.
+                continue;
             }
 
             // PackageResolver needs every candidate version to reconcile ranges introduced
@@ -354,7 +410,7 @@ internal sealed class NuGetClient(
 
                 foreach (var dependency in candidate.Dependencies)
                 {
-                    pendingRanges.Enqueue((dependency.Id, dependency.VersionRange));
+                    pendingRanges.Enqueue((dependency.Id, dependency.VersionRange, IsRoot: false));
                 }
             }
         }
@@ -402,7 +458,8 @@ internal sealed class NuGetClient(
         }
 
         throw new InvalidOperationException(
-            $"NuGet package source mapping for package '{packageId}' refers to unavailable source(s): {string.Join(", ", mappedSourceNames)}.");
+            $"NuGet package source mapping for package '{packageId}' refers to unavailable source(s): " +
+            $"{string.Join(", ", mappedSourceNames.Select(PackageSourceRedactor.RedactForDisplay))}.");
     }
 
     private async Task<string> DownloadPackageAsync(
@@ -419,7 +476,7 @@ internal sealed class NuGetClient(
             .GetResourceAsync<DownloadResource>(cancellationToken)
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException(
-                $"NuGet source '{source.PackageSource.Source}' does not support package downloads.");
+                $"NuGet source '{PackageSourceRedactor.RedactForDisplay(source.PackageSource.Source)}' does not support package downloads.");
         using var downloadResult = await downloadResource.GetDownloadResourceResultAsync(
             package,
             new PackageDownloadContext(cacheContext),
@@ -431,10 +488,11 @@ internal sealed class NuGetClient(
             downloadResult.PackageStream is null)
         {
             throw new InvalidOperationException(
-                $"Unable to download NuGet package '{package.Id}' version '{package.Version}' from '{source.PackageSource.Source}'.");
+                $"Unable to download NuGet package '{package.Id}' version '{package.Version}' from " +
+                $"'{PackageSourceRedactor.RedactForDisplay(source.PackageSource.Source)}'.");
         }
 
-        var installed = await PackageExtractor.InstallFromSourceAsync(
+        await PackageExtractor.InstallFromSourceAsync(
             source.PackageSource.Source,
             package,
             async destination =>
@@ -445,15 +503,18 @@ internal sealed class NuGetClient(
             pathResolver,
             extractionContext,
             cancellationToken).ConfigureAwait(false);
-        if (!installed)
+
+        using var installedPackage = GlobalPackagesFolderUtility.GetPackage(package, globalPackagesFolder);
+        var installPath = installedPackage is null
+            ? null
+            : pathResolver.GetInstallPath(package.Id, package.Version);
+        if (installPath is null)
         {
             throw new InvalidOperationException(
                 $"NuGet package '{package.Id}' version '{package.Version}' could not be installed.");
         }
 
-        return pathResolver.GetInstallPath(package.Id, package.Version)
-            ?? throw new InvalidOperationException(
-                $"NuGet package '{package.Id}' version '{package.Version}' was downloaded but not installed.");
+        return installPath;
     }
 
     private async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceAsync(
@@ -561,10 +622,10 @@ internal sealed class NuGetClient(
         var runtimeGroup = FindRuntimeGroup(files, targetFramework, runtimeIdentifiers, frameworkReducer);
         var runtimeOverrides = runtimeGroup
             .Where(file => file.RelativePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(file => Path.GetFileName(file.Path), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(GetManagedAssetKey, StringComparer.OrdinalIgnoreCase);
         var baseAssemblyNames = baseGroup
             .Where(file => file.RelativePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-            .Select(file => Path.GetFileName(file.Path))
+            .Select(GetManagedAssetKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var file in baseGroup)
@@ -576,9 +637,15 @@ internal sealed class NuGetClient(
             }
 
             var culture = GetResourceCulture(file.RelativePath);
-            if (culture is null && runtimeOverrides.TryGetValue(Path.GetFileName(file.Path), out var runtimePath))
+            if (runtimeOverrides.TryGetValue(GetManagedAssetKey(file), out var runtimePath))
             {
-                yield return new PackageAsset(package.Id, package.Version, runtimePath.Path, IsManagedAssembly: true, IsNativeLibrary: false, Culture: null);
+                yield return new PackageAsset(
+                    package.Id,
+                    package.Version,
+                    runtimePath.Path,
+                    IsManagedAssembly: true,
+                    IsNativeLibrary: false,
+                    GetResourceCulture(runtimePath.RelativePath));
             }
             else
             {
@@ -589,9 +656,15 @@ internal sealed class NuGetClient(
         foreach (var runtimeFile in runtimeGroup)
         {
             if (runtimeFile.RelativePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) &&
-                !baseAssemblyNames.Contains(Path.GetFileName(runtimeFile.Path)))
+                !baseAssemblyNames.Contains(GetManagedAssetKey(runtimeFile)))
             {
-                yield return new PackageAsset(package.Id, package.Version, runtimeFile.Path, IsManagedAssembly: true, IsNativeLibrary: false, Culture: null);
+                yield return new PackageAsset(
+                    package.Id,
+                    package.Version,
+                    runtimeFile.Path,
+                    IsManagedAssembly: true,
+                    IsNativeLibrary: false,
+                    GetResourceCulture(runtimeFile.RelativePath));
             }
         }
 
@@ -611,6 +684,12 @@ internal sealed class NuGetClient(
             }
 
             break;
+        }
+
+        static string GetManagedAssetKey(PackageFile file)
+        {
+            var culture = GetResourceCulture(file.RelativePath);
+            return $"{culture ?? "<neutral>"}|{Path.GetFileName(file.Path)}";
         }
     }
 
@@ -663,40 +742,63 @@ internal sealed class NuGetClient(
         var effectiveRuntimeIdentifier = string.IsNullOrWhiteSpace(runtimeIdentifier)
             ? System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier
             : runtimeIdentifier;
-        var runtimeIdentifiers = new List<string> { effectiveRuntimeIdentifier };
-        var separatorIndex = effectiveRuntimeIdentifier.LastIndexOf('-');
-        var platform = separatorIndex > 0
-            ? effectiveRuntimeIdentifier[..separatorIndex]
-            : effectiveRuntimeIdentifier;
-
-        if (!runtimeIdentifiers.Contains(platform, StringComparer.OrdinalIgnoreCase))
+        var runtimeIdentifiers = s_runtimeGraph.Value.ExpandRuntime(effectiveRuntimeIdentifier).ToList();
+        if (!runtimeIdentifiers.Contains("any", StringComparer.OrdinalIgnoreCase))
         {
-            runtimeIdentifiers.Add(platform);
+            runtimeIdentifiers.Add("any");
         }
 
-        if (platform.StartsWith("linux", StringComparison.OrdinalIgnoreCase))
+        return runtimeIdentifiers;
+    }
+
+    private static RuntimeGraph LoadRuntimeGraph()
+    {
+        using var stream = typeof(NuGetClient).Assembly.GetManifestResourceStream(RuntimeIdentifierGraphResourceName)
+            ?? throw new InvalidOperationException(
+                $"Embedded runtime identifier graph '{RuntimeIdentifierGraphResourceName}' was not found.");
+        using var document = JsonDocument.Parse(
+            stream,
+            new JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip
+            });
+        if (!document.RootElement.TryGetProperty("runtimes", out var runtimesElement) ||
+            runtimesElement.ValueKind != JsonValueKind.Object)
         {
-            runtimeIdentifiers.Add("linux");
-            runtimeIdentifiers.Add("unix");
-        }
-        else if (platform.StartsWith("osx", StringComparison.OrdinalIgnoreCase))
-        {
-            runtimeIdentifiers.Add("osx");
-            runtimeIdentifiers.Add("unix");
-        }
-        else if (platform.StartsWith("win", StringComparison.OrdinalIgnoreCase))
-        {
-            runtimeIdentifiers.Add("win");
+            throw new InvalidOperationException(
+                $"Embedded runtime identifier graph '{RuntimeIdentifierGraphResourceName}' does not contain a runtimes object.");
         }
 
-        runtimeIdentifiers.Add("any");
-        return runtimeIdentifiers.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var runtimes = new List<RuntimeDescription>();
+        foreach (var runtimeProperty in runtimesElement.EnumerateObject())
+        {
+            var inheritedRuntimes = new List<string>();
+            if (runtimeProperty.Value.TryGetProperty("#import", out var importsElement))
+            {
+                if (importsElement.ValueKind == JsonValueKind.Array)
+                {
+                    inheritedRuntimes.AddRange(
+                        importsElement.EnumerateArray()
+                            .Where(element => element.ValueKind == JsonValueKind.String)
+                            .Select(element => element.GetString()!));
+                }
+                else if (importsElement.ValueKind == JsonValueKind.String)
+                {
+                    inheritedRuntimes.Add(importsElement.GetString()!);
+                }
+            }
+
+            runtimes.Add(new RuntimeDescription(runtimeProperty.Name, inheritedRuntimes));
+        }
+
+        return new RuntimeGraph(runtimes);
     }
 
     private static string? GetResourceCulture(string relativePath)
     {
         var segments = relativePath.Split('/');
-        return segments.Length >= 4 &&
+        return segments.Length is 4 or 6 &&
             segments[^1].EndsWith(".resources.dll", StringComparison.OrdinalIgnoreCase)
                 ? segments[^2]
                 : null;
@@ -772,6 +874,11 @@ internal sealed class NuGetClient(
         bool IsManagedAssembly,
         bool IsNativeLibrary,
         string? Culture);
+
+    private sealed record NuGetSourceSearchResult(
+        IReadOnlyList<NuGetSearchResult> Packages,
+        string Source,
+        Exception? Exception);
 
     private sealed class NuGetLogger(ILogger logger) : INuGetLogger
     {

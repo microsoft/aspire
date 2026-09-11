@@ -9,6 +9,7 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
+using NuGet.Configuration;
 
 namespace Aspire.Cli.NuGet;
 
@@ -72,7 +73,16 @@ internal sealed class BundleNuGetService : INuGetService
         }
 
         var sourceList = sources?.ToArray() ?? [];
-        var packageHash = ComputePackageHash(packageList, targetFramework, runtimeIdentifier, sources: sourceList);
+        var settingsFingerprint = await ComputeSettingsFingerprintAsync(
+            nugetConfigPath,
+            workingDirectory,
+            ct).ConfigureAwait(false);
+        var packageHash = ComputePackageHash(
+            packageList,
+            targetFramework,
+            runtimeIdentifier,
+            sources: sourceList,
+            settingsFingerprint: settingsFingerprint);
         var restoreCacheDirectory = GetPackageRestoreCacheDirectory(workingDirectory);
         var restoreDirectory = Path.Combine(restoreCacheDirectory, packageHash);
         var objectDirectory = Path.Combine(restoreDirectory, "obj");
@@ -132,7 +142,8 @@ internal sealed class BundleNuGetService : INuGetService
         string tfm,
         string? runtimeIdentifier,
         string? managedPath = null,
-        IEnumerable<string>? sources = null)
+        IEnumerable<string>? sources = null,
+        string? settingsFingerprint = null)
     {
         var content = string.Join(
             ";",
@@ -141,14 +152,42 @@ internal sealed class BundleNuGetService : INuGetService
         content += $";tfm:{tfm}";
         content += $";rid:{runtimeIdentifier ?? "<none>"}";
         content += $";client:{GetClientFingerprint(managedPath)}";
+        content += $";settings:{settingsFingerprint ?? "<none>"}";
 
         if (sources?.ToArray() is { Length: > 0 } sourceList)
         {
-            content += $";sources:{string.Join("|", sourceList.OrderBy(source => source, StringComparer.OrdinalIgnoreCase))}";
+            content += $";sources:{string.Join("|", sourceList)}";
         }
 
         var hash = XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(content));
         return hash.ToString("X16", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    internal static async Task<string> ComputeSettingsFingerprintAsync(
+        string? nugetConfigPath,
+        string workingDirectory,
+        CancellationToken cancellationToken)
+    {
+        var settings = !string.IsNullOrEmpty(nugetConfigPath)
+            ? Settings.LoadSpecificSettings(
+                Path.GetDirectoryName(nugetConfigPath)!,
+                Path.GetFileName(nugetConfigPath))
+            : Settings.LoadDefaultSettings(workingDirectory);
+        var hasher = new XxHash3();
+
+        foreach (var configFilePath in settings.GetConfigFilePaths())
+        {
+            hasher.Append(Encoding.UTF8.GetBytes(Path.GetFullPath(configFilePath)));
+            hasher.Append([0]);
+            if (File.Exists(configFilePath))
+            {
+                hasher.Append(await File.ReadAllBytesAsync(configFilePath, cancellationToken).ConfigureAwait(false));
+            }
+            hasher.Append([0]);
+        }
+
+        hasher.Append(Encoding.UTF8.GetBytes(SettingsUtility.GetGlobalPackagesFolder(settings)));
+        return Convert.ToHexString(hasher.GetCurrentHash());
     }
 
     private static string GetClientFingerprint(string? explicitPath)

@@ -95,15 +95,13 @@ internal sealed class BundleNuGetPackageCache(
         bool useCache,
         CancellationToken cancellationToken)
     {
-        var results = await nuGetClient.SearchAsync(
+        var results = await SearchClientAsync(
+            workingDirectory,
             exactPackageId,
             exactMatch: true,
             prerelease,
-            SearchPageSize,
+            nugetConfigFile,
             useCache,
-            explicitSources: [],
-            nugetConfigFile?.FullName,
-            workingDirectory.FullName,
             cancellationToken).ConfigureAwait(false);
         var packages = results
             .Where(package => package.Id.Equals(exactPackageId, StringComparison.OrdinalIgnoreCase))
@@ -114,7 +112,7 @@ internal sealed class BundleNuGetPackageCache(
                 Source = package.Source
             }))
             .DistinctBy(package => package.Version, StringComparer.OrdinalIgnoreCase);
-        return FilterDeprecatedPackages(packages);
+        return packages;
     }
 
     private async Task<IEnumerable<NuGetPackage>> SearchAsync(
@@ -127,15 +125,13 @@ internal sealed class BundleNuGetPackageCache(
         CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
-        var results = await nuGetClient.SearchAsync(
+        var results = await SearchClientAsync(
+            workingDirectory,
             query,
             exactMatch,
             prerelease,
-            SearchPageSize,
+            nugetConfigFile,
             useCache,
-            explicitSources: [],
-            nugetConfigFile?.FullName,
-            workingDirectory.FullName,
             cancellationToken).ConfigureAwait(false);
         return results.Select(package => new NuGetPackage
         {
@@ -143,6 +139,36 @@ internal sealed class BundleNuGetPackageCache(
             Version = package.Version,
             Source = package.Source
         });
+    }
+
+    private async Task<IReadOnlyList<NuGetSearchResult>> SearchClientAsync(
+        DirectoryInfo workingDirectory,
+        string query,
+        bool exactMatch,
+        bool prerelease,
+        FileInfo? nugetConfigFile,
+        bool useCache,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await nuGetClient.SearchAsync(
+                query,
+                exactMatch,
+                prerelease,
+                SearchPageSize,
+                useCache,
+                explicitSources: [],
+                nugetConfigFile?.FullName,
+                workingDirectory.FullName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new NuGetPackageCacheException(
+                $"Package search failed ({ex.GetType().Name}).",
+                ex);
+        }
     }
 
     private IEnumerable<NuGetPackage> FilterPackages(
