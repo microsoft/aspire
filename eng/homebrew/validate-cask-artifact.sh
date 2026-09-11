@@ -8,8 +8,8 @@ set -euo pipefail
 # Validation modes:
 #   * LiveRelease  — Validates against the live GitHub release for the cask's
 #                    version. Runs the full `brew audit --cask --online`
-#                    (the same gauntlet Homebrew/homebrew-cask's per-cask CI
-#                    runs for a bump PR) plus a real
+#                    plus explicit binary notarization verification (matching
+#                    Homebrew/homebrew-cask's signing audit) and a real
 #                    `brew install`/`brew uninstall` cycle. Used by the
 #                    release pipeline after `PublishReleaseAssetsJob` has
 #                    uploaded the aspire-cli-osx-* archives to the GitHub
@@ -228,6 +228,24 @@ if [[ "$VALIDATION_MODE" == "LiveRelease" ]]; then
     brew info --cask "$test_cask_ref" || true
     exit 1
   fi
+
+  cask_version="$(awk -F'"' '/^[[:space:]]*version[[:space:]]+"/ { print $2; exit }' "$CASK_FILE")"
+  installed_binary="$(brew --prefix)/Caskroom/$CASK_NAME/$cask_version/aspire"
+  if [[ ! -f "$installed_binary" ]]; then
+    echo "Error: installed Aspire binary not found at $installed_binary." >&2
+    exit 1
+  fi
+
+  if ! command -v codesign >/dev/null 2>&1; then
+    echo "Error: codesign is required for LiveRelease binary notarization validation." >&2
+    exit 1
+  fi
+
+  # Homebrew no longer exposes --signing for `brew audit`. Because this cask
+  # is installed from a temporary third-party tap, audit_signing does not run
+  # automatically as it does for homebrew/cask. Preserve that release gate by
+  # applying the same notarization requirement directly to the installed binary.
+  codesign --verify -R=notarized --check-notarization "$installed_binary"
 
   echo "  Path: $(command -v aspire)"
   aspire_version="$(aspire --version 2>&1)"

@@ -143,7 +143,7 @@ cask URL points at validation time:
 
 | Mode | Cask URL resolves? | Audit args | Used by |
 |---|---|---|---|
-| `LiveRelease` | Yes — points at a live GitHub release | `brew audit --cask --online` + `brew install`/`brew uninstall` | `.github/workflows/homebrew-validate-release.yml`, on `release: [published]` after the human publishes the draft |
+| `LiveRelease` | Yes — points at a live GitHub release | `brew audit --cask --online` + binary notarization verification + `brew install`/`brew uninstall` | `.github/workflows/homebrew-validate-release.yml`, on `release: [published]` after the human publishes the draft |
 | `LiveArchives` | Not yet — release for `v#{version}` hasn't been published | `brew audit --cask` (no `--online`) | `azure-pipelines.yml` Homebrew Cask job; `.github/workflows/tests.yml`; `dogfood.sh` PR validation |
 
 Common to both modes:

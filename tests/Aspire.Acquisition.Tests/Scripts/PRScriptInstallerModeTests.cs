@@ -106,12 +106,13 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         return (manifestDir, archiveRoot);
     }
 
-    private static async Task<string> CreateMockHomebrewBinAsync(TestEnvironment env, int aspireExitCode)
+    private static async Task<string> CreateMockHomebrewBinAsync(TestEnvironment env, int aspireExitCode, int codesignExitCode = 0)
     {
         var mockBinDir = Path.Combine(env.TempDirectory, "mock-homebrew-bin");
         var brewRepository = Path.Combine(env.TempDirectory, "brew-repository");
         var brewPrefix = Path.Combine(env.TempDirectory, "brew-prefix");
         var brewLog = Path.Combine(env.TempDirectory, "brew.log");
+        var codesignLog = Path.Combine(env.TempDirectory, "codesign.log");
 
         Directory.CreateDirectory(mockBinDir);
         Directory.CreateDirectory(brewRepository);
@@ -130,6 +131,8 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
             exit {{aspireExitCode}}
             ASPIRE
               chmod +x "{{mockBinDir}}/aspire"
+                            mkdir -p "{{brewPrefix}}/Caskroom/aspire/13.3.0"
+                            cp "{{mockBinDir}}/aspire" "{{brewPrefix}}/Caskroom/aspire/13.3.0/aspire"
             }
 
             case "${1:-}" in
@@ -179,6 +182,7 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
                 ;;
               uninstall)
                 rm -f "{{mockBinDir}}/aspire"
+                                rm -rf "{{brewPrefix}}/Caskroom/aspire"
                 exit 0
                 ;;
               untap)
@@ -198,6 +202,14 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
             exit 0
             """);
         FileHelper.MakeExecutable(curlPath);
+
+        var codesignPath = Path.Combine(mockBinDir, "codesign");
+        await File.WriteAllTextAsync(codesignPath, $$"""
+            #!/usr/bin/env bash
+            echo "$*" >> "{{codesignLog}}"
+            exit {{codesignExitCode}}
+            """);
+        FileHelper.MakeExecutable(codesignPath);
 
         return mockBinDir;
     }
@@ -617,6 +629,35 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         Assert.Contains("audit --cask --online local/aspire/aspire", brewLog);
         Assert.DoesNotContain("--signing", brewLog);
         Assert.DoesNotContain("--no-signing", brewLog);
+        Assert.Contains("uninstall --cask local/aspire-test/aspire", brewLog);
+        var codesignLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "codesign.log"));
+        Assert.Contains("--verify -R=notarized --check-notarization", codesignLog);
+        Assert.Contains("Caskroom/aspire/13.3.0/aspire", codesignLog);
+    }
+
+    [Fact]
+    [RequiresTools(["ruby"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
+    public async Task Bash_PrepareHomebrewCask_FailedSigningValidation_UninstallsCask()
+    {
+        using var env = new TestEnvironment();
+        var archiveRoot = Path.Combine(env.TempDirectory, "archives");
+        await CreateFakeHomebrewArchivesAsync(archiveRoot);
+        var mockBinDir = await CreateMockHomebrewBinAsync(env, aspireExitCode: 0, codesignExitCode: 42);
+        using var cmd = new ScriptToolCommand("eng/homebrew/prepare-cask-artifact.sh", env, _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockBinDir}{Path.PathSeparator}/usr/bin:/bin:/usr/sbin:/sbin");
+
+        var result = await cmd.ExecuteAsync(
+            "--version", "13.3.0",
+            "--channel", "stable",
+            "--archive-root", archiveRoot,
+            "--output-dir", Path.Combine(env.TempDirectory, "homebrew-output"),
+            "--validation-mode", "LiveRelease");
+
+        Assert.NotEqual(0, result.ExitCode);
+        var codesignLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "codesign.log"));
+        Assert.Contains("--verify -R=notarized --check-notarization", codesignLog);
+        var brewLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "brew.log"));
         Assert.Contains("uninstall --cask local/aspire-test/aspire", brewLog);
     }
 
