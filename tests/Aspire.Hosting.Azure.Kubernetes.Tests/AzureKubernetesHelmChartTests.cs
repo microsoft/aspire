@@ -6,16 +6,16 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
-using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureKubernetesHelmChartTests
+public class AzureKubernetesHelmChartTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void AksAddHelmChart_HasCorrectParent()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         var chart = aks.AddHelmChart("cert-manager", "oci://quay.io/jetstack/charts/cert-manager", "1.17.0");
@@ -28,7 +28,8 @@ public class AzureKubernetesHelmChartTests
     [Fact]
     public void AksAddHelmChart_BasicProperties()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         var chart = aks.AddHelmChart("cert-manager", "oci://quay.io/jetstack/charts/cert-manager", "1.17.0");
@@ -41,7 +42,8 @@ public class AzureKubernetesHelmChartTests
     [Fact]
     public void AksAddHelmChart_WithHelmValue_StoresValues()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         var chart = aks.AddHelmChart("cert-manager", "oci://quay.io/jetstack/charts/cert-manager", "1.17.0")
@@ -56,7 +58,8 @@ public class AzureKubernetesHelmChartTests
     [Fact]
     public void AksAddHelmChart_WithNamespace_SetsNamespace()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         var chart = aks.AddHelmChart("nginx", "oci://ghcr.io/nginx/charts/nginx-ingress", "1.5.0")
@@ -68,7 +71,8 @@ public class AzureKubernetesHelmChartTests
     [Fact]
     public void AksAddHelmChart_WithReleaseName_SetsReleaseName()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         var chart = aks.AddHelmChart("nginx", "oci://ghcr.io/nginx/charts/nginx-ingress", "1.5.0")
@@ -80,7 +84,8 @@ public class AzureKubernetesHelmChartTests
     [Fact]
     public void AksAddHelmChart_WithDestroy_OptsIn()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         var chart = aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1")
@@ -92,7 +97,8 @@ public class AzureKubernetesHelmChartTests
     [Fact]
     public void AksAddHelmChart_DestroyDefaultsToFalse()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         var chart = aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1");
@@ -117,7 +123,8 @@ public class AzureKubernetesHelmChartTests
     [InlineData("test", "oci://example.com/chart", "")]
     public void AksAddHelmChart_ThrowsOnNullOrEmptyArgs(string? name, string? chartReference, string? chartVersion)
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         Assert.ThrowsAny<ArgumentException>(() => aks.AddHelmChart(name!, chartReference!, chartVersion!));
@@ -126,7 +133,8 @@ public class AzureKubernetesHelmChartTests
     [Fact]
     public void AksAddHelmChart_RejectsInvalidChartVersion()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         Assert.Throws<ArgumentException>(() =>
@@ -136,7 +144,8 @@ public class AzureKubernetesHelmChartTests
     [Fact]
     public void AksAddHelmChart_RejectsMaliciousChartReference()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         Assert.Throws<ArgumentException>(() =>

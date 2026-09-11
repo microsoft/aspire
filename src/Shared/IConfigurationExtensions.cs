@@ -2,14 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
-#if !CLI && !ASPIRE_DASHBOARD
+#if !CLI && !ASPIRE_DASHBOARD && !ASPIRE_TERMINAL_HOST
 using Aspire.Hosting;
 #endif
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire;
 
-#if CLI || ASPIRE_DASHBOARD
+#if CLI || ASPIRE_DASHBOARD || ASPIRE_TERMINAL_HOST
 [AttributeUsage(AttributeTargets.All)]
 internal sealed class AspireExportIgnoreAttribute : Attribute
 {
