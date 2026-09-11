@@ -19,6 +19,7 @@ namespace Aspire.Cli.NuGet;
 
 internal sealed record NuGetSettingsInfo(
     IReadOnlyList<string> ConfigPaths,
+    string CacheIdentity,
     IReadOnlyList<NuGetSourceInfo> Sources,
     IReadOnlyList<string> SensitiveSourceValues,
     bool PackageSourceMappingEnabled,
@@ -60,6 +61,7 @@ internal interface INuGetService
     /// <param name="sources">Additional NuGet sources.</param>
     /// <param name="workingDirectory">Working directory for nuget.config discovery and for resolving the workspace-local restore cache. Required.</param>
     /// <param name="nugetConfigPaths">NuGet.config paths ordered from highest to lowest precedence.</param>
+    /// <param name="nugetSettingsCacheIdentity">The cache identity computed from NuGet's effective ambient settings.</param>
     /// <param name="nugetConfigOverlayCacheIdentity">A stable cache identity for the first config path when it is an invocation-scoped overlay.</param>
     /// <param name="additionalSensitiveSources">Additional source values that must be redacted from restore output.</param>
     /// <param name="globalPackagesFolderOverride">An optional global packages folder override for the restore process.</param>
@@ -72,6 +74,7 @@ internal interface INuGetService
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
         IReadOnlyList<string>? nugetConfigPaths = null,
+        string? nugetSettingsCacheIdentity = null,
         string? nugetConfigOverlayCacheIdentity = null,
         IEnumerable<string>? additionalSensitiveSources = null,
         string? globalPackagesFolderOverride = null,
@@ -117,6 +120,7 @@ internal sealed class BundleNuGetService : INuGetService
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
         IReadOnlyList<string>? nugetConfigPaths = null,
+        string? nugetSettingsCacheIdentity = null,
         string? nugetConfigOverlayCacheIdentity = null,
         IEnumerable<string>? additionalSensitiveSources = null,
         string? globalPackagesFolderOverride = null,
@@ -146,10 +150,9 @@ internal sealed class BundleNuGetService : INuGetService
         }
 
         var sourceList = sources?.ToArray();
-        var nugetConfigCacheIdentity = await ComputeNuGetConfigCacheIdentityAsync(
-            nugetConfigPaths,
-            nugetConfigOverlayCacheIdentity,
-            ct).ConfigureAwait(false);
+        var nugetConfigCacheIdentity = ComputeNuGetConfigCacheIdentity(
+            nugetSettingsCacheIdentity,
+            nugetConfigOverlayCacheIdentity);
         var sensitiveSources = (sourceList ?? [])
             .Concat(additionalSensitiveSources ?? [])
             .Where(PackageSourceOverrideMappings.HasCredentialMaterial)
@@ -390,6 +393,10 @@ internal sealed class BundleNuGetService : INuGetService
                 .Select(static element => element.GetString()
                     ?? throw new InvalidDataException("The NuGet configuration hierarchy contained a null path."))
                 .ToArray();
+            var cacheIdentity = document.RootElement
+                .GetProperty("CacheIdentity")
+                .GetString()
+                ?? throw new InvalidDataException("The NuGet settings response did not contain a cache identity.");
             var sources = document.RootElement
                 .GetProperty("Sources")
                 .EnumerateArray()
@@ -432,6 +439,7 @@ internal sealed class BundleNuGetService : INuGetService
 
             return new NuGetSettingsInfo(
                 configPaths,
+                cacheIdentity,
                 sources,
                 sensitiveSourceValues,
                 packageSourceMappingEnabled,
@@ -582,39 +590,25 @@ internal sealed class BundleNuGetService : INuGetService
         return XxHash3.HashToUInt64(System.Text.Encoding.UTF8.GetBytes(content)).ToString("X16", CultureInfo.InvariantCulture);
     }
 
-    private async Task<string?> ComputeNuGetConfigCacheIdentityAsync(
-        IReadOnlyList<string>? nugetConfigPaths,
-        string? nugetConfigOverlayCacheIdentity,
-        CancellationToken cancellationToken)
+    private static string? ComputeNuGetConfigCacheIdentity(
+        string? nugetSettingsCacheIdentity,
+        string? nugetConfigOverlayCacheIdentity)
     {
-        if (nugetConfigPaths is not { Count: > 0 })
+        if (nugetSettingsCacheIdentity is null && nugetConfigOverlayCacheIdentity is null)
         {
             return null;
         }
 
         var hash = new XxHash3();
-        for (var index = 0; index < nugetConfigPaths.Count; index++)
+        if (nugetSettingsCacheIdentity is not null)
         {
-            var nugetConfigPath = nugetConfigPaths[index];
-            if (index == 0 && nugetConfigOverlayCacheIdentity is not null)
-            {
-                hash.Append("\0NUGET_CONFIG_OVERLAY\0"u8);
-                hash.Append(System.Text.Encoding.UTF8.GetBytes(nugetConfigOverlayCacheIdentity));
-            }
-            else
-            {
-                hash.Append(System.Text.Encoding.UTF8.GetBytes(nugetConfigPath));
-                hash.Append(await File.ReadAllBytesAsync(nugetConfigPath, cancellationToken).ConfigureAwait(false));
-            }
-
-            var configContent = await File.ReadAllTextAsync(nugetConfigPath, cancellationToken).ConfigureAwait(false);
-            foreach (var environmentVariableName in NuGetConfigEnvironmentVariables.FindReferencedNames(configContent))
-            {
-                hash.Append("\0NUGET_CONFIG_ENVIRONMENT\0"u8);
-                hash.Append(System.Text.Encoding.UTF8.GetBytes(environmentVariableName));
-                hash.Append(System.Text.Encoding.UTF8.GetBytes(
-                    _environment.GetEnvironmentVariable(environmentVariableName) ?? "\0UNSET\0"));
-            }
+            hash.Append("\0NUGET_SETTINGS\0"u8);
+            hash.Append(System.Text.Encoding.UTF8.GetBytes(nugetSettingsCacheIdentity));
+        }
+        if (nugetConfigOverlayCacheIdentity is not null)
+        {
+            hash.Append("\0NUGET_CONFIG_OVERLAY\0"u8);
+            hash.Append(System.Text.Encoding.UTF8.GetBytes(nugetConfigOverlayCacheIdentity));
         }
 
         return Convert.ToHexString(hash.GetCurrentHash());

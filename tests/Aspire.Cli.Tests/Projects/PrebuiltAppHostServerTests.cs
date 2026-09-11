@@ -84,497 +84,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void CanSkipIntegrationRestore_RestoresWhenNothingHasBeenRestoredYet()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
-    }
-
-    [Fact]
-    public void CanSkipIntegrationRestore_RestoresWhenTheAssetsAreMissing()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint", writeAssets: false);
-
-        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
-    }
-
-    [Fact]
-    public void CanSkipIntegrationRestore_RestoresWhenTheFingerprintChanged()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "old-fingerprint");
-
-        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "new-fingerprint", NullLogger.Instance));
-    }
-
-    [Fact]
-    public void CanSkipIntegrationRestore_SkipsWhenTheFingerprintMatches()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint");
-
-        Assert.True(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenAReferencedProjectChanges()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
-        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.5.0" /></ItemGroup></Project>""");
-        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
-
-        var before = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        // A referenced project bumping its own dependency changes the closure that restore resolves
-        // without changing a byte of the generated project file.
-        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.6.0-dev" /></ItemGroup></Project>""");
-        var after = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        Assert.NotEqual(before.Fingerprint, after.Fingerprint);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenRestoreConfigContentChanges()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
-        await File.WriteAllTextAsync(
-            configPath,
-            "<configuration><packageSources><add key=\"a\" value=\"https://example.invalid/a\" /></packageSources></configuration>");
-        var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            [configPath],
-            integrationHostingVersion: null,
-            integrationPackageSources: null,
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: null,
-            CancellationToken.None);
-
-        await File.WriteAllTextAsync(
-            configPath,
-            "<configuration><packageSources><add key=\"b\" value=\"https://example.invalid/b\" /></packageSources></configuration>");
-        var second = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            [configPath],
-            integrationHostingVersion: null,
-            integrationPackageSources: null,
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: null,
-            CancellationToken.None);
-
-        Assert.NotEqual(first.Fingerprint, second.Fingerprint);
-    }
-
-    [Theory]
-    [InlineData("%ASPIRE_TEST_SOURCE%")]
-    [InlineData("$ASPIRE_TEST_SOURCE")]
-    [InlineData("${ASPIRE_TEST_SOURCE}")]
-    public async Task ComputeRestoreInputsAsync_ConfigEnvironmentReferenceDisablesRestoreSkip(string source)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
-        await File.WriteAllTextAsync(
-            configPath,
-            $"""
-            <configuration>
-              <packageSources>
-                <add key="environment" value="{source}" />
-              </packageSources>
-            </configuration>
-            """);
-
-        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            [configPath],
-            integrationHostingVersion: null,
-            integrationPackageSources: null,
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: null,
-            CancellationToken.None);
-
-        Assert.False(inputs.IsEligibleForSkip);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_ReferencedProjectConfigEnvironmentReferenceDisablesRestoreSkip()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var projectDirectory = workspace.CreateDirectory("integration");
-        var referencedProject = Path.Combine(projectDirectory.FullName, "MyIntegration.csproj");
-        await File.WriteAllTextAsync(referencedProject, "<Project />");
-        await File.WriteAllTextAsync(
-            Path.Combine(projectDirectory.FullName, "NuGet.Config"),
-            """
-            <configuration>
-              <config>
-                <add key="globalPackagesFolder" value="%INTEGRATION_PACKAGES%" />
-              </config>
-            </configuration>
-            """);
-        var projectRefs = new List<IntegrationReference>
-        {
-            IntegrationReference.FromProject("MyIntegration", referencedProject)
-        };
-
-        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            projectRefs,
-            CancellationToken.None);
-
-        Assert.False(inputs.IsEligibleForSkip);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenGlobalPackagesFolderChanges()
-    {
-        var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            nugetConfigPaths: null,
-            integrationHostingVersion: null,
-            integrationPackageSources: null,
-            nugetPackagesPath: Path.GetFullPath("packages-a"),
-            nugetFallbackPackagesPaths: null,
-            CancellationToken.None);
-
-        var second = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            nugetConfigPaths: null,
-            integrationHostingVersion: null,
-            integrationPackageSources: null,
-            nugetPackagesPath: Path.GetFullPath("packages-b"),
-            nugetFallbackPackagesPaths: null,
-            CancellationToken.None);
-
-        Assert.NotEqual(first.Fingerprint, second.Fingerprint);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenFallbackPackagesFoldersChange()
-    {
-        var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            nugetConfigPaths: null,
-            integrationHostingVersion: null,
-            integrationPackageSources: null,
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: [Path.GetFullPath("fallback-a")],
-            CancellationToken.None);
-
-        var second = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            nugetConfigPaths: null,
-            integrationHostingVersion: null,
-            integrationPackageSources: null,
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: [Path.GetFullPath("fallback-b")],
-            CancellationToken.None);
-
-        Assert.NotEqual(first.Fingerprint, second.Fingerprint);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenIntegrationHostingVersionChanges()
-    {
-        var initial = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            nugetConfigPaths: null,
-            integrationHostingVersion: "13.4.0",
-            integrationPackageSources: null,
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: null,
-            CancellationToken.None);
-
-        var changedVersion = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            nugetConfigPaths: null,
-            integrationHostingVersion: "13.5.0",
-            integrationPackageSources: null,
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: null,
-            CancellationToken.None);
-
-        Assert.NotEqual(initial.Fingerprint, changedVersion.Fingerprint);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenIntegrationPackageSourcesChange()
-    {
-        var initial = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            nugetConfigPaths: null,
-            integrationHostingVersion: null,
-            integrationPackageSources: "https://example.invalid/feed-a",
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: null,
-            CancellationToken.None);
-
-        var changedSources = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project />",
-            [],
-            [],
-            nugetConfigPaths: null,
-            integrationHostingVersion: null,
-            integrationPackageSources: "https://example.invalid/feed-b",
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: null,
-            CancellationToken.None);
-
-        Assert.NotEqual(initial.Fingerprint, changedSources.Fingerprint);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenACentrallyManagedVersionChanges()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
-        // Under central package management the reference carries no version at all: the version lives
-        // in Directory.Packages.props, which MSBuild imports automatically. Bumping it there changes
-        // what restore resolves while every hashed file stays byte-for-byte identical.
-        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" /></ItemGroup></Project>""");
-        var packagesProps = Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props");
-        await File.WriteAllTextAsync(packagesProps, """<Project><ItemGroup><PackageVersion Include="Aspire.Hosting" Version="13.5.0" /></ItemGroup></Project>""");
-        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
-
-        var before = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        await File.WriteAllTextAsync(packagesProps, """<Project><ItemGroup><PackageVersion Include="Aspire.Hosting" Version="13.6.0-dev" /></ItemGroup></Project>""");
-        var after = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        Assert.NotEqual(before.Fingerprint, after.Fingerprint);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenATransitivelyReferencedProjectChanges()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var leaf = Path.Combine(workspace.WorkspaceRoot.FullName, "Leaf.csproj");
-        await File.WriteAllTextAsync(leaf, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.5.0" /></ItemGroup></Project>""");
-        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
-        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><ProjectReference Include="Leaf.csproj" /></ItemGroup></Project>""");
-        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
-
-        var before = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        // Restore resolves the whole graph, not just its first level, so a package bump two hops out
-        // changes the closure exactly as much as one hop out does.
-        await File.WriteAllTextAsync(leaf, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.6.0-dev" /></ItemGroup></Project>""");
-        var after = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        Assert.NotEqual(before.Fingerprint, after.Fingerprint);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_IsNotEligibleForSkipWhenATransitivelyReferencedProjectFloats()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var leaf = Path.Combine(workspace.WorkspaceRoot.FullName, "Leaf.csproj");
-        await File.WriteAllTextAsync(leaf, """<Project><ItemGroup><PackageReference Include="Some.Package" Version="13.4.*" /></ItemGroup></Project>""");
-        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
-        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><ProjectReference Include="Leaf.csproj" /></ItemGroup></Project>""");
-        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
-
-        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        Assert.False(inputs.IsEligibleForSkip);
-    }
-
-    [Theory]
-    [InlineData("""<Project><Import Project="Versions.props" /></Project>""")]
-    [InlineData("""<Project><ItemGroup><ProjectReference Include="$(RepoRoot)/Leaf.csproj" /></ItemGroup></Project>""")]
-    public async Task ComputeRestoreInputsAsync_IsNotEligibleForSkipWhenRestoreInputsRequireEvaluation(string projectContent)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
-        await File.WriteAllTextAsync(referencedProject, projectContent);
-        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
-
-        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        Assert.False(inputs.IsEligibleForSkip);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintIncludesNuGetConfigCanonicalCasing()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var projectDirectory = workspace.CreateDirectory("src");
-        var referencedProject = Path.Combine(projectDirectory.FullName, "Aspire.Hosting.Java.csproj");
-        await File.WriteAllTextAsync(referencedProject, "<Project />");
-        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
-        await File.WriteAllTextAsync(nugetConfigPath, "<configuration />");
-        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
-
-        var before = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-        await File.WriteAllTextAsync(nugetConfigPath, "<configuration><packageSources><clear /></packageSources></configuration>");
-        var after = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        Assert.NotEqual(before.Fingerprint, after.Fingerprint);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_ToleratesAProjectReferenceCycle()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var first = Path.Combine(workspace.WorkspaceRoot.FullName, "First.csproj");
-        var second = Path.Combine(workspace.WorkspaceRoot.FullName, "Second.csproj");
-        // MSBuild rejects a cycle, but the fingerprint is computed before anything validates the
-        // graph, so walking it has to terminate on its own rather than hang the launch.
-        await File.WriteAllTextAsync(first, """<Project><ItemGroup><ProjectReference Include="Second.csproj" /></ItemGroup></Project>""");
-        await File.WriteAllTextAsync(second, """<Project><ItemGroup><ProjectReference Include="First.csproj" /></ItemGroup></Project>""");
-        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("First", first) };
-
-        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        Assert.NotEmpty(inputs.Fingerprint);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintIsStableForUnchangedInputs()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
-        await File.WriteAllTextAsync(referencedProject, "<Project />");
-        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
-
-        var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-        var second = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        Assert.Equal(first, second);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_IsNotEligibleForSkipWhenAReferencedProjectFloats()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
-        // The generated project pins exact versions, so the only float is inside the referenced
-        // project. Restore must still run because the feed can resolve it to a different package.
-        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Some.Package" Version="13.4.*" /></ItemGroup></Project>""");
-        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
-
-        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
-
-        Assert.False(inputs.IsEligibleForSkip);
-    }
-
-    [Fact]
-    public async Task ComputeRestoreInputsAsync_IsEligibleForSkipWhenEveryVersionIsExact()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
-        await File.WriteAllTextAsync(referencedProject, """<Project ToolsVersion="4.0"><ItemGroup><PackageReference Include="Some.Package" Version="13.5.0" /></ItemGroup></Project>""");
-        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
-        var packageRefs = new List<IntegrationReference> { IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.5.0") };
-
-        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", packageRefs, projectRefs, CancellationToken.None);
-
-        Assert.True(inputs.IsEligibleForSkip);
-    }
-
-    [Theory]
-    [InlineData("""<PackageReference Include="A" Version="13.4.*" />""")]
-    [InlineData("""<PackageReference Include="A" Version="[13.4,14)" />""")]
-    [InlineData("""<PackageReference Include="A" Version="(13.4,)" />""")]
-    [InlineData("""<PackageReference Include="A" VersionOverride="13.4.*" />""")]
-    [InlineData("""<PackageReference Include="A" Version = "13.4.*" />""")]
-    [InlineData("""<PackageReference Include='A' Version='13.4.*' />""")]
-    [InlineData("""<PackageReference Include="A" Version="$(PackageVersion)" />""")]
-    public void HasFloatingVersionAttribute_DetectsVersionsThatCanResolveDifferently(string projectText)
-    {
-        Assert.True(PrebuiltAppHostServer.HasFloatingVersionAttribute(projectText));
-    }
-
-    [Theory]
-    [InlineData("""<PackageReference Include="A" Version="13.5.0" />""")]
-    [InlineData("""<PackageReference Include="A" Version="13.5.0-preview.1.25000.1" />""")]
-    // ToolsVersion ends in "Version" but is not a package version; the word boundary must exclude it.
-    [InlineData("""<Project ToolsVersion="4.0,x" />""")]
-    [InlineData("<Project />")]
-    public void HasFloatingVersionAttribute_IsFalseForExactVersions(string projectText)
-    {
-        Assert.False(PrebuiltAppHostServer.HasFloatingVersionAttribute(projectText));
-    }
-
-    [Theory]
-    [InlineData("13.4.*")]
-    [InlineData("[13.4,14)")]
-    [InlineData("(13.4,)")]
-    public void HasFloatingPackageVersion_DetectsVersionsThatCanResolveDifferently(string version)
-    {
-        var packageRefs = new List<IntegrationReference> { IntegrationReference.FromPackage("Aspire.Hosting.Redis", version) };
-
-        Assert.True(PrebuiltAppHostServer.HasFloatingPackageVersion(packageRefs));
-    }
-
-    [Fact]
-    public void HasFloatingPackageVersion_IsFalseForExactVersions()
-    {
-        var packageRefs = new List<IntegrationReference>
-        {
-            IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.5.0"),
-            IntegrationReference.FromPackage("Aspire.Hosting.Java", "13.5.0-preview.1.25000.1")
-        };
-
-        Assert.False(PrebuiltAppHostServer.HasFloatingPackageVersion(packageRefs));
-    }
-
-    [Theory]
-    [InlineData("error NETSDK1004: Assets file '/tmp/obj/project.assets.json' not found. Run a NuGet package restore.")]
-    [InlineData("/tmp/obj/project.assets.json' doesn't have a target for 'net10.0'.")]
-    public void ShouldRetryWithRestore_RetriesWhenTheAssetsAreMissingOrStale(string line)
-    {
-        var output = new OutputCollector();
-        output.AppendOutput(line);
-
-        Assert.True(PrebuiltAppHostServer.ShouldRetryWithRestore(output));
-    }
-
-    [Theory]
-    [InlineData("error NETSDK1064: Package Aspire.Hosting.Redis, version 13.5.0 was not found. It might have been deleted since NuGet restore. Otherwise, NuGet restore might have only partially completed, which might have been due to maximum path length restrictions.")]
-    [InlineData("error NU1101: Unable to find package Aspire.Hosting.Java. No packages exist with this id in source(s): dotnet-public")]
-    [InlineData("error NU1102: Unable to find package Aspire.Hosting with version (>= 13.6.0-dev)")]
-    public void ShouldRetryWithRestore_RetriesWhenThePackageCacheIsMissingPackages(string line)
-    {
-        var output = new OutputCollector();
-        output.AppendOutput(line);
-
-        Assert.True(PrebuiltAppHostServer.ShouldRetryWithRestore(output));
-    }
-
-    [Fact]
-    public void ShouldRetryWithRestore_DoesNotRetryAnOrdinaryCompileFailure()
-    {
-        var output = new OutputCollector();
-        output.AppendOutput("Program.cs(3,1): error CS0103: The name 'Foo' does not exist in the current context");
-
-        Assert.False(PrebuiltAppHostServer.ShouldRetryWithRestore(output));
-    }
-
-    [Fact]
     public void GetIntegrationBuildFailureMessage_ExplainsAPackageDowngrade()
     {
         var output = new OutputCollector();
@@ -596,49 +105,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Equal(ErrorStrings.IntegrationBuildFailed, PrebuiltAppHostServer.GetIntegrationBuildFailureMessage(output));
     }
 
-    private static void WriteRestoreState(string restoreDir, string fingerprint, bool writeAssets = true)
-    {
-        var objDir = Path.Combine(restoreDir, "obj");
-        Directory.CreateDirectory(objDir);
-        if (writeAssets)
-        {
-            File.WriteAllText(Path.Combine(objDir, "project.assets.json"), "{}");
-        }
-
-        File.WriteAllText(Path.Combine(objDir, "aspire-restore.stamp"), fingerprint);
-    }
-
     [Fact]
-    public void GenerateIntegrationProjectFile_WithPackagesOnly_ProducesPackageReferences()
+    public void GenerateIntegrationProjectFile_ProducesAspireHostingAndProjectReferences()
     {
-        var packageRefs = new List<IntegrationReference>
-        {
-            IntegrationReference.FromPackage("Aspire.Hosting", "13.2.0"),
-            IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.2.0")
-        };
-        var projectRefs = new List<IntegrationReference>();
-
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(packageRefs, projectRefs, "/tmp/libs");
-        var doc = XDocument.Parse(xml);
-
-        var packageElements = doc.Descendants("PackageReference").ToList();
-        Assert.Equal(2, packageElements.Count);
-        Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "Aspire.Hosting" && e.Attribute("Version")?.Value == "13.2.0");
-        Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "13.2.0");
-
-        Assert.Empty(doc.Descendants("ProjectReference"));
-    }
-
-    [Fact]
-    public void GenerateIntegrationProjectFile_WithProjectRefsOnly_ProducesProjectReferences()
-    {
-        var packageRefs = new List<IntegrationReference>();
         var projectRefs = new List<IntegrationReference>
         {
             IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
         };
 
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(packageRefs, projectRefs, "/tmp/libs");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(projectRefs, "13.5.0", "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
         var projectElements = doc.Descendants("ProjectReference").ToList();
@@ -648,39 +123,45 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Equal("true", projectElements[0].Element("ReferenceOutputAssembly")?.Value);
         Assert.Null(projectElements[0].Element("Private"));
 
-        Assert.Empty(doc.Descendants("PackageReference"));
+        var packageReference = Assert.Single(doc.Descendants("PackageReference"));
+        Assert.Equal("Aspire.Hosting", packageReference.Attribute("Include")?.Value);
+        Assert.Equal("13.5.0", packageReference.Attribute("Version")?.Value);
     }
 
     [Fact]
-    public void GenerateIntegrationProjectFile_WithMixed_ProducesBothReferenceTypes()
+    public void GenerateIntegrationProjectFile_UsesOnlyAspireHostingPackageReference()
     {
-        var packageRefs = new List<IntegrationReference>
-        {
-            IntegrationReference.FromPackage("Aspire.Hosting", "13.2.0"),
-            IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.2.0")
-        };
         var projectRefs = new List<IntegrationReference>
         {
             IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
         };
 
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(packageRefs, projectRefs, "/tmp/libs");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(projectRefs, "13.5.0", "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
-        Assert.Equal(2, doc.Descendants("PackageReference").Count());
+        var packageReference = Assert.Single(doc.Descendants("PackageReference"));
+        Assert.Equal("Aspire.Hosting", packageReference.Attribute("Include")?.Value);
         Assert.Single(doc.Descendants("ProjectReference"));
+    }
+
+    [Fact]
+    public void GenerateIntegrationProjectFile_WithSourceOverridePinsExactAspireHostingVersion()
+    {
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [],
+            "13.5.0",
+            "/tmp/libs",
+            useExactPackageVersions: true);
+        var doc = XDocument.Parse(xml);
+
+        var packageReference = Assert.Single(doc.Descendants("PackageReference"));
+        Assert.Equal("[13.5.0]", packageReference.Attribute("Version")?.Value);
     }
 
     [Fact]
     public void GenerateIntegrationProjectFile_DoesNotSetOutDir()
     {
-        var packageRefs = new List<IntegrationReference>
-        {
-            IntegrationReference.FromPackage("Aspire.Hosting", "13.2.0")
-        };
-        var projectRefs = new List<IntegrationReference>();
-
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(packageRefs, projectRefs, "/custom/output/path");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/custom/output/path");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -690,7 +171,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_DoesNotSetEarlyOutputPathProperties()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/custom/output/path");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/custom/output/path");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -806,7 +287,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_WritesClosureManifestFiles()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/work");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/work");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -819,7 +300,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_WritesClosureManifestTarget()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/work");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/work");
         var doc = XDocument.Parse(xml);
 
         var target = doc.Descendants("Target")
@@ -833,7 +314,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_HasCopyLocalLockFileAssemblies()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/libs");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -844,7 +325,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_DisablesAnalyzersAndDocGen()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/libs");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -859,7 +340,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_TargetsNet10()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/libs");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -873,7 +354,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
             [],
-            [],
+            "13.5.0",
             "/tmp/libs",
             sources);
         var doc = XDocument.Parse(xml);
@@ -888,33 +369,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_WithEmptyAdditionalSources_OverridesInheritedEnvironmentValue()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/libs", Enumerable.Empty<string>());
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/libs", Enumerable.Empty<string>());
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
         var restoreSources = doc.Descendants(ns + "RestoreAdditionalProjectSources").Single();
         Assert.Equal(string.Empty, restoreSources.Value);
-    }
-
-    [Fact]
-    public void GenerateIntegrationProjectFile_WithExactVersions_ExactPinsOnlyAspirePackages()
-    {
-        var packageRefs = new List<IntegrationReference>
-        {
-            IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0-pr.17166.ga49d604d"),
-            IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Redis", "1.0.0")
-        };
-
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
-            packageRefs,
-            [],
-            "/tmp/libs",
-            useExactPackageVersions: true);
-        var doc = XDocument.Parse(xml);
-
-        var packageElements = doc.Descendants("PackageReference").ToList();
-        Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "[13.4.0-pr.17166.ga49d604d]");
-        Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "CommunityToolkit.Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "1.0.0");
     }
 
     [Fact]
@@ -1592,6 +1052,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         const string source = "https://example.com/staging";
         var settings = new NuGetSettingsInfo(
             ConfigPaths: [],
+            CacheIdentity: "settings",
             Sources:
             [
                 CreateNuGetSourceInfo("Private", source, isEnabled: false),
@@ -2091,7 +1552,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 string.Empty);
             var nugetExecutionFactory = new TestProcessExecutionFactory
             {
-                AssertionCallback = (args, _, _, _) => WriteNuGetConfigOverlayIfRequested(args),
+                AssertionCallback = (args, _, _, _) =>
+                {
+                    WriteNuGetConfigOverlayIfRequested(args);
+                    WritePackageProbeManifestIfRequested(args);
+                },
                 AttemptCallback = (_, _) => (0, CreateNuGetSettingsResponse())
             };
             nugetService = new BundleNuGetService(
@@ -2172,7 +1637,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         return await server.CreateRestoreOverlayAsync(
             restoreSources,
             configSources,
-            new NuGetSettingsInfo([], [], [], false, [], [], [], s_sourceIdentityKey),
+            new NuGetSettingsInfo([], "settings", [], [], false, [], [], [], s_sourceIdentityKey),
             CancellationToken.None);
     }
 
@@ -3149,7 +2614,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             Assert.True(firstResult.Success);
             Assert.True(secondResult.Success);
-            Assert.Equal([false, true], noRestoreValues);
+            Assert.Equal([false, false], noRestoreValues);
             Assert.All(processOptions, options =>
             {
                 Assert.False(options.SuppressLogging);
@@ -3211,10 +2676,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             // Aspire package versions remain in their original (non-pinned) form when no override
             // is in play; the exact-version pinning only fires when a single source is selected.
-            var packageElements = generatedProject.Descendants("PackageReference").ToList();
-            Assert.Contains(packageElements, e =>
-                e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" &&
-                e.Attribute("Version")?.Value == "13.4.0-pr.17141.gf142085f");
+            var packageElement = Assert.Single(generatedProject.Descendants("PackageReference"));
+            Assert.Equal("Aspire.Hosting", packageElement.Attribute("Include")?.Value);
+            Assert.Equal("13.4.0-pr.17141.gf142085f", packageElement.Attribute("Version")?.Value);
         }
         finally
         {
@@ -3379,7 +2843,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         {
             var args = executionFactory.LastArguments!;
             return Task.FromResult(args is ["nuget", "settings", ..]
-                ? (0, (string?)CreateNuGetSettingsResponse([ambientConfigPath]))
+                ? (0, (string?)CreateNuGetSettingsResponse(
+                    [ambientConfigPath],
+                    cacheIdentity: File.ReadAllText(ambientConfigPath)))
                 : (0, (string?)null));
         };
 
@@ -3585,7 +3051,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(firstResult.Success);
             Assert.True(secondResult.Success);
             Assert.True(thirdResult.Success);
-            Assert.Equal([false, true, false], noRestoreValues);
+            Assert.Equal([false, false, false], noRestoreValues);
         }
         finally
         {
@@ -3854,9 +3320,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 buildOptions?.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName]);
             Assert.False(buildOptions?.EnvironmentVariables?.ContainsKey("RestoreAdditionalProjectSources"));
 
-            var packageElements = generatedProject.Descendants("PackageReference").ToList();
-            Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "[13.4.0-pr.17166.ga49d604d]");
-            Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "CommunityToolkit.Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "1.0.0");
+            var packageElement = Assert.Single(generatedProject.Descendants("PackageReference"));
+            Assert.Equal("Aspire.Hosting", packageElement.Attribute("Include")?.Value);
+            Assert.Equal("[13.4.0-pr.17166.ga49d604d]", packageElement.Attribute("Version")?.Value);
         }
         finally
         {
@@ -4045,7 +3511,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferences_WritesPackageProbeManifestAndCopiesOnlyProjectOutputs()
+    public async Task PrepareAsync_WithMixedReferences_UsesPackageProbeManifestAndCopiesCompleteProjectOutput()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -4070,20 +3536,19 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 .OrderBy(static path => path, StringComparer.Ordinal)
                 .ToList();
 
-            Assert.Equal(["MyIntegration.dll"], copiedLibs);
+            Assert.Equal(["Aspire.Hosting.Redis.dll", "MyIntegration.dll"], copiedLibs);
 
             var probeManifestPath = Assert.IsType<string>(server.IntegrationProbeManifestPath);
-            await using var probeManifestStream = File.OpenRead(probeManifestPath);
-            using var probeManifest = await JsonDocument.ParseAsync(probeManifestStream);
-
-            var managedAssemblies = probeManifest.RootElement.GetProperty("managedAssemblies").EnumerateArray().ToList();
             Assert.Contains(
-                managedAssemblies,
-                assembly => assembly.GetProperty("name").GetString() == "Aspire.Hosting.Redis" &&
-                    assembly.GetProperty("packageId").GetString() == "Aspire.Hosting.Redis" &&
-                    assembly.GetProperty("packageVersion").GetString() == "13.2.0" &&
-                    assembly.GetProperty("path").GetString() == Path.Combine(workingDirectory, "integration-restore", "closure-sources", "Aspire.Hosting.Redis.dll"));
-            Assert.Equal(0, probeManifest.RootElement.GetProperty("nativeLibraries").GetArrayLength());
+                Path.Combine(".aspire", "integrations", "package-restore"),
+                probeManifestPath,
+                StringComparison.OrdinalIgnoreCase);
+
+            var generatedProject = XDocument.Load(Path.Combine(workingDirectory, "integration-restore", PrebuiltAppHostServer.IntegrationProjectFileName));
+            var packageReference = Assert.Single(generatedProject.Descendants("PackageReference"));
+            Assert.Equal("Aspire.Hosting", packageReference.Attribute("Include")?.Value);
+            Assert.Equal("13.2.0", packageReference.Attribute("Version")?.Value);
+            Assert.Single(generatedProject.Descendants("ProjectReference"));
         }
         finally
         {
@@ -4092,7 +3557,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferences_WritesPackageResourcesAndNativeAssetsToProbeManifest()
+    public async Task PrepareAsync_WithProjectReferences_CopiesRestoreAssetsIntoProjectLayout()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -4124,26 +3589,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 .OrderBy(static path => path, StringComparer.Ordinal)
                 .ToList();
 
-            Assert.Equal(["MyIntegration.dll"], copiedLibs);
-
-            var probeManifestPath = Assert.IsType<string>(server.IntegrationProbeManifestPath);
-            await using var probeManifestStream = File.OpenRead(probeManifestPath);
-            using var probeManifest = await JsonDocument.ParseAsync(probeManifestStream);
-
-            var managedAssemblies = probeManifest.RootElement.GetProperty("managedAssemblies").EnumerateArray().ToList();
-            Assert.Contains(
-                managedAssemblies,
-                assembly => assembly.GetProperty("name").GetString() == "Aspire.Hosting.Redis" &&
-                    !assembly.TryGetProperty("culture", out _));
-            Assert.Contains(
-                managedAssemblies,
-                assembly => assembly.GetProperty("name").GetString() == "Aspire.Hosting.Redis.resources" &&
-                    assembly.GetProperty("culture").GetString() == "fr");
-
-            var nativeLibraries = probeManifest.RootElement.GetProperty("nativeLibraries").EnumerateArray().ToList();
-            Assert.Contains(
-                nativeLibraries,
-                nativeLibrary => nativeLibrary.GetProperty("fileName").GetString() == "testnative.so");
+            Assert.Equal(
+                [
+                    "Aspire.Hosting.Redis.dll",
+                    "MyIntegration.dll",
+                    "fr/Aspire.Hosting.Redis.resources.dll",
+                    "runtimes/test-rid/native/testnative.so"
+                ],
+                copiedLibs);
         }
         finally
         {
@@ -4313,7 +3766,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ClosureManifest_ProjectLayoutManifestIgnoresPackageBackedEntries()
+    public void ClosureManifest_ProjectLayoutManifestIncludesPackageBackedEntries()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -4359,8 +3812,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         CancellationToken.None);
 
         Assert.NotEqual(firstManifest.ManifestFingerprint, secondManifest.ManifestFingerprint);
-        Assert.Equal(firstManifest.ProjectLayoutFingerprint, secondManifest.ProjectLayoutFingerprint);
-        Assert.Equal(firstManifest.GetProjectLayoutManifestLines(), secondManifest.GetProjectLayoutManifestLines());
+        Assert.NotEqual(firstManifest.ProjectLayoutFingerprint, secondManifest.ProjectLayoutFingerprint);
+        Assert.NotEqual(firstManifest.GetProjectLayoutManifestLines(), secondManifest.GetProjectLayoutManifestLines());
     }
 
     [Fact]
@@ -4625,6 +4078,18 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         return arguments[optionIndex + 1];
     }
 
+    private static void WritePackageProbeManifestIfRequested(IReadOnlyList<string> arguments)
+    {
+        if (arguments is not ["nuget", "manifest", ..])
+        {
+            return;
+        }
+
+        IntegrationPackageProbeManifest.WriteAsync(
+            GetArgumentValue(arguments, "--output"),
+            IntegrationPackageProbeManifest.Empty).GetAwaiter().GetResult();
+    }
+
     [Fact]
     public void CreateStartInfo_SetsCliLogFilePathEnvironmentVariable()
     {
@@ -4695,7 +4160,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         IEnumerable<string>? disabledPackageSourceKeys = null,
         IEnumerable<string>? reservedPackageSourceKeys = null,
         IEnumerable<string>? credentialSourceKeys = null,
-        IEnumerable<string>? clientCertificateSourceKeys = null)
+        IEnumerable<string>? clientCertificateSourceKeys = null,
+        string cacheIdentity = "settings")
     {
         var sourceArray = sources?.ToArray() ?? [];
         var mappingArray = packageSourceMappings?.ToArray() ?? [];
@@ -4712,6 +4178,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         return System.Text.Json.JsonSerializer.Serialize(new
         {
             ConfigPaths = configPaths?.ToArray() ?? [],
+            CacheIdentity = cacheIdentity,
             Sources = sourceArray
                 .Select(source => new
                 {

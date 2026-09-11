@@ -1,15 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO.Hashing;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Xml;
-using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -36,17 +30,15 @@ internal sealed record NuGetConfigSource(
 /// This is used when running in bundle mode (without .NET SDK) to avoid
 /// dynamic project generation and building.
 /// </summary>
-internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
+internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 {
     // Closure file names are owned by IntegrationClosureBuilder so generated integration
     // projects cannot drift from the post-build reader's MSBuild contract.
     internal const string ClosureManifestFileName = "closure-manifest.txt";
     internal const string IntegrationProjectFileName = "IntegrationRestore.csproj";
 
-    private const string ProjectAssetsFileName = "project.assets.json";
     internal const string IntegrationHostingVersionPropertyName = "AspireIntegrationHostingVersion";
     internal const string IntegrationPackageSourcesPropertyName = "AspireIntegrationPackageSources";
-    private const string RestoreStampFileName = "aspire-restore.stamp";
     private readonly string _appDirectoryPath;
     private readonly string _socketPath;
     private readonly LayoutConfiguration _layout;
@@ -195,7 +187,20 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                         $"Project references in settings.json require .NET SDK {minimumRequired} or later. " +
                         "Install the .NET SDK from https://dotnet.microsoft.com/download or use NuGet package versions instead.");
                 }
+            }
 
+            if (packageRefs.Count > 0)
+            {
+                _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
+                    packageRefs,
+                    requestedChannel,
+                    effectivePackageSourceOverride,
+                    packageSourceOverridePattern,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            if (projectRefs.Count > 0)
+            {
                 using var fileLock = await FileLock.AcquireAsync(_projectReferencePrepareLockPath, cancellationToken).ConfigureAwait(false);
                 _projectLayoutStore.CleanupStagingDirectories();
 
@@ -208,15 +213,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                     packageSourceOverridePattern,
                     cancellationToken).ConfigureAwait(false);
 
-                if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
-                {
-                    _integrationProbeManifestPath = Path.Combine(_workingDirectory, IntegrationPackageProbeManifest.FileName);
-                    await IntegrationPackageProbeManifest.WriteAsync(
-                        _integrationProbeManifestPath,
-                        closureManifest.CreatePackageProbeManifest(),
-                        cancellationToken).ConfigureAwait(false);
-                }
-
                 _selectedProjectLayout = await _projectLayoutStore.GetOrCreateAsync(closureManifest, cancellationToken).ConfigureAwait(false);
                 if (_selectedProjectLayout is not null)
                 {
@@ -227,17 +223,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             }
             else
             {
-                if (packageRefs.Count > 0)
-                {
-                    // NuGet-only — use the bundled NuGet service (no SDK required)
-                    _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
-                        packageRefs,
-                        requestedChannel,
-                        effectivePackageSourceOverride,
-                        packageSourceOverridePattern,
-                        cancellationToken);
-                }
-
                 var appSettingsContent = CreateAppSettingsContent(packageRefs, []);
                 await WriteAppSettingsAsync(_workingDirectory, appSettingsContent, cancellationToken).ConfigureAwait(false);
             }
@@ -359,6 +344,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
             nugetConfigPaths: configPaths,
+            nugetSettingsCacheIdentity: settings.CacheIdentity,
             nugetConfigOverlayCacheIdentity: restoreOverlay?.CacheIdentity,
             additionalSensitiveSources: settings.SensitiveSourceValues.Concat(
                 restoreSources.PackageSourceMappings?
@@ -380,455 +366,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         => GeneratedFileWriter.WriteIfChangedAsync(path, content, cancellationToken);
 
     /// <summary>
-    /// Reads every restore input, returning its fingerprint and whether the closure is eligible
-    /// for a skipped restore at all.
-    /// </summary>
-    /// <remarks>
-    /// The generated project file and optional synthesized NuGet.config encode package identities
-    /// and versions, project reference paths, and channel sources. Referenced project files are hashed
-    /// as well because restore resolves their dependencies too: a referenced project bumping its own
-    /// Aspire.Hosting version changes the resolved closure without changing a single byte of the
-    /// generated project file.
-    /// <para>
-    /// The whole project-reference graph is walked, not just its first level, because restore
-    /// resolves the graph: a package bump two hops out changes the closure exactly as much as one
-    /// hop out does. Each project's directory-scoped MSBuild imports are hashed with it, since under
-    /// central package management the reference carries no version at all and bumping
-    /// Directory.Packages.props changes what restore resolves while every project file stays
-    /// byte-for-byte identical.
-    /// </para>
-    /// <para>
-    /// Every project in that closure is also scanned for floating versions, because a float anywhere
-    /// in it can resolve to a different package without any local input changing.
-    /// </para>
-    /// </remarks>
-    internal static async Task<RestoreInputs> ComputeRestoreInputsAsync(
-        string projectContent,
-        IReadOnlyList<IntegrationReference> packageRefs,
-        IReadOnlyList<IntegrationReference> projectRefs,
-        CancellationToken cancellationToken)
-        => await ComputeRestoreInputsAsync(
-            projectContent,
-            packageRefs,
-            projectRefs,
-            nugetConfigPaths: null,
-            integrationHostingVersion: null,
-            integrationPackageSources: null,
-            nugetPackagesPath: null,
-            nugetFallbackPackagesPaths: null,
-            cancellationToken).ConfigureAwait(false);
-
-    internal static async Task<RestoreInputs> ComputeRestoreInputsAsync(
-        string projectContent,
-        IReadOnlyList<IntegrationReference> packageRefs,
-        IReadOnlyList<IntegrationReference> projectRefs,
-        IReadOnlyList<string>? nugetConfigPaths,
-        string? integrationHostingVersion,
-        string? integrationPackageSources,
-        string? nugetPackagesPath,
-        IReadOnlyList<string>? nugetFallbackPackagesPaths,
-        CancellationToken cancellationToken)
-    {
-        var hash = new XxHash3();
-        hash.Append(Encoding.UTF8.GetBytes(projectContent));
-        var hasDynamicRestoreInput = HasFloatingPackageVersion(packageRefs);
-        if (nugetConfigPaths is not null)
-        {
-            foreach (var nugetConfigPath in nugetConfigPaths)
-            {
-                hash.Append("\0NUGET_CONFIG\0"u8);
-                hash.Append(Encoding.UTF8.GetBytes(nugetConfigPath));
-                hash.Append(await File.ReadAllBytesAsync(nugetConfigPath, cancellationToken).ConfigureAwait(false));
-                if (!hasDynamicRestoreInput)
-                {
-                    var configContent = await File.ReadAllTextAsync(nugetConfigPath, cancellationToken).ConfigureAwait(false);
-                    hasDynamicRestoreInput = NuGetConfigEnvironmentVariables.FindReferencedNames(configContent).Length > 0;
-                }
-            }
-        }
-        if (integrationHostingVersion is not null)
-        {
-            hash.Append("\0AspireIntegrationHostingVersion\0"u8);
-            hash.Append(Encoding.UTF8.GetBytes(integrationHostingVersion));
-        }
-        if (integrationPackageSources is not null)
-        {
-            hash.Append("\0AspireIntegrationPackageSources\0"u8);
-            hash.Append(Encoding.UTF8.GetBytes(integrationPackageSources));
-        }
-        if (nugetPackagesPath is not null)
-        {
-            hash.Append("\0NUGET_PACKAGES\0"u8);
-            hash.Append(Encoding.UTF8.GetBytes(nugetPackagesPath));
-        }
-        if (nugetFallbackPackagesPaths is not null)
-        {
-            foreach (var fallbackPackagesPath in nugetFallbackPackagesPaths)
-            {
-                hash.Append("\0NUGET_FALLBACK_PACKAGES\0"u8);
-                hash.Append(Encoding.UTF8.GetBytes(fallbackPackagesPath));
-            }
-        }
-
-        var pending = new Queue<string>();
-        // Ordinal rather than a path-aware comparer: a duplicate spelling of the same path costs one
-        // extra read, whereas treating two genuinely different paths as one would drop an input.
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        var closure = new List<string>();
-
-        foreach (var projectRef in projectRefs)
-        {
-            if (projectRef.ProjectPath is { } path)
-            {
-                pending.Enqueue(path);
-            }
-        }
-
-        while (pending.Count > 0)
-        {
-            var projectPath = pending.Dequeue();
-            var normalizedPath = NormalizeProjectPath(projectPath);
-
-            // Terminates on its own rather than hanging the launch: MSBuild rejects a project
-            // reference cycle, but the fingerprint is computed before anything validates the graph.
-            if (!visited.Add(normalizedPath))
-            {
-                continue;
-            }
-
-            closure.Add(normalizedPath);
-
-            foreach (var referenced in ReadProjectReferences(normalizedPath))
-            {
-                pending.Enqueue(referenced);
-            }
-        }
-
-        // Ordering makes the fingerprint independent of the order the graph happened to be walked in.
-        // Hash the path as well as the content so that repointing a reference at a different project
-        // with identical content is still seen as a change.
-        foreach (var projectPath in closure.OrderBy(static path => path, StringComparer.Ordinal))
-        {
-            hash.Append(Encoding.UTF8.GetBytes(projectPath));
-
-            if (!File.Exists(projectPath))
-            {
-                continue;
-            }
-
-            var projectBytes = await File.ReadAllBytesAsync(projectPath, cancellationToken).ConfigureAwait(false);
-            hash.Append(projectBytes);
-
-            if (!hasDynamicRestoreInput)
-            {
-                var projectText = Encoding.UTF8.GetString(projectBytes);
-                hasDynamicRestoreInput =
-                    HasFloatingVersionAttribute(projectText) ||
-                    HasUnevaluatedRestoreInputs(projectText);
-            }
-        }
-
-        foreach (var importPath in FindDirectoryScopedImports(closure).OrderBy(static path => path, StringComparer.Ordinal))
-        {
-            hash.Append(Encoding.UTF8.GetBytes(importPath));
-
-            var importBytes = await File.ReadAllBytesAsync(importPath, cancellationToken).ConfigureAwait(false);
-            hash.Append(importBytes);
-
-            if (!hasDynamicRestoreInput)
-            {
-                var importText = Encoding.UTF8.GetString(importBytes);
-                // NuGet expands environment references independently for each project's config.
-                // Restore rather than persist potentially sensitive values in the fingerprint.
-                hasDynamicRestoreInput =
-                    HasFloatingVersionAttribute(importText) ||
-                    HasUnevaluatedRestoreInputs(importText) ||
-                    (IsNuGetConfigFile(importPath) &&
-                        NuGetConfigEnvironmentVariables.FindReferencedNames(importText).Length > 0);
-            }
-        }
-
-        return new RestoreInputs(Convert.ToHexString(hash.GetCurrentHash()), IsEligibleForSkip: !hasDynamicRestoreInput);
-    }
-
-    /// <summary>
-    /// Resolves a project path to a comparable absolute form so the same project reached by two
-    /// different spellings is hashed once.
-    /// </summary>
-    private static string NormalizeProjectPath(string projectPath)
-    {
-        try
-        {
-            return Path.GetFullPath(projectPath);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            // An unresolvable path is still hashed verbatim: it cannot be read, but the fact that the
-            // closure names it is itself an input, and a later change to a valid path is then seen.
-            return projectPath;
-        }
-    }
-
-    /// <summary>
-    /// Reads the &lt;ProjectReference Include="..." /&gt; paths a project declares, resolved against
-    /// the project's own directory the way MSBuild resolves them.
-    /// </summary>
-    /// <remarks>
-    /// Parsed as XML rather than with a regex because an Include can be spread across attributes and
-    /// whitespace. A project that cannot be read or parsed contributes no references: the file itself
-    /// is still hashed above, so a later fix to it changes the fingerprint.
-    /// </remarks>
-    private static List<string> ReadProjectReferences(string projectPath)
-    {
-        var references = new List<string>();
-
-        if (!File.Exists(projectPath))
-        {
-            return references;
-        }
-
-        XDocument document;
-        try
-        {
-            using var stream = File.OpenRead(projectPath);
-            // DTD processing stays off: these files are inputs from the user's checkout and an
-            // external entity must never be fetched while computing a fingerprint.
-            using var reader = XmlReader.Create(stream, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
-            document = XDocument.Load(reader);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or XmlException)
-        {
-            return references;
-        }
-
-        var projectDirectory = Path.GetDirectoryName(projectPath);
-        if (projectDirectory is null)
-        {
-            return references;
-        }
-
-        foreach (var element in document.Descendants().Where(static e => e.Name.LocalName == "ProjectReference"))
-        {
-            var include = element.Attribute("Include")?.Value;
-            if (string.IsNullOrWhiteSpace(include))
-            {
-                continue;
-            }
-
-            // An MSBuild property in the path ($(RepoRoot)/...) cannot be expanded without evaluating
-            // the project, so the reference is skipped rather than hashed under a nonsense path.
-            if (include.Contains("$(", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            references.Add(Path.Combine(projectDirectory, include.Replace('\\', Path.DirectorySeparatorChar)));
-        }
-
-        return references;
-    }
-
-    /// <summary>
-    /// Finds the directory-scoped files MSBuild and NuGet import automatically for the projects in a
-    /// closure, by walking from each project's directory to the root the way they do.
-    /// </summary>
-    /// <remarks>
-    /// These carry version information that never appears in the project file itself - most
-    /// importantly Directory.Packages.props under central package management, where the reference is
-    /// written without a version at all.
-    /// <list type="bullet">
-    /// <item>https://learn.microsoft.com/nuget/consume-packages/central-package-management</item>
-    /// <item>https://learn.microsoft.com/visualstudio/msbuild/customize-by-directory</item>
-    /// </list>
-    /// </remarks>
-    private static HashSet<string> FindDirectoryScopedImports(IReadOnlyList<string> closure)
-    {
-        var imports = new HashSet<string>(StringComparer.Ordinal);
-        var scannedDirectories = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var projectPath in closure)
-        {
-            var directory = Path.GetDirectoryName(projectPath);
-
-            while (directory is not null && scannedDirectories.Add(directory))
-            {
-                foreach (var fileName in s_directoryScopedImportFileNames)
-                {
-                    var candidate = Path.Combine(directory, fileName);
-                    if (File.Exists(candidate))
-                    {
-                        imports.Add(candidate);
-                    }
-                }
-
-                directory = Path.GetDirectoryName(directory);
-            }
-        }
-
-        return imports;
-    }
-
-    private static bool IsNuGetConfigFile(string path)
-        => s_nugetConfigFileNames.Contains(Path.GetFileName(path), StringComparer.Ordinal);
-
-    private static readonly string[] s_nugetConfigFileNames =
-    [
-        "NuGet.config",
-        "NuGet.Config",
-        "nuget.config"
-    ];
-
-    // NuGet recognizes these filename casings on case-sensitive filesystems.
-    private static readonly string[] s_directoryScopedImportFileNames =
-    [
-        "Directory.Packages.props",
-        "Directory.Build.props",
-        "Directory.Build.targets",
-        .. s_nugetConfigFileNames
-    ];
-
-    /// <summary>
-    /// The restore inputs for one integration closure.
-    /// </summary>
-    /// <param name="Fingerprint">Identifies the exact set of inputs the restore reads.</param>
-    /// <param name="IsEligibleForSkip">
-    /// Whether an unchanged fingerprint is enough to prove the resolved closure is unchanged.
-    /// </param>
-    internal readonly record struct RestoreInputs(string Fingerprint, bool IsEligibleForSkip);
-
-    /// <summary>
-    /// Returns <see langword="true" /> when a project file declares a package version that NuGet
-    /// resolves against the feed rather than pinning exactly.
-    /// </summary>
-    /// <remarks>
-    /// Matches the version attribute of a reference, for example
-    /// <c>&lt;PackageReference Include="Aspire.Hosting" Version="13.4.*" /&gt;</c> or
-    /// <c>VersionOverride="[13.4,14)"</c>. The word boundary keeps unrelated attributes that merely
-    /// end in "Version" (such as <c>ToolsVersion</c>) from matching. A false positive only forces a
-    /// restore, which is the safe direction.
-    /// </remarks>
-    internal static bool HasFloatingVersionAttribute(string projectText)
-        => FloatingVersionAttributeRegex().IsMatch(projectText);
-
-    [GeneratedRegex("""\b(?:VersionOverride|Version)\s*=\s*["'][^"']*[*\[(,$]""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex FloatingVersionAttributeRegex();
-
-    private static bool HasUnevaluatedRestoreInputs(string projectText)
-    {
-        try
-        {
-            var document = XDocument.Parse(projectText);
-            if (document.Descendants().Any(static element => element.Name.LocalName == "Import"))
-            {
-                return true;
-            }
-
-            return document.Descendants()
-                .Where(static element => element.Name.LocalName == "ProjectReference")
-                .Select(static element => element.Attribute("Include")?.Value)
-                .Any(static include => include?.Contains("$(", StringComparison.Ordinal) == true);
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Returns <see langword="true" /> when any package version can resolve to a different package
-    /// without any local input changing, which makes the closure ineligible for a skipped restore.
-    /// </summary>
-    /// <remarks>
-    /// A floating version ("13.4.*") or a range ("[13.4,14)") is resolved by NuGet at restore time
-    /// against the feed, so an unchanged fingerprint does not imply an unchanged closure.
-    /// </remarks>
-    internal static bool HasFloatingPackageVersion(IReadOnlyList<IntegrationReference> packageRefs)
-        => packageRefs.Any(static r => r.Version is { } version && version.AsSpan().ContainsAny(s_floatingVersionChars));
-
-    // '*' is a float, and '[', '(', ',' delimit a version range. An exact version contains none of them.
-    private static readonly SearchValues<char> s_floatingVersionChars = SearchValues.Create("*[(,");
-
-    /// <summary>
-    /// Determines whether the last successful restore already saw this exact set of inputs.
-    /// </summary>
-    /// <remarks>
-    /// The stamp is written only after a restore succeeds, so its presence with a matching
-    /// fingerprint means a complete restore has run for these inputs. This is compared by content
-    /// rather than by timestamp because file modification times are unreliable across coarse
-    /// filesystems, clock skew, and caches that restore mtimes.
-    /// </remarks>
-    internal static bool CanSkipIntegrationRestore(string restoreDir, string expectedFingerprint, ILogger logger)
-    {
-        var assetsPath = Path.Combine(restoreDir, "obj", ProjectAssetsFileName);
-        var stampPath = Path.Combine(restoreDir, "obj", RestoreStampFileName);
-        if (!File.Exists(assetsPath) || !File.Exists(stampPath))
-        {
-            return false;
-        }
-
-        try
-        {
-            return string.Equals(File.ReadAllText(stampPath), expectedFingerprint, StringComparison.Ordinal);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogDebug(ex, "Unable to read the integration restore stamp; restoring.");
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Records that a restore completed successfully for <paramref name="fingerprint" />.
-    /// </summary>
-    private static async Task WriteRestoreStampAsync(string restoreDir, string fingerprint, ILogger logger, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var objDir = Path.Combine(restoreDir, "obj");
-            Directory.CreateDirectory(objDir);
-            await File.WriteAllTextAsync(Path.Combine(objDir, RestoreStampFileName), fingerprint, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A missing stamp only costs a restore on the next launch, so this is not worth failing over.
-            logger.LogDebug(ex, "Unable to write the integration restore stamp.");
-        }
-    }
-
-    /// <summary>
-    /// Returns <see langword="true" /> when a build failure looks like one that restoring would fix.
-    /// </summary>
-    /// <remarks>
-    /// Only a package-resolution failure is worth a second build. Retrying every failure would
-    /// double the cost of an ordinary compile error and would replace its diagnostic with whatever
-    /// the restore attempt produced.
-    /// The restore fingerprint covers this app's own inputs but cannot see the shared global package
-    /// cache, so a `dotnet nuget locals all --clear` (or any cache eviction) leaves the fingerprint
-    /// unchanged while the packages it assumes are gone. Because the stamp is only ever written
-    /// after a successful restore and is never cleared, a no-restore build that fails this way would
-    /// otherwise fail identically on every subsequent run until the user manually deleted obj/.
-    /// Examples of the failures this matches:
-    ///   error NETSDK1004: Assets file '/path/obj/project.assets.json' not found. Run a NuGet package restore.
-    ///   error NETSDK1064: Package Aspire.Hosting.Redis, version 13.5.0 was not found. It might have been deleted since NuGet restore.
-    ///   error NU1101: Unable to find package Aspire.Hosting.Java. No packages exist with this id in source(s): dotnet-public
-    ///   error NU1102: Unable to find package Aspire.Hosting with version (&gt;= 13.6.0-dev)
-    /// </remarks>
-    internal static bool ShouldRetryWithRestore(OutputCollector buildOutput)
-        => buildOutput.GetLines().Any(static l =>
-            l.Line.Contains("NETSDK1004", StringComparison.Ordinal) ||
-            l.Line.Contains("NETSDK1064", StringComparison.Ordinal) ||
-            l.Line.Contains("NU1101", StringComparison.Ordinal) ||
-            l.Line.Contains("NU1102", StringComparison.Ordinal) ||
-            l.Line.Contains(ProjectAssetsFileName, StringComparison.Ordinal));
-
-    /// <summary>
     /// Produces the failure message for a failed integration build, recognizing the one failure
     /// mode that is a configuration problem rather than a build problem.
     /// </summary>
     /// <remarks>
     /// The AppHost server is the CLI itself, so the synthesized project pins Aspire.Hosting to the
-    /// CLI's own version. A project reference that requires a newer Aspire.Hosting cannot be
-    /// satisfied, and NuGet reports it as a downgrade:
+    /// selected AppHost SDK version. A project reference that requires a newer Aspire.Hosting cannot
+    /// be satisfied, and NuGet reports it as a downgrade:
     ///   error NU1605: Warning As Error: Detected package downgrade: Aspire.Hosting from 13.6.0-dev to 13.5.0
     /// The raw output is unusable here because MSBuild localizes it, so the diagnostic is matched on
     /// the error code alone and the actionable explanation is supplied in the CLI's own language.
@@ -895,8 +439,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     }
 
     /// <summary>
-    /// Creates a synthetic .csproj with all package and project references,
-    /// then builds it to get the full transitive DLL closure via CopyLocalLockFileAssemblies.
+    /// Creates a synthetic .csproj with the integration project references,
+    /// then builds it to get their full copied-local closure.
     /// Requires .NET SDK.
     /// </summary>
     private async Task<AppHostServerClosureManifest> BuildIntegrationClosureManifestAsync(
@@ -966,8 +510,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             .ToArray();
         var intermediateOutputPath = Path.Combine(restoreDir, "obj");
         var projectContent = GenerateIntegrationProjectFile(
-            packageRefs,
             projectRefs,
+            sdkVersion,
             restoreDir,
             rootAdditionalSources,
             useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride));
@@ -1000,80 +544,23 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         await WriteIfChangedAsync(
             Path.Combine(restoreDir, "Directory.Build.targets"), "<Project />", cancellationToken);
 
-        // Restore dominates this build - measured at 5.6s of a 6.7s warm build - and it only needs to
-        // run again when something restore actually reads has changed. That set of inputs is captured
-        // as a content fingerprint rather than a timestamp comparison, and the stamp recording it is
-        // written only after a restore succeeds.
-        //
-        // Skipping restore never skips the build itself, so an edit to a referenced project is still
-        // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
-        // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
-        // restore rather than reported.
-        IReadOnlyList<string> configPaths = restoreOverlayFile is null
-            ? settings.ConfigPaths
-            : [restoreOverlayFile.FullName, .. settings.ConfigPaths];
-        var restoreInputs = await ComputeRestoreInputsAsync(
-            projectContent,
-            packageRefs,
-            projectRefs,
-            configPaths,
-            sdkVersion,
-            integrationPackageSources,
-            globalPackagesFolder ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
-            CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment),
-            cancellationToken).ConfigureAwait(false);
-        var restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
-
-        if (restoreFingerprint is null)
-        {
-            // A restore that cannot prove all of its inputs must invalidate any stamp from a
-            // previous source configuration before it replaces the assets file.
-            var restoreStampFile = new FileInfo(Path.Combine(restoreDir, "obj", RestoreStampFileName));
-            if (restoreStampFile.Exists)
-            {
-                restoreStampFile.Delete();
-            }
-        }
-
-        var skipRestore = restoreFingerprint is not null && CanSkipIntegrationRestore(restoreDir, restoreFingerprint, _logger);
-
-        _logger.LogDebug("Building integration project with {PackageCount} packages and {ProjectCount} project references (restore {RestoreState})",
-            packageRefs.Count, projectRefs.Count, skipRestore ? "skipped" : "requested");
+        _logger.LogDebug("Building integration project with {ProjectCount} project references", projectRefs.Count);
 
         var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
             projectFilePath,
-            noRestore: skipRestore,
+            noRestore: false,
             globalPackagesFolder,
             integrationHostingVersion: sdkVersion,
             integrationPackageSources,
             suppressLogging: sensitiveSources.Length > 0,
             sensitiveSources,
             cancellationToken).ConfigureAwait(false);
-        if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
-        {
-            _logger.LogDebug("Integration project build failed on the restore assets; retrying with restore. First attempt output:\n{BuildOutput}",
-                string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line)));
-            (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
-                projectFilePath,
-                noRestore: false,
-                globalPackagesFolder,
-                integrationHostingVersion: sdkVersion,
-                integrationPackageSources,
-                suppressLogging: sensitiveSources.Length > 0,
-                sensitiveSources,
-                cancellationToken).ConfigureAwait(false);
-        }
 
         if (exitCode != 0)
         {
             var outputLines = string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line));
             _logger.LogError("Integration project build failed. Output:\n{BuildOutput}", outputLines);
             throw new AppHostServerPrepareFailedException(GetIntegrationBuildFailureMessage(buildOutput), buildOutput);
-        }
-
-        if (restoreFingerprint is not null && !skipRestore)
-        {
-            await WriteRestoreStampAsync(restoreDir, restoreFingerprint, _logger, cancellationToken).ConfigureAwait(false);
         }
 
         var projectRefAssemblyNames = await IntegrationClosureBuilder.ReadProjectRefAssemblyNamesAsync(
@@ -1102,31 +589,27 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     }
 
     /// <summary>
-    /// Generates a synthetic .csproj file that references all integration packages and projects.
-    /// Building this project with CopyLocalLockFileAssemblies produces the full transitive DLL closure.
+    /// Generates a synthetic .csproj file that pins Aspire.Hosting and references the integration projects.
+    /// Building this project with CopyLocalLockFileAssemblies produces their full copied-local closure.
     /// </summary>
     internal static string GenerateIntegrationProjectFile(
-        List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
+        string sdkVersion,
         string restoreDir,
         IEnumerable<string>? additionalSources = null,
         bool useExactPackageVersions = false)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sdkVersion);
+
         var projectFile = IntegrationClosureBuilder.CreateClosureProjectFile(
             restoreDir,
             additionalSources);
 
-        foreach (var packageReference in packageRefs)
-        {
-            if (packageReference.Version is null)
-            {
-                throw new InvalidOperationException($"Package reference '{packageReference.Name}' is missing a version.");
-            }
-
-            projectFile.PackageReferences.Add(new CSharpPackageReference(
-                packageReference.Name,
-                GetRestoreVersion(packageReference.Name, packageReference.Version, useExactPackageVersions)));
-        }
+        // Keep the pre-existing compatibility check between the AppHost SDK selected by the CLI and
+        // project-referenced integrations. All other integration packages use the package-only path.
+        projectFile.PackageReferences.Add(new CSharpPackageReference(
+            "Aspire.Hosting",
+            GetRestoreVersion("Aspire.Hosting", sdkVersion, useExactPackageVersions)));
 
         projectFile.ProjectReferences.AddRange(projectRefs.Select(p => new CSharpProjectReference(
             p.ProjectPath!,

@@ -127,11 +127,13 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var manifestPathA = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             nugetConfigPaths: [firstConfigPath],
+            nugetSettingsCacheIdentity: "ambient-settings",
             nugetConfigOverlayCacheIdentity: "shared-overlay",
             workingDirectory: appHostDirectory.FullName);
         var manifestPathB = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             nugetConfigPaths: [secondConfigPath],
+            nugetSettingsCacheIdentity: "ambient-settings",
             nugetConfigOverlayCacheIdentity: "shared-overlay",
             workingDirectory: appHostDirectory.FullName);
 
@@ -173,7 +175,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RestorePackagesAsync_UsesDistinctCachePathsWhenConfigEnvironmentValueChanges()
+    public async Task RestorePackagesAsync_UsesDistinctCachePathsWhenEffectiveSettingsChange()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -207,12 +209,14 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var manifestPathA = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             nugetConfigPaths: [configPath],
+            nugetSettingsCacheIdentity: "feed-a",
             nugetConfigOverlayCacheIdentity: "environment-overlay",
             workingDirectory: appHostDirectory.FullName);
         environmentVariables["ASPIRE_TEST_PACKAGE_SOURCE"] = "https://example.com/feed-b";
         var manifestPathB = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             nugetConfigPaths: [configPath],
+            nugetSettingsCacheIdentity: "feed-b",
             nugetConfigOverlayCacheIdentity: "environment-overlay",
             workingDirectory: appHostDirectory.FullName);
 
@@ -333,11 +337,13 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: ["https://example.com/shared/index.json"],
             nugetConfigPaths: [firstConfigPath],
+            nugetSettingsCacheIdentity: "first-settings",
             workingDirectory: appHostDirectory.FullName);
         var manifestPathB = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: ["https://example.com/shared/index.json"],
             nugetConfigPaths: [secondConfigPath],
+            nugetSettingsCacheIdentity: "second-settings",
             workingDirectory: appHostDirectory.FullName);
 
         Assert.NotEqual(manifestPathA, manifestPathB);
@@ -373,10 +379,12 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var firstManifestPath = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             nugetConfigPaths: [configPath],
+            nugetSettingsCacheIdentity: "settings",
             workingDirectory: appHostDirectory.FullName);
         var secondManifestPath = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             nugetConfigPaths: [configPath],
+            nugetSettingsCacheIdentity: "settings",
             workingDirectory: appHostDirectory.FullName);
 
         Assert.Equal(firstManifestPath, secondManifestPath);
@@ -565,6 +573,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             AttemptCallback = (_, _) => (0, System.Text.Json.JsonSerializer.Serialize(new
             {
                 ConfigPaths = new[] { configPath },
+                CacheIdentity = "settings",
                 Sources = new[]
                 {
                     new
@@ -599,6 +608,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var settings = await service.GetNuGetSettingsAsync(appHostDirectory.FullName, CancellationToken.None);
 
         Assert.Equal([configPath], settings.ConfigPaths);
+        Assert.Equal("settings", settings.CacheIdentity);
         var source = Assert.Single(settings.Sources);
         Assert.Equal(
             new NuGetSourceInfo(
@@ -726,6 +736,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             [("Aspire.RedactionProbe.DoesNotExist", "0.0.0")],
             workingDirectory: appHostDirectory.FullName,
             nugetConfigPaths: settings.ConfigPaths,
+            nugetSettingsCacheIdentity: settings.CacheIdentity,
             additionalSensitiveSources: settings.SensitiveSourceValues,
             ct: timeout.Token));
 
@@ -912,7 +923,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: appHostDirectory.FullName,
-            nugetConfigPaths: [nugetConfigPath]);
+            nugetConfigPaths: [nugetConfigPath],
+            nugetSettingsCacheIdentity: "settings");
 
         Assert.Contains("--no-nuget-org", invocations[0]);
         Assert.Equal(nugetConfigPath, GetArgumentValue(invocations[0], "--nuget-config"));
