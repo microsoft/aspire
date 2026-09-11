@@ -19,7 +19,7 @@ public class DashboardDialogProviderTests : DashboardTestContext
     public async Task Navigation_CancelsDialogsAndDrawers(string destination)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
-        var cut = RenderComponent<DashboardDialogProvider>();
+        var cut = Render<DashboardDialogProvider>();
         var navigation = Services.GetRequiredService<NavigationManager>();
         var closed = new List<string>();
         var first = await OpenAsync(cut, "first", drawer: false, OnStateChange);
@@ -57,7 +57,7 @@ public class DashboardDialogProviderTests : DashboardTestContext
     public async Task Navigation_CancelsConfirmation()
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
-        var cut = RenderComponent<DashboardDialogProvider>();
+        var cut = Render<DashboardDialogProvider>();
         var service = Services.GetRequiredService<IDialogService>();
         Task<DialogResult> result = null!;
         await cut.InvokeAsync(() => { result = service.ShowConfirmationAsync("Confirm navigation test"); });
@@ -75,9 +75,9 @@ public class DashboardDialogProviderTests : DashboardTestContext
     public async Task DisposedProvider_UnsubscribesFromNavigation()
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
-        var cut = RenderComponent<DashboardDialogProvider>();
+        var cut = Render<DashboardDialogProvider>();
         await cut.InvokeAsync(DisposeComponents);
-        var plainProvider = RenderComponent<FluentDialogProvider>();
+        var plainProvider = Render<FluentDialogProvider>();
         var result = await OpenAsync(plainProvider, "after-dispose", drawer: false, onStateChange: null);
 
         await plainProvider.InvokeAsync(() => Services.GetRequiredService<NavigationManager>().NavigateTo("/traces"));
@@ -88,7 +88,7 @@ public class DashboardDialogProviderTests : DashboardTestContext
         Assert.True(result.IsCompletedSuccessfully);
     }
 
-    private async Task<Task<DialogResult>> OpenAsync(IRenderedFragment cut, string id, bool drawer, Action<DialogEventArgs>? onStateChange)
+    private async Task<Task<DialogResult>> OpenAsync(IRenderedComponent<IComponent> cut, string id, bool drawer, Action<DialogEventArgs>? onStateChange)
     {
         var service = Services.GetRequiredService<IDialogService>();
         Task<DialogResult> result = null!;
@@ -104,7 +104,7 @@ public class DashboardDialogProviderTests : DashboardTestContext
         return result;
     }
 
-    private static Task RaiseOpeningAsync(IRenderedFragment cut, string id)
+    private static Task RaiseOpeningAsync(IRenderedComponent<IComponent> cut, string id)
     {
         return cut.InvokeAsync(() => cut.Find($"#{id}").TriggerEvent("ondialogbeforetoggle", new DialogToggleEventArgs
         {

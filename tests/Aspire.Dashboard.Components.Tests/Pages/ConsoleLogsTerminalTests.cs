@@ -59,7 +59,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -111,7 +111,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -161,7 +161,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -216,7 +216,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -265,7 +265,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -318,7 +318,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -372,7 +372,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -409,7 +409,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -428,7 +428,7 @@ public partial class ConsoleLogsTests
         // production selection-changed pipeline, not a direct parameter set.
         navigationManager.LocationChanged += (sender, e) =>
         {
-            cut.SetParametersAndRender(builder =>
+            cut.Render(builder =>
             {
                 builder.Add(m => m.ResourceName, "plain-resource");
             });
@@ -471,7 +471,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -491,7 +491,7 @@ public partial class ConsoleLogsTests
 
         navigationManager.LocationChanged += (sender, e) =>
         {
-            cut.SetParametersAndRender(builder =>
+            cut.Render(builder =>
             {
                 builder.Add(m => m.ResourceName, "plain-resource");
             });
@@ -553,7 +553,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -589,13 +589,13 @@ public partial class ConsoleLogsTests
         var reconnectTerminal = module.Setup<int>("reconnectTerminal", _ => true);
         reconnectTerminal.SetResult(2);
 
-        var cut = RenderComponent<TerminalView>(builder =>
+        var cut = Render<TerminalView>(builder =>
         {
             builder.Add(p => p.ResourceName, "first-resource");
             builder.Add(p => p.ReplicaIndex, 0);
         });
 
-        cut.SetParametersAndRender(builder =>
+        cut.Render(builder =>
         {
             builder.Add(p => p.ResourceName, "second-resource");
             builder.Add(p => p.ReplicaIndex, 1);

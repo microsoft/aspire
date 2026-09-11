@@ -27,7 +27,7 @@ public class GridColumnManagerTests : DashboardTestContext
             new GridColumn("NoDesktopWithIsVisibleTrue", null, "4fr", IsVisible: () => true)
         ];
 
-        var cut = RenderComponent<GridColumnManager>(builder =>
+        var cut = Render<GridColumnManager>(builder =>
         {
             builder.Add(c => c.Columns, gridColumns);
         });
@@ -55,7 +55,7 @@ public class GridColumnManagerTests : DashboardTestContext
             new GridColumn("NoDesktopWithIsVisibleTrue", null, "4fr", IsVisible: () => true)
         ];
 
-        var cut = RenderComponent<GridColumnManager>(builder =>
+        var cut = Render<GridColumnManager>(builder =>
         {
             builder.Add(c => c.Columns, gridColumns);
         });
@@ -92,7 +92,7 @@ public class GridColumnManagerTests : DashboardTestContext
             new GridColumn("NoDesktopWithIsVisibleTrue", null, "4fr", IsVisible: () => true)
         ];
 
-        var cut = RenderComponent<GridColumnManager>(builder =>
+        var cut = Render<GridColumnManager>(builder =>
         {
             builder.Add(c => c.Columns, gridColumns);
         });

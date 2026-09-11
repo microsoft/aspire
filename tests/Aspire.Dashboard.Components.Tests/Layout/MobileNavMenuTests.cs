@@ -116,7 +116,7 @@ public class MobileNavMenuTests : DashboardTestContext
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(currentUrl);
 
-        return RenderComponent<MobileNavMenu>(builder =>
+        return Render<MobileNavMenu>(builder =>
         {
             builder.Add(p => p.IsNavMenuOpen, isNavMenuOpen);
             builder.Add(p => p.CloseNavMenu, closeNavMenu ?? (() => { }));
