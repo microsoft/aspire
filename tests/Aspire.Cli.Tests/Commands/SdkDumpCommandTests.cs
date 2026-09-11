@@ -3,7 +3,6 @@
 
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
-using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -252,30 +251,21 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SdkDump_PreparesRepositoryNuGetConfigBeforeCreatingScanner(bool outputDirectory)
+    public async Task SdkDump_PassesRepositoryRootAsScannerRestoreConfigDirectory(bool outputDirectory)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(workspace.Path);
-        if (repoRoot is null)
-        {
-            Assert.Skip("This test requires repository-development mode.");
-            return;
-        }
-
-        Assert.True(NuGetConfigMerger.TryFindNuGetConfigInDirectory(new DirectoryInfo(repoRoot), out var repoConfig));
-        var expectedConfig = await File.ReadAllTextAsync(repoConfig.FullName);
         string? scannerPath = null;
-        string? scannerConfig = null;
+        string[]? scannerFiles = null;
         var factory = new TestAppHostServerProjectFactory
         {
-            CreateAsyncCallback = async (appPath, cancellationToken) =>
+            CreateAsyncCallback = (appPath, cancellationToken) =>
             {
                 scannerPath = appPath;
-                var configPath = Path.Combine(appPath, "nuget.config");
-                scannerConfig = File.Exists(configPath)
-                    ? await File.ReadAllTextAsync(configPath, cancellationToken)
-                    : null;
-                return new FakeFailingAppHostServerProject(appPath);
+                scannerFiles = Directory.GetFiles(appPath);
+                // Fail preparation after capturing the factory arguments to avoid a real build or RPC session.
+                // The command is therefore expected to return FailedToBuildArtifacts.
+                return Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(appPath));
             }
         };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
@@ -290,7 +280,9 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
         Assert.NotNull(scannerPath);
-        Assert.Equal(expectedConfig, scannerConfig);
+        Assert.Equal(repoRoot, factory.RestoreRootConfigDirectory);
+        Assert.NotNull(scannerFiles);
+        Assert.Empty(scannerFiles);
         Assert.False(Directory.Exists(scannerPath));
     }
 
@@ -323,10 +315,31 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
                 Environment.SetEnvironmentVariable("DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "true");
                 Environment.SetEnvironmentVariable("DOTNET_GENERATE_ASPNET_CERTIFICATE", "false");
 
-                // ExtraLongTimeout because this spawns a real dotnet build of Aspire.Hosting.csproj
-                // in a child process, which can exceed the default timeout under concurrent test load.
-                var exitCode = await Program.Main(["sdk", "dump", "--format", "ci", "--output", outputPath, projectPath]).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
-                Assert.Equal((int)CliExitCodes.Success, exitCode);
+                using var standardOutput = new StringWriter();
+                using var standardError = new StringWriter();
+                var originalOutput = Console.Out;
+                var originalError = Console.Error;
+                int exitCode;
+                Console.SetOut(standardOutput);
+                Console.SetError(standardError);
+                try
+                {
+                    // ExtraLongTimeout because this spawns a real dotnet build of Aspire.Hosting.csproj
+                    // in a child process, which can exceed the default timeout under concurrent test load.
+                    exitCode = await Program.Main(["sdk", "dump", "--format", "ci", "--output", outputPath, projectPath]).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+                }
+                finally
+                {
+                    Console.SetOut(originalOutput);
+                    Console.SetError(originalError);
+                    // Forward both streams to the parent test even when the command throws or times out.
+                    Console.WriteLine($"SDK dump stdout:{Environment.NewLine}{standardOutput}");
+                    Console.WriteLine($"SDK dump stderr:{Environment.NewLine}{standardError}");
+                }
+
+                Assert.True(exitCode == CliExitCodes.Success,
+                    $"aspire sdk dump --format ci failed for '{projectPath}'. Expected exit code {CliExitCodes.Success}, actual {exitCode}.{Environment.NewLine}" +
+                    $"stdout:{Environment.NewLine}{standardOutput}{Environment.NewLine}stderr:{Environment.NewLine}{standardError}");
 
                 var output = await File.ReadAllTextAsync(outputPath);
                 Assert.NotEmpty(output);

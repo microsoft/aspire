@@ -719,7 +719,7 @@ public class GuestAppHostProjectTests : IDisposable
     /// <remarks>
     /// The test drives <see cref="GuestAppHostProject.UpdatePackagesAsync"/> through the
     /// code path that detects updates, then expects the call to throw from
-    /// <c>BuildAndGenerateSdkAsync</c> because <see cref="TestAppHostServerProjectFactory.CreateAsync"/>
+    /// <c>BuildAndGenerateSdkAsync</c> because <see cref="TestAppHostServerProjectFactory.CreateAsync(string, CancellationToken)"/>
     /// throws. The on-disk config should still contain the original versions.
     /// </remarks>
     [Fact]

@@ -9,7 +9,6 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
 using Aspire.Shared.Json;
@@ -165,14 +164,7 @@ internal sealed class SdkDumpCommand : BaseCommand
     private Task<IAppHostServerProject> CreateCapabilityScannerProjectAsync(string tempDir, CancellationToken cancellationToken)
     {
         var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(tempDir);
-        if (repoRoot is not null && NuGetConfigMerger.TryFindNuGetConfigInDirectory(new DirectoryInfo(repoRoot), out var nugetConfig))
-        {
-            // The scanner's temporary app directory is outside the checkout. Preserve the
-            // repository's source names and mappings so its project references can restore.
-            nugetConfig.CopyTo(Path.Combine(tempDir, "nuget.config"));
-        }
-
-        return _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
+        return _appHostServerProjectFactory.CreateAsync(tempDir, restoreRootConfigDirectory: repoRoot, cancellationToken);
     }
 
     private async Task<int> DumpCapabilitiesAsync(
