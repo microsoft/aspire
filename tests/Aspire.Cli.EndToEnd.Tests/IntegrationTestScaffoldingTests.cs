@@ -71,5 +71,36 @@ public sealed class IntegrationTestScaffoldingTests(ITestOutputHelper output)
             "dotnet test IntegrationTestApp/IntegrationTestApp.Directory.Tests/IntegrationTestApp.Directory.Tests.csproj -- --filter-method \"*.AppHostBuilds\"",
             counter,
             TimeSpan.FromMinutes(5));
+
+        // Older templates should remain standalone even when discovery would find multiple AppHosts.
+        await auto.RunCommandAsync(
+            "mkdir IntegrationTestApp/SecondAppHost && " +
+            "cp IntegrationTestApp/IntegrationTestApp.AppHost/IntegrationTestApp.AppHost.csproj IntegrationTestApp/SecondAppHost/SecondAppHost.csproj",
+            counter);
+        await auto.RunCommandAsync(
+            "aspire new aspire-test --version 13.5.3 --source https://api.nuget.org/v3/index.json " +
+            "--test-framework MSTest --name OlderTemplate.Tests --output OlderTemplate.Tests --non-interactive --suppress-agent-init",
+            counter,
+            TimeSpan.FromMinutes(5));
+        await auto.RunCommandAsync(
+            "dotnet build OlderTemplate.Tests/OlderTemplate.Tests.csproj",
+            counter,
+            TimeSpan.FromMinutes(5));
+
+        await auto.TypeAsync(
+            "aspire new aspire-test --version 13.5.3 --source https://api.nuget.org/v3/index.json " +
+            "--apphost IntegrationTestApp/IntegrationTestApp.AppHost/IntegrationTestApp.AppHost.csproj " +
+            "--test-framework MSTest --name UnsupportedTemplate.Tests --output UnsupportedTemplate.Tests --non-interactive --suppress-agent-init");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(
+            s => new CellPatternSearcher().Find("does not support AppHost references").Search(s).Count > 0,
+            timeout: TimeSpan.FromMinutes(5),
+            description: "unsupported template AppHost reference diagnostic");
+        var errorPrompt = new CellPatternSearcher().Find($"[{counter.Value} ERR:");
+        await auto.WaitUntilAsync(
+            s => errorPrompt.Search(s).Count > 0,
+            timeout: TimeSpan.FromSeconds(30),
+            description: "unsupported template command returning a non-zero exit code");
+        counter.Increment();
     }
 }

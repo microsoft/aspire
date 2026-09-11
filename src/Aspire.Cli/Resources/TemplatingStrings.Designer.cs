@@ -241,6 +241,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The '{0}' template in Aspire.ProjectTemplates {1} does not support AppHost references. Choose a template version that supports AppHost references, or omit --apphost to generate a standalone test project..
+        /// </summary>
+        public static string IntegrationTestAppHostReferenceNotSupported {
+            get {
+                return ResourceManager.GetString("IntegrationTestAppHostReferenceNotSupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Integration tests.
         /// </summary>
         public static string IntegrationTestsTemplate_Description {

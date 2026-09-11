@@ -196,6 +196,244 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.False(requestedCreateSettingsFile);
     }
 
+    [Theory]
+    [InlineData("MSTest", "aspire-mstest", null, "13.5.3", false)]
+    [InlineData("NUnit", "aspire-nunit", null, "13.5.3", false)]
+    [InlineData("xUnit", "aspire-xunit", "v2", "13.5.3", false)]
+    [InlineData("MSTest", "aspire-mstest", null, "13.6.0-preview.1", false)]
+    [InlineData("MSTest", "aspire-mstest", null, "13.5.0-local", true)]
+    [InlineData("MSTest", "aspire-mstest", null, "13.6.0", true)]
+    [InlineData("NUnit", "aspire-nunit", null, "13.6.0", true)]
+    [InlineData("xUnit", "aspire-xunit", "v2", "13.6.0", true)]
+    public async Task NewCommand_IntegrationTestTemplateUsesInstalledTemplateCapabilities(
+        string testFramework,
+        string expectedTemplate,
+        string? xunitVersion,
+        string templateVersion,
+        bool supportsAppHostReference)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        var otherAppHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "OtherAppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        await File.WriteAllTextAsync(otherAppHostFile.FullName, "<Project />");
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Tests");
+        var operations = new List<string>();
+        var runner = CreateTestRunnerWithTemplatePackage(templateVersion);
+        runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) =>
+        {
+            operations.Add("Install");
+            Assert.Equal(templateVersion, version);
+            return (0, version);
+        };
+        runner.NewProjectDryRunAsyncCallback = (templateName, _, _, _, _) =>
+        {
+            operations.Add("Probe");
+            Assert.Equal(expectedTemplate, templateName);
+            return supportsAppHostReference ? 0 : 127;
+        };
+        runner.NewProjectAsyncCallback = (templateName, projectName, generatedPath, _, _) =>
+        {
+            operations.Add("Create");
+            Assert.Equal(expectedTemplate, templateName);
+            Directory.CreateDirectory(generatedPath);
+            File.WriteAllText(Path.Combine(generatedPath, $"{projectName}.csproj"), "<Project />");
+            return 0;
+        };
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => runner;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (projectFile, _, createSettingsFile, _) =>
+                {
+                    operations.Add("Discover");
+                    Assert.Null(projectFile);
+                    Assert.False(createSettingsFile);
+                    return Task.FromResult(new AppHostProjectSearchResult(
+                        supportsAppHostReference ? appHostFile : null,
+                        [appHostFile, otherAppHostFile]));
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var xunitVersionArgument = xunitVersion is null ? string.Empty : $" --xunit-version {xunitVersion}";
+        var result = command.Parse(
+            $"new aspire-test --test-framework {testFramework}{xunitVersionArgument} --version {templateVersion} " +
+            $"--name AppHost.Tests --output \"{outputPath}\" --non-interactive --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(["--dry-run", "--WithAppHostReference", "false"], Assert.IsType<string[]>(runner.LastNewProjectDryRunExtraArgs));
+        var expectedExtraArgs = new List<string>();
+        if (xunitVersion is not null)
+        {
+            expectedExtraArgs.AddRange(["--xunit-version", xunitVersion]);
+        }
+        if (supportsAppHostReference)
+        {
+            expectedExtraArgs.AddRange(
+            [
+                "--WithAppHostReference",
+                "true",
+                "--AppHostProjectPath",
+                Path.Combine("..", "AppHost", "AppHost.csproj"),
+                "--AppHostProjectName",
+                "AppHost"
+            ]);
+        }
+        Assert.Equal(expectedExtraArgs, runner.LastNewProjectExtraArgs);
+        Assert.Equal(
+            supportsAppHostReference ? ["Install", "Probe", "Discover", "Create"] : ["Install", "Probe", "Create"],
+            operations);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NewCommand_IntegrationTestTemplateRejectsExplicitAppHostForUnsupportedTemplates(bool appHostIsDirectory)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Tests");
+        var runner = CreateTestRunnerWithTemplatePackage("13.5.3");
+        runner.NewProjectDryRunAsyncCallback = (_, _, _, _, _) => 127;
+        var interactionService = new TestInteractionService();
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => runner;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    throw new InvalidOperationException("Unsupported templates must not trigger AppHost discovery.")
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var appHostPath = appHostIsDirectory ? appHostDirectory.FullName : appHostFile.FullName;
+        var result = command.Parse(
+            $"new aspire-test --test-framework MSTest --version 13.5.3 --apphost \"{appHostPath}\" " +
+            $"--name AppHost.Tests --output \"{outputPath}\" --non-interactive --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
+        Assert.Null(runner.LastNewProjectExtraArgs);
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, TemplatingStrings.IntegrationTestAppHostReferenceNotSupported, "aspire-mstest", "13.5.3"),
+            Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(73)]
+    [InlineData(103)]
+    public async Task NewCommand_IntegrationTestTemplateSurfacesUnexpectedCapabilityProbeFailures(int probeExitCode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Tests");
+        var runner = CreateTestRunnerWithStandardPackages();
+        runner.NewProjectDryRunAsyncCallback = (_, _, _, options, _) =>
+        {
+            options.StandardErrorCallback?.Invoke("Template probe failed.");
+            return probeExitCode;
+        };
+        var interactionService = new TestInteractionService();
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => runner;
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    throw new InvalidOperationException("A failed probe must not trigger AppHost discovery.")
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+            $"new aspire-test --test-framework MSTest --name AppHost.Tests --output \"{outputPath}\" --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
+        Assert.Null(runner.LastNewProjectExtraArgs);
+        Assert.Equal(
+            probeExitCode == 73
+                ? TemplatingStrings.ProjectAlreadyExists
+                : string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, probeExitCode),
+            Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Fact]
+    public async Task NewCommand_IntegrationTestTemplatePropagatesCapabilityProbeCancellation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Tests");
+        var runner = CreateTestRunnerWithStandardPackages();
+        runner.NewProjectDryRunAsyncCallback = (_, _, _, _, cancellationToken) => throw new OperationCanceledException(cancellationToken);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => runner;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    throw new InvalidOperationException("A cancelled probe must not trigger AppHost discovery.")
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+            $"new aspire-test --test-framework MSTest --name AppHost.Tests --output \"{outputPath}\" --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Cancelled, exitCode);
+        Assert.Null(runner.LastNewProjectExtraArgs);
+    }
+
+    [Fact]
+    public async Task NewCommand_IntegrationTestTemplateDoesNotProbeAfterInstallationFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Tests");
+        var runner = CreateTestRunnerWithStandardPackages();
+        runner.InstallTemplateAsyncCallback = (_, _, _, _, _, _, _) => (1, null);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => runner;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    throw new InvalidOperationException("A failed installation must not trigger AppHost discovery.")
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+            $"new aspire-test --test-framework MSTest --name AppHost.Tests --output \"{outputPath}\" --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToInstallTemplates, exitCode);
+        Assert.Null(runner.LastNewProjectDryRunExtraArgs);
+        Assert.Null(runner.LastNewProjectExtraArgs);
+    }
+
     [Fact]
     public async Task NewCommand_IntegrationTestTemplateSelectsCompatibleAppHostFromExplicitDirectory()
     {
@@ -1309,6 +1547,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     private static TestDotNetCliRunner CreateTestRunnerWithStandardPackages()
+        => CreateTestRunnerWithTemplatePackage("9.2.0");
+
+    private static TestDotNetCliRunner CreateTestRunnerWithTemplatePackage(string version)
     {
         var runner = new TestDotNetCliRunner();
         runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
@@ -1317,7 +1558,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 Id = "Aspire.ProjectTemplates",
                 Source = "nuget",
-                Version = "9.2.0"
+                Version = version
             };
 
             return (0, new NuGetPackage[] { package });
