@@ -19,6 +19,8 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// <item><c>"CaptureFile:{fileName}"</c> — additional files to capture under the given destination name</item>
 /// </list>
 /// Workspace capture is automatic when using <see cref="TemporaryWorkspace.Create"/>.
+/// Callers should still dispose the workspace normally; annotated workspaces defer deletion
+/// until this attribute has captured or released them.
 /// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
@@ -34,13 +36,17 @@ internal sealed class CaptureWorkspaceOnFailureAttribute : BeforeAfterTestAttrib
 
     public override void After(MethodInfo methodUnderTest, IXunitTest test)
     {
+        var workspacePath =
+            TestContext.Current.KeyValueStorage.TryGetValue("WorkspacePath", out var workspaceValue) &&
+            workspaceValue is string registeredWorkspacePath
+                ? registeredWorkspacePath
+                : null;
+
         if (TestContext.Current.TestState?.Result is not TestResult.Failed)
         {
-            if (!CliE2ETestHelpers.IsRunningInCI &&
-                TestContext.Current.KeyValueStorage.TryGetValue("WorkspacePath", out var workspaceValue) &&
-                workspaceValue is string preservedWorkspacePath)
+            if (workspacePath is not null)
             {
-                TemporaryWorkspace.ReleasePreservation(preservedWorkspacePath);
+                TemporaryWorkspace.ReleasePreservation(workspacePath);
             }
 
             return;
@@ -52,11 +58,10 @@ internal sealed class CaptureWorkspaceOnFailureAttribute : BeforeAfterTestAttrib
         {
             if (!CliE2ETestHelpers.IsRunningInCI)
             {
-                if (TestContext.Current.KeyValueStorage.TryGetValue("WorkspacePath", out var workspaceValue) &&
-                    workspaceValue is string localWorkspacePath)
+                if (workspacePath is not null)
                 {
-                    Console.WriteLine($"Failed test workspace preserved at: {localWorkspacePath}");
-                    TemporaryWorkspace.ReleasePreservation(localWorkspacePath, deleteDirectory: false);
+                    Console.WriteLine($"Failed test workspace preserved at: {workspacePath}");
+                    TemporaryWorkspace.ReleasePreservation(workspacePath, deleteDirectory: false);
                 }
 
                 foreach (var kvp in TestContext.Current.KeyValueStorage)
@@ -82,8 +87,7 @@ internal sealed class CaptureWorkspaceOnFailureAttribute : BeforeAfterTestAttrib
             }
 
             // Capture primary workspace
-            if (TestContext.Current.KeyValueStorage.TryGetValue("WorkspacePath", out var value) &&
-                value is string workspacePath &&
+            if (workspacePath is not null &&
                 Directory.Exists(workspacePath))
             {
                 var capturePath = CliE2ETestHelpers.CaptureDirectory(workspacePath, testName, label: null);
@@ -115,6 +119,13 @@ internal sealed class CaptureWorkspaceOnFailureAttribute : BeforeAfterTestAttrib
         catch
         {
             // Don't fail the test because of capture issues.
+        }
+        finally
+        {
+            if (CliE2ETestHelpers.IsRunningInCI && workspacePath is not null)
+            {
+                TemporaryWorkspace.ReleasePreservation(workspacePath);
+            }
         }
     }
 }
