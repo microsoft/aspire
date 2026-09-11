@@ -231,6 +231,8 @@ public static class PostgresBuilderExtensions
                     ];
                 });
 
+            AddManagementLinks(pgAdminContainerBuilder, "http", "Manage (pgAdmin)");
+
             configureContainer?.Invoke(pgAdminContainerBuilder);
 
             pgAdminContainerBuilder.WithRelationship(builder.Resource, "PgAdmin");
@@ -326,6 +328,8 @@ public static class PostgresBuilderExtensions
                                                .WithArgs("--sessions")
                                                .ExcludeFromManifest();
 
+            AddManagementLinks(pgwebContainerBuilder, "http", "Manage (pgweb)");
+
             configureContainer?.Invoke(pgwebContainerBuilder);
 
             pgwebContainerBuilder.WithRelationship(builder.Resource, "PgWeb");
@@ -409,6 +413,35 @@ public static class PostgresBuilderExtensions
         mcpContainerBuilder.WithParentRelationship(builder.Resource);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpointName"/>
+    /// endpoint to every <see cref="PostgresServerResource"/> in the app.
+    /// </summary>
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, string endpointName, string displayText)
+        where T : IResourceWithEndpoints
+    {
+        resourceBuilder.WithHidden();
+
+        var endpoint = resourceBuilder.GetEndpoint(endpointName);
+        resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var postgresResource in @event.Model.Resources.OfType<PostgresServerResource>())
+            {
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                postgresResource.Annotations.Add(new ResourceUrlAnnotation
+                {
+                    Url = "/",
+                    DisplayText = displayText,
+                    Endpoint = endpoint,
+                    DisplayOrder = 1
+                });
+#pragma warning restore CS0618
+            }
+
+            return Task.CompletedTask;
+        });
     }
 
     private static void SetPgAdminEnvironmentVariables(EnvironmentCallbackContext context)

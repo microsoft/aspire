@@ -230,6 +230,17 @@ public class AddMySqlTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void WithPhpMyAdminHidesThePhpMyAdminResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.AddMySql("mysql").WithPhpMyAdmin();
+
+        var phpMyAdmin = Assert.Single(builder.Resources.OfType<PhpMyAdminContainerResource>());
+        var hidden = Assert.Single(phpMyAdmin.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
     public async Task SingleMySqlInstanceProducesCorrectMySqlHostsVariable()
     {
         var builder = DistributedApplication.CreateBuilder();

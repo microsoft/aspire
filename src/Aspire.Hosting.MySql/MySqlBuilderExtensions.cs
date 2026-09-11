@@ -260,6 +260,8 @@ public static class MySqlBuilderExtensions
                                                 .WithIconName("WindowDatabase")
                                                 .ExcludeFromManifest();
 
+        AddManagementLinks(phpMyAdminContainerBuilder, "http", "Manage");
+
         builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(phpMyAdminContainer, async (e, ct) =>
         {
             var mySqlInstances = builder.ApplicationBuilder.Resources.OfType<MySqlServerResource>();
@@ -318,7 +320,38 @@ public static class MySqlBuilderExtensions
 
         configureContainer?.Invoke(phpMyAdminContainerBuilder);
 
+        phpMyAdminContainerBuilder.WithRelationship(builder.Resource, "PhpMyAdmin");
+
         return builder;
+    }
+
+    /// <summary>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpointName"/>
+    /// endpoint to every <see cref="MySqlServerResource"/> in the app.
+    /// </summary>
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, string endpointName, string displayText)
+        where T : IResourceWithEndpoints
+    {
+        resourceBuilder.WithHidden();
+
+        var endpoint = resourceBuilder.GetEndpoint(endpointName);
+        resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var mySqlResource in @event.Model.Resources.OfType<MySqlServerResource>())
+            {
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                mySqlResource.Annotations.Add(new ResourceUrlAnnotation
+                {
+                    Url = "/",
+                    DisplayText = displayText,
+                    Endpoint = endpoint,
+                    DisplayOrder = 1
+                });
+#pragma warning restore CS0618
+            }
+
+            return Task.CompletedTask;
+        });
     }
 
     /// <summary>
