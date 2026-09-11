@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Release-engineering fix to signing classification for third-party dashboard SDK package dependencies; internal build/release infrastructure only, no user-facing impact.",
+  "mergedAt": "2026-09-11T02:24:04Z",
+  "number": 20027,
+  "runDate": "2026-09-11T06:11:13Z",
+  "status": "excluded",
+  "title": "Fix signing failures for dashboard SDK packages"
+}

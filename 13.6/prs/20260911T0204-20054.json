@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Internal telemetry-attribution fix (reads coding-agent markers via IEnvironment instead of merged IConfiguration) plus unrelated test-infra Vite E2E dependency pin; no user-observable CLI/product behavior change.",
+  "mergedAt": "2026-09-11T02:04:05Z",
+  "number": 20054,
+  "runDate": "2026-09-11T06:11:13Z",
+  "status": "excluded",
+  "title": "Detect coding agents from process environment variables"
+}

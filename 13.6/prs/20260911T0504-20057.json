@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only fix isolating AKS destroy-pipeline tests from the real Helm runner; no production code or user-facing behavior changed.",
+  "mergedAt": "2026-09-11T05:04:42Z",
+  "number": 20057,
+  "runDate": "2026-09-11T06:11:13Z",
+  "status": "excluded",
+  "title": "Isolate AKS destroy tests from the real Helm runner"
+}
