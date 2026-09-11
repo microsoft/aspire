@@ -2,6 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Globalization;
+using System.IO.Hashing;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Shared;
@@ -87,12 +90,96 @@ internal static class SettingsCommand
 
         return new NuGetSettingsResult(
             settings.GetConfigFilePaths().ToArray(),
+            ComputeCacheIdentity(settings, packageSources, auditSources, packageSourceMappings),
             sources,
             sensitiveSourceValues,
             packageSourceMappings.Length > 0,
             packageSourceMappings,
             disabledPackageSourceKeys,
             reservedPackageSourceKeys);
+    }
+
+    internal static string ComputeCacheIdentity(
+        ISettings settings,
+        IReadOnlyList<PackageSource> packageSources,
+        IReadOnlyList<PackageSource> auditSources,
+        IReadOnlyList<NuGetPackageSourceMappingResult> packageSourceMappings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(packageSources);
+        ArgumentNullException.ThrowIfNull(auditSources);
+        ArgumentNullException.ThrowIfNull(packageSourceMappings);
+
+        var hash = new XxHash3();
+
+        foreach (var configPath in settings.GetConfigFilePaths())
+        {
+            AppendValue(hash, "config-path");
+            AppendValue(hash, configPath);
+        }
+
+        AppendPackageSources(hash, "package-source", packageSources);
+        AppendPackageSources(hash, "audit-source", auditSources);
+
+        var signatureValidationMode = settings
+            .GetSection("config")?
+            .Items
+            .OfType<AddItem>()
+            .LastOrDefault(static item => string.Equals(item.Key, "signatureValidationMode", StringComparison.OrdinalIgnoreCase))?
+            .Value;
+        if (signatureValidationMode is not null)
+        {
+            // This setting changes whether a package is accepted during restore. Hash the effective
+            // value without serializing unrelated config entries, which can contain credentials.
+            AppendValue(hash, "signature-validation-mode");
+            AppendValue(hash, signatureValidationMode);
+        }
+
+        foreach (var mapping in packageSourceMappings)
+        {
+            AppendValue(hash, "package-source-mapping");
+            AppendValue(hash, mapping.SourceKey);
+            foreach (var pattern in mapping.Patterns)
+            {
+                AppendValue(hash, pattern);
+            }
+        }
+
+        var pathContext = NuGetPathContext.Create(settings);
+        AppendValue(hash, "global-packages");
+        AppendValue(hash, pathContext.UserPackageFolder);
+        foreach (var fallbackPackageFolder in pathContext.FallbackPackageFolders)
+        {
+            AppendValue(hash, "fallback-packages");
+            AppendValue(hash, fallbackPackageFolder);
+        }
+
+        return Convert.ToHexString(hash.GetCurrentHash());
+    }
+
+    private static void AppendPackageSources(
+        XxHash3 hash,
+        string kind,
+        IReadOnlyList<PackageSource> sources)
+    {
+        foreach (var source in sources)
+        {
+            AppendValue(hash, kind);
+            AppendValue(hash, source.Name);
+            AppendValue(hash, source.Source);
+            AppendValue(hash, source.IsEnabled.ToString(CultureInfo.InvariantCulture));
+            AppendValue(hash, source.ProtocolVersion.ToString(CultureInfo.InvariantCulture));
+            AppendValue(hash, source.AllowInsecureConnections.ToString(CultureInfo.InvariantCulture));
+            AppendValue(hash, source.DisableTLSCertificateValidation.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    private static void AppendValue(XxHash3 hash, string value)
+    {
+        hash.Append(Encoding.UTF8.GetBytes(value.Length.ToString(CultureInfo.InvariantCulture)));
+        hash.Append(":"u8);
+        hash.Append(Encoding.UTF8.GetBytes(value));
+        hash.Append("\n"u8);
     }
 
     private static NuGetSourceResult CreateSourceResult(PackageSource source, byte[] identityKey)
@@ -130,6 +217,7 @@ internal static class SettingsCommand
 
 internal sealed record NuGetSettingsResult(
     string[] ConfigPaths,
+    string CacheIdentity,
     NuGetSourceResult[] Sources,
     string[] SensitiveSourceValues,
     bool PackageSourceMappingEnabled,

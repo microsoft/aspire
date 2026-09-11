@@ -377,6 +377,69 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
                 source.IsEnabled);
         Assert.Empty(settings.SensitiveSourceValues);
         Assert.True(settings.PackageSourceMappingEnabled);
+        Assert.NotEmpty(settings.CacheIdentity);
+    }
+
+    [Fact]
+    public void SettingsCommand_CacheIdentityUsesNuGetEnvironmentExpansion()
+    {
+        const string environmentVariableName = "ASPIRE_TEST_SETTINGS_SOURCE";
+        File.WriteAllText(
+            Path.Combine(_workspace.Path, "NuGet.Config"),
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="environment" value="%{environmentVariableName}%" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment[environmentVariableName] = "https://example.invalid/feed-a";
+
+        RemoteExecutor.Invoke(static (workingDirectory, variableName) =>
+        {
+            var first = SettingsCommand.GetSettings(workingDirectory, s_sourceIdentityKey);
+            var unchanged = SettingsCommand.GetSettings(workingDirectory, s_sourceIdentityKey);
+
+            Environment.SetEnvironmentVariable(variableName, "https://example.invalid/feed-b");
+            var changed = SettingsCommand.GetSettings(workingDirectory, s_sourceIdentityKey);
+
+            Assert.Equal(first.CacheIdentity, unchanged.CacheIdentity);
+            Assert.NotEqual(first.CacheIdentity, changed.CacheIdentity);
+        }, _workspace.Path, environmentVariableName, options).Dispose();
+    }
+
+    [Fact]
+    public void SettingsCommand_CacheIdentityIncludesSignatureValidationMode()
+    {
+        var configPath = Path.Combine(_workspace.Path, "NuGet.Config");
+        File.WriteAllText(
+            configPath,
+            """
+            <configuration>
+              <config>
+                <add key="signatureValidationMode" value="accept" />
+              </config>
+            </configuration>
+            """);
+
+        var first = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
+
+        File.WriteAllText(
+            configPath,
+            """
+            <configuration>
+              <config>
+                <add key="signatureValidationMode" value="require" />
+              </config>
+            </configuration>
+            """);
+
+        var changed = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
+
+        Assert.NotEqual(first.CacheIdentity, changed.CacheIdentity);
     }
 
     [Fact]
