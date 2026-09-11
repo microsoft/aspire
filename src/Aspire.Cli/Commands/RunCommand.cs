@@ -252,6 +252,7 @@ internal sealed class RunCommand : BaseCommand
         LauncherLivenessMonitor? launcherMonitor = null;
         Task<int>? runTask = null;
         CancellationTokenSource? runCts = null;
+        var cancellationRequested = false;
 
         try
         {
@@ -641,16 +642,6 @@ internal sealed class RunCommand : BaseCommand
                         : CommandResult.FromExitCode(exitCode);
                 }
             }
-            catch (OperationCanceledException ex) when (ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested)
-            {
-                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
-
-                // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
-                // Internal failures `return X` directly from GuestAppHostProject.RunAsync rather
-                // than flowing through this catch, so we don't need to distinguish failure codes
-                // here.
-                return CommandResult.Cancelled(CliExitCodes.Success);
-            }
             finally
             {
                 logCaptureCancellationSource.Cancel();
@@ -673,21 +664,7 @@ internal sealed class RunCommand : BaseCommand
             (runCts is not null && ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested))
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
-
-            // Cancellation can interrupt build or startup readiness waits before the project task unwinds.
-            // Keep cleanup owned by this handler so a late build cannot outlive the CLI and retain
-            // the workspace directory on Windows.
-            if (runCts is not null &&
-                runTask is not null &&
-                !runTask.IsCompleted)
-            {
-                // BaseCommand already races manager-owned cancellation against the process-wide
-                // shutdown deadline. Only direct callers with an unrelated token need a local bound.
-                var cleanupTimeout = _cancellationManager.IsCancellationRequested
-                    ? Timeout.InfiniteTimeSpan
-                    : s_appHostStartupCancellationTimeout;
-                await CancelAppHostRunAsync(runCts, runTask, cleanupTimeout, CancellationToken.None).ConfigureAwait(false);
-            }
+            cancellationRequested = true;
 
             // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
             // Internal failures `return X` directly from GuestAppHostProject.RunAsync rather
@@ -735,6 +712,21 @@ internal sealed class RunCommand : BaseCommand
         }
         finally
         {
+            // Keep cancellation cleanup owned by the command even if a concurrent RPC failure
+            // or disconnect selected a different catch. Preserve that result while draining the run
+            // before disposing its token source, so child processes cannot retain the workspace.
+            if ((cancellationRequested || cancellationToken.IsCancellationRequested) &&
+                runCts is not null &&
+                runTask is { IsCompleted: false })
+            {
+                // BaseCommand already races manager-owned cancellation against the process-wide
+                // shutdown deadline. Only direct callers with an unrelated token need a local bound.
+                var cleanupTimeout = _cancellationManager.IsCancellationRequested
+                    ? Timeout.InfiniteTimeSpan
+                    : s_appHostStartupCancellationTimeout;
+                await CancelAppHostRunAsync(runCts, runTask, cleanupTimeout, CancellationToken.None).ConfigureAwait(false);
+            }
+
             if (IsDetachedStartChild() && runTask is { IsCompleted: false } detachedAppHostRun)
             {
                 // If the runTask is still running here, that is an abnormal exit. 
@@ -1508,6 +1500,9 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (OperationCanceledException)
         {
+            // Cancellation of the wait must reach the command's owning cancellation handler.
+            // Only cancellation of the run task itself is safe to absorb here.
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (TimeoutException ex) when (timeout != Timeout.InfiniteTimeSpan)
         {
@@ -1518,6 +1513,9 @@ internal sealed class RunCommand : BaseCommand
         {
             _logger.LogDebug(ex, "AppHost run failed after startup cancellation.");
         }
+
+        // Cancellation can race the timeout or a run failure and lose the WaitAsync race.
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     private async Task DrainAppHostRunAfterCancellationAsync(Task<int> pendingRun)
