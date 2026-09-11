@@ -14,6 +14,65 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class CSharpInitTests(ITestOutputHelper output)
 {
     [CaptureWorkspaceOnFailure]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FileBasedInitRejectsTypeScriptWithoutChangingFiles(bool configuredLanguage)
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+        var appDirectory = workspace.CreateDirectory("app");
+        var existingFiles = new Dictionary<string, string>
+        {
+            [Path.Combine(appDirectory.FullName, "package.json")] = """{"name":"existing-web","private":true}""",
+            [Path.Combine(appDirectory.FullName, "Incidental.slnx")] = "<Solution />"
+        };
+        if (configuredLanguage)
+        {
+            existingFiles[Path.Combine(appDirectory.FullName, "aspire.config.json")] = """{"appHost":{"language":"typescript/nodejs"}}""";
+        }
+
+        foreach (var (path, content) in existingFiles)
+        {
+            await File.WriteAllTextAsync(path, content);
+        }
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync("cd app", counter);
+        var languageArg = configuredLanguage ? string.Empty : " --language typescript";
+        await auto.TypeAsync($"aspire init --file-based{languageArg} --non-interactive --suppress-agent-init > ../init-error.txt 2>&1");
+        await auto.EnterAsync();
+
+        var errorPrompt = new CellPatternSearcher()
+            .Find($"[{counter.Value} ERR:1] $ ");
+        var successPrompt = new CellPatternSearcher()
+            .Find($"[{counter.Value} OK] $ ");
+        var failedAsExpected = false;
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            failedAsExpected = errorPrompt.Search(snapshot).Count > 0;
+            return failedAsExpected || successPrompt.Search(snapshot).Count > 0;
+        }, timeout: TimeSpan.FromMinutes(2), description: "waiting for file-based initialization to reject TypeScript");
+        counter.Increment();
+
+        Assert.True(failedAsExpected, "Expected invalid-command exit code 1 for --file-based with TypeScript.");
+        var errorOutput = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "init-error.txt"));
+        Assert.Contains("The --file-based option requires C#. Select --language csharp or omit --file-based.", errorOutput);
+        Assert.Equal(existingFiles.Keys.Order(), Directory.GetFiles(appDirectory.FullName, "*", SearchOption.AllDirectories).Order());
+        foreach (var (path, content) in existingFiles)
+        {
+            Assert.Equal(content, await File.ReadAllTextAsync(path));
+        }
+    }
+
+    [CaptureWorkspaceOnFailure]
     [Fact]
     public async Task FileBasedCSharpInitIgnoresIncidentalSolutions()
     {

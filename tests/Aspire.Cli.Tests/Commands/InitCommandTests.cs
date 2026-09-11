@@ -464,8 +464,73 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(" --language typescript", false, false)]
+    [InlineData(" --language typescript/nodejs", false, false)]
+    [InlineData("", true, false)]
+    [InlineData("", false, false)]
+    [InlineData(" --language typescript", false, true)]
+    public async Task InitCommand_FileBased_WhenTypeScriptSelected_FailsWithoutChanges(string languageArgs, bool configuredLanguage, bool existingAppHost)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (existingAppHost)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "apphost.mts"), "console.log('existing AppHost');");
+        }
+
+        var originalFiles = Directory.GetFiles(workspace.Path, "*", SearchOption.AllDirectories)
+            .ToDictionary(path => path, File.ReadAllText);
+        var promptCount = 0;
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) =>
+            {
+                Assert.Empty(languageArgs);
+                Assert.False(configuredLanguage);
+                promptCount++;
+                return choices.Cast<LanguageInfo>().Single(language => language.LanguageId.Value == KnownLanguageId.TypeScript);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.LanguageServiceFactory = sp => ActivatorUtilities.CreateInstance<LanguageService>(sp);
+            options.ConfigurationServiceFactory = _ => new global::Aspire.Cli.Tests.TestServices.TestConfigurationService
+            {
+                OnGetConfiguration = key => configuredLanguage && key == "appHost.language" ? KnownLanguageId.TypeScript : null,
+                OnSetConfiguration = (_, _, _) => throw new InvalidOperationException("Rejected initialization must not persist language selection.")
+            };
+            options.SolutionLocatorFactory = _ => new TestSolutionLocator
+            {
+                FindSolutionFileAsyncCallback = (_, _) => throw new InvalidOperationException("Rejected initialization must not discover solutions.")
+            };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (_, _) => throw new InvalidOperationException("Rejected initialization must not scaffold files.")
+            };
+        });
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = command.Parse($"init --file-based{languageArgs}");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(["The --file-based option requires C#. Select --language csharp or omit --file-based."], interactionService.DisplayedErrors);
+        Assert.Equal(string.IsNullOrEmpty(languageArgs) && !configuredLanguage ? 1 : 0, promptCount);
+        Assert.Empty(interactionService.BooleanPromptCalls);
+        // Failed commands can create a diagnostic log, but must not create or change project files.
+        var logFilePath = serviceProvider.GetRequiredService<Program.CliLoggingOptions>().LogFilePath;
+        var projectFiles = Directory.GetFiles(workspace.Path, "*", SearchOption.AllDirectories).Where(path => path != logFilePath);
+        Assert.Equal(originalFiles.Keys.Order(), projectFiles.Order());
+        foreach (var (path, content) in originalFiles)
+        {
+            Assert.Equal(content, await File.ReadAllTextAsync(path));
+        }
+    }
+
+    [Theory]
     [InlineData("")]
-    [InlineData(" --file-based")]
+    [InlineData(" --file-based false")]
     public async Task InitCommand_WhenTypeScriptSelected_CreatesAppHostAndAspireConfig(string additionalArgs)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -504,7 +569,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("")]
-    [InlineData(" --file-based")]
+    [InlineData(" --file-based false")]
     public async Task InitCommand_WhenLegacyTypeScriptAppHostExists_DoesNotCreateMtsAppHost(string additionalArgs)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -533,7 +598,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("")]
-    [InlineData(" --file-based")]
+    [InlineData(" --file-based false")]
     public async Task InitCommand_WhenBrownfieldTypeScriptSelected_DisplaysNestedAppHostPath(string additionalArgs)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

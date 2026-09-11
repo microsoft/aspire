@@ -127,12 +127,18 @@ internal sealed class InitCommand : BaseCommand
         var selectedProject = projectSelection.Project;
 
         var isCSharp = selectedProject.LanguageId == KnownLanguageId.CSharp;
+        var fileBased = parseResult.GetValue(_fileBasedOption);
+        if (fileBased && !isCSharp)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, InitCommandStrings.FileBasedRequiresCSharp);
+        }
+
         var workingDirectory = _executionContext.WorkingDirectory;
 
         // Step 2: Detect solution (C# only — determines single-file vs full project).
         // File-based initialization bypasses discovery so incidental solutions cannot trigger a prompt.
         FileInfo? solutionFile = null;
-        if (isCSharp && !parseResult.GetValue(_fileBasedOption))
+        if (isCSharp && !fileBased)
         {
             solutionFile = await _solutionLocator.FindSolutionFileAsync(workingDirectory, cancellationToken);
         }

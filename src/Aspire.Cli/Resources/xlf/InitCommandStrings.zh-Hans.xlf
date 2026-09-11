@@ -78,8 +78,13 @@
         <note />
       </trans-unit>
       <trans-unit id="FileBasedOptionDescription">
-        <source>Create a file-based AppHost in the current directory. For C#, this skips .NET solution discovery and creates apphost.cs.</source>
-        <target state="new">Create a file-based AppHost in the current directory. For C#, this skips .NET solution discovery and creates apphost.cs.</target>
+        <source>Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.</source>
+        <target state="new">Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FileBasedRequiresCSharp">
+        <source>The --file-based option requires C#. Select --language csharp or omit --file-based.</source>
+        <target state="new">The --file-based option requires C#. Select --language csharp or omit --file-based.</target>
         <note />
       </trans-unit>
       <trans-unit id="FixOrRemoveConfigAndRerun">
