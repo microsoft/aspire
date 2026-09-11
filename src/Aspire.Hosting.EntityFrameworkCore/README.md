@@ -256,9 +256,9 @@ starting `dotnet-ef`. This includes automatic startup migrations and dashboard c
 output, not for the application to start, so `api.WaitFor(migrations)` remains supported.
 
 EF operations do **not** forward Aspire-specific `WithBuildEnvironment` customizations as MSBuild global
-properties to `dotnet-ef`. When the startup or a known migrations project has custom build providers or
-build-property metadata, each requested EF operation logs a warning and continues. This also applies to
-script and bundle generation during publishing.
+properties to `dotnet-ef`. When the startup or a known migrations project has `WithBuildEnvironment`,
+`WithDotnetProgramBuildEnvironment`, or custom build-property metadata, each requested EF operation logs a
+warning and continues. This also applies to script and bundle generation during publishing.
 
 Waiting for the build does not guarantee that EF selects the same assemblies: EF may use suitable output,
 select different or stale output, or fail because its expected output is missing. Ordinary commands retain

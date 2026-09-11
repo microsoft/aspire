@@ -172,7 +172,7 @@ internal interface IDotnetProgramContainerImageManager
 {
     Task<DotnetProgramImageBuildResult> BuildDotnetProgramImageAsync(
         IResource resource,
-        IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> buildEnvironmentProviders,
+        IReadOnlyList<DotnetProgramBuildEnvironmentCallbackAnnotation> buildEnvironmentCallbacks,
         Func<IContainerRuntime, CancellationToken, Task> ensureContainerRuntimeRunning,
         CancellationToken cancellationToken);
 }
@@ -337,7 +337,7 @@ internal sealed class ResourceContainerImageManager(
         {
             using var result = await BuildDotnetProgramImageAsync(
                 resource,
-                resource.Annotations.OfType<IDotnetProgramBuildEnvironmentProvider>().ToArray(),
+                resource.Annotations.OfType<DotnetProgramBuildEnvironmentCallbackAnnotation>().ToArray(),
                 EnsureContainerRuntimeRunningAsync,
                 cancellationToken).ConfigureAwait(false);
 
@@ -396,14 +396,14 @@ internal sealed class ResourceContainerImageManager(
 
     async Task<DotnetProgramImageBuildResult> IDotnetProgramContainerImageManager.BuildDotnetProgramImageAsync(
         IResource resource,
-        IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> buildEnvironmentProviders,
+        IReadOnlyList<DotnetProgramBuildEnvironmentCallbackAnnotation> buildEnvironmentCallbacks,
         Func<IContainerRuntime, CancellationToken, Task> ensureContainerRuntimeRunning,
         CancellationToken cancellationToken) =>
-        await BuildDotnetProgramImageAsync(resource, buildEnvironmentProviders, ensureContainerRuntimeRunning, cancellationToken).ConfigureAwait(false);
+        await BuildDotnetProgramImageAsync(resource, buildEnvironmentCallbacks, ensureContainerRuntimeRunning, cancellationToken).ConfigureAwait(false);
 
     private async Task<DotnetProgramImageBuildResult> BuildDotnetProgramImageAsync(
         IResource resource,
-        IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> buildEnvironmentProviders,
+        IReadOnlyList<DotnetProgramBuildEnvironmentCallbackAnnotation> buildEnvironmentCallbacks,
         Func<IContainerRuntime, CancellationToken, Task> ensureContainerRuntimeRunning,
         CancellationToken cancellationToken)
     {
@@ -435,7 +435,7 @@ internal sealed class ResourceContainerImageManager(
             buildContext = await CreateDotnetProgramBuildContextAsync(
                 resource,
                 projectMetadata,
-                buildEnvironmentProviders,
+                buildEnvironmentCallbacks,
                 cancellationToken).ConfigureAwait(false);
 
             var sdkPublishOptions = hasContainerFiles && options.Destination == ContainerImageDestination.Archive
@@ -664,13 +664,13 @@ internal sealed class ResourceContainerImageManager(
     private async Task<DotnetProgramBuildContext> CreateDotnetProgramBuildContextAsync(
             IResource resource,
             IProjectMetadata projectMetadata,
-            IReadOnlyList<IDotnetProgramBuildEnvironmentProvider> providers,
+            IReadOnlyList<DotnetProgramBuildEnvironmentCallbackAnnotation> callbacks,
             CancellationToken cancellationToken)
     {
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var unresolvedEnvironment = new Dictionary<string, object>(comparer);
 
-        if (providers.Count > 0)
+        if (callbacks.Count > 0)
         {
             var activeExecutionContext = executionContext ?? throw new InvalidOperationException(
                 $"An execution context is required to evaluate the build environment for resource '{resource.Name}'.");
@@ -683,9 +683,9 @@ internal sealed class ResourceContainerImageManager(
                 Logger = logger
             };
 
-            foreach (var provider in providers)
+            foreach (var callback in callbacks)
             {
-                await provider.ApplyAsync(callbackContext).ConfigureAwait(false);
+                await callback.ApplyAsync(callbackContext).ConfigureAwait(false);
             }
         }
 
