@@ -1,0 +1,73 @@
+{
+  "run_id": 34564571207,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34564571207",
+  "analyzed_at": "2026-09-11T05:40:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20057,
+    "title": "Isolate AKS destroy tests from the real Helm runner",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/fix-aks-destroy-test-helm",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20057"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 103154339295,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34564571207/job/103154339295",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic exit code 1 and no retrievable logs. PR only modifies Aspire.Hosting.Azure.Kubernetes tests, unrelated to the VS Code extension. Matches known flaky pattern 'vscode-extension-unit-tests-windows-flaky'.",
+      "failed_steps": ["Run tests"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 103154352647,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34564571207/job/103154352647",
+      "classification": "flaky-test",
+      "reason": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings failed because dotnet build of Aspire.Hosting.csproj emitted unexpected warnings (Expected: 0, Actual: 6), unrelated to PR changes which only touch Aspire.Hosting.Azure.Kubernetes.Tests. Matches known flaky cause 'cli-sdkdumpcommandtests-doesnotemitwarnings-flaky'.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 103154353891,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34564571207/job/103154353891",
+      "classification": "flaky-test",
+      "reason": "Same SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings failure as the macOS job (Expected: 0, Actual: 6 warnings), unrelated to PR changes. Matches known flaky cause 'cli-sdkdumpcommandtests-doesnotemitwarnings-flaky'.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "id": 103156345133,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34564571207/job/103156345133",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic exit code 1, no retrievable logs, and no TRX test failures extracted. PR only modifies Aspire.Hosting.Azure.Kubernetes tests, unrelated to the VS Code extension. Matches known flaky pattern 'vscode-e2e-windows-apphost-tree-flaky'.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Cli (macos-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception. Child exception: Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ Expected: 0 Actual: 6",
+      "stack_trace": "at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/SdkDumpCommandTests.cs:line 280 --- End of stack trace from previous location --- at Microsoft.DotNet.RemoteExecutor.Program.Main(String[] args) in /_/src/Microsoft.DotNet.RemoteExecutor/src/Program.cs:line 65",
+      "classification": "flaky",
+      "reason": "Test asserts that dotnet build of Aspire.Hosting.csproj emits 0 warnings, but got 6 warnings. PR does not touch Aspire.Hosting or Aspire.Cli code, only Azure.Kubernetes hosting tests. Matches known recurring flaky cause with 3 prior occurrences (issue #20029)."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Cli (windows-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception. Child exception: Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ Expected: 0 Actual: 6",
+      "stack_trace": "at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Commands\\SdkDumpCommandTests.cs:line 280 --- End of stack trace from previous location --- at Microsoft.DotNet.RemoteExecutor.Program.Main(String[] args) in /_/src/Microsoft.DotNet.RemoteExecutor/src/Program.cs:line 65",
+      "classification": "flaky",
+      "reason": "Same recurring warning-count mismatch failure as the macOS job, unrelated to PR changes. Matches known recurring flaky cause with 3 prior occurrences (issue #20029)."
+    }
+  ],
+  "causes": ["cli-sdkdumpcommandtests-doesnotemitwarnings-flaky", "vscode-extension-unit-tests-windows-flaky", "vscode-e2e-windows-apphost-tree-flaky"]
+}

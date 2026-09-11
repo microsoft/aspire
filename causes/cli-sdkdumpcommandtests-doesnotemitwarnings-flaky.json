@@ -25,6 +25,13 @@
       "job": "Tests / No-package tests (regular, Aspire.StackExchange.Redis.Tests, StackExchange.Redis, StackExchange.R... / StackExchange.Redis (windows-latest)",
       "pr_number": 20054,
       "observed_at": "2026-09-11T02:59:16Z"
+    },
+    {
+      "run_id": 34564571207,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34564571207",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "pr_number": 20057,
+      "observed_at": "2026-09-11T05:40:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20029"
