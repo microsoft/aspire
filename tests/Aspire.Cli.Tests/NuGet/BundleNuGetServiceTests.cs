@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Xml.Linq;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
@@ -822,9 +823,9 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
-        var overlay = new NuGetConfigOverlayInfo(
+        var overlay = new NuGetConfigOverlayRequest(
             [new NuGetConfigSourceDefinition("aspire-0", "https://example.com/feed")],
-            [new NuGetPackageSourceMappingInfo("aspire-0", ["Aspire*"])],
+            [new NuGetPackageSourceMapping("aspire-0", ["Aspire*"])],
             ClearDisabledPackageSources: true,
             DisabledPackageSourceKeys: ["unrelated"],
             GlobalPackagesFolder: "/packages");
@@ -843,6 +844,41 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal("/packages", request.RootElement.GetProperty("GlobalPackagesFolder").GetString());
         Assert.True(File.Exists(outputPath));
         Assert.False(File.Exists(requestPath));
+    }
+
+    [Fact]
+    public async Task WriteNuGetConfigOverlayAsync_RoundTripsThroughActualManagedHelper()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        var service = CreateServiceWithActualManagedHelper(
+            NullLogger<BundleNuGetService>.Instance,
+            new byte[NuGetSourceIdentity.KeySizeInBytes]);
+        var overlay = new NuGetConfigOverlayRequest(
+            [new NuGetConfigSourceDefinition("aspire-0", "https://example.com/feed")],
+            [new NuGetPackageSourceMapping("aspire-0", ["Aspire*"])],
+            ClearDisabledPackageSources: true,
+            DisabledPackageSourceKeys: ["unrelated"],
+            GlobalPackagesFolder: "/packages");
+
+        await service.WriteNuGetConfigOverlayAsync(
+            overlay,
+            outputPath,
+            TestContext.Current.CancellationToken);
+
+        var config = XDocument.Load(outputPath);
+        var source = Assert.Single(config.Descendants("packageSources").Elements("add"));
+        Assert.Equal("aspire-0", source.Attribute("key")?.Value);
+        Assert.Equal("https://example.com/feed", source.Attribute("value")?.Value);
+        var mapping = Assert.Single(config.Descendants("packageSourceMapping").Elements("packageSource"));
+        Assert.Equal("aspire-0", mapping.Attribute("key")?.Value);
+        Assert.Equal("Aspire*", Assert.Single(mapping.Elements("package")).Attribute("pattern")?.Value);
+        Assert.Equal(
+            "unrelated",
+            Assert.Single(config.Descendants("disabledPackageSources").Elements("add")).Attribute("key")?.Value);
+        Assert.Equal(
+            "/packages",
+            Assert.Single(config.Descendants("config").Elements("add")).Attribute("value")?.Value);
     }
 
     [Fact]

@@ -461,7 +461,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         var settings = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
         var serializedSettings = JsonSerializer.Serialize(
             settings,
-            SettingsJsonContext.Default.NuGetSettingsResult);
+            SettingsJsonContext.Default.NuGetSettingsResponse);
 
         var packageSource = Assert.Single(settings.Sources);
         Assert.Equal("private", packageSource.Name);
@@ -495,7 +495,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         var settings = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
         var serializedSettings = JsonSerializer.Serialize(
             settings,
-            SettingsJsonContext.Default.NuGetSettingsResult);
+            SettingsJsonContext.Default.NuGetSettingsResponse);
 
         var source = Assert.Single(settings.Sources);
         Assert.Equal("packages", source.Name);
@@ -529,7 +529,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         var settings = SettingsCommand.GetSettings(_workspace.Path, s_sourceIdentityKey);
         var serializedSettings = JsonSerializer.Serialize(
             settings,
-            SettingsJsonContext.Default.NuGetSettingsResult);
+            SettingsJsonContext.Default.NuGetSettingsResponse);
 
         var source = Assert.Single(settings.Sources);
         Assert.True(source.HasCredentials);
@@ -661,15 +661,15 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.Contains("certificate-only", ambient.ReservedPackageSourceKeys, StringComparer.OrdinalIgnoreCase);
         Assert.Contains("dormant", ambient.ReservedPackageSourceKeys, StringComparer.OrdinalIgnoreCase);
         var transformedMappings = ambient.PackageSourceMappings
-            .Select(mapping => new NuGetPackageSourceMappingResult(
+            .Select(mapping => new NuGetPackageSourceMapping(
                 mapping.SourceKey,
                 mapping.Patterns
                     .Where(static pattern => !pattern.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
                     .ToArray()))
             .Where(static mapping => mapping.Patterns.Length > 0)
-            .Append(new NuGetPackageSourceMappingResult("private", ["Aspire*"]))
+            .Append(new NuGetPackageSourceMapping("private", ["Aspire*"]))
             .GroupBy(static mapping => mapping.SourceKey, StringComparer.OrdinalIgnoreCase)
-            .Select(static group => new NuGetPackageSourceMappingResult(
+            .Select(static group => new NuGetPackageSourceMapping(
                 group.Key,
                 group.SelectMany(static mapping => mapping.Patterns).ToArray()))
             .ToArray();

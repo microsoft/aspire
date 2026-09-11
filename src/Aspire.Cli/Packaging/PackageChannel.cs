@@ -106,6 +106,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         Type is PackageChannelType.Explicit &&
         Mappings?.Any(static mapping => mapping.IsAspireDirectoryMapping) == true;
 
+    internal string? GetExistingLocalAspirePackageSource()
+        => GetLocalAspirePackageSource(Mappings)?.Source;
+
     private static string ComputeSourceDetails(PackageMapping[]? mappings)
     {
         if (mappings is null)

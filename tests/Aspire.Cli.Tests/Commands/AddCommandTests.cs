@@ -7,6 +7,7 @@ using System.Xml.Linq;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -2953,7 +2954,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             </configuration>
             """);
 
-        Assert.True(await AddCommand.HasPackageSourceMappingAsync(
+        Assert.True(await NuGetSettingsProvider.HasPackageSourceMappingAsync(
             [parentConfigPath],
             CancellationToken.None));
 
@@ -2989,7 +2990,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             </configuration>
             """);
 
-        Assert.False(await AddCommand.HasPackageSourceMappingAsync(
+        Assert.False(await NuGetSettingsProvider.HasPackageSourceMappingAsync(
             [higherPrecedenceConfigPath, parentConfigPath],
             CancellationToken.None));
 
@@ -3048,13 +3049,13 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             </configuration>
             """);
 
-        Assert.False(await AddCommand.HasPackageSourceMappingAsync(
+        Assert.False(await NuGetSettingsProvider.HasPackageSourceMappingAsync(
             [nonCanonicalSectionPath],
             CancellationToken.None));
-        Assert.False(await AddCommand.HasPackageSourceMappingAsync(
+        Assert.False(await NuGetSettingsProvider.HasPackageSourceMappingAsync(
             [mappingThenClearPath],
             CancellationToken.None));
-        Assert.True(await AddCommand.HasPackageSourceMappingAsync(
+        Assert.True(await NuGetSettingsProvider.HasPackageSourceMappingAsync(
             [clearThenMappingPath],
             CancellationToken.None));
     }
@@ -3374,6 +3375,53 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedRequestedChannel, addPackageContext.RequestedChannel);
         Assert.Equal(includeSource ? sourceOverride : null, addPackageContext.Source);
         Assert.Equal(expectedSourcePackagePattern, addPackageContext.SourcePackagePattern);
+    }
+
+    [Fact]
+    public async Task AddCommandPolyglotAppHostResolvesRelativeSourceAgainstInvocationDirectory()
+    {
+        AddPackageContext? addPackageContext = null;
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("src");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        var sourceDirectory = workspace.CreateDirectory("feed");
+        File.WriteAllText(
+            Path.Combine(sourceDirectory.FullName, "Aspire.Hosting.Redis.1.0.0.nupkg"),
+            string.Empty);
+
+        var implicitCache = new FakeNuGetPackageCache();
+
+        var tsFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        tsFactory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            addPackageContext = context;
+            return Task.FromResult(true);
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance)
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(tsFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add redis --apphost \"{appHostFile.FullName}\" --source ./feed");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(addPackageContext);
+        Assert.Equal(sourceDirectory.FullName, addPackageContext.Source);
     }
 
     [Fact]

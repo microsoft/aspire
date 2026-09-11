@@ -23,28 +23,10 @@ internal sealed record NuGetSettingsInfo(
     IReadOnlyList<NuGetSourceInfo> Sources,
     IReadOnlyList<string> SensitiveSourceValues,
     bool PackageSourceMappingEnabled,
-    IReadOnlyList<NuGetPackageSourceMappingInfo> PackageSourceMappings,
+    IReadOnlyList<NuGetPackageSourceMapping> PackageSourceMappings,
     IReadOnlyList<string> DisabledPackageSourceKeys,
     IReadOnlyList<string> ReservedPackageSourceKeys,
     byte[] SourceIdentityKey);
-
-internal sealed record NuGetSourceInfo(
-    string Name,
-    string Identity,
-    bool IsEnabled,
-    bool HasCredentials,
-    bool HasClientCertificates);
-
-internal sealed record NuGetPackageSourceMappingInfo(string SourceKey, string[] Patterns);
-
-internal sealed record NuGetConfigOverlayInfo(
-    NuGetConfigSourceDefinition[] Sources,
-    NuGetPackageSourceMappingInfo[] PackageSourceMappings,
-    bool ClearDisabledPackageSources,
-    string[] DisabledPackageSourceKeys,
-    string? GlobalPackagesFolder);
-
-internal sealed record NuGetConfigSourceDefinition(string Key, string Source);
 
 /// <summary>
 /// Service for NuGet operations that works in bundle mode.
@@ -86,7 +68,6 @@ internal interface INuGetService
 /// </summary>
 internal sealed class BundleNuGetService : INuGetService
 {
-    internal const string ManagedComponentNotFoundMessage = "aspire-managed not found in layout.";
     private readonly ILayoutDiscovery _layoutDiscovery;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly IFeatures _features;
@@ -355,7 +336,7 @@ internal sealed class BundleNuGetService : INuGetService
         var managedPath = layout?.GetManagedPath();
         if (managedPath is null || !File.Exists(managedPath))
         {
-            throw new InvalidOperationException(ManagedComponentNotFoundMessage);
+            throw new BundledNuGetComponentNotFoundException();
         }
 
         var sourceIdentityKey = SourceIdentityKeyFactory();
@@ -381,71 +362,21 @@ internal sealed class BundleNuGetService : INuGetService
 
         try
         {
-            using var document = JsonDocument.Parse(output);
-            if (document.RootElement.ValueKind is not JsonValueKind.Object)
-            {
-                throw new InvalidDataException("The NuGet settings response was not an object.");
-            }
-
-            var configPaths = document.RootElement
-                .GetProperty("ConfigPaths")
-                .EnumerateArray()
-                .Select(static element => element.GetString()
-                    ?? throw new InvalidDataException("The NuGet configuration hierarchy contained a null path."))
-                .ToArray();
-            var cacheIdentity = document.RootElement
-                .GetProperty("CacheIdentity")
-                .GetString()
-                ?? throw new InvalidDataException("The NuGet settings response did not contain a cache identity.");
-            var sources = document.RootElement
-                .GetProperty("Sources")
-                .EnumerateArray()
-                .Select(static element => new NuGetSourceInfo(
-                    element.GetProperty("Name").GetString()
-                        ?? throw new InvalidDataException("The NuGet settings response contained a source without a name."),
-                    element.GetProperty("Identity").GetString()
-                        ?? throw new InvalidDataException("The NuGet settings response contained a source without an identity."),
-                    element.GetProperty("IsEnabled").GetBoolean(),
-                    element.GetProperty("HasCredentials").GetBoolean(),
-                    element.GetProperty("HasClientCertificates").GetBoolean()))
-                .ToArray();
-            var sensitiveSourceValues = ReadStringArray(
-                document.RootElement,
-                "SensitiveSourceValues",
-                "The NuGet settings response contained a null sensitive source value.");
-            var packageSourceMappingEnabled = document.RootElement
-                .GetProperty("PackageSourceMappingEnabled")
-                .GetBoolean();
-            var packageSourceMappings = document.RootElement
-                .GetProperty("PackageSourceMappings")
-                .EnumerateArray()
-                .Select(static mapping => new NuGetPackageSourceMappingInfo(
-                    mapping.GetProperty("SourceKey").GetString()
-                        ?? throw new InvalidDataException("The NuGet settings response contained a mapping without a source key."),
-                    mapping.GetProperty("Patterns")
-                        .EnumerateArray()
-                        .Select(static pattern => pattern.GetString()
-                            ?? throw new InvalidDataException("The NuGet settings response contained a null package pattern."))
-                        .ToArray()))
-                .ToArray();
-            var disabledPackageSourceKeys = ReadStringArray(
-                document.RootElement,
-                "DisabledPackageSourceKeys",
-                "The NuGet settings response contained a null disabled package source key.");
-            var reservedPackageSourceKeys = ReadStringArray(
-                document.RootElement,
-                "ReservedPackageSourceKeys",
-                "The NuGet settings response contained a null reserved package source key.");
+            var response = JsonSerializer.Deserialize(
+                output,
+                BundleNuGetJsonContext.Default.NuGetSettingsResponse)
+                ?? throw new InvalidDataException("The NuGet settings response was empty.");
+            ValidateSettingsResponse(response);
 
             return new NuGetSettingsInfo(
-                configPaths,
-                cacheIdentity,
-                sources,
-                sensitiveSourceValues,
-                packageSourceMappingEnabled,
-                packageSourceMappings,
-                disabledPackageSourceKeys,
-                reservedPackageSourceKeys,
+                response.ConfigPaths,
+                response.CacheIdentity,
+                response.Sources,
+                response.SensitiveSourceValues,
+                response.PackageSourceMappingEnabled,
+                response.PackageSourceMappings,
+                response.DisabledPackageSourceKeys,
+                response.ReservedPackageSourceKeys,
                 sourceIdentityKey);
         }
         catch (JsonException ex)
@@ -455,7 +386,7 @@ internal sealed class BundleNuGetService : INuGetService
     }
 
     internal async Task WriteNuGetConfigOverlayAsync(
-        NuGetConfigOverlayInfo overlay,
+        NuGetConfigOverlayRequest overlay,
         string outputPath,
         CancellationToken cancellationToken)
     {
@@ -469,7 +400,7 @@ internal sealed class BundleNuGetService : INuGetService
         var managedPath = layout?.GetManagedPath();
         if (managedPath is null || !File.Exists(managedPath))
         {
-            throw new InvalidOperationException(ManagedComponentNotFoundMessage);
+            throw new BundledNuGetComponentNotFoundException();
         }
 
         var requestDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config-request");
@@ -481,7 +412,7 @@ internal sealed class BundleNuGetService : INuGetService
                 await JsonSerializer.SerializeAsync(
                     requestStream,
                     overlay,
-                    BundleNuGetJsonContext.Default.NuGetConfigOverlayInfo,
+                    BundleNuGetJsonContext.Default.NuGetConfigOverlayRequest,
                     cancellationToken).ConfigureAwait(false);
             }
 
@@ -506,16 +437,32 @@ internal sealed class BundleNuGetService : INuGetService
         }
     }
 
-    private static string[] ReadStringArray(
-        JsonElement parent,
-        string propertyName,
-        string nullElementMessage)
-        => parent
-            .GetProperty(propertyName)
-            .EnumerateArray()
-            .Select(element => element.GetString()
-                ?? throw new InvalidDataException(nullElementMessage))
-            .ToArray();
+    private static void ValidateSettingsResponse(NuGetSettingsResponse response)
+    {
+        if (response.ConfigPaths is null ||
+            response.CacheIdentity is null ||
+            response.Sources is null ||
+            response.SensitiveSourceValues is null ||
+            response.PackageSourceMappings is null ||
+            response.DisabledPackageSourceKeys is null ||
+            response.ReservedPackageSourceKeys is null ||
+            response.ConfigPaths.Any(static path => path is null) ||
+            response.Sources.Any(static source =>
+                source is null ||
+                source.Name is null ||
+                source.Identity is null) ||
+            response.SensitiveSourceValues.Any(static source => source is null) ||
+            response.PackageSourceMappings.Any(static mapping =>
+                mapping is null ||
+                mapping.SourceKey is null ||
+                mapping.Patterns is null ||
+                mapping.Patterns.Any(static pattern => pattern is null)) ||
+            response.DisabledPackageSourceKeys.Any(static key => key is null) ||
+            response.ReservedPackageSourceKeys.Any(static key => key is null))
+        {
+            throw new InvalidDataException("The NuGet settings response contained a null required value.");
+        }
+    }
 
     private static bool TryValidatePackageManifest(string manifestPath, ILogger logger)
     {
@@ -653,5 +600,9 @@ internal sealed class BundleNuGetService : INuGetService
     }
 }
 
-[JsonSerializable(typeof(NuGetConfigOverlayInfo))]
+[JsonSerializable(typeof(NuGetConfigOverlayRequest))]
+[JsonSerializable(typeof(NuGetSettingsResponse))]
 internal sealed partial class BundleNuGetJsonContext : JsonSerializerContext;
+
+internal sealed class BundledNuGetComponentNotFoundException()
+    : InvalidOperationException("aspire-managed not found in layout.");

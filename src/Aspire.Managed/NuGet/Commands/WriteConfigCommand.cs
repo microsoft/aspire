@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Text.Json;
+using Aspire.Shared;
 using NuGet.Configuration;
 
 namespace Aspire.Managed.NuGet.Commands;
@@ -123,14 +124,3 @@ internal static class WriteConfigCommand
         settings.SaveToDisk();
     }
 }
-
-internal sealed record NuGetConfigOverlayRequest(
-    NuGetConfigSourceResult[] Sources,
-    NuGetPackageSourceMappingResult[] PackageSourceMappings,
-    bool ClearDisabledPackageSources,
-    string[] DisabledPackageSourceKeys,
-    string? GlobalPackagesFolder);
-
-internal sealed record NuGetConfigSourceResult(string Key, string Source);
-
-internal sealed record NuGetPackageSourceMappingResult(string SourceKey, string[] Patterns);
