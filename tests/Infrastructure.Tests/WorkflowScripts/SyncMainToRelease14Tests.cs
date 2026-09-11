@@ -31,7 +31,7 @@ public sealed class SyncMainToRelease14Tests(ITestOutputHelper output)
         Assert.Equal(["name", "id", "uses", "with"], tokenStep.Children.Keys.Select(key => key.ToString()));
         Assert.Matches("^actions/create-github-app-token@[a-f0-9]{40}$", Scalar(tokenStep, "uses"));
         var token = Mapping(tokenStep, "with");
-        Assert.Equal(["client-id", "private-key", "owner", "repositories", "permission-contents", "permission-pull-requests", "permission-workflows", "skip-token-revoke"],
+        Assert.Equal(["client-id", "private-key", "owner", "repositories", "permission-contents", "permission-pull-requests", "skip-token-revoke"],
             token.Children.Keys.Select(key => key.ToString()));
         Assert.Equal("${{ secrets.ASPIRE_BOT_APP_ID }}", Scalar(token, "client-id"));
         Assert.Equal("${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}", Scalar(token, "private-key"));
@@ -39,7 +39,6 @@ public sealed class SyncMainToRelease14Tests(ITestOutputHelper output)
         Assert.Equal("aspire", Scalar(token, "repositories"));
         Assert.Equal("write", Scalar(token, "permission-contents"));
         Assert.Equal("write", Scalar(token, "permission-pull-requests"));
-        Assert.Equal("write", Scalar(token, "permission-workflows"));
         Assert.Equal("false", Scalar(token, "skip-token-revoke"));
 
         var scriptStep = Assert.IsType<YamlMappingNode>(steps.Children[1]);

@@ -7,10 +7,17 @@ up to date while `main` develops 13.6. It runs daily at **08:23 UTC** and can be
 dispatched manually, but only from `main` in `microsoft/aspire`.
 
 The workflow uses the existing Aspire App secrets (`ASPIRE_BOT_APP_ID` and
-`ASPIRE_BOT_PRIVATE_KEY`) with repository-scoped contents, pull-request, and workflow
-write permissions. Workflow write is needed to synchronize batches that change
-`.github/workflows` files. It only calls GitHub APIs; it never checks out or executes branch
+`ASPIRE_BOT_PRIVATE_KEY`) with repository-scoped contents and pull-request write
+permissions. It only calls GitHub APIs; it never checks out or executes branch
 code with the bot token.
+
+The token deliberately uses the App's existing permissions, without requesting
+workflow-write access or requiring an installation permission update. Synchronizing
+already-existing workflow files with these permissions still needs live validation.
+If GitHub rejects a sync involving workflow files, the run fails visibly and a
+maintainer can complete that sync manually, using a merge commit. Investigate the
+actual failure before requesting broader App permissions; do not drop workflow
+changes from the sync or substitute more privileged credentials automatically.
 
 Each batch creates a `sync/main-to-release-14.0/<main-sha>` branch pointing at a
 snapshot of `main`, then opens a PR into `release/14.0`. There is at most one open
@@ -21,9 +28,6 @@ while that PR is open are picked up by the next run after it merges.
 ### Auto-merge prerequisites
 
 - Enable **Allow merge commits** and **Allow auto-merge** in repository settings.
-- Grant the Aspire App **Workflows: Read and write** and approve the installation's
-  updated permissions if needed; the token action cannot grant permissions the
-  installation does not have.
 - Allow merge commits in every ruleset applying to `release/14.0`. A separate
   `main` ruleset can continue requiring squash merges for normal feature PRs.
 - Ensure branch push restrictions allow the Aspire App to merge. Required status

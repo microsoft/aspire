@@ -30,7 +30,6 @@ jobs:
           repositories: aspire
           permission-contents: write
           permission-pull-requests: write
-          permission-workflows: write # Sync batches can include workflow-file changes.
           skip-token-revoke: false
 
       # Metadata-only: no checkout, local merge, or execution of either branch's code.
