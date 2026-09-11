@@ -25,7 +25,7 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
 
         // Act
-        var cut = RenderComponent<UrlsColumnDisplay>(builder =>
+        var cut = Render<UrlsColumnDisplay>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.HasMultipleReplicas, false);
@@ -53,7 +53,7 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
 
         // Act
-        var cut = RenderComponent<UrlsColumnDisplay>(builder =>
+        var cut = Render<UrlsColumnDisplay>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.HasMultipleReplicas, false);

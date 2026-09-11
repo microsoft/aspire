@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.AI.AgentServer.Invocations" VersionOverride="1.0.0-beta.4" />
+    <PackageReference Include="Azure.AI.AgentServer.Invocations" VersionOverride="1.0.0-beta.7" />
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" VersionOverride="1.20.0" />
   </ItemGroup>
 

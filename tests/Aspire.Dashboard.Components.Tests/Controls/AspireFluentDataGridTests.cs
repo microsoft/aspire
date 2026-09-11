@@ -18,7 +18,7 @@ public sealed class AspireFluentDataGridTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentDataGrid(this);
 
-        var cut = RenderComponent<AspireFluentDataGrid<string>>(builder => builder
+        var cut = Render<AspireFluentDataGrid<string>>(builder => builder
             .Add(component => component.Loading, true));
 
         var stack = cut.FindComponent<FluentStack>().Instance;

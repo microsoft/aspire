@@ -36,7 +36,7 @@ public class UserProfileTests : DashboardTestContext
             new Claim("name", "Ada Lovelace"),
             new Claim("preferred_username", "ada@example.com"));
 
-        var cut = RenderComponent<UserProfile>();
+        var cut = Render<UserProfile>();
 
         var button = cut.Find(".profile-menu-button");
         var popover = cut.Find("fluent-popover-b");
