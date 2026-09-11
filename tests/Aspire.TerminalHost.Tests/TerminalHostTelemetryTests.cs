@@ -22,7 +22,7 @@ public class TerminalHostTelemetryTests
     [InlineData("")]
     [InlineData(" ")]
     [InlineData("not-a-bool")]
-    [InlineData("1")]
+    [InlineData("0")]
     public void TelemetryRequiresExplicitOptIn(string? enabled)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -51,15 +51,17 @@ public class TerminalHostTelemetryTests
     }
 
     [Theory]
-    [InlineData("myapp-terminalhost-0", "myapp-terminalhost-0")]
-    [InlineData("myapp-terminalhost-1", "myapp-terminalhost-1")]
-    [InlineData(null, TerminalHostTelemetry.SourceName)]
-    [InlineData("", TerminalHostTelemetry.SourceName)]
-    public void EnabledTelemetryRegistersAllSignalsWithResourceIdentity(string? serviceName, string expectedServiceName)
+    [InlineData("myapp-terminalhost-0", "myapp-terminalhost-0", "true")]
+    [InlineData("myapp-terminalhost-1", "myapp-terminalhost-1", "true")]
+    [InlineData(null, TerminalHostTelemetry.SourceName, "true")]
+    [InlineData("", TerminalHostTelemetry.SourceName, "true")]
+    [InlineData("myapp-terminalhost-0", "myapp-terminalhost-0", "1")]
+    [InlineData("myapp-terminalhost-0", "myapp-terminalhost-0", "-1")]
+    public void EnabledTelemetryRegistersAllSignalsWithResourceIdentity(string? serviceName, string expectedServiceName, string enabled)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [KnownConfigNames.TerminalHostTelemetryEnabled] = "true",
+            [KnownConfigNames.TerminalHostTelemetryEnabled] = enabled,
             ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4317",
             ["OTEL_SERVICE_NAME"] = serviceName,
             ["OTEL_RESOURCE_ATTRIBUTES"] = "service.instance.id=test-instance",

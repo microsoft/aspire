@@ -357,8 +357,7 @@ public sealed class TerminalHostApp : IAsyncDisposable
         // An inherited OTLP endpoint must not turn a hidden implementation detail into
         // a telemetry resource. The AppHost explicitly sets this flag from ShowTerminalHost.
         // Malformed values (e.g. "not-a-bool") must leave telemetry disabled, not stop the terminal.
-        if (!bool.TryParse(configuration[KnownConfigNames.TerminalHostTelemetryEnabled], out var telemetryEnabled) ||
-            !telemetryEnabled ||
+        if (!configuration.GetBool(KnownConfigNames.TerminalHostTelemetryEnabled, defaultValue: false) ||
             string.IsNullOrEmpty(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
         {
             return null;
