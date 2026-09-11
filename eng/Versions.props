@@ -1,11 +1,13 @@
 <Project>
   <PropertyGroup>
     <!-- This repo version -->
-    <MajorVersion>13</MajorVersion>
-    <MinorVersion>6</MinorVersion>
+    <MajorVersion>14</MajorVersion>
+    <MinorVersion>0</MinorVersion>
     <PatchVersion>0</PatchVersion>
     <VersionPrefix>$(MajorVersion).$(MinorVersion).$(PatchVersion)</VersionPrefix>
     <PreReleaseVersionLabel>preview.1</PreReleaseVersionLabel>
+    <!-- The advance 14.0 branch precedes its dashboard image. Remove this override once the 14.0 tag is published. -->
+    <AspireDashboardImageTag>13.6</AspireDashboardImageTag>
     <DefaultTargetFramework>net8.0</DefaultTargetFramework>
     <AllTargetFrameworks>$(DefaultTargetFramework);net9.0;net10.0</AllTargetFrameworks>
     <!-- dotnet versions for running template tests -->

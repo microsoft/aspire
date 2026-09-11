@@ -19,17 +19,9 @@ internal static class DashboardImage
     public const string Name = "mcr.microsoft.com/dotnet/nightly/aspire-dashboard";
 
     /// <summary>
-    /// Resolves the tag to pin the dashboard image to, derived from the running Aspire product
+    /// Resolves the dashboard image tag from a build-time override, or the running Aspire product
     /// version's <c>major.minor</c> (for example <c>13.5</c>).
     /// </summary>
-    /// <remarks>
-    /// The publishers previously emitted the image without a tag, which Docker and Kubernetes both
-    /// resolve to the mutable <c>:latest</c> tag. That made generated manifests non-reproducible and
-    /// let the dashboard drift away from the app's Aspire version. Pinning to <c>major.minor</c> keeps
-    /// the dashboard on the same Aspire line that generated the manifest and always resolves to a tag
-    /// that exists on the registry — including for prerelease/CI builds, where a full
-    /// <c>major.minor.patch-prerelease</c> tag is not published.
-    /// </remarks>
     public static string ResolveTag()
         => ResolveTag(typeof(DashboardImage).Assembly);
 
@@ -39,12 +31,22 @@ internal static class DashboardImage
         //   "13.5.0-preview.1.25111.1+ad18db0213e9db8209bca0feb83fc801f34634f5"
         // The assembly version (e.g. "13.5.0.0") is used as a fallback when it is unavailable.
         var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var imageTag = assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .SingleOrDefault(attribute => attribute.Key == "AspireDashboardImageTag")?.Value;
 
-        return ResolveTag(informationalVersion, assembly.GetName().Version?.ToString());
+        return ResolveTag(informationalVersion, assembly.GetName().Version?.ToString(), imageTag);
     }
 
-    internal static string ResolveTag(string? informationalVersion, string? assemblyVersion)
+    internal static string ResolveTag(string? informationalVersion, string? assemblyVersion, string? imageTag)
     {
+        // Advance release branches can bump the product version before the matching image is
+        // published. Honor their explicit build-time pin instead of requesting a nonexistent tag
+        // or silently switching to the mutable ":latest" image.
+        if (!string.IsNullOrEmpty(imageTag))
+        {
+            return imageTag;
+        }
+
         if (TryGetMajorMinor(informationalVersion, out var majorMinor) ||
             TryGetMajorMinor(assemblyVersion, out majorMinor))
         {
