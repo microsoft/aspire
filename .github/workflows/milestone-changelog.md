@@ -16,6 +16,8 @@ max-daily-ai-credits: -1
 #   1. fetch-data job — Clones the memory branch, fetches all
 #      milestone PRs, computes the unprocessed batch, checks
 #      for feedback updates, and fetches the existing wiki page.
+#      It also reconciles stale community-contribution flags on
+#      already-processed entries (see step 3a in the fetch script).
 #      Uploads everything as an artifact and outputs has_work.
 #
 #   2. Agent job — Downloads the artifact, then follows the
@@ -254,6 +256,82 @@ jobs:
           if [ "$DOCS_BATCH_COUNT" -gt 0 ]; then
             echo "Has $DOCS_BATCH_COUNT unprocessed docs PRs"
             HAS_WORK="true"
+          fi
+
+          # 3a. Reconcile stale community-contribution flags on existing entries.
+          #
+          # The "community contribution" flag (Step 5b) is a point-in-time snapshot:
+          # it is computed once, when a PR is first processed, from the author's repo
+          # permission at that moment (see the enrichment step above). Processed PRs
+          # are never re-evaluated, so when an author is later granted write access
+          # (e.g., joins the team) an already-rendered entry keeps the stale flag
+          # forever. Re-check every currently-flagged contributor against their
+          # CURRENT permission and clear the flag once they have write/maintain/admin
+          # access, so the wiki self-heals on the next run. This is intentionally
+          # one-directional: it only ever REMOVES a now-incorrect flag, never adds
+          # one, and only rewrites the entries that actually change.
+          RECONCILED="false"
+          if [ -n "${WRITE_DIR:-}" ] && [ -d "$WRITE_DIR/changes" ]; then
+            # Distinct logins currently flagged as community contributors (@ stripped).
+            DISTINCT=$(jq -r '(.communityContributors // [])[] | ltrimstr("@")' "$WRITE_DIR"/changes/*.json 2>/dev/null | sort -u || true)
+            NOW_MEMBERS=""
+            for LOGIN in $DISTINCT; do
+              if [ -z "$LOGIN" ]; then continue; fi
+              # Same membership signal used by the enrichment step: write/maintain/admin
+              # collaborator permission means the author is a team member, not community.
+              PERM=$(gh api "repos/$REPO/collaborators/$LOGIN/permission" --jq '.permission' 2>/dev/null) || PERM=""
+              case "$PERM" in
+                write|maintain|admin) NOW_MEMBERS="$NOW_MEMBERS $LOGIN" ;;
+              esac
+            done
+            if [ -n "$NOW_MEMBERS" ]; then
+              # JSON array of now-member logins, lowercased for case-insensitive match.
+              MEMBERS_JSON=$(printf '%s\n' $NOW_MEMBERS | jq -R 'ascii_downcase' | jq -s '.')
+              for CF in "$WRITE_DIR"/changes/*.json; do
+                if [ ! -e "$CF" ]; then continue; fi
+                BEFORE=$(jq -c '.communityContributors // []' "$CF")
+                AFTER=$(jq -c --argjson members "$MEMBERS_JSON" \
+                  '(.communityContributors // []) | map(select((ltrimstr("@") | ascii_downcase) as $u | ($members | index($u)) | not))' "$CF")
+                if [ "$AFTER" = "$BEFORE" ]; then continue; fi
+                # When no community contributors remain, restore the owner to the
+                # author of the entry's earliest PR (per Step 5c), looked up from the
+                # PR tracker files persisted on previous runs.
+                NEWOWNER=""
+                if [ "$AFTER" = "[]" ]; then
+                  EARLIEST=""
+                  for N in $(jq -r '.prs[]?' "$CF"); do
+                    TF=$(ls "$WRITE_DIR"/prs/*-"$N".json 2>/dev/null | head -n1 || true)
+                    if [ -z "$TF" ]; then continue; fi
+                    M=$(jq -r '.mergedAt // empty' "$TF")
+                    A=$(jq -r '.author // empty' "$TF")
+                    # ISO 8601 timestamps sort lexicographically == chronologically.
+                    if [ -n "$A" ] && { [ -z "$EARLIEST" ] || [[ "$M" < "$EARLIEST" ]]; }; then
+                      EARLIEST="$M"; NEWOWNER="$A"
+                    fi
+                  done
+                fi
+                TMP=$(mktemp)
+                if [ -n "$NEWOWNER" ]; then
+                  jq --argjson after "$AFTER" --arg owner "$NEWOWNER" \
+                    '.communityContributors = $after | .owner = $owner' "$CF" > "$TMP"
+                else
+                  jq --argjson after "$AFTER" '.communityContributors = $after' "$CF" > "$TMP"
+                fi
+                jq --sort-keys '.' "$TMP" > "$CF"
+                rm -f "$TMP"
+                BN="${CF##*/}"
+                # Keep the read-only copy consistent with the rewritten write copy.
+                if [ -f "$MEMORY_DIR/changes/$BN" ]; then cp "$CF" "$MEMORY_DIR/changes/$BN"; fi
+                RECONCILED="true"
+                echo "Reconciled $BN: communityContributors $BEFORE -> $AFTER${NEWOWNER:+ (owner -> $NEWOWNER)}"
+              done
+            fi
+          fi
+          if [ "$RECONCILED" = "true" ]; then
+            # Force a republish so corrected entries reach the wiki even when there
+            # are no new PRs, docs PRs, or feedback this run.
+            HAS_WORK="true"
+            echo "Community-contribution reconciliation updated entries; forcing has_work=true"
           fi
 
           # 4. Find the feedback issue number (check memory branch first, fallback to search)
