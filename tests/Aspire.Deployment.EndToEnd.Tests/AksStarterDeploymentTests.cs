@@ -12,6 +12,9 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// </summary>
 public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
 {
+    private const string TestConnectionStringName = "deployment-test";
+    private const string TestConnectionStringValue = "https://portable-alias-test.vault.azure.net/";
+
     // Timeout set to 45 minutes to allow for AKS provisioning (~10-15 min) plus deployment.
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);
 
@@ -175,6 +178,12 @@ public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
             // aspire add may show a version selection prompt
             await auto.WaitForAspireAddCompletionAsync(counter);
 
+            // Step 13a: Add the current Key Vault client integration to the deployed API.
+            output.WriteLine("Step 13a: Adding Key Vault client package...");
+            await auto.TypeAsync($"dotnet add {projectName}.ApiService package Aspire.Azure.Security.KeyVault --prerelease");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
+
             // Step 14: Modify AppHost.cs to add Kubernetes environment
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
@@ -183,6 +192,30 @@ public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
             output.WriteLine($"Modifying AppHost.cs at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
+            const string apiServiceDeclarationPattern = "var apiService = builder.AddProject";
+            const string apiServiceHealthCheckPattern = "    .WithHttpHealthCheck(\"/health\");";
+            if (!content.Contains(apiServiceDeclarationPattern, StringComparison.Ordinal) ||
+                !content.Contains(apiServiceHealthCheckPattern, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Could not find the API service resource in the generated AppHost.");
+            }
+
+            content = content
+                .Replace(
+                    apiServiceDeclarationPattern,
+                    $$"""
+                    var deploymentTest = builder.AddConnectionString("{{TestConnectionStringName}}", expression => expression.AppendLiteral("{{TestConnectionStringValue}}"));
+
+                    {{apiServiceDeclarationPattern}}
+                    """,
+                    StringComparison.Ordinal)
+                .Replace(
+                    apiServiceHealthCheckPattern,
+                    $"""
+                        .WithHttpHealthCheck("/health")
+                        .WithReference(deploymentTest);
+                    """,
+                    StringComparison.Ordinal);
 
             // Insert the Kubernetes environment before builder.Build().Run();
             var buildRunPattern = "builder.Build().Run();";
@@ -203,7 +236,36 @@ builder.Build().Run();
 
             File.WriteAllText(appHostFilePath, content);
 
+            var apiServiceFilePath = Path.Combine(projectDir, $"{projectName}.ApiService", "Program.cs");
+            content = File.ReadAllText(apiServiceFilePath);
+            const string serviceDefaultsPattern = "builder.AddServiceDefaults();";
+            const string defaultEndpointsPattern = "app.MapDefaultEndpoints();";
+            if (!content.Contains(serviceDefaultsPattern, StringComparison.Ordinal) ||
+                !content.Contains(defaultEndpointsPattern, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Could not find the service registration or default endpoint mapping in the generated API service.");
+            }
+
+            content = content
+                .Replace(
+                    serviceDefaultsPattern,
+                    $$"""
+                    {{serviceDefaultsPattern}}
+                    builder.AddAzureKeyVaultClient("{{TestConnectionStringName}}", settings => settings.DisableHealthChecks = true);
+                    """,
+                    StringComparison.Ordinal)
+                .Replace(
+                    defaultEndpointsPattern,
+                    """
+                    app.MapGet("/connection-string", (Azure.Security.KeyVault.Secrets.SecretClient client) => client.VaultUri.AbsoluteUri);
+
+                    app.MapDefaultEndpoints();
+                    """,
+                    StringComparison.Ordinal);
+            File.WriteAllText(apiServiceFilePath, content);
+
             output.WriteLine("Modified AppHost.cs with AddKubernetesEnvironment");
+            output.WriteLine($"Modified Program.cs at: {apiServiceFilePath}");
 
             // Step 15: Navigate to AppHost project directory
             output.WriteLine("Step 15: Navigating to AppHost directory...");
@@ -292,13 +354,13 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 25: Verify apiservice is serving traffic via port-forward
-            // Use /weatherforecast (the actual API endpoint) since /health is only available in Development
-            output.WriteLine("Step 25: Verifying apiservice endpoint...");
+            // Step 25: Verify the deployed API service resolves the portable connection-string alias.
+            output.WriteLine("Step 25: Verifying portable connection-string alias...");
             await auto.TypeAsync("kubectl port-forward svc/apiservice-service 18080:8080 &");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
-            await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18080/weatherforecast -o /dev/null -w '%{http_code}' && echo ' OK' && break; done");
+            await auto.TypeAsync($"resolved=0; for i in $(seq 1 10); do sleep 3; value=$(curl -sf http://localhost:18080/connection-string 2>/dev/null) || value=''; " +
+                $"if [ \"$value\" = \"{TestConnectionStringValue}\" ]; then echo 'Portable connection-string alias resolved'; resolved=1; break; fi; done; [ \"$resolved\" -eq 1 ]");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 

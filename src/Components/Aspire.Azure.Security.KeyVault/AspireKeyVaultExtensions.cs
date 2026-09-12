@@ -188,7 +188,7 @@ public static class AspireKeyVaultExtensions
         var settings = new AzureSecurityKeyVaultSettings();
         configSection.Bind(settings);
 
-        if (configuration.GetConnectionString(connectionName) is string connectionString)
+        if (configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             ((IConnectionStringSettings)settings).ParseConnectionString(connectionString);
         }

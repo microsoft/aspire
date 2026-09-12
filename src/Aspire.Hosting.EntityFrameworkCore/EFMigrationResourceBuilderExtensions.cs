@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is experimental; used to wire migration-bundle pipeline steps.
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
@@ -298,8 +299,6 @@ public static class EFMigrationResourceBuilderExtensions
     // Suffix appended to the image tag for Windows-based containers (nanoserver is the smallest
     // Windows image that includes cmd.exe for shell-form ENTRYPOINT env-var expansion).
     private const string WindowsImageTagSuffix = "-nanoserver-ltsc2022";
-    private const string ConnectionStringEnvVarPrefix = "ConnectionStrings__";
-
     // Mirrors Aspire.Dashboard.Model.KnownRelationshipTypes.Reference, which is internal to
     // Aspire.Hosting and not visible from this project. Kept in sync with that constant.
     private const string ReferenceRelationshipType = "Reference";
@@ -332,8 +331,9 @@ public static class EFMigrationResourceBuilderExtensions
         builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
         {
             var connectionStringResource = GetSingleConnectionStringResource(migrationResource);
-            var envVar = connectionStringResource.ConnectionStringEnvironmentVariable
-                ?? ConnectionStringEnvVarPrefix + connectionStringResource.Name;
+            var envVar = ConnectionStringEnvironmentVariableNames
+                .Create(connectionStringResource, connectionStringResource.Name)
+                .PortableName;
 
             migrationResource.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
             {
@@ -518,8 +518,9 @@ public static class EFMigrationResourceBuilderExtensions
     {
         var primary = GetSingleConnectionStringResource(migrationResource);
 
-        var envVarName = primary.ConnectionStringEnvironmentVariable
-            ?? ConnectionStringEnvVarPrefix + primary.Name;
+        var envVarName = ConnectionStringEnvironmentVariableNames
+            .Create(primary, primary.Name)
+            .PortableName;
 
         var baseImage = ResolveBaseImage(migrationResource);
         var bundleFileName = EFResourceBuilderExtensions.GetBundleFileName(migrationResource);

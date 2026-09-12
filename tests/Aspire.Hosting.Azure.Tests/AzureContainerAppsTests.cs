@@ -8,6 +8,7 @@
 #pragma warning disable ASPIREACANAMING002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Foundry;
@@ -397,6 +398,33 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
               .AppendContentAsFile(bicep, "bicep")
               .AppendContentAsFile(identityManifest.ToString(), "json")
               .AppendContentAsFile(identityBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ConnectionStringNamesWithHyphens_PreserveBothAliases()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        builder.AddContainer("api", "myimage")
+            .WithReference(connection);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var container = Assert.Single(model.GetContainerResources());
+        var resource = Assert.IsAssignableFrom<AzureProvisioningResource>(
+            container.GetDeploymentTargetAnnotation()?.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(resource);
+
+        var aliases = Regex.Matches(bicep, @"name: '(ConnectionStrings__[^']+)'")
+            .Select(static match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            ["ConnectionStrings__my-db", "ConnectionStrings__my_db"],
+            aliases);
     }
 
     [Fact]

@@ -47,6 +47,22 @@ When deploying to Azure App Service, the following constraints apply:
 - **HTTP/HTTPS only**: Only HTTP and HTTPS endpoints are supported. Other protocols are not supported.
 - **Single endpoint**: App Service supports only a single target port. Resources with multiple external endpoints with different target ports are not supported. The default target port is 8000, which can be overridden using the `WithHttpEndpoint` extension method.
 
+### Connection string names
+
+Connection resource names remain logical .NET configuration names. For example, a resource named `my-db` is still read as `ConnectionStrings:my-db`. Aspire deploys its value to App Service with the portable physical name `ConnectionStrings__my_db`, because App Service removes hyphens from environment variable names.
+
+Updated Aspire client integrations resolve both forms. Applications using older integrations or reading `IConfiguration` directly must update their connection-string resolution or supply an explicit portable connection name:
+
+```csharp
+var database = builder.AddPostgres("postgres")
+    .AddDatabase("my-db");
+
+builder.AddProject<Projects.Api>("api")
+    .WithReference(database, connectionName: "my_db");
+```
+
+Explicit `ConnectionStringEnvironmentVariable` values are physical names and are not normalized. App Service continues to reject explicit or unrelated environment-variable names containing `-`.
+
 ### Publishing compute resources to Azure App Service
 
 The `PublishAsAzureAppServiceWebsite` extension method configures a compute resource to be published as an Azure App Service Web App when deploying to Azure. This method allows you to customize the App Service Web App configuration using the Azure Provisioning SDK.

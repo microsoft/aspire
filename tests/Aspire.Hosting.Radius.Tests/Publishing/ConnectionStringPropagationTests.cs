@@ -5,6 +5,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.RegularExpressions;
 
 namespace Aspire.Hosting.Radius.Tests.Publishing;
 
@@ -91,6 +92,33 @@ public class ConnectionStringPropagationTests
 
         // Child resource (mydb) should resolve to parent (sqlserver) in connections
         Assert.Contains("source: sqlserver.id", bicep);
+    }
+
+    [Fact]
+    public void GeneratedConnectionStringAliases_EmitOnlyPortableName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv");
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithReference(connection)
+            .WithEnvironment("ConnectionStrings__my-db", "Host=override");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+        var bicep = context.GenerateBicep(model);
+
+        var aliases = Regex.Matches(
+                bicep,
+                @"(?m)^\s+(ConnectionStrings__[^:]+): \{\r?\n\s+value: '([^']*)'")
+            .Select(static match => (Name: match.Groups[1].Value, Value: match.Groups[2].Value));
+
+        Assert.Equal(
+            [("ConnectionStrings__my_db", "Host=override")],
+            aliases);
     }
 
 }

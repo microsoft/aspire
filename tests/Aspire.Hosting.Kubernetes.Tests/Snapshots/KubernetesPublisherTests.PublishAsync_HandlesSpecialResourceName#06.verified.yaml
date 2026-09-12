@@ -1,4 +1,4 @@
----
+﻿---
 apiVersion: "v1"
 kind: "Secret"
 metadata:
@@ -9,5 +9,5 @@ metadata:
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 stringData:
   param3: "{{ .Values.secrets.SpeciaL_ApP.param3 }}"
-  ConnectionStrings__api-cs: "Url={{ .Values.config.SpeciaL_ApP.param0 }}, Secret={{ .Values.secrets.SpeciaL_ApP.param1 }}"
+  ConnectionStrings__api_cs: "Url={{ .Values.config.SpeciaL_ApP.param0 }}, Secret={{ .Values.secrets.SpeciaL_ApP.param1 }}"
 type: "Opaque"
