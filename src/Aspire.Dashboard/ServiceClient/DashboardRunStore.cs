@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Dashboard.ServiceClient;
 
 /// <summary>
-/// Provides the dashboard runs available for selection.
+/// Provides discovered dashboard runs.
 /// </summary>
 public interface IDashboardRunStore
 {
@@ -22,9 +22,9 @@ public interface IDashboardRunStore
     bool SupportsRunSelection { get; }
 
     /// <summary>
-    /// Gets the current and historical dashboard runs available for selection.
+    /// Gets the current and historical dashboard runs that have not been pruned.
     /// </summary>
-    /// <returns>The available dashboard runs.</returns>
+    /// <returns>The discovered dashboard runs.</returns>
     IReadOnlyList<DashboardRunDescriptor> GetRuns();
 
     /// <summary>
@@ -37,8 +37,9 @@ public interface IDashboardRunStore
     /// Gets the dashboard run with the specified ID.
     /// </summary>
     /// <param name="runId">The ID of the dashboard run.</param>
+    /// <param name="onlyCompatible"><see langword="true"/> to return only runs compatible with the current dashboard version; otherwise, <see langword="false"/>.</param>
     /// <returns>The dashboard run, or <see langword="null"/> when the run is not available.</returns>
-    DashboardRunDescriptor? GetRunById(string runId);
+    DashboardRunDescriptor? GetRunById(string runId, bool onlyCompatible);
 
     /// <summary>
     /// Pins or unpins the specified dashboard run.
@@ -228,22 +229,19 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     public DashboardPersistenceMode PersistenceMode { get; }
     public bool SupportsRunSelection => PersistenceMode == DashboardPersistenceMode.Run;
 
-    public IReadOnlyList<DashboardRunDescriptor> GetRuns()
-    {
-        var runs = _runs.Value;
-        return runs.Any(run => run.IsPruned || !run.IsSelectable)
-            ? runs.Where(run => !run.IsPruned && run.IsSelectable).ToArray()
-            : runs;
-    }
+    public IReadOnlyList<DashboardRunDescriptor> GetRuns() =>
+        _runs.Value.Where(run => !run.IsPruned).ToArray();
 
     public DashboardRunDescriptor GetCurrentRun() => GetRuns().Single(run => run.IsCurrent);
 
-    public DashboardRunDescriptor? GetRunById(string runId) =>
-        GetRuns().SingleOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
+    public DashboardRunDescriptor? GetRunById(string runId, bool onlyCompatible) =>
+        GetRuns().SingleOrDefault(run =>
+            (!onlyCompatible || run.IsCompatible) &&
+            string.Equals(run.RunId, runId, StringComparison.Ordinal));
 
     public void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
     {
-        var storedRun = GetRunById(run.RunId);
+        var storedRun = GetRunById(run.RunId, onlyCompatible: false);
         if (storedRun is null)
         {
             throw new InvalidOperationException($"Dashboard run '{run.RunId}' is no longer available.");
@@ -266,7 +264,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     {
         var metadataPath = Path.Combine(runDirectory, "run.json");
         var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
-        if (metadata is not { SchemaVersion: SchemaVersion } ||
+        if (metadata?.SchemaVersion != run.SchemaVersion ||
             !string.Equals(metadata.RunId, run.RunId, StringComparison.Ordinal))
         {
             throw new InvalidDataException($"Dashboard run metadata for '{run.RunId}' is invalid.");
@@ -313,7 +311,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run)
     {
-        var storedRun = GetRunById(run.RunId);
+        var storedRun = GetRunById(run.RunId, onlyCompatible: true);
         if (storedRun is null)
         {
             return null;
@@ -353,12 +351,20 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 try
                 {
                     var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
-                    if (metadata is { SchemaVersion: SchemaVersion })
+                    if (metadata is not null)
                     {
                         var run = CreateDescriptor(metadata, directory, isCurrent: false);
-                        // Filter out in-progress runs that are owned by other Dashboard instances.
-                        using var runLock = TryOpenRunLock(directory);
-                        run.IsSelectable = runLock is not null;
+                        if (run.IsCompatible)
+                        {
+                            // Filter out in-progress runs that are owned by other Dashboard instances.
+                            using var runLock = TryOpenRunLock(directory);
+                            run.IsSelectable = runLock is not null;
+                        }
+                        else
+                        {
+                            run.IsSelectable = false;
+                        }
+
                         runs.Add(run);
                     }
                 }
@@ -624,7 +630,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 }
 
 /// <summary>
-/// Describes a dashboard run available for selection.
+/// Describes a discovered dashboard run.
 /// </summary>
 /// <param name="RunId">The unique identifier for the dashboard run.</param>
 /// <param name="SchemaVersion">The dashboard database schema version used by the run.</param>
@@ -644,6 +650,8 @@ public sealed record DashboardRunDescriptor(
     string DatabasePath,
     bool IsCurrent)
 {
+    internal bool IsCompatible => SchemaVersion == DashboardRunStore.SchemaVersion;
+
     /// <summary>
     /// Gets or sets a value indicating whether the dashboard run was pruned.
     /// </summary>

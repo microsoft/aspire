@@ -50,7 +50,7 @@ public partial class DashboardRunSelect : ComponentBase
     private IList<MenuButtonItem> LoadRuns()
     {
         var runs = RunStore.GetRuns()
-            .Where(run => !run.IsPruned)
+            .Where(run => !run.IsPruned && (run.IsSelectable || !run.IsCompatible))
             .OrderByDescending(run => run.IsCurrent)
             .ThenByDescending(run => run.IsPinned)
             .ThenByDescending(run => run.StartedAtUtc)
@@ -58,12 +58,15 @@ public partial class DashboardRunSelect : ComponentBase
         var menuItems = new List<MenuButtonItem>();
         foreach (var run in runs)
         {
+            var isCompatible = run.IsCompatible;
             var menuItem = new MenuButtonItem
             {
                 Text = FormatRunOption(run),
                 Role = MenuItemRole.Radio,
                 Checked = string.Equals(run.RunId, SelectedRunId, StringComparison.Ordinal),
                 Icon = s_checkmarkIcon,
+                IsDisabled = !isCompatible,
+                Tooltip = isCompatible ? null : Loc[nameof(LayoutResources.DashboardRunSelectIncompatibleTooltip)].Value,
                 SecondaryActionIcon = run.IsPinned ? s_pinnedIcon : s_pinIcon,
                 SecondaryActionAriaLabel = Loc[run.IsPinned
                     ? nameof(LayoutResources.DashboardRunSelectUnpin)
