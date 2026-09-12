@@ -13,6 +13,10 @@ func main() {
 	}
 
 	search := builder.AddAzureSearch("resource")
+	_ = search.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		service := infrastructure.GetSearchService()
+		service.Tags().Set("provisioning-proxy", "go")
+	})
 	search.WithSearchRoleAssignments(search, []aspire.AzureSearchRole{
 		aspire.AzureSearchRoleSearchServiceContributor,
 		aspire.AzureSearchRoleSearchIndexDataReader})

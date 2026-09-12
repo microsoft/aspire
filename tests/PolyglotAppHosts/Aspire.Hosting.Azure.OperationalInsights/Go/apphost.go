@@ -13,6 +13,10 @@ func main() {
 	}
 
 	logAnalytics := builder.AddAzureLogAnalyticsWorkspace("logs")
+	_ = logAnalytics.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		workspace := infrastructure.GetOperationalInsightsWorkspace()
+		workspace.Tags().Set("provisioning-proxy", "go")
+	})
 	logAnalytics.WithUrl("https://example.local/logs")
 	if logAnalytics.Err() != nil {
 		log.Fatalf(aspire.FormatError(logAnalytics.Err()))

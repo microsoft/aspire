@@ -5,6 +5,19 @@ const builder = await createBuilder();
 
 // addAzureWebPubSub — factory method
 const webpubsub = await builder.addAzureWebPubSub("webpubsub");
+await webpubsub.configureInfrastructure(async infrastructure => {
+    const service = await infrastructure.getWebPubSubService();
+    const tags = await service.tags.get();
+    await tags.set("provisioning-proxy", "typescript");
+
+    const configuredHub = await infrastructure.getWebPubSubHubByIdentifier("myhub");
+    const properties = await configuredHub.properties.get();
+    await properties.anonymousConnectPolicy.set("allow");
+    const handlers = await properties.eventHandlers.get();
+    const handler = await infrastructure.createWebPubSubEventHandler();
+    await handler.urlTemplate.set("https://example.com/configured-handler");
+    await handlers.add(handler);
+});
 
 // addHub — adds a hub to the Web PubSub resource (with optional hubName)
 const hub = await webpubsub.addHub("myhub");

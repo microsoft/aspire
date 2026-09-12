@@ -4,6 +4,10 @@ void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var storage = builder.addAzureStorage("storage");
         var sqlServer = builder.addAzureSqlServer("sql");
+        sqlServer.configureInfrastructure((infrastructure) -> {
+            var server = infrastructure.getSqlServer();
+            server.tags().set("provisioning-proxy", "java");
+        });
         var db = sqlServer.addDatabase("mydb");
         var db2 = sqlServer.addDatabase("inventory", "inventorydb");
         db2.withDefaultAzureSku();

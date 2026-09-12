@@ -13,6 +13,10 @@ func main() {
 	}
 
 	webpubsub := builder.AddAzureWebPubSub("webpubsub")
+	_ = webpubsub.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		service := infrastructure.GetWebPubSubService()
+		service.Tags().Set("provisioning-proxy", "go")
+	})
 	if webpubsub.Err() != nil {
 		log.Fatalf(aspire.FormatError(webpubsub.Err()))
 	}

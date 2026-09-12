@@ -7,6 +7,6 @@
     "experimentalPolyglot:java": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.KeyVault": ""
+    "Aspire.Hosting.Azure.Provisioning.KeyVault": ""
   }
 }

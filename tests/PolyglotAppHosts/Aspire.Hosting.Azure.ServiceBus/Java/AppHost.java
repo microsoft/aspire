@@ -3,6 +3,10 @@ import aspire.*;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var serviceBus = builder.addAzureServiceBus("messaging");
+        serviceBus.configureInfrastructure((infrastructure) -> {
+            var namespace = infrastructure.getServiceBusNamespace();
+            namespace.tags().set("provisioning-proxy", "java");
+        });
         var emulatorBus = builder
     .addAzureServiceBus("messaging-emulator")
     .runAsEmulator((emulator) -> { emulator.withConfigurationFile("./servicebus-config.json"); emulator.withHostPort(5672.0); });
