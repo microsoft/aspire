@@ -13,6 +13,8 @@ namespace Infrastructure.Tests;
 /// hash the telemetry hook scripts over LF-normalized UTF-8 (no BOM) so the recorded hash is stable no
 /// matter how git checked the file out — <c>track-telemetry.ps1</c> is <c>text=auto</c> and lands with
 /// CRLF on Windows, while <c>track-telemetry.sh</c> is <c>eol=lf</c>.
+/// Also verifies that each sibling bundle requires its own matching asset and successful attestation,
+/// substituting only the external GitHub CLI command to keep these checks offline.
 /// </summary>
 /// <remarks>
 /// The hook-hash branch of the verify script only runs once a companion aspire-skills release records a
@@ -75,6 +77,120 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
             .ToArray();
 
         Assert.Equal(onDisk, names.OrderBy(static n => n, StringComparer.Ordinal).ToArray());
+    }
+
+    [Theory]
+    [RequiresTools(["pwsh"])]
+    [InlineData("aspire-skills", 0)]
+    [InlineData("aspire-skills", 1)]
+    [InlineData("aspire-extensions", 0)]
+    [InlineData("aspire-extensions", 1)]
+    public async Task EveryBundleRequiresItsOwnAttestation(string assetPrefix, int attestationExitCode)
+    {
+        var driverPath = WriteDriver(
+            "attestation-driver.ps1",
+            """
+            [CmdletBinding()]
+            param(
+                [Parameter(Mandatory = $true)][string]$CommonScript,
+                [Parameter(Mandatory = $true)][string]$EmbeddedDirectory,
+                [Parameter(Mandatory = $true)][string]$AssetPrefix,
+                [Parameter(Mandatory = $true)][int]$AttestationExitCode
+            )
+
+            $ErrorActionPreference = 'Stop'
+            . $CommonScript
+
+            # Replace only the external command; exercise metadata/hash checks and the exit-code gate.
+            function gh {
+                Write-Host ("GH_ARGUMENTS=" + ($args -join '|'))
+                $global:LASTEXITCODE = $AttestationExitCode
+            }
+
+            $definitions = @(Get-AspireSkillsBundleDefinitions)
+            Write-Output ("BUNDLES=" + ($definitions.AssetPrefix -join '|'))
+            $definition = $definitions | Where-Object { $_.AssetPrefix -eq $AssetPrefix }
+            $metadata = Get-Content -Raw (Join-Path $EmbeddedDirectory $definition.MetadataFileName) | ConvertFrom-Json
+            $archivePath = Join-Path $EmbeddedDirectory $metadata.assetName
+            $identity = "https://github.com/$($metadata.repository)/.github/workflows/publish.yml@refs/tags/$($metadata.tag)"
+            Write-Output "EXPECTED_ARGUMENTS=attestation|verify|$archivePath|--repo|$($metadata.repository)|--cert-identity|$identity|--cert-oidc-issuer|https://token.actions.githubusercontent.com"
+            try {
+                $null = Get-AspireSkillsVerifiedBundleMetadata -Repository 'microsoft/aspire-skills' -EmbeddedDirectory $EmbeddedDirectory -Definition $definition
+                Write-Output 'VERIFICATION=passed'
+            }
+            catch {
+                if ($_.Exception.Message -notlike 'GitHub artifact attestation verification failed*') {
+                    throw
+                }
+                Write-Output 'VERIFICATION=rejected'
+            }
+            """);
+
+        var embeddedDirectory = Path.Combine(RepoRoot.Path, "src", "Aspire.Cli", "Agents", "AspireSkills", "Embedded");
+        var result = await RunDriverAsync(
+            driverPath,
+            "-CommonScript", $"\"{_commonScriptPath}\"",
+            "-EmbeddedDirectory", $"\"{embeddedDirectory}\"",
+            "-AssetPrefix", assetPrefix,
+            "-AttestationExitCode", attestationExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var lines = ReadLines(result.Output).ToArray();
+        Assert.Equal("BUNDLES=aspire-skills|aspire-extensions", Assert.Single(lines, static l => l.StartsWith("BUNDLES=", StringComparison.Ordinal)));
+        var arguments = Assert.Single(lines, static l => l.StartsWith("GH_ARGUMENTS=", StringComparison.Ordinal));
+        var expectedArguments = Assert.Single(lines, static l => l.StartsWith("EXPECTED_ARGUMENTS=", StringComparison.Ordinal));
+        Assert.Equal(expectedArguments["EXPECTED_ARGUMENTS=".Length..], arguments["GH_ARGUMENTS=".Length..]);
+        Assert.Equal(
+            attestationExitCode == 0 ? "VERIFICATION=passed" : "VERIFICATION=rejected",
+            Assert.Single(lines, static l => l.StartsWith("VERIFICATION=", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [RequiresTools(["pwsh"])]
+    [InlineData("aspire-skills", "aspire-extensions")]
+    [InlineData("aspire-extensions", "aspire-skills")]
+    public async Task SiblingBundleCannotSatisfyVerification(string assetPrefix, string siblingPrefix)
+    {
+        var driverPath = WriteDriver(
+            "sibling-driver.ps1",
+            """
+            [CmdletBinding()]
+            param(
+                [Parameter(Mandatory = $true)][string]$CommonScript,
+                [Parameter(Mandatory = $true)][string]$EmbeddedDirectory,
+                [Parameter(Mandatory = $true)][string]$AssetPrefix,
+                [Parameter(Mandatory = $true)][string]$SiblingPrefix
+            )
+
+            $ErrorActionPreference = 'Stop'
+            . $CommonScript
+
+            function gh {
+                throw 'Attestation must not run for the wrong bundle kind.'
+            }
+
+            $definition = Get-AspireSkillsBundleDefinitions | Where-Object { $_.AssetPrefix -eq $AssetPrefix }
+            $definition.MetadataFileName = "$SiblingPrefix.metadata.json"
+            try {
+                $null = Get-AspireSkillsVerifiedBundleMetadata -Repository 'microsoft/aspire-skills' -EmbeddedDirectory $EmbeddedDirectory -Definition $definition
+                throw 'Verification accepted the wrong bundle kind.'
+            }
+            catch {
+                if ($_.Exception.Message -notlike '*does not match its bundle kind and version*') {
+                    throw
+                }
+                Write-Output 'VERIFICATION=rejected'
+            }
+            """);
+
+        var embeddedDirectory = Path.Combine(RepoRoot.Path, "src", "Aspire.Cli", "Agents", "AspireSkills", "Embedded");
+        var result = await RunDriverAsync(
+            driverPath,
+            "-CommonScript", $"\"{_commonScriptPath}\"",
+            "-EmbeddedDirectory", $"\"{embeddedDirectory}\"",
+            "-AssetPrefix", assetPrefix,
+            "-SiblingPrefix", siblingPrefix);
+
+        Assert.Equal("VERIFICATION=rejected", result.Output.Trim());
     }
 
     private async Task<string> RunHashDriverAsync(string inputPath)

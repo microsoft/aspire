@@ -1,70 +1,68 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
-
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// A validated Aspire skills bundle.
+/// A validated bundle of agent skills or extensions.
 /// </summary>
 internal sealed class AspireSkillsBundle
 {
-    private readonly string _version;
-    private readonly IReadOnlyList<ValidatedAspireSkill> _skills;
+    private readonly IReadOnlyList<ValidatedAspireSkillsBundleAsset> _assets;
 
-    internal AspireSkillsBundle(string version, IReadOnlyList<ValidatedAspireSkill> skills)
+    internal AspireSkillsBundle(
+        string version,
+        AgentAssetKind assetKind,
+        IReadOnlyList<ValidatedAspireSkillsBundleAsset> assets)
     {
-        _version = version;
-        _skills = skills;
+        if (assets.Any(asset => asset.Definition.AssetKind != assetKind))
+        {
+            throw new ArgumentException("All bundle assets must have the bundle's asset kind.", nameof(assets));
+        }
+
+        Version = version;
+        AssetKind = assetKind;
+        _assets = [.. assets];
+        Assets = _assets.Select(static asset => asset.Definition).ToArray();
     }
 
-    /// <summary>
-    /// Gets the bundle version.
-    /// </summary>
-    public string Version => _version;
+    public string Version { get; }
+
+    public AgentAssetKind AssetKind { get; }
 
     /// <summary>
-    /// Gets installable files for the specified skill.
+    /// Gets the installable definitions declared by the bundle manifest.
     /// </summary>
-    public Task<IReadOnlyList<SkillAssetFile>> GetSkillFilesAsync(SkillDefinition skill, CancellationToken cancellationToken)
+    public IReadOnlyList<AgentAssetDefinition> Assets { get; }
+
+    /// <summary>
+    /// Gets validated files for an asset, applying its install exclusions.
+    /// </summary>
+    public Task<IReadOnlyList<AgentAssetFile>> GetAssetFilesAsync(
+        AgentAssetDefinition asset,
+        CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(skill);
+        ArgumentNullException.ThrowIfNull(asset);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var bundledSkill = _skills.FirstOrDefault(s => string.Equals(s.Definition.Name, skill.Name, StringComparison.Ordinal));
-        if (bundledSkill is null)
+        var bundledAsset = _assets.FirstOrDefault(candidate =>
+            candidate.Definition.AssetKind == asset.AssetKind &&
+            string.Equals(candidate.Definition.Name, asset.Name, StringComparison.Ordinal));
+        if (bundledAsset is null)
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle does not contain skill '{0}'.", skill.Name));
+            throw new InvalidOperationException($"Aspire bundle does not contain {asset.AssetKind} '{asset.Name}'.");
         }
 
-        List<SkillAssetFile> files = [];
-        foreach (var bundledFile in bundledSkill.Files.OrderBy(f => f.RelativePath, StringComparer.Ordinal))
-        {
-            var relativePath = bundledFile.RelativePath;
-            if (!skill.ShouldInstallFile(relativePath) ||
-                !bundledSkill.Definition.ShouldInstallFile(relativePath))
-            {
-                continue;
-            }
+        IReadOnlyList<AgentAssetFile> files = bundledAsset.Files
+            .Where(file => asset.ShouldInstallFile(file.RelativePath) &&
+                bundledAsset.Definition.ShouldInstallFile(file.RelativePath))
+            .OrderBy(static file => file.RelativePath, StringComparer.Ordinal)
+            .ToArray();
 
-            files.Add(bundledFile);
-        }
-
-        return Task.FromResult<IReadOnlyList<SkillAssetFile>>(files);
-    }
-
-    /// <summary>
-    /// Gets the installable skill definitions declared by the bundle manifest.
-    /// </summary>
-    public IReadOnlyList<SkillDefinition> GetSkillDefinitions()
-    {
-        return _skills
-            .Select(static skill => skill.Definition)
-            .ToList();
+        return Task.FromResult(files);
     }
 }
 
-internal sealed record ValidatedAspireSkill(
-    SkillDefinition Definition,
-    IReadOnlyList<SkillAssetFile> Files);
+internal sealed record ValidatedAspireSkillsBundleAsset(
+    AgentAssetDefinition Definition,
+    IReadOnlyList<AgentAssetFile> Files);

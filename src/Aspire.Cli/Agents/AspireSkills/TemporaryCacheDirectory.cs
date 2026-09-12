@@ -4,7 +4,7 @@
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Owns a leased temporary directory under the Aspire skills cache root.
+/// Owns a leased temporary directory under an Aspire Skills bundle cache root.
 /// </summary>
 internal sealed class TemporaryCacheDirectory : IDisposable
 {

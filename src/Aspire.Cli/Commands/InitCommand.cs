@@ -113,6 +113,8 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(NewCommand.s_suppressAgentInitOption);
         Options.Add(AgentInitCommand.s_skillLocationsOption);
         Options.Add(AgentInitCommand.s_skillsOption);
+        Options.Add(AgentInitCommand.s_extensionLocationsOption);
+        Options.Add(AgentInitCommand.s_extensionsOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -174,6 +176,8 @@ internal sealed class InitCommand : BaseCommand
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
+        var extensionLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_extensionLocationsOption);
+        var extensionsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_extensionsOption);
         // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
         // (which includes aspireify as the natural follow-up wiring skill). This chained flow
         // never registers `--mcp`, so MCP configuration is unavailable here by construction —
@@ -185,6 +189,8 @@ internal sealed class InitCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
+            extensionLocationsBinding,
+            extensionsBinding,
             cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
@@ -229,16 +235,16 @@ internal sealed class InitCommand : BaseCommand
         }
     }
 
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<SkillLocation> selectedLocations)
+    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<AgentAssetLocation> selectedLocations)
     {
         var commands = new List<string>();
 
-        if (selectedLocations.Contains(SkillLocation.ClaudeCode))
+        if (selectedLocations.Contains(AgentAssetLocation.ClaudeCode))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedLocations.Contains(SkillLocation.OpenCode))
+        if (selectedLocations.Contains(AgentAssetLocation.OpenCode))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }

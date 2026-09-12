@@ -2322,6 +2322,33 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommand_WithExtensionOptions_InstallsExtensionsWithoutConfiguringMcp()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var mcpConfigured = false;
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(
+                new AgentEnvironmentApplicator("Configure MCP", _ =>
+                {
+                    mcpConfigured = true;
+                    return Task.CompletedTask;
+                }));
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+
+        var exitCode = await command.Parse("new aspire-empty --name TestApp --output ./output --skill-locations none --extension-locations project --extensions aspire-doctor")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".github", "extensions", "aspire-doctor", "extension.mjs")));
+        Assert.False(mcpConfigured);
+        Assert.NotEmpty(command.Parse("new --mcp").Errors);
+    }
+
+    [Fact]
     public async Task NewCommandNonInteractiveWithoutTemplate_DisplaysErrorWithAvailableTemplates()
     {
         TestInteractionService? testInteractionService = null;
@@ -3227,19 +3254,19 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             ConfirmCallback = (_, defaultValue) => defaultValue,
         };
-        var promptedSkills = new List<SkillDefinition>();
+        var promptedSkills = new List<AgentAssetDefinition>();
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
         {
             var items = choices.Cast<object>().ToList();
-            if (items.FirstOrDefault() is SkillLocation)
+            if (items.FirstOrDefault() is AgentAssetLocation)
             {
-                return [SkillLocation.Standard];
+                return [AgentAssetLocation.Standard];
             }
 
-            Assert.All(items, static item => Assert.IsType<SkillDefinition>(item));
-            promptedSkills.AddRange(items.Cast<SkillDefinition>());
+            Assert.All(items, static item => Assert.IsType<AgentAssetDefinition>(item));
+            promptedSkills.AddRange(items.Cast<AgentAssetDefinition>());
             return items
-                .Cast<SkillDefinition>()
+                .Cast<AgentAssetDefinition>()
                 .Where(static skill => skill.IsDefault)
                 .Cast<object>()
                 .ToList();

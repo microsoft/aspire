@@ -671,14 +671,14 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             var items = choices.Cast<object>().ToList();
 
-            if (items.FirstOrDefault() is SkillLocation)
+            if (items.FirstOrDefault() is AgentAssetLocation)
             {
-                return [SkillLocation.Standard, SkillLocation.ClaudeCode, SkillLocation.OpenCode];
+                return [AgentAssetLocation.Standard, AgentAssetLocation.ClaudeCode, AgentAssetLocation.OpenCode];
             }
 
-            Assert.All(items, static item => Assert.IsType<SkillDefinition>(item));
+            Assert.All(items, static item => Assert.IsType<AgentAssetDefinition>(item));
             return items
-                .OfType<SkillDefinition>()
+                .OfType<AgentAssetDefinition>()
                 .Where(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName))
                 .Cast<object>()
                 .ToList();
@@ -722,13 +722,13 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             var items = choices.Cast<object>().ToList();
 
-            if (items.FirstOrDefault() is SkillLocation)
+            if (items.FirstOrDefault() is AgentAssetLocation)
             {
-                return [SkillLocation.Standard];
+                return [AgentAssetLocation.Standard];
             }
 
             return items
-                .OfType<SkillDefinition>()
+                .OfType<AgentAssetDefinition>()
                 .Where(static skill => skill.HasName(CommonAgentApplicators.AspireSkillName))
                 .Cast<object>()
                 .ToList();
@@ -815,6 +815,33 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         // aspireify was not requested, so it should not be installed.
         var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
+    }
+
+    [Fact]
+    public async Task InitCommand_WithExtensionOptions_InstallsExtensionsWithoutConfiguringMcp()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var mcpConfigured = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(
+                new AgentEnvironmentApplicator("Configure MCP", _ =>
+                {
+                    mcpConfigured = true;
+                    return Task.CompletedTask;
+                }));
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("init --non-interactive --skill-locations none --extension-locations project --extensions aspire-doctor")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "extensions", "aspire-doctor", "extension.mjs")));
+        Assert.False(mcpConfigured);
+        Assert.NotEmpty(command.Parse("init --mcp").Errors);
     }
 
     [Fact]
