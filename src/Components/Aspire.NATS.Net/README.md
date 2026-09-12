@@ -90,6 +90,36 @@ Also you can pass the `Action<NatsClientSettings> configureSettings` delegate to
 builder.AddNatsClient("nats", settings => settings.DisableHealthChecks = true);
 ```
 
+### NATS.Net 3 upgrade notes
+
+Most applications can upgrade without code changes. Existing serializers continue to work, and the socket interfaces moved to `NATS.Client.Abstractions` with the same namespaces and type forwarding.
+
+Applications that implement the JetStream interfaces directly, including custom test fakes, must implement the reset members added in NATS.Net 3.2:
+
+```csharp
+ValueTask<ConsumerResetResponse> ResetConsumerAsync(
+    string consumer,
+    ulong seq = 0,
+    CancellationToken cancellationToken = default);
+
+ValueTask<ConsumerResetResponse> ResetAsync(
+    ulong seq = 0,
+    CancellationToken cancellationToken = default);
+```
+
+`NatsHeaders` remains mutable after a publish in NATS.Net 3. Do not reuse one instance across concurrent publishes; create a fresh instance for each publish or wait for the previous publish to complete before reusing it.
+
+NATS.Net 3 changes the default request/reply mode from `SharedInbox` to `Direct` while preserving request/reply semantics. To opt back into the previous implementation:
+
+```csharp
+builder.AddNatsClient("nats", configureOptions: options =>
+    options with { RequestReplyMode = NatsRequestReplyMode.SharedInbox });
+```
+
+The default subscription overflow mode remains `BoundedChannelFullMode.DropNewest`; the pending channel capacity increases from 1,024 to 16,384.
+
+See the upstream [NATS.Net 3.0 release notes](https://github.com/nats-io/nats.net/releases/tag/v3.0.0) and [NATS.Net 3.2 release notes](https://github.com/nats-io/nats.net/releases/tag/v3.2.0) for the complete changes.
+
 ## AppHost extensions
 
 In your AppHost project, install the `Aspire.Hosting.Nats` library with [NuGet](https://www.nuget.org):
