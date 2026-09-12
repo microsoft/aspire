@@ -53,6 +53,39 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(serviceBus);
 ```
 
+### Emulator usage
+
+Aspire supports using the Azure Service Bus emulator. To use the emulator, add the following to your AppHost project:
+
+```csharp
+// AppHost
+var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator();
+```
+
+When the AppHost starts up, a local container running the Azure Service Bus emulator will be started. By default it is accompanied by a SQL Server resource that the emulator uses to store its state, unless an existing SQL Server resource is provided with `WithSqlServer` (see below). The emulator waits for its SQL Server to become healthy before it starts.
+
+That SQL Server resource can be customized using the regular SQL Server integration APIs, for instance to persist its state in a data volume or use a specific container name:
+
+```csharp
+// AppHost
+var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(emulator => emulator
+    .WithSqlServer(sql => sql
+        .WithDataVolume()
+        .WithContainerName("myproject-servicebus-sql")));
+```
+
+Alternatively, the emulator can reuse an existing SQL Server resource instead of creating one for itself:
+
+```csharp
+// AppHost
+var sql = builder.AddSqlServer("sql");
+
+var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(emulator => emulator
+    .WithSqlServer(sql));
+```
+
+> NOTE: Customizing the SQL Server resource created for the emulator and reusing an existing one are mutually exclusive and throw an exception when combined.
+
 ## Connection Properties
 
 When you reference Azure Service Bus resources using `WithReference`, the following connection properties are made available to the consuming project:
