@@ -90,6 +90,7 @@
     <Project Path="src/Aspire.TypeSystem/Aspire.TypeSystem.csproj" />
   </Folder>
   <Folder Name="/Hosting/Azure/">
+    <Project Path="src/Aspire.Hosting.Azure.ApiManagement/Aspire.Hosting.Azure.ApiManagement.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.AppConfiguration/Aspire.Hosting.Azure.AppConfiguration.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.ApplicationInsights/Aspire.Hosting.Azure.ApplicationInsights.csproj" />
@@ -156,6 +157,13 @@
   <Folder Name="/playground/AzureAppService/">
     <Project Path="playground/AzureAppService/AzureAppService.ApiService/AzureAppService.ApiService.csproj" />
     <Project Path="playground/AzureAppService/AzureAppService.AppHost/AzureAppService.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/AzureApiManagement/">
+    <Project Path="playground/AzureApiManagement/AzureApiManagement.ApiService/AzureApiManagement.ApiService.csproj" />
+    <Project Path="playground/AzureApiManagement/AzureApiManagement.AppHost/AzureApiManagement.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/AzureApiManagementOpenAI/">
+    <Project Path="playground/AzureApiManagementOpenAI/AzureApiManagementOpenAI.AppHost/AzureApiManagementOpenAI.AppHost.csproj" />
   </Folder>
   <Folder Name="/playground/AzureContainerApps/">
     <Project Path="playground/AzureContainerApps/AzureContainerApps.ApiService/AzureContainerApps.ApiService.csproj" />
