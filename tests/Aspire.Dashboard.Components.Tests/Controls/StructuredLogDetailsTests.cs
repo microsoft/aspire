@@ -54,7 +54,7 @@ public class StructuredLogDetailsTests : DashboardTestContext
         };
 
         // Act
-        var cut = RenderComponent<StructuredLogDetails>(builder =>
+        var cut = Render<StructuredLogDetails>(builder =>
         {
             builder.Add(p => p.ViewModel, model);
         });

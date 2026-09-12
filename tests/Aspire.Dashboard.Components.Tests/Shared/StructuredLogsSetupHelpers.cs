@@ -15,7 +15,7 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class StructuredLogsSetupHelpers
 {
-    public static void SetupStructuredLogsDetails(TestContext context)
+    public static void SetupStructuredLogsDetails(BunitContext context)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
