@@ -27,6 +27,18 @@
     <_SdkTrustedRootsDir>$([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName($(BundledRuntimeIdentifierGraphFile))), 'trustedroots'))</_SdkTrustedRootsDir>
   </PropertyGroup>
 
+  <!-- On Windows, ship Hex1b's PTY host alongside aspire-managed. Nothing in the tree launches it
+       yet: DCP owns every PTY we currently surface. AppHost-owned terminals (#19887) add the path
+       that needs it, where Hex1b owns the pseudo-terminal itself, and #19976 asks for the helper to
+       be signed and bundled before that lands. src/Directory.Build.targets strips it from publish
+       output everywhere else (dead weight in the CLI archive, and extra winget submission friction),
+       so this is the one project that opts back in. Publishing it as a loose file next to
+       aspire-managed is what lets the build sign it and CreateLayout stage it at
+       managed/hex1bpty.exe. -->
+  <PropertyGroup Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win'))">
+    <PublishHex1bPtyHost>true</PublishHex1bPtyHost>
+  </PropertyGroup>
+
   <!-- Embed NuGet trusted root certificates from the .NET SDK for signature verification on Linux -->
   <ItemGroup>
     <EmbeddedResource Include="$(_SdkTrustedRootsDir)\*.pem" />
