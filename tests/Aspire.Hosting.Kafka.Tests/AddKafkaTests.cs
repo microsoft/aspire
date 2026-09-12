@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
@@ -54,11 +54,12 @@ public class AddKafkaTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task KafkaCreatesConnectionString()
+    public async Task KafkaWithoutPasswordCreatesBareConnectionString()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
         appBuilder
             .AddKafka("kafka")
+            .WithPassword(null)
             .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017));
 
         using var app = appBuilder.Build();
@@ -73,11 +74,190 @@ public class AddKafkaTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task KafkaCreatesConnectionStringWithCredentials()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var password = appBuilder.AddParameter("pass", "p@ssw0rd1", secret: true);
+
+        appBuilder
+            .AddKafka("kafka", password: password)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017));
+
+        using var app = appBuilder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var connectionStringResource = Assert.Single(appModel.Resources.OfType<KafkaServerResource>()) as IResourceWithConnectionString;
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
+
+        Assert.Equal("BootstrapServers=localhost:27017;SecurityProtocol=SaslPlaintext;SaslMechanism=Plain;SaslUsername=kafka;SaslPassword=\"p@ssw0rd1\"", connectionString);
+        Assert.Equal(
+            "BootstrapServers={kafka.bindings.tcp.host}:{kafka.bindings.tcp.port};SecurityProtocol=SaslPlaintext;SaslMechanism=Plain;SaslUsername=kafka;SaslPassword=\"{pass.value}\"",
+            connectionStringResource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public async Task KafkaUsesUserNameParameterInConnectionString()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var userName = appBuilder.AddParameter("user", "usr");
+        var password = appBuilder.AddParameter("pass", "p@ssw0rd1", secret: true);
+
+        var kafka = appBuilder
+            .AddKafka("kafka", userName: userName, password: password)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017));
+
+        Assert.NotNull(kafka.Resource.UserNameParameter);
+
+        var connectionString = await ((IResourceWithConnectionString)kafka.Resource).GetConnectionStringAsync();
+
+        Assert.Equal("BootstrapServers=localhost:27017;SecurityProtocol=SaslPlaintext;SaslMechanism=Plain;SaslUsername=usr;SaslPassword=\"p@ssw0rd1\"", connectionString);
+    }
+
+    [Fact]
+    public void AddKafkaAddsGeneratedPasswordParameterWithUserSecretsParameterDefaultInRunMode()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var kafka = appBuilder.AddKafka("kafka");
+
+        Assert.Equal("Aspire.Hosting.ApplicationModel.UserSecretsParameterDefault", kafka.Resource.PasswordParameter!.Default?.GetType().FullName);
+    }
+
+    [Fact]
+    public void AddKafkaDoesNotAddGeneratedPasswordParameterWithUserSecretsParameterDefaultInPublishMode()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var kafka = appBuilder.AddKafka("kafka");
+
+        Assert.NotEqual("Aspire.Hosting.ApplicationModel.UserSecretsParameterDefault", kafka.Resource.PasswordParameter!.Default?.GetType().FullName);
+    }
+
+    [Fact]
+    public async Task AddKafkaConfiguresSaslOnClientFacingListeners()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var password = appBuilder.AddParameter("pass", "p@ssw0rd1", secret: true);
+
+        var kafka = appBuilder.AddKafka("kafka", password: password)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(kafka.Resource);
+
+        // The controller and inter broker listeners stay on the loopback interface in plaintext.
+        Assert.Equal(
+            "PLAINTEXT://localhost:29092,CONTROLLER://localhost:29093,EXTERNAL://0.0.0.0:9092,INTERNAL://0.0.0.0:9093",
+            config["KAFKA_LISTENERS"]);
+        Assert.Equal(
+            "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:SASL_PLAINTEXT,INTERNAL:SASL_PLAINTEXT",
+            config["KAFKA_LISTENER_SECURITY_PROTOCOL_MAP"]);
+        Assert.Equal("PLAIN", config["KAFKA_SASL_ENABLED_MECHANISMS"]);
+
+        const string ExpectedJaasConfig = """
+            org.apache.kafka.common.security.plain.PlainLoginModule required username="kafka" password="p@ssw0rd1" user_kafka="p@ssw0rd1";
+            """;
+        Assert.Equal(ExpectedJaasConfig, config["KAFKA_LISTENER_NAME_EXTERNAL_PLAIN_SASL_JAAS_CONFIG"]);
+        Assert.Equal(ExpectedJaasConfig, config["KAFKA_LISTENER_NAME_INTERNAL_PLAIN_SASL_JAAS_CONFIG"]);
+    }
+
+    [Fact]
+    public async Task WithPasswordNullRevertsToPlaintextListeners()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var kafka = appBuilder.AddKafka("kafka")
+            .WithPassword(null)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(kafka.Resource);
+
+        Assert.Equal(
+            "PLAINTEXT://localhost:29092,CONTROLLER://localhost:29093,PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:9093",
+            config["KAFKA_LISTENERS"]);
+        Assert.Equal(
+            "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT",
+            config["KAFKA_LISTENER_SECURITY_PROTOCOL_MAP"]);
+        Assert.DoesNotContain(config, kvp => kvp.Key.StartsWith("KAFKA_SASL", StringComparison.Ordinal));
+        Assert.DoesNotContain(config, kvp => kvp.Key.StartsWith("KAFKA_LISTENER_NAME_", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WithKafkaUIConfiguresSaslProperties()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var password = appBuilder.AddParameter("pass", "p@ssw0rd1", secret: true);
+
+        appBuilder.AddKafka("kafka1", password: password)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017))
+            .WithKafkaUI();
+
+        using var app = appBuilder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var kafkaUiResource = Assert.Single(appModel.Resources.OfType<KafkaUIContainerResource>());
+
+        await appBuilder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(kafkaUiResource, app.Services),
+            EventDispatchBehavior.BlockingSequential);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(kafkaUiResource);
+
+        Assert.Equal("SASL_PLAINTEXT", config["KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL"]);
+        Assert.Equal("PLAIN", config["KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM"]);
+        Assert.Equal(
+            """
+            org.apache.kafka.common.security.plain.PlainLoginModule required username="kafka" password="p@ssw0rd1" user_kafka="p@ssw0rd1";
+            """,
+            config["KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG"]);
+    }
+
+    [Fact]
     public async Task VerifyManifest()
     {
         using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var kafka = appBuilder.AddKafka("kafka");
+
+        var manifest = await ManifestUtils.GetManifest(kafka.Resource);
+
+        var expectedManifest = $$"""
+            {
+              "type": "container.v0",
+              "connectionString": "BootstrapServers={kafka.bindings.tcp.host}:{kafka.bindings.tcp.port};SecurityProtocol=SaslPlaintext;SaslMechanism=Plain;SaslUsername=kafka;SaslPassword=\u0022{kafka-password.value}\u0022",
+              "image": "{{KafkaContainerImageTags.Registry}}/{{KafkaContainerImageTags.Image}}:{{KafkaContainerImageTags.Tag}}",
+              "env": {
+                "KAFKA_LISTENERS": "PLAINTEXT://localhost:29092,CONTROLLER://localhost:29093,EXTERNAL://0.0.0.0:9092,INTERNAL://0.0.0.0:9093",
+                "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:SASL_PLAINTEXT,INTERNAL:SASL_PLAINTEXT",
+                "KAFKA_ADVERTISED_LISTENERS": "PLAINTEXT://{kafka.bindings.tcp.host}:29092,EXTERNAL://{kafka.bindings.tcp.host}:{kafka.bindings.tcp.port},INTERNAL://{kafka.bindings.internal.host}:{kafka.bindings.internal.port}",
+                "KAFKA_SASL_ENABLED_MECHANISMS": "PLAIN",
+                "KAFKA_LISTENER_NAME_EXTERNAL_PLAIN_SASL_JAAS_CONFIG": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\u0022kafka\u0022 password=\u0022{kafka-password.value}\u0022 user_kafka=\u0022{kafka-password.value}\u0022;",
+                "KAFKA_LISTENER_NAME_INTERNAL_PLAIN_SASL_JAAS_CONFIG": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\u0022kafka\u0022 password=\u0022{kafka-password.value}\u0022 user_kafka=\u0022{kafka-password.value}\u0022;"
+              },
+              "bindings": {
+                "tcp": {
+                  "scheme": "tcp",
+                  "protocol": "tcp",
+                  "transport": "tcp",
+                  "targetPort": 9092
+                },
+                "internal": {
+                  "scheme": "tcp",
+                  "protocol": "tcp",
+                  "transport": "tcp",
+                  "targetPort": 9093
+                }
+              }
+            }
+            """;
+        Assert.Equal(expectedManifest, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyManifestWithoutPassword()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var kafka = appBuilder.AddKafka("kafka").WithPassword(null);
 
         var manifest = await ManifestUtils.GetManifest(kafka.Resource);
 
