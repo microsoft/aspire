@@ -26,6 +26,7 @@ internal static class ResourceCommandHelper
     /// <param name="baseVerb">The base verb for error messages (e.g., "start", "stop").</param>
     /// <param name="pastTenseVerb">The past tense verb for success messages (e.g., "started", "stopped").</param>
     /// <param name="arguments">Optional invocation arguments to pass to the command.</param>
+    /// <param name="files">Optional files supplied for file-type command arguments.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Exit code indicating success or failure.</returns>
     public static async Task<int> ExecuteResourceCommandAsync(
@@ -38,6 +39,7 @@ internal static class ResourceCommandHelper
         string baseVerb,
         string pastTenseVerb,
         JsonNode? arguments,
+        ResourceCommandFileArgument[]? files,
         CancellationToken cancellationToken)
     {
         logger.LogDebug("{Verb} resource '{ResourceName}'", progressVerb, resourceName);
@@ -50,6 +52,7 @@ internal static class ResourceCommandHelper
                 new ExecuteResourceCommandOptions
                 {
                     Arguments = arguments,
+                    Files = files,
                     NonInteractive = true
                 },
                 cancellationToken));
@@ -67,6 +70,7 @@ internal static class ResourceCommandHelper
         string resourceName,
         string commandName,
         JsonNode? arguments,
+        ResourceCommandFileArgument[]? files,
         CancellationToken cancellationToken)
     {
         logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
@@ -79,6 +83,7 @@ internal static class ResourceCommandHelper
                 new ExecuteResourceCommandOptions
                 {
                     Arguments = arguments,
+                    Files = files,
                     NonInteractive = true
                 },
                 cancellationToken));

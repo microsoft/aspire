@@ -37,6 +37,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public bool SupportsV3 { get; set; }
     public bool SupportsTerminalsV1 { get; set; } = true;
     public bool SupportsResourceSnapshotVersionsV1 { get; set; }
+    public bool SupportsResourceCommandFilesV1 { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the resource snapshots to return from GetResourceSnapshotsAsync and WatchResourceSnapshotsAsync.
