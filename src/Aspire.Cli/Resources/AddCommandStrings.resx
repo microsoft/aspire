@@ -147,6 +147,9 @@
   <data name="SourceArgumentDescription" xml:space="preserve">
     <value>The NuGet source to use for the integration</value>
   </data>
+  <data name="SourceWithCredentialsNotSupported" xml:space="preserve">
+    <value>The --source URL includes credentials, a query string, or a fragment. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</value>
+  </data>
   <data name="AllArgumentDescription" xml:space="preserve">
     <value>Include all integrations, even those not marked compatible with the AppHost language</value>
   </data>

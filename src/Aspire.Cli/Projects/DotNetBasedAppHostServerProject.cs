@@ -502,9 +502,16 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IEnumerable<IntegrationReference> integrations,
         string? requestedChannel = null,
         string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
     {
-        var (_, channelName) = await CreateProjectFilesAsync(integrations, requestedChannel, packageSourceOverride, cancellationToken);
+        _ = packageSourceOverridePattern;
+
+        var (_, channelName) = await CreateProjectFilesAsync(
+            integrations,
+            requestedChannel,
+            packageSourceOverride,
+            cancellationToken);
         var (buildSuccess, buildOutput) = await BuildAsync(cancellationToken);
 
         if (!buildSuccess)

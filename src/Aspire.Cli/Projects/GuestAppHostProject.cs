@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.IO.Hashing;
 using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Certificates;
@@ -281,9 +282,16 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         List<IntegrationReference> integrations,
         string? requestedChannel,
         string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await appHostServerProject.PrepareAsync(sdkVersion, integrations, requestedChannel, packageSourceOverride, cancellationToken);
+        var result = await appHostServerProject.PrepareAsync(
+            sdkVersion,
+            integrations,
+            requestedChannel,
+            packageSourceOverride,
+            packageSourceOverridePattern,
+            cancellationToken);
         return (result.Success, result.Output, result.ChannelName, result.NeedsCodeGeneration);
     }
 
@@ -294,10 +302,22 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         var config = LoadConfiguration(directory);
-        return await BuildAndGenerateSdkAsync(directory, config, packageSourceOverride, cancellationToken);
+        return await BuildAndGenerateSdkAsync(
+            directory,
+            config,
+            config.Channel,
+            packageSourceOverride,
+            packageSourceOverridePattern: null,
+            cancellationToken);
     }
 
-    private async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, AspireConfigFile config, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
+    private async Task<bool> BuildAndGenerateSdkAsync(
+        DirectoryInfo directory,
+        AspireConfigFile config,
+        string? requestedChannel,
+        string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null,
+        CancellationToken cancellationToken = default)
     {
         var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
 
@@ -307,7 +327,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
         var sdkVersion = GetPrepareSdkVersion(config);
 
-        var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, config.Channel, packageSourceOverride, cancellationToken);
+        var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(
+            appHostServerProject,
+            sdkVersion,
+            integrations,
+            requestedChannel,
+            packageSourceOverride,
+            packageSourceOverridePattern,
+            cancellationToken);
         if (!buildSuccess)
         {
             if (buildOutput is not null)
@@ -1448,7 +1475,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         config.AddOrUpdatePackage(context.PackageId, context.PackageVersion);
 
         // Build and regenerate SDK code with the new package
-        var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
+        var requestedChannel = context.RequestedChannel ?? config.Channel;
+        var regenerateSuccess = await BuildAndGenerateSdkAsync(
+            directory,
+            config,
+            requestedChannel,
+            context.Source,
+            context.SourcePackagePattern,
+            cancellationToken);
         if (!regenerateSuccess)
         {
             return false;
@@ -1472,6 +1506,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Find updates for SDK version and packages
         string? newSdkVersion = null;
+        ExceptionDispatchInfo? updateCheckFailure = null;
         var updates = await _interactionService.ShowStatusAsync(
             UpdateCommandStrings.AnalyzingProjectStatus,
             async () =>
@@ -1490,6 +1525,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 }
                 catch (Exception ex)
                 {
+                    updateCheckFailure ??= ExceptionDispatchInfo.Capture(ex);
                     _logger.LogWarning(ex, "Failed to check for SDK version updates");
                 }
 
@@ -1513,6 +1549,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                         }
                         catch (Exception ex)
                         {
+                            updateCheckFailure ??= ExceptionDispatchInfo.Capture(ex);
                             _logger.LogWarning(ex, "Failed to check for updates to package {PackageId}", packageId);
                         }
                     }
@@ -1522,36 +1559,46 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             });
 
         var explicitChannelName = context.Channel.ShouldPersistChannelName() ? context.Channel.Name : null;
-        var explicitChannelChanged = explicitChannelName is not null && !string.Equals(config.Channel, explicitChannelName, StringComparisons.CliInputOrOutput);
+        var clearExplicitChannel = context.Channel.Type is PackageChannelType.Explicit &&
+            string.Equals(context.Channel.Name, PackageChannelNames.Stable, StringComparisons.ChannelName) &&
+            config.Channel is not null;
+        var explicitChannelChanged = clearExplicitChannel ||
+            explicitChannelName is not null &&
+            !string.Equals(config.Channel, explicitChannelName, StringComparisons.CliInputOrOutput);
 
-        if (updates.Count == 0 && newSdkVersion is null)
+        if (explicitChannelChanged && updateCheckFailure is not null)
         {
-            if (explicitChannelChanged)
-            {
-                config.Channel = explicitChannelName;
-                SaveConfiguration(config, directory);
-            }
+            // A channel transition changes the restore policy as well as version selection.
+            // Do not persist a partial transition when any package version could not be evaluated.
+            updateCheckFailure.Throw();
+        }
 
+        var hasVersionUpdates = updates.Count > 0 || newSdkVersion is not null;
+        if (!hasVersionUpdates && !explicitChannelChanged)
+        {
             _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
-            return new UpdatePackagesResult { UpdatesApplied = explicitChannelChanged };
-        }
-
-        // Display pending updates
-        _interactionService.DisplayEmptyLine();
-        if (newSdkVersion is not null)
-        {
-            _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]Aspire SDK[/] [bold green]{config.SdkVersion.EscapeMarkup()}[/] to [bold green]{newSdkVersion.EscapeMarkup()}[/]", allowMarkup: true);
-        }
-        foreach (var (packageId, currentVersion, newVersion) in updates)
-        {
-            _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]{packageId.EscapeMarkup()}[/] [bold green]{currentVersion.EscapeMarkup()}[/] to [bold green]{newVersion.EscapeMarkup()}[/]", allowMarkup: true);
-        }
-        _interactionService.DisplayEmptyLine();
-
-        // Confirm with user
-        if (!await _interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken))
-        {
             return new UpdatePackagesResult { UpdatesApplied = false };
+        }
+
+        if (hasVersionUpdates)
+        {
+            // Display pending updates
+            _interactionService.DisplayEmptyLine();
+            if (newSdkVersion is not null)
+            {
+                _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]Aspire SDK[/] [bold green]{config.SdkVersion.EscapeMarkup()}[/] to [bold green]{newSdkVersion.EscapeMarkup()}[/]", allowMarkup: true);
+            }
+            foreach (var (packageId, currentVersion, newVersion) in updates)
+            {
+                _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]{packageId.EscapeMarkup()}[/] [bold green]{currentVersion.EscapeMarkup()}[/] to [bold green]{newVersion.EscapeMarkup()}[/]", allowMarkup: true);
+            }
+            _interactionService.DisplayEmptyLine();
+
+            // Confirm with user
+            if (!await _interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken))
+            {
+                return new UpdatePackagesResult { UpdatesApplied = false };
+            }
         }
 
         // Apply updates to settings.json
@@ -1559,12 +1606,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             config.SdkVersion = newSdkVersion;
         }
-        // Persist the channel when update resolved a non-stable explicit channel. That can
-        // come from --channel, per-project/global config, prompt selection, or the
-        // UpdateCommand identity-channel fallback for non-project-reference AppHosts. When
-        // the resolved channel is Implicit or stable, leave the project's existing setting
-        // untouched rather than pinning the default public-feed behavior.
-        if (explicitChannelName is not null)
+        // Non-stable explicit channels are persisted because their source policy must be
+        // reproducible. Selecting the explicit stable channel clears any previous pin so the
+        // project returns to the ambient stable source policy without persisting "stable".
+        if (explicitChannelChanged)
         {
             config.Channel = explicitChannelName;
         }
@@ -1578,7 +1623,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             UpdateCommandStrings.RegeneratingSdkCode,
             async () =>
             {
-                var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
+                var requestedChannel = context.Channel.Type is PackageChannelType.Explicit
+                    ? context.Channel.Name
+                    : config.Channel;
+                var regenerateSuccess = await BuildAndGenerateSdkAsync(
+                    directory,
+                    config,
+                    requestedChannel,
+                    packageSourceOverridePattern: null,
+                    cancellationToken: cancellationToken);
 
                 if (!regenerateSuccess)
                 {

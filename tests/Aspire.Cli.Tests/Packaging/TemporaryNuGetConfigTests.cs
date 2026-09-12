@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Xml;
+using System.Xml.Linq;
 using Aspire.Cli.Packaging;
 
 namespace Aspire.Cli.Tests.Packaging;
@@ -9,214 +9,174 @@ namespace Aspire.Cli.Tests.Packaging;
 public class TemporaryNuGetConfigTests
 {
     [Fact]
-    public async Task CreateAsync_IncludesAllPackageSourceMappings()
+    public async Task CreateAsync_IncludesSourcesAndMappings()
     {
-        // Arrange
-        var mappings = new PackageMapping[]
-        {
-            new("Aspire.*", "https://example.com/feed1"),
-            new(PackageMapping.AllPackages, "https://example.com/feed2"), // "*" filter
-            new("Microsoft.*", "https://example.com/feed1")
-        };
+        using var config = await TemporaryNuGetConfig.CreateAsync(
+        [
+            new PackageMapping("Aspire.*", "https://example.com/feed1"),
+            new PackageMapping(PackageMapping.AllPackages, "https://example.com/feed2"),
+            new PackageMapping("Microsoft.*", "https://example.com/feed1")
+        ]);
 
-        // Act
-        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(mappings);
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var sourceKeys = document.Descendants("packageSources")
+            .Elements("add")
+            .ToDictionary(
+                static element => element.Attribute("value")!.Value,
+                static element => element.Attribute("key")!.Value,
+                PackageSourceIdentity.Comparer);
 
-        // Assert
-        var configContent = await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName);
-        var xmlDoc = new XmlDocument();
-        xmlDoc.LoadXml(configContent);
-
-        // Verify that package source mappings section exists
-        var packageSourceMappingNode = xmlDoc.SelectSingleNode("//packageSourceMapping");
-        Assert.NotNull(packageSourceMappingNode);
-
-        // Verify all package sources are present
-        var packageSourceNodes = xmlDoc.SelectNodes("//packageSourceMapping/packageSource");
-        Assert.NotNull(packageSourceNodes);
-        Assert.Equal(2, packageSourceNodes.Count); // Two distinct sources
-
-        // Verify that the AllPackages mapping is included
-        var allPackagesMapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='https://example.com/feed2']/package[@pattern='*']");
-        Assert.NotNull(allPackagesMapping);
-
-        // Verify other specific mappings are also included
-        var aspireMapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='https://example.com/feed1']/package[@pattern='Aspire.*']");
-        Assert.NotNull(aspireMapping);
-
-        var microsoftMapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='https://example.com/feed1']/package[@pattern='Microsoft.*']");
-        Assert.NotNull(microsoftMapping);
-    }
-
-    [Fact]
-    public async Task CreateAsync_WithOnlyAllPackagesMappings_IncludesAllMappings()
-    {
-        // Arrange
-        var mappings = new PackageMapping[]
-        {
-            new(PackageMapping.AllPackages, "https://feed1.example.com"),
-            new(PackageMapping.AllPackages, "https://feed2.example.com")
-        };
-
-        // Act
-        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(mappings);
-
-        // Assert
-        var configContent = await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName);
-        var xmlDoc = new XmlDocument();
-        xmlDoc.LoadXml(configContent);
-
-        // Verify that package source mappings section exists
-        var packageSourceMappingNode = xmlDoc.SelectSingleNode("//packageSourceMapping");
-        Assert.NotNull(packageSourceMappingNode);
-
-        // Verify all package sources are present
-        var packageSourceNodes = xmlDoc.SelectNodes("//packageSourceMapping/packageSource");
-        Assert.NotNull(packageSourceNodes);
-        Assert.Equal(2, packageSourceNodes.Count); // Two distinct sources
-
-        // Verify that both AllPackages mappings are included
-        var feed1Mapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='https://feed1.example.com']/package[@pattern='*']");
-        Assert.NotNull(feed1Mapping);
-
-        var feed2Mapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='https://feed2.example.com']/package[@pattern='*']");
-        Assert.NotNull(feed2Mapping);
-    }
-
-    [Fact]
-    public async Task CreateAsync_WithNoMappings_CreatesValidConfig()
-    {
-        // Arrange
-        var mappings = Array.Empty<PackageMapping>();
-
-        // Act
-        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(mappings);
-
-        // Assert
-        var configContent = await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName);
-        var xmlDoc = new XmlDocument();
-        xmlDoc.LoadXml(configContent);
-
-        // Verify basic structure exists
-        var configNode = xmlDoc.SelectSingleNode("//configuration");
-        Assert.NotNull(configNode);
-
-        var packageSourcesNode = xmlDoc.SelectSingleNode("//packageSources");
-        Assert.NotNull(packageSourcesNode);
-
-        // No package source mappings should exist when no mappings provided
-        var packageSourceMappingNode = xmlDoc.SelectSingleNode("//packageSourceMapping");
-        Assert.Null(packageSourceMappingNode);
+        Assert.NotNull(document.Descendants("packageSources").ElementAt(0).Element("clear"));
+        Assert.Equal(2, sourceKeys.Count);
+        Assert.Contains(
+            document.Descendants("packageSourceMapping").Elements("packageSource"),
+            element => element.Attribute("key")?.Value == sourceKeys["https://example.com/feed1"] &&
+                element.Elements("package").Select(static package => package.Attribute("pattern")?.Value)
+                    .SequenceEqual(["Aspire.*", "Microsoft.*"]));
+        Assert.Contains(
+            document.Descendants("packageSourceMapping").Elements("packageSource"),
+            element => element.Attribute("key")?.Value == sourceKeys["https://example.com/feed2"] &&
+                element.Elements("package").Single().Attribute("pattern")?.Value == PackageMapping.AllPackages);
     }
 
     [Fact]
     public async Task CreateAsync_WithConfiguredGlobalPackagesFolder_AddsConfigEntry()
     {
-        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(
-            [new PackageMapping("Aspire.*", "https://example.com/feed")],
-            configureGlobalPackagesFolder: true);
-
-        var configContent = await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName);
-        var xmlDoc = new XmlDocument();
-        xmlDoc.LoadXml(configContent);
-
-        var globalPackagesFolder = xmlDoc.SelectSingleNode("//config/add[@key='globalPackagesFolder']");
-        Assert.NotNull(globalPackagesFolder);
-        Assert.Equal(".nugetpackages", globalPackagesFolder!.Attributes!["value"]!.Value);
-    }
-
-    [Fact]
-    public async Task CreateAsync_WithExplicitGlobalPackagesFolderOverride_UsesOverrideValue()
-    {
-        // Callers that need the cache to outlive the temp config (e.g. PrebuiltAppHostServer's
-        // staging path) supply an absolute, persistent path so BundleNuGetService manifest paths
-        // remain valid after TemporaryNuGetConfig.Dispose deletes the temp directory.
-        var overrideValue = Path.Combine(Path.GetTempPath(), "aspire-tests", "stable-cache", "deadbeef");
-
-        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(
+        using var config = await TemporaryNuGetConfig.CreateAsync(
             [new PackageMapping("Aspire.*", "https://example.com/feed")],
             configureGlobalPackagesFolder: true,
-            globalPackagesFolderValue: overrideValue);
+            globalPackagesFolderValue: "/packages");
 
-        var configContent = await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName);
-        var xmlDoc = new XmlDocument();
-        xmlDoc.LoadXml(configContent);
+        var document = XDocument.Load(config.ConfigFile.FullName);
 
-        var globalPackagesFolder = xmlDoc.SelectSingleNode("//config/add[@key='globalPackagesFolder']");
-        Assert.NotNull(globalPackagesFolder);
-        Assert.Equal(overrideValue, globalPackagesFolder!.Attributes!["value"]!.Value);
+        Assert.Equal(
+            "/packages",
+            document.Descendants("config")
+                .Elements("add")
+                .Single(element => element.Attribute("key")?.Value == "globalPackagesFolder")
+                .Attribute("value")?.Value);
     }
 
     [Fact]
-    public async Task CreateAsync_WithoutConfiguredGlobalPackagesFolder_IgnoresOverride()
+    public async Task CreateAsync_PreservesCaseDistinctSourcePaths()
     {
-        // When configureGlobalPackagesFolder is false the override is irrelevant — no
-        // <config><add key="globalPackagesFolder"/> element should be emitted at all.
-        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(
-            [new PackageMapping("Aspire.*", "https://example.com/feed")],
-            configureGlobalPackagesFolder: false,
-            globalPackagesFolderValue: "/should/not/appear");
+        using var config = await TemporaryNuGetConfig.CreateAsync(
+        [
+            new PackageMapping("Upper.*", "https://example.com/Feed/index.json"),
+            new PackageMapping("Lower.*", "https://example.com/feed/index.json")
+        ]);
 
-        var configContent = await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName);
-        var xmlDoc = new XmlDocument();
-        xmlDoc.LoadXml(configContent);
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var sources = document.Descendants("packageSources")
+            .Elements("add")
+            .Select(static element => element.Attribute("value")!.Value)
+            .ToArray();
 
-        Assert.Null(xmlDoc.SelectSingleNode("//config/add[@key='globalPackagesFolder']"));
+        Assert.Equal(
+        [
+            "https://example.com/Feed/index.json",
+            "https://example.com/feed/index.json"
+        ],
+            sources);
     }
 
-    [Theory]
-    [InlineData("https://example.com/feed")]
-    [InlineData("/var/folders/X/hives/pr-17105/packages")]
-    [InlineData(@"C:\Users\X\.aspire\hives\pr-17105\packages")]
-    public async Task CreateAsync_PackageSourceAddKeyMatchesPackageSourceMappingKey(string source)
+    [Fact]
+    public async Task CreateRestoreOverlayAsync_UsesProvidedWriter()
     {
-        // Bug B defense: NuGet's packageSourceMapping lookup matches the
-        // <packageSource key="..."> attribute against the source name registered
-        // from <packageSources><add key="..." />. A future refactor that splits
-        // those keys (or canonicalizes one side and not the other) would silently
-        // drop the mapping. This invariant lives at the writer; pin it.
-        //
-        // Note that we ALSO need the source written here to be in the form NuGet
-        // will accept after its own internal canonicalization (e.g. on macOS the
-        // upstream caller must strip /private/var → /var before constructing the
-        // PackageMapping — see CliPathHelper.StripMacOSFirmlinkPrefix and the
-        // GetAspireHomeDirectory_OnMacOS_PrRouteWithFirmlinkedProcessPath test).
-        // This test only pins the writer's symmetry contract.
-        var mappings = new PackageMapping[]
+        using var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+            path => File.WriteAllTextAsync(
+                path,
+                """
+                <configuration>
+                  <packageSourceMapping>
+                    <clear />
+                    <packageSource key="private">
+                      <package pattern="Aspire*" />
+                    </packageSource>
+                  </packageSourceMapping>
+                </configuration>
+                """));
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+
+        var mapping = Assert.Single(document.Descendants("packageSourceMapping"));
+        Assert.NotNull(mapping.Element("clear"));
+        Assert.Equal("private", mapping.Element("packageSource")?.Attribute("key")?.Value);
+        Assert.Equal("Aspire*", mapping.Descendants("package").Single().Attribute("pattern")?.Value);
+    }
+
+    [Fact]
+    public async Task RegenerateAsync_RewritesConfigAndCacheIdentity()
+    {
+        using var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+            path => File.WriteAllTextAsync(
+                path,
+                "<configuration><packageSourceMapping><clear /></packageSourceMapping></configuration>"));
+        var originalIdentity = config.CacheIdentity;
+
+        await config.RegenerateAsync(
+            path => File.WriteAllTextAsync(
+                path,
+                "<configuration><packageSourceMapping><clear /><packageSource key=\"private\"><package pattern=\"Aspire*\" /></packageSource></packageSourceMapping></configuration>"));
+
+        Assert.NotEqual(originalIdentity, config.CacheIdentity);
+        Assert.Equal(
+            "Aspire*",
+            XDocument.Load(config.ConfigFile.FullName)
+                .Descendants("package")
+                .Single()
+                .Attribute("pattern")?
+                .Value);
+    }
+
+    [Fact]
+    public async Task Dispose_RemovesDirectoryWhenFailedRegenerationDeletedConfig()
+    {
+        using var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+            path => File.WriteAllTextAsync(path, "<configuration />"));
+        var directory = config.ConfigFile.Directory!.FullName;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => config.RegenerateAsync(path =>
         {
-            new("Aspire*", source),
-            new(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
-        };
+            File.Delete(path);
+            return Task.FromException(new InvalidOperationException("Failed to regenerate the configuration."));
+        }));
 
-        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(mappings);
+        Assert.False(config.ConfigFile.Exists);
+        Assert.True(Directory.Exists(directory));
 
-        var xmlDoc = new XmlDocument();
-        xmlDoc.LoadXml(await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName));
+        config.Dispose();
 
-        // Collect <packageSources><add key="X" value="Y" /> entries (filter out <clear/>).
-        var addNodes = xmlDoc.SelectNodes("//packageSources/add")!;
-        var addKeys = new List<string>();
-        foreach (XmlNode add in addNodes)
-        {
-            addKeys.Add(add.Attributes!["key"]!.Value);
-            Assert.Equal(add.Attributes!["key"]!.Value, add.Attributes!["value"]!.Value);
-        }
+        Assert.False(Directory.Exists(directory));
+    }
 
-        // Collect <packageSourceMapping><packageSource key="X"> entries.
-        var mappingNodes = xmlDoc.SelectNodes("//packageSourceMapping/packageSource")!;
-        var mappingKeys = new List<string>();
-        foreach (XmlNode m in mappingNodes)
-        {
-            mappingKeys.Add(m.Attributes!["key"]!.Value);
-        }
+    [Fact]
+    public async Task CacheIdentity_DoesNotDependOnGlobalPackagesFolderLocation()
+    {
+        using var first = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+            path => File.WriteAllTextAsync(
+                path,
+                "<configuration><config><add key=\"globalPackagesFolder\" value=\"/packages/first\" /></config></configuration>"));
+        using var second = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+            path => File.WriteAllTextAsync(
+                path,
+                "<configuration><config><add key=\"globalPackagesFolder\" value=\"/packages/second\" /></config></configuration>"));
 
-        // Every mapping key must have a matching <add key>, byte-for-byte.
-        foreach (var mappingKey in mappingKeys)
-        {
-            Assert.Contains(mappingKey, addKeys);
-        }
+        Assert.Equal(first.CacheIdentity, second.CacheIdentity);
+    }
 
-        // The mapping for our source must be present and exactly equal the input source.
-        Assert.Contains(source, mappingKeys);
+    [Fact]
+    public async Task CacheIdentity_DoesNotChangeWhenGlobalPackagesFolderIsAdded()
+    {
+        using var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+            path => File.WriteAllTextAsync(path, "<configuration />"));
+        var originalIdentity = config.CacheIdentity;
+
+        await config.RegenerateAsync(
+            path => File.WriteAllTextAsync(
+                path,
+                "<configuration><config><add key=\"globalPackagesFolder\" value=\"/packages\" /></config></configuration>"));
+
+        Assert.Equal(originalIdentity, config.CacheIdentity);
     }
 }

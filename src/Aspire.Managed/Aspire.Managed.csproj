@@ -61,6 +61,8 @@
     <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared\HeldFileLease.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="NuGet\IntegrationPackageProbeManifest.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)NuGetConfigContracts.cs" Link="NuGet\NuGetConfigContracts.cs" />
+    <Compile Include="$(SharedDir)NuGetSourceIdentity.cs" Link="NuGet\NuGetSourceIdentity.cs" />
     <Compile Include="$(SharedDir)ParentProcessWatchdog.cs" Link="Shared\ParentProcessWatchdog.cs" />
     <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Shared\ProcessStartTimeHelper.cs" />
     <Compile Include="$(SharedDir)ParentProcessLivenessMonitor.cs" Link="Shared\ParentProcessLivenessMonitor.cs" />

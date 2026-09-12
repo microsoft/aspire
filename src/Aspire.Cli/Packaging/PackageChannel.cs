@@ -106,6 +106,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         Type is PackageChannelType.Explicit &&
         Mappings?.Any(static mapping => mapping.IsAspireDirectoryMapping) == true;
 
+    internal string? GetExistingLocalAspirePackageSource()
+        => GetLocalAspirePackageSource(Mappings)?.Source;
+
     private static string ComputeSourceDetails(PackageMapping[]? mappings)
     {
         if (mappings is null)
@@ -204,20 +207,47 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return filteredPackages;
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        if (GetLocalAspirePackageSource() is { } localPackageSource)
+        return GetIntegrationPackagesAsync(
+            workingDirectory,
+            Mappings,
+            applyPinnedVersion: true,
+            cancellationToken);
+    }
+
+    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+        DirectoryInfo workingDirectory,
+        PackageMapping[] mappings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(mappings);
+
+        return GetIntegrationPackagesAsync(
+            workingDirectory,
+            mappings,
+            applyPinnedVersion: false,
+            cancellationToken);
+    }
+
+    private async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+        DirectoryInfo workingDirectory,
+        PackageMapping[]? mappings,
+        bool applyPinnedVersion,
+        CancellationToken cancellationToken)
+    {
+        if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
         {
             return GetIntegrationPackagesFromLocalPackageSource(
                 localPackageSource.Source,
                 localPackageSource.PackageSource,
-                GetLocalPackageVersion(workingDirectory),
+                applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null,
                 cancellationToken);
         }
 
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
-        using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
+        using var tempNuGetConfig = mappings is not null ? await TemporaryNuGetConfig.CreateAsync(mappings) : null;
 
         if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
         {
@@ -247,15 +277,13 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         // When pinned to a specific version, override the version on each discovered package
         // so the correct version gets installed regardless of what the feed reports as latest.
-        if (PinnedVersion is not null)
+        if (applyPinnedVersion && PinnedVersion is not null)
         {
             return filteredPackages.Select(p => new NuGetPackage { Id = p.Id, Version = PinnedVersion, Source = p.Source });
         }
 
         return filteredPackages;
     }
-
-    private (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource() => GetLocalAspirePackageSource(Mappings);
 
     private static (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource(PackageMapping[]? mappings)
     {
@@ -374,17 +402,46 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     /// <item>Remote feeds: a secondary <c>tags:polyglot</c> search is issued.</item>
     /// </list>
     /// </remarks>
-    public async Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    public Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(
+        DirectoryInfo workingDirectory,
+        CancellationToken cancellationToken)
     {
-        if (GetLocalAspirePackageSource() is { } localPackageSource)
+        return GetPolyglotCompatiblePackageIdsAsync(
+            workingDirectory,
+            Mappings,
+            applyPinnedVersion: true,
+            cancellationToken);
+    }
+
+    public Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(
+        DirectoryInfo workingDirectory,
+        PackageMapping[] mappings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(mappings);
+
+        return GetPolyglotCompatiblePackageIdsAsync(
+            workingDirectory,
+            mappings,
+            applyPinnedVersion: false,
+            cancellationToken);
+    }
+
+    private async Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(
+        DirectoryInfo workingDirectory,
+        PackageMapping[]? mappings,
+        bool applyPinnedVersion,
+        CancellationToken cancellationToken)
+    {
+        if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
         {
             return GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
                 localPackageSource.PackageSource,
-                GetLocalPackageVersion(workingDirectory),
+                applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null,
                 cancellationToken);
         }
 
-        using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
+        using var tempNuGetConfig = mappings is not null ? await TemporaryNuGetConfig.CreateAsync(mappings) : null;
 
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
@@ -583,11 +640,36 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return latestPackage;
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    public Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(
+        string packageId,
+        DirectoryInfo workingDirectory,
+        CancellationToken cancellationToken)
     {
+        return GetPackageVersionsAsync(
+            packageId,
+            workingDirectory,
+            Mappings,
+            cancellationToken);
+    }
+
+    public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(
+        string packageId,
+        DirectoryInfo workingDirectory,
+        PackageMapping[]? mappings,
+        CancellationToken cancellationToken)
+    {
+        if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
+        {
+            return GetPackageVersionsFromLocalPackageSource(
+                localPackageSource.Source,
+                localPackageSource.PackageSource,
+                packageId,
+                cancellationToken);
+        }
+
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
-        using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
+        using var tempNuGetConfig = mappings is not null ? await TemporaryNuGetConfig.CreateAsync(mappings) : null;
 
         if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
         {
@@ -644,6 +726,34 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         });
 
         return filteredPackages;
+    }
+
+    private IEnumerable<NuGetPackage> GetPackageVersionsFromLocalPackageSource(
+        string source,
+        DirectoryInfo packageSource,
+        string packageId,
+        CancellationToken cancellationToken)
+    {
+        return EnumerateLocalPackageFiles(packageSource, cancellationToken)
+            .Select(file => GetPackageFileMetadata(file.FullName))
+            .OfType<PackageFileMetadata>()
+            .Where(metadata => string.Equals(metadata.PackageId, packageId, StringComparisons.NuGetPackageId))
+            .Where(metadata => new { metadata.Version, Quality } switch
+            {
+                { Quality: PackageChannelQuality.Both } => true,
+                { Quality: PackageChannelQuality.Stable, Version: { IsPrerelease: false } } => true,
+                { Quality: PackageChannelQuality.Prerelease, Version: { IsPrerelease: true } } => true,
+                _ => false
+            })
+            .DistinctBy(metadata => metadata.Version)
+            .OrderByDescending(metadata => metadata.Version, SemVersion.PrecedenceComparer)
+            .Select(metadata => new NuGetPackage
+            {
+                Id = metadata.PackageId,
+                Version = metadata.Version.ToString(),
+                Source = source
+            })
+            .ToArray();
     }
 
     public PackageChannel CreateScopedChannelForPackage(string packageId)

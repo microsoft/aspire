@@ -76,9 +76,19 @@ internal sealed class AddPackageContext
     public required string PackageVersion { get; init; }
 
     /// <summary>
-    /// Gets or sets the optional NuGet source.
+    /// Gets or sets the package channel selected for this add operation.
+    /// </summary>
+    public string? RequestedChannel { get; init; }
+
+    /// <summary>
+    /// Gets or sets the optional invocation-scoped NuGet source.
     /// </summary>
     public string? Source { get; init; }
+
+    /// <summary>
+    /// Gets or sets the package pattern whose restore is owned by <see cref="Source"/>.
+    /// </summary>
+    public string? SourcePackagePattern { get; init; }
 
     /// <summary>
     /// Gets or sets the output collector for capturing stdout/stderr.

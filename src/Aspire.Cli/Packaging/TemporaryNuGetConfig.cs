@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Hashing;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -11,56 +13,82 @@ internal sealed class TemporaryNuGetConfig : IDisposable
     private readonly FileInfo _configFile;
     private bool _disposed;
 
-    private TemporaryNuGetConfig(FileInfo configFile)
+    private TemporaryNuGetConfig(FileInfo configFile, string cacheIdentity)
     {
         _configFile = configFile;
+        CacheIdentity = cacheIdentity;
     }
 
     public FileInfo ConfigFile => _configFile;
 
-    public static async Task<TemporaryNuGetConfig> CreateAsync(PackageMapping[] mappings, bool configureGlobalPackagesFolder = false, string? globalPackagesFolderValue = null)
+    public string CacheIdentity { get; private set; }
+
+    public static async Task<TemporaryNuGetConfig> CreateAsync(
+        PackageMapping[] mappings,
+        bool configureGlobalPackagesFolder = false,
+        string? globalPackagesFolderValue = null)
     {
         var tempDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config").FullName;
         try
         {
-            var tempFilePath = Path.Combine(tempDirectory, "nuget.config");
-            var configFile = new FileInfo(tempFilePath);
-            await GenerateNuGetConfigAsync(mappings, configFile);
+            var configFile = new FileInfo(Path.Combine(tempDirectory, "nuget.config"));
+            await GenerateNuGetConfigAsync(mappings, configFile).ConfigureAwait(false);
             if (configureGlobalPackagesFolder)
             {
-                await AddGlobalPackagesFolderToConfigAsync(configFile, globalPackagesFolderValue);
+                await AddGlobalPackagesFolderToConfigAsync(configFile, globalPackagesFolderValue).ConfigureAwait(false);
             }
-            return new TemporaryNuGetConfig(configFile);
+
+            return new TemporaryNuGetConfig(configFile, await ComputeCacheIdentityAsync(configFile).ConfigureAwait(false));
         }
         catch
         {
-            try
-            {
-                Directory.Delete(tempDirectory, recursive: true);
-            }
-            catch
-            {
-                // Ignore cleanup failures; surface the original exception instead.
-            }
+            TryDeleteDirectory(tempDirectory);
+            throw;
+        }
+    }
+
+    public static async Task<TemporaryNuGetConfig> CreateRestoreOverlayAsync(
+        Func<string, Task> writeConfigAsync)
+    {
+        ArgumentNullException.ThrowIfNull(writeConfigAsync);
+
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config").FullName;
+        try
+        {
+            var configFile = new FileInfo(Path.Combine(tempDirectory, "nuget.config"));
+            await writeConfigAsync(configFile.FullName).ConfigureAwait(false);
+
+            return new TemporaryNuGetConfig(configFile, await ComputeCacheIdentityAsync(configFile).ConfigureAwait(false));
+        }
+        catch
+        {
+            TryDeleteDirectory(tempDirectory);
             throw;
         }
     }
 
     /// <summary>
-    /// Generates a NuGet.config file at the specified path with the given package mappings.
+    /// Generates a standalone NuGet.config file at the specified path with the given package mappings.
     /// </summary>
-    public static async Task GenerateAsync(PackageMapping[] mappings, string targetPath)
+    public static Task GenerateAsync(PackageMapping[] mappings, string targetPath)
+        => GenerateNuGetConfigAsync(mappings, new FileInfo(targetPath));
+
+    public async Task RegenerateAsync(Func<string, Task> writeConfigAsync)
     {
-        var configFile = new FileInfo(targetPath);
-        await GenerateNuGetConfigAsync(mappings, configFile);
+        ArgumentNullException.ThrowIfNull(writeConfigAsync);
+
+        await writeConfigAsync(_configFile.FullName).ConfigureAwait(false);
+        CacheIdentity = await ComputeCacheIdentityAsync(_configFile).ConfigureAwait(false);
     }
 
-    private static async Task GenerateNuGetConfigAsync(PackageMapping[] mappings, FileInfo configFile)
+    private static async Task GenerateNuGetConfigAsync(
+        PackageMapping[] mappings,
+        FileInfo configFile)
     {
-        var distinctSources = mappings
-            .Select(m => m.Source)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select((source, index) => new { Source = source, Key = source })
+        var sources = mappings
+            .Select(static mapping => mapping.Source)
+            .Distinct(PackageSourceIdentity.Comparer)
+            .Select(static (source, index) => (Key: $"aspire-{index}", Source: source))
             .ToArray();
 
         await using var fileStream = configFile.Create();
@@ -70,69 +98,59 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             Indent = true,
             IndentChars = "  ",
             NewLineChars = Environment.NewLine,
-            Encoding = System.Text.Encoding.UTF8,
+            Encoding = Encoding.UTF8,
             Async = true
         });
 
         await xmlWriter.WriteStartDocumentAsync();
         await xmlWriter.WriteStartElementAsync(null, "configuration", null);
 
-        // Write packageSources section
         await xmlWriter.WriteStartElementAsync(null, "packageSources", null);
-
-        // <clear />
         await xmlWriter.WriteStartElementAsync(null, "clear", null);
         await xmlWriter.WriteEndElementAsync();
 
-        foreach (var sourceInfo in distinctSources)
+        foreach (var source in sources)
         {
             await xmlWriter.WriteStartElementAsync(null, "add", null);
-            await xmlWriter.WriteAttributeStringAsync(null, "key", null, sourceInfo.Key);
-            await xmlWriter.WriteAttributeStringAsync(null, "value", null, sourceInfo.Source);
-            await xmlWriter.WriteEndElementAsync(); // add
+            await xmlWriter.WriteAttributeStringAsync(null, "key", null, source.Key);
+            await xmlWriter.WriteAttributeStringAsync(null, "value", null, source.Source);
+            await xmlWriter.WriteEndElementAsync();
         }
-        await xmlWriter.WriteEndElementAsync(); // packageSources
 
-        // Add package source mappings for all filters
+        await xmlWriter.WriteEndElementAsync();
+
         if (mappings.Length > 0)
         {
             await xmlWriter.WriteStartElementAsync(null, "packageSourceMapping", null);
 
-            var groupedBySource = mappings
-                .GroupBy(m => m.Source, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var sourceGroup in groupedBySource)
+            foreach (var sourceGroup in mappings.GroupBy(static mapping => mapping.Source, PackageSourceIdentity.Comparer))
             {
-                var sourceInfo = distinctSources.First(s => string.Equals(s.Source, sourceGroup.Key, StringComparison.OrdinalIgnoreCase));
-
+                var sourceKey = sources
+                    .Single(source => PackageSourceIdentity.Comparer.Equals(source.Source, sourceGroup.Key))
+                    .Key;
                 await xmlWriter.WriteStartElementAsync(null, "packageSource", null);
-                await xmlWriter.WriteAttributeStringAsync(null, "key", null, sourceInfo.Key);
+                await xmlWriter.WriteAttributeStringAsync(null, "key", null, sourceKey);
 
                 foreach (var mapping in sourceGroup)
                 {
                     await xmlWriter.WriteStartElementAsync(null, "package", null);
                     await xmlWriter.WriteAttributeStringAsync(null, "pattern", null, mapping.PackageFilter);
-                    await xmlWriter.WriteEndElementAsync(); // package
+                    await xmlWriter.WriteEndElementAsync();
                 }
 
-                await xmlWriter.WriteEndElementAsync(); // packageSource
+                await xmlWriter.WriteEndElementAsync();
             }
 
-            await xmlWriter.WriteEndElementAsync(); // packageSourceMapping
+            await xmlWriter.WriteEndElementAsync();
         }
 
-        await xmlWriter.WriteEndElementAsync(); // configuration
+        await xmlWriter.WriteEndElementAsync();
         await xmlWriter.WriteEndDocumentAsync();
     }
 
     private static async Task AddGlobalPackagesFolderToConfigAsync(FileInfo configFile, string? globalPackagesFolderValue)
     {
-        XDocument document;
-        await using (var stream = configFile.OpenRead())
-        {
-            document = XDocument.Load(stream);
-        }
-
+        var document = await LoadAsync(configFile).ConfigureAwait(false);
         var configuration = document.Root ?? new XElement("configuration");
         if (document.Root is null)
         {
@@ -144,27 +162,65 @@ internal sealed class TemporaryNuGetConfig : IDisposable
         var content = document.Declaration is null
             ? document.ToString()
             : $"{document.Declaration}{Environment.NewLine}{document}";
-        await File.WriteAllTextAsync(configFile.FullName, content);
+        await File.WriteAllTextAsync(configFile.FullName, content).ConfigureAwait(false);
+    }
+
+    private static async Task<string> ComputeCacheIdentityAsync(FileInfo configFile)
+    {
+        var document = await LoadAsync(configFile).ConfigureAwait(false);
+        var globalPackagesFolderItems = document
+            .Descendants("config")
+            .Elements("add")
+            .Where(static element => string.Equals(
+                (string?)element.Attribute("key"),
+                "globalPackagesFolder",
+                StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        globalPackagesFolderItems.Remove();
+        document
+            .Descendants("config")
+            .Where(static section => !section.Elements().Any())
+            .Remove();
+        var bytes = Encoding.UTF8.GetBytes(document.ToString(SaveOptions.DisableFormatting));
+        return Convert.ToHexString(XxHash3.Hash(bytes));
+    }
+
+    private static async Task<XDocument> LoadAsync(FileInfo configFile)
+    {
+        await using var stream = new FileStream(
+            configFile.FullName,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 4096,
+            useAsync: true);
+        return await XDocument.LoadAsync(stream, LoadOptions.None, CancellationToken.None).ConfigureAwait(false);
     }
 
     public void Dispose()
     {
-        if (!_disposed)
+        if (_disposed)
         {
-            try
-            {
-                if (_configFile.Exists)
-                {
-                    _configFile.Delete();
-                    _configFile.Directory?.Delete(true);
-                }
-            }
-            catch
-            {
-                // Ignore exceptions during cleanup
-            }
+            return;
+        }
 
-            _disposed = true;
+        if (_configFile.DirectoryName is { } directory)
+        {
+            TryDeleteDirectory(directory);
+        }
+
+        _disposed = true;
+    }
+
+    private static void TryDeleteDirectory(string directory)
+    {
+        try
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+        catch
+        {
+            // Temporary configuration cleanup is best effort.
         }
     }
 }

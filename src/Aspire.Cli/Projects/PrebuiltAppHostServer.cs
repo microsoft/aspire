@@ -1,15 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO.Hashing;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Xml;
-using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -30,16 +24,15 @@ namespace Aspire.Cli.Projects;
 /// This is used when running in bundle mode (without .NET SDK) to avoid
 /// dynamic project generation and building.
 /// </summary>
-internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
+internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 {
     // Closure file names are owned by IntegrationClosureBuilder so generated integration
     // projects cannot drift from the post-build reader's MSBuild contract.
     internal const string ClosureManifestFileName = "closure-manifest.txt";
     internal const string IntegrationProjectFileName = "IntegrationRestore.csproj";
 
-    private const string ProjectAssetsFileName = "project.assets.json";
-    private const string RestoreStampFileName = "aspire-restore.stamp";
-
+    internal const string IntegrationHostingVersionPropertyName = "AspireIntegrationHostingVersion";
+    internal const string IntegrationPackageSourcesPropertyName = "AspireIntegrationPackageSources";
     private readonly string _appDirectoryPath;
     private readonly string _socketPath;
     private readonly LayoutConfiguration _layout;
@@ -138,14 +131,14 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         IEnumerable<IntegrationReference> integrations,
         string? requestedChannel = null,
         string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
     {
         var integrationList = integrations.ToList();
         var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
         var projectRefs = integrationList.Where(r => r.IsProjectReference).ToList();
         // Lifted to outer scope so the failure footer reflects the source actually used by
-        // restore — including the auto-discovered local hive resolved by
-        // ResolveLocalPackageSourceOverrideAsync — rather than the unset --source the user
+        // restore, including an auto-discovered local hive, rather than only the --source value
         // originally passed in.
         var effectivePackageSourceOverride = packageSourceOverride;
 
@@ -160,10 +153,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             // with a legacy .aspire/settings.json#channel fallback). This is independent of the
             // running CLI's identity hive (CliExecutionContext.IdentityChannel).
             requestedChannel ??= ResolveRequestedChannel();
-            if (string.IsNullOrWhiteSpace(effectivePackageSourceOverride))
-            {
-                effectivePackageSourceOverride = await ResolveLocalPackageSourceOverrideAsync(requestedChannel, cancellationToken).ConfigureAwait(false);
-            }
 
             if (projectRefs.Count > 0)
             {
@@ -175,25 +164,39 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                         $"Project references in settings.json require .NET SDK {minimumRequired} or later. " +
                         "Install the .NET SDK from https://dotnet.microsoft.com/download or use NuGet package versions instead.");
                 }
+            }
 
+            IIntegrationRestorePlan? restorePlan = null;
+            if (packageRefs.Count > 0 || projectRefs.Count > 0)
+            {
+                restorePlan = await ResolveIntegrationRestorePlanAsync(
+                    sdkVersion,
+                    requestedChannel,
+                    effectivePackageSourceOverride,
+                    packageSourceOverridePattern,
+                    cancellationToken).ConfigureAwait(false);
+                effectivePackageSourceOverride = restorePlan.EffectivePackageSourceOverride;
+            }
+
+            if (packageRefs.Count > 0)
+            {
+                _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
+                    packageRefs,
+                    restorePlan!,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            if (projectRefs.Count > 0)
+            {
                 using var fileLock = await FileLock.AcquireAsync(_projectReferencePrepareLockPath, cancellationToken).ConfigureAwait(false);
                 _projectLayoutStore.CleanupStagingDirectories();
 
                 var closureManifest = await BuildIntegrationClosureManifestAsync(
                     packageRefs,
                     projectRefs,
-                    requestedChannel,
-                    effectivePackageSourceOverride,
+                    sdkVersion,
+                    restorePlan!,
                     cancellationToken).ConfigureAwait(false);
-
-                if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
-                {
-                    _integrationProbeManifestPath = Path.Combine(_workingDirectory, IntegrationPackageProbeManifest.FileName);
-                    await IntegrationPackageProbeManifest.WriteAsync(
-                        _integrationProbeManifestPath,
-                        closureManifest.CreatePackageProbeManifest(),
-                        cancellationToken).ConfigureAwait(false);
-                }
 
                 _selectedProjectLayout = await _projectLayoutStore.GetOrCreateAsync(closureManifest, cancellationToken).ConfigureAwait(false);
                 if (_selectedProjectLayout is not null)
@@ -205,13 +208,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             }
             else
             {
-                if (packageRefs.Count > 0)
-                {
-                    // NuGet-only — use the bundled NuGet service (no SDK required)
-                    _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
-                        packageRefs, requestedChannel, effectivePackageSourceOverride, cancellationToken);
-                }
-
                 var appSettingsContent = CreateAppSettingsContent(packageRefs, []);
                 await WriteAppSettingsAsync(_workingDirectory, appSettingsContent, cancellationToken).ConfigureAwait(false);
             }
@@ -293,26 +289,28 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     /// </summary>
     private async Task<string> RestoreNuGetPackagesAsync(
         List<IntegrationReference> packageRefs,
-        string? requestedChannel,
-        string? packageSourceOverride,
+        IIntegrationRestorePlan restorePlan,
         CancellationToken cancellationToken)
     {
         _logger.LogDebug("Restoring {Count} integration packages via bundled NuGet", packageRefs.Count);
 
-        var useExactPackageVersions = !string.IsNullOrWhiteSpace(packageSourceOverride);
         var packages = packageRefs
-            .Select(r => (r.Name, Version: GetRestoreVersion(r.Name, r.Version!, useExactPackageVersions)))
+            .Select(r => (r.Name, Version: restorePlan.GetRestoreVersion(r.Name, r.Version!)))
             .ToList();
-        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken);
-        var sources = await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken);
+        using var restoreConfiguration = await restorePlan.CreatePackageRestoreConfigurationAsync(
+            cancellationToken).ConfigureAwait(false);
 
         return await _nugetService.RestorePackagesAsync(
             packages,
             workingDirectory: _appDirectoryPath,
             targetFramework: DotNetBasedAppHostServerProject.TargetFramework,
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
-            sources: sources,
-            nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
+            sources: restoreConfiguration.Sources,
+            nugetConfigPaths: restoreConfiguration.ConfigPaths,
+            nugetSettingsCacheIdentity: restoreConfiguration.SettingsCacheIdentity,
+            nugetConfigOverlayCacheIdentity: restoreConfiguration.OverlayCacheIdentity,
+            additionalSensitiveSources: restoreConfiguration.SensitiveSources,
+            globalPackagesFolderOverride: restoreConfiguration.GlobalPackagesFolder,
             ct: cancellationToken).ConfigureAwait(false);
     }
 
@@ -328,359 +326,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         => GeneratedFileWriter.WriteIfChangedAsync(path, content, cancellationToken);
 
     /// <summary>
-    /// Reads every restore input, returning its fingerprint and whether the closure is eligible
-    /// for a skipped restore at all.
-    /// </summary>
-    /// <remarks>
-    /// The generated project file encodes package identities and versions, project reference paths,
-    /// channel sources, and the synthesized NuGet.config path. Referenced project files are hashed as
-    /// well because restore resolves their dependencies too: a referenced project bumping its own
-    /// Aspire.Hosting version changes the resolved closure without changing a single byte of the
-    /// generated project file.
-    /// <para>
-    /// The whole project-reference graph is walked, not just its first level, because restore
-    /// resolves the graph: a package bump two hops out changes the closure exactly as much as one
-    /// hop out does. Each project's directory-scoped MSBuild imports are hashed with it, since under
-    /// central package management the reference carries no version at all and bumping
-    /// Directory.Packages.props changes what restore resolves while every project file stays
-    /// byte-for-byte identical.
-    /// </para>
-    /// <para>
-    /// Every project in that closure is also scanned for floating versions, because a float anywhere
-    /// in it can resolve to a different package without any local input changing.
-    /// </para>
-    /// </remarks>
-    internal static async Task<RestoreInputs> ComputeRestoreInputsAsync(
-        string projectContent,
-        IReadOnlyList<IntegrationReference> packageRefs,
-        IReadOnlyList<IntegrationReference> projectRefs,
-        CancellationToken cancellationToken)
-    {
-        var hash = new XxHash3();
-        hash.Append(Encoding.UTF8.GetBytes(projectContent));
-
-        var isFloating = HasFloatingPackageVersion(packageRefs);
-
-        var pending = new Queue<string>();
-        // Ordinal rather than a path-aware comparer: a duplicate spelling of the same path costs one
-        // extra read, whereas treating two genuinely different paths as one would drop an input.
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        var closure = new List<string>();
-
-        foreach (var projectRef in projectRefs)
-        {
-            if (projectRef.ProjectPath is { } path)
-            {
-                pending.Enqueue(path);
-            }
-        }
-
-        while (pending.Count > 0)
-        {
-            var projectPath = pending.Dequeue();
-            var normalizedPath = NormalizeProjectPath(projectPath);
-
-            // Terminates on its own rather than hanging the launch: MSBuild rejects a project
-            // reference cycle, but the fingerprint is computed before anything validates the graph.
-            if (!visited.Add(normalizedPath))
-            {
-                continue;
-            }
-
-            closure.Add(normalizedPath);
-
-            foreach (var referenced in ReadProjectReferences(normalizedPath))
-            {
-                pending.Enqueue(referenced);
-            }
-        }
-
-        // Ordering makes the fingerprint independent of the order the graph happened to be walked in.
-        // Hash the path as well as the content so that repointing a reference at a different project
-        // with identical content is still seen as a change.
-        foreach (var projectPath in closure.OrderBy(static path => path, StringComparer.Ordinal))
-        {
-            hash.Append(Encoding.UTF8.GetBytes(projectPath));
-
-            if (!File.Exists(projectPath))
-            {
-                continue;
-            }
-
-            var projectBytes = await File.ReadAllBytesAsync(projectPath, cancellationToken).ConfigureAwait(false);
-            hash.Append(projectBytes);
-
-            if (!isFloating && HasFloatingVersionAttribute(Encoding.UTF8.GetString(projectBytes)))
-            {
-                isFloating = true;
-            }
-        }
-
-        foreach (var importPath in FindDirectoryScopedImports(closure).OrderBy(static path => path, StringComparer.Ordinal))
-        {
-            hash.Append(Encoding.UTF8.GetBytes(importPath));
-
-            var importBytes = await File.ReadAllBytesAsync(importPath, cancellationToken).ConfigureAwait(false);
-            hash.Append(importBytes);
-
-            if (!isFloating && HasFloatingVersionAttribute(Encoding.UTF8.GetString(importBytes)))
-            {
-                isFloating = true;
-            }
-        }
-
-        return new RestoreInputs(Convert.ToHexString(hash.GetCurrentHash()), IsEligibleForSkip: !isFloating);
-    }
-
-    /// <summary>
-    /// Resolves a project path to a comparable absolute form so the same project reached by two
-    /// different spellings is hashed once.
-    /// </summary>
-    private static string NormalizeProjectPath(string projectPath)
-    {
-        try
-        {
-            return Path.GetFullPath(projectPath);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            // An unresolvable path is still hashed verbatim: it cannot be read, but the fact that the
-            // closure names it is itself an input, and a later change to a valid path is then seen.
-            return projectPath;
-        }
-    }
-
-    /// <summary>
-    /// Reads the &lt;ProjectReference Include="..." /&gt; paths a project declares, resolved against
-    /// the project's own directory the way MSBuild resolves them.
-    /// </summary>
-    /// <remarks>
-    /// Parsed as XML rather than with a regex because an Include can be spread across attributes and
-    /// whitespace. A project that cannot be read or parsed contributes no references: the file itself
-    /// is still hashed above, so a later fix to it changes the fingerprint.
-    /// </remarks>
-    private static List<string> ReadProjectReferences(string projectPath)
-    {
-        var references = new List<string>();
-
-        if (!File.Exists(projectPath))
-        {
-            return references;
-        }
-
-        XDocument document;
-        try
-        {
-            using var stream = File.OpenRead(projectPath);
-            // DTD processing stays off: these files are inputs from the user's checkout and an
-            // external entity must never be fetched while computing a fingerprint.
-            using var reader = XmlReader.Create(stream, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
-            document = XDocument.Load(reader);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or XmlException)
-        {
-            return references;
-        }
-
-        var projectDirectory = Path.GetDirectoryName(projectPath);
-        if (projectDirectory is null)
-        {
-            return references;
-        }
-
-        foreach (var element in document.Descendants().Where(static e => e.Name.LocalName == "ProjectReference"))
-        {
-            var include = element.Attribute("Include")?.Value;
-            if (string.IsNullOrWhiteSpace(include))
-            {
-                continue;
-            }
-
-            // An MSBuild property in the path ($(RepoRoot)/...) cannot be expanded without evaluating
-            // the project, so the reference is skipped rather than hashed under a nonsense path.
-            if (include.Contains("$(", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            references.Add(Path.Combine(projectDirectory, include.Replace('\\', Path.DirectorySeparatorChar)));
-        }
-
-        return references;
-    }
-
-    /// <summary>
-    /// Finds the directory-scoped files MSBuild and NuGet import automatically for the projects in a
-    /// closure, by walking from each project's directory to the root the way they do.
-    /// </summary>
-    /// <remarks>
-    /// These carry version information that never appears in the project file itself - most
-    /// importantly Directory.Packages.props under central package management, where the reference is
-    /// written without a version at all.
-    /// <list type="bullet">
-    /// <item>https://learn.microsoft.com/nuget/consume-packages/central-package-management</item>
-    /// <item>https://learn.microsoft.com/visualstudio/msbuild/customize-by-directory</item>
-    /// </list>
-    /// </remarks>
-    private static HashSet<string> FindDirectoryScopedImports(IReadOnlyList<string> closure)
-    {
-        var imports = new HashSet<string>(StringComparer.Ordinal);
-        var scannedDirectories = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var projectPath in closure)
-        {
-            var directory = Path.GetDirectoryName(projectPath);
-
-            while (directory is not null && scannedDirectories.Add(directory))
-            {
-                foreach (var fileName in s_directoryScopedImportFileNames)
-                {
-                    var candidate = Path.Combine(directory, fileName);
-                    if (File.Exists(candidate))
-                    {
-                        imports.Add(candidate);
-                    }
-                }
-
-                directory = Path.GetDirectoryName(directory);
-            }
-        }
-
-        return imports;
-    }
-
-    // NuGet.config is matched case-insensitively by NuGet itself, but the two spellings below are the
-    // ones it documents and the ones repositories actually use.
-    private static readonly string[] s_directoryScopedImportFileNames =
-    [
-        "Directory.Packages.props",
-        "Directory.Build.props",
-        "Directory.Build.targets",
-        "NuGet.config",
-        "nuget.config"
-    ];
-
-    /// <summary>
-    /// The restore inputs for one integration closure.
-    /// </summary>
-    /// <param name="Fingerprint">Identifies the exact set of inputs the restore reads.</param>
-    /// <param name="IsEligibleForSkip">
-    /// Whether an unchanged fingerprint is enough to prove the resolved closure is unchanged.
-    /// </param>
-    internal readonly record struct RestoreInputs(string Fingerprint, bool IsEligibleForSkip);
-
-    /// <summary>
-    /// Returns <see langword="true" /> when a project file declares a package version that NuGet
-    /// resolves against the feed rather than pinning exactly.
-    /// </summary>
-    /// <remarks>
-    /// Matches the version attribute of a reference, for example
-    /// <c>&lt;PackageReference Include="Aspire.Hosting" Version="13.4.*" /&gt;</c> or
-    /// <c>VersionOverride="[13.4,14)"</c>. The word boundary keeps unrelated attributes that merely
-    /// end in "Version" (such as <c>ToolsVersion</c>) from matching. A false positive only forces a
-    /// restore, which is the safe direction.
-    /// </remarks>
-    internal static bool HasFloatingVersionAttribute(string projectText)
-        => FloatingVersionAttributeRegex().IsMatch(projectText);
-
-    [GeneratedRegex("""\b(?:VersionOverride|Version)\s*=\s*"[^"]*[*\[(,]""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex FloatingVersionAttributeRegex();
-
-    /// <summary>
-    /// Returns <see langword="true" /> when any package version can resolve to a different package
-    /// without any local input changing, which makes the closure ineligible for a skipped restore.
-    /// </summary>
-    /// <remarks>
-    /// A floating version ("13.4.*") or a range ("[13.4,14)") is resolved by NuGet at restore time
-    /// against the feed, so an unchanged fingerprint does not imply an unchanged closure.
-    /// </remarks>
-    internal static bool HasFloatingPackageVersion(IReadOnlyList<IntegrationReference> packageRefs)
-        => packageRefs.Any(static r => r.Version is { } version && version.AsSpan().ContainsAny(s_floatingVersionChars));
-
-    // '*' is a float, and '[', '(', ',' delimit a version range. An exact version contains none of them.
-    private static readonly SearchValues<char> s_floatingVersionChars = SearchValues.Create("*[(,");
-
-    /// <summary>
-    /// Determines whether the last successful restore already saw this exact set of inputs.
-    /// </summary>
-    /// <remarks>
-    /// The stamp is written only after a restore succeeds, so its presence with a matching
-    /// fingerprint means a complete restore has run for these inputs. This is compared by content
-    /// rather than by timestamp because file modification times are unreliable across coarse
-    /// filesystems, clock skew, and caches that restore mtimes.
-    /// </remarks>
-    internal static bool CanSkipIntegrationRestore(string restoreDir, string expectedFingerprint, ILogger logger)
-    {
-        var assetsPath = Path.Combine(restoreDir, "obj", ProjectAssetsFileName);
-        var stampPath = Path.Combine(restoreDir, "obj", RestoreStampFileName);
-        if (!File.Exists(assetsPath) || !File.Exists(stampPath))
-        {
-            return false;
-        }
-
-        try
-        {
-            return string.Equals(File.ReadAllText(stampPath), expectedFingerprint, StringComparison.Ordinal);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogDebug(ex, "Unable to read the integration restore stamp; restoring.");
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Records that a restore completed successfully for <paramref name="fingerprint" />.
-    /// </summary>
-    private static async Task WriteRestoreStampAsync(string restoreDir, string fingerprint, ILogger logger, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var objDir = Path.Combine(restoreDir, "obj");
-            Directory.CreateDirectory(objDir);
-            await File.WriteAllTextAsync(Path.Combine(objDir, RestoreStampFileName), fingerprint, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A missing stamp only costs a restore on the next launch, so this is not worth failing over.
-            logger.LogDebug(ex, "Unable to write the integration restore stamp.");
-        }
-    }
-
-    /// <summary>
-    /// Returns <see langword="true" /> when a build failure looks like one that restoring would fix.
-    /// </summary>
-    /// <remarks>
-    /// Only a package-resolution failure is worth a second build. Retrying every failure would
-    /// double the cost of an ordinary compile error and would replace its diagnostic with whatever
-    /// the restore attempt produced.
-    /// The restore fingerprint covers this app's own inputs but cannot see the shared global package
-    /// cache, so a `dotnet nuget locals all --clear` (or any cache eviction) leaves the fingerprint
-    /// unchanged while the packages it assumes are gone. Because the stamp is only ever written
-    /// after a successful restore and is never cleared, a no-restore build that fails this way would
-    /// otherwise fail identically on every subsequent run until the user manually deleted obj/.
-    /// Examples of the failures this matches:
-    ///   error NETSDK1004: Assets file '/path/obj/project.assets.json' not found. Run a NuGet package restore.
-    ///   error NETSDK1064: Package Aspire.Hosting.Redis, version 13.5.0 was not found. It might have been deleted since NuGet restore.
-    ///   error NU1101: Unable to find package Aspire.Hosting.Java. No packages exist with this id in source(s): dotnet-public
-    ///   error NU1102: Unable to find package Aspire.Hosting with version (&gt;= 13.6.0-dev)
-    /// </remarks>
-    internal static bool ShouldRetryWithRestore(OutputCollector buildOutput)
-        => buildOutput.GetLines().Any(static l =>
-            l.Line.Contains("NETSDK1004", StringComparison.Ordinal) ||
-            l.Line.Contains("NETSDK1064", StringComparison.Ordinal) ||
-            l.Line.Contains("NU1101", StringComparison.Ordinal) ||
-            l.Line.Contains("NU1102", StringComparison.Ordinal) ||
-            l.Line.Contains(ProjectAssetsFileName, StringComparison.Ordinal));
-
-    /// <summary>
     /// Produces the failure message for a failed integration build, recognizing the one failure
     /// mode that is a configuration problem rather than a build problem.
     /// </summary>
     /// <remarks>
     /// The AppHost server is the CLI itself, so the synthesized project pins Aspire.Hosting to the
-    /// CLI's own version. A project reference that requires a newer Aspire.Hosting cannot be
-    /// satisfied, and NuGet reports it as a downgrade:
+    /// selected AppHost SDK version. A project reference that requires a newer Aspire.Hosting cannot
+    /// be satisfied, and NuGet reports it as a downgrade:
     ///   error NU1605: Warning As Error: Detected package downgrade: Aspire.Hosting from 13.6.0-dev to 13.5.0
     /// The raw output is unusable here because MSBuild localizes it, so the diagnostic is matched on
     /// the error code alone and the actionable explanation is supplied in the CLI's own language.
@@ -701,16 +353,45 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private async Task<(int ExitCode, OutputCollector Output)> BuildIntegrationProjectAsync(
         string projectFilePath,
         bool noRestore,
+        string? globalPackagesFolder,
+        string integrationHostingVersion,
+        string? integrationPackageSources,
+        bool suppressLogging,
+        IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
     {
         var buildOutput = new OutputCollector();
+        // Environment-backed MSBuild properties are visible during NuGet's restore graph
+        // evaluation, including Directory.Packages.props.
+        var environmentVariables = new Dictionary<string, string>
+        {
+            [IntegrationHostingVersionPropertyName] = integrationHostingVersion
+        };
+        if (globalPackagesFolder is not null)
+        {
+            environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = globalPackagesFolder;
+        }
+        if (integrationPackageSources is not null)
+        {
+            environmentVariables[IntegrationPackageSourcesPropertyName] = integrationPackageSources;
+        }
+
         var exitCode = await _dotNetCliRunner.BuildAsync(
             new FileInfo(projectFilePath),
             noRestore,
             new ProcessInvocationOptions
             {
-                StandardOutputCallback = buildOutput.AppendOutput,
-                StandardErrorCallback = buildOutput.AppendError
+                StandardOutputCallback = line =>
+                    buildOutput.AppendOutput(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
+                StandardErrorCallback = line =>
+                    buildOutput.AppendError(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
+                EnvironmentVariableFilter = name =>
+                    string.Equals(name, IntegrationHostingVersionPropertyName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(name, IntegrationPackageSourcesPropertyName, StringComparison.OrdinalIgnoreCase) ||
+                    (globalPackagesFolder is not null &&
+                        string.Equals(name, CliPathHelper.NuGetPackagesEnvironmentVariable, StringComparison.OrdinalIgnoreCase)),
+                EnvironmentVariables = environmentVariables,
+                SuppressLogging = suppressLogging
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -718,39 +399,34 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     }
 
     /// <summary>
-    /// Creates a synthetic .csproj with all package and project references,
-    /// then builds it to get the full transitive DLL closure via CopyLocalLockFileAssemblies.
+    /// Creates a synthetic .csproj with the integration project references,
+    /// then builds it to get their full copied-local closure.
     /// Requires .NET SDK.
     /// </summary>
     private async Task<AppHostServerClosureManifest> BuildIntegrationClosureManifestAsync(
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
-        string? requestedChannel,
-        string? packageSourceOverride,
+        string sdkVersion,
+        IIntegrationRestorePlan restorePlan,
         CancellationToken cancellationToken)
     {
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
-        // Only synthesize a temp NuGet.config (replacing nuget.config discovery via
-        // RestoreConfigFile) when an explicit --source or auto-discovered local channel source
-        // is in play. The explicit-channel-no-override path keeps the user's ambient
-        // nuget.config in place and contributes channel mappings additively via
-        // RestoreAdditionalProjectSources so private/internal feeds the user has configured
-        // remain reachable for non-Aspire transitives during project-ref restore.
-        using var temporaryNuGetConfig = !string.IsNullOrWhiteSpace(packageSourceOverride)
-            ? await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken)
-            : null;
-        var channelSources = temporaryNuGetConfig is null
-            ? await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride: null, cancellationToken)
-            : null;
+        var policyDirectory = IntegrationClosureBuilder.GetAppHostIntegrationPolicyDirectory(
+            new DirectoryInfo(_appDirectoryPath));
+        var restoreConfiguration = await restorePlan.ApplyProjectRestoreConfigurationAsync(
+            policyDirectory,
+            cancellationToken).ConfigureAwait(false);
+        var integrationPackageSources = IntegrationClosureBuilder.CreateRestoreAdditionalProjectSourcesValue(
+            existingValue: null,
+            restoreConfiguration.PackageSourceHints);
+        var intermediateOutputPath = Path.Combine(restoreDir, "obj");
         var projectContent = GenerateIntegrationProjectFile(
-            packageRefs,
             projectRefs,
+            restorePlan.GetRestoreVersion("Aspire.Hosting", sdkVersion),
             restoreDir,
-            channelSources,
-            useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
-            restoreConfigFile: temporaryNuGetConfig?.ConfigFile.FullName);
+            restoreConfiguration.RootAdditionalSources);
         var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
         await WriteIfChangedAsync(projectFilePath, projectContent, cancellationToken);
 
@@ -769,47 +445,34 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         // parent props from affecting the generated project.
         await WriteIfChangedAsync(
             Path.Combine(restoreDir, "Directory.Build.props"),
-            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(restoreDir).ToString(),
+            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
+                restoreDir,
+                intermediateOutputPath,
+                restoreConfiguration.RestoreRootConfigDirectory,
+                globalPackagesFolder: null).ToString(),
             cancellationToken);
 
         // Write empty Directory.Build.targets to prevent parent targets imports.
         await WriteIfChangedAsync(
             Path.Combine(restoreDir, "Directory.Build.targets"), "<Project />", cancellationToken);
 
-        // Restore dominates this build - measured at 5.6s of a 6.7s warm build - and it only needs to
-        // run again when something restore actually reads has changed. That set of inputs is captured
-        // as a content fingerprint rather than a timestamp comparison, and the stamp recording it is
-        // written only after a restore succeeds.
-        //
-        // Skipping restore never skips the build itself, so an edit to a referenced project is still
-        // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
-        // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
-        // restore rather than reported.
-        var restoreInputs = await ComputeRestoreInputsAsync(projectContent, packageRefs, projectRefs, cancellationToken).ConfigureAwait(false);
-        var restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
-        var skipRestore = restoreFingerprint is not null && CanSkipIntegrationRestore(restoreDir, restoreFingerprint, _logger);
+        _logger.LogDebug("Building integration project with {ProjectCount} project references", projectRefs.Count);
 
-        _logger.LogDebug("Building integration project with {PackageCount} packages and {ProjectCount} project references (restore {RestoreState})",
-            packageRefs.Count, projectRefs.Count, skipRestore ? "skipped" : "requested");
-
-        var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(projectFilePath, noRestore: skipRestore, cancellationToken).ConfigureAwait(false);
-        if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
-        {
-            _logger.LogDebug("Integration project build failed on the restore assets; retrying with restore. First attempt output:\n{BuildOutput}",
-                string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line)));
-            (exitCode, buildOutput) = await BuildIntegrationProjectAsync(projectFilePath, noRestore: false, cancellationToken).ConfigureAwait(false);
-        }
+        var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
+            projectFilePath,
+            noRestore: false,
+            restoreConfiguration.GlobalPackagesFolder,
+            integrationHostingVersion: sdkVersion,
+            integrationPackageSources,
+            suppressLogging: restoreConfiguration.SensitiveSources.Length > 0,
+            restoreConfiguration.SensitiveSources,
+            cancellationToken).ConfigureAwait(false);
 
         if (exitCode != 0)
         {
             var outputLines = string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line));
             _logger.LogError("Integration project build failed. Output:\n{BuildOutput}", outputLines);
             throw new AppHostServerPrepareFailedException(GetIntegrationBuildFailureMessage(buildOutput), buildOutput);
-        }
-
-        if (restoreFingerprint is not null && !skipRestore)
-        {
-            await WriteRestoreStampAsync(restoreDir, restoreFingerprint, _logger, cancellationToken).ConfigureAwait(false);
         }
 
         var projectRefAssemblyNames = await IntegrationClosureBuilder.ReadProjectRefAssemblyNamesAsync(
@@ -820,7 +483,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
         var closureManifest = await IntegrationClosureBuilder.ReadClosureManifestAsync(
             restoreDir,
-            Path.Combine(restoreDir, "obj", IntegrationClosureBuilder.ProjectAssetsFileName),
+            Path.Combine(intermediateOutputPath, IntegrationClosureBuilder.ProjectAssetsFileName),
             appSettingsContent,
             ClosureFileMissingBehavior.Throw,
             _logger,
@@ -838,42 +501,26 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     }
 
     /// <summary>
-    /// Generates a synthetic .csproj file that references all integration packages and projects.
-    /// Building this project with CopyLocalLockFileAssemblies produces the full transitive DLL closure.
+    /// Generates a synthetic .csproj file that pins Aspire.Hosting and references the integration projects.
+    /// Building this project with CopyLocalLockFileAssemblies produces their full copied-local closure.
     /// </summary>
     internal static string GenerateIntegrationProjectFile(
-        List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
+        string hostingPackageVersion,
         string restoreDir,
-        IEnumerable<string>? additionalSources = null,
-        bool useExactPackageVersions = false,
-        string? restoreConfigFile = null)
+        IEnumerable<string>? additionalSources = null)
     {
-        IEnumerable<string>? restoreAdditionalSources = additionalSources;
-        if (!string.IsNullOrWhiteSpace(restoreConfigFile))
-        {
-            // RestoreAdditionalProjectSources can add feeds, but it cannot carry package source
-            // mappings. Use the generated NuGet.config so Aspire* packages stay pinned to the
-            // explicit source while non-Aspire dependencies can use fallback sources.
-            restoreAdditionalSources = null;
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostingPackageVersion);
 
         var projectFile = IntegrationClosureBuilder.CreateClosureProjectFile(
             restoreDir,
-            restoreAdditionalSources,
-            restoreConfigFile);
+            additionalSources);
 
-        foreach (var packageReference in packageRefs)
-        {
-            if (packageReference.Version is null)
-            {
-                throw new InvalidOperationException($"Package reference '{packageReference.Name}' is missing a version.");
-            }
-
-            projectFile.PackageReferences.Add(new CSharpPackageReference(
-                packageReference.Name,
-                GetRestoreVersion(packageReference.Name, packageReference.Version, useExactPackageVersions)));
-        }
+        // Keep the pre-existing compatibility check between the AppHost SDK selected by the CLI and
+        // project-referenced integrations. All other integration packages use the package-only path.
+        projectFile.PackageReferences.Add(new CSharpPackageReference(
+            "Aspire.Hosting",
+            hostingPackageVersion));
 
         projectFile.ProjectReferences.AddRange(projectRefs.Select(p => new CSharpProjectReference(
             p.ProjectPath!,
@@ -902,365 +549,24 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         return channelName;
     }
 
-    /// <summary>
-    /// Throws when the caller asked for the staging channel but the running CLI's packaging
-    /// service refuses to synthesize one (daily/local/pr-<c>N</c> identity without
-    /// <c>overrideStagingFeed</c> or the <c>StagingChannelEnabled</c> feature flag). Surfaces
-    /// the same actionable reason the <c>update</c> and <c>new</c> commands display so the
-    /// bundled AppHost restore path doesn't silently downgrade to the daily feed.
-    /// </summary>
-    private void ThrowIfStagingUnavailable(string? requestedChannel)
-    {
-        if (!string.Equals(requestedChannel, PackageChannelNames.Staging, StringComparisons.ChannelName))
-        {
-            return;
-        }
-
-        var reason = _packagingService.GetStagingChannelUnavailableReason();
-        if (reason is not null)
-        {
-            throw new InvalidOperationException(reason);
-        }
-    }
-
-    /// <summary>
-    /// Gets NuGet sources from the resolved channel for bundled restore.
-    /// </summary>
-    internal async Task<IEnumerable<string>?> GetNuGetSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
-    {
-        // Refuse to silently downgrade staging restores to the shared daily feed when the running
-        // CLI cannot synthesize a real staging channel (daily/local/pr-<N>). PackagingService omits
-        // the staging channel in that case; without this check the lookup below falls through to
-        // "all explicit channels" — which on a daily CLI is the shared daily feed — and restore
-        // silently succeeds against the wrong feed. Surfacing the actionable
-        // GetStagingChannelUnavailableReason() mirrors UpdateCommand/NewCommand and closes the
-        // bundled-AppHost arm of https://github.com/microsoft/aspire/issues/16652.
-        ThrowIfStagingUnavailable(requestedChannel);
-
-        var sources = new List<string>();
-
-        if (!string.IsNullOrWhiteSpace(packageSourceOverride))
-        {
-            sources.Add(packageSourceOverride);
-        }
-
-        try
-        {
-            // When --source is set without a specific channel, do NOT fold in every explicit
-            // channel's sources: each built-in channel contributes its own Aspire* feed, and
-            // letting all of them through would give NuGet multiple co-eligible sources for
-            // Aspire packages and silently defeat the override. The temp NuGet.config below
-            // emits PSM that constrains Aspire packages to the override; this list only needs
-            // the override (plus a NuGet.org fallback) for non-Aspire transitives.
-            var channels = !string.IsNullOrWhiteSpace(packageSourceOverride) && string.IsNullOrEmpty(requestedChannel)
-                ? []
-                : await GetExplicitRestoreChannelsAsync(requestedChannel, cancellationToken);
-            var hasOverride = !string.IsNullOrWhiteSpace(packageSourceOverride);
-            var matchedChannelHasAllPackagesMapping = false;
-            foreach (var channel in channels)
-            {
-                if (channel.Mappings is null)
-                {
-                    continue;
-                }
-
-                foreach (var mapping in channel.Mappings)
-                {
-                    // Stay consistent with TryCreateTemporaryNuGetConfigAsync, which drops the
-                    // matched channel's Aspire* mapping in the override branch: the bundled
-                    // restore tool treats `--source` CLI args as co-eligible with config
-                    // mappings, so re-adding the channel's Aspire feed here would silently
-                    // defeat the override even though the temp NuGet.config's PSM tries to
-                    // pin Aspire* to the override exclusively.
-                    if (hasOverride && mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    if (mapping.PackageFilter == PackageMapping.AllPackages)
-                    {
-                        matchedChannelHasAllPackagesMapping = true;
-                    }
-
-                    if (!sources.Contains(mapping.Source, StringComparer.OrdinalIgnoreCase))
-                    {
-                        sources.Add(mapping.Source);
-                    }
-                }
-            }
-
-            // Mirror the temp NuGet.config's catch-all decision: it adds `* -> NuGet.org`
-            // only when the matched channel did not supply its own AllPackages mapping. The
-            // --source argument list must agree so non-Aspire transitives have the same
-            // catch-all source in both views. Honor the runtime nuget service-index
-            // override here too — see docs/specs/cli-identity-sidecar.md.
-            var nugetOrg = _executionContext.NuGetServiceIndexOverride ?? PackageSources.NuGetOrg;
-            if (hasOverride && !matchedChannelHasAllPackagesMapping &&
-                !sources.Contains(nugetOrg, StringComparer.OrdinalIgnoreCase))
-            {
-                sources.Add(nugetOrg);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get package channels, relying on nuget.config and nuget.org fallback");
-        }
-
-        return sources.Count > 0 ? sources : null;
-    }
-
-    internal async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
-    {
-        // Keep staging refusal consistent across both temp-config branches. The project-reference
-        // restore path skips GetNuGetSourcesAsync when a temp config exists, so this method must
-        // surface the actionable staging-unavailable reason before building any override config.
-        ThrowIfStagingUnavailable(requestedChannel);
-
-        if (!string.IsNullOrWhiteSpace(packageSourceOverride))
-        {
-            // Treat an explicit --source value as the preferred source for Aspire packages.
-            // Build a temporary NuGet.config that routes Aspire* there, optionally preserves
-            // non-Aspire channel mappings, and leaves a fallback source for non-Aspire deps.
-            PackageChannel? matchedChannel = null;
-            var configureGlobalPackagesFolder = false;
-
-            try
-            {
-                // Only fold in mappings from an explicitly-requested, matched channel. Falling
-                // back to "all explicit channels" here would pull in every built-in channel's
-                // Aspire* mapping pointing at its own feed; NuGet would treat all of them as
-                // co-eligible sources for Aspire packages and silently defeat the override.
-                if (!string.IsNullOrEmpty(requestedChannel))
-                {
-                    var packageChannels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
-                    matchedChannel = packageChannels.FirstOrDefault(c =>
-                        string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
-                    if (matchedChannel is not null)
-                    {
-                        configureGlobalPackagesFolder |= matchedChannel.ConfigureGlobalPackagesFolder;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to get package channels while creating source override NuGet.config");
-            }
-
-            return await TemporaryNuGetConfig.CreateAsync(
-                PackageSourceOverrideMappings.Create(packageSourceOverride, matchedChannel, _executionContext.NuGetServiceIndexOverride),
-                configureGlobalPackagesFolder,
-                configureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(packageSourceOverride) : null);
-        }
-
-        if (string.IsNullOrEmpty(requestedChannel))
-        {
-            return null;
-        }
-
-        PackageChannel? channel;
-        try
-        {
-            var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
-            channel = channels.FirstOrDefault(c =>
-                c.Type == PackageChannelType.Explicit &&
-                c.Mappings is { Length: > 0 } &&
-                string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            // Mirror the defensive catch in the override branch above and in
-            // ResolveLocalPackageSourceOverrideAsync / GetNuGetSourcesAsync: a transient
-            // packaging-service failure must degrade to the ambient nuget.config + the
-            // caller's separately resolved channel-source list, rather than failing the
-            // whole PrepareAsync. Returning null skips the PSM-bearing temp config; for
-            // non-staging channels the caller still gets channel sources via
-            // GetNuGetSourcesAsync (which catches), and for staging the unavailable-reason
-            // refusal above has already short-circuited before we reach this point.
-            _logger.LogWarning(ex, "Failed to get package channels while creating channel NuGet.config for '{Channel}'.", requestedChannel);
-            return null;
-        }
-
-        if (channel?.Mappings is null)
-        {
-            return null;
-        }
-
-        // Skip PSM only when the resolved channel is the local hive — that hive is a transient
-        // dev-build artifact with no real package mappings, so emitting PSM for it would just
-        // constrain restore to an empty source set. For every other channel (stable, staging,
-        // daily, pr-*) PSM must emit so restore honours the channel's package source mappings —
-        // regardless of which CLI identity (CliExecutionContext.IdentityChannel) is running.
-        // Keying on the resolved channel.Name (rather than the input requestedChannel) is robust
-        // to alias/normalization in the channel lookup above.
-        if (string.Equals(channel.Name, PackageChannelNames.Local, StringComparisons.ChannelName))
-        {
-            return null;
-        }
-
-        // Materializing the temp config is required for explicit channels so that
-        // restore honors the channel's package source mappings. Let IO/XML failures
-        // surface instead of silently falling back to the caller's unmapped sources,
-        // which could otherwise restore from an unintended feed.
-        return await TemporaryNuGetConfig.CreateAsync(
-            channel.Mappings,
-            channel.ConfigureGlobalPackagesFolder,
-            channel.ConfigureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(GetPrimaryFeedUrl(channel.Mappings)) : null);
-    }
-
-    /// <summary>
-    /// Returns the absolute <c>globalPackagesFolder</c> path to write into a temporary NuGet.config
-    /// when the resolved channel asks for per-build cache isolation (today: <c>staging</c>).
-    /// </summary>
-    /// <remarks>
-    /// The default <see cref="NuGetConfigMerger.DefaultGlobalPackagesFolderValue"/> is a relative
-    /// <c>.nugetpackages</c> path that NuGet resolves next to the nuget.config it came from. For
-    /// the <see cref="NuGetConfigMerger"/> workspace-merge flow that's fine — the merged config is
-    /// persistent. For <see cref="PrebuiltAppHostServer"/>'s <see cref="TemporaryNuGetConfig"/>
-    /// the config file lives in a Directory.CreateTempSubdirectory("aspire-nuget-config") folder
-    /// that <see cref="TemporaryNuGetConfig.Dispose"/> recursively deletes after restore. NuGet
-    /// would have just populated <c>&lt;temp&gt;/.nugetpackages/&lt;id&gt;/&lt;version&gt;/</c>
-    /// with the staging assemblies, <see cref="NuGet.BundleNuGetService"/> would have baked those
-    /// paths into <c>integration-package-probe-manifest.json</c>, and aspire-managed would then
-    /// try to load assemblies the dispose just removed — observed as a hang during DI / assembly
-    /// loading on macOS osx-arm64 polyglot staging builds. Anchoring the override at a stable
-    /// per-build location keeps the cached packages alive for as long as any manifest references
-    /// them.
-    ///
-    /// The cache lives under <see cref="CliExecutionContext.AspireHomeDirectory"/> (i.e. the
-    /// <c>ASPIRE_HOME</c> override when set, otherwise <c>~/.aspire</c>) rather than under
-    /// <see cref="_workingDirectory"/> so that two AppHosts running on the same machine against
-    /// the same staging build can share a single restore — the unit of cache isolation here is
-    /// the staging build, not the individual restore command.
-    ///
-    /// The cache subdirectory is keyed by a truncated hash of the resolved feed URL (first 8
-    /// hex chars of <see cref="System.IO.Hashing.XxHash3"/> over the trimmed/lower-cased URL).
-    /// Two staging builds of the same release branch — which share the same stable-shaped semver
-    /// (e.g. <c>13.4.0</c>) but ship from different darc feeds — therefore each get their own
-    /// cache. A user pointing the same CLI at multiple <c>overrideStagingFeed</c> values during
-    /// dev/test also gets a distinct cache per feed, instead of one bucket silently shared across
-    /// feeds. NuGet identifies packages by <c>(id, version)</c> only, so without that per-feed
-    /// key the second feed's restore would silently reuse the first feed's now-stale
-    /// <c>13.4.0</c> assemblies. When <paramref name="feedUrl"/> is null or empty (defensive —
-    /// both call sites currently always pass a real URL) the key falls back to <c>"default"</c>
-    /// so the path is still well-formed.
-    /// </remarks>
-    private string ResolveStableGlobalPackagesFolder(string? feedUrl)
-    {
-        var cacheKey = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl) ?? "default";
-        return Path.Combine(
-            CliPathHelper.GetStagingNuGetPackagesDirectory(_executionContext.AspireHomeDirectory),
-            cacheKey);
-    }
-
-    /// <summary>
-    /// Returns the URL we use as the cache-key input when materializing a temp nuget.config from
-    /// a <see cref="PackageChannel"/>. Prefers the explicit <c>Aspire*</c> mapping (the staging
-    /// channel's primary feed and the one whose restored assemblies actually need cache
-    /// isolation), falling back to the first mapping for forward compatibility with channel
-    /// shapes we don't yet emit.
-    /// </summary>
-    private static string GetPrimaryFeedUrl(PackageMapping[] mappings)
-    {
-        var aspire = mappings.FirstOrDefault(m =>
-            string.Equals(m.PackageFilter, "Aspire*", StringComparison.OrdinalIgnoreCase));
-        return aspire?.Source ?? mappings[0].Source;
-    }
-
-    private async Task<string?> ResolveLocalPackageSourceOverrideAsync(string? requestedChannel, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(requestedChannel))
-        {
-            return null;
-        }
-
-        PackageChannel? channel;
-        try
-        {
-            var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
-            channel = channels.FirstOrDefault(c =>
-                c.Type == PackageChannelType.Explicit &&
-                c.Mappings is { Length: > 0 } &&
-                string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            // A transient packaging-service failure during auto-discovery must not turn
-            // `aspire new` into a hard failure. Returning null falls through to the existing
-            // ambient + channel-sources path, matching the defensive catches in
-            // TryCreateTemporaryNuGetConfigAsync and GetNuGetSourcesAsync.
-            _logger.LogWarning(ex, "Failed to resolve local Aspire package source for channel '{Channel}'.", requestedChannel);
-            return null;
-        }
-
-        var source = channel is null ? null : GetExistingLocalAspirePackageSource(channel);
-
-        if (!string.IsNullOrWhiteSpace(source))
-        {
-            _logger.LogDebug("Using local package source '{Source}' for channel '{Channel}'.", source, requestedChannel);
-        }
-
-        return source;
-    }
-
-    private static string? GetExistingLocalAspirePackageSource(PackageChannel channel)
-    {
-        if (channel.Mappings is null)
-        {
-            return null;
-        }
-
-        foreach (var mapping in channel.Mappings)
-        {
-            if (!IsAspireSpecificMapping(mapping) ||
-                PackageSourceOverrideMappings.GetNormalizedLocalDirectory(mapping.Source) is not { } localDirectory ||
-                !Directory.Exists(localDirectory))
-            {
-                continue;
-            }
-
-            return mapping.Source;
-        }
-
-        return null;
-    }
-
-    private static bool IsAspireSpecificMapping(PackageMapping mapping) =>
-        mapping.PackageFilter != PackageMapping.AllPackages &&
-        mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase);
-
-    private async Task<IEnumerable<PackageChannel>> GetExplicitRestoreChannelsAsync(string? requestedChannel, CancellationToken cancellationToken)
-    {
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
-        if (!string.IsNullOrEmpty(requestedChannel))
-        {
-            var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
-            if (matchingChannel is not null)
-            {
-                return [matchingChannel];
-            }
-        }
-
-        return channels.Where(c => c.Type == PackageChannelType.Explicit).ToArray();
-    }
-
-    private static string GetRestoreVersion(string packageName, string version, bool useExactPackageVersions)
-    {
-        var shouldUseExactAspirePackageVersion = useExactPackageVersions && packageName.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase);
-        if (!shouldUseExactAspirePackageVersion || version.Length == 0 || version[0] is '[' or '(')
-        {
-            return version;
-        }
-
-        return $"[{version}]";
-    }
+    internal Task<IIntegrationRestorePlan> ResolveIntegrationRestorePlanAsync(
+        string sdkVersion,
+        string? requestedChannel,
+        string? packageSourceOverride,
+        string? packageSourceOverridePattern,
+        CancellationToken cancellationToken)
+        => new IntegrationRestorePlanResolver(
+            _packagingService,
+            _nugetService,
+            _executionContext,
+            _logger)
+            .ResolveAsync(
+                _appDirectoryPath,
+                sdkVersion,
+                requestedChannel,
+                packageSourceOverride,
+                packageSourceOverridePattern,
+                cancellationToken);
 
     // Display-safe form of a NuGet source used in user-visible error footers. Delegates to the
     // shared helper so the same redaction is applied wherever sources appear (failure context,

@@ -8,6 +8,18 @@ namespace Aspire.Cli.Tests.Packaging;
 public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public void CredentialBearingSourceOverride_IsRejected()
+    {
+        const string source = "https://user:p#word@host/";
+
+        Assert.True(PackageSourceOverrideMappings.HasCredentialMaterial(source));
+        Assert.Throws<ArgumentException>(() =>
+            PackageSourceOverrideMappings.Create(source, requestedChannel: null, nugetServiceIndexOverride: source));
+        Assert.Throws<ArgumentException>(() =>
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source));
+    }
+
+    [Fact]
     [PlatformSpecific(TestPlatforms.AnyUnix)]
     public void ResolveForWorkingDirectory_RelativePathContainingColon_ResolvesAgainstWorkingDirectory()
     {
@@ -40,6 +52,19 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         var result = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workspace.WorkspaceRoot);
 
         Assert.Equal(source, result);
+    }
+
+    [Fact]
+    public void ResolveForWorkingDirectory_MalformedHttpSource_ReturnsUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string source = "https://user:p#word@packages.example.com/v3/index.json";
+
+        var result = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workspace.WorkspaceRoot);
+
+        Assert.Equal(source, result);
+        Assert.True(PackageSourceOverrideMappings.HasCredentialMaterial(result));
+        Assert.Null(PackageSourceOverrideMappings.GetMissingLocalDirectory(result));
     }
 
     [Fact]
