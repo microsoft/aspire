@@ -8,7 +8,7 @@
     overflow-y: visible !important;
 }
 
-::deep .url-overflow > [behavior="fixed"]:not(.fluent-overflow-more) {
+::deep .url-overflow > [behavior="ellipsis"] {
     flex: 0 1 auto;
     min-width: 0;
     max-width: fit-content;

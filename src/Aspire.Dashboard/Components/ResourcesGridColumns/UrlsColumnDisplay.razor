@@ -14,15 +14,15 @@ else if (DisplayedUrls.Count == 1)
 else if (DisplayedUrls.Count > 1)
 {
     <div class="url-container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-        <FluentOverflow Class="url-overflow" MaxRenderedItems="@MaxRenderedOverflowItems">
+        <FluentOverflow Class="url-overflow" MaxRenderedItems="@MaxRenderedOverflowItems" Threshold="0">
             <ChildContent>
                 @* TODO: Filter the URLs before rendering if resource URL cardinality becomes large enough to cause performance problems. *@
                 @for (var i = 0; i < DisplayedUrls.Count; i++)
                 {
                     var displayedUrl = DisplayedUrls[i];
 
-                    // Always display the first item by setting a fixed value.
-                    <div behavior="@(i == 0 ? "fixed" : null)">
+                    // Keep the first URL visible until the overflow container is too narrow to display it in full.
+                    <div behavior="@(i == 0 ? "ellipsis" : null)">
                         @WriteUrl(displayedUrl)
                     </div>
                 }
@@ -36,7 +36,7 @@ else if (DisplayedUrls.Count > 1)
             </MoreTemplate>
             <OverflowTemplate Context="overflow">
                 @{
-                    // The first URL is fixed, so managed overflow item indexes start at the second URL.
+                    // The first URL uses ellipsis behavior, so managed overflow item indexes start at the second URL.
                     var firstOverflowItem = overflow.ItemsOverflow.FirstOrDefault();
                     var items = firstOverflowItem is null ? [] : DisplayedUrls.Skip(firstOverflowItem.Index + 1);
                 }

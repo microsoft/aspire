@@ -14,6 +14,22 @@
     overflow-y: hidden;
 }
 
+.dimension-overflow-ellipsis {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: fit-content;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dimension-overflow-ellipsis > .dimension-tag {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .filter-value-tag {
     cursor: pointer;
     user-select: none;

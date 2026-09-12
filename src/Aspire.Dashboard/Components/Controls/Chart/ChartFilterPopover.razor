@@ -20,9 +20,10 @@
 @* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
 <FluentPopover AnchorId="@id" @bind-Opened="Filter.PopupVisible" Class="content-list-popover chart-filter-popover">
     <strong>@Filter.Name</strong>
-    <div>
+    <div class="dimension-popup-container">
         <FluentStack Orientation="Orientation.Vertical" Class="content-list-popover-items dimension-popup">
             <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
+                            Class="aspire-checkbox"
                             ThreeState="true"
                             ShowIndeterminate="false"
                             ThreeStateOrderUncheckToIntermediate="true"
@@ -33,6 +34,7 @@
             {
                 var isChecked = Filter.SelectedValues.Contains(tag);
                 <FluentCheckbox Label="@tag.Text"
+                                Class="aspire-checkbox"
                                 title="@tag.Text"
                                 @key=tag
                                 @bind-Value:get="isChecked"

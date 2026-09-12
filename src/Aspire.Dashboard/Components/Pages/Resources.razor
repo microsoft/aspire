@@ -67,15 +67,17 @@
         </ToolbarSection>
 
         <MainSection>
-            <FluentPopover AnchorId="resourceFilterButton"
-                           @bind-Opened="_isFilterPopupVisible"
-                           Class="resources-filter-popup">
-                <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
-                                 ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
-                                 ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
-                                 OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
-                                 OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
-            </FluentPopover>
+            <div class="resources-filter-popup-container">
+                <FluentPopover AnchorId="resourceFilterButton"
+                               @bind-Opened="_isFilterPopupVisible"
+                               Class="resources-filter-popup">
+                    <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
+                                     ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
+                                     ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
+                                     OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
+                                     OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
+                </FluentPopover>
+            </div>
 
             <SummaryDetailsView DetailsTitle="@(PageViewModel.SelectedResource != null ? $"{PageViewModel.SelectedResource.ResourceType}: {GetResourceName(PageViewModel.SelectedResource)}" : null)"
                                 ShowDetails="@showDetailsView"

@@ -33,10 +33,13 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         });
 
         // Assert
-    var overflow = cut.Find("fluent-overflow");
+        var overflow = cut.Find("fluent-overflow");
         var overflowItems = cut.FindAll("fluent-overflow > div:not(.fluent-overflow-more)");
-    Assert.Equal("20", overflow.GetAttribute("max-rendered-items"));
-    Assert.Equal(totalUrls, overflowItems.Count);
+        Assert.Equal("20", overflow.GetAttribute("max-rendered-items"));
+        Assert.Equal("0", overflow.GetAttribute("threshold"));
+        Assert.Equal("ellipsis", overflowItems[0].GetAttribute("behavior"));
+        Assert.All(overflowItems.Skip(1), item => Assert.Null(item.GetAttribute("behavior")));
+        Assert.Equal(totalUrls, overflowItems.Count);
     }
 
     [Fact]
