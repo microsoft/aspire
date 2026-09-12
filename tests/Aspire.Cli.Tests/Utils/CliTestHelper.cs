@@ -134,6 +134,7 @@ internal static class CliTestHelper
         services.AddSingleton(sp => sp.GetRequiredService<ConsoleEnvironment>().Out);
         services.AddSingleton(options.TimeProvider);
         services.AddSingleton(options.TelemetryFactory);
+        services.AddSingleton<ICIEnvironmentDetector, CIEnvironmentDetector>();
         services.AddSingleton<ProfilingTelemetry>();
         services.AddSingleton(options.ProjectLocatorFactory);
         services.AddSingleton(options.SolutionLocatorFactory);
@@ -533,11 +534,12 @@ internal sealed class CliServiceCollectionTestOptions
         var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
         var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+        var ciEnvironmentDetector = serviceProvider.GetRequiredService<ICIEnvironmentDetector>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
         var environment = serviceProvider.GetRequiredService<IEnvironment>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var logger = serviceProvider.GetRequiredService<ILogger<CertificateService>>();
-        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, environment, executionContext, logger);
+        return new CertificateService(certificateToolRunner, interactiveService, telemetry, ciEnvironmentDetector, hostEnvironment, environment, executionContext, logger);
     };
 
     public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
