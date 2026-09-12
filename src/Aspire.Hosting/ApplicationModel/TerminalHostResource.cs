@@ -30,7 +30,8 @@ internal sealed class TerminalHostResource : ExecutableResource, IResourceWithPa
         ArgumentNullException.ThrowIfNull(parent);
         ArgumentNullException.ThrowIfNull(layout);
 
-        Parent = parent;
+        // The typed parent view may supply terminal capabilities, but the relationship targets its model owner.
+        Parent = parent.GetOwnerOrSelf();
         Layout = layout;
     }
 

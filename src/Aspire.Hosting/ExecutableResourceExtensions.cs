@@ -11,15 +11,17 @@ namespace Aspire.Hosting;
 public static class ExecutableResourceExtensions
 {
     /// <summary>
-    /// Returns an enumerable collection of executable resources from the specified distributed application model.
+    /// Returns executable resources whose effective shape remains an executable for the current AppHost invocation.
     /// </summary>
     /// <param name="model">The distributed application model to retrieve executable resources from.</param>
-    /// <returns>An enumerable collection of executable resources.</returns>
+    /// <returns>An enumerable collection of resources whose effective shape is executable.</returns>
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<ExecutableResource> GetExecutableResources(this DistributedApplicationModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        return model.Resources.OfType<ExecutableResource>();
+        return model.Resources
+            .OfType<ExecutableResource>()
+            .Where(static resource => resource.AsContainer() is null);
     }
 }

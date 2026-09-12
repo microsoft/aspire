@@ -4,7 +4,7 @@
 namespace Aspire.Hosting;
 
 /// <summary>
-/// Excludes a property, method, or type from ATS export when the containing type uses
+/// Excludes a property, method, class, or interface from ATS export when the containing type uses
 /// <see cref="AspireExportAttribute.ExposeProperties"/> or <see cref="AspireExportAttribute.ExposeMethods"/>.
 /// </summary>
 /// <remarks>
@@ -17,8 +17,9 @@ namespace Aspire.Hosting;
 /// implementation details or types that shouldn't be part of the polyglot API.
 /// </para>
 /// <para>
-/// Apply this attribute to a type to suppress all automatic export coverage checks for the
-/// type's members when the type is intentionally not part of the ATS surface.
+/// Apply this attribute to a class to suppress all automatic export coverage checks for the
+/// type's members, or to an interface to keep an implementation contract out of generated
+/// language bindings when it is intentionally not part of the ATS surface.
 /// </para>
 /// </remarks>
 /// <example>
@@ -35,7 +36,7 @@ namespace Aspire.Hosting;
 /// </code>
 /// </example>
 [AttributeUsage(
-    AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method,
+    AttributeTargets.Class | AttributeTargets.Interface | AttributeTargets.Property | AttributeTargets.Method,
     Inherited = false,
     AllowMultiple = false)]
 public sealed class AspireExportIgnoreAttribute : Attribute

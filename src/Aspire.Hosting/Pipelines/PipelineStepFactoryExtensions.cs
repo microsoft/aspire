@@ -114,7 +114,11 @@ public static class PipelineStepFactoryExtensions
         ArgumentException.ThrowIfNullOrEmpty(stepName);
         ArgumentNullException.ThrowIfNull(callback);
 
-        return builder.WithPipelineStepFactory(_ => new PipelineStep
+        // Capture the resource from the factory context rather than builder.Resource. When this is called on a
+        // projection builder the builder's resource is the projection facade, which is not a member of the model;
+        // the factory context always carries the canonical owner the annotation was collected from. The pipeline
+        // only fills in a null Resource, so an eagerly captured facade would survive collection.
+        return builder.WithPipelineStepFactory(context => new PipelineStep
         {
             Name = stepName,
             Description = description,
@@ -122,7 +126,7 @@ public static class PipelineStepFactoryExtensions
             DependsOnSteps = dependsOn is [..] ? [.. dependsOn] : [],
             RequiredBySteps = requiredBy is [..] ? [.. requiredBy] : [],
             Tags = tags is [..] ? [.. tags] : [],
-            Resource = builder.Resource
+            Resource = context.Resource
         });
     }
 

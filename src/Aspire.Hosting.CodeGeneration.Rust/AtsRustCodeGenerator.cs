@@ -468,7 +468,9 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             return;
         }
 
-        var returnType = MapTypeRefToRust(capability.ReturnType, false);
+        var returnType = MapTypeRefToRust(
+            capability.ReturnType,
+            capability.ReturnType is { Category: AtsTypeCategory.Handle, IsNullable: true });
         var hasReturn = capability.ReturnType.TypeId != AtsConstants.Void;
 
         // Build parameter list
@@ -490,7 +492,9 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             {
                 // Handle wrappers are passed by reference
                 var handleTypeName = MapTypeRefToRust(parameter.Type, false);
-                paramType = parameter.IsOptional ? $"Option<&{handleTypeName}>" : $"&{handleTypeName}";
+                paramType = parameter.IsOptional || parameter.Type?.IsNullable == true
+                    ? $"Option<&{handleTypeName}>"
+                    : $"&{handleTypeName}";
             }
             else
             {
@@ -539,6 +543,14 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
                     WriteLine($"        if let Some(ref v) = {paramName} {{");
                     WriteLine($"            args.insert(\"{parameter.Name}\".to_string(), v.handle().to_json());");
                     WriteLine("        }");
+                }
+                else if (parameter.Type?.IsNullable == true)
+                {
+                    WriteLine($"        let value = match {paramName} {{");
+                    WriteLine("            Some(v) => v.handle().to_json(),");
+                    WriteLine("            None => Value::Null,");
+                    WriteLine("        };");
+                    WriteLine($"        args.insert(\"{parameter.Name}\".to_string(), value);");
                 }
                 else
                 {
@@ -603,8 +615,19 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             if (IsHandleType(returnTypeRef))
             {
                 var wrappedType = MapHandleType(returnTypeRef.TypeId);
-                WriteLine($"        let handle: Handle = serde_json::from_value(result)?;");
-                WriteLine($"        Ok({wrappedType}::new(handle, self.client.clone()))");
+                if (returnTypeRef!.IsNullable == true)
+                {
+                    WriteLine("        if result.is_null() {");
+                    WriteLine("            return Ok(None);");
+                    WriteLine("        }");
+                    WriteLine("        let handle: Handle = serde_json::from_value(result)?;");
+                    WriteLine($"        Ok(Some({wrappedType}::new(handle, self.client.clone())))");
+                }
+                else
+                {
+                    WriteLine("        let handle: Handle = serde_json::from_value(result)?;");
+                    WriteLine($"        Ok({wrappedType}::new(handle, self.client.clone()))");
+                }
             }
             else if (returnTypeRef?.TypeId == AtsConstants.CancellationToken)
             {

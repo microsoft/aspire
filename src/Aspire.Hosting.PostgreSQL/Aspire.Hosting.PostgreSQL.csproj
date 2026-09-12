@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.PostgreSQL" />
     <InternalsVisibleTo Include="Aspire.Hosting.PostgreSQL.Tests" />
   </ItemGroup>
 

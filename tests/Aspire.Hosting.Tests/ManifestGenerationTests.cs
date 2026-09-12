@@ -7,6 +7,7 @@ using System.Text.Json;
 using Aspire.Components.Common.TestUtilities;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Postgres;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Redis;
 using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Utils;
@@ -109,6 +110,39 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
             }
             """;
         Assert.Equal(expectedManifest, redisManifest.ToString());
+    }
+
+    [Fact]
+    public async Task ProjectedContainerManifestValueProvidersReceiveOwnerAsCaller()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var argument = new CallerCapturingValueProvider("argument");
+        var environmentVariable = new CallerCapturingValueProvider("value");
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsDockerFile()
+            .WithArgs(argument)
+            .WithEnvironment(context => context.EnvironmentVariables["SETTING"] = environmentVariable);
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var executionContext = new DistributedApplicationExecutionContext(
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+            {
+                Services = services
+            });
+        using var stream = new MemoryStream();
+        using var writer = new Utf8JsonWriter(stream);
+        var context = new ManifestPublishingContext(
+            executionContext,
+            Path.Combine(Environment.CurrentDirectory, "manifest.json"),
+            writer);
+        var container = Assert.IsAssignableFrom<ContainerResource>(executable.Resource.AsContainer());
+
+        writer.WriteStartObject();
+        await context.WriteCommandLineArgumentsAsync(container);
+        await context.WriteEnvironmentVariablesAsync(container);
+        writer.WriteEndObject();
+
+        Assert.Same(executable.Resource, argument.Caller);
+        Assert.Same(executable.Resource, environmentVariable.Caller);
     }
 
     [Fact]
@@ -722,5 +756,19 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
         return builder;
+    }
+
+    private sealed class CallerCapturingValueProvider(string value) : IValueProvider
+    {
+        public IResource? Caller { get; private set; }
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<string?>(value);
+
+        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
+        {
+            Caller = context.Caller;
+            return ValueTask.FromResult<string?>(value);
+        }
     }
 }

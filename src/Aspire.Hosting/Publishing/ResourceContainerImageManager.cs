@@ -260,7 +260,7 @@ internal sealed class ResourceContainerImageManager(
             logger.LogDebug("{ContainerRuntimeName} is healthy", containerRuntime.Name);
         }
 
-        if (resource is ProjectResource)
+        if (resource is ProjectResource && resource.AsContainer() is null)
         {
             // If it is a project resource we need to build the container image
             // using the .NET SDK.

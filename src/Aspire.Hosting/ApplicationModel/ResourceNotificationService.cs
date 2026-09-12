@@ -827,6 +827,9 @@ public class ResourceNotificationService : IDisposable
     /// </remarks>
     public Task PublishUpdateAsync(IResource resource, string resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
     {
+        // Projection builders expose typed facades to callbacks, but notification state is registered
+        // against the canonical model resource.
+        resource = resource.GetOwnerOrSelf();
         var notificationState = GetResourceNotificationState(resourceId, resource);
         if (notificationState.Resource != resource)
         {
@@ -1228,6 +1231,7 @@ public class ResourceNotificationService : IDisposable
     /// </remarks>
     public async Task PublishUpdateAsync(IResource resource, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
     {
+        resource = resource.GetOwnerOrSelf();
         var resourceNames = resource.GetResolvedResourceNames();
         foreach (var resourceName in resourceNames)
         {

@@ -178,9 +178,8 @@ public static class GoHostingExtensions
                     var buildImage = baseImageAnnotation?.BuildImage ?? $"golang:{goVersion}-alpine";
                     var runtimeImage = baseImageAnnotation?.RuntimeImage ?? "alpine:latest";
 
-                    // packagePath comes from the AddGoApp closure — ctx.Resource is the
-                    // ContainerResource created by PublishAsDockerFile and does not carry
-                    // the GoPackagePathAnnotation from the original GoAppResource.
+                    // packagePath comes from the AddGoApp closure because it selects the package used
+                    // to generate this projection, independent of later annotation changes.
                     var binaryName = ctx.Resource.Name;
                     var buildCmd = BuildDockerGoCommand(ctx.Resource, packagePath, binaryName);
                     var hasGoMod = File.Exists(Path.Combine(appDirectory, "go.mod"));

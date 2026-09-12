@@ -6,6 +6,7 @@
 
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.UserSecrets;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
@@ -82,5 +83,30 @@ public class PersistentContainerWarningTests(ITestOutputHelper testOutputHelper)
         await BuiltInDistributedApplicationEventSubscriptionHandlers.WarnPersistentContainersWithoutUserSecrets(beforeStartEvent, CancellationToken.None);
 
         Assert.DoesNotContain(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task PersistentProjectedContainerWithoutUserSecrets_LogsWarning()
+    {
+        var testSink = new TestSink();
+        var services = new ServiceCollection();
+        services.AddSingleton<IUserSecretsManager>(NoopUserSecretsManager.Instance);
+        services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+        services.AddLogging(logging => logging.AddXunit(testOutputHelper));
+        using var serviceProvider = services.BuildServiceProvider();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(DistributedApplicationOperation.Run, _ => { })
+            .WithPersistentLifetime();
+        var model = new DistributedApplicationModel(builder.Resources);
+        var beforeStartEvent = new BeforeStartEvent(serviceProvider, model);
+
+        await BuiltInDistributedApplicationEventSubscriptionHandlers.WarnPersistentContainersWithoutUserSecrets(
+            beforeStartEvent,
+            CancellationToken.None);
+
+        Assert.Contains(
+            testSink.Writes,
+            write => write.LogLevel == LogLevel.Warning && write.Message?.Contains(executable.Resource.Name) == true);
     }
 }

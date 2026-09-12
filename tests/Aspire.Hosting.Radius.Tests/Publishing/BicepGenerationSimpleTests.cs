@@ -174,6 +174,48 @@ public class BicepGenerationSimpleTests
     }
 
     [Fact]
+    public void GenerateBicep_ProjectedProjectGeneratesContainerCompute()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var env = builder.AddRadiusEnvironment("myenv");
+        builder.AddProject<TestProjectMetadata>("webapp")
+            .PublishAsDockerFile();
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        RadiusTestHelper.AttachDeploymentTargets(env.Resource, model);
+        var context = new RadiusBicepPublishingContext(env.Resource);
+        var bicep = context.GenerateBicep(model);
+
+        Assert.Contains("Radius.Compute/containers@2025-08-01-preview", bicep);
+        Assert.Contains("name: 'webapp'", bicep);
+        Assert.Contains("image: 'webapp:latest'", bicep);
+    }
+
+    [Fact]
+    public void GenerateBicep_ProjectionImageTakesPrecedenceOverLegacyImageAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var env = builder.AddRadiusEnvironment("myenv");
+        builder.AddProject<TestProjectMetadata>("webapp")
+            .WithAnnotation(new ContainerImageAnnotation
+            {
+                Image = "legacy",
+                Tag = "latest"
+            })
+            .PublishAsDockerFile(container => container.WithImage("projected", "v2"));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        RadiusTestHelper.AttachDeploymentTargets(env.Resource, model);
+        var context = new RadiusBicepPublishingContext(env.Resource);
+        var bicep = context.GenerateBicep(model);
+
+        Assert.Contains("image: 'projected:v2'", bicep);
+        Assert.DoesNotContain("image: 'legacy:latest'", bicep);
+    }
+
+    [Fact]
     public void EnvironmentResource_HasPipelineStepAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -191,7 +233,7 @@ public class BicepGenerationSimpleTests
 
     private sealed class TestProjectMetadata : IProjectMetadata
     {
-        public string ProjectPath => "testproject";
+        public string ProjectPath => "testproject/testproject.csproj";
         public LaunchSettings LaunchSettings { get; } = new();
     }
 }

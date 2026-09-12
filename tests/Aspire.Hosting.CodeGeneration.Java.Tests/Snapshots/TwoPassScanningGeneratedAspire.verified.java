@@ -1988,6 +1988,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", (h, c) -> new TestEnvironmentContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", (h, c) -> new TestCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", (h, c) -> new TestMutableCollectionContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext", (h, c) -> new TestHandlePropertyContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", (h, c) -> new TestRedisResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource", (h, c) -> new ITestPromiseCollisionResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise", (h, c) -> new ITestPromiseCollisionResourcePromise(h, c));
@@ -2291,6 +2292,14 @@ public class CSharpAppResource extends ProjectResource {
         }
         getClient().invokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs);
         return this;
+    }
+
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
@@ -3407,6 +3416,29 @@ public class CSharpAppResource extends ProjectResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public CSharpAppResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
         return this;
     }
 
@@ -5433,6 +5465,14 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     public ContainerRegistryResource withRequiredCommand(String command) {
         return withRequiredCommand(command, null);
     }
@@ -5767,6 +5807,29 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    public ContainerRegistryResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ContainerRegistryResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
         return this;
     }
 
@@ -6603,6 +6666,14 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("alias", AspireClient.serializeValue(alias));
         getClient().invokeCapability("Aspire.Hosting/withContainerNetworkAlias", reqArgs);
         return this;
+    }
+
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
@@ -9235,6 +9306,14 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Sets the package identifier for the tool configuration associated with the resource builder. */
     public DotnetToolResource withToolPackage(String packageId) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -10383,6 +10462,29 @@ public class DotnetToolResource extends ExecutableResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    public DotnetToolResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public DotnetToolResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
         return this;
     }
 
@@ -11678,6 +11780,14 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Publishes an executable as a Docker file */
     public ExecutableResource publishAsDockerFile(AspireAction1<ContainerResource> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -12778,6 +12888,29 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ExecutableResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ExecutableResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     public ExecutableResource withTerminal() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -13519,6 +13652,14 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Adds an HTTP health check to the external service for polyglot app hosts. */
     public ExternalServiceResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -13882,6 +14023,29 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    public ExternalServiceResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ExternalServiceResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
         return this;
     }
 
@@ -18317,6 +18481,14 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     public ParameterResource withDescription(String description) {
         return withDescription(description, null);
     }
@@ -18676,6 +18848,29 @@ public class ParameterResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    public ParameterResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ParameterResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
         return this;
     }
 
@@ -19872,6 +20067,14 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public ProjectResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -20986,6 +21189,29 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    public ProjectResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ProjectResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
         return this;
     }
 
@@ -23360,6 +23586,14 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public TestDatabaseResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -25095,6 +25329,123 @@ public class TestEnvironmentContext extends HandleWrapperBase {
 
 }
 
+// ===== aspire/TestHandlePropertyContext.java =====
+// TestHandlePropertyContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TestHandlePropertyContext extends HandleWrapperBase {
+    TestHandlePropertyContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the OptionalResource property */
+    public TestResourceContext optionalResource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource", reqArgs);
+        return (TestResourceContext) result;
+    }
+
+    /** Sets the OptionalResource property */
+    public TestHandlePropertyContext setOptionalResource(TestResourceContext value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalResource", reqArgs);
+        return (TestHandlePropertyContext) result;
+    }
+
+    /** Gets the ReadOnlyOptionalResource property */
+    public TestResourceContext readOnlyOptionalResource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource", reqArgs);
+        return (TestResourceContext) result;
+    }
+
+    /** Gets the RequiredResource property */
+    public TestResourceContext requiredResource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource", reqArgs);
+        return (TestResourceContext) result;
+    }
+
+    /** Sets the RequiredResource property */
+    public TestHandlePropertyContext setRequiredResource(TestResourceContext value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredResource", reqArgs);
+        return (TestHandlePropertyContext) result;
+    }
+
+    /** Gets the ReadOnlyRequiredResource property */
+    public TestResourceContext readOnlyRequiredResource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource", reqArgs);
+        return (TestResourceContext) result;
+    }
+
+    /** Gets the OptionalContext property */
+    public TestEnvironmentContext optionalContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext", reqArgs);
+        return (TestEnvironmentContext) result;
+    }
+
+    /** Sets the OptionalContext property */
+    public TestHandlePropertyContext setOptionalContext(TestEnvironmentContext value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalContext", reqArgs);
+        return (TestHandlePropertyContext) result;
+    }
+
+    /** Gets the ReadOnlyOptionalContext property */
+    public TestEnvironmentContext readOnlyOptionalContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext", reqArgs);
+        return (TestEnvironmentContext) result;
+    }
+
+    /** Gets the RequiredContext property */
+    public TestEnvironmentContext requiredContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext", reqArgs);
+        return (TestEnvironmentContext) result;
+    }
+
+    /** Sets the RequiredContext property */
+    public TestHandlePropertyContext setRequiredContext(TestEnvironmentContext value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredContext", reqArgs);
+        return (TestHandlePropertyContext) result;
+    }
+
+    /** Gets the ReadOnlyRequiredContext property */
+    public TestEnvironmentContext readOnlyRequiredContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext", reqArgs);
+        return (TestEnvironmentContext) result;
+    }
+
+}
+
 // ===== aspire/TestMutableCollectionContext.java =====
 // TestMutableCollectionContext.java - GENERATED CODE - DO NOT EDIT
 
@@ -25573,6 +25924,14 @@ public class TestRedisResource extends ContainerResource {
         reqArgs.put("alias", AspireClient.serializeValue(alias));
         getClient().invokeCapability("Aspire.Hosting/withContainerNetworkAlias", reqArgs);
         return this;
+    }
+
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
@@ -27913,6 +28272,14 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("alias", AspireClient.serializeValue(alias));
         getClient().invokeCapability("Aspire.Hosting/withContainerNetworkAlias", reqArgs);
         return this;
+    }
+
+    /** Gets a resource's effective container. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
@@ -30630,6 +30997,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/TestDatabaseResource.java
 .aspire/modules/aspire/TestDeeplyNestedDto.java
 .aspire/modules/aspire/TestEnvironmentContext.java
+.aspire/modules/aspire/TestHandlePropertyContext.java
 .aspire/modules/aspire/TestMutableCollectionContext.java
 .aspire/modules/aspire/TestNestedDto.java
 .aspire/modules/aspire/TestPersistenceMode.java

@@ -16,7 +16,8 @@ internal class EnvironmentVariablesExecutionConfigurationGatherer : IExecutionCo
         if (resource.TryGetEnvironmentVariables(out var envVarAnnotations))
         {
             var envVars = new Dictionary<string, object>(context.EnvironmentVariables);
-            var callbackContext = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken: cancellationToken)
+            // Projection annotations are shared, but callbacks must identify the canonical model resource.
+            var callbackContext = new EnvironmentCallbackContext(executionContext, resource.GetOwnerOrSelf(), envVars, cancellationToken: cancellationToken)
             {
                 Logger = resourceLogger,
             };

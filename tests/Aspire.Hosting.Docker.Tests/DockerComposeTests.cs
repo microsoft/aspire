@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTIONS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIRECOMPUTE003
 #pragma warning disable ASPIREPIPELINES001
@@ -42,6 +43,23 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         Assert.Same(composeEnv.Resource, container.Resource.GetDeploymentTargetAnnotation()?.ComputeEnvironment);
+    }
+
+    [Fact]
+    public async Task ProjectContainerProjectionUsesConfiguredImage()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var composeEnvironment = builder.AddDockerComposeEnvironment("docker-compose");
+        var project = builder.AddProject<Projects.ServiceA>("api");
+        project.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => new TestContainerProjection(project.Resource),
+            container => container.WithImage("contoso/api", "1.0"));
+
+        var serviceResource = new DockerComposeServiceResource(project.Resource.Name, project.Resource, composeEnvironment.Resource);
+        var service = await serviceResource.BuildComposeServiceAsync();
+
+        Assert.Equal("contoso/api:1.0", service.Image);
     }
 
     [Fact]

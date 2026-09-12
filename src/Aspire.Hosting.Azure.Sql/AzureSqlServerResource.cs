@@ -155,7 +155,8 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
     /// <inheritdoc />
     /// <remarks>This property is not available in polyglot app hosts.</remarks>
     [AspireExportIgnore]
-    public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
+    public override ResourceAnnotationCollection Annotations =>
+        _createdWithInnerResource ? InnerResource!.Annotations : base.Annotations;
 
     /// <summary>
     /// A dictionary where the key is the resource name and the value is the Azure SQL database resource.
@@ -177,10 +178,14 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
 
     internal void SetInnerResource(SqlServerServerResource innerResource)
     {
-        // Copy the annotations to the inner resource before making it the inner resource
-        foreach (var annotation in Annotations)
+        if (!ReferenceEquals(Annotations, innerResource.Annotations))
         {
-            innerResource.Annotations.Add(annotation);
+            // Older AsAzure paths use a distinct inner resource rather than a projection, so they still need the
+            // owner's existing annotations copied before annotation storage switches to that resource.
+            foreach (var annotation in Annotations)
+            {
+                innerResource.Annotations.Add(annotation);
+            }
         }
 
         InnerResource = innerResource;

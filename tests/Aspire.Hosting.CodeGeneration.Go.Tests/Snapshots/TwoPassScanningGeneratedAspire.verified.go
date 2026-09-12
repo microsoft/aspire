@@ -1434,6 +1434,7 @@ func (s *aspireStore) GetFileNameWithContent(filenameTemplate string, sourceFile
 // Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource is the public interface for handle type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
 type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	handleReference
+	AsContainer() ContainerResource
 	AsHttp2Service() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1561,6 +1562,24 @@ type aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource struct {
 // newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle wraps an existing handle as Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
 func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *handle, c *client) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsContainer() ContainerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
+	}
+	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -3661,6 +3680,7 @@ func (s *beforeStartEvent) Services() ServiceProvider {
 // CSharpAppResource is the public interface for handle type CSharpAppResource.
 type CSharpAppResource interface {
 	handleReference
+	AsContainer() ContainerResource
 	AsHttp2Service() CSharpAppResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	DisableForwardedHeaders() CSharpAppResource
@@ -3675,6 +3695,7 @@ type CSharpAppResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) CSharpAppResource
 	PublishAsDockerFile(options ...*PublishAsDockerFileOptions) CSharpAppResource
 	PublishWithContainerFiles(source ResourceWithContainerFiles, destinationPath string) CSharpAppResource
+	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) CSharpAppResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) CSharpAppResource
 	TestWaitFor(dependency Resource) CSharpAppResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) CSharpAppResource
@@ -3771,6 +3792,24 @@ type cSharpAppResource struct {
 // newCSharpAppResourceFromHandle wraps an existing handle as CSharpAppResource.
 func newCSharpAppResourceFromHandle(h *handle, c *client) CSharpAppResource {
 	return &cSharpAppResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *cSharpAppResource) AsContainer() ContainerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
+	}
+	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -4003,6 +4042,33 @@ func (s *cSharpAppResource) PublishWithContainerFiles(source ResourceWithContain
 	reqArgs["source"] = serializeValue(source)
 	reqArgs["destinationPath"] = serializeValue(destinationPath)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishWithContainerFilesFromResource", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+func (s *cSharpAppResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["image"] = serializeValue(image)
+	if len(options) > 0 {
+		merged := &RunAsContainerImageOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				cb(callbackArg[ContainerResource](args, 0))
+				return nil
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6557,6 +6623,7 @@ func (s *containerPortReference) ValueExpression() (string, error) {
 // ContainerRegistryResource is the public interface for handle type ContainerRegistryResource.
 type ContainerRegistryResource interface {
 	handleReference
+	AsContainer() ContainerResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() ContainerRegistryResource
 	ExcludeFromMcp() ContainerRegistryResource
@@ -6565,6 +6632,7 @@ type ContainerRegistryResource interface {
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ContainerRegistryResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ContainerRegistryResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ContainerRegistryResource
+	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ContainerRegistryResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ContainerRegistryResource
 	TestWaitFor(dependency Resource) ContainerRegistryResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ContainerRegistryResource
@@ -6625,6 +6693,24 @@ type containerRegistryResource struct {
 // newContainerRegistryResourceFromHandle wraps an existing handle as ContainerRegistryResource.
 func newContainerRegistryResourceFromHandle(h *handle, c *client) ContainerRegistryResource {
 	return &containerRegistryResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *containerRegistryResource) AsContainer() ContainerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
+	}
+	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
@@ -6756,6 +6842,33 @@ func (s *containerRegistryResource) OnResourceStopped(callback func(arg Resource
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onResourceStopped", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+func (s *containerRegistryResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["image"] = serializeValue(image)
+	if len(options) > 0 {
+		merged := &RunAsContainerImageOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				cb(callbackArg[ContainerResource](args, 0))
+				return nil
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7560,6 +7673,7 @@ func (s *containerRegistryResource) WithValidator(validator func(arg TestResourc
 // ContainerResource is the public interface for handle type ContainerResource.
 type ContainerResource interface {
 	handleReference
+	AsContainer() ContainerResource
 	AsHttp2Service() ContainerResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() ContainerResource
@@ -7686,6 +7800,17 @@ type containerResource struct {
 // newContainerResourceFromHandle wraps an existing handle as ContainerResource.
 func newContainerResourceFromHandle(h *handle, c *client) ContainerResource {
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *containerResource) AsContainer() ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -10669,6 +10794,7 @@ func (s *distributedApplicationModel) FindResourceByName(name string) Resource {
 	reqArgs["name"] = serializeValue(name)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/findResourceByName", reqArgs)
 	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	typed, ok := result.(Resource)
 	if !ok {
 		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/findResourceByName returned unexpected type %T", result))
@@ -11228,6 +11354,7 @@ func (s *dockerfileStage) WorkDir(path string) DockerfileStage {
 // DotnetToolResource is the public interface for handle type DotnetToolResource.
 type DotnetToolResource interface {
 	handleReference
+	AsContainer() ContainerResource
 	AsHttp2Service() DotnetToolResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() DotnetToolResource
@@ -11240,6 +11367,7 @@ type DotnetToolResource interface {
 	OnResourceReady(callback func(arg ResourceReadyEvent)) DotnetToolResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) DotnetToolResource
 	PublishAsDockerFile(configure func(obj ContainerResource)) DotnetToolResource
+	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) DotnetToolResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) DotnetToolResource
 	TestWaitFor(dependency Resource) DotnetToolResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) DotnetToolResource
@@ -11342,6 +11470,24 @@ type dotnetToolResource struct {
 // newDotnetToolResourceFromHandle wraps an existing handle as DotnetToolResource.
 func newDotnetToolResourceFromHandle(h *handle, c *client) DotnetToolResource {
 	return &dotnetToolResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *dotnetToolResource) AsContainer() ContainerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
+	}
+	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -11542,6 +11688,33 @@ func (s *dotnetToolResource) PublishAsDockerFile(configure func(obj ContainerRes
 		reqArgs["configure"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsDockerFile", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+func (s *dotnetToolResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["image"] = serializeValue(image)
+	if len(options) > 0 {
+		merged := &RunAsContainerImageOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				cb(callbackArg[ContainerResource](args, 0))
+				return nil
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14052,6 +14225,7 @@ func (s *eventingSubscriberRegistrationContext) OnBeforeStart(callback func(arg 
 // ExecutableResource is the public interface for handle type ExecutableResource.
 type ExecutableResource interface {
 	handleReference
+	AsContainer() ContainerResource
 	AsHttp2Service() ExecutableResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() ExecutableResource
@@ -14064,6 +14238,7 @@ type ExecutableResource interface {
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ExecutableResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ExecutableResource
 	PublishAsDockerFile(configure func(obj ContainerResource)) ExecutableResource
+	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ExecutableResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ExecutableResource
 	TestWaitFor(dependency Resource) ExecutableResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ExecutableResource
@@ -14160,6 +14335,24 @@ type executableResource struct {
 // newExecutableResourceFromHandle wraps an existing handle as ExecutableResource.
 func newExecutableResourceFromHandle(h *handle, c *client) ExecutableResource {
 	return &executableResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *executableResource) AsContainer() ContainerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
+	}
+	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -14360,6 +14553,33 @@ func (s *executableResource) PublishAsDockerFile(configure func(obj ContainerRes
 		reqArgs["configure"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsDockerFile", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+func (s *executableResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["image"] = serializeValue(image)
+	if len(options) > 0 {
+		merged := &RunAsContainerImageOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				cb(callbackArg[ContainerResource](args, 0))
+				return nil
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -16055,6 +16275,7 @@ func (s *executionConfigurationResult) GetHttpsCertificateData() (*HttpsCertific
 // ExternalServiceResource is the public interface for handle type ExternalServiceResource.
 type ExternalServiceResource interface {
 	handleReference
+	AsContainer() ContainerResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() ExternalServiceResource
 	ExcludeFromMcp() ExternalServiceResource
@@ -16063,6 +16284,7 @@ type ExternalServiceResource interface {
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ExternalServiceResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ExternalServiceResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ExternalServiceResource
+	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ExternalServiceResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ExternalServiceResource
 	TestWaitFor(dependency Resource) ExternalServiceResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ExternalServiceResource
@@ -16124,6 +16346,24 @@ type externalServiceResource struct {
 // newExternalServiceResourceFromHandle wraps an existing handle as ExternalServiceResource.
 func newExternalServiceResourceFromHandle(h *handle, c *client) ExternalServiceResource {
 	return &externalServiceResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *externalServiceResource) AsContainer() ContainerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
+	}
+	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
@@ -16255,6 +16495,33 @@ func (s *externalServiceResource) OnResourceStopped(callback func(arg ResourceSt
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onResourceStopped", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+func (s *externalServiceResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["image"] = serializeValue(image)
+	if len(options) > 0 {
+		merged := &RunAsContainerImageOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				cb(callbackArg[ContainerResource](args, 0))
+				return nil
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18740,6 +19007,7 @@ func (s *loggerFactory) CreateLogger(categoryName string) Logger {
 // ParameterResource is the public interface for handle type ParameterResource.
 type ParameterResource interface {
 	handleReference
+	AsContainer() ContainerResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() ParameterResource
 	ExcludeFromMcp() ParameterResource
@@ -18748,6 +19016,7 @@ type ParameterResource interface {
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ParameterResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ParameterResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ParameterResource
+	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ParameterResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ParameterResource
 	TestWaitFor(dependency Resource) ParameterResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ParameterResource
@@ -18810,6 +19079,24 @@ type parameterResource struct {
 // newParameterResourceFromHandle wraps an existing handle as ParameterResource.
 func newParameterResourceFromHandle(h *handle, c *client) ParameterResource {
 	return &parameterResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *parameterResource) AsContainer() ContainerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
+	}
+	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
@@ -18941,6 +19228,33 @@ func (s *parameterResource) OnResourceStopped(callback func(arg ResourceStoppedE
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onResourceStopped", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+func (s *parameterResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["image"] = serializeValue(image)
+	if len(options) > 0 {
+		merged := &RunAsContainerImageOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				cb(callbackArg[ContainerResource](args, 0))
+				return nil
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20474,6 +20788,7 @@ func (s *progressContext) CancellationToken() (*CancellationToken, error) {
 // ProjectResource is the public interface for handle type ProjectResource.
 type ProjectResource interface {
 	handleReference
+	AsContainer() ContainerResource
 	AsHttp2Service() ProjectResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	DisableForwardedHeaders() ProjectResource
@@ -20488,6 +20803,7 @@ type ProjectResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ProjectResource
 	PublishAsDockerFile(options ...*PublishAsDockerFileOptions) ProjectResource
 	PublishWithContainerFiles(source ResourceWithContainerFiles, destinationPath string) ProjectResource
+	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ProjectResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ProjectResource
 	TestWaitFor(dependency Resource) ProjectResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ProjectResource
@@ -20584,6 +20900,24 @@ type projectResource struct {
 // newProjectResourceFromHandle wraps an existing handle as ProjectResource.
 func newProjectResourceFromHandle(h *handle, c *client) ProjectResource {
 	return &projectResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *projectResource) AsContainer() ContainerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
+	}
+	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -20816,6 +21150,33 @@ func (s *projectResource) PublishWithContainerFiles(source ResourceWithContainer
 	reqArgs["source"] = serializeValue(source)
 	reqArgs["destinationPath"] = serializeValue(destinationPath)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishWithContainerFilesFromResource", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+func (s *projectResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["image"] = serializeValue(image)
+	if len(options) > 0 {
+		merged := &RunAsContainerImageOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				cb(callbackArg[ContainerResource](args, 0))
+				return nil
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23310,20 +23671,19 @@ func (s *resourceUrlsCallbackContext) ExecutionContext() DistributedApplicationE
 
 // GetEndpoint gets an endpoint reference from the associated resource
 func (s *resourceUrlsCallbackContext) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["name"] = serializeValue(name)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/getEndpoint", reqArgs)
-	if err != nil {
-		return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/getEndpoint returned unexpected type %T", result)
-		return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/getEndpoint returned unexpected type %T", result))
+		return nil
 	}
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -23866,6 +24226,7 @@ func (s *testCollectionContext) Metadata() *Dict[string, string] {
 // TestDatabaseResource is the public interface for handle type TestDatabaseResource.
 type TestDatabaseResource interface {
 	handleReference
+	AsContainer() ContainerResource
 	AsHttp2Service() TestDatabaseResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() TestDatabaseResource
@@ -23992,6 +24353,24 @@ type testDatabaseResource struct {
 // newTestDatabaseResourceFromHandle wraps an existing handle as TestDatabaseResource.
 func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResource {
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *testDatabaseResource) AsContainer() ContainerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
+	}
+	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -26014,6 +26393,234 @@ func (s *testEnvironmentContext) SetPriority(value float64) TestEnvironmentConte
 	return s
 }
 
+// TestHandlePropertyContext is the public interface for handle type TestHandlePropertyContext.
+type TestHandlePropertyContext interface {
+	handleReference
+	OptionalContext() TestEnvironmentContext
+	OptionalResource() TestResourceContext
+	ReadOnlyOptionalContext() TestEnvironmentContext
+	ReadOnlyOptionalResource() TestResourceContext
+	ReadOnlyRequiredContext() TestEnvironmentContext
+	ReadOnlyRequiredResource() TestResourceContext
+	RequiredContext() TestEnvironmentContext
+	RequiredResource() TestResourceContext
+	SetOptionalContext(value TestEnvironmentContext) TestHandlePropertyContext
+	SetOptionalResource(value TestResourceContext) TestHandlePropertyContext
+	SetRequiredContext(value TestEnvironmentContext) TestHandlePropertyContext
+	SetRequiredResource(value TestResourceContext) TestHandlePropertyContext
+	Err() error
+}
+
+// testHandlePropertyContext is the unexported impl of TestHandlePropertyContext.
+type testHandlePropertyContext struct {
+	*resourceBuilderBase
+}
+
+// newTestHandlePropertyContextFromHandle wraps an existing handle as TestHandlePropertyContext.
+func newTestHandlePropertyContextFromHandle(h *handle, c *client) TestHandlePropertyContext {
+	return &testHandlePropertyContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// OptionalContext gets the OptionalContext property
+func (s *testHandlePropertyContext) OptionalContext() TestEnvironmentContext {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext returned unexpected type %T", result))
+		return nil
+	}
+	return &testEnvironmentContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// OptionalResource gets the OptionalResource property
+func (s *testHandlePropertyContext) OptionalResource() TestResourceContext {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource returned unexpected type %T", result))
+		return nil
+	}
+	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ReadOnlyOptionalContext gets the ReadOnlyOptionalContext property
+func (s *testHandlePropertyContext) ReadOnlyOptionalContext() TestEnvironmentContext {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext returned unexpected type %T", result))
+		return nil
+	}
+	return &testEnvironmentContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ReadOnlyOptionalResource gets the ReadOnlyOptionalResource property
+func (s *testHandlePropertyContext) ReadOnlyOptionalResource() TestResourceContext {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource returned unexpected type %T", result))
+		return nil
+	}
+	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ReadOnlyRequiredContext gets the ReadOnlyRequiredContext property
+func (s *testHandlePropertyContext) ReadOnlyRequiredContext() TestEnvironmentContext {
+	if s.err != nil { return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext", reqArgs)
+	if err != nil {
+		return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext returned unexpected type %T", result)
+		return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &testEnvironmentContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ReadOnlyRequiredResource gets the ReadOnlyRequiredResource property
+func (s *testHandlePropertyContext) ReadOnlyRequiredResource() TestResourceContext {
+	if s.err != nil { return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource", reqArgs)
+	if err != nil {
+		return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource returned unexpected type %T", result)
+		return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// RequiredContext gets the RequiredContext property
+func (s *testHandlePropertyContext) RequiredContext() TestEnvironmentContext {
+	if s.err != nil { return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext", reqArgs)
+	if err != nil {
+		return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext returned unexpected type %T", result)
+		return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &testEnvironmentContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// RequiredResource gets the RequiredResource property
+func (s *testHandlePropertyContext) RequiredResource() TestResourceContext {
+	if s.err != nil { return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource", reqArgs)
+	if err != nil {
+		return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource returned unexpected type %T", result)
+		return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// SetOptionalContext sets the OptionalContext property
+func (s *testHandlePropertyContext) SetOptionalContext(value TestEnvironmentContext) TestHandlePropertyContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalContext", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetOptionalResource sets the OptionalResource property
+func (s *testHandlePropertyContext) SetOptionalResource(value TestResourceContext) TestHandlePropertyContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalResource", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetRequiredContext sets the RequiredContext property
+func (s *testHandlePropertyContext) SetRequiredContext(value TestEnvironmentContext) TestHandlePropertyContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredContext", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetRequiredResource sets the RequiredResource property
+func (s *testHandlePropertyContext) SetRequiredResource(value TestResourceContext) TestHandlePropertyContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredResource", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // TestMutableCollectionContext is the public interface for handle type TestMutableCollectionContext.
 type TestMutableCollectionContext interface {
 	handleReference
@@ -26125,6 +26732,7 @@ func (s *testMutablePromiseCollisionResource) Value() (string, error) {
 type TestRedisResource interface {
 	handleReference
 	AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource
+	AsContainer() ContainerResource
 	AsHttp2Service() TestRedisResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() TestRedisResource
@@ -26297,6 +26905,24 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 		return &testDatabaseResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// AsContainer gets a resource's effective container.
+func (s *testRedisResource) AsContainer() ContainerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
+	}
+	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -29360,6 +29986,17 @@ func (o *WithHiddenOnCompletionOptions) ToMap() map[string]any {
 	return m
 }
 
+// RunAsContainerImageOptions carries optional parameters for RunAsContainerImage.
+type RunAsContainerImageOptions struct {
+	Configure func(obj ContainerResource) `json:"-"`
+}
+
+func (o *RunAsContainerImageOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	return m
+}
+
 // SetCancellationTokenOptions carries optional parameters for SetCancellationToken.
 type SetCancellationTokenOptions struct {
 	Value *CancellationToken `json:"-"`
@@ -30302,6 +30939,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", func(h *handle, c *client) any {
 		return newTestEnvironmentContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext", func(h *handle, c *client) any {
+		return newTestHandlePropertyContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", func(h *handle, c *client) any {
 		return newTestMutableCollectionContextFromHandle(h, c)

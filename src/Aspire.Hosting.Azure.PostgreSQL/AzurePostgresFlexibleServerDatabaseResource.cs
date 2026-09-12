@@ -69,7 +69,7 @@ public class AzurePostgresFlexibleServerDatabaseResource(string name, string dat
             Parent.BuildJdbcConnectionString(databaseName);
 
     /// <inheritdoc />
-    public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
+    public override ResourceAnnotationCollection Annotations => base.Annotations;
 
     private static string ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)
     {
@@ -79,10 +79,12 @@ public class AzurePostgresFlexibleServerDatabaseResource(string name, string dat
 
     internal void SetInnerResource(PostgresDatabaseResource innerResource)
     {
-        // Copy the annotations to the inner resource before making it the inner resource
-        foreach (var annotation in Annotations)
+        if (!ReferenceEquals(Annotations, innerResource.Annotations))
         {
-            innerResource.Annotations.Add(annotation);
+            foreach (var annotation in Annotations)
+            {
+                innerResource.Annotations.Add(annotation);
+            }
         }
 
         InnerResource = innerResource;

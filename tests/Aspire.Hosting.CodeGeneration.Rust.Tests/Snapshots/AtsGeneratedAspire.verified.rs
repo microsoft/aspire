@@ -956,6 +956,164 @@ impl TestEnvironmentContext {
     }
 }
 
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext
+pub struct TestHandlePropertyContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for TestHandlePropertyContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl TestHandlePropertyContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the OptionalResource property
+    pub fn optional_resource(&self) -> Result<Option<TestResourceContext>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(TestResourceContext::new(handle, self.client.clone())))
+    }
+
+    /// Sets the OptionalResource property
+    pub fn set_optional_resource(&self, value: Option<&TestResourceContext>) -> Result<TestHandlePropertyContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let value = match value {
+            Some(v) => v.handle().to_json(),
+            None => Value::Null,
+        };
+        args.insert("value".to_string(), value);
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalResource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestHandlePropertyContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the ReadOnlyOptionalResource property
+    pub fn read_only_optional_resource(&self) -> Result<Option<TestResourceContext>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(TestResourceContext::new(handle, self.client.clone())))
+    }
+
+    /// Gets the RequiredResource property
+    pub fn required_resource(&self) -> Result<TestResourceContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestResourceContext::new(handle, self.client.clone()))
+    }
+
+    /// Sets the RequiredResource property
+    pub fn set_required_resource(&self, value: &TestResourceContext) -> Result<TestHandlePropertyContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), value.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredResource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestHandlePropertyContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the ReadOnlyRequiredResource property
+    pub fn read_only_required_resource(&self) -> Result<TestResourceContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestResourceContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the OptionalContext property
+    pub fn optional_context(&self) -> Result<Option<TestEnvironmentContext>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(TestEnvironmentContext::new(handle, self.client.clone())))
+    }
+
+    /// Sets the OptionalContext property
+    pub fn set_optional_context(&self, value: Option<&TestEnvironmentContext>) -> Result<TestHandlePropertyContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let value = match value {
+            Some(v) => v.handle().to_json(),
+            None => Value::Null,
+        };
+        args.insert("value".to_string(), value);
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalContext", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestHandlePropertyContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the ReadOnlyOptionalContext property
+    pub fn read_only_optional_context(&self) -> Result<Option<TestEnvironmentContext>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(TestEnvironmentContext::new(handle, self.client.clone())))
+    }
+
+    /// Gets the RequiredContext property
+    pub fn required_context(&self) -> Result<TestEnvironmentContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestEnvironmentContext::new(handle, self.client.clone()))
+    }
+
+    /// Sets the RequiredContext property
+    pub fn set_required_context(&self, value: &TestEnvironmentContext) -> Result<TestHandlePropertyContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), value.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredContext", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestHandlePropertyContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the ReadOnlyRequiredContext property
+    pub fn read_only_required_context(&self) -> Result<TestEnvironmentContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestEnvironmentContext::new(handle, self.client.clone()))
+    }
+}
+
 /// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext
 pub struct TestMutableCollectionContext {
     handle: Handle,

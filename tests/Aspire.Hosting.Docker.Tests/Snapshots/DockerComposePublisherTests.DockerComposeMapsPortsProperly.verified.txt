@@ -1,6 +1,8 @@
 ﻿services:
   service:
     image: "${SERVICE_IMAGE}"
+    entrypoint:
+      - "/app/service"
     environment:
       PORT: "8000"
     expose:

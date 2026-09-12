@@ -56,7 +56,7 @@ public class AzureRedisCacheResource(string name, Action<AzureResourceInfrastruc
     internal RedisResource? InnerResource { get; private set; }
 
     /// <inheritdoc />
-    public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
+    public override ResourceAnnotationCollection Annotations => base.Annotations;
 
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Cache for Redis resource.
@@ -93,10 +93,12 @@ public class AzureRedisCacheResource(string name, Action<AzureResourceInfrastruc
 
     internal void SetInnerResource(RedisResource innerResource)
     {
-        // Copy the annotations to the inner resource before making it the inner resource
-        foreach (var annotation in Annotations)
+        if (!ReferenceEquals(Annotations, innerResource.Annotations))
         {
-            innerResource.Annotations.Add(annotation);
+            foreach (var annotation in Annotations)
+            {
+                innerResource.Annotations.Add(annotation);
+            }
         }
 
         InnerResource = innerResource;

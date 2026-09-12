@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTIONS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIRECOMPUTE003
 #pragma warning disable ASPIREPIPELINES001
@@ -12,6 +13,7 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -1208,6 +1210,25 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         var imageParam = k8sResource.Parameters.Values.SingleOrDefault(p => p.ImageResource is not null);
         Assert.NotNull(imageParam);
         Assert.Same(project.Resource, imageParam.ImageResource);
+    }
+
+    [Fact]
+    public void HelmValue_ImageResource_IsNotSetForProjectedProjectResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var env = builder.AddKubernetesEnvironment("env");
+        var project = builder.AddProject<Projects.ServiceA>("api");
+        project.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => new TestContainerProjection(project.Resource),
+            container => container.WithImage("contoso/api", "1.0"));
+
+        using var app = builder.Build();
+        var k8sResource = new KubernetesResource("api-k8s", project.Resource, env.Resource);
+        var imageName = k8sResource.GetContainerImageName(project.Resource);
+
+        Assert.Equal("contoso/api:1.0", imageName);
+        Assert.Empty(k8sResource.Parameters);
     }
 
     [Fact]

@@ -916,12 +916,14 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
     public void RunAsEmulatorAppliesEmulatorResourceAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
+        AzureServiceBusEmulatorResource? projection = null;
         var serviceBus = builder.AddAzureServiceBus("servicebus")
-                               .RunAsEmulator();
+                               .RunAsEmulator(container => projection = container.Resource);
 
         // Verify that the EmulatorResourceAnnotation is applied
         Assert.True(serviceBus.Resource.IsEmulator());
         Assert.Contains(serviceBus.Resource.Annotations, a => a is EmulatorResourceAnnotation);
+        ProjectionTestHelpers.AssertProjection(serviceBus, Assert.IsType<AzureServiceBusEmulatorResource>(projection));
     }
 
     [Fact]

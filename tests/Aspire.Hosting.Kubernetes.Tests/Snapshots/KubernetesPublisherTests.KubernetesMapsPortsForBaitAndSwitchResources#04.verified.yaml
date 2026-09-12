@@ -1,4 +1,4 @@
----
+﻿---
 apiVersion: "apps/v1"
 kind: "Deployment"
 metadata:
@@ -16,7 +16,9 @@ spec:
         app.kubernetes.io/instance: "{{ .Release.Name }}"
     spec:
       containers:
-        - image: "{{ .Values.parameters.api.api_image }}"
+        - command:
+            - "/app/api"
+          image: "{{ .Values.parameters.api.api_image }}"
           name: "api"
           envFrom:
             - configMapRef:

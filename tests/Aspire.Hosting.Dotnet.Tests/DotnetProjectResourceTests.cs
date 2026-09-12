@@ -188,6 +188,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         });
 
         using var app = builder.Build();
+
         await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecutePipelineAsync(app));
 
         Assert.False(workExecuted);
@@ -333,6 +334,22 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         await Assert.ThrowsAsync<DistributedApplicationException>(
             () => ExecutePipelineAsync(app));
+    }
+
+    [Fact]
+    public async Task DotnetProjectResource_WithRawContainerImageAnnotation_InPublishMode_PipelineThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddResource(new DotnetProjectResource("svc", workspace.Path))
+            .WithAnnotation(new ContainerImageAnnotation { Image = "example" });
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecutePipelineAsync(app));
+
+        AssertUnsupportedPublishMessage(
+            exception,
+            "Resource 'svc' is a DotnetProjectResource.");
     }
 
     [Fact]

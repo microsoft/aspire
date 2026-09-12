@@ -644,12 +644,14 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
     public void RunAsEmulatorAppliesEmulatorResourceAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
+        AzureEventHubsEmulatorResource? projection = null;
         var eventHubs = builder.AddAzureEventHubs("eventhubs")
-                              .RunAsEmulator();
+                              .RunAsEmulator(container => projection = container.Resource);
 
         // Verify that the EmulatorResourceAnnotation is applied
         Assert.True(eventHubs.Resource.IsEmulator());
         Assert.Contains(eventHubs.Resource.Annotations, a => a is EmulatorResourceAnnotation);
+        ProjectionTestHelpers.AssertProjection(eventHubs, Assert.IsType<AzureEventHubsEmulatorResource>(projection));
     }
 
     [Fact]

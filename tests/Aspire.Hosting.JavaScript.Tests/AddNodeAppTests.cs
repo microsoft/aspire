@@ -154,7 +154,7 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
             """.Replace("\r\n", "\n");
         Assert.Equal(expectedDockerfile, dockerfileContents);
 
-        var dockerBuildAnnotation = nodeApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        var dockerBuildAnnotation = nodeApp.GetDockerfileBuildAnnotation();
         Assert.True(dockerBuildAnnotation.HasEntrypoint);
 
         Assert.Empty(nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>());

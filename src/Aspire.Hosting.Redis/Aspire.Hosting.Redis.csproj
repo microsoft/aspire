@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Redis"/>
     <InternalsVisibleTo Include="Aspire.Hosting.Redis.Tests"/>
   </ItemGroup>
   

@@ -334,8 +334,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         builder.AddDockerComposeEnvironment("docker-compose")
             .WithDashboard(false);
 
-        var container = builder.AddExecutable("service", "foo", ".")
-            .PublishAsDockerFile()
+        builder.AddExecutable("service", "foo", ".")
+            .PublishAsDockerFile(container => container.Resource.Entrypoint = "/app/service")
             .WithHttpEndpoint(env: "PORT");
 
         var app = builder.Build();

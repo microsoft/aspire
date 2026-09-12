@@ -260,6 +260,7 @@ public class AzurePostgresExtensionsTests
 
         var postgres = builder.AddAzurePostgresFlexibleServer("postgres-data");
         IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource>? db = null;
+        PostgresServerResource? projection = null;
 
         if (addDatabaseBefore)
         {
@@ -274,6 +275,7 @@ public class AzurePostgresExtensionsTests
 
         postgres.RunAsContainer(c =>
         {
+            projection = c.Resource;
             c.WithAnnotation(new Dummy2Annotation());
         });
 
@@ -305,6 +307,40 @@ public class AzurePostgresExtensionsTests
 
         Assert.True(dbResourceInModel.TryGetAnnotationsOfType<Dummy1Annotation>(out var dbAnnotations));
         Assert.Single(dbAnnotations);
+        Assert.Contains(db!.Resource.Annotations, annotation => annotation is HealthCheckAnnotation);
+        ProjectionTestHelpers.AssertProjection(postgres, Assert.IsType<AzurePostgresFlexibleServerContainerResource>(projection));
+        Assert.Same(db.Resource, dbResourceInModel);
+    }
+
+    [Fact]
+    public async Task RunAsContainerReappliesContainerDefaults()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var postgres = builder.AddAzurePostgresFlexibleServer("postgres").RunAsContainer();
+        var container = Assert.IsAssignableFrom<PostgresServerResource>(postgres.Resource.AsContainer());
+        Assert.True(container.TryGetContainerImageName(out var defaultImage));
+
+        postgres.RunAsContainer(container => container
+            .WithImage("custom")
+            .WithEnvironment("POSTGRES_HOST_AUTH_METHOD", "trust")
+            .WithEnvironment("POSTGRES_PASSWORD", "incorrect"));
+        Assert.True(postgres.Resource.AsContainer()!.TryGetContainerImageName(out var customImage));
+        Assert.Equal("docker.io/custom:latest", customImage);
+
+        postgres.RunAsContainer();
+        Assert.True(postgres.Resource.AsContainer()!.TryGetContainerImageName(out var reappliedImage));
+        Assert.Equal(defaultImage, reappliedImage);
+        container = Assert.IsAssignableFrom<PostgresServerResource>(postgres.Resource.AsContainer());
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            postgres.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance);
+        Assert.Equal("scram-sha-256", environment["POSTGRES_HOST_AUTH_METHOD"]);
+        Assert.Equal(
+            await container.PasswordParameter.GetValueAsync(CancellationToken.None),
+            environment["POSTGRES_PASSWORD"]);
     }
 
     [Fact]

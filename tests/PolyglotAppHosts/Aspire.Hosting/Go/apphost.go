@@ -326,6 +326,11 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	// publishAsDockerFile
 	tool.PublishAsDockerFile(func(_ aspire.ContainerResource) {})
 
+	// runAsContainerImage
+	tool.RunAsContainerImage("contoso/tool:latest", &aspire.RunAsContainerImageOptions{
+		Configure: func(_ aspire.ContainerResource) {},
+	})
+
 	// ===================================================================
 	// Pipeline step factory
 	// ===================================================================

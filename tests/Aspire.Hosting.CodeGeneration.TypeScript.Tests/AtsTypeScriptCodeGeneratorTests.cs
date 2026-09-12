@@ -847,6 +847,48 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal("Union input types must define at least one member type.", ex.Message);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MapInputTypeToTypeScript_PreservesHandleNullability(bool isNullable)
+    {
+        var projector = new TypeScriptApiProjector(CreateContextFromTestAssembly());
+        var types = new[]
+        {
+            typeof(TestResourceContext),
+            typeof(TestEnvironmentContext),
+            typeof(IResourceWithConnectionString),
+            typeof(IDisposable),
+            typeof(ReferenceExpression)
+        };
+        var mappings = types.Select(type =>
+        {
+            var handleType = new AtsTypeRef
+            {
+                TypeId = GetAtsTypeId(type),
+                Category = AtsTypeCategory.Handle,
+                IsInterface = type.IsInterface,
+                IsNullable = isNullable
+            };
+            var unionType = new AtsTypeRef
+            {
+                TypeId = $"string|{handleType.TypeId}",
+                Category = AtsTypeCategory.Union,
+                UnionTypes = [new AtsTypeRef { TypeId = AtsConstants.String, Category = AtsTypeCategory.Primitive }, handleType]
+            };
+
+            return new
+            {
+                Type = type.Name,
+                Input = projector.MapInputTypeToTypeScript(handleType),
+                UnionInput = projector.MapInputTypeToTypeScript(unionType)
+            };
+        }).ToArray();
+
+        await Verify(mappings)
+            .UseParameters(isNullable);
+    }
+
     [Fact]
     public async Task Scanner_BaseTypeHierarchy_IsCollected()
     {
@@ -1493,6 +1535,67 @@ public class AtsTypeScriptCodeGeneratorTests
         // Snapshot for detailed verification
         await Verify(aspireTs, extension: "ts")
             .UseFileName("TwoPassScanningGeneratedAspire");
+    }
+
+    [Fact]
+    public async Task GenerateDistributedApplication_PreservesNullableHandlePropertiesInApiExport()
+    {
+        var context = CreateContextFromTestAssembly();
+        var typeId = GetAtsTypeId(typeof(TestHandlePropertyContext));
+        var getters = context.Capabilities
+            .Where(capability => capability.TargetTypeId == typeId && capability.CapabilityKind == AtsCapabilityKind.PropertyGetter)
+            .ToList();
+
+        var expectedReturnNullability = new Dictionary<string, bool>(StringComparer.Ordinal)
+        {
+            ["optionalResource"] = true,
+            ["readOnlyOptionalResource"] = true,
+            ["requiredResource"] = false,
+            ["readOnlyRequiredResource"] = false,
+            ["optionalContext"] = true,
+            ["readOnlyOptionalContext"] = true,
+            ["requiredContext"] = false,
+            ["readOnlyRequiredContext"] = false,
+        };
+        Assert.Equal(
+            expectedReturnNullability.Keys.Order(StringComparer.Ordinal),
+            getters.Select(getter => getter.MethodName).Order(StringComparer.Ordinal));
+        foreach (var (methodName, isNullable) in expectedReturnNullability)
+        {
+            var getter = Assert.Single(getters, getter => getter.MethodName == methodName);
+            Assert.NotNull(getter.ReturnType);
+            Assert.Equal(AtsTypeCategory.Handle, getter.ReturnType.Category);
+            Assert.Equal(isNullable, getter.ReturnType.IsNullable == true);
+        }
+
+        var setters = context.Capabilities
+            .Where(capability => capability.TargetTypeId == typeId && capability.CapabilityKind == AtsCapabilityKind.PropertySetter)
+            .ToList();
+        var expectedParameterNullability = new Dictionary<string, bool>(StringComparer.Ordinal)
+        {
+            ["setOptionalResource"] = true,
+            ["setRequiredResource"] = false,
+            ["setOptionalContext"] = true,
+            ["setRequiredContext"] = false,
+        };
+        Assert.Equal(
+            expectedParameterNullability.Keys.Order(StringComparer.Ordinal),
+            setters.Select(setter => setter.MethodName).Order(StringComparer.Ordinal));
+        foreach (var (methodName, isNullable) in expectedParameterNullability)
+        {
+            var setter = Assert.Single(setters, setter => setter.MethodName == methodName);
+            var value = Assert.Single(setter.Parameters, parameter => parameter.Name == "value");
+            Assert.NotNull(value.Type);
+            Assert.Equal(AtsTypeCategory.Handle, value.Type.Category);
+            Assert.Equal(isNullable, value.Type.IsNullable == true);
+        }
+
+        var declaration = Assert.Single(
+            ProjectApi(context, ApiExportPackageName).Declarations,
+            declaration => declaration.Content.StartsWith("export interface TestHandlePropertyContext {", StringComparison.Ordinal));
+
+        await Verify(declaration.Content, extension: "ts")
+            .UseFileName("NullableHandlePropertiesApi");
     }
 
     [Fact]

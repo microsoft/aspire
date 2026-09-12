@@ -1677,6 +1677,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", (h, c) -> new TestEnvironmentContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", (h, c) -> new TestCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", (h, c) -> new TestMutableCollectionContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext", (h, c) -> new TestHandlePropertyContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", (h, c) -> new TestRedisResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource", (h, c) -> new ITestPromiseCollisionResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise", (h, c) -> new ITestPromiseCollisionResourcePromise(h, c));
@@ -2970,6 +2971,123 @@ public class TestEnvironmentContext extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
         var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setPriority", reqArgs);
+        return (TestEnvironmentContext) result;
+    }
+
+}
+
+// ===== aspire/TestHandlePropertyContext.java =====
+// TestHandlePropertyContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TestHandlePropertyContext extends HandleWrapperBase {
+    TestHandlePropertyContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the OptionalResource property */
+    public TestResourceContext optionalResource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource", reqArgs);
+        return (TestResourceContext) result;
+    }
+
+    /** Sets the OptionalResource property */
+    public TestHandlePropertyContext setOptionalResource(TestResourceContext value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalResource", reqArgs);
+        return (TestHandlePropertyContext) result;
+    }
+
+    /** Gets the ReadOnlyOptionalResource property */
+    public TestResourceContext readOnlyOptionalResource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource", reqArgs);
+        return (TestResourceContext) result;
+    }
+
+    /** Gets the RequiredResource property */
+    public TestResourceContext requiredResource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource", reqArgs);
+        return (TestResourceContext) result;
+    }
+
+    /** Sets the RequiredResource property */
+    public TestHandlePropertyContext setRequiredResource(TestResourceContext value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredResource", reqArgs);
+        return (TestHandlePropertyContext) result;
+    }
+
+    /** Gets the ReadOnlyRequiredResource property */
+    public TestResourceContext readOnlyRequiredResource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource", reqArgs);
+        return (TestResourceContext) result;
+    }
+
+    /** Gets the OptionalContext property */
+    public TestEnvironmentContext optionalContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext", reqArgs);
+        return (TestEnvironmentContext) result;
+    }
+
+    /** Sets the OptionalContext property */
+    public TestHandlePropertyContext setOptionalContext(TestEnvironmentContext value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalContext", reqArgs);
+        return (TestHandlePropertyContext) result;
+    }
+
+    /** Gets the ReadOnlyOptionalContext property */
+    public TestEnvironmentContext readOnlyOptionalContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext", reqArgs);
+        return (TestEnvironmentContext) result;
+    }
+
+    /** Gets the RequiredContext property */
+    public TestEnvironmentContext requiredContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext", reqArgs);
+        return (TestEnvironmentContext) result;
+    }
+
+    /** Sets the RequiredContext property */
+    public TestHandlePropertyContext setRequiredContext(TestEnvironmentContext value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredContext", reqArgs);
+        return (TestHandlePropertyContext) result;
+    }
+
+    /** Gets the ReadOnlyRequiredContext property */
+    public TestEnvironmentContext readOnlyRequiredContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext", reqArgs);
         return (TestEnvironmentContext) result;
     }
 
@@ -4290,6 +4408,7 @@ public final class WithOptionalStringOptions {
 .aspire/modules/aspire/TestDatabaseResource.java
 .aspire/modules/aspire/TestDeeplyNestedDto.java
 .aspire/modules/aspire/TestEnvironmentContext.java
+.aspire/modules/aspire/TestHandlePropertyContext.java
 .aspire/modules/aspire/TestMutableCollectionContext.java
 .aspire/modules/aspire/TestNestedDto.java
 .aspire/modules/aspire/TestPersistenceMode.java

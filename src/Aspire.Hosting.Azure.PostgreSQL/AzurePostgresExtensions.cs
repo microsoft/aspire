@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTIONS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
@@ -12,6 +13,7 @@ using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.KeyVault;
 using Azure.Provisioning.PostgreSql;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -175,20 +177,15 @@ public static class AzurePostgresExtensions
 
         builder.Resource.AddDatabase(name, databaseName);
 
-        if (azureResource.InnerResource is null)
+        var databaseBuilder = builder.ApplicationBuilder.AddResource(azurePostgresDatabase);
+        if (azureResource.InnerResource is not null)
         {
-            return builder.ApplicationBuilder.AddResource(azurePostgresDatabase);
+            AttachContainerDatabase(
+                builder.ApplicationBuilder.CreateResourceBuilder(azureResource.InnerResource),
+                databaseBuilder);
         }
-        else
-        {
-            // need to add the database to the InnerResource
-            var innerBuilder = builder.ApplicationBuilder.CreateResourceBuilder(azureResource.InnerResource);
-            var innerDb = innerBuilder.AddDatabase(name, databaseName);
-            azurePostgresDatabase.SetInnerResource(innerDb.Resource);
 
-            // create a builder, but don't add the Azure database to the model because the InnerResource already has it
-            return builder.ApplicationBuilder.CreateResourceBuilder(azurePostgresDatabase);
-        }
+        return databaseBuilder;
     }
 
     /// <summary>
@@ -221,56 +218,76 @@ public static class AzurePostgresExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            return builder;
-        }
-
         var azureResource = builder.Resource;
-        var azureDatabases = builder.ApplicationBuilder.Resources
-            .OfType<AzurePostgresFlexibleServerDatabaseResource>()
-            .Where(db => db.Parent == azureResource)
-            .ToDictionary(db => db.Name);
-
-        RemoveAzureResources(builder.ApplicationBuilder, azureResource, azureDatabases);
-
-        var userNameParameterBuilder = azureResource.UserNameParameter is not null ?
-            builder.ApplicationBuilder.CreateResourceBuilder(azureResource.UserNameParameter) :
-            null;
-        var passwordParameterBuilder = azureResource.PasswordParameter is not null ?
-            builder.ApplicationBuilder.CreateResourceBuilder(azureResource.PasswordParameter) :
-            null;
-
-        var postgresContainer = builder.ApplicationBuilder.AddPostgres(
-            azureResource.Name,
-            userNameParameterBuilder,
-            passwordParameterBuilder);
-
-        azureResource.SetInnerResource(postgresContainer.Resource);
-
-        foreach (var database in azureResource.Databases)
-        {
-            if (!azureDatabases.TryGetValue(database.Key, out var existingDb))
+        return builder.WithContainerProjection(
+            DistributedApplicationOperation.Run,
+            () =>
             {
-                throw new InvalidOperationException($"Could not find a {nameof(AzurePostgresFlexibleServerDatabaseResource)} with name {database.Key}.");
-            }
+                var password = azureResource.PasswordParameter ??
+                    ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(
+                        builder.ApplicationBuilder,
+                        $"{azureResource.Name}-password");
+                return new AzurePostgresFlexibleServerContainerResource(
+                    azureResource,
+                    azureResource.UserNameParameter,
+                    password);
+            },
+            container =>
+            {
+                if (!container.Resource.IsConfigured)
+                {
+                    azureResource.SetInnerResource(container.Resource);
+                    container.ConfigurePostgres();
 
-            var innerDb = postgresContainer.AddDatabase(database.Key, database.Value);
-            existingDb.SetInnerResource(innerDb.Resource);
-        }
+                    foreach (var database in builder.ApplicationBuilder.Resources
+                        .OfType<AzurePostgresFlexibleServerDatabaseResource>()
+                        .Where(database => ReferenceEquals(database.Parent, azureResource)))
+                    {
+                        AttachContainerDatabase(
+                            container,
+                            builder.ApplicationBuilder.CreateResourceBuilder(database));
+                    }
 
-        configureContainer?.Invoke(postgresContainer);
+                    container.Resource.IsConfigured = true;
+                }
+                else
+                {
+                    container
+                        .ApplyPostgresContainerDefaults()
+                        .ApplyPostgresEnvironmentDefaults();
+                }
 
-        return builder;
+                configureContainer?.Invoke(container);
+            });
     }
 
-    private static void RemoveAzureResources(IDistributedApplicationBuilder appBuilder, AzurePostgresFlexibleServerResource azureResource, Dictionary<string, AzurePostgresFlexibleServerDatabaseResource> azureDatabases)
+    private static void AttachContainerDatabase(
+        IResourceBuilder<PostgresServerResource> container,
+        IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource> database)
     {
-        appBuilder.Resources.Remove(azureResource);
-        foreach (var database in azureDatabases)
-        {
-            appBuilder.Resources.Remove(database.Value);
-        }
+        var innerDatabase = new AzurePostgresFlexibleServerDatabaseContainerResource(database.Resource, container.Resource);
+        container.Resource.AddDatabase(innerDatabase);
+        database.Resource.SetInnerResource(innerDatabase);
+
+        string? connectionString = null;
+        var healthCheckKey = $"{database.Resource.Name}_check";
+        database.ApplicationBuilder.Services.AddHealthChecks().AddNpgSql(
+            _ => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"),
+            name: healthCheckKey);
+
+        database.ApplicationBuilder.Eventing.Subscribe<ConnectionStringAvailableEvent>(
+            database.Resource,
+            async (@event, ct) =>
+            {
+                connectionString = await database.Resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+
+                if (connectionString is null)
+                {
+                    throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{database.Resource.Name}' resource but the connection string was null.");
+                }
+            });
+
+        database.WithHealthCheck(healthCheckKey);
     }
 
     /// <summary>
