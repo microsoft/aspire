@@ -50,15 +50,26 @@ internal sealed class ResourceTypeMapper
     {
         // Resource types from optional hosting packages - referenced by string name
         // since those packages are not referenced by this project.
+        // Redis and RabbitMQ moved onto their Radius.* UDTs in Radius 0.60: both
+        // kube-recipes/rediscaches and kube-recipes/rabbitmq are published, so the UDT is
+        // deployable and the legacy fallback is gone. Neither recipe is in a stable release yet,
+        // so both are pinned by commit SHA rather than :latest — see s_defaultRecipeTemplates in
+        // RadiusInfrastructureBuilder.
         ["RedisResource"] = new(
             RadiusResourceTypes.RedisCaches,
-            RadiusResourceTypes.RadiusApiVersion,
-            RadiusResourceTypes.LegacyRedisCaches,
-            RadiusResourceTypes.LegacyApiVersion),
-
-        ["SqlServerServerResource"] = new(
-            RadiusResourceTypes.SqlDatabases,
             RadiusResourceTypes.RadiusApiVersion),
+
+        // SQL Server stays on the legacy portable type. The contrib UDT is
+        // Radius.Data/sqlServerDatabases (not sqlDatabases), and its Kubernetes recipe
+        // (kube-recipes/sqlserverdatabases) is not published yet, so emitting the UDT would fail
+        // recipe resolution at deploy time. The legacy type has a published recipe
+        // (recipes/local-dev/sqldatabases) and a listSecrets() action, so the credentials the recipe
+        // generates can still be projected to consumers. Drop the fallback once the UDT recipe ships.
+        ["SqlServerServerResource"] = new(
+            RadiusResourceTypes.SqlServerDatabases,
+            RadiusResourceTypes.RadiusApiVersion,
+            RadiusResourceTypes.LegacySqlDatabases,
+            RadiusResourceTypes.LegacyApiVersion),
 
         ["PostgresServerResource"] = new(
             RadiusResourceTypes.PostgreSqlDatabases,
@@ -71,10 +82,8 @@ internal sealed class ResourceTypeMapper
             RadiusResourceTypes.LegacyApiVersion),
 
         ["RabbitMQServerResource"] = new(
-            RadiusResourceTypes.RabbitMQQueues,
-            RadiusResourceTypes.RadiusApiVersion,
-            RadiusResourceTypes.LegacyRabbitMQQueues,
-            RadiusResourceTypes.LegacyApiVersion),
+            RadiusResourceTypes.RabbitMQ,
+            RadiusResourceTypes.RadiusApiVersion),
 
         // Core hosting types - these are in the Aspire.Hosting package
         ["ContainerResource"] = new(
@@ -85,16 +94,18 @@ internal sealed class ResourceTypeMapper
             RadiusResourceTypes.Containers,
             RadiusResourceTypes.RadiusApiVersion),
 
-        // Dapr types
+        // Dapr types. Radius 0.60 has no Radius.Dapr/* namespace, so unlike the entries above these
+        // are not a UDT-with-legacy-fallback pair — the legacy Applications.Dapr/* portable type is
+        // the only type that exists, and it is mapped directly as the primary type.
+        //
+        // These entries must not be deleted: MapResource falls back to Radius.Compute/containers for
+        // unmapped resources, so removing them would silently publish Dapr building blocks as
+        // containers rather than failing.
         ["DaprStateStoreResource"] = new(
-            RadiusResourceTypes.DaprStateStores,
-            RadiusResourceTypes.RadiusApiVersion,
             RadiusResourceTypes.LegacyDaprStateStores,
             RadiusResourceTypes.LegacyApiVersion),
 
         ["DaprPubSubResource"] = new(
-            RadiusResourceTypes.DaprPubSubBrokers,
-            RadiusResourceTypes.RadiusApiVersion,
             RadiusResourceTypes.LegacyDaprPubSubBrokers,
             RadiusResourceTypes.LegacyApiVersion),
     };
@@ -134,7 +145,7 @@ internal sealed class ResourceTypeMapper
         {
             // If a legacy fallback exists, it means the Radius.* type is not yet fully migrated.
             // Use the legacy type. This is the prototype's expected v1 mapping for several types
-            // (e.g. Redis, MongoDB, RabbitMQ, Dapr), so we log at Information rather than Warning
+            // (e.g. MongoDB, SQL Server), so we log at Information rather than Warning
             // to avoid flooding the dashboard / CI logs with per-resource yellow noise. The README
             // documents which Aspire resources are mapped to legacy vs UDT.
             if (mapping.LegacyFallbackType is not null)
@@ -181,6 +192,44 @@ internal sealed class ResourceTypeMapper
         return s_typeMappings.TryGetValue(key, out var mapping)
             && !string.Equals(mapping.RadiusType, RadiusResourceTypes.Containers, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// The Radius type a backing resource is emitted as — the legacy fallback when one is
+    /// configured, otherwise the <c>Radius.*</c> type — or <see langword="null"/> when
+    /// <paramref name="resource"/> is not a backing resource.
+    /// </summary>
+    /// <remarks>
+    /// Side-effect-free like <see cref="IsBackingResource"/>, so a diagnostic can name the type
+    /// without emitting the per-resource mapping log entries that belong to the publish path.
+    /// </remarks>
+    internal static string? TryGetEmittedBackingType(IResource resource)
+    {
+        var key = GetMappingKey(resource);
+        if (!s_typeMappings.TryGetValue(key, out var mapping) ||
+            string.Equals(mapping.RadiusType, RadiusResourceTypes.Containers, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return mapping.LegacyFallbackType ?? mapping.RadiusType;
+    }
+
+    /// <summary>
+    /// The Radius type each backing-resource mapping actually emits — the legacy fallback when one
+    /// is configured, otherwise the <c>Radius.*</c> type — paired with the mapping key it came from.
+    /// </summary>
+    /// <remarks>
+    /// Exists so <c>RadiusBackingConnections</c>'s schema table can be asserted total over this
+    /// classification. Without that assertion, adding a mapping (or dropping a
+    /// <see cref="RadiusTypeMapping.LegacyFallbackType"/>) would leave the new emitted type without
+    /// a schema, and the publisher would fall back to routing Aspire's locally-generated password
+    /// into the deployed connection string — the defect
+    /// <see href="https://github.com/microsoft/aspire/issues/18935"/> describes.
+    /// </remarks>
+    internal static IEnumerable<(string MappingKey, string EmittedType)> GetEmittedBackingTypes() =>
+        s_typeMappings
+            .Where(static kvp => !string.Equals(kvp.Value.RadiusType, RadiusResourceTypes.Containers, StringComparison.Ordinal))
+            .Select(static kvp => (kvp.Key, kvp.Value.LegacyFallbackType ?? kvp.Value.RadiusType));
 
     /// <summary>
     /// Gets the key used to look up the type mapping. Walks the type hierarchy to find the

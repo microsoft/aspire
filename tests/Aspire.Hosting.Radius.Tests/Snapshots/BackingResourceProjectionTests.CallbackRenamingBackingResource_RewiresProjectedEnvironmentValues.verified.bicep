@@ -1,15 +1,12 @@
 ﻿extension radius
 
-@secure()
-param db_password string
-
 resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
   name: 'default'
   properties: {
     recipes: {
-      'Radius.Data/postgreSqlDatabases': {
+      'Radius.Data/redisCaches': {
         kind: 'bicep'
-        source: 'ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest'
+        source: 'ghcr.io/radius-project/kube-recipes/rediscaches:ebdeec9509036f2b2f271e41661e6fcfe45eda89'
       }
       'Radius.Compute/containers': {
         kind: 'bicep'
@@ -40,14 +37,11 @@ resource app 'Radius.Core/applications@2025-08-01-preview' = {
   }
 }
 
-resource db 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
-  name: 'db'
+resource renamed_cache 'Radius.Data/redisCaches@2025-08-01-preview' = {
+  name: 'cache'
   properties: {
     application: app.id
     environment: myenv.id
-    username: 'postgres'
-    password: db_password
-    database: 'postgres'
   }
 }
 
@@ -57,9 +51,31 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
     containers: {
       api: {
         image: 'myapp/api:latest'
+        env: {
+          ConnectionStrings__cache: {
+            value: '${renamed_cache.properties.host}:${renamed_cache.properties.port},password='
+          }
+          CACHE_HOST: {
+            value: renamed_cache.properties.host
+          }
+          CACHE_PORT: {
+            value: string(renamed_cache.properties.port)
+          }
+          CACHE_PASSWORD: {
+            value: ''
+          }
+          CACHE_URI: {
+            value: 'redis://:@${renamed_cache.properties.host}:${renamed_cache.properties.port}'
+          }
+        }
       }
     }
     application: app.id
     environment: myenv.id
+    connections: {
+      cache: {
+        source: renamed_cache.id
+      }
+    }
   }
 }

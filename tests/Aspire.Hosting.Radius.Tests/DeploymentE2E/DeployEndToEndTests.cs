@@ -60,9 +60,11 @@ public class DeployEndToEndTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddRadiusEnvironment("e2e");
         var redis = builder.AddRedis("cache");
-        var sql = builder.AddSqlServer("sqlserver").AddDatabase("appdb");
+        var postgres = builder.AddPostgres("pg").AddDatabase("appdb");
+        var sql = builder.AddSqlServer("sqlserver").AddDatabase("sqldb");
         builder.AddContainer("api", "myapp/api", "latest")
             .WithReference(redis)
+            .WithReference(postgres)
             .WithReference(sql);
 
         using var app = builder.Build();
@@ -75,11 +77,17 @@ public class DeployEndToEndTests
 
         // Secrets must flow through valueless Bicep `param`s (resolved at deploy time via
         // `rad deploy --parameters`), never embedded as literals. The word "password"
-        // legitimately appears as a parameter *name* (e.g. `param sqlserver_password string`)
+        // legitimately appears as a parameter *name* (e.g. `param pg_password string`)
         // and as an environment-variable reference to that param — that is the secure shape.
         // Assert the invariant precisely rather than banning the substring "password":
         //   * at least one secret is surfaced as a valueless `param ... string` (no default), and
         //   * no secret param carries a hardcoded literal default value.
+        //
+        // Postgres is the resource that carries this assertion: it routes its credential into a
+        // `@secure()` param the recipe reads as a schema property. Redis and SQL Server deliberately
+        // emit no password param — Redis maps to a recipe that provisions no credential at all, and
+        // SQL Server reads its password back from the recipe with `listSecrets()` — so a model
+        // containing only those two would satisfy this test vacuously.
         Assert.Matches(@"(?im)^\s*param\s+\w*password\w*\s+string\s*$", bicep);
         Assert.DoesNotMatch(@"(?i)param\s+\w*password\w*\s+string\s*=", bicep);
         Assert.Contains(".id", bicep);

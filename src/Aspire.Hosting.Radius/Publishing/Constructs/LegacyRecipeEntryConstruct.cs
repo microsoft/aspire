@@ -13,8 +13,9 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// Represents an individual recipe entry nested inside a legacy
 /// <c>Applications.Core/environments</c> <c>properties.recipes</c> block.
 /// Uses the original legacy schema keys <c>templateKind</c> /
-/// <c>templatePath</c> (the new <c>recipeKind</c> / <c>recipeLocation</c> keys
-/// are only valid on <c>Radius.Core/recipePacks</c>).
+/// <c>templatePath</c>, which are unchanged in Radius 0.60. The
+/// <c>Radius.Core/recipePacks</c> keys (<c>kind</c> / <c>source</c> as of 0.60)
+/// do not apply here.
 /// </summary>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class LegacyRecipeEntryConstruct : ProvisionableConstruct

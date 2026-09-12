@@ -5,6 +5,7 @@
 
 using System.Text.Json;
 using Aspire.Hosting.Radius.Publishing;
+using Xunit.Sdk;
 
 namespace Aspire.Hosting.Radius.Tests.Secrets;
 
@@ -36,6 +37,69 @@ public class SealedSecretApplyStepTests
     {
         var args = SealedSecretApplyStep.BuildApplyArgs(null, "app");
         Assert.Equal(new[] { "apply", "-f", "-", "-o", "json", "-n", "app" }, args);
+    }
+
+    /// <summary>
+    /// `rad` has no configuration environment variable — the config is chosen with the global
+    /// `--config` flag — so reading &lt;home&gt;/.rad/config.yaml describes the workspace only when
+    /// `rad` runs with its default config. Asking `rad` instead means the answer comes from the
+    /// same executable, PATH and config the deploy will use, including through a wrapper shim.
+    /// </summary>
+    [Fact]
+    public async Task TryResolve_PrefersTheContextRadItselfReports()
+    {
+        var context = await RadiusWorkspaceKubeContext.TryResolveAsync(
+            (fileName, arguments, _, _) =>
+            {
+                Assert.Equal("rad", fileName);
+                Assert.Equal(["workspace", "show", "--output", "json"], arguments);
+                return Task.FromResult<ProcessRunResult?>(new ProcessRunResult(
+                    0,
+                    """{"name":"default","connection":{"kind":"kubernetes","context":"shimmed-cluster"},"scope":"/planes/radius/local/resourceGroups/default"}"""));
+            },
+            CancellationToken.None);
+
+        Assert.Equal("shimmed-cluster", context);
+    }
+
+    /// <summary>
+    /// Every payload that does not name a kubecontext has to fall through to the config file rather
+    /// than resolve to something invented: a non-kubernetes connection, a failed or missing `rad`,
+    /// and output that is not the expected object at all.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"name":"default","connection":{"kind":"kubernetes","context":"kind-radius"}}""", "kind-radius")]
+    [InlineData("""{"name":"default","connection":{"kind":"kubernetes","context":"  spaced  "}}""", "spaced")]
+    [InlineData("""{"name":"default","connection":{"kind":"kubernetes","context":""}}""", null)]
+    // A workspace that is not backed by a Kubernetes cluster carries no kubecontext.
+    [InlineData("""{"name":"default","connection":{"kind":"other"}}""", null)]
+    [InlineData("""{"name":"default"}""", null)]
+    [InlineData("[]", null)]
+    [InlineData("not json", null)]
+    [InlineData("", null)]
+    public void ParseWorkspaceConnectionContext_ReadsOnlyAKubecontext(string json, string? expected)
+    {
+        Assert.Equal(expected, RadiusWorkspaceKubeContext.ParseWorkspaceConnectionContext(json));
+    }
+
+    /// <summary>
+    /// When `rad` cannot answer, the config file is still read — preserving the previous behavior
+    /// for the ordinary default-config case rather than trading one blind spot for another.
+    /// </summary>
+    [Fact]
+    public async Task TryResolve_WhenRadCannotAnswer_FallsBackToTheConfigFile()
+    {
+        foreach (var unusable in new ProcessRunResult?[] { null, new ProcessRunResult(1, ""), new ProcessRunResult(0, ""), new ProcessRunResult(0, "not json") })
+        {
+            // The real home almost certainly has no rad config in CI, so the fallback resolves to
+            // null. What is being pinned is that the fallback is *reached* rather than the command
+            // result being trusted blindly.
+            var context = await RadiusWorkspaceKubeContext.TryResolveAsync(
+                (_, _, _, _) => Task.FromResult(unusable),
+                CancellationToken.None);
+
+            Assert.Null(context);
+        }
     }
 
     [Fact]
