@@ -47,7 +47,7 @@ paths.
 | `conventions` | `<name>`-capture pattern → target template, emitted only if the derived test exists (existence guard). Additive. Covers a test's own folder and the Hosting/Components integration dirs as a backstop for non-MSBuild files the graph cannot attribute. |
 | `ignore` | globs Layer 2 accounts for with **no** target, so they do not trip the run-all fallback. Link-compiled `src/Shared` / `tests/Shared` / `Components/Common` files are attributed by Layer 1; the curated entries cover only paths that still need an explicit exemption. See [test-trigger-selector-design.md](./test-trigger-selector-design.md) §Layer 2. |
 | `path_rules` | a path glob set → a target set (`test:` / `job:` / a group / `ALL`). The single general path matcher: catch-all-to-`ALL`, convention misses, non-.NET job loose-file triggers, and loose-file reads all live here under comment headers |
-| `affected_project_rules` | an affected **production** project, matched by project-name glob against Layer 1's affected set, → a target set. Matched against production names **only** — affected matrix test projects are excluded, so a test-only change cannot fire production jobs via a glob like `Aspire.Hosting*`. Follows the graph's transitive closure |
+| `affected_project_rules` | an affected **non-matrix** project, matched by project-name glob against Layer 1's affected set, → a target set. Matrix test projects are excluded because Layer 1 already selects them directly; non-matrix support projects can still match broad globs. Follows the graph's transitive closure |
 | `derived_targets` | "if any of these tests is selected, also run these jobs/tests" — a *test-set* relationship, not a file edge |
 | `groups` | named, reusable bundles of `test:`/`job:` targets that expand recursively |
 
@@ -177,17 +177,31 @@ Highlights:
   **both** `job:typescript-api-compat` (baseline diff) and `job:polyglot`,
   because the polyglot playground regenerates and compiles that exported surface
   in every language.
-- **loose-file deps** — `eng/clipack/**`, `eng/winget/**`, `eng/homebrew/**`,
+- **loose-file deps** — `eng/clipack/**`, `eng/dashboardpack/**`,
+  `eng/dcppack/**`, `eng/winget/**`, `eng/homebrew/**`,
   `src/Aspire.ProjectTemplates/**`, `playground/**`, `.github/workflows/**`,
-  and `eng/Bundle.proj`.
+  `eng/Bundle.proj`, and `tools/CreateLayout/**`. Runtime consumers are
+  additive: CLI and extension E2E execute the CLI archive and its Dashboard/DCP
+  payloads, CLI E2E restores the built `Aspire.ProjectTemplates` package,
+  Templates.Tests generates AppHosts that consume the Linux and Windows
+  Dashboard/DCP packages, extension E2E copies `playground/JavaSpringBoot/**`,
+  and the repository-root `.gitignore` controls whether that Java AppHost is
+  discoverable. The `.gitignore` invariant is covered by a focused
+  `Infrastructure.Tests` guard instead of the expensive extension E2E matrix.
+  Dedicated package-input directories use broad `/**` rules when enumerating
+  files or RIDs would let a newly added input silently miss its consumers.
 
 ### Project rules (`affected_project_rules`)
 
-An affected **production** project → a target set, matched by project-**name**
+An affected **non-matrix** project → a target set, matched by project-**name**
 glob against Layer 1's affected set. Matrix test projects are handled by the
-Layer 1 intersection.
+Layer 1 intersection and excluded here. Non-matrix test-support projects can
+still match broad globs. Narrow those matches for expensive or class-sharded
+gated targets; broader no-miss matching can be appropriate for smaller
+unsharded jobs when maintaining an exhaustive allowlist would be more fragile
+than the harmless over-selection.
 
-This is keyed by project identity rather than literal production-project path
+This is keyed by project identity rather than literal project-path
 globs, so it follows the graph's transitive closure and survives project
 directory moves. It is additive and inert when Layer 1 is explicitly skipped
 with `--skip-layer1`; the loose-file `path_rules` still cover those triggers.
@@ -198,6 +212,48 @@ Project name means the `.csproj` base name, which is what Layer 1 emits.
 - projects: [Aspire.Hosting*, Aspire.Cli]
   targets: [job:typescript-api-compat]
 ```
+
+ProjectGraph cannot see a test or job that restores repository-built packages
+at runtime instead of referencing their projects. For expensive or
+class-sharded selector-gated work, represent those edges with exact production
+project names in `affected_project_rules`. Keep the list to packages the target
+actually exercises; do not replace it with a broad family glob merely because
+the target consumes some members of that family.
+
+Do not expand or refine advisory targets that gate no PR jobs in an unrelated
+PR focused on PR-gated work. Audit them when their workflow or routing is
+intentionally in scope.
+
+"Actually exercises" is relative to the target's execution lane. A regular-PR
+target includes only consumers that run in regular PR CI; quarantined, disabled,
+and outerloop-only scenarios do not justify an edge to that target. Adding or
+removing `QuarantinedTest`, `ActiveIssue`, or `OuterloopTest` on a runtime
+consumer requires auditing the exact map edge and updating focused regression
+coverage when eligibility changes.
+
+This distinction is especially important for class-sharded E2E targets. The
+[issue #19879 audit](https://github.com/microsoft/aspire/issues/19879) found
+that broad Hosting routing created 772 unnecessary extension E2E jobs and
+about 3,388 aggregate runner-minutes across 24 runs. A full CLI E2E selection
+created 87–88 class jobs and consumed 398–440 aggregate runner-minutes across
+four measured runs, plus its Docker image build. Representative CI runs are
+[33596440076](https://github.com/microsoft/aspire/actions/runs/33596440076)
+and
+[33414997820](https://github.com/microsoft/aspire/actions/runs/33414997820).
+
+Audit the complete curated consumer and path lists against the consuming
+workflow whenever routing or runtime consumption changes. Do not duplicate the
+whole list in a test: it cannot detect a consumer missing from both copies and
+encourages mechanically accepting over-selection. Tests are regression guards
+for distinct routing boundaries:
+
+- add a representative positive for each new or narrowed edge;
+- record deliberately excluded consumers in focused negative cases; and
+- add a structural assertion when the same consumer list is intentionally
+  duplicated across `path_rules` and `affected_project_rules`.
+
+Treat a widened or relaxed negative expectation as a reason to re-check which
+artifacts the workflow downloads and which lanes execute it.
 
 ### Derived targets (`derived_targets`)
 
@@ -257,16 +313,25 @@ it.
      target to schedule; record why in the adjacent YAML comment;
    - add a top-level skip pattern only when the path cannot affect main CI, or a
      dedicated workflow fully validates it; preserve any `keep_routed` carve-out;
-   - use `affected_project_rules` only when an affected production project
+   - use `affected_project_rules` only when an affected non-matrix project
      implies work beyond the graph-selected tests, and `derived_targets` only
-     when selecting one test inherently requires another target.
+     when selecting one test inherently requires another target;
+   - keep `reason` to a short description of what the rule covers or why the
+     target consumes the input. Add detail only for a non-obvious relationship
+     or constraint. The `targets` field is the source of truth for the target
+     list; do not repeat those names in `reason` or use it for PR narrative or
+     investigation history. A category-level description is sufficient; the
+     reason does not need to explain every target or make the rule
+     self-contained. Keep discussion of alternative rule shapes or why a glob
+     was split or broadened in the PR or maintenance documentation.
 4. **Wire jobs end to end.** A selector-gated `job:` target needs a matching
    `run_*` output in `tests.yml`, a gate that consumes that output, and a route
    from any reusable workflow that implements the job. Targets outside those PR
    gates must remain advisory rather than appearing as PR-runnable work.
-5. **Add a regression that would catch both under- and over-selection.**
-   - curated routing changes use the real map in `TestTriggerMapTests.cs` and
-     compare the complete selected target sets;
+5. **Add focused regressions for the routing boundary.**
+   - curated routing changes use the real map with a representative positive
+     and focused negatives for deliberate exclusions;
+   - intentionally duplicated consumer lists get a structural equality check;
    - selector-engine behavior uses focused synthetic maps in
      `SelectTestsAcceptanceTests.cs`;
    - CLI rendering and side-channel behavior belongs in
