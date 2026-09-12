@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Security fix: requires patched Snappier 1.3.1 for MongoDB.Driver.v2 to address CVE-2026-44302",
+  "mergedAt": "2026-09-11T22:45:13Z",
+  "number": 20072,
+  "runDate": "2026-09-12T06:07:46Z",
+  "status": "included",
+  "title": "Require patched Snappier for MongoDB v2 integration"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Aspire.MongoDB.Driver.v2 now requires Snappier 1.3.1 or later, fixing a vulnerability (CVE-2026-44302) where malformed compressed data could cause an infinite loop during decompression.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-09-11T22:45:13Z",
+  "lastMergedAt": "2026-09-11T22:45:13Z",
+  "name": "Patched Snappier dependency for MongoDB v2 security fix",
+  "owner": "joperezr",
+  "prs": [
+    20072
+  ]
+}
