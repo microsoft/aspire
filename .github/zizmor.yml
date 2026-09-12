@@ -1,0 +1,12 @@
+# zizmor configuration for microsoft/aspire
+# https://docs.zizmor.sh/configuration/
+
+rules:
+  dangerous-triggers:
+    ignore:
+      # These workflows use workflow_run / pull_request_target intentionally
+      # and have explicit fork validation guards in place.
+      - auto-rerun-transient-ci-failures.yml
+      - cli-e2e-recording-comment.yml
+      - dogfood-comment.yml
+      - labeler-predict-pulls.yml
