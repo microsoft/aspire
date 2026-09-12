@@ -309,6 +309,42 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PromptForSelectionsAsync_ForwardsFormattedDefaultsAndMapsSelectedValues()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        SelectionChoice[] choices =
+        [
+            new("Aspire skill"),
+            new("Playwright CLI")
+        ];
+        string? capturedPrompt = null;
+        IReadOnlyList<string>? capturedChoices = null;
+        IReadOnlyList<string>? capturedPreSelected = null;
+        var backchannel = new TestExtensionBackchannel
+        {
+            PromptForSelectionsAsyncCallback = (prompt, formattedChoices, formattedPreSelected) =>
+            {
+                capturedPrompt = prompt;
+                capturedChoices = formattedChoices;
+                capturedPreSelected = formattedPreSelected;
+                return Task.FromResult<IReadOnlyList<string>>(["Playwright CLI"]);
+            }
+        };
+        using var interactionService = CreateExtensionInteractionService(workspace, backchannel);
+
+        var result = await interactionService.PromptForSelectionsAsync(
+            "[bold]Select skills:[/]",
+            choices,
+            choice => $"[bold]{choice.Label}[/]",
+            preSelected: [choices[0]]);
+
+        Assert.Equal("Select skills:", capturedPrompt);
+        Assert.Equal(["Aspire skill", "Playwright CLI"], capturedChoices);
+        Assert.Equal(["Aspire skill"], capturedPreSelected);
+        Assert.Same(choices[1], Assert.Single(result));
+    }
+
+    [Fact]
     public async Task PromptForFilePathAsync_RetriesAfterInvalidSelection()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -470,4 +506,6 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             extensionPromptEnabled: true,
             logger: NullLogger<ExtensionInteractionService>.Instance);
     }
+
+    private sealed record SelectionChoice(string Label);
 }
