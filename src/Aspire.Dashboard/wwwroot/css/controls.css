@@ -450,18 +450,23 @@ fluent-dropdown fluent-option {
 }
 
 fluent-dropdown fluent-option[selected],
-fluent-dropdown fluent-option:hover,
-fluent-dropdown fluent-option:state(active),
-fluent-dropdown fluent-option:focus-visible {
+fluent-dropdown fluent-option:not(:state(disabled)):hover,
+fluent-dropdown fluent-option:not(:state(disabled)):state(active),
+fluent-dropdown fluent-option:not(:state(disabled)):focus-visible {
     color: var(--aspire-dropdown-option-foreground);
     background-color: var(--aspire-dropdown-option-selected-background);
+}
+
+fluent-dropdown fluent-option:state(disabled) {
+    cursor: not-allowed;
+    opacity: var(--disabled-opacity);
 }
 
 fluent-dropdown fluent-option:state(active) {
     border: none;
 }
 
-fluent-dropdown fluent-option[selected]:hover {
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover {
     background-color: var(--aspire-dropdown-option-selected-hover-background);
 }
 
@@ -470,7 +475,7 @@ fluent-dropdown fluent-option::part(content) {
 }
 
 fluent-dropdown fluent-option[selected],
-fluent-dropdown fluent-option[selected]:hover {
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover {
     position: relative;
     color: transparent;
 }
@@ -670,9 +675,9 @@ body {
     inset-inline-start: 8px;
 }
 
-.aspire-menu-container fluent-menu-item:hover,
-.aspire-menu-container fluent-menu-item:state(active),
-.aspire-menu-container fluent-menu-item:focus-visible {
+.aspire-menu-container fluent-menu-item:not(:state(disabled)):hover,
+.aspire-menu-container fluent-menu-item:not(:state(disabled)):state(active),
+.aspire-menu-container fluent-menu-item:not(:state(disabled)):focus-visible {
     background-color: var(--aspire-menu-item-hover-background);
 }
 
@@ -702,7 +707,7 @@ fluent-menu-item:state(disabled) {
     background-color: transparent;
     color: var(--colorNeutralForeground1);
     cursor: not-allowed;
-    opacity: 0.3;
+    opacity: var(--disabled-opacity);
 }
 
 .aspire-menu-container.mobile-nav-menu {
