@@ -4,23 +4,30 @@
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Caching;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
-using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Migrations;
+using Aspire.Cli.Npm;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
+using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Secrets;
@@ -28,6 +35,8 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.EnvironmentChecker;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,15 +45,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Migrations;
-using Aspire.Cli.Utils;
-using Aspire.Cli.Utils.EnvironmentChecker;
-using Aspire.Cli.Packaging;
-using Aspire.Cli.Caching;
-using Aspire.Cli.Diagnostics;
-using Aspire.Cli.Npm;
-using Aspire.Cli.Profiling;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -89,7 +89,9 @@ internal static class CliTestHelper
         var configurationValues = new Dictionary<string, string?>();
 
         // Populate feature flag configuration in in-memory collection.
-        options.ConfigurationCallback += config => {
+        options.ConfigurationCallback += config =>
+        {
+
             foreach (var featureFlag in options.EnabledFeatures)
             {
                 config[$"{KnownFeatures.FeaturePrefix}:{featureFlag}"] = "true";
@@ -221,7 +223,7 @@ internal static class CliTestHelper
         // IdentityChannelReader for AspireVersionCheck (doctor) — uses the same
         // pattern as production wiring in Program.cs.
         services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
-        services.AddSingleton<IEnvironment, TestEnvironment>();
+        services.AddSingleton(options.EnvironmentFactory);
         services.AddSingleton<ProfileCaptureState>();
         services.AddSingleton<ProfileCaptureService>();
 
@@ -702,6 +704,7 @@ internal sealed class CliServiceCollectionTestOptions
 
     // Layout discovery - returns null by default (no bundle layout), causing SDK mode fallback
     public Func<IServiceProvider, ILayoutDiscovery> LayoutDiscoveryFactory { get; set; } = _ => new NullLayoutDiscovery();
+    public Func<IServiceProvider, IEnvironment> EnvironmentFactory { get; set; } = _ => new TestEnvironment();
 
     // Bundle service - returns no-op implementation by default (no embedded bundle)
     public Func<IServiceProvider, IBundleService> BundleServiceFactory { get; set; } = _ => new NullBundleService();
