@@ -25,6 +25,7 @@ export const ResourceCommandInputType = {
     Choice: 'Choice',
     Boolean: 'Boolean',
     Number: 'Number',
+    File: 'File',
 } as const;
 
 export type ResourceCommandInputType = typeof ResourceCommandInputType[keyof typeof ResourceCommandInputType];
@@ -49,6 +50,10 @@ export interface ResourceCommandArgumentInputJson {
     allowCustomChoice?: boolean;
     disabled?: boolean;
     maxLength: number | null;
+    allowMultipleFiles?: boolean;
+    fileFilter?: string | null;
+    maxFileSize?: number | null;
+    filePathValueSupported?: boolean;
     dynamicLoading?: ResourceCommandArgumentDynamicLoadingJson | null;
 }
 

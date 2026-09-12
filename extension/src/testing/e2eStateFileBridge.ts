@@ -25,6 +25,7 @@ import { ResourceJson } from '../data/appHostCliContracts';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { getSupportedCapabilities, javaLanguageExtensionId } from '../capabilities';
 import { getCliPathTargetKey, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { withResourceCommandFilePickerForE2E } from '../views/ResourceCommandArguments';
 
 let atomicWriteSequence = 0;
 
@@ -563,18 +564,22 @@ export async function executeE2eControlCommand(
     }
     case 'executeResourceCommandItem': {
       const element = getResourceCommandElement(appHostTreeProvider, command);
-      const commandPromise = vscode.commands.executeCommand('aspire-vscode.executeResourceCommandItem', element);
+      const commandPromise = executeResourceCommandWithFilePicker(
+        command.filePickerPaths,
+        () => vscode.commands.executeCommand('aspire-vscode.executeResourceCommandItem', element));
       markStarted();
       return await commandPromise;
     }
     case 'executeCodeLensResourceAction': {
       const element = getResourceCommandElement(appHostTreeProvider, command);
-      const commandPromise = vscode.commands.executeCommand(
-        'aspire-vscode.codeLensResourceAction',
-        element.resourceItem.resource.name,
-        element.commandName,
-        command.appHostPath ?? element.resourceItem.appHostPath ?? '',
-        element.commandJson);
+      const commandPromise = executeResourceCommandWithFilePicker(
+        command.filePickerPaths,
+        () => vscode.commands.executeCommand(
+          'aspire-vscode.codeLensResourceAction',
+          element.resourceItem.resource.name,
+          element.commandName,
+          command.appHostPath ?? element.resourceItem.appHostPath ?? '',
+          element.commandJson));
       markStarted();
       return await commandPromise;
     }
@@ -2179,6 +2184,45 @@ function hasResourceForClipboard(element: unknown): element is { resource: { dis
     && 'name' in resource
     && typeof resource.name === 'string'
     && (!('displayName' in resource) || resource.displayName === undefined || resource.displayName === null || typeof resource.displayName === 'string');
+}
+
+async function executeResourceCommandWithFilePicker<T>(
+  filePickerPaths: readonly string[] | undefined,
+  execute: () => PromiseLike<T>,
+): Promise<T> {
+  if (filePickerPaths === undefined) {
+    return await execute();
+  }
+
+  if (filePickerPaths.length === 0) {
+    throw new Error('Aspire extension E2E file picker requires at least one selected file.');
+  }
+
+  const selectedFiles = filePickerPaths.map(filePath => vscode.Uri.file(getE2eWorkspacePath(filePath)));
+  let invocationCount = 0;
+
+  // Native file dialogs are outside WebDriver's browser surface. Replace only the picker response
+  // while the real Extension Host command, hidden CLI process, and AppHost callback run unchanged.
+  return await withResourceCommandFilePickerForE2E(
+    async options => {
+      invocationCount++;
+      if (!options.canSelectFiles || options.canSelectFolders) {
+        throw new Error('Aspire extension E2E resource command did not open a file-only picker.');
+      }
+      if (!options.canSelectMany && selectedFiles.length > 1) {
+        throw new Error('Aspire extension E2E resource command picker does not allow multiple files.');
+      }
+
+      return selectedFiles;
+    },
+    async () => {
+      const result = await execute();
+      if (invocationCount !== 1) {
+        throw new Error(`Aspire extension E2E resource command expected one file picker invocation, but observed ${invocationCount}.`);
+      }
+
+      return result;
+    });
 }
 
 function getResourceCommandElement(

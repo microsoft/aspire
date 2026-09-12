@@ -1300,6 +1300,26 @@ internal sealed class ResourceSnapshotCommandArgument
     public int? MaxLength { get; init; }
 
     /// <summary>
+    /// Gets a value indicating whether multiple files can be selected for file inputs.
+    /// </summary>
+    public bool AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets the accepted file types for file inputs.
+    /// </summary>
+    public string? FileFilter { get; init; }
+
+    /// <summary>
+    /// Gets the maximum file size in bytes for file inputs.
+    /// </summary>
+    public long? MaxFileSize { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether local file paths can be submitted as argument values.
+    /// </summary>
+    public bool FilePathValueSupported { get; init; }
+
+    /// <summary>
     /// Gets metadata describing dynamic input loading behavior.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

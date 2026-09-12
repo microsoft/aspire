@@ -231,6 +231,14 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                                 DependsOnInputs = ["browser"],
                                 LoadCallback = _ => Task.CompletedTask
                             }
+                        },
+                        new InteractionInput
+                        {
+                            Name = "config",
+                            InputType = InputType.File,
+                            AllowMultipleFiles = true,
+                            FileFilter = ".json,.yaml",
+                            MaxFileSize = 1024
                         }
                     ],
                     Visibility = ResourceCommandVisibility.Api
@@ -302,7 +310,8 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         // Commands
         Assert.Equal(3, snapshot.Commands.Length);
         var startCommand = Assert.Single(snapshot.Commands, c => c.Name == "start" && c.DisplayName == "Start" && c.Description == "Start the resource" && c.State == "Enabled");
-        var argumentInput = Assert.Single(startCommand.ArgumentInputs);
+        Assert.Equal(2, startCommand.ArgumentInputs.Length);
+        var argumentInput = Assert.Single(startCommand.ArgumentInputs, input => input.Name == "selector");
         Assert.Equal("selector", argumentInput.Name);
         Assert.Equal("Selector", argumentInput.Label);
         Assert.Equal("CSS selector to click.", argumentInput.Description);
@@ -316,6 +325,12 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.NotNull(argumentInput.DynamicLoading);
         Assert.True(argumentInput.DynamicLoading.AlwaysLoadOnStart);
         Assert.Equal("browser", Assert.Single(argumentInput.DynamicLoading.DependsOnInputs!));
+        var fileArgumentInput = Assert.Single(startCommand.ArgumentInputs, input => input.Name == "config");
+        Assert.Equal(nameof(InputType.File), fileArgumentInput.InputType);
+        Assert.True(fileArgumentInput.AllowMultipleFiles);
+        Assert.Equal(".json,.yaml", fileArgumentInput.FileFilter);
+        Assert.Equal(1024, fileArgumentInput.MaxFileSize);
+        Assert.True(fileArgumentInput.FilePathValueSupported);
         Assert.Equal(nameof(ResourceCommandVisibility.Api), startCommand.Visibility);
         Assert.Contains(snapshot.Commands, c => c.Name == "stop" && c.DisplayName == "Stop" && c.Description == "Stop the resource" && c.State == "Disabled");
         Assert.Contains(snapshot.Commands, c => c.Name == "restart" && c.DisplayName == "Restart" && c.Description == null && c.State == "Hidden");

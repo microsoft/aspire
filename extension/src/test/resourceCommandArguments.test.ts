@@ -206,6 +206,99 @@ suite('ResourceCommandArguments', () => {
         assert.strictEqual(getResourceCommandArgumentValidationMessage(input, 'abcd'), 'Value must be 3 characters or fewer.');
     });
 
+    test('collects file input from the native file picker', async () => {
+        const selectedFile = vscode.Uri.file('/workspace/bingo squares.json');
+        const openDialogStub = sinon.stub(vscode.window, 'showOpenDialog').resolves([selectedFile]);
+
+        try {
+            const result = await collectResourceCommandArguments('import', {
+                description: null,
+                argumentInputs: [
+                    makeInput({
+                        name: 'squares',
+                        label: 'Bingo squares',
+                        inputType: 'File',
+                        required: true,
+                        fileFilter: '.json,.txt',
+                        filePathValueSupported: true,
+                    }),
+                ],
+            });
+
+            assert.deepStrictEqual(result?.args, ['--', `--squares=${JSON.stringify([selectedFile.fsPath])}`]);
+            assert.strictEqual(result?.containsSecret, false);
+            assert.strictEqual(openDialogStub.calledOnce, true);
+            assert.deepStrictEqual(openDialogStub.firstCall.args[0], {
+                canSelectFiles: true,
+                canSelectFolders: false,
+                canSelectMany: false,
+                filters: {
+                    '.json,.txt': ['json', 'txt'],
+                },
+                openLabel: 'Bingo squares',
+                title: 'Run import: Bingo squares',
+            });
+        }
+        finally {
+            openDialogStub.restore();
+        }
+    });
+
+    test('collects multiple file inputs and ignores MIME filters unsupported by VS Code', async () => {
+        const selectedFiles = [
+            vscode.Uri.file('/workspace/first.png'),
+            vscode.Uri.file('/workspace/second.png'),
+        ];
+        const openDialogStub = sinon.stub(vscode.window, 'showOpenDialog').resolves(selectedFiles);
+
+        try {
+            const result = await collectResourceCommandArguments('import', {
+                description: null,
+                argumentInputs: [
+                    makeInput({
+                        name: 'images',
+                        inputType: 'File',
+                        allowMultipleFiles: true,
+                        fileFilter: 'image/*',
+                        filePathValueSupported: true,
+                    }),
+                ],
+            });
+
+            assert.deepStrictEqual(result?.args, ['--', `--images=${JSON.stringify(selectedFiles.map(file => file.fsPath))}`]);
+            assert.strictEqual(openDialogStub.firstCall.args[0]?.canSelectMany, true);
+            assert.strictEqual(openDialogStub.firstCall.args[0]?.filters, undefined);
+        }
+        finally {
+            openDialogStub.restore();
+        }
+    });
+
+    test('blocks file inputs from older CLI or AppHost versions', async () => {
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        const openDialogStub = sinon.stub(vscode.window, 'showOpenDialog');
+
+        try {
+            const result = await collectResourceCommandArguments('import', {
+                description: null,
+                argumentInputs: [
+                    makeInput({
+                        name: 'squares',
+                        inputType: 'File',
+                    }),
+                ],
+            });
+
+            assert.strictEqual(result, undefined);
+            assert.strictEqual(warningStub.calledOnce, true);
+            assert.strictEqual(openDialogStub.called, false);
+        }
+        finally {
+            openDialogStub.restore();
+            warningStub.restore();
+        }
+    });
+
     test('detects enabled dynamic arguments', () => {
         assert.strictEqual(hasDynamicResourceCommandArguments({
             description: null,

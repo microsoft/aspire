@@ -67,6 +67,10 @@ public class ResourceSnapshotMapperTests
                             AllowCustomChoice = true,
                             Disabled = true,
                             MaxLength = 128,
+                            AllowMultipleFiles = true,
+                            FileFilter = ".json,.txt",
+                            MaxFileSize = 1024,
+                            FilePathValueSupported = true,
                             DynamicLoading = new ResourceSnapshotCommandArgumentDynamicLoading
                             {
                                 AlwaysLoadOnStart = true,
@@ -114,6 +118,10 @@ public class ResourceSnapshotMapperTests
         Assert.True(argumentInput.AllowCustomChoice);
         Assert.True(argumentInput.Disabled);
         Assert.Equal(128, argumentInput.MaxLength);
+        Assert.True(argumentInput.AllowMultipleFiles);
+        Assert.Equal(".json,.txt", argumentInput.FileFilter);
+        Assert.Equal(1024, argumentInput.MaxFileSize);
+        Assert.True(argumentInput.FilePathValueSupported);
         Assert.NotNull(argumentInput.DynamicLoading);
         Assert.True(argumentInput.DynamicLoading.AlwaysLoadOnStart);
         Assert.Equal("browser", Assert.Single(argumentInput.DynamicLoading.DependsOnInputs!));

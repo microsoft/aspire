@@ -337,6 +337,28 @@ internal sealed class ResourceCommandArgumentJson
     public int? MaxLength { get; set; }
 
     /// <summary>
+    /// Whether multiple files can be selected for file inputs.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AllowMultipleFiles { get; set; }
+
+    /// <summary>
+    /// The accepted file types for file inputs.
+    /// </summary>
+    public string? FileFilter { get; set; }
+
+    /// <summary>
+    /// The maximum file size in bytes for file inputs.
+    /// </summary>
+    public long? MaxFileSize { get; set; }
+
+    /// <summary>
+    /// Whether the AppHost supports local file paths as resource command argument values.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool FilePathValueSupported { get; set; }
+
+    /// <summary>
     /// Dynamic input loading metadata.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
