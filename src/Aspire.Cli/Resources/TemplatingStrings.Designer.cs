@@ -61,6 +61,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The path to the Aspire AppHost project file or a directory to search.
+        /// </summary>
+        public static string AppHostProjectOptionDescription {
+            get {
+                return ResourceManager.GetString("AppHostProjectOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to AppHost.
         /// </summary>
         public static string AspireAppHost_Description {
@@ -210,6 +219,33 @@ namespace Aspire.Cli.Resources {
         public static string GettingTemplates {
             get {
                 return ResourceManager.GetString("GettingTemplates", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Selects the test framework for the integration test project: MSTest, NUnit, or xUnit..
+        /// </summary>
+        public static string IntegrationTestFrameworkOptionDescription {
+            get {
+                return ResourceManager.GetString("IntegrationTestFrameworkOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Integration test scaffolding can only reference a C# AppHost project (.csproj)..
+        /// </summary>
+        public static string IntegrationTestAppHostMustBeCSharpProject {
+            get {
+                return ResourceManager.GetString("IntegrationTestAppHostMustBeCSharpProject", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The '{0}' template in Aspire.ProjectTemplates {1} does not support AppHost references. Choose a template version that supports AppHost references, or omit --apphost to generate a standalone test project..
+        /// </summary>
+        public static string IntegrationTestAppHostReferenceNotSupported {
+            get {
+                return ResourceManager.GetString("IntegrationTestAppHostReferenceNotSupported", resourceCulture);
             }
         }
 

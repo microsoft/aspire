@@ -4,6 +4,20 @@
       "Framework": {
         "longName": "framework"
       },
+      "AppHostTargetFramework": {
+        "longName": "AppHostTargetFramework",
+        "shortName": "",
+        "isHidden": true
+      },
+      "AppHostProjectPath": {
+        "isHidden": true
+      },
+      "AppHostProjectName": {
+        "isHidden": true
+      },
+      "WithAppHostReference": {
+        "isHidden": true
+      },
       "XUnitVersion": {
         "shortName": "",
         "longName": "xunit-version",

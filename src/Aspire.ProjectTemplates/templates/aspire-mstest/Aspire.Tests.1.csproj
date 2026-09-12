@@ -15,6 +15,12 @@
     <PackageReference Include="MSTest" Version="3.10.2" />
   </ItemGroup>
 
+  <!--#if (WithAppHostReference) -->
+  <ItemGroup>
+    <ProjectReference Include="XmlEncodedAppHostProjectPath" />
+  </ItemGroup>
+
+  <!--#endif -->
   <ItemGroup>
     <Using Include="System.Net" />
     <Using Include="Microsoft.Extensions.DependencyInjection" />

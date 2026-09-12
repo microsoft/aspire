@@ -269,7 +269,8 @@ internal sealed class NewCommand : BaseCommand
                 .ToList();
         }
 
-        // Sort templates alphabetically by description, keeping empty templates at the end
+        // Keep the established AppHost templates first so adding secondary scaffolding templates
+        // does not change the default selection for `aspire new`. Empty templates remain last.
         templates.Sort((a, b) =>
         {
             var aIsEmpty = a.IsEmpty;
@@ -278,6 +279,14 @@ internal sealed class NewCommand : BaseCommand
             if (aIsEmpty != bIsEmpty)
             {
                 return aIsEmpty ? 1 : -1;
+            }
+
+            var aIsIntegrationTest = a.Name.Equals(KnownTemplateId.IntegrationTest, StringComparison.OrdinalIgnoreCase);
+            var bIsIntegrationTest = b.Name.Equals(KnownTemplateId.IntegrationTest, StringComparison.OrdinalIgnoreCase);
+
+            if (aIsIntegrationTest != bIsIntegrationTest)
+            {
+                return aIsIntegrationTest ? 1 : -1;
             }
 
             return string.Compare(a.Description, b.Description, StringComparison.OrdinalIgnoreCase);
@@ -585,7 +594,15 @@ internal sealed class NewCommand : BaseCommand
             Channel = resolvedChannelName,
             Language = selectedLanguageId
         };
-        var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+        TemplateResult templateResult;
+        try
+        {
+            templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+        }
+        catch (ProjectLocatorException ex)
+        {
+            return HandleProjectLocatorException(ex, InteractionService, Telemetry);
+        }
 
         // Generated AppHosts can be run directly by dotnet, which cannot trigger lazy bundle
         // extraction. Ensure the bundle is ready instead of relying on best-effort prefetching.
@@ -610,9 +627,10 @@ internal sealed class NewCommand : BaseCommand
             skillsBinding,
             cancellationToken);
 
-        if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
+        var editorPath = templateResult.EditorPath ?? templateResult.OutputPath;
+        if (editorPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
-            extensionInteractionService.OpenEditor(templateResult.OutputPath);
+            extensionInteractionService.OpenEditor(editorPath);
         }
 
         return CommandResult.FromExitCode(agentInitResult.ExitCode);
@@ -658,7 +676,7 @@ internal sealed class NewCommand : BaseCommand
 
 internal interface INewCommandPrompter
 {
-    Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
+    Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken, PromptBinding<string?>? binding = null);
     Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken);
     Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, Func<string, string>? outputPathResolver = null, CancellationToken cancellationToken = default);
 }
@@ -804,12 +822,13 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
             cancellationToken: cancellationToken);
     }
 
-    public virtual async Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken)
+    public virtual async Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken, PromptBinding<string?>? binding = null)
     {
         return await interactionService.PromptForSelectionAsync(
             NewCommandStrings.SelectAProjectTemplate,
             validTemplates,
             t => t.Description.EscapeMarkup(),
+            binding: binding,
             cancellationToken: cancellationToken
         );
     }

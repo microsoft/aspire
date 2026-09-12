@@ -156,6 +156,19 @@
   <data name="IntegrationTestsTemplate_Description" xml:space="preserve">
     <value>Integration tests</value>
   </data>
+  <data name="IntegrationTestFrameworkOptionDescription" xml:space="preserve">
+    <value>Selects the test framework for the integration test project: MSTest, NUnit, or xUnit.</value>
+  </data>
+  <data name="IntegrationTestAppHostMustBeCSharpProject" xml:space="preserve">
+    <value>Integration test scaffolding can only reference a C# AppHost project (.csproj).</value>
+  </data>
+  <data name="IntegrationTestAppHostReferenceNotSupported" xml:space="preserve">
+    <value>The '{0}' template in Aspire.ProjectTemplates {1} does not support AppHost references. Choose a template version that supports AppHost references, or omit --apphost to generate a standalone test project.</value>
+    <comment>{0} is a template name, {1} is a package version.</comment>
+  </data>
+  <data name="AppHostProjectOptionDescription" xml:space="preserve">
+    <value>The path to the Aspire AppHost project file or a directory to search</value>
+  </data>
   <data name="UseRedisCache_Prompt" xml:space="preserve">
     <value>Use Redis Cache</value>
   </data>
