@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREDOTNETPROJECT001
+#pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -21,7 +23,7 @@ public class AddEFMigrationsTests
         Assert.NotNull(migrations);
         Assert.IsAssignableFrom<IResourceBuilder<EFMigrationResource>>(migrations);
         Assert.Equal("mymigrations", migrations.Resource.Name);
-        Assert.Equal(project.Resource, migrations.Resource.ProjectResource);
+        Assert.Equal(project.Resource, migrations.Resource.StartupProjectResource);
         Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.DbContextTypeName);
     }
 
@@ -35,7 +37,7 @@ public class AddEFMigrationsTests
         Assert.NotNull(migrations);
         Assert.IsAssignableFrom<IResourceBuilder<EFMigrationResource>>(migrations);
         Assert.Equal("mymigrations", migrations.Resource.Name);
-        Assert.Equal(project.Resource, migrations.Resource.ProjectResource);
+        Assert.Equal(project.Resource, migrations.Resource.StartupProjectResource);
         Assert.Null(migrations.Resource.DbContextTypeName);
     }
 
@@ -49,7 +51,7 @@ public class AddEFMigrationsTests
         Assert.NotNull(migrations);
         Assert.IsAssignableFrom<IResourceBuilder<EFMigrationResource>>(migrations);
         Assert.Equal("mymigrations", migrations.Resource.Name);
-        Assert.Equal(project.Resource, migrations.Resource.ProjectResource);
+        Assert.Equal(project.Resource, migrations.Resource.StartupProjectResource);
         Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.DbContextTypeName);
     }
 
@@ -64,7 +66,7 @@ public class AddEFMigrationsTests
         Assert.NotNull(migrations);
         Assert.IsAssignableFrom<IResourceBuilder<EFMigrationResource>>(migrations);
         Assert.Equal("mymigrations", migrations.Resource.Name);
-        Assert.Equal(project.Resource, migrations.Resource.ProjectResource);
+        Assert.Equal(project.Resource, migrations.Resource.StartupProjectResource);
         Assert.Equal(contextTypeName, migrations.Resource.DbContextTypeName);
     }
 
@@ -81,6 +83,52 @@ public class AddEFMigrationsTests
 
         var migrationResource = Assert.Single(appModel.Resources.OfType<EFMigrationResource>());
         Assert.Equal("mymigrations", migrationResource.Name);
+    }
+
+    [Fact]
+    public void AddEFMigrationsFromDotnetProjectUsesGeneralizedStartupProject()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddDotnetProject("myproject", "MyProject.csproj", options => options.ExcludeLaunchProfile = true);
+
+        var migrations = project.AddEFMigrations("mymigrations");
+
+        Assert.Same(project.Resource, migrations.Resource.StartupProjectResource);
+#pragma warning disable CS0618
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            _ = migrations.Resource.ProjectResource;
+        });
+#pragma warning restore CS0618
+        Assert.Contains(nameof(EFMigrationResource.StartupProjectResource), exception.Message);
+    }
+
+    [Fact]
+    public void AddEFMigrationsFromFileBasedAppThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddDotnetProject("myproject", "app.cs", options => options.ExcludeLaunchProfile = true);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            project.AddEFMigrations("mymigrations");
+        });
+
+        Assert.Equal(
+            "EF Core migrations require a project file. Resource 'myproject' is a file-based app.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void LegacyProjectResourcePropertyReturnsOriginalProject()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations");
+
+#pragma warning disable CS0618
+        Assert.Same(project.Resource, migrations.Resource.ProjectResource);
+#pragma warning restore CS0618
     }
 
     [Fact]

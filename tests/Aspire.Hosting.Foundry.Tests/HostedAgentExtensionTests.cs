@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREDOTNETPROJECT001
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Net;
 using System.Runtime.CompilerServices;
@@ -432,6 +434,26 @@ public class HostedAgentExtensionTests
         Assert.DoesNotContain("HTTP_PORTS", envVars.Keys);
         Assert.DoesNotContain("HTTPS_PORTS", envVars.Keys);
         Assert.DoesNotContain("DEFAULT_AD_PORT", envVars.Keys);
+    }
+
+    [Fact]
+    public void AsHostedAgent_InPublishMode_DotnetProjectKeepsSdkPublishingTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var agent = builder.AddDotnetProject("agent", "agent.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint(targetPort: 9000, env: "DEFAULT_AD_PORT")
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        Assert.Same(agent.Resource, hostedAgent.Target);
+        Assert.True(agent.Resource.SupportsDotnetProgramPublishing());
+        Assert.DoesNotContain(builder.Resources.OfType<ContainerResource>(), resource => resource.Name == agent.Resource.Name);
+        Assert.DoesNotContain(agent.Resource.Annotations, annotation => annotation is DockerfileBuildAnnotation);
+        Assert.Contains(agent.Resource.Annotations, annotation => annotation is EndpointEnvironmentInjectionFilterAnnotation);
     }
 
     [Fact]

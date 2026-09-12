@@ -532,6 +532,17 @@ public sealed class TestTriggerMapTests
         Assert.Empty(result.Jobs);
     }
 
+    [Fact]
+    public void DeploymentE2eRunsWhenDotnetHostingIsAffected()
+    {
+        var result = SelectWithRealMap(
+            "src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj",
+            "Aspire.Hosting.Dotnet");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("job:deployment-e2e", result.Jobs);
+    }
+
     [Theory]
     [InlineData("src/Aspire.Cli/Commands/RunCommand.cs", "Aspire.Cli")]
     [InlineData("src/Aspire.Managed/Program.cs", "Aspire.Managed")]

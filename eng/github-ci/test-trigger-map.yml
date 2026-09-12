@@ -432,9 +432,9 @@ affected_project_rules:
   - projects: [Aspire.Cli, Aspire.Hosting*, Aspire.Dashboard*]
     targets: [job:extension-e2e]
     reason: mirrors the production-project half of tests.yml extension_e2e_changes
-  - projects: [Aspire.Hosting.Azure*, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
+  - projects: [Aspire.Hosting.Azure*, Aspire.Hosting.Dotnet, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
     targets: [job:deployment-e2e]
-    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
+    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps with packages added dynamically by tests
   - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
     targets: [test:Aspire.EndToEnd.Tests]
     reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets

@@ -44,6 +44,125 @@ namespace Aspire.Hosting.Tests.Dcp;
 public class DcpExecutorTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task ExecutablePrecomputedReplicasCreateDistinctProducersAndRestartIndividually()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = AddExecutableWithPrecomputedReplicas(builder)
+            .WithHttpEndpoint(name: "http", env: "PORT");
+        var kubernetesService = new TestKubernetesService();
+        var startingEvents = new ConcurrentQueue<OnResourceStartingContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceStartingContext>(context =>
+        {
+            startingEvents.Enqueue(context);
+            return Task.CompletedTask;
+        });
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService,
+            events: events);
+
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var executables = GetCreatedExecutablesForResource(kubernetesService, "program");
+        Assert.Equal(2, executables.Count);
+        Assert.Same(resource.Resource, Assert.Single(startingEvents).Resource);
+        var service = Assert.Single(kubernetesService.CreatedResources.OfType<Service>());
+        var targetPorts = new HashSet<int>();
+        foreach (var executable in executables)
+        {
+            Assert.True(executable.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(CustomResource.ServiceProducerAnnotation, out var producers));
+            var producer = Assert.Single(producers);
+            Assert.Equal(service.Metadata.Name, producer.ServiceName);
+            var targetPort = Assert.IsType<int>(producer.Port);
+            AssertPortAllocatedFromProxylessEndpointAllocatorRange(targetPort);
+            Assert.True(targetPorts.Add(targetPort));
+            Assert.Equal(
+                $"{{{{- portForServing \"{service.Metadata.Name}\" -}}}}",
+                Assert.Single(executable.Spec.Env!, variable => variable.Name == "PORT").Value);
+        }
+
+        var firstName = executables[0].Metadata.Name;
+        var secondName = executables[1].Metadata.Name;
+        var reference = executor.GetResource(firstName);
+        await executor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+        await executor.StartResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var afterRestart = GetCreatedExecutablesForResource(kubernetesService, "program");
+        Assert.Equal(3, afterRestart.Count);
+        Assert.Equal(2, afterRestart.Count(executable => executable.Metadata.Name == firstName));
+        Assert.Single(afterRestart, executable => executable.Metadata.Name == secondName);
+    }
+
+    [Fact]
+    public async Task ExecutablePrecomputedReplicasCanEachBeExplicitlyStarted()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = AddExecutableWithPrecomputedReplicas(builder).WithExplicitStart();
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "program"));
+        Assert.True(resource.Resource.TryGetInstances(out var instances));
+        for (var index = 0; index < instances.Length; index++)
+        {
+            var reference = executor.GetResource(instances[index].Name);
+            await executor.StartResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+            var created = GetCreatedExecutablesForResource(kubernetesService, "program");
+            Assert.Equal(index + 1, created.Count);
+            Assert.All(created, executable => Assert.True(executable.Spec.Start));
+        }
+    }
+
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, 8080)]
+    public async Task ExecutablePrecomputedReplicasRejectIncompatibleEndpoints(bool proxied, int? targetPort)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        AddExecutableWithPrecomputedReplicas(builder)
+            .WithHttpEndpoint(name: "http", isProxied: proxied, targetPort: targetPort);
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.RunApplicationAsync()).DefaultTimeout();
+
+        Assert.Equal(
+            proxied
+                ? "Resource 'program' can have multiple replicas, and it uses endpoint 'http' that has TargetPort property set. Each replica must have a unique port; setting TargetPort is not allowed."
+                : "Resource 'program' uses multiple replicas and a proxy-less endpoint 'http'. These features do not work together.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task PlainExecutableReplicaEligibilityIsUnchanged()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddExecutable("program", "program", builder.AppHostDirectory)
+            .WithAnnotation(new ReplicaAnnotation(3));
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.True(resource.Resource.TryGetInstances(out var instances));
+        Assert.Single(instances);
+        var executable = GetCreatedExecutableForResource(kubernetesService, "program");
+        Assert.Equal("1", executable.Metadata.Annotations[CustomResource.ResourceReplicaCount]);
+        Assert.Equal("0", executable.Metadata.Annotations[CustomResource.ResourceReplicaIndex]);
+    }
+
+    [Fact]
     public async Task ContainersArePassedOtelServiceName()
     {
         // Arrange
@@ -9917,6 +10036,17 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         // Assert
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    private static IResourceBuilder<ExecutableResource> AddExecutableWithPrecomputedReplicas(IDistributedApplicationBuilder builder)
+    {
+        return builder.AddExecutable("program", "program", builder.AppHostDirectory)
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .WithAnnotation(new DcpInstancesAnnotation(
+            [
+                new DcpInstance("program-first", "first", 0),
+                new DcpInstance("program-second", "second", 1)
+            ]));
     }
 
     private static Executable GetCreatedExecutableForResource(TestKubernetesService kubernetesService, string appModelResourceName)

@@ -74,7 +74,16 @@ Use `WithBuildEnvironment` when an environment variable must affect MSBuild eval
 resource. File-based `.cs` apps do not support build-only environment variables and are rejected when
 `WithBuildEnvironment` is called. Projects with build-specific environment variables use serialized direct
 builds instead of a shared traversal build. Build environment variables are not added to the launched process;
-configure the same variable with `WithEnvironment` as well when it is needed at runtime.
+configure the same variable with `WithEnvironment` as well when it is needed at runtime. The same build-only
+values are applied when the project is published through the .NET SDK container targets.
+
+Container publishing rejects build environment properties that can redirect the artifact tracked by Aspire:
+`ContainerRepository`, `ContainerImageTag`, `ContainerImageTags`, `ContainerRegistry`,
+`ContainerImageName`, `PublishImageTag`, `AutoGenerateImageTag`, `RegistryUrl`,
+`ContainerArchiveOutputPath`, `ContainerImageFormat`, `LocalRegistry`, `RuntimeIdentifier`,
+`RuntimeIdentifiers`, `ContainerRuntimeIdentifier`, and `ContainerRuntimeIdentifiers`. Configure
+supported image identity, destination, format, and target platform settings with
+`WithContainerBuildOptions` instead.
 
 Do not use `WithBuildEnvironment` for secrets. Aspire carries these values in IDE launch metadata and
 process environments. Protected temporary MSBuild response files preserve global-property semantics
@@ -96,21 +105,59 @@ await builder
     .withBuildEnvironment("BUILD_FLAVOR", "custom");
 ```
 
+### EF Core operations
+
+EF Core migration operations wait for the coordinated build in run mode, without waiting for the application
+to start. However, `dotnet-ef` does not receive `WithBuildEnvironment` customizations as MSBuild global properties.
+The EF integration warns once per requested operation and continues, including when generating publish scripts
+or bundles. EF may use suitable output, select different or stale output, or fail because the expected output
+is missing. Ordinary EF commands retain `--no-build`; bundle generation still allows EF to build.
+
+Where equivalent, use shared `.csproj` or `Directory.Build.props` settings so the coordinated build and EF
+evaluate the same values. Runtime `WithEnvironment` is not an equivalent workaround. See the
+[EF Core integration guidance](../Aspire.Hosting.EntityFrameworkCore/README.md#coordinated-builds-and-custom-build-inputs)
+for the remaining compatibility risk.
+
 ## Publishing
 
-Automatic project publishing for `DotnetProjectResource` is not currently supported. A plain
-`DotnetProjectResource` causes `aspire publish` and `aspire deploy` to fail with an actionable error
-instead of emitting an `executable.v0` manifest containing machine-local paths.
+Resources created with `AddDotnetProject` participate in the same .NET SDK container publishing pipeline as
+resources created with `AddProject`. Project files, directories containing a single project file, and file-based
+C# apps are emitted as project resources in the Aspire manifest and can be deployed through supported compute
+environments.
 
-Use one of these alternatives:
+File-based apps preserve the .NET SDK's publishing defaults, including Native AOT. Native AOT cannot compile
+across operating systems, so publishing a file-based app from Windows or macOS to a Linux container can fail.
+To publish a framework-dependent container instead, add this directive to the C# file:
 
-- Use `AddProject<TProject>(...)` for a project referenced by a C# AppHost.
-- Use `AddCSharpApp(...)` or `addCSharpApp(...)` for a path-based project or file-based app that
-  should use standard .NET project publishing.
-- Call `PublishAsDockerFile(...)` or `publishAsDockerFile(...)` to configure container publishing
-  explicitly.
-- Call `ExcludeFromManifest()` or `excludeFromManifest()` when the resource is intentionally
-  available only during local orchestration.
+```csharp
+#:property PublishAot=false
+```
+
+Alternatively, run publishing on the target operating system to retain Native AOT. Aspire reports focused
+guidance when it detects this cross-operating-system failure.
+
+### Archive output paths
+
+Set `Destination` to `ContainerImageDestination.Archive` in `WithContainerBuildOptions` to save an SDK-built
+image as an archive. An archive-only SDK build does not require Docker or Podman to be running; layering files
+from another container still requires a container runtime. Docker supports layered archives in Docker format
+because the layering build must use Docker's local image store before `docker image save` exports the result.
+Use Podman when container-file layering must produce an OCI-format archive.
+
+For .NET SDK publishing, a non-existent `OutputPath` with any filename extension is an explicit archive
+filename. This includes custom extensions such as `image.custom`, not only `.tar` or `.tar.gz`. A path without
+an extension is interpreted as a directory. End a dotted directory path with the platform's directory separator
+to make its intent explicit, for example `artifacts.v1\` on Windows. Prefer an explicit archive filename when
+configuring output consumed by other tools.
+
+These are the .NET SDK's path conventions; Dockerfile/container-runtime publishing has its own output
+conventions. See the [SDK archive publishing documentation](https://learn.microsoft.com/dotnet/core/containers/sdk-publish#publish-net-app-to-a-tarball).
+
+### Other publishing options
+
+Call `PublishAsDockerFile(...)` or `publishAsDockerFile(...)` to use an explicit Dockerfile instead of .NET SDK
+container publishing. Call `ExcludeFromManifest()` or `excludeFromManifest()` when the resource is intentionally
+available only during local orchestration.
 
 ## Additional documentation
 

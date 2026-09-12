@@ -1,0 +1,16 @@
+﻿---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "api-config"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "api"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.api.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
+  ASPNETCORE_FORWARDEDHEADERS_ENABLED: "{{ .Values.config.api.ASPNETCORE_FORWARDEDHEADERS_ENABLED }}"
+  HTTP_PORTS: "{{ .Values.parameters.api.port_http | int | toString }}"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.config.api.OTEL_EXPORTER_OTLP_ENDPOINT }}"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "{{ .Values.config.api.OTEL_EXPORTER_OTLP_PROTOCOL }}"
+  OTEL_SERVICE_NAME: "{{ .Values.config.api.OTEL_SERVICE_NAME }}"

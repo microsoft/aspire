@@ -141,9 +141,7 @@ public class EFCoreOperationExecutorTests
         var toolResource = CreateToolResource(_ => Task.FromResult(CommandResults.Failure("tool startup failed")));
 
         using var executor = new EFCoreOperationExecutor(
-            project.Resource,
-            targetProjectPath: null,
-            contextTypeName: null,
+            new EFMigrationResource("migrations", project.Resource, dbContextTypeName: null),
             NullLogger.Instance,
             CancellationToken.None,
             app.Services,
@@ -164,9 +162,7 @@ public class EFCoreOperationExecutorTests
         var toolResource = CreateToolResource(_ => Task.FromResult(CommandResults.Canceled()));
 
         using var executor = new EFCoreOperationExecutor(
-            project.Resource,
-            targetProjectPath: null,
-            contextTypeName: null,
+            new EFMigrationResource("migrations", project.Resource, dbContextTypeName: null),
             NullLogger.Instance,
             CancellationToken.None,
             app.Services,

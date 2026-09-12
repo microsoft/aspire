@@ -47,6 +47,11 @@ public static class DotnetProjectHostingExtensions
     /// Configuring a build environment causes Aspire to build this project separately from traversal groups.
     /// </para>
     /// <para>
+    /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
+    /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
+    /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
+    /// </para>
+    /// <para>
     /// Do not use this API for secrets. Aspire must carry the value in IDE launch metadata and process environments,
     /// and the value can appear in build diagnostics. Protected temporary MSBuild response files preserve
     /// global-property semantics without exposing values in process command lines, but they are not a general-purpose
@@ -92,6 +97,11 @@ public static class DotnetProjectHostingExtensions
     /// build-only environment variables.
     /// </para>
     /// <para>
+    /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
+    /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
+    /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
+    /// </para>
+    /// <para>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
     /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
     /// temporary MSBuild response files, and the values can appear in build diagnostics.
@@ -131,6 +141,11 @@ public static class DotnetProjectHostingExtensions
     /// build-only environment variables.
     /// </para>
     /// <para>
+    /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
+    /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
+    /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
+    /// </para>
+    /// <para>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
     /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
     /// temporary MSBuild response files, and the values can appear in build diagnostics.
@@ -150,7 +165,8 @@ public static class DotnetProjectHostingExtensions
             ValidateBuildEnvironmentSupport(builder.Resource, metadata);
         }
 
-        return builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+        builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+        return builder.WithDotnetProgramBuildEnvironment(callback);
     }
 
     internal static void ValidateBuildEnvironmentSupport(IResource resource, IProjectMetadata metadata)
@@ -160,6 +176,48 @@ public static class DotnetProjectHostingExtensions
             throw new DistributedApplicationException(
                 $"The .NET resource '{resource.Name}' uses WithBuildEnvironment, which is supported only for project files.");
         }
+    }
+
+    /// <summary>
+    /// Configures the number of .NET project replicas for polyglot AppHosts.
+    /// </summary>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("withDotnetProjectReplicas", MethodName = "withReplicas")]
+    internal static IResourceBuilder<DotnetProjectResource> WithReplicasForPolyglot(
+        this IResourceBuilder<DotnetProjectResource> builder,
+        int replicas)
+    {
+        return DotnetProgramResourceBuilderExtensions.WithReplicas(builder, replicas);
+    }
+
+    /// <summary>
+    /// Disables forwarded headers for a .NET project in polyglot AppHosts.
+    /// </summary>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("disableDotnetProjectForwardedHeaders", MethodName = "disableForwardedHeaders")]
+    internal static IResourceBuilder<DotnetProjectResource> DisableForwardedHeadersForPolyglot(
+        this IResourceBuilder<DotnetProjectResource> builder)
+    {
+        return DotnetProgramResourceBuilderExtensions.DisableForwardedHeaders(builder);
+    }
+
+    /// <summary>
+    /// Configures endpoint environment-variable injection for a .NET project in polyglot AppHosts.
+    /// </summary>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("withDotnetProjectEndpointsInEnvironment", MethodName = "withEndpointsInEnvironment")]
+    internal static IResourceBuilder<DotnetProjectResource> WithEndpointsInEnvironmentForPolyglot(
+        this IResourceBuilder<DotnetProjectResource> builder,
+        string[] endpointNames)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpointNames);
+
+        var includedEndpointNames = endpointNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return DotnetProgramResourceBuilderExtensions.WithEndpointsInEnvironment(
+            builder,
+            endpoint => includedEndpointNames.Contains(endpoint.Name));
     }
 
     /// <summary>
@@ -270,7 +328,8 @@ public static class DotnetProjectHostingExtensions
         var resource = builder.AddResource(app)
                               .WithAnnotation(projectMetadata)
                               .WithIconName("CodeCsRectangle")
-                              .WithProjectDefaults(options);
+                              .WithProjectDefaults(options)
+                              .WithDotnetProgramPublishing();
         var projectLaunchConfigurationType = resource.Resource.Annotations
             .OfType<SupportsDebuggingAnnotation>()
             .LastOrDefault()

@@ -100,6 +100,12 @@ public sealed class ContainerBuildOptionsCallbackContext
     /// <summary>
     /// Gets or sets the output path for the container archive.
     /// </summary>
+    /// <remarks>
+    /// For .NET SDK publishing, a non-existent path with any filename extension is an archive filename.
+    /// End a directory path with the platform's directory separator to make directory intent explicit,
+    /// especially when its name contains a period. Prefer an explicit archive filename to avoid ambiguity.
+    /// Other container image builders may interpret this path as an output directory.
+    /// </remarks>
     public string? OutputPath { get; set; }
 
     /// <summary>

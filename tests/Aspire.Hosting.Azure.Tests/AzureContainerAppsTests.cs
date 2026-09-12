@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREACANAMING001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREACANAMING002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREDOTNETPROJECT001
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
@@ -119,6 +120,25 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddContainerAppEnvironmentAddsDeploymentTargetToDotnetProjectResource()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint();
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        Assert.Same(environment.Resource, target.ComputeEnvironment);
+        var provisioningResource = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(provisioningResource);
+        Assert.Contains("autoConfigureDataProtection", bicep);
     }
 
     [Fact]

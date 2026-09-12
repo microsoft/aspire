@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003
+#pragma warning disable ASPIREDOTNETPROJECT001
 
 using System.Net;
 using System.Net.Http.Headers;
@@ -2675,6 +2676,25 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Equal(
             "Endpoint 'https' on project resource 'frontend' is exposed through Azure sandbox ingress, which terminates TLS and forwards plaintext HTTP. Add an HTTP endpoint that shares this endpoint's target port.",
             exception.Message);
+    }
+
+    [Fact]
+    public async Task SandboxDotnetProjectRejectsExposedHttpsEndpointWithoutPlaintextHttpEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var project = builder.AddDotnetProject("frontend", "frontend.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var deploymentTarget = Assert.IsType<AzureSandboxContainerResource>(
+            project.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var exception = Assert.Throws<NotSupportedException>(
+            () => AzureSandboxContainerDeployment.ResolveSandboxEndpoints(deploymentTarget));
+
+        Assert.Contains("terminates TLS and forwards plaintext HTTP", exception.Message);
     }
 
     [Fact]

@@ -5,6 +5,8 @@
 
 #pragma warning disable ASPIRECOMPUTE002 // GetEndpointPropertyExpression/GetHostAddressExpression are experimental compute-environment APIs the publisher relies on.
 #pragma warning disable ASPIRERADIUS006 // Secret-store model types (RadiusSecretStoreResource, etc.) are experimental; consumed internally by the publisher.
+#pragma warning disable ASPIREPROJECTS001
+
 using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
@@ -675,7 +677,7 @@ internal sealed class RadiusInfrastructureBuilder
             resolved[resource] = resolvedType;
             var resourceType = resolvedType.ResourceType;
 
-            if (resource is ProjectResource ||
+            if (resource is IDotnetProgramResource ||
                 (resource is ContainerResource && resourceType == RadiusResourceTypes.Containers))
             {
                 compute.Add(resource);
@@ -962,19 +964,19 @@ internal sealed class RadiusInfrastructureBuilder
             return image;
         }
 
-        // ProjectResource has no ContainerImageAnnotation by default — the integration does
+        // .NET program resources have no ContainerImageAnnotation by default — the integration does
         // not (yet) build and push project images. Failing fast at publish time with a clear
         // remediation prevents the silent `aspire publish && aspire deploy` → in-cluster
         // ImagePullBackOff failure mode, which is opaque to the user (Radius/Kubernetes
         // surface it, not Aspire). Mirrors the CLI behaviour guideline that errors should
         // name the specific action the user must take.
-        if (resource is ProjectResource)
+        if (resource is IDotnetProgramResource)
         {
             throw new InvalidOperationException(
-                $"Project resource '{resource.Name}' cannot be published to Radius because no container image " +
+                $".NET program resource '{resource.Name}' cannot be published to Radius because no container image " +
                 "has been associated with it. The Aspire.Hosting.Radius integration does not yet build or push " +
                 "project images. As a workaround, build and push an image to a registry the target cluster can " +
-                "pull from, then attach it via WithContainerImage(\"<registry>/<image>:<tag>\") on the project " +
+                "pull from, then attach it via WithContainerImage(\"<registry>/<image>:<tag>\") on the .NET program " +
                 "resource. Tracking issue: https://github.com/microsoft/aspire/issues/16844.");
         }
 
