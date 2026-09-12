@@ -1553,7 +1553,11 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             KillOnParentExit = true,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
-            LaunchProfile = context.LaunchProfile,
+            // The bundled AppHost run hook delegates dotnet run to aspire run. The SDK passes
+            // its selected profile through DOTNET_LAUNCH_PROFILE rather than a CLI argument.
+            // Preserve that selection for both direct launch and the dotnet run fallback,
+            // while allowing an explicit Aspire CLI option to take precedence.
+            LaunchProfile = context.LaunchProfile ?? GetEffectiveEnvironmentValue(env, "DOTNET_LAUNCH_PROFILE"),
             ExtensionAppHostLaunchCompletedAsync = deferBuildCompletion
                 ? () =>
                 {
