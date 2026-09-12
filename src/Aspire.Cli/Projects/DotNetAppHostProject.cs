@@ -2490,11 +2490,17 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             StandardOutputCallback = outputCollector.AppendOutput,
             StandardErrorCallback = outputCollector.AppendError,
         };
+        var packageInstallSource = await context.GetPackageSourceOverrideAsync(
+            _runner,
+            _environment,
+            configWillBeRelocated: false,
+            cancellationToken);
+
         var result = await _runner.AddPackageAsync(
             context.AppHostFile,
             context.PackageId,
             context.PackageVersion,
-            context.Source,
+            packageInstallSource,
             noRestore: false,
             options,
             cancellationToken);

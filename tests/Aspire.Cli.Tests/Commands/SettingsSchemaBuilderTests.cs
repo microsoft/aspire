@@ -42,6 +42,16 @@ public class SettingsSchemaBuilderTests
     }
 
     [Fact]
+    public void BuildConfigFileSchema_IncludesNuGetSource()
+    {
+        var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+
+        var nugetSourceProperty = Assert.Single(schema.Properties, static property => property.Name == "nugetSource");
+        Assert.Equal("string", nugetSourceProperty.Type);
+        Assert.Contains("NuGet source", nugetSourceProperty.Description, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void BuildSchema_DoesNotIncludeLegacyAppHostPath()
     {
         var schema = SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: false);

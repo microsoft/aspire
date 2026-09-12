@@ -19,9 +19,14 @@ internal sealed class TemplateInputs
     public string? Output { get; init; }
 
     /// <summary>
-    /// Gets the NuGet source (from --source option).
+    /// Gets the effective NuGet source for package discovery and installation.
     /// </summary>
     public string? Source { get; init; }
+
+    /// <summary>
+    /// Gets the NuGet source to persist in the generated project when explicitly provided by <c>--source</c>.
+    /// </summary>
+    public string? PersistenceSource { get; init; }
 
     /// <summary>
     /// Gets the version (from --version option).

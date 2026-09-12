@@ -9,6 +9,10 @@
       "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\"). Used by aspire add to determine which NuGet feed to use.",
       "type": "string"
     },
+    "nugetSource": {
+      "description": "The default NuGet source for package and template operations. Explicit --source arguments override this value.",
+      "type": "string"
+    },
     "features": {
       "description": "Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).",
       "type": "object",

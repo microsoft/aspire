@@ -1448,7 +1448,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         config.AddOrUpdatePackage(context.PackageId, context.PackageVersion);
 
         // Build and regenerate SDK code with the new package
-        var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
+        var packageSourceOverride = await context.GetPackageSourceOverrideAsync(
+            _runner,
+            _environment,
+            configWillBeRelocated: true,
+            cancellationToken);
+        var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, packageSourceOverride, cancellationToken);
         if (!regenerateSuccess)
         {
             return false;

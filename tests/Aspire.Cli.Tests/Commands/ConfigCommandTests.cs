@@ -1021,7 +1021,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 }
 
-public class TestConfigurationService : IConfigurationService
+internal sealed class TestConfigurationService : IConfigurationService
 {
     public Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default)
     {
@@ -1055,14 +1055,21 @@ public class TestConfigurationService : IConfigurationService
         return Task.FromResult(new Dictionary<string, string>());
     }
 
-    public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
+    public async Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<string?>(key);
+        var configuration = await GetAllConfigurationAsync(cancellationToken);
+        return configuration.TryGetValue(key, out var value) ? value : null;
     }
 
     public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
     {
         return GetConfigurationAsync(key, cancellationToken);
+    }
+
+    public async Task<ConfigurationValueWithOrigin?> GetConfigurationFromDirectoryWithOriginAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
+    {
+        var value = await GetConfigurationFromDirectoryAsync(key, startDirectory, continueSearchWhenKeyMissing, cancellationToken);
+        return value is null ? null : new(value, startDirectory, IsGlobal: false);
     }
 
     public string GetSettingsFilePath(bool isGlobal)

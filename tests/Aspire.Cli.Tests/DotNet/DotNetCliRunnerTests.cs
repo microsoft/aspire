@@ -39,6 +39,45 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetNuGetSourcesAsyncReturnsOnlyEnabledSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var (runner, executionFactory) = DotNetCliRunnerTestHelper.CreateWithRetry(
+            provider,
+            executionContext,
+            (_, _) => (0,
+                """
+                E https://enabled.example/v3/index.json
+                D /path/to/disabled/feed
+                EM /path/to/enabled-machine-wide-feed
+                EO https://enabled-official.example/v3/index.json
+                EMO https://enabled-machine-wide-official.example/v3/index.json
+                E /path with spaces/enabled feed
+                """));
+
+        var (exitCode, sources) = await runner.GetNuGetSourcesAsync(
+            workspace.WorkspaceRoot,
+            new ProcessInvocationOptions(),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(
+            [
+                "https://enabled.example/v3/index.json",
+                "/path/to/enabled-machine-wide-feed",
+                "https://enabled-official.example/v3/index.json",
+                "https://enabled-machine-wide-official.example/v3/index.json",
+                "/path with spaces/enabled feed"
+            ],
+            sources);
+        Assert.Equal(["nuget", "list", "source", "--format", "short"], executionFactory.LastArguments!);
+    }
+
+    [Fact]
     public async Task DotNetCliCorrectlyAppliesNoLaunchProfileArgumentWhenSpecifiedInOptions()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
