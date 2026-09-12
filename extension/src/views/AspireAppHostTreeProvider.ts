@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
-import { CliPathResolutionTarget, getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
+import { CliPathResolutionTarget, getCliPathTargetForUri, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { isPipelineStepListUnsupportedError, resolvePipelineStep, selectPipelineStepFromCli } from '../utils/pipelineStep';
 import { AppHostCliRunner } from '../data/appHostCliRunner';
@@ -44,6 +44,7 @@ import { extensionLogOutputChannel } from '../utils/logging';
 import { pipelineInteractionCapability, pipelineStepListJsonCapability } from '../types/configInfo';
 import { isAppHostSourceFile, isProjectFile } from '../utils/paths/comparison';
 import { isCommandCancellation } from '../utils/telemetry';
+import { classifyAppHostPath } from '../utils/appHostLanguage';
 import {
     getParentResourceName,
     getTerminalReplicaIndex,
@@ -877,6 +878,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             // action - Run included - is withheld while one is in flight. Only the source and
             // path affordances remain.
             if (!element.launching && !element.stopping && !element.operation) {
+                if (classifyAppHostPath(element.appHostPath) !== 'csharp') {
+                    items.push(new WorkspaceAppHostActionItem(element, 'restore'));
+                }
                 items.push(new WorkspaceAppHostActionItem(element, 'run'));
                 items.push(new WorkspaceAppHostActionItem(element, 'debug'));
                 if (element.actions?.deploy) {
@@ -1157,6 +1161,28 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             }
             throw err;
         }
+    }
+
+    async restoreAppHost(element: WorkspaceAppHostItem | undefined): Promise<void> {
+        const appHostPath = element?.appHostPath;
+        if (!appHostPath) {
+            vscode.window.showWarningMessage(appHostSourceNotFound);
+            return;
+        }
+
+        // Prefer the workspace folder that discovered this AppHost via `aspire ls` over
+        // re-deriving a target from the path alone: a configured AppHost can legitimately resolve
+        // outside every open folder, which would otherwise fall back to the window/default CLI in
+        // a multi-root workspace and run a different CLI than the one that discovered it.
+        const discoveredFolder = this._repository.getWorkspaceFolderForAppHostPath?.(appHostPath);
+        const target = discoveredFolder
+            ? workspaceFolderCliPathTarget(discoveredFolder)
+            : getCliPathTargetForUri(vscode.Uri.file(appHostPath));
+        await this._terminalProvider.sendAspireCommandToAspireTerminal(
+            ['restore', '--apphost', shellArg(appHostPath)],
+            true,
+            undefined,
+            { target });
     }
 
     async deployAppHost(element: AppHostActionElement | undefined): Promise<void> {

@@ -442,6 +442,26 @@ export function writeTrackedStreamingDiscoveryCliWrapper(delayMs = 4_000, initia
     return { cliPath, invocationLogPath };
 }
 
+export interface CliWrapperCompletion {
+    args: string[];
+    exitCode: number;
+}
+
+export function writeTrackedForwardingCliWrapper(name = 'aspire-tracked-forwarding'): {
+    cliPath: string;
+    invocationLogPath: string;
+    completionLogPath: string;
+} {
+    const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
+    const invocationLogPath = path.join(wrapperDirectory, `${name}-invocations.log`);
+    const completionLogPath = path.join(wrapperDirectory, `${name}-completions.log`);
+    removePath(invocationLogPath, { force: true });
+    removePath(completionLogPath, { force: true });
+    const cliPath = writeCliWrapper(name, { invocationLogPath, completionLogPath, forwardAllCommands: true });
+
+    return { cliPath, invocationLogPath, completionLogPath };
+}
+
 export function getCliWrapperInvocationCount(invocationLogPath: string): number {
     if (!fs.existsSync(invocationLogPath)) {
         return 0;
@@ -493,6 +513,35 @@ export function getCliWrapperInvocations(invocationLogPath: string): string[][] 
         .split(/\r?\n/)
         .filter(line => line.length > 0)
         .map(line => JSON.parse(line) as string[]);
+}
+
+export function getCliWrapperCompletions(completionLogPath: string): CliWrapperCompletion[] {
+    if (!fs.existsSync(completionLogPath)) {
+        return [];
+    }
+
+    return fs.readFileSync(completionLogPath, 'utf8')
+        .split(/\r?\n/)
+        .filter(line => line.length > 0)
+        .map(line => JSON.parse(line) as CliWrapperCompletion);
+}
+
+export async function waitForCliWrapperCompletion(
+    completionLogPath: string,
+    predicate: (completion: CliWrapperCompletion) => boolean,
+    timeoutMs: number,
+): Promise<CliWrapperCompletion> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        const completion = getCliWrapperCompletions(completionLogPath).find(predicate);
+        if (completion) {
+            return completion;
+        }
+
+        await delay(500);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for an Aspire CLI wrapper completion in ${completionLogPath}.`);
 }
 
 export async function restoreWorkspaceCliPath(): Promise<void> {
@@ -951,6 +1000,8 @@ function writeCliWrapper(
         deployRequestFilePath?: string;
         deployReleaseFilePath?: string;
         invocationLogPath?: string;
+        completionLogPath?: string;
+        forwardAllCommands?: boolean;
         psSnapshotDelayMs?: number;
         psSnapshotRequestFilePath?: string;
         psSnapshotReleaseFilePath?: string;
@@ -985,7 +1036,7 @@ function waitForReleaseFile(filePath, description, timeoutMs = 120000, releaseDi
   }
 }
 
-${options.versionOutput === undefined
+${options.forwardAllCommands || options.versionOutput === undefined
         ? ''
         : `if (args.length === 1 && args[0] === '--version') {
   console.log(${JSON.stringify(options.versionOutput)});
@@ -993,6 +1044,9 @@ ${options.versionOutput === undefined
 }
 
 `}
+${options.forwardAllCommands
+        ? ''
+        : `
 if (args.includes('--include-disabled-commands')) {
   console.error('simulated old CLI does not support --include-disabled-commands');
   process.exit(123);
@@ -1006,6 +1060,7 @@ ${options.configInfoJson === undefined
   process.exit(0);`}
 }
 
+`}
 ${options.deployReleaseFilePath === undefined
         ? ''
         : `// The extension keeps a durable deploy operation in flight until this process exits, so
@@ -1115,13 +1170,17 @@ const result = spawnSync(realCli, args, {
   stdio: 'inherit',
   shell: false,
 });
+const exitCode = result.error ? 1 : (result.status ?? (result.signal ? 1 : 0));
+${options.completionLogPath === undefined
+        ? ''
+        : `fs.appendFileSync(${JSON.stringify(options.completionLogPath)}, JSON.stringify({ args, exitCode }) + '\\n');`}
 
 if (result.error) {
   console.error(result.error.stack || result.error.message);
   process.exit(1);
 }
 
-process.exit(result.status ?? (result.signal ? 1 : 0));
+process.exit(exitCode);
 ${options.streamedLsCandidate === undefined ? '' : '}'}
 `);
     fs.chmodSync(scriptPath, 0o755);

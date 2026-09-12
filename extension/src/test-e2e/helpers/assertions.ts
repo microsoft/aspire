@@ -16,8 +16,18 @@ let controlRevision = Date.now();
 let atomicWriteSequence = 0;
 let workspaceFolderOpened = false;
 
+// Opening the workspace folder is part of the wait rather than a precondition, for the same
+// reason documented on `waitForWorkspaceAppHostCandidate` below: discovery does not run at all
+// while the harness still has its own folder open, so a caller that skips this - most notably one
+// that calls this as its very first wait in a freshly-launched window, before any other helper has
+// had a chance to open the fixture workspace - can time out with no useful state ever observed.
 export async function waitForRepositoryIdle(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
-    return await waitForExtensionState(file => file.state.isWorkspaceAppHostDiscoveryComplete && !file.state.isRepositoryLoading, 'repository to become idle', timeoutMs);
+    await ensureWorkspaceFolderOpen();
+    const deadline = createDeadline(timeoutMs);
+    return await waitForExtensionState(
+        file => file.state.isWorkspaceAppHostDiscoveryComplete && !file.state.isRepositoryLoading,
+        'repository to become idle',
+        getRemainingTimeout(deadline, 'repository to become idle'));
 }
 
 export async function waitForWorkspaceAppHost(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
@@ -32,8 +42,8 @@ export async function waitForWorkspaceAppHost(timeoutMs = 120000): Promise<Exten
  * empty candidate list until the timeout.
  */
 export async function waitForWorkspaceAppHostCandidate(appHostPath: string, timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
+    await ensureWorkspaceFolderOpen();
     const deadline = createDeadline(timeoutMs);
-    await ensureWorkspaceFolderOpen(deadline);
     return await waitForExtensionState(
         file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, appHostPath)),
         `workspace AppHost candidate '${appHostPath}'`,
@@ -41,8 +51,8 @@ export async function waitForWorkspaceAppHostCandidate(appHostPath: string, time
 }
 
 export async function waitForSelectedWorkspaceAppHost(appHostPath = getPrimaryAppHostProjectPath(), timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
+    await ensureWorkspaceFolderOpen();
     const deadline = createDeadline(timeoutMs);
-    await ensureWorkspaceFolderOpen(deadline);
     return await waitForExtensionState(
         file => file.state.workspaceAppHostPath !== undefined && isSamePath(file.state.workspaceAppHostPath, appHostPath),
         `selected workspace AppHost '${appHostPath}'`,
@@ -326,17 +336,46 @@ export function readStateFile(): ExtensionE2EStateFile {
     }
 }
 
-async function ensureWorkspaceFolderOpen(deadline: Deadline): Promise<void> {
+async function ensureWorkspaceFolderOpen(): Promise<void> {
     if (workspaceFolderOpened) {
         return;
     }
 
+    // This preamble is one-time setup, not part of any caller's own condition-wait, so it gets its
+    // own fixed deadline instead of sharing the `timeoutMs` a caller passed in for its actual
+    // condition. Sharing was a real bug: this function used to take the caller's `Deadline`
+    // directly, but most callers default `timeoutMs` to just 120000ms total, and on a loaded CI
+    // machine the 30s quick check below plus the openWorkspaceFolder round trip could by themselves
+    // exhaust that whole budget - leaving the caller's actual condition-wait a sliver of its
+    // requested time, or none at all. Giving this its own independent deadline guarantees a
+    // caller's subsequent wait for its real condition always gets the full `timeoutMs` it asked
+    // for, starting only once this preamble has actually finished.
+    const deadline = createDeadline(150000);
     const expectedPath = getWorkspaceRoot();
-    if (await tryWaitForWorkspaceFolder(expectedPath, deadline, 5000)) {
+    // The E2E control-file bridge activates concurrently with RPC/DCP server setup, so give it
+    // generous time to come up on its own before assuming anything is actually wrong: on a loaded
+    // CI machine, activation alone can take well over the 5s this quick check previously allowed,
+    // which made the fallback below trigger far more often than the "genuinely stuck" case it
+    // exists for.
+    if (await tryWaitForWorkspaceFolder(expectedPath, deadline, 30000)) {
         workspaceFolderOpened = true;
         return;
     }
 
+    // Nothing else in the harness actively opens this folder for us: ExTester's own run-tests CLI
+    // is invoked without --open_resource (see run-e2e.js), so VSBrowser.openResources() - the
+    // ExTester API that would normally do this - is a documented no-op with an empty resource
+    // list. run-e2e.js instead patches ExTester's VS Code launch arguments to add the folder path
+    // directly (patchExtesterLaunchLocale), which is what actually opens it for the first test
+    // suite in each shard's VS Code session; every later suite's quick check above just finds it
+    // still open. This command is the fallback for when that one-time launch-time open hasn't
+    // landed yet by the time we get here - it asks the extension to open the folder itself via
+    // vscode.commands.executeCommand('vscode.openFolder', ...), which is expected to tear down and
+    // restart the extension host. We only wait for the command to have *started*: the fresh host
+    // that comes up after the restart never retroactively resolves this specific control revision,
+    // so waiting for 'applied' here would just burn the deadline. The poll below detects the
+    // restart's completion instead, by retrying fresh getWorkspaceFolders() queries (each its own
+    // control revision) until the new host is up and reports the folder.
     const openWorkspaceStatus = await applyE2eControl(
         { command: { name: 'openWorkspaceFolder', folderPath: expectedPath } },
         'started',
@@ -377,6 +416,12 @@ async function getWorkspaceFolders(timeoutMs: number): Promise<Array<{ fileName?
     return Array.isArray(status.result) ? status.result as Array<{ fileName?: string }> : [];
 }
 
+// The fresh extension host that comes up after 'openWorkspaceFolder' triggers a restart never
+// retroactively reports 'applied' for the pre-restart control revision (see the comment in
+// ensureWorkspaceFolderOpen), so tryWaitForWorkspaceFolder can't just wait on that status. It can,
+// however, still observe an 'error' status written *before* the restart happened - e.g. if
+// getE2eWorkspaceFolderPath rejected the requested folder - so check for that on every iteration
+// to fail fast instead of waiting out the full timeout for a command that already reported failure.
 function throwIfControlFailed(revision: number): void {
     const control = readStateFile().control;
     if (control?.revision === revision && control.status === 'error') {

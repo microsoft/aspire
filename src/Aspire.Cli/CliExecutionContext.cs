@@ -91,6 +91,35 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     public string? IdentityCommit { get; } = identityCommit;
 
     /// <summary>
+    /// Gets the complete CLI identity reported by <c>aspire --version</c>, including source-revision
+    /// build metadata when available.
+    /// </summary>
+    public string IdentityInformationalVersion
+    {
+        get
+        {
+            var version = IdentityVersion;
+            var commit = IdentityCommit;
+
+            // IdentityVersion can already carry build metadata when supplied through an override.
+            // Prefer the separately resolved commit, but preserve embedded metadata when no explicit
+            // commit source is available.
+            var plusIndex = version.IndexOf('+');
+            if (plusIndex > 0)
+            {
+                if (string.IsNullOrEmpty(commit))
+                {
+                    commit = version[(plusIndex + 1)..];
+                }
+
+                version = version[..plusIndex];
+            }
+
+            return string.IsNullOrEmpty(commit) ? version : $"{version}+{commit}";
+        }
+    }
+
+    /// <summary>
     /// Gets a value indicating whether at least one identity field
     /// (<see cref="IdentityChannel"/>, <see cref="IdentityVersion"/>,
     /// <see cref="IdentityCommit"/>, <see cref="NuGetServiceIndexOverride"/>
