@@ -201,4 +201,7 @@
   <data name="DashboardRunSelectUnpin" xml:space="preserve">
     <value>Unpin run</value>
   </data>
+  <data name="DashboardRunSelectIncompatibleTooltip" xml:space="preserve">
+    <value>This run can't be viewed because it was created by an incompatible version of the dashboard.</value>
+  </data>
 </root>
