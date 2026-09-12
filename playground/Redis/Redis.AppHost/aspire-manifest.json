@@ -59,7 +59,7 @@
     "valkey": {
       "type": "container.v0",
       "connectionString": "{valkey.bindings.tcp.host}:{valkey.bindings.tcp.port},password={valkey-password.value}",
-      "image": "docker.io/valkey/valkey:9.0",
+      "image": "docker.io/valkey/valkey:9.1",
       "entrypoint": "/bin/sh",
       "args": [
         "-c",
