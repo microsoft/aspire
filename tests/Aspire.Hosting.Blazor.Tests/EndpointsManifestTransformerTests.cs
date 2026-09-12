@@ -76,6 +76,33 @@ public class EndpointsManifestTransformerTests : IDisposable
     }
 
     [Fact]
+    public async Task PrefixEndpointsAssetFile_DoesNotAddFallback_WhenManifestAlreadyHasOne()
+    {
+        // Hosted Blazor Web App shape: the server already owns routing and the manifest ships
+        // its own {**path:nonfile} catch-all. Injecting a second one collides and causes HTTP 500.
+        var manifest = new EndpointsManifest
+        {
+            Endpoints =
+            [
+                new EndpointEntry { Route = "index.html", AssetFile = "index.html" },
+                new EndpointEntry { Route = "{**path:nonfile}", AssetFile = "index.html" }
+            ]
+        };
+
+        var manifestPath = Path.Combine(_tempDir, "endpoints.json");
+        await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(manifest, ManifestJsonContext.Default.EndpointsManifest));
+
+        var result = await EndpointsManifestTransformer.PrefixEndpointsAssetFileAsync(manifestPath, "store", CancellationToken.None);
+
+        var transformed = JsonSerializer.Deserialize(result, ManifestJsonContext.Default.EndpointsManifest)!;
+
+        // No extra fallback appended, and the existing one is left untouched (only one remains).
+        Assert.Equal(2, transformed.Endpoints.Length);
+        Assert.Single(transformed.Endpoints, ep => ep.Route == "{**path:nonfile}");
+        Assert.All(transformed.Endpoints, ep => Assert.StartsWith("store/", ep.AssetFile));
+    }
+
+    [Fact]
     public async Task PrefixEndpointsAssetFile_SkipsFallback_ForCompressedIndexHtml()
     {
         var manifest = new EndpointsManifest
