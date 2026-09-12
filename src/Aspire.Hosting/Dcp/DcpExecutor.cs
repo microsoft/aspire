@@ -43,10 +43,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
     // it probably means DCP crashed and there is no point trying further.
     private static readonly TimeSpan s_disposeTimeout = TimeSpan.FromSeconds(10);
 
-    // Regex for normalizing application names.
-    [GeneratedRegex("""^(?<name>.+?)\.?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
-    private static partial Regex ApplicationNameRegex();
-
     private readonly ILogger<DistributedApplication> _distributedApplicationLogger;
     private readonly IKubernetesService _kubernetesService;
     private readonly IConfiguration _configuration;
@@ -334,7 +330,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     /// <summary>
     /// Normalizes the application name for use in physical container resource names (only guaranteed valid as a suffix).
-    /// Removes the ".AppHost" suffix if present and takes only characters that are valid in resource names.
+    /// Removes the ".AppHost" or "-AppHost" suffix if present and takes only characters that are valid in resource names.
     /// Invalid characters are simply omitted from the name as the result doesn't need to be identical.
     /// </summary>
     /// <param name="applicationName">The application name to normalize.</param>
@@ -346,7 +342,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             return applicationName;
         }
 
-        applicationName = ApplicationNameRegex().Match(applicationName) switch
+        applicationName = ApplicationNameHelper.ApplicationNameRegex().Match(applicationName) switch
         {
             Match { Success: true } match => match.Groups["name"].Value,
             _ => applicationName
