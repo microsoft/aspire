@@ -4,12 +4,17 @@
   <Import Project="$(SharedDir)Workload.targets" />
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <IsPackable>true</IsPackable>
+    <TargetFramework>net11.0</TargetFramework>
+    <CanPublishDashboardNativeAot Condition="'$(SkipNativeBuild)' != 'true' and $([System.OperatingSystem]::IsWindows()) and $(DashboardRuntime.StartsWith('win-'))">true</CanPublishDashboardNativeAot>
+    <CanPublishDashboardNativeAot Condition="'$(SkipNativeBuild)' != 'true' and $([System.OperatingSystem]::IsLinux()) and $(DashboardRuntime.StartsWith('linux-'))">true</CanPublishDashboardNativeAot>
+    <CanPublishDashboardNativeAot Condition="'$(SkipNativeBuild)' != 'true' and $([System.OperatingSystem]::IsMacOS()) and $(DashboardRuntime.StartsWith('osx-'))">true</CanPublishDashboardNativeAot>
+    <IsPackable>false</IsPackable>
+    <IsPackable Condition="'$(CanPublishDashboardNativeAot)' == 'true'">true</IsPackable>
     <!-- Unset PackageType as that is being set by Workload.targets to DotnetPlatform, which this package no longer is. -->
     <PackageType />
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild Condition="'$(CanPublishDashboardNativeAot)' == 'true'">true</GeneratePackageOnBuild>
     <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <PackageOutputPath Condition=" '$(PackageOutputPath)' == '' ">$(ArtifactsShippingPackagesDir)</PackageOutputPath>
@@ -33,20 +38,37 @@
   <Target Name="Build" />
 
 
-  <Target Name="BeforeBuild" BeforeTargets="Build">
+  <Target Name="BeforeBuild" BeforeTargets="Build" Condition="'$(CanPublishDashboardNativeAot)' == 'true'">
     <MSBuild Projects="../../src/Aspire.Dashboard/Aspire.Dashboard.csproj" Targets="publish"
-      Properties="Configuration=$(Configuration);Platform=$(Platform);TargetFramework=$(TargetFramework);RuntimeIdentifier=$(DashboardRuntime);PlatformName=$(DashboardRuntime)" />
+      Condition="'$(SkipDashboardPublish)' != 'true'"
+      Properties="Configuration=$(Configuration);Platform=$(Platform);TargetFramework=$(TargetFramework);RuntimeIdentifier=$(DashboardRuntime);PlatformName=$(DashboardRuntime);PublishAot=true;SelfContained=true" />
 
     <!-- After publishing the project, we ensure that the published assets get packed in the nuspec. -->
+    <PropertyGroup>
+      <_DashboardExecutableName>Aspire.Dashboard</_DashboardExecutableName>
+      <_DashboardExecutableName Condition="$(DashboardRuntime.StartsWith('win-'))">$(_DashboardExecutableName).exe</_DashboardExecutableName>
+      <_DashboardPublishDirectory>$(DotNetOutputPath)Aspire.Dashboard/$(DashboardRuntime)/$(Configuration)/$(TargetFramework)/$(DashboardRuntime)/publish</_DashboardPublishDirectory>
+      <_DashboardArchiveStagingDirectory>$(IntermediateOutputPath)dashboard-archive</_DashboardArchiveStagingDirectory>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_DashboardPublishDirectory)/$(_DashboardExecutableName)')"
+      Text="Native AOT Dashboard executable was not found at '$(_DashboardPublishDirectory)/$(_DashboardExecutableName)'." />
+
     <ItemGroup>
       <_PublishItems
-        Include="$(DotNetOutputPath)Aspire.Dashboard/$(DashboardRuntime)/$(Configuration)/$(TargetFramework)/$(DashboardRuntime)/publish/**/*" />
+        Include="$(_DashboardPublishDirectory)/**/*"
+        Exclude="$(_DashboardPublishDirectory)/**/*.pdb;$(_DashboardPublishDirectory)/**/*.dbg;$(_DashboardPublishDirectory)/**/*.dSYM/**/*" />
       <None Include="@(_PublishItems)" Pack="true" PackagePath="tools/" />
     </ItemGroup>
 
+    <RemoveDir Directories="$(_DashboardArchiveStagingDirectory)" />
+    <MakeDir Directories="$(_DashboardArchiveStagingDirectory)" />
+    <Copy
+      SourceFiles="@(_PublishItems)"
+      DestinationFiles="@(_PublishItems->'$(_DashboardArchiveStagingDirectory)/%(RecursiveDir)%(Filename)%(Extension)')" />
+
     <MakeDir Directories="$(DashboardPublishedArtifactsOutputDir)/$(DashboardRuntime)" />
     <ZipDirectory
-      SourceDirectory="$(DotNetOutputPath)Aspire.Dashboard/$(DashboardRuntime)/$(Configuration)/$(TargetFramework)/$(DashboardRuntime)/publish"
+      SourceDirectory="$(_DashboardArchiveStagingDirectory)"
       DestinationFile="$(DashboardPublishedArtifactsOutputDir)/$(DashboardRuntime)/aspire-dashboard-$(DashboardRuntime).zip"
       Overwrite="true" />
 

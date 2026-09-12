@@ -21,6 +21,8 @@
         <ArchivesTargetDir>/<artifactName>/<inner path>/aspire-cli-*.{zip,tar.gz}
         <NupkgsTargetDir>/<artifactName>/<inner path>/Aspire.Cli*.nupkg
         <NupkgsTargetDir>/<artifactName>/<inner path>/microsoft-aspire-cli*.tgz
+        <NupkgsTargetDir>/<artifactName>/<inner path>/Aspire.Dashboard.Sdk.*.nupkg
+        <DashboardArtifactsTargetDir>/<artifactName>/<inner path>/aspire-dashboard-*.zip
 
     The <artifactName> path component is preserved so that
     stage-native-cli-tool-packages.ps1 (which the assemble job runs next) sees
@@ -48,10 +50,14 @@
     Created if it does not already exist.
 
 .PARAMETER NupkgsTargetDir
-    Destination directory for Aspire.Cli*.nupkg AND microsoft-aspire-cli*.tgz
+    Destination directory for Aspire.Cli*.nupkg, Aspire.Dashboard.Sdk.*.nupkg,
+    and microsoft-aspire-cli*.tgz
     files. Created if it does not already exist. (Both land here because
     stage-native-cli-tool-packages.ps1 then walks this directory for both
     shapes when called with -RequireNpmPackages.)
+
+.PARAMETER DashboardArtifactsTargetDir
+    Destination directory for Native AOT Dashboard runtime zip files.
 
 .PARAMETER ArtifactNamePattern
     Wildcard for selecting artifacts. Defaults to `native_archives_*`.
@@ -83,7 +89,8 @@
         -Project 'internal' `
         -BuildId 2987730 `
         -ArchivesTargetDir 'artifacts/signed-archives/Release' `
-        -NupkgsTargetDir 'artifacts/native-cli-packages/Release'
+        -NupkgsTargetDir 'artifacts/native-cli-packages/Release' `
+        -DashboardArtifactsTargetDir 'artifacts/DashboardArtifacts/Release'
 
 .NOTES
     Only Build/Container artifacts (the type produced by
@@ -110,6 +117,9 @@ param(
 
     [Parameter(Mandatory)]
     [string]$NupkgsTargetDir,
+
+    [Parameter(Mandatory)]
+    [string]$DashboardArtifactsTargetDir,
 
     [string]$ArtifactNamePattern = 'native_archives_*',
 
@@ -206,6 +216,7 @@ $DownloadOneArtifact = {
         [string]$DownloadUrl,
         [string]$ArchivesTargetDir,
         [string]$NupkgsTargetDir,
+        [string]$DashboardArtifactsTargetDir,
         [int]$MaxDownloadAttempts,
         [int]$RetryBaseDelaySeconds
     )
@@ -284,16 +295,28 @@ $DownloadOneArtifact = {
 
     $archivesCount = 0
     $nupkgsCount = 0
+    $dashboardArchivesCount = 0
     try {
         foreach ($entry in $zip.Entries) {
             # Skip directory entries (empty Name).
             if (-not $entry.Name) { continue }
 
             $isArchive = ($entry.Name -like 'aspire-cli-*.zip') -or ($entry.Name -like 'aspire-cli-*.tar.gz')
-            $isNupkg = ($entry.Name -like 'Aspire.Cli*.nupkg') -or ($entry.Name -like 'microsoft-aspire-cli*.tgz')
-            if (-not ($isArchive -or $isNupkg)) { continue }
+            $isNupkg = ($entry.Name -like 'Aspire.Cli*.nupkg') -or
+                ($entry.Name -like 'Aspire.Dashboard.Sdk.*.nupkg') -or
+                ($entry.Name -like 'microsoft-aspire-cli*.tgz')
+            $isDashboardArchive = $entry.Name -like 'aspire-dashboard-*.zip'
+            if (-not ($isArchive -or $isNupkg -or $isDashboardArchive)) { continue }
 
-            $target = if ($isArchive) { $ArchivesTargetDir } else { $NupkgsTargetDir }
+            $target = if ($isArchive) {
+                $ArchivesTargetDir
+            }
+            elseif ($isDashboardArchive) {
+                $DashboardArtifactsTargetDir
+            }
+            else {
+                $NupkgsTargetDir
+            }
 
             # Preserve the original layout: <target>/<artifactName>/<inner path>.
             # stage-native-cli-tool-packages.ps1 walks for `native_archives_*`
@@ -320,19 +343,27 @@ $DownloadOneArtifact = {
             }
             [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $dest, $true)
 
-            if ($isArchive) { $archivesCount++ } else { $nupkgsCount++ }
+            if ($isArchive) {
+                $archivesCount++
+            }
+            elseif ($isDashboardArchive) {
+                $dashboardArchivesCount++
+            }
+            else {
+                $nupkgsCount++
+            }
         }
     }
     finally {
         $zip.Dispose()
     }
 
-    if (($archivesCount + $nupkgsCount) -eq 0) {
+    if (($archivesCount + $nupkgsCount + $dashboardArchivesCount) -eq 0) {
         # Zero matches isn't necessarily an error (an artifact might be all
         # symbols or sdl analysis files), but log so devs investigating an
         # empty-asset-manifest failure can see exactly what each artifact
         # contributed.
-        Write-Warning "Artifact '$ArtifactName' had no entries matching aspire-cli-*, Aspire.Cli*.nupkg, or microsoft-aspire-cli*.tgz shapes. Inspect $tempZip if this was unexpected."
+        Write-Warning "Artifact '$ArtifactName' had no entries matching CLI or Dashboard shipping artifact shapes. Inspect $tempZip if this was unexpected."
     }
     else {
         # Only remove the temp zip when at least something was extracted —
@@ -347,6 +378,7 @@ $DownloadOneArtifact = {
         TotalMs      = $sw.ElapsedMilliseconds
         Archives     = $archivesCount
         Nupkgs       = $nupkgsCount
+        DashboardArchives = $dashboardArchivesCount
     }
 }
 
@@ -363,6 +395,7 @@ function Invoke-ParallelDownloads {
         [Parameter(Mandatory)] [string]$AccessToken,
         [Parameter(Mandatory)] [string]$ArchivesTargetDir,
         [Parameter(Mandatory)] [string]$NupkgsTargetDir,
+        [Parameter(Mandatory)] [string]$DashboardArtifactsTargetDir,
         [Parameter(Mandatory)] [scriptblock]$Worker,
         [Parameter(Mandatory)] [int]$ThrottleLimit,
         [Parameter(Mandatory)] [int]$MaxDownloadAttempts,
@@ -401,7 +434,7 @@ function Invoke-ParallelDownloads {
     $jobs = @(foreach ($a in $Artifacts) {
         Start-ThreadJob `
             -ScriptBlock $Worker `
-            -ArgumentList @($AccessToken, $a.name, $a.resource.downloadUrl, $ArchivesTargetDir, $NupkgsTargetDir, $MaxDownloadAttempts, $RetryBaseDelaySeconds) `
+            -ArgumentList @($AccessToken, $a.name, $a.resource.downloadUrl, $ArchivesTargetDir, $NupkgsTargetDir, $DashboardArtifactsTargetDir, $MaxDownloadAttempts, $RetryBaseDelaySeconds) `
             -ThrottleLimit $ThrottleLimit `
             -Name $a.name
     })
@@ -412,8 +445,8 @@ function Invoke-ParallelDownloads {
     foreach ($job in $jobs) {
         try {
             $result = $job | Receive-Job -ErrorAction Stop
-            Write-Host ("  {0,-32} download={1,7:N0}ms total={2,7:N0}ms archives={3} nupkgs={4}" `
-                -f $result.ArtifactName, $result.DownloadMs, $result.TotalMs, $result.Archives, $result.Nupkgs)
+            Write-Host ("  {0,-32} download={1,7:N0}ms total={2,7:N0}ms archives={3} nupkgs={4} dashboardArchives={5}" `
+                -f $result.ArtifactName, $result.DownloadMs, $result.TotalMs, $result.Archives, $result.Nupkgs, $result.DashboardArchives)
         }
         catch {
             $failures += [pscustomobject]@{ Name = $job.Name; Error = $_ }
@@ -433,7 +466,7 @@ function Invoke-ParallelDownloads {
 
 # --- Main ---
 
-New-Item -ItemType Directory -Force -Path $ArchivesTargetDir, $NupkgsTargetDir | Out-Null
+New-Item -ItemType Directory -Force -Path $ArchivesTargetDir, $NupkgsTargetDir, $DashboardArtifactsTargetDir | Out-Null
 
 $artifacts = Get-MatchingArtifacts `
     -CollectionUri $CollectionUri `
@@ -448,6 +481,7 @@ Invoke-ParallelDownloads `
     -AccessToken $AccessToken `
     -ArchivesTargetDir $ArchivesTargetDir `
     -NupkgsTargetDir $NupkgsTargetDir `
+    -DashboardArtifactsTargetDir $DashboardArtifactsTargetDir `
     -Worker $DownloadOneArtifact `
     -ThrottleLimit $ThrottleLimit `
     -MaxDownloadAttempts $MaxDownloadAttempts `

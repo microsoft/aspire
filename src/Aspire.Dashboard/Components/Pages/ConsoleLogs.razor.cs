@@ -1404,7 +1404,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         }
 
         UpdateMenuButtons();
-        StateHasChanged();
     }
 
     private Task HandleViewChangedAsync(string? newView)

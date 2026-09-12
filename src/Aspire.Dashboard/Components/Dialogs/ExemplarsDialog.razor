@@ -7,7 +7,7 @@
 
 <FluentDialogBody>
 <div style="max-height: 44vh; overflow-y: auto;">
-    <FluentDataGrid Items="@MetricView"
+    <FluentDataGrid ItemsProvider="@EnumerableGridItemsProvider.Create(() => MetricView)"
                     RowSize="DataGridRowSize.Medium"
                     GridTemplateColumns="2fr 1fr 1fr 1fr"
                     TGridItem="ChartExemplar">

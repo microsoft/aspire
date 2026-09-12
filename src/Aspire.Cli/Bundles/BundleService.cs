@@ -171,7 +171,8 @@ internal sealed class BundleService(
             {
                 var existingVersion = ReadVersionMarker(destinationPath);
                 var currentVersion = GetCurrentVersion(ProcessPathOverride);
-                if (existingVersion == currentVersion)
+                if (existingVersion == currentVersion &&
+                    ResolveActiveVersionDirectory(destinationPath) is not null)
                 {
                     logger.LogDebug("Bundle already extracted and up to date (version: {Version}).", existingVersion);
                     return BundleExtractResult.AlreadyUpToDate;
@@ -259,7 +260,7 @@ internal sealed class BundleService(
         // post-flip sanity check fails.
         var priorTargets = CaptureLinkTargets(destinationPath);
 
-        // Migrate any legacy real directories (managed/, dcp/) and flip the public
+        // Migrate any legacy real directories (managed/, dashboard/, dcp/) and flip the public
         // reparse points to point at the new versioned directory.
         if (!TryFlipLinks(destinationPath, activeVersionDir))
         {
@@ -294,7 +295,7 @@ internal sealed class BundleService(
             FileDeleteHelper.TryCleanupOldItems(destinationPath, dir);
         }
 
-        // Best-effort cleanup of legacy top-level managed/ and dcp/ paths from
+        // Best-effort cleanup of legacy top-level managed/, dashboard/, and dcp/ paths from
         // the old layout (before the single bundle/ link was introduced). These
         // are no longer needed now that layout discovery resolves through bundle/.
         TryCleanupLegacyLayoutPaths(destinationPath);
@@ -515,7 +516,7 @@ internal sealed class BundleService(
             var linkPath = Path.Combine(layoutPath, dir);
 
             // The bundle link points directly at the active version directory —
-            // components (managed/, dcp/) are subdirectories of the target.
+            // components (managed/, dashboard/, dcp/) are subdirectories of the target.
             var target = activeVersionDir;
 
             // Clear out legacy stale siblings from prior runs first.
@@ -586,7 +587,7 @@ internal sealed class BundleService(
 
     /// <summary>
     /// Returns <see langword="true"/> if <paramref name="versionDir"/> contains the
-    /// essential bundle components (<c>managed/aspire-managed</c> and the DCP executable).
+    /// essential bundle components (the managed and Dashboard executables, the Blazor script, the SQLite native library, and the DCP executable).
     /// </summary>
     internal static bool IsVersionedLayoutValid(string versionDir)
     {
@@ -598,20 +599,17 @@ internal sealed class BundleService(
         var managedDir = Path.Combine(versionDir, BundleDiscovery.ManagedDirectoryName);
         var managedExe = Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
 
-        if (!Directory.Exists(managedDir) || !File.Exists(managedExe))
+        if (!Directory.Exists(managedDir) || !IsNonEmptyFile(managedExe))
         {
             return false;
         }
 
-        try
-        {
-            var info = new FileInfo(managedExe);
-            if (info.Length == 0)
-            {
-                return false;
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        var dashboardDir = Path.Combine(versionDir, BundleDiscovery.DashboardDirectoryName);
+        var dashboardExe = Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        var blazorScript = Path.Combine(dashboardDir, "wwwroot", "_framework", "blazor.web.js");
+        var sqliteLibraryName = OperatingSystem.IsWindows() ? "e_sqlite3.dll" : OperatingSystem.IsMacOS() ? "libe_sqlite3.dylib" : "libe_sqlite3.so";
+        var sqliteLibrary = Path.Combine(dashboardDir, sqliteLibraryName);
+        if (!Directory.Exists(dashboardDir) || !IsNonEmptyFile(dashboardExe) || !IsNonEmptyFile(blazorScript) || !IsNonEmptyFile(sqliteLibrary))
         {
             return false;
         }
@@ -624,6 +622,18 @@ internal sealed class BundleService(
         }
 
         return true;
+
+        static bool IsNonEmptyFile(string path)
+        {
+            try
+            {
+                return File.Exists(path) && new FileInfo(path).Length > 0;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
     }
 
     /// <summary>
@@ -719,20 +729,21 @@ internal sealed class BundleService(
             Components = new LayoutComponents
             {
                 Dcp = BundleDiscovery.DcpDirectoryName,
+                Dashboard = BundleDiscovery.DashboardDirectoryName,
                 Managed = BundleDiscovery.ManagedDirectoryName,
             }
         };
     }
 
     /// <summary>
-    /// Best-effort removal of legacy top-level <c>managed/</c> and <c>dcp/</c>
+    /// Best-effort removal of legacy top-level <c>managed/</c>, <c>dashboard/</c>, and <c>dcp/</c>
     /// directories from the old layout shape (before the single <c>bundle/</c> link
     /// was introduced). Failures are silently ignored since the new layout via
     /// <c>bundle/</c> is already functional.
     /// </summary>
     private void TryCleanupLegacyLayoutPaths(string layoutPath)
     {
-        string[] legacyDirs = [BundleDiscovery.ManagedDirectoryName, BundleDiscovery.DcpDirectoryName];
+        string[] legacyDirs = [BundleDiscovery.ManagedDirectoryName, BundleDiscovery.DashboardDirectoryName, BundleDiscovery.DcpDirectoryName];
 
         foreach (var dir in legacyDirs)
         {

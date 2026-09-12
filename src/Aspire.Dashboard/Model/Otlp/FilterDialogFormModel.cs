@@ -41,7 +41,7 @@ public class FilterDialogFormModel : IValidatableObject
 
     // Set a max length on value because it will be added to the query string.
     // Max length is protection against accidently building a query string that exceeds limits because of a very long value.
-    [MaxLength(1024, ErrorMessageResourceType = typeof(Dialogs), ErrorMessageResourceName = nameof(Dialogs.FieldTooLong))]
+    [StringLength(1024, ErrorMessageResourceType = typeof(Dialogs), ErrorMessageResourceName = nameof(Dialogs.FieldTooLong))]
     public string? Value { get; set; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

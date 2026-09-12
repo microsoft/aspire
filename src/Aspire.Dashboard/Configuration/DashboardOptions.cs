@@ -401,6 +401,16 @@ public sealed class OpenIdConnectOptions
 
 public sealed class ClaimAction
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ClaimAction"/> class.
+    /// </summary>
+    [SetsRequiredMembers]
+    public ClaimAction()
+    {
+        ClaimType = null!;
+        JsonKey = null!;
+    }
+
     public required string ClaimType { get; set; }
     public required string JsonKey { get; set; }
     public string? SubKey { get; set; }
@@ -437,11 +447,9 @@ public sealed class DebugSessionOptions
 
             try
             {
-#if NET9_0_OR_GREATER
+                // Server identity validation needs a single DER/PEM public certificate, not a
+                // PKCS#12/PFX or PKCS#7 container. Do not restore the constructor's format sniffing.
                 _serverCertificate = X509CertificateLoader.LoadCertificate(data);
-#else
-                _serverCertificate = new X509Certificate2(data);
-#endif
             }
             catch (Exception ex)
             {

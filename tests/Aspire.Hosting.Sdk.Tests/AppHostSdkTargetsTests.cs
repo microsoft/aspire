@@ -662,10 +662,83 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("Dnx", properties["_AspireResolvedCliInvocationMode"]);
         Assert.Equal(dnxBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
-        Assert.Equal(dnxBundle.ManagedDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
-        Assert.Equal(dnxBundle.ManagedPath, properties["AspireDashboardPath"]);
+        Assert.Equal(dnxBundle.DashboardDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(dnxBundle.DashboardPath, properties["AspireDashboardPath"]);
         Assert.NotEqual(staleBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
         AssertCliBundleExists(aspireHome, JsonSerializer.Serialize(properties));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResolveAspireCliBundleRejectsIncompleteDashboard(bool hasTransitionalDashboard)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var bundle = CreateFakeCliBundle(workspace.Path);
+        var managedDir = Path.Combine(workspace.Path, "bundle", "managed");
+        if (hasTransitionalDashboard)
+        {
+            File.Move(bundle.DashboardPath, Path.Combine(managedDir, Path.GetFileName(bundle.DashboardPath)));
+        }
+        else
+        {
+            File.Delete(bundle.DashboardPath);
+        }
+
+        var task = new ResolveAspireCliBundle
+        {
+            AspireCliBundlePath = workspace.Path,
+            WarnOnInvalidPaths = false
+        };
+
+        Assert.True(task.Execute());
+        Assert.Null(task.DcpDir);
+        Assert.Null(task.AspireDashboardDir);
+        Assert.Null(task.AspireDashboardPath);
+        Assert.Null(task.AspireTerminalHostDir);
+        Assert.Null(task.AspireTerminalHostPath);
+        Assert.Null(task.AspireTerminalHostInvocationArgs);
+    }
+
+    [Theory]
+    [InlineData("current")]
+    [InlineData("transitional")]
+    [InlineData("legacy")]
+    public void ResolveAspireCliBundleResolvesSupportedDashboardLayouts(string layout)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var bundle = CreateFakeCliBundle(workspace.Path);
+        var managedDir = Path.Combine(workspace.Path, "bundle", "managed");
+        var managedPath = Path.Combine(managedDir, OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed");
+        var expectedDashboardDir = bundle.DashboardDirectory;
+        var expectedDashboardPath = bundle.DashboardPath;
+        if (layout == "transitional")
+        {
+            expectedDashboardDir = managedDir;
+            expectedDashboardPath = Path.Combine(managedDir, Path.GetFileName(bundle.DashboardPath));
+            File.Move(bundle.DashboardPath, expectedDashboardPath);
+            Directory.Delete(bundle.DashboardDirectory);
+        }
+        else if (layout == "legacy")
+        {
+            expectedDashboardDir = managedDir;
+            expectedDashboardPath = managedPath;
+            Directory.Delete(bundle.DashboardDirectory, recursive: true);
+        }
+
+        var task = new ResolveAspireCliBundle
+        {
+            AspireCliBundlePath = workspace.Path,
+            WarnOnInvalidPaths = false
+        };
+
+        Assert.True(task.Execute());
+        Assert.Equal(bundle.DcpDirectory + Path.DirectorySeparatorChar, task.DcpDir);
+        Assert.Equal(expectedDashboardDir + Path.DirectorySeparatorChar, task.AspireDashboardDir);
+        Assert.Equal(expectedDashboardPath, task.AspireDashboardPath);
+        Assert.Equal(managedDir + Path.DirectorySeparatorChar, task.AspireTerminalHostDir);
+        Assert.Equal(managedPath, task.AspireTerminalHostPath);
+        Assert.Equal("terminalhost", task.AspireTerminalHostInvocationArgs);
     }
 
     [Fact]
@@ -690,8 +763,8 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(aspireCliPath, properties["_AspireResolvedCliPath"]);
         Assert.Equal(selectedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
-        Assert.Equal(selectedBundle.ManagedDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
-        Assert.Equal(selectedBundle.ManagedPath, properties["AspireDashboardPath"]);
+        Assert.Equal(selectedBundle.DashboardDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(selectedBundle.DashboardPath, properties["AspireDashboardPath"]);
         AssertCliBundleExists(fakeCliDirectory.FullName, JsonSerializer.Serialize(properties));
     }
 
@@ -718,8 +791,8 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
         Assert.Equal(selectedCliPath, properties["_AspireResolvedCliPath"]);
         Assert.Equal(selectedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
-        Assert.Equal(selectedBundle.ManagedDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
-        Assert.Equal(selectedBundle.ManagedPath, properties["AspireDashboardPath"]);
+        Assert.Equal(selectedBundle.DashboardDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(selectedBundle.DashboardPath, properties["AspireDashboardPath"]);
         Assert.NotEqual(staleBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
         AssertCliBundleExists(selectedCliDirectory.FullName, JsonSerializer.Serialize(properties));
     }
@@ -745,8 +818,8 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var selectedBundle = GetFakeCliBundlePaths(fakeCliDirectory.FullName);
 
         Assert.Equal(selectedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
-        Assert.Equal(selectedBundle.ManagedDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
-        Assert.Equal(selectedBundle.ManagedPath, properties["AspireDashboardPath"]);
+        Assert.Equal(selectedBundle.DashboardDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(selectedBundle.DashboardPath, properties["AspireDashboardPath"]);
         AssertCliBundleExists(fakeCliDirectory.FullName, JsonSerializer.Serialize(properties));
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "nativeexpanded")));
     }
@@ -1246,8 +1319,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 if not "%~1"=="setup" exit /b 2
                 mkdir "%~dp0bundle\dcp"
                 mkdir "%~dp0bundle\managed"
+                mkdir "%~dp0bundle\dashboard"
                 type nul > "%~dp0bundle\dcp\dcp.exe"
                 type nul > "%~dp0bundle\managed\aspire-managed.exe"
+                type nul > "%~dp0bundle\dashboard\Aspire.Dashboard.exe"
                 """
             : """
                 #!/bin/sh
@@ -1255,9 +1330,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                     exit 2
                 fi
                 install_path="$(dirname "$0")"
-                mkdir -p "$install_path/bundle/dcp" "$install_path/bundle/managed"
+                mkdir -p "$install_path/bundle/dcp" "$install_path/bundle/managed" "$install_path/bundle/dashboard"
                 : > "$install_path/bundle/dcp/dcp"
                 : > "$install_path/bundle/managed/aspire-managed"
+                : > "$install_path/bundle/dashboard/Aspire.Dashboard"
                 """;
 
         await File.WriteAllTextAsync(aspirePath, contents.ReplaceLineEndings(OperatingSystem.IsWindows() ? "\r\n" : "\n"));
@@ -1269,23 +1345,27 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         return aspirePath;
     }
 
-    private static (string DcpDirectory, string ManagedDirectory, string ManagedPath) CreateFakeCliBundle(string layoutRoot)
+    private static (string DcpDirectory, string DashboardDirectory, string DashboardPath) CreateFakeCliBundle(string layoutRoot)
     {
         var bundle = GetFakeCliBundlePaths(layoutRoot);
         Directory.CreateDirectory(bundle.DcpDirectory);
-        Directory.CreateDirectory(bundle.ManagedDirectory);
+        Directory.CreateDirectory(Path.Combine(layoutRoot, "bundle", "managed"));
+        Directory.CreateDirectory(bundle.DashboardDirectory);
         File.WriteAllText(Path.Combine(bundle.DcpDirectory, OperatingSystem.IsWindows() ? "dcp.exe" : "dcp"), "");
-        File.WriteAllText(bundle.ManagedPath, "");
+        File.WriteAllText(
+            Path.Combine(layoutRoot, "bundle", "managed", OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed"),
+            "");
+        File.WriteAllText(bundle.DashboardPath, "");
         return bundle;
     }
 
-    private static (string DcpDirectory, string ManagedDirectory, string ManagedPath) GetFakeCliBundlePaths(string layoutRoot)
+    private static (string DcpDirectory, string DashboardDirectory, string DashboardPath) GetFakeCliBundlePaths(string layoutRoot)
     {
         var bundleRoot = Path.Combine(layoutRoot, "bundle");
         var dcpDirectory = Path.Combine(bundleRoot, "dcp");
-        var managedDirectory = Path.Combine(bundleRoot, "managed");
-        var managedPath = Path.Combine(managedDirectory, OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed");
-        return (dcpDirectory, managedDirectory, managedPath);
+        var dashboardDirectory = Path.Combine(bundleRoot, "dashboard");
+        var dashboardPath = Path.Combine(dashboardDirectory, OperatingSystem.IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
+        return (dcpDirectory, dashboardDirectory, dashboardPath);
     }
 
     private static async Task<string> CreateFakeAspireCommandShimAsync(string fakeCliDirectory, string extension = ".cmd")
@@ -1359,9 +1439,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                     exit 0
                 fi
                 if [ "$1" = "--yes" ] && { [ "$2" = "aspire.cli@13.5.0" ] || [ "$2" = "aspire.cli" ]; } && [ "$3" = "--" ] && [ "$4" = "setup" ] && [ "$5" = "--install-path" ]; then
-                    mkdir -p "$6/bundle/dcp" "$6/bundle/managed"
+                    mkdir -p "$6/bundle/dcp" "$6/bundle/managed" "$6/bundle/dashboard"
                     : > "$6/bundle/dcp/dcp"
                     : > "$6/bundle/managed/aspire-managed"
+                    : > "$6/bundle/dashboard/Aspire.Dashboard"
                     exit 0
                 fi
                 printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"

@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
 using Xunit;
@@ -258,6 +259,86 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
+    }
+
+    [Fact]
+    public async Task AspireStart_TimeoutIncludesStartupDiagnostics()
+    {
+        await using var terminal = new Hex1bTerminal(new Hex1bTerminalOptions
+        {
+            WorkloadAdapter = new Hex1bAppWorkloadAdapter()
+        });
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+            auto.AspireStartAsync(new SequenceCounter(), startTimeout: TimeSpan.Zero));
+
+        Assert.Equal(
+            "aspire start did not complete within 1 seconds. AppHost startup may be stuck. " +
+            "Check the terminal recording and captured workspace diagnostics for CLI and AppHost logs.",
+            exception.Message);
+        var automationException = Assert.IsType<Hex1bAutomationException>(exception.InnerException);
+        Assert.IsType<WaitUntilTimeoutException>(automationException.InnerException);
+    }
+
+    [Fact]
+    public async Task DashboardReadiness_TimeoutIncludesStartupDiagnostics()
+    {
+        await using var terminal = new Hex1bTerminal(new Hex1bTerminalOptions
+        {
+            WorkloadAdapter = new Hex1bAppWorkloadAdapter()
+        });
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+            auto.WaitForDashboardReadyAsync(new SequenceCounter(), TimeSpan.Zero));
+
+        Assert.Equal(
+            "aspire start completed, but the Dashboard did not become ready within the 0-second readiness budget. " +
+            "Expected HTTP 200 from the Dashboard URL. The Dashboard may have failed to start or stopped responding. " +
+            "Check the terminal recording for the last HTTP status and the captured workspace diagnostics for AppHost and Dashboard logs.",
+            exception.Message);
+        var automationException = Assert.IsType<Hex1bAutomationException>(exception.InnerException);
+        Assert.IsType<WaitUntilTimeoutException>(automationException.InnerException);
+    }
+
+    [Fact]
+    public async Task TerminalCleanup_CompletedRunDoesNotCancel()
+    {
+        using var runCancellation = new CancellationTokenSource();
+
+        await TerminalRun.WaitForExitAsync(Task.CompletedTask, runCancellation, TimeSpan.Zero);
+
+        Assert.False(runCancellation.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task TerminalCleanup_CancelsStalledRun()
+    {
+        using var runCancellation = new CancellationTokenSource();
+        var pendingRun = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = runCancellation.Token.Register(() => pendingRun.SetCanceled(runCancellation.Token));
+
+        await TerminalRun.WaitForExitAsync(pendingRun.Task, runCancellation, TimeSpan.Zero);
+
+        Assert.True(runCancellation.IsCancellationRequested);
+        Assert.True(pendingRun.Task.IsCanceled);
+    }
+
+    [Fact]
+    public async Task TerminalCleanup_RunIgnoringCancellationStillTimesOut()
+    {
+        using var runCancellation = new CancellationTokenSource();
+        var pendingRun = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() => TerminalRun.WaitForExitAsync(pendingRun.Task, runCancellation, TimeSpan.Zero));
+
+        Assert.Equal(
+            "The terminal did not exit after cancellation. Stopped waiting so the original test failure can be reported. " +
+            "Check the terminal recording for the command that stopped making progress.",
+            exception.Message);
+        Assert.True(runCancellation.IsCancellationRequested);
+        Assert.False(pendingRun.Task.IsCompleted);
     }
 
     private static string GetAppHostSdkVersion(string appHostPath)

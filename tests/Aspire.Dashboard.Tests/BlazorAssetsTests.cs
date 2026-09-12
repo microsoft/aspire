@@ -21,26 +21,21 @@ public class BlazorAssetsTests
         Assert.Contains(".IMask", imask, StringComparison.Ordinal);
 
         var app = File.ReadAllText(appPath);
-        var imaskScriptIndex = app.IndexOf("<script src=\"js/imask-7.6.1.min.js\"></script>", StringComparison.Ordinal);
-        var blazorScriptIndex = app.IndexOf("<BlazorScript />", StringComparison.Ordinal);
+        var imaskScriptIndex = app.IndexOf("""<script src="@Assets["js/imask-7.6.1.min.js"]"></script>""", StringComparison.Ordinal);
+        var blazorScriptIndex = app.IndexOf("""<script src="@Assets["_framework/blazor.web.js"]"></script>""", StringComparison.Ordinal);
         Assert.True(imaskScriptIndex >= 0, "Expected App.razor to load the bundled IMask script.");
         Assert.True(blazorScriptIndex > imaskScriptIndex, "IMask must load before Blazor renders FluentNumberInput components.");
     }
 
-    [Theory]
-    [InlineData("10")]
-    [InlineData("11")]
-    public void BlazorWebJs_DoesNotSendUnsupportedKeyboardEventProperties(string runtimeMajorVersion)
+    [Fact]
+    public void BlazorScript_UsesAssetReference()
     {
-        var blazorWebJsPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "wwwroot", "framework", $"blazor.web.{runtimeMajorVersion}.js");
-        Assert.True(File.Exists(blazorWebJsPath), $"Expected generated Blazor asset at {blazorWebJsPath}");
+        var appPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "Components", "App.razor");
 
-        var blazorWebJs = File.ReadAllText(blazorWebJsPath);
+        var blazorScript = File.ReadLines(appPath)
+            .Single(line => line.Contains("_framework/blazor.web.js", StringComparison.Ordinal)).Trim();
 
-        Assert.Contains("keydown", blazorWebJs, StringComparison.Ordinal);
-        Assert.False(
-            blazorWebJs.Contains("isComposing", StringComparison.Ordinal),
-            "The dashboard Blazor script must not emit KeyboardEvent.isComposing because the server event parser rejects the unknown property.");
+        Assert.Equal("""<script src="@Assets["_framework/blazor.web.js"]"></script>""", blazorScript);
     }
 
     private static string GetRepoRoot()

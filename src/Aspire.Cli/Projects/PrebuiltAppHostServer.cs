@@ -3,8 +3,10 @@
 
 using System.Buffers;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO.Hashing;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -24,6 +26,7 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Projects;
 
@@ -64,6 +67,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private string? _integrationLibsPath;
     private string? _integrationProbeManifestPath;
     private AppHostServerProjectLayout? _selectedProjectLayout;
+    private bool _supportsNativeDashboard = true;
 
     /// <summary>
     /// Initializes a new instance of the PrebuiltAppHostServer class.
@@ -140,6 +144,37 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         return managedPath;
     }
 
+    private bool TryGetHostingVersion(string sdkVersion, [NotNullWhen(true)] out SemVersion? hostingVersion)
+    {
+        try
+        {
+            var hostingAssembly = IntegrationPackageProbeManifest.Load(_integrationProbeManifestPath).ManagedAssemblies
+                .FirstOrDefault(static assembly => assembly.Culture is null && string.Equals(assembly.Name, "Aspire.Hosting", StringComparison.OrdinalIgnoreCase));
+            if (SemVersion.TryParse(hostingAssembly?.PackageVersion, out hostingVersion))
+            {
+                return true;
+            }
+
+            var assemblyPath = hostingAssembly?.Path ?? (_integrationLibsPath is not null ? Path.Combine(_integrationLibsPath, "Aspire.Hosting.dll") : null);
+            if (assemblyPath is not null && File.Exists(assemblyPath))
+            {
+                var assemblyVersion = AssemblyName.GetAssemblyName(assemblyPath).Version;
+                hostingVersion = assemblyVersion is not null
+                    ? new SemVersion(assemblyVersion.Major, assemblyVersion.Minor, assemblyVersion.Build)
+                    : null;
+                return hostingVersion is not null;
+            }
+
+            return SemVersion.TryParse(sdkVersion, out hostingVersion);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Unable to determine the Hosting version; using the Dashboard compatibility dispatcher.");
+            hostingVersion = null;
+            return false;
+        }
+    }
+
     /// <inheritdoc />
     public async Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
@@ -163,6 +198,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             _contentRootPath = _workingDirectory;
             _integrationLibsPath = null;
             _integrationProbeManifestPath = null;
+            _supportsNativeDashboard = false;
 
             // Resolve the channel the project requests for restore (aspire.config.json#channel,
             // with a legacy .aspire/settings.json#channel fallback). This is independent of the
@@ -223,6 +259,11 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 var appSettingsContent = CreateAppSettingsContent(packageRefs, []);
                 await WriteAppSettingsAsync(_workingDirectory, appSettingsContent, cancellationToken).ConfigureAwait(false);
             }
+
+            // Hosting before 13.6 treats every non-aspire-managed path as a managed Dashboard DLL.
+            // Use the restored Hosting version: the server bundle does not contain its own Hosting assembly.
+            _supportsNativeDashboard = TryGetHostingVersion(sdkVersion, out var hostingVersion) &&
+                DashboardLaunchHelper.SupportsNativeDashboard(hostingVersion);
 
             return new AppHostServerPrepareResult(
                 Success: true,
@@ -1495,11 +1536,29 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 BundleDiscovery.DcpPathEnvVar);
         }
 
-        // Set the dashboard path so the AppHost can locate and launch the dashboard binary
-        var managedPath = _layout.GetManagedPath();
-        if (managedPath is not null)
+        if (DashboardLaunchHelper.GetDashboardPath(_layout, _supportsNativeDashboard) is { } dashboardPath)
         {
-            startInfo.Environment[BundleDiscovery.DashboardPathEnvVar] = managedPath;
+            startInfo.Environment[BundleDiscovery.DashboardPathEnvVar] = dashboardPath;
+        }
+
+        // Set explicit terminal host defaults so they remain valid when the Dashboard path is overridden.
+        // Retain inherited and apphost.run.json overrides as a pair.
+        bool HasEnvironmentOverride(string name)
+        {
+            var value = environmentVariables is not null && environmentVariables.TryGetValue(name, out var configuredValue)
+                ? configuredValue
+                : startInfo.Environment.TryGetValue(name, out var inheritedValue) ? inheritedValue : null;
+            return !string.IsNullOrWhiteSpace(value);
+        }
+
+        if (!HasEnvironmentOverride(BundleDiscovery.TerminalHostPathEnvVar) &&
+            _layout.GetManagedPath() is { } terminalHostPath)
+        {
+            startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
+            if (!HasEnvironmentOverride(BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+            {
+                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
+            }
         }
 
         // Apply environment variables from apphost.run.json

@@ -20,6 +20,7 @@ using Aspire.Dashboard.Otlp;
 using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Serialization;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
@@ -30,7 +31,6 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -126,6 +126,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// </summary>
     /// <param name="preConfigureBuilder">Configuration for the internal app builder *before* normal dashboard configuration is done. This is for unit testing.</param>
     /// <param name="options">Environment configuration for the internal app builder. This is for unit testing</param>
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "AddRazorComponents and AddInteractiveServerComponents still warn that Blazor does not support trimming. Dashboard component types are rooted and circuit serialization uses generated Dashboard and Fluent UI contexts. Remove when Blazor supports trimming: https://aka.ms/aspnet/nativeaot.")]
     public DashboardWebApplication(
         Action<WebApplicationBuilder>? preConfigureBuilder = null,
         WebApplicationOptions? options = null)
@@ -230,12 +231,22 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         ConfigureAuthentication(builder, dashboardOptions);
 
+        builder.Services.ConfigureHttpJsonOptions(options =>
+        {
+            options.SerializerOptions.TypeInfoResolverChain.Insert(0, DashboardJsonSerializerContext.Default);
+            options.SerializerOptions.TypeInfoResolverChain.Insert(1, Aspire.Otlp.Serialization.OtlpJsonSerializerContext.Default);
+        });
+
         // Add services to the container.
-        builder.Services.AddRazorComponents().AddInteractiveServerComponents();
-    #if !NET9_0_OR_GREATER
-        // Fluent uses constructor injection, which Blazor's default activator only supports in .NET 9+.
-        builder.Services.Replace(ServiceDescriptor.Scoped<IComponentActivator, DashboardComponentActivator>());
-    #endif
+        builder.Services.AddRazorComponents().AddInteractiveServerComponents(options =>
+        {
+#pragma warning disable FLUENTUI0001 // Fluent UI Native AOT serialization support is experimental.
+#pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
+            options.JsonTypeInfoResolvers.Add(FluentUIJsonSerializerContext.Default);
+            options.JsonTypeInfoResolvers.Add(DashboardJsonSerializerContext.Default);
+#pragma warning restore ASPNETCORE9004
+#pragma warning restore FLUENTUI0001
+        });
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddResponseCompression(options =>
         {
@@ -280,7 +291,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
                 // Only loopback proxies are allowed by default. Clear that restriction because forwarders are
                 // being enabled by explicit configuration.
-                options.KnownNetworks.Clear();
+                options.KnownIPNetworks.Clear();
                 options.KnownProxies.Clear();
             });
         }
@@ -801,8 +812,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeOtlp, o => o.RequiredConnectionTypes = [ConnectionType.OtlpGrpc, ConnectionType.OtlpHttp])
             .AddCertificate(options =>
             {
-                // Bind options to configuration so they can be overridden by environment variables.
-                builder.Configuration.Bind("Dashboard:Otlp:CertificateAuthOptions", options);
+                BindCertificateAuthenticationOptions(
+                    builder.Configuration.GetSection("Dashboard:Otlp:CertificateAuthOptions"),
+                    options);
 
                 options.Events = new CertificateAuthenticationEvents
                 {
@@ -986,6 +998,56 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
     }
 
+    internal static void BindCertificateAuthenticationOptions(
+        IConfigurationSection configuration,
+        CertificateAuthenticationOptions options)
+    {
+        // Binding the entire options object produces SYSLIB1100/SYSLIB1101 even for scalar-only config:
+        // TimeProvider has no public constructor, and CustomTrustStore contains unsupported certificate
+        // types. Generated certificate bindings also access obsolete APIs. Bind supported scalars explicitly
+        // rather than suppressing these diagnostics or falling back to reflection under Native AOT.
+        // https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1100
+        options.AllowedCertificateTypes = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.AllowedCertificateTypes),
+            options.AllowedCertificateTypes);
+        options.ChainTrustValidationMode = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ChainTrustValidationMode),
+            options.ChainTrustValidationMode);
+        options.RevocationFlag = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.RevocationFlag),
+            options.RevocationFlag);
+        options.RevocationMode = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.RevocationMode),
+            options.RevocationMode);
+        options.ValidateCertificateUse = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ValidateCertificateUse),
+            options.ValidateCertificateUse);
+        options.ValidateValidityPeriod = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ValidateValidityPeriod),
+            options.ValidateValidityPeriod);
+        options.ClaimsIssuer = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ClaimsIssuer),
+            options.ClaimsIssuer);
+        options.ForwardAuthenticate = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardAuthenticate),
+            options.ForwardAuthenticate);
+        options.ForwardChallenge = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardChallenge),
+            options.ForwardChallenge);
+        options.ForwardDefault = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardDefault),
+            options.ForwardDefault);
+        options.ForwardForbid = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardForbid),
+            options.ForwardForbid);
+        options.ForwardSignIn = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardSignIn),
+            options.ForwardSignIn);
+        options.ForwardSignOut = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardSignOut),
+            options.ForwardSignOut);
+    }
+
     internal static Action<OpenIdConnectOptions> GetOidcClaimActionConfigure(ClaimAction action)
     {
         Action<OpenIdConnectOptions> configureAction = (action.SubKey is null, action.IsUnique) switch
@@ -1099,12 +1161,4 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     }
 
     private static bool IsHttpsOrNull(BindingAddress? address) => address == null || string.Equals(address.Scheme, "https", StringComparison.Ordinal);
-
-    private sealed class DashboardComponentActivator(IServiceProvider serviceProvider) : IComponentActivator
-    {
-        public IComponent CreateInstance([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type componentType)
-        {
-            return (IComponent)ActivatorUtilities.CreateInstance(serviceProvider, componentType);
-        }
-    }
 }

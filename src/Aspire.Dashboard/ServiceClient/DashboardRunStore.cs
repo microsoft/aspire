@@ -6,6 +6,7 @@ using System.IO.Hashing;
 using System.Text;
 using System.Text.Json;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Serialization;
 using Aspire.Shared;
 using Microsoft.Extensions.Options;
 
@@ -74,7 +75,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     internal const int MaxRuns = 10;
     internal const int SchemaVersion = DashboardSqliteDatabase.SchemaVersion;
 
-    private static readonly JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
+    // Preserve the persisted PascalCase names and indentation without changing the shared context's defaults.
+    private static readonly DashboardJsonSerializerContext s_jsonContext = new(new JsonSerializerOptions { WriteIndented = true });
 
     private readonly string? _runsDirectory;
     private readonly string? _metadataPath;
@@ -265,7 +267,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private void UpdatePinnedState(DashboardRunDescriptor run, string runDirectory, bool isPinned)
     {
         var metadataPath = Path.Combine(runDirectory, "run.json");
-        var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
+        var metadata = JsonSerializer.Deserialize(File.ReadAllText(metadataPath), s_jsonContext.DashboardRunMetadata);
         if (metadata is not { SchemaVersion: SchemaVersion } ||
             !string.Equals(metadata.RunId, run.RunId, StringComparison.Ordinal))
         {
@@ -352,7 +354,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 var metadataPath = Path.Combine(directory, "run.json");
                 try
                 {
-                    var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
+                    var metadata = JsonSerializer.Deserialize(File.ReadAllText(metadataPath), s_jsonContext.DashboardRunMetadata);
                     if (metadata is { SchemaVersion: SchemaVersion })
                     {
                         var run = CreateDescriptor(metadata, directory, isCurrent: false);
@@ -419,7 +421,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
         try
         {
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(metadata, s_jsonOptions));
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(metadata, s_jsonContext.DashboardRunMetadata));
             File.Move(temporaryPath, metadataPath, overwrite: true);
         }
         catch
@@ -470,7 +472,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         try
         {
             var metadataPath = Path.Combine(runDirectory, "run.json");
-            return JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath))?.IsPinned == true;
+            return JsonSerializer.Deserialize(File.ReadAllText(metadataPath), s_jsonContext.DashboardRunMetadata)?.IsPinned == true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -610,7 +612,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
     }
 
-    private sealed record DashboardRunMetadata
+    internal sealed record DashboardRunMetadata
     {
         public required int SchemaVersion { get; init; }
         public required string RunId { get; init; }

@@ -46,7 +46,7 @@
                                                 Expanded="@_isUrlsExpanded">
                 <FluentDataGrid TGridItem="DisplayedUrl"
                                 ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
-                                Items="@FilteredUrls"
+                                ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredUrls)"
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizableColumns="true"
                                 ResizeType="DataGridResizeType.Discrete"
@@ -70,7 +70,7 @@
                                    IsMaskedChanged="@(_ => OnValueMaskedChanged(context))"
                                    HighlightText="@_filter" />
                     </AspireTemplateColumn>
-                    <AspireTemplateColumn Sortable="true" SortBy="@(GridSort<DisplayedUrl>.ByAscending(i => i.Name))" Title="@ControlStringsLoc[nameof(ControlsStrings.EndpointNameColumnHeader)]">
+                    <AspireTemplateColumn Sortable="true" SortBy="@(EnumerableGridSort<DisplayedUrl>.ByAscending(item => item.Name))" Title="@ControlStringsLoc[nameof(ControlsStrings.EndpointNameColumnHeader)]">
                         <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.EndpointNameColumnHeader)]"
                                    Value="@context.Name"
                                    EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
@@ -85,7 +85,7 @@
                                                     Expanded="@_isVolumesExpanded">
                     <FluentDataGrid TGridItem="VolumeViewModel"
                                     ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
-                                    Items="@FilteredVolumes"
+                                    ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredVolumes)"
                                     HeaderCellAsButtonWithMenu="true"
                                     ResizableColumns="true"
                                     ResizeType="DataGridResizeType.Discrete"
@@ -93,19 +93,19 @@
                                     RowSize="DataGridRowSize.Medium"
                                     GridTemplateColumns="1fr 1fr 0.5fr"
                                     ShowHover="true">
-                        <AspireTemplateColumn Sortable="true" SortBy="@(GridSort<VolumeViewModel>.ByAscending(i => i.Source))" Title="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]">
+                        <AspireTemplateColumn Sortable="true" SortBy="@(EnumerableGridSort<VolumeViewModel>.ByAscending(item => item.Source))" Title="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]">
                             <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]"
                                        Value="@context.Source"
                                        EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
                                        HighlightText="@_filter" />
                         </AspireTemplateColumn>
-                        <AspireTemplateColumn Sortable="true" SortBy="@(GridSort<VolumeViewModel>.ByAscending(i => i.Target))" Title="@ControlStringsLoc[nameof(ControlsStrings.VolumePathColumnHeader)]">
+                        <AspireTemplateColumn Sortable="true" SortBy="@(EnumerableGridSort<VolumeViewModel>.ByAscending(item => item.Target))" Title="@ControlStringsLoc[nameof(ControlsStrings.VolumePathColumnHeader)]">
                             <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.VolumePathColumnHeader)]"
                                        Value="@context.Target"
                                        EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
                                        HighlightText="@_filter" />
                         </AspireTemplateColumn>
-                        <AspireTemplateColumn Sortable="true" SortBy="@(GridSort<VolumeViewModel>.ByAscending(i => i.MountType))" Title="@ControlStringsLoc[nameof(ControlsStrings.VolumeMountTypeColumnHeader)]">
+                        <AspireTemplateColumn Sortable="true" SortBy="@(EnumerableGridSort<VolumeViewModel>.ByAscending(item => item.MountType))" Title="@ControlStringsLoc[nameof(ControlsStrings.VolumeMountTypeColumnHeader)]">
                             <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.VolumeMountTypeColumnHeader)]"
                                        Value="@context.MountType.Humanize()">
                                 <ContentBeforeValue>
@@ -126,7 +126,7 @@
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 TGridItem="ResourceDetailRelationshipViewModel"
-                                Items="@FilteredRelationships"
+                                ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredRelationships)"
                                 ItemKey="r => r.ResourceName"
                                 ResizableColumns="true"
                                 Style="width:100%"
@@ -151,7 +151,7 @@
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 TGridItem="ResourceDetailRelationshipViewModel"
-                                Items="@FilteredBackRelationships"
+                                ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredBackRelationships)"
                                 ItemKey="r => r.ResourceName"
                                 ResizableColumns="true"
                                 Style="width:100%"
@@ -175,7 +175,7 @@
                 <FluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
-                                Items="@FilteredHealthReports"
+                                ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredHealthReports)"
                                 ItemKey="r => r.Name"
                                 ResizableColumns="true"
                                 Style="width:100%"
