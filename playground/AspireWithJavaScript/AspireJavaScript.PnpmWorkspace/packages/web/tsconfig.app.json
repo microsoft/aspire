@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": [
+      "vite/client"
+    ]
+  },
+  "include": [
+    "src"
+  ]
+}
