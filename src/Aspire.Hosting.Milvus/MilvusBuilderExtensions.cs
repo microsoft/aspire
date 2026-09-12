@@ -152,11 +152,34 @@ public static class MilvusBuilderExtensions
                                                         .WithIconName("WindowDatabase")
                                                         .WithHttpEndpoint(targetPort: 3000, name: "http")
                                                         .WithEnvironment(context => ConfigureAttuContainer(context, builder.Resource))
+                                                        .WithParentRelationship(builder)
                                                         .ExcludeFromManifest();
+
+        AddManagementLink(resourceBuilder, "http", "Manage", builder.Resource);
 
         configureContainer?.Invoke(resourceBuilder);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpointName"/>
+    /// endpoint to <paramref name="managedResource"/>.
+    /// </summary>
+    private static void AddManagementLink<T>(IResourceBuilder<T> resourceBuilder, string endpointName, string displayText, IResource managedResource)
+        where T : IResourceWithEndpoints
+    {
+        resourceBuilder.WithHidden();
+
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+        managedResource.Annotations.Add(new ResourceUrlAnnotation
+        {
+            Url = "/",
+            DisplayText = displayText,
+            Endpoint = resourceBuilder.GetEndpoint(endpointName),
+            DisplayOrder = 1
+        });
+#pragma warning restore CS0618
     }
 
     /// <summary>

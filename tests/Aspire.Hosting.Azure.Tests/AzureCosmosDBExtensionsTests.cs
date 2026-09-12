@@ -1262,7 +1262,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task WithDataExplorerSetsDataExplorerDisplayText()
+    public async Task WithDataExplorerSetsManageDisplayText()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -1283,7 +1283,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         }
 
         var explorerUrl = Assert.Single(urls, u => u.Endpoint?.EndpointName == "data-explorer");
-        Assert.Equal("Data Explorer", explorerUrl.DisplayText);
+        Assert.Equal("Manage", explorerUrl.DisplayText);
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]

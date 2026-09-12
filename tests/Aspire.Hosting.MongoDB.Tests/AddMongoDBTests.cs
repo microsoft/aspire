@@ -217,6 +217,17 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithMongoExpressHidesTheMongoExpressResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.AddMongoDB("mongo").WithMongoExpress();
+
+        var mongoExpress = Assert.Single(builder.Resources.OfType<MongoExpressContainerResource>());
+        var hidden = Assert.Single(mongoExpress.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
     public async Task VerifyManifest()
     {
         var appBuilder = DistributedApplication.CreateBuilder();

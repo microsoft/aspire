@@ -180,6 +180,17 @@ public class AddKafkaTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithKafkaUIHidesTheKafkaUIResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.AddKafka("kafka").WithKafkaUI();
+
+        var kafkaUi = Assert.Single(builder.Resources.OfType<KafkaUIContainerResource>());
+        var hidden = Assert.Single(kafkaUi.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
     public async Task KafkaEnvironmentCallbackIsIdempotent()
     {
         using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);

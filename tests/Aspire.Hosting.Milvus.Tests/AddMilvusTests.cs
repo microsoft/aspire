@@ -201,6 +201,17 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("http", grpcEndpoint.UriScheme);
     }
 
+    [Fact]
+    public void WithAttuHidesTheAttuResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.AddMilvus("milvus").WithAttu();
+
+        var attu = Assert.Single(builder.Resources.OfType<AttuResource>());
+        var hidden = Assert.Single(attu.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
     private sealed class ProjectA : IProjectMetadata
     {
         public string ProjectPath => "projectA";

@@ -416,12 +416,15 @@ public static class RedisBuilderExtensions
         {
             foreach (var redisResource in @event.Model.Resources.OfType<RedisResource>())
             {
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
                 redisResource.Annotations.Add(new ResourceUrlAnnotation
                 {
                     Url = "/",
                     DisplayText = displayText,
-                    Endpoint = endpoint
+                    Endpoint = endpoint,
+                    DisplayOrder = 1
                 });
+#pragma warning restore CS0618
             }
 
             return Task.CompletedTask;
