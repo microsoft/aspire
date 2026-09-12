@@ -171,4 +171,27 @@ public class GenerateCITimelineTests
 
         Assert.Contains("45m", summary);
     }
+
+    [Fact]
+    public void GenerateSummary_InitialQueueTime_IncludedInWallTime()
+    {
+        // run_started_at is 3 minutes before the first job's created_at.
+        // Total should be run_started_at to last completed: 09:57 -> 10:43 = 46m.
+        var (runInfo, jobs) = LoadTestData("run-with-initial-queue.json");
+        var summary = TimelineRenderer.GenerateSummary(runInfo, jobs);
+
+        Assert.Contains("46m", summary);
+    }
+
+    [Fact]
+    public void GenerateSummary_InitialQueueTime_ReflectedInFirstJobDeps()
+    {
+        // The first job ("Prepare for ci") has created_at 3 minutes after run_started_at.
+        // Its Deps column (CreatedAt relative to t0) should show 3m00s.
+        var (runInfo, jobs) = LoadTestData("run-with-initial-queue.json");
+        var summary = TimelineRenderer.GenerateSummary(runInfo, jobs);
+
+        // The 3-minute initial queue shows up as "3m00s" in a table cell
+        Assert.Contains("3m00s", summary);
+    }
 }
