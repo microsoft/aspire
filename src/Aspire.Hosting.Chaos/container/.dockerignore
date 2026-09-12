@@ -1,0 +1,9 @@
+# Keep host build artifacts out of the docker build context. Without this, `COPY . ./`
+# can overwrite the container's RID-specific `dotnet restore` output with stale host-side
+# obj/ assets (which reference host-only NuGet fallback folders), breaking the --no-restore
+# ReadyToRun publish. The Aspire WithDockerfile context already omits these, but this makes
+# a build from the raw container/ source (CI, manual `podman build`) equally robust.
+bin/
+obj/
+**/bin/
+**/obj/

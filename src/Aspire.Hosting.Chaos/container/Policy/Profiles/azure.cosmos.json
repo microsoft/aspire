@@ -1,0 +1,47 @@
+{
+  "id": "azure.cosmos",
+  "safeFailFirstMax": 8,
+  "entries": [
+    {
+      "weight": 0.45,
+      "kind": "error",
+      "status": 429,
+      "contentType": "application/json",
+      "headers": {
+        "x-ms-retry-after-ms": "${retryAfterMs}",
+        "x-ms-substatus": "3200"
+      },
+      "paramRanges": { "retryAfterMs": [50, 500] },
+      "body": "{\"code\":\"TooManyRequests\",\"message\":\"Request rate is large. More Request Units may be needed; retryAfterMilliseconds=${retryAfterMs}\",\"retryAfterMilliseconds\":${retryAfterMs}}"
+    },
+    {
+      "weight": 0.20,
+      "kind": "error",
+      "status": 503,
+      "contentType": "application/json",
+      "headers": { "x-ms-substatus": "0" },
+      "body": "{\"code\":\"ServiceUnavailable\",\"message\":\"The service is currently unavailable. Retry the request.\"}"
+    },
+    {
+      "weight": 0.20,
+      "kind": "error",
+      "status": 449,
+      "contentType": "application/json",
+      "body": "{\"code\":\"Conflict\",\"message\":\"The request failed because of a conflict with the current state of the resource.\"}"
+    },
+    {
+      "weight": 0.10,
+      "kind": "error",
+      "status": 412,
+      "contentType": "application/json",
+      "headers": { "x-ms-substatus": "0" },
+      "body": "{\"code\":\"PreconditionFailed\",\"message\":\"Operation cannot be performed because one of the specified precondition is not met.\"}"
+    },
+    {
+      "weight": 0.05,
+      "kind": "latency",
+      "minMs": 100,
+      "maxMs": 1000
+    }
+  ]
+}
