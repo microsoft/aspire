@@ -124,7 +124,8 @@ correct affected set *and* the genuine shortest hop chain to each project.
 
 The output is the affected project base names: the `.csproj` filename without
 extension. `TestSelector.Select(...)` intersects test-project names with the
-matrix and matches non-matrix project names against `affected_project_rules`.
+matrix, then matches production/non-test project names against
+`affected_project_rules`.
 
 #### Decision paths (traceability)
 
@@ -237,11 +238,11 @@ load-bearing at the design level:
   This is why `prefilter`, not `ignore`, is what stops a packed `README.md` from
   being attributed by the graph and fanned out: `ignore` only suppresses the
   Layer 2 run-all fallback, while Layer 1 still attributes an `ignore`d file.
-- **`affected_project_rules`** matches Layer 1's affected **non-matrix** project
-  names; affected matrix *test* projects are filtered out first, so a test-only
-  matrix change cannot fire jobs (`typescript-api-compat`, `extension-e2e`, …)
-  through a glob like `Aspire.Hosting*`. Non-matrix test-support projects can
-  still match broad globs.
+- **`affected_project_rules`** matches Layer 1's affected
+  **production/non-test** project names. Every project under `tests/`, including
+  non-matrix fixtures and support projects, is filtered out first, so test-only
+  changes cannot fire jobs (`typescript-api-compat`, `extension-e2e`, …) through
+  a glob like `Aspire.Hosting*`.
 
 ## The tool (`tools/SelectTests`)
 
@@ -286,8 +287,8 @@ Flow:
    treated as Layer-1-owned, so a link-compiled `src/Shared`/`tests/Shared`
    file does not trip the run-all fallback even though it is under no project
    directory.
-4. Apply `affected_project_rules` to Layer 1 **non-matrix** project names
-   (affected matrix test projects are filtered out first, so a matrix-test-only
+4. Apply `affected_project_rules` to Layer 1 **production/non-test** project
+   names (every project under `tests/` is filtered out first, so a test-only
    change does not fire jobs through a broad project-name glob).
 5. Apply `derived_targets` to a cycle-safe fixpoint.
 6. Escalate to `ALL` for a kill switch, an `ALL` path rule, or any changed file
@@ -471,29 +472,29 @@ regular PR matrix and PR-gated jobs. The summary shows:
 - any `ALL` or kill-switch escalation and why;
 - unattributed changed files that may need curated rules.
 
-The PR comment carries the same selection in a more scannable form. It leads
-with **what runs** — the flat list of selected PR test projects, the flat list
-of selected PR jobs, and a separate advisory schedule/outerloop section (test
-projects first, since they are the primary review signal) — so a reviewer sees
-the full impact at a glance even when many files changed. It then explains
-**how** the selection was reached in a collapsed
-`<details>` (the heading is the `<summary>`, so the rationale stays out of the
-way until expanded), grouping the selected projects under each trigger (changed
-file, affected project, or derived test) that pulled them in: a changed file
-and its graph fan-out appear under one heading, so a single edit's whole
-closure is stated once rather than repeated per project, and large fan-outs
-collapse into a nested `<details>`. Every cause is still shown — a project
-selected by several triggers appears under each — and a per-job table names
-what triggered each job. The comment is posted **one per pushed
-commit** and links the head commit it was computed for: a re-run of the same
-commit updates that commit's comment in place (no duplicate — re-runs are
-common), a new commit posts a fresh comment at the bottom, and comments from
-superseded commits are collapsed (minimized, never deleted) so the latest
-selection surfaces at the bottom while the per-push history is preserved. In
-audit mode the comment is advisory — the regular PR matrix and PR-gated jobs
-still run — so it is labelled "(audit mode)" and states that the PR lists are
-what selective CI **would** run under enforcement. Advisory-only targets remain
-explicitly labelled as schedule/outerloop impact.
+The PR comment carries the PR-gated selection in a more scannable form. It
+leads with **what runs** — the flat list of selected PR test projects and the
+flat list of selected PR jobs (test projects first, since they are the primary
+review signal) — so a reviewer sees the regular PR impact at a glance even when
+many files changed. It then explains **how** the PR-gated selection was reached
+in a collapsed `<details>` (the heading is the `<summary>`, so the rationale
+stays out of the way until expanded), grouping selected projects under each
+trigger (changed file, affected project, or derived test) that pulled them in:
+a changed file and its graph fan-out appear under one heading, so a single
+edit's whole closure is stated once rather than repeated per project, and large
+fan-outs collapse into a nested `<details>`. Every PR-gated cause is still shown
+— a project selected by several triggers appears under each — and a per-job
+table names what triggered each PR job. The full step summary, `--explain`
+output, and JSON artifact remain the diagnostic surfaces for advisory
+schedule/outerloop impact. The comment is posted **one per pushed commit** and
+links the head commit it was computed for: a re-run of the same commit updates
+that commit's comment in place (no duplicate — re-runs are common), a new commit
+posts a fresh comment at the bottom, and comments from superseded commits are
+collapsed (minimized, never deleted) so the latest selection surfaces at the
+bottom while the per-push history is preserved. In audit mode the comment is
+advisory — the regular PR matrix and PR-gated jobs still run — so it is labelled
+"(audit mode)" and states that the PR lists are what selective CI **would** run
+under enforcement.
 
 Any audit run where a would-be-skipped test would have failed is a map bug. Fix
 the map before returning to enforcing mode.

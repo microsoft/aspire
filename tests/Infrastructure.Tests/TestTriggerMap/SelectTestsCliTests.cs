@@ -76,6 +76,79 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    [Fact]
+    public void ExplainWritesTheComputedSummaryToStandardOutput()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+            var previousOut = Console.Out;
+            using var output = new StringWriter();
+            Console.SetOut(output);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.Contains("## SelectTests", output.ToString());
+            Assert.Contains("trigger.txt", output.ToString());
+            Assert.Contains("## SelectTests", File.ReadAllText(Path.Combine(repoRoot, "summary")));
+        });
+    }
+
+    [Fact]
+    public void ExplainIncludesTransitiveDerivedJobDependencies()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "other.txt");
+            var previousOut = Console.Out;
+            using var output = new StringWriter();
+            Console.SetOut(output);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            var explanation = output.ToString();
+            Assert.Contains("job:derived-only-job", explanation);
+            Assert.Contains("derived from selected test `Aspire.Cli.Tests`", explanation);
+        });
+    }
+
+    [Fact]
+    public void ExplainDoesNotDuplicateSummaryToStandardError()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+            var previousSummary = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+            var previousError = Console.Error;
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", null);
+            using var error = new StringWriter();
+            Console.SetError(error);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetError(previousError);
+                Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", previousSummary);
+            }
+
+            Assert.Empty(error.ToString());
+        });
+    }
+
     // The --slnx option points the selector at a solution outside the default <repo-root>/Aspire.slnx.
     // Failure mode: if SlnxPath were ignored and the tool fell back to <repo-root>/Aspire.slnx, the
     // universe would be read from the wrong (here: absent) file and LoadTestProjects would throw, so a
@@ -338,7 +411,7 @@ public sealed class SelectTestsCliTests
                 Assert.Contains("**would**", comment);
                 Assert.Contains("under enforcement", comment);
                 Assert.Contains("regular PR test matrix and PR-gated jobs", comment);
-                Assert.Contains("Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates", comment);
+                Assert.DoesNotContain("Advisory-only targets", comment);
                 Assert.DoesNotContain("do not run on PRs", comment);
             }
             finally
@@ -382,9 +455,9 @@ public sealed class SelectTestsCliTests
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("### Selected PR test projects (1 / 1)", comment);
                 Assert.Contains("### Selected PR jobs (1)", comment);
-                Assert.Contains("### Advisory workflow impact (2)", comment);
-                Assert.Contains("`Aspire.EndToEnd.Tests` *(outerloop-only)*", comment);
-                Assert.Contains("`deployment-e2e` *(schedule/dispatch-only)*", comment);
+                Assert.DoesNotContain("Advisory workflow impact", comment);
+                Assert.DoesNotContain("deployment-e2e", comment);
+                Assert.Contains("How these were chosen", comment);
 
                 var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
                 Assert.Contains("- selected PR test projects: 1 / 1", summary);
@@ -434,8 +507,8 @@ public sealed class SelectTestsCliTests
 
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("**Selects the full PR test matrix + all PR-gated jobs (ALL)**", comment);
-                Assert.Contains("### Advisory workflow impact (2)", comment);
-                Assert.Contains("Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates", comment);
+                Assert.DoesNotContain("Advisory workflow impact", comment);
+                Assert.DoesNotContain("deployment-e2e", comment);
                 Assert.DoesNotContain("do not run on PRs", comment);
             }
             finally
@@ -510,12 +583,9 @@ public sealed class SelectTestsCliTests
 
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("### Selected PR test projects (1 / 1)", comment);
-                Assert.Contains(
-                    $"### Advisory workflow impact ({expectedAdvisoryProjects.Count})",
-                    comment);
                 foreach (var project in expectedAdvisoryProjects)
                 {
-                    Assert.Contains($"`{project}`", comment);
+                    Assert.DoesNotContain($"`{project}`", comment);
                 }
             }
             finally
@@ -1186,7 +1256,8 @@ public sealed class SelectTestsCliTests
         bool forceAll = false,
         bool enforce = false,
         string? slnxPath = null,
-        string? forceAllReason = null) =>
+        string? forceAllReason = null,
+        bool explain = false) =>
         new(
             RepoRoot: repoRoot,
             MapPath: Path.Combine(repoRoot, "map.yml"),
@@ -1198,7 +1269,8 @@ public sealed class SelectTestsCliTests
             ForceAll: forceAll,
             Enforce: enforce,
             BeforeBuildProps: propsPath,
-            ForceAllReason: forceAllReason);
+            ForceAllReason: forceAllReason,
+            Explain: explain);
 
     private static string WriteChangedFiles(string repoRoot, params string[] paths)
     {

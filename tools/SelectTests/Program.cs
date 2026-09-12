@@ -80,11 +80,16 @@ var beforeBuildPropsOption = new Option<string?>("--before-build-props")
                   "otherwise nothing is written so enumerate-tests enumerates everything."
 };
 
+var explainOption = new Option<bool>("--explain")
+{
+    Description = "Print the computed selection summary to standard output for local inspection."
+};
+
 var rootCommand = new RootCommand("Select the relevant CI test subset for a PR's changed files.");
 foreach (var option in new Option[]
 {
     repoRootOption, mapOption, slnxOption, fromOption, toOption, changedFilesOption,
-    skipLayer1Option, forceAllOption, forceAllReasonOption, enforceOption, beforeBuildPropsOption
+    skipLayer1Option, forceAllOption, forceAllReasonOption, enforceOption, beforeBuildPropsOption, explainOption
 })
 {
     rootCommand.Options.Add(option);
@@ -105,10 +110,11 @@ rootCommand.SetAction(parseResult =>
     var forceAllReason = parseResult.GetValue(forceAllReasonOption);
     var enforce = parseResult.GetValue(enforceOption);
     var beforeBuildProps = parseResult.GetValue(beforeBuildPropsOption);
+    var explain = parseResult.GetValue(explainOption);
 
     return Selection.Run(new RunOptions(
         repoRoot, mapPath, slnxPath, from, to, changedFilesPath,
-        skipLayer1, forceAll, enforce, beforeBuildProps, forceAllReason));
+        skipLayer1, forceAll, enforce, beforeBuildProps, forceAllReason, explain));
 });
 
 return rootCommand.Parse(args).Invoke();
@@ -124,7 +130,8 @@ internal sealed record RunOptions(
     bool ForceAll,
     bool Enforce,
     string? BeforeBuildProps,
-    string? ForceAllReason = null);
+    string? ForceAllReason = null,
+    bool Explain = false);
 
 internal static class Selection
 {
@@ -168,7 +175,8 @@ internal static class Selection
         // selector now runs BEFORE enumerate-tests. Maps each test project name to its repo-relative
         // .csproj path so a selected name can be written as an OverrideProjectToBuild item.
         trace.EnterStage("load test projects from slnx");
-        var testProjectsByName = LoadTestProjects(options.SlnxPath);
+        var testProjectSets = LoadTestProjectSets(options.SlnxPath);
+        var testProjectsByName = testProjectSets.MatrixProjects;
         var allTestProjects = testProjectsByName.Keys.ToHashSet(StringComparer.Ordinal);
 
         // The prefilter (the map's `prefilter` block): read the CI skip-gate patterns file at runtime
@@ -243,7 +251,7 @@ internal static class Selection
             : LoadProjectDirectories(options.SlnxPath);
 
         trace.EnterStage("select (Layer 2 trigger map + Layer 1 union)");
-        var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories);
+        var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories, testProjectSets.AllProjects);
         var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll, options.ForceAllReason), layer1.AttributedPaths, layer1.Paths);
 
         trace.EnterStage("write summary and outputs");
@@ -286,10 +294,15 @@ internal static class Selection
 
     // Repo-relative, '/'-separated paths of the test projects in Aspire.slnx, keyed by project name
     // (the .csproj base name == the matrix projectName == the map's test: target). The universe is
-    // the tests/<Name>/<Name>.csproj projects whose name ends in ".Tests"; the other tests/ projects
-    // (Aspire.TestUtilities, TestingAppHost1, testproject, ...) are shared fixtures/helpers, not test
-    // projects, and are excluded so they are never selected or enumerated on their own.
-    private static IReadOnlyDictionary<string, string> LoadTestProjects(string slnxPath)
+    private sealed record TestProjectSets(
+        IReadOnlyDictionary<string, string> MatrixProjects,
+        IReadOnlySet<string> AllProjects);
+
+    // The matrix contains tests/<Name>/<Name>.csproj projects whose name ends in ".Tests"; the other
+    // tests/ projects (Aspire.TestUtilities, TestingAppHost1, testproject, ...) are shared
+    // fixtures/helpers. Keep those names in AllProjects so affected-project rules cannot mistake a
+    // test-only fixture for a production project.
+    private static TestProjectSets LoadTestProjectSets(string slnxPath)
     {
         if (!File.Exists(slnxPath))
         {
@@ -297,7 +310,8 @@ internal static class Selection
         }
 
         var slnx = File.ReadAllText(slnxPath);
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var matrixProjects = new Dictionary<string, string>(StringComparer.Ordinal);
+        var allProjects = new HashSet<string>(StringComparer.Ordinal);
         // <Project Path="tests/Foo.Tests/Foo.Tests.csproj" /> -- normalize separators, keep tests/ + .Tests.
         foreach (System.Text.RegularExpressions.Match m in
                  System.Text.RegularExpressions.Regex.Matches(slnx, "Path=\"([^\"]+\\.csproj)\""))
@@ -309,13 +323,14 @@ internal static class Selection
             }
 
             var name = Path.GetFileNameWithoutExtension(relPath);
+            allProjects.Add(name);
             if (name.EndsWith(".Tests", StringComparison.Ordinal))
             {
-                map[name] = relPath;
+                matrixProjects[name] = relPath;
             }
         }
 
-        return map;
+        return new TestProjectSets(matrixProjects, allProjects);
     }
 
     // Writes the MSBuild props file that eng/Build.props imports via $(BeforeBuildPropsPath): an
@@ -339,7 +354,7 @@ internal static class Selection
         foreach (var name in selectedTestProjects.OrderBy(n => n, StringComparer.Ordinal))
         {
             // A selected name not in the slnx test-project set is not a buildable test project (e.g. a
-            // non-matrix project name from affected_project_rules); it contributes no OverrideProjectToBuild item.
+            // production/non-test project name from affected_project_rules); it contributes no OverrideProjectToBuild item.
             if (testProjectsByName.TryGetValue(name, out var relPath))
             {
                 sb.AppendLine(CultureInfo.InvariantCulture, $"    <OverrideProjectToBuild Include=\"$(RepoRoot){relPath}\" />");
@@ -470,7 +485,7 @@ internal static class Selection
     // Layer 1: build the MSBuild ProjectGraph from Aspire.slnx (HEAD-only) and report every project
     // hit by the diff — the union of *changed* (incl. cross-project linked-file consumers) and
     // *affected* (downstream dependents). We return the full set of project names: the selector
-    // intersects the matrix test projects and matches the non-matrix projects against
+    // intersects the matrix test projects and matches production/non-test projects against
     // affected_project_rules. See GraphAffectedProjects for why this replaced dotnet-affected.
     private static AffectedResult RunLayer1(RunOptions options, ChangedFileFilter filter, SelectionTrace trace)
     {
@@ -736,9 +751,9 @@ internal static class Selection
 
         if (!options.Enforce)
         {
-            // Audit mode runs all regular PR work regardless of the selection. Schedule/outerloop-only
-            // targets are reported separately because the PR selector cannot cause them to run.
-            sb.AppendLine("_The regular PR test matrix and PR-gated jobs still run in audit mode. The PR tests and jobs below are what selective CI **would** run under enforcement. Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates; independent workflows may still run them for a PR._");
+            // Audit mode runs all regular PR work regardless of the selection. The projects and jobs
+            // below are what selective CI **would** run under enforcement.
+            sb.AppendLine("_The regular PR test matrix and PR-gated jobs still run in audit mode. The projects and jobs below are what selective CI **would** run under enforcement._");
             sb.AppendLine();
         }
 
@@ -747,23 +762,20 @@ internal static class Selection
         var jobs = result.Jobs.OrderBy(j => j, StringComparer.Ordinal).ToList();
         var prTests = tests.Where(test => !s_advisoryTestTargets.ContainsKey(test)).ToList();
         var prJobs = jobs.Where(job => !s_advisoryJobTargets.ContainsKey(job)).ToList();
-        var advisoryTargets = GetAdvisoryTargets(tests, jobs);
         var allPrTestProjects = allTestProjects.Count(test => !s_advisoryTestTargets.ContainsKey(test));
 
         if (result.SelectsAll)
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"**Selects the full PR test matrix + all PR-gated jobs (ALL)** — {result.EscalationReason}");
             sb.AppendLine();
-            AppendAdvisoryTargets(sb, advisoryTargets);
             WriteCommentFile(commentPath, sb.ToString());
             return;
         }
 
         var fileWord = changedFiles.Count == 1 ? "changed file" : "changed files";
         var jobWord = prJobs.Count == 1 ? "job" : "jobs";
-        var advisoryWord = advisoryTargets.Count == 1 ? "target" : "targets";
         sb.AppendLine(CultureInfo.InvariantCulture,
-            $"**{prTests.Count} / {allPrTestProjects} PR test projects · {prJobs.Count} PR {jobWord} · {advisoryTargets.Count} advisory-only {advisoryWord}**, from {changedFiles.Count} {fileWord}.");
+            $"**{prTests.Count} / {allPrTestProjects} PR test projects · {prJobs.Count} PR {jobWord}**, from {changedFiles.Count} {fileWord}.");
         sb.AppendLine();
 
         // WHAT runs -- the flat lists up front. A reviewer scanning a large selection sees the complete
@@ -783,10 +795,8 @@ internal static class Selection
             : string.Join(", ", prJobs.Select(j => $"`{StripJobPrefix(j)}`")));
         sb.AppendLine();
 
-        AppendAdvisoryTargets(sb, advisoryTargets);
-
         // HOW it was chosen -- the per-trigger grouping.
-        AppendSelectionRationale(sb, result, tests, jobs);
+        AppendSelectionRationale(sb, result, prTests, prJobs);
 
         sb.AppendLine();
         WriteCommentFile(commentPath, sb.ToString());
@@ -805,24 +815,6 @@ internal static class Selection
             .Select(job => new AdvisoryTarget(job, StripJobPrefix(job), s_advisoryJobTargets[job])));
 
         return targets;
-    }
-
-    private static void AppendAdvisoryTargets(StringBuilder sb, IReadOnlyList<AdvisoryTarget> targets)
-    {
-        sb.AppendLine(CultureInfo.InvariantCulture, $"### Advisory workflow impact ({targets.Count})");
-        sb.AppendLine();
-        if (targets.Count == 0)
-        {
-            sb.AppendLine("_none_");
-        }
-        else
-        {
-            foreach (var target in targets)
-            {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- `{target.DisplayName}` *({target.Qualifier})*");
-            }
-        }
-        sb.AppendLine();
     }
 
     // Renders the "how these were chosen" section: every selected test project grouped under each
@@ -1251,15 +1243,20 @@ internal static class Selection
             builder.AppendLine();
         }
 
-        static void WriteOut(StringBuilder builder)
+        void WriteOut(StringBuilder builder)
         {
             var markdown = builder.ToString();
+            if (options.Explain)
+            {
+                Console.Out.Write(markdown);
+            }
+
             var summaryPath = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
             if (summaryPath is not null)
             {
                 File.AppendAllText(summaryPath, markdown);
             }
-            else
+            else if (!options.Explain)
             {
                 Console.Error.Write(markdown);
             }
