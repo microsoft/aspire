@@ -15,6 +15,7 @@ Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FabricToolResource
 Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FileSearchToolResource
 Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource [ExposeProperties]
 Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryResource
+Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxResource
 Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolResource
 Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FunctionToolResource
 Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration [ExposeProperties]
@@ -27,6 +28,19 @@ Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel # Describes a model t
   Format: string # The format or provider of the model (e.g., OpenAI, Microsoft, xAi, Deepseek).
   Name: string # The name of the model.
   Version: string # The version of the model.
+Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxMcpApprovalFilter # Selects MCP tools by name or read-only status for an approval policy.
+  ReadOnly?: boolean # Gets or sets whether this filter selects read-only or non-read-only MCP tools.
+  ToolNames: string[] # Gets or sets the names of the MCP tools selected by this filter.
+Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxMcpApprovalPolicy # Declares which tools discovered from an MCP server require approval.
+  Always: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxMcpApprovalFilter # Gets or sets the filter for MCP tools that always require approval.
+  Global?: enum:Aspire.Hosting.Foundry.FoundryToolboxMcpGlobalApprovalMode # Gets or sets a policy that applies to every tool exposed by the MCP server.
+  Never: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxMcpApprovalFilter # Gets or sets the filter for MCP tools that never require approval.
+Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxMcpToolOptions # Options for an MCP tool in a Microsoft Foundry Toolbox.
+  ApprovalPolicy: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxMcpApprovalPolicy # Gets or sets the declared approval policy for tools discovered from the MCP server.
+  ServerDescription: string # Gets or sets a description of the MCP server.
+  ServerLabel: string # Gets or sets the label that identifies the MCP server in the Toolbox and prefixes its discovered tool names. The Toolbox tool name is used when unset.
+Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxOptions # Options used when adding a Microsoft Foundry Toolbox resource to a project.
+  Version: string # Gets or sets the optional Toolbox version to reference. When unset, the default Toolbox version is used.
 Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentOptions # Options that control how a compute resource is deployed as a Microsoft Foundry hosted agent. All properties are optional; unset properties fall back to the Foundry hosted agent defaults.
   Cpu?: number # CPU allocation for each hosted agent instance, in vCPU cores. Must be between 0.5 and 3.5 in increments of 0.25. When not set, the hosted agent default CPU allocation is used.
   Description: string # Human-readable description of the hosted agent surfaced in the Microsoft Foundry portal. When not set, the hosted agent default description is used.
@@ -35,6 +49,7 @@ Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentOptions # Options that 
   Metadata?: Aspire.Hosting/Dict<string,string> # Additional metadata key/value pairs to attach to the hosted agent definition. Entries with the same key as an existing metadata entry overwrite it.
 
 # Enum Types
+enum:Aspire.Hosting.Foundry.FoundryToolboxMcpGlobalApprovalMode = Never | Always
 enum:Aspire.Hosting.Foundry.HostedAgentProtocol = Responses | Invocations
 enum:Aspire.Hosting.FoundryRole = CognitiveServicesOpenAIContributor | CognitiveServicesOpenAIUser | CognitiveServicesUser
 
@@ -43,7 +58,6 @@ FoundryModels.Anthropic.ClaudeFable5: Aspire.Hosting.Foundry/Aspire.Hosting.Foun
 FoundryModels.Anthropic.ClaudeHaiku45: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-haiku-4-5","Version":"2","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeMythos5: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-mythos-5","Version":"1","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeMythosPreview: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-mythos-preview","Version":"1","Format":"Anthropic"}
-FoundryModels.Anthropic.ClaudeOpus41: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-opus-4-1","Version":"20250805","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeOpus45: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-opus-4-5","Version":"20251101","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeOpus46: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-opus-4-6","Version":"1","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeOpus47: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-opus-4-7","Version":"1","Format":"Anthropic"}
@@ -65,15 +79,15 @@ FoundryModels.Cohere.CohereRerankV40Pro: Aspire.Hosting.Foundry/Aspire.Hosting.F
 FoundryModels.Cohere.EmbedV40: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"embed-v-4-0","Version":"6","Format":"Cohere"}
 FoundryModels.DeepSeek.DeepSeekR1: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-R1","Version":"1","Format":"DeepSeek"}
 FoundryModels.DeepSeek.DeepSeekR10528: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-R1-0528","Version":"1","Format":"DeepSeek"}
-FoundryModels.DeepSeek.DeepSeekV30324: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V3-0324","Version":"1","Format":"DeepSeek"}
-FoundryModels.DeepSeek.DeepSeekV31: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V3.1","Version":"1","Format":"DeepSeek"}
 FoundryModels.DeepSeek.DeepSeekV32: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V3.2","Version":"1","Format":"DeepSeek"}
 FoundryModels.DeepSeek.DeepSeekV32Speciale: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V3.2-Speciale","Version":"1","Format":"DeepSeek"}
 FoundryModels.DeepSeek.DeepSeekV4Flash: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V4-Flash","Version":"2026-04-23","Format":"DeepSeek"}
+FoundryModels.DeepSeek.DeepSeekV4Flash0731: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V4-Flash-0731","Version":"2026-07-31","Format":"DeepSeek"}
 FoundryModels.DeepSeek.DeepSeekV4Pro: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V4-Pro","Version":"2026-04-23","Format":"DeepSeek"}
 FoundryModels.Local.DeepseekR114b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"deepseek-r1-14b","Version":"2","Format":"Microsoft"}
 FoundryModels.Local.DeepseekR115b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"deepseek-r1-1.5b","Version":"2","Format":"Microsoft"}
 FoundryModels.Local.DeepseekR17b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"deepseek-r1-7b","Version":"2","Format":"Microsoft"}
+FoundryModels.Local.Gemma4E2bIt: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gemma-4-e2b-it","Version":"1","Format":"Microsoft"}
 FoundryModels.Local.GptOss20b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-oss-20b","Version":"1","Format":"Microsoft"}
 FoundryModels.Local.Ministral33bInstruct2512: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"ministral-3-3b-instruct-2512","Version":"1","Format":"Microsoft"}
 FoundryModels.Local.Mistral7bV02: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-7b-v0.2","Version":"2","Format":"Microsoft"}
@@ -102,11 +116,11 @@ FoundryModels.Local.Qwen306b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.Foun
 FoundryModels.Local.Qwen314b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3-14b","Version":"2","Format":"Microsoft"}
 FoundryModels.Local.Qwen317b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3-1.7b","Version":"2","Format":"Microsoft"}
 FoundryModels.Local.Qwen34b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3-4b","Version":"2","Format":"Microsoft"}
-FoundryModels.Local.Qwen3508b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3.5-0.8b","Version":"2","Format":"Microsoft"}
-FoundryModels.Local.Qwen352b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3.5-2b","Version":"2","Format":"Microsoft"}
+FoundryModels.Local.Qwen3508b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3.5-0.8b","Version":"3","Format":"Microsoft"}
+FoundryModels.Local.Qwen352b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3.5-2b","Version":"3","Format":"Microsoft"}
 FoundryModels.Local.Qwen352bText: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3.5-2b-text","Version":"1","Format":"Microsoft"}
-FoundryModels.Local.Qwen354b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3.5-4b","Version":"2","Format":"Microsoft"}
-FoundryModels.Local.Qwen359b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3.5-9b","Version":"2","Format":"Microsoft"}
+FoundryModels.Local.Qwen354b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3.5-4b","Version":"3","Format":"Microsoft"}
+FoundryModels.Local.Qwen359b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3.5-9b","Version":"3","Format":"Microsoft"}
 FoundryModels.Local.Qwen38b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3-8b","Version":"2","Format":"Microsoft"}
 FoundryModels.Local.Qwen3Embedding06b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3-embedding-0.6b","Version":"1","Format":"Microsoft"}
 FoundryModels.Local.Qwen3Embedding8b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3-embedding-8b","Version":"1","Format":"Microsoft"}
@@ -154,7 +168,6 @@ FoundryModels.Microsoft.Phi4MultimodalInstruct: Aspire.Hosting.Foundry/Aspire.Ho
 FoundryModels.Microsoft.Phi4Reasoning: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Phi-4-reasoning","Version":"1","Format":"Microsoft"}
 FoundryModels.MistralAI.Codestral2501: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Codestral-2501","Version":"2","Format":"Mistral AI"}
 FoundryModels.MistralAI.Ministral3B: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Ministral-3B","Version":"1","Format":"Mistral AI"}
-FoundryModels.MistralAI.MistralDocumentAi2505: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-document-ai-2505","Version":"1","Format":"Mistral AI"}
 FoundryModels.MistralAI.MistralDocumentAi2512: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-document-ai-2512","Version":"1","Format":"Mistral AI"}
 FoundryModels.MistralAI.MistralLarge3: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Mistral-Large-3","Version":"1","Format":"Mistral AI"}
 FoundryModels.MistralAI.MistralMedium2505: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-medium-2505","Version":"1","Format":"Mistral AI"}
@@ -163,7 +176,6 @@ FoundryModels.MistralAI.MistralOcr40: Aspire.Hosting.Foundry/Aspire.Hosting.Foun
 FoundryModels.MistralAI.MistralSmall2503: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-small-2503","Version":"1","Format":"Mistral AI"}
 FoundryModels.OpenAI.CodexMini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"codex-mini","Version":"2025-05-16","Format":"OpenAI"}
 FoundryModels.OpenAI.ComputerUsePreview: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"computer-use-preview","Version":"2025-03-11","Format":"OpenAI"}
-FoundryModels.OpenAI.Davinci002: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"davinci-002","Version":"3","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt41: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-4.1","Version":"2025-04-14","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt41Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-4.1-mini","Version":"2025-04-14","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt41Nano: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-4.1-nano","Version":"2025-04-14","Format":"OpenAI"}
@@ -175,14 +187,11 @@ FoundryModels.OpenAI.Gpt4oTranscribe: Aspire.Hosting.Foundry/Aspire.Hosting.Foun
 FoundryModels.OpenAI.Gpt4oTranscribeDiarize: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-4o-transcribe-diarize","Version":"2025-10-15","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt5: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5","Version":"2025-08-07","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt51: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.1","Version":"2025-11-13","Format":"OpenAI"}
-FoundryModels.OpenAI.Gpt51Chat: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.1-chat","Version":"2025-11-13","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt51Codex: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.1-codex","Version":"2025-11-13","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt51CodexMax: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.1-codex-max","Version":"2025-12-04","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt51CodexMini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.1-codex-mini","Version":"2025-11-13","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt52: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.2","Version":"2025-12-11","Format":"OpenAI"}
-FoundryModels.OpenAI.Gpt52Chat: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.2-chat","Version":"2026-02-10","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt52Codex: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.2-codex","Version":"2026-01-14","Format":"OpenAI"}
-FoundryModels.OpenAI.Gpt53Chat: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.3-chat","Version":"2026-03-03","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt53Codex: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.3-codex","Version":"2026-02-24","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt54: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.4","Version":"2026-03-05","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt54Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.4-mini","Version":"2026-03-17","Format":"OpenAI"}
@@ -192,7 +201,6 @@ FoundryModels.OpenAI.Gpt55: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.Foundr
 FoundryModels.OpenAI.Gpt56Luna: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.6-luna","Version":"2026-07-09","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt56Sol: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.6-sol","Version":"2026-07-09","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt56Terra: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.6-terra","Version":"2026-07-09","Format":"OpenAI"}
-FoundryModels.OpenAI.Gpt5Chat: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5-chat","Version":"2025-10-03","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt5Codex: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5-codex","Version":"2025-09-15","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt5Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5-mini","Version":"2025-08-07","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt5Nano: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5-nano","Version":"2025-08-07","Format":"OpenAI"}
@@ -200,7 +208,7 @@ FoundryModels.OpenAI.Gpt5Pro: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.Foun
 FoundryModels.OpenAI.GptAudio: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-audio","Version":"2025-08-28","Format":"OpenAI"}
 FoundryModels.OpenAI.GptAudio15: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-audio-1.5","Version":"2026-02-23","Format":"OpenAI"}
 FoundryModels.OpenAI.GptAudioMini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-audio-mini","Version":"2025-10-06","Format":"OpenAI"}
-FoundryModels.OpenAI.GptChatLatest: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-chat-latest","Version":"2026-06-24","Format":"OpenAI"}
+FoundryModels.OpenAI.GptChatLatest: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-chat-latest","Version":"2026-08-06","Format":"OpenAI"}
 FoundryModels.OpenAI.GptImage15: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-image-1.5","Version":"2025-12-16","Format":"OpenAI"}
 FoundryModels.OpenAI.GptImage1Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-image-1-mini","Version":"2025-10-06","Format":"OpenAI"}
 FoundryModels.OpenAI.GptImage2: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-image-2","Version":"2026-04-21","Format":"OpenAI"}
@@ -264,7 +272,9 @@ Aspire.Hosting.Foundry/addPromptAgent(name: string, model: Aspire.Hosting.Foundr
 Aspire.Hosting.Foundry/addSearchConnection(search: Aspire.Hosting.Azure.Search/Aspire.Hosting.Azure.AzureSearchResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectConnectionResource
 Aspire.Hosting.Foundry/addSharePointTool(name: string, projectConnectionIds: string[]) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.SharePointToolResource
 Aspire.Hosting.Foundry/addStorageConnection(storage: Aspire.Hosting.Azure.Storage/Aspire.Hosting.Azure.AzureStorageResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectConnectionResource
+Aspire.Hosting.Foundry/addToolbox(name: string, options?: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxOptions) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxResource
 Aspire.Hosting.Foundry/addWebSearchTool(name: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.WebSearchToolResource
+Aspire.Hosting.Foundry/asExisting() -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxResource
 Aspire.Hosting.Foundry/asHostedAgent(project: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource, options?: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting.Foundry/asHostedAgentWithProtocol(project: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource, protocol: enum:Aspire.Hosting.Foundry.HostedAgentProtocol, protocolVersion: string, options?: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting.Foundry/AzurePromptAgentResource.connectionStringExpression(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzurePromptAgentResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
@@ -278,11 +288,13 @@ Aspire.Hosting.Foundry/AzurePromptAgentResource.setModel(context: Aspire.Hosting
 Aspire.Hosting.Foundry/FoundryDeploymentResource.connectionStringExpression(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Foundry/FoundryDeploymentResource.deploymentName(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource) -> string
 Aspire.Hosting.Foundry/FoundryDeploymentResource.format(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource) -> string
+Aspire.Hosting.Foundry/FoundryDeploymentResource.localModelId(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource) -> string
 Aspire.Hosting.Foundry/FoundryDeploymentResource.modelName(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource) -> string
 Aspire.Hosting.Foundry/FoundryDeploymentResource.modelVersion(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource) -> string
 Aspire.Hosting.Foundry/FoundryDeploymentResource.parent(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryResource
 Aspire.Hosting.Foundry/FoundryDeploymentResource.setDeploymentName(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource, value: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource
 Aspire.Hosting.Foundry/FoundryDeploymentResource.setFormat(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource, value: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource
+Aspire.Hosting.Foundry/FoundryDeploymentResource.setLocalModelId(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource, value: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource
 Aspire.Hosting.Foundry/FoundryDeploymentResource.setModelName(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource, value: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource
 Aspire.Hosting.Foundry/FoundryDeploymentResource.setModelVersion(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource, value: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource
 Aspire.Hosting.Foundry/FoundryDeploymentResource.setParent(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource, value: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource
@@ -298,12 +310,18 @@ Aspire.Hosting.Foundry/HostedAgentConfiguration.metadata(context: Aspire.Hosting
 Aspire.Hosting.Foundry/HostedAgentConfiguration.setCpu(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration, value: number) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration
 Aspire.Hosting.Foundry/HostedAgentConfiguration.setDescription(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration, value: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration
 Aspire.Hosting.Foundry/HostedAgentConfiguration.setMemory(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration, value: number) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration
-Aspire.Hosting.Foundry/runAsFoundryLocal() -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryResource
+Aspire.Hosting.Foundry/publishAsExisting() -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxResource
+Aspire.Hosting.Foundry/runAsExisting() -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxResource
+Aspire.Hosting.Foundry/runAsFoundryLocal(endpoint?: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryResource
+Aspire.Hosting.Foundry/withAISearchTool(name: string, search: Aspire.Hosting.Azure.Search/Aspire.Hosting.Azure.AzureSearchResource, indexName: string, description?: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxResource
 Aspire.Hosting.Foundry/withAppInsights(appInsights: Aspire.Hosting.Azure.ApplicationInsights/Aspire.Hosting.Azure.AzureApplicationInsightsResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource
 Aspire.Hosting.Foundry/withBingReference(bingReference: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.BingGroundingConnectionResource|string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.BingGroundingToolResource
 Aspire.Hosting.Foundry/withCapabilityHost(resource: Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.AzureCosmosDBResource|Aspire.Hosting.Azure.Storage/Aspire.Hosting.Azure.AzureStorageResource|Aspire.Hosting.Azure.Search/Aspire.Hosting.Azure.AzureSearchResource|Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource
+Aspire.Hosting.Foundry/withDescription(description: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxResource
 Aspire.Hosting.Foundry/withFoundryDeploymentProperties(configure: callback) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryDeploymentResource
 Aspire.Hosting.Foundry/withFoundryRoleAssignments(target: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryResource, roles: enum:Aspire.Hosting.FoundryRole[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.Foundry/withKeyVault(keyVault: Aspire.Hosting.Azure.KeyVault/Aspire.Hosting.Azure.AzureKeyVaultResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource
+Aspire.Hosting.Foundry/withMcpTool(name: string, endpoint: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression, options?: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxMcpToolOptions) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxResource
 Aspire.Hosting.Foundry/withReference(search: Aspire.Hosting.Azure.Search/Aspire.Hosting.Azure.AzureSearchResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureAISearchToolResource
 Aspire.Hosting.Foundry/withTool(tool: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzurePromptAgentResource
+Aspire.Hosting.Foundry/withWebSearchTool(name?: string, description?: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryToolboxResource
