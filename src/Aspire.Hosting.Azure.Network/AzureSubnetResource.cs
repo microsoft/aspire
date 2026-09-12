@@ -22,6 +22,7 @@ namespace Aspire.Hosting.Azure;
 public class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNetworkResource>
 {
     // Backing field holds either string or ParameterResource
+    private readonly object _subnetName;
     private readonly object _addressPrefix;
 
     /// <summary>
@@ -34,7 +35,7 @@ public class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNet
     public AzureSubnetResource(string name, string subnetName, string addressPrefix, AzureVirtualNetworkResource parent)
         : base(name)
     {
-        SubnetName = ThrowIfNullOrEmpty(subnetName);
+        _subnetName = ThrowIfNullOrEmpty(subnetName);
         _addressPrefix = ThrowIfNullOrEmpty(addressPrefix);
         Parent = parent ?? throw new ArgumentNullException(nameof(parent));
     }
@@ -49,20 +50,40 @@ public class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNet
     public AzureSubnetResource(string name, string subnetName, ParameterResource addressPrefix, AzureVirtualNetworkResource parent)
         : base(name)
     {
-        SubnetName = ThrowIfNullOrEmpty(subnetName);
+        _subnetName = ThrowIfNullOrEmpty(subnetName);
         _addressPrefix = addressPrefix ?? throw new ArgumentNullException(nameof(addressPrefix));
         Parent = parent ?? throw new ArgumentNullException(nameof(parent));
     }
 
     /// <summary>
-    /// Gets the subnet name.
+    /// Initializes a new instance of the <see cref="AzureSubnetResource"/> class with parameterized subnet name and address prefix.
     /// </summary>
-    public string SubnetName { get; }
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="subnetName">The parameter resource containing the subnet name.</param>
+    /// <param name="addressPrefix">The parameter resource containing the address prefix for the subnet.</param>
+    /// <param name="parent">The parent Virtual Network resource.</param>
+    public AzureSubnetResource(string name, ParameterResource subnetName, ParameterResource addressPrefix, AzureVirtualNetworkResource parent)
+        : base(name)
+    {
+        _subnetName = subnetName ?? throw new ArgumentNullException(nameof(subnetName));
+        _addressPrefix = addressPrefix ?? throw new ArgumentNullException(nameof(addressPrefix));
+        Parent = parent ?? throw new ArgumentNullException(nameof(parent));
+    }
+
+    /// <summary>
+    /// Gets the subnet name, or <c>null</c> if the subnet name is provided via a <see cref="ParameterResource"/>.
+    /// </summary>
+    public string? SubnetName => _subnetName as string;
 
     /// <summary>
     /// Gets the address prefix for the subnet (e.g., "10.0.1.0/24"), or <c>null</c> if the address prefix is provided via a <see cref="ParameterResource"/>.
     /// </summary>
     public string? AddressPrefix => _addressPrefix as string;
+
+    /// <summary>
+    /// Gets the parameter resource containing the subnet name, or <c>null</c> if the subnet name is provided as a literal string.
+    /// </summary>
+    public ParameterResource? SubnetNameParameter => _subnetName as ParameterResource;
 
     /// <summary>
     /// Gets the parameter resource containing the address prefix for the subnet, or <c>null</c> if the address prefix is provided as a literal string.
@@ -97,10 +118,21 @@ public class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNet
     /// </summary>
     internal SubnetResource ToProvisioningEntity(AzureResourceInfrastructure infra, ProvisionableResource? dependsOn)
     {
-        var subnet = new SubnetResource(Infrastructure.NormalizeBicepIdentifier(Name))
+        var subnet = new SubnetResource(Infrastructure.NormalizeBicepIdentifier(Name));
+
+        // Set the subnet name from either the literal string or the parameter
+        if (_subnetName is string subnetName)
         {
-            Name = SubnetName,
-        };
+            subnet.Name = subnetName;
+        }
+        else if (_subnetName is ParameterResource subnetNameParameter)
+        {
+            subnet.Name = subnetNameParameter.AsProvisioningParameter(infra);
+        }
+        else
+        {
+            throw new UnreachableException("SubnetName must be set either as a string or a ParameterResource.");
+        }
 
         // Set the address prefix from either the literal string or the parameter
         if (_addressPrefix is string addressPrefix)
