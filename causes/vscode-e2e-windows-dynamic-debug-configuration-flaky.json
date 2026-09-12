@@ -116,6 +116,13 @@
       "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-4, Hosting-4, tests/Aspire.Hosting.Tests) / Hosting-4 (windows-latest)",
       "pr_number": 20072,
       "observed_at": "2026-09-11T23:41:00Z"
+    },
+    {
+      "run_id": 34680944910,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34680944910",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 20081,
+      "observed_at": "2026-09-12T07:58:58Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19576"

@@ -1,0 +1,29 @@
+{
+  "run_id": 34680944910,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34680944910",
+  "analyzed_at": "2026-09-12T07:58:58Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20081,
+    "title": "Filter blank values from dashboard filter dialog",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/filter-dialog-blank-values",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20081"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 103520673943,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34680944910/job/103520673943",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic 'Process completed with exit code 1' on the 'Run extension E2E tests' step; detailed job logs were unavailable ('Failed to fetch logs for job') and no TRX test failures were extracted. The PR only modifies src/Aspire.Dashboard/Components/Dialogs/FilterDialog.razor.cs and its tests, which is unrelated to the VS Code extension codebase. This matches a known recurring flaky pattern for the 'VS Code extension E2E (Windows, dynamic-debug-configuration)' shard (16 prior occurrences, issue #19576).",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky"]
+}
