@@ -101,6 +101,34 @@ public class FilterDialogTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_StringFilter_EmptyFieldValueIsNotDisplayed()
+    {
+        SetupFilterDialogServices();
+        var content = new FilterDialogViewModel
+        {
+            Filter = new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.TraceIdField,
+                Condition = FilterCondition.Contains,
+                Value = ""
+            },
+            KnownKeys = [KnownTraceFields.TraceIdField],
+            GetPropertyKeysAsync = static _ => Task.FromResult<List<string>>([]),
+            GetFieldValuesAsync = static (_, _) => Task.FromResult(new Dictionary<string, int>
+            {
+                [""] = 3,
+                ["trace-id"] = 2
+            })
+        };
+
+        var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
+
+        var option = Assert.Single(cut.Find("fluent-dropdown[type='combobox']").QuerySelectorAll("fluent-option:not([freeform])"));
+        Assert.Equal("trace-id", option.GetAttribute("text"));
+        Assert.Single(option.QuerySelectorAll("[data-filtercount='2']"));
+    }
+
+    [Fact]
     public async Task Render_PropertyKeysLoading_DisablesParameterSelectAndDisplaysProgressRing()
     {
         SetupFilterDialogServices();

@@ -225,6 +225,7 @@ public partial class FilterDialog : IAsyncDisposable
                 }
 
                 _allValues = fieldValues
+                    .Where(kvp => !string.IsNullOrEmpty(kvp.Key))
                     .Select(kvp => new FieldValue { Value = kvp.Key, Count = kvp.Value })
                     .OrderByDescending(v => v.Count)
                     .ThenBy(v => v.Value, StringComparers.OtlpFieldValue)
