@@ -7,6 +7,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
@@ -48,6 +49,7 @@ public class DistributedApplicationTests
     private const string ReplicaIdRegex = @"[\w]+"; // Matches a replica ID that is part of a resource name.
     private const string AspireTestContainerRegistry = "netaspireci.azurecr.io";
     private const string RedisImageSource = $"{AspireTestContainerRegistry}/{RedisContainerImageTags.Image}:{RedisContainerImageTags.Tag}";
+    private const int ServiceAHttpLaunchProfilePort = 5156;
 
     public DistributedApplicationTests(ITestOutputHelper testOutputHelper)
     {
@@ -1734,16 +1736,14 @@ public class DistributedApplicationTests
         var result = await client.GetStringAsync("pid").DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
         Assert.NotNull(result);
 
-        // Check that endpoint from launchsettings doesn't work
-        await Assert.ThrowsAnyAsync<Exception>(async () =>
-        {
-            using var client2 = new HttpClient(new SocketsHttpHandler
-            {
-                // Provide a timeout to avoid long timeout while trying to connect.
-                ConnectTimeout = TimeSpan.FromSeconds(2)
-            });
-            await client2.GetStringAsync("http://localhost:5156/pid");
-        }).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        var urls = await client.GetFromJsonAsync<string[]>("urls").DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        AssertServiceAListensOnProxylessPort(urls, port);
+    }
+
+    [Fact]
+    public void ProxylessEndpointPortAssertionUsesObservedListeningUrls()
+    {
+        AssertServiceAListensOnProxylessPort(["http://127.0.0.1:12345"], 12345);
     }
 
     [Fact]
@@ -2444,6 +2444,15 @@ public class DistributedApplicationTests
         testProgram.AppBuilder.WithTestAndResourceLogging(_testOutputHelper);
 
         return testProgram;
+    }
+
+    private static void AssertServiceAListensOnProxylessPort(IEnumerable<string>? urls, int port)
+    {
+        Assert.NotNull(urls);
+
+        var listeningPorts = urls.Select(static url => new Uri(url).Port).ToArray();
+        Assert.Contains(port, listeningPorts);
+        Assert.All(listeningPorts, listeningPort => Assert.NotEqual(ServiceAHttpLaunchProfilePort, listeningPort));
     }
 
     private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
