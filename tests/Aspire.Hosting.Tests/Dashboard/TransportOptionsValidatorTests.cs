@@ -46,7 +46,7 @@ public class TransportOptionsValidatorTests
     }
 
     [Fact]
-    public void InvalidTransportOptionSucceedValidationWithDashboardDisabled()
+    public void InvalidTransportOptionFailsValidationWithDashboardDisabled()
     {
         var distributedApplicationOptions = new DistributedApplicationOptions()
         {
@@ -60,7 +60,11 @@ public class TransportOptionsValidatorTests
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
-        Assert.True(result.Succeeded, result.FailureMessage);
+        Assert.True(result.Failed);
+        Assert.Equal(
+            $"The 'applicationUrl' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/aspire/allowunsecuredtransport for more details.",
+            result.FailureMessage
+            );
     }
 
     [Fact]

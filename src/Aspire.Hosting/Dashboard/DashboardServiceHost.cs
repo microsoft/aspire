@@ -33,13 +33,12 @@ internal sealed class DashboardServiceHost : IHostedService
     private readonly TaskCompletionSource<string> _resourceServiceUri = new();
 
     /// <summary>
-    /// <see langword="null"/> if <see cref="DistributedApplicationOptions.DashboardEnabled"/> is <see langword="false"/>.
+    /// <see langword="null"/> in publish mode.
     /// </summary>
     private readonly WebApplication? _app;
     private readonly ILogger<DashboardServiceHost> _logger;
 
     public DashboardServiceHost(
-        DistributedApplicationOptions options,
         DistributedApplicationModel applicationModel,
         IConfiguration configuration,
         DistributedApplicationExecutionContext executionContext,
@@ -54,9 +53,9 @@ internal sealed class DashboardServiceHost : IHostedService
     {
         _logger = loggerFactory.CreateLogger<DashboardServiceHost>();
 
-        if (!options.DashboardEnabled || executionContext.IsPublishMode)
+        if (executionContext.IsPublishMode)
         {
-            _logger.LogDebug("Dashboard is not enabled so skipping hosting the resource service.");
+            _logger.LogDebug("Skipping hosting the resource service in publish mode.");
             _resourceServiceUri.SetCanceled();
             return;
         }
