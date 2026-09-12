@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Xml.Linq;
 using Xunit;
 
 namespace Aspire.Templates.Tests;
@@ -51,6 +52,7 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
                                         extraArgs: extraTestCreationArgs,
                                         overrideRootDir: topLevelDir);
 
+            AssertTestFrameworkPackages(testProjectDir, templateName, extraTestCreationArgs);
             await project.BuildAsync(extraBuildArgs: [$"-c {config}"], workingDirectory: testProjectDir);
         }
         catch (ToolCommandException tce) when (error is not null)
@@ -58,6 +60,54 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
             Assert.NotNull(tce.Result);
             Assert.Contains(error, tce.Result.Value.Output);
         }
+    }
+
+    private static void AssertTestFrameworkPackages(string testProjectDir, string templateName, string extraTestCreationArgs)
+    {
+        var projectPath = Directory.EnumerateFiles(testProjectDir, "*.csproj").Single();
+        var packageReferences = XDocument.Load(projectPath)
+            .Descendants("PackageReference")
+            .Where(element => element.Attribute("Include")?.Value != "Aspire.Hosting.Testing")
+            .Select(element => $"{element.Attribute("Include")?.Value}/{element.Attribute("Version")?.Value}")
+            .OrderBy(packageReference => packageReference)
+            .ToArray();
+
+        string[] expectedPackageReferences = (templateName, extraTestCreationArgs) switch
+        {
+            ("aspire-mstest", _) =>
+            [
+                "MSTest/4.4.0",
+            ],
+            ("aspire-nunit", _) =>
+            [
+                "coverlet.collector/10.0.1",
+                "Microsoft.NET.Test.Sdk/18.10.0",
+                "NUnit/4.6.1",
+                "NUnit.Analyzers/4.14.0",
+                "NUnit3TestAdapter/6.3.0",
+            ],
+            ("aspire-xunit", "--xunit-version v3mtp") =>
+            [
+                "xunit.v3/4.0.0",
+            ],
+            ("aspire-xunit", "--xunit-version v3") =>
+            [
+                "coverlet.collector/10.0.1",
+                "Microsoft.NET.Test.Sdk/18.10.0",
+                "xunit.runner.visualstudio/4.0.0",
+                "xunit.v3.mtp-off/4.0.0",
+            ],
+            ("aspire-xunit", _) =>
+            [
+                "coverlet.collector/10.0.1",
+                "Microsoft.NET.Test.Sdk/18.10.0",
+                "xunit/2.9.3",
+                "xunit.runner.visualstudio/4.0.0",
+            ],
+            _ => throw new InvalidOperationException($"Unexpected test template '{templateName}'."),
+        };
+
+        Assert.Equal(expectedPackageReferences.OrderBy(packageReference => packageReference), packageReferences);
     }
 }
 

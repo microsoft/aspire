@@ -1,4 +1,4 @@
-<configuration>
+﻿<configuration>
   <packageSources>
     <clear />
     <add key="NuGet" value="https://api.nuget.org/v3/index.json" />

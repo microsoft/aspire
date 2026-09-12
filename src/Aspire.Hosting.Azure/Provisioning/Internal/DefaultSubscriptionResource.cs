@@ -5,6 +5,7 @@ using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.Resources.Deployments;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
 
@@ -19,7 +20,7 @@ internal sealed class DefaultSubscriptionResource(SubscriptionResource subscript
 
     public IArmDeploymentCollection GetArmDeployments()
     {
-        return new DefaultArmDeploymentCollection(subscriptionResource.GetArmDeployments());
+        return new DefaultArmDeploymentCollection(ResourcesDeploymentsExtensions.GetArmDeployments(subscriptionResource));
     }
 
     public IResourceGroupCollection GetResourceGroups()
