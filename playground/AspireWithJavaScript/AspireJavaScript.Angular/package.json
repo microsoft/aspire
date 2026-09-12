@@ -43,13 +43,13 @@
   },
   "overrides": {
     "vite": "7.3.5",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.6",
     "postcss": "8.5.23",
     "uuid": "14.0.0",
     "webpack-dev-server": "5.2.6",
     "tmp": "0.2.7",
     "tar": "7.5.22",
-    "hono": "4.12.34",
+    "hono": "4.13.5",
     "@hono/node-server": "2.0.12",
     "ws": "8.21.0",
     "piscina": "5.2.0",
@@ -75,6 +75,9 @@
     "@angular/router": "21.2.19",
     "@angular-devkit/build-angular": "21.2.19",
     "ip-address": "10.3.1",
-    "socket.io-parser": "4.2.7"
+    "socket.io-parser": "4.2.7",
+    "js-yaml": "4.3.2",
+    "baseline-browser-mapping": "2.11.0",
+    "browserslist": "4.28.7"
   }
 }
