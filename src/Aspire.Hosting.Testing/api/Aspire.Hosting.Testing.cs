@@ -43,6 +43,9 @@ namespace Aspire.Hosting.Testing
         [AspireExportIgnore(Reason = "Use the exported getConnectionString overload without a cancellation token.")]
         public static System.Threading.Tasks.ValueTask<string?> GetConnectionStringAsync(this DistributedApplication app, string resourceName, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the exported getDashboardUrl overload without a cancellation token.")]
+        public static System.Threading.Tasks.Task<System.Uri> GetDashboardUrlAsync(this DistributedApplication app, System.Threading.CancellationToken cancellationToken = default) { throw null; }
+
         [AspireExport]
         public static System.Uri GetEndpoint(this DistributedApplication app, string resourceName, string? endpointName = null) { throw null; }
 
@@ -52,15 +55,22 @@ namespace Aspire.Hosting.Testing
 
     public static partial class DistributedApplicationTestingBuilder
     {
+        public static IDistributedApplicationTestingBuilder Create(DistributedApplicationTestingBuilderOptions options, string[] args) { throw null; }
+
         public static IDistributedApplicationTestingBuilder Create(string[] args, System.Action<DistributedApplicationOptions, Microsoft.Extensions.Hosting.HostApplicationBuilderSettings> configureBuilder) { throw null; }
 
         public static IDistributedApplicationTestingBuilder Create(params string[] args) { throw null; }
+
+        public static System.Threading.Tasks.Task<IDistributedApplicationTestingBuilder> CreateAsync(System.Type entryPoint, DistributedApplicationTestingBuilderOptions options, string[] args, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
         public static System.Threading.Tasks.Task<IDistributedApplicationTestingBuilder> CreateAsync(System.Type entryPoint, string[] args, System.Action<DistributedApplicationOptions, Microsoft.Extensions.Hosting.HostApplicationBuilderSettings> configureBuilder, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
         public static System.Threading.Tasks.Task<IDistributedApplicationTestingBuilder> CreateAsync(System.Type entryPoint, string[] args, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
         public static System.Threading.Tasks.Task<IDistributedApplicationTestingBuilder> CreateAsync(System.Type entryPoint, System.Threading.CancellationToken cancellationToken = default) { throw null; }
+
+        public static System.Threading.Tasks.Task<IDistributedApplicationTestingBuilder> CreateAsync<TEntryPoint>(DistributedApplicationTestingBuilderOptions options, string[] args, System.Threading.CancellationToken cancellationToken = default)
+            where TEntryPoint : class { throw null; }
 
         public static System.Threading.Tasks.Task<IDistributedApplicationTestingBuilder> CreateAsync<TEntryPoint>(string[] args, System.Action<DistributedApplicationOptions, Microsoft.Extensions.Hosting.HostApplicationBuilderSettings> configureBuilder, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
@@ -69,6 +79,11 @@ namespace Aspire.Hosting.Testing
 
         public static System.Threading.Tasks.Task<IDistributedApplicationTestingBuilder> CreateAsync<TEntryPoint>(System.Threading.CancellationToken cancellationToken = default)
             where TEntryPoint : class { throw null; }
+    }
+
+    public sealed partial class DistributedApplicationTestingBuilderOptions
+    {
+        public bool EnableDashboard { get { throw null; } set { } }
     }
 
     public partial interface IDistributedApplicationTestingBuilder : IDistributedApplicationBuilder, System.IAsyncDisposable, System.IDisposable

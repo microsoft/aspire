@@ -19,11 +19,11 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference export.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> qdrantResource, string? connectionName = null)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Use the overload that accepts an explicit connection name when calling this API from polyglot app hosts.")]
+        [AspireExportIgnore(Reason = "Use the overload that accepts an explicit connection name when calling this API from polyglot AppHosts.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> qdrantResource)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
     }

@@ -13,7 +13,7 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> AddRedis(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the canonical addRedis export with options.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the canonical addRedis export with options.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> AddRedis(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
         [AspireExport]

@@ -13,22 +13,22 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> AddAzureKeyVault(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSecret dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> parameterResource) { throw null; }
 
         [AspireExportIgnore(Reason = "Raw ParameterResource overload; use the IResourceBuilder<ParameterResource> variant instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, ApplicationModel.ParameterResource parameterResource) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSecret dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, ApplicationModel.ReferenceExpression value) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSecret dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, string secretName, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> parameterResource) { throw null; }
 
         [AspireExportIgnore(Reason = "Raw ParameterResource overload; use the IResourceBuilder<ParameterResource> variant instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, string secretName, ApplicationModel.ParameterResource parameterResource) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSecret dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, string secretName, ApplicationModel.ReferenceExpression value) { throw null; }
 
         [AspireExport]
