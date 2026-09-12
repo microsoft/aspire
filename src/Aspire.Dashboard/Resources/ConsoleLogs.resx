@@ -199,6 +199,24 @@
   <data name="TerminalToolbarDecreaseFontSize" xml:space="preserve">
     <value>Decrease font size</value>
   </data>
+  <data name="TerminalInputLabel" xml:space="preserve">
+    <value>Interactive terminal input</value>
+  </data>
+  <data name="TerminalMountFailed" xml:space="preserve">
+    <value>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</value>
+  </data>
+  <data name="TerminalDisconnected" xml:space="preserve">
+    <value>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</value>
+  </data>
+  <data name="TerminalInputFailed" xml:space="preserve">
+    <value>The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</value>
+  </data>
+  <data name="TerminalSizingFailed" xml:space="preserve">
+    <value>The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</value>
+  </data>
+  <data name="TerminalRetry" xml:space="preserve">
+    <value>Reconnect terminal</value>
+  </data>
   <data name="TerminalToolbarIncreaseFontSize" xml:space="preserve">
     <value>Increase font size</value>
   </data>
@@ -207,6 +225,15 @@
   </data>
   <data name="TerminalToolbarGridSizeAuto" xml:space="preserve">
     <value>Fit</value>
+  </data>
+  <data name="TerminalToolbarOpenInWindow" xml:space="preserve">
+    <value>Open in new window</value>
+  </data>
+  <data name="TerminalToolbarOpenInWindowBlocked" xml:space="preserve">
+    <value>The browser blocked the terminal window. Allow pop-ups for this site and try again.</value>
+  </data>
+  <data name="TerminalFocusControlsHint" xml:space="preserve">
+    <value>F6: Focus terminal controls</value>
   </data>
   <data name="ConsoleLogsViewConsoleOption" xml:space="preserve">
     <value>Console logs</value>

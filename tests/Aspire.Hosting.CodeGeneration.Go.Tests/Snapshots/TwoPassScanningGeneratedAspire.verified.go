@@ -187,6 +187,7 @@ const (
 	InputTypeBoolean InputType = "Boolean"
 	InputTypeNumber InputType = "Number"
 	InputTypeFile InputType = "File"
+	InputTypeTerminal InputType = "Terminal"
 )
 
 // HealthStatus represents HealthStatus.

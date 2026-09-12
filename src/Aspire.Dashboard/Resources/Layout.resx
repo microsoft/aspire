@@ -123,6 +123,9 @@
   <data name="MainLayoutAspireDashboardHelpLink" xml:space="preserve">
     <value>Help</value>
   </data>
+  <data name="MainLayoutToggleTerminalDock" xml:space="preserve">
+    <value>Toggle terminal (Shift+`)</value>
+  </data>
   <data name="MainLayoutLaunchSettings" xml:space="preserve">
     <value>Settings</value>
   </data>
@@ -167,6 +170,57 @@
   </data>
   <data name="MainLayoutAspire" xml:space="preserve">
     <value>Aspire</value>
+  </data>
+  <data name="TerminalDockCloseTab" xml:space="preserve">
+    <value>Close terminal '{0}'</value>
+    <comment>{0} is the terminal's display title.</comment>
+  </data>
+  <data name="TerminalDockCloseTimedOutTitle" xml:space="preserve">
+    <value>Terminal close timed out</value>
+  </data>
+  <data name="TerminalDockCloseTimedOutMessage" xml:space="preserve">
+    <value>Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</value>
+    <comment>{0} is the terminal's display title.</comment>
+  </data>
+  <data name="TerminalDockDetach" xml:space="preserve">
+    <value>Open terminal in a new window</value>
+  </data>
+  <data name="TerminalDockDetached" xml:space="preserve">
+    <value>This terminal is running in a separate window.</value>
+  </data>
+  <data name="TerminalDockDetachBlocked" xml:space="preserve">
+    <value>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</value>
+  </data>
+  <data name="TerminalDockFocusWindow" xml:space="preserve">
+    <value>Focus window</value>
+  </data>
+  <data name="TerminalDockHide" xml:space="preserve">
+    <value>Hide terminal panel (Shift+`)</value>
+  </data>
+  <data name="TerminalDockHeight" xml:space="preserve">
+    <value>{0} pixels high</value>
+    <comment>{0} is the terminal dock height in CSS pixels.</comment>
+  </data>
+  <data name="TerminalDockResizeHelp" xml:space="preserve">
+    <value>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</value>
+  </data>
+  <data name="TerminalDockTabs" xml:space="preserve">
+    <value>Terminals</value>
+  </data>
+  <data name="TerminalDockPanelBody" xml:space="preserve">
+    <value>Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</value>
+  </data>
+  <data name="TerminalDockPanelHeading" xml:space="preserve">
+    <value>No terminals</value>
+  </data>
+  <data name="TerminalDockPanelHint" xml:space="preserve">
+    <value>Press Shift+` to hide this panel.</value>
+  </data>
+  <data name="TerminalDockReturnToDock" xml:space="preserve">
+    <value>Return to panel</value>
+  </data>
+  <data name="TerminalWindowEnded" xml:space="preserve">
+    <value>This terminal has ended.</value>
   </data>
   <data name="MessageUnsecuredEndpointTelemetryBody" xml:space="preserve">
     <value>Untrusted apps can send telemetry to the dashboard.</value>

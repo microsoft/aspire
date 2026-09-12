@@ -146,9 +146,8 @@
         <MainSection>
             @* For terminal-enabled resources we keep BOTH views mounted and
                flip visibility via CSS. Unmounting TerminalView on every flip
-               would tear down xterm.js, the WebSocket, and the PTY consumer
-               session — destroying scrollback and forcing an HMP1
-               StateSync round-trip on every toggle. Unmounting LogViewer
+               would tear down the Hex1b client and WebSocket, forcing a
+               new producer-backed history sync on every toggle. Unmounting LogViewer
                would drop the rendered log buffer for the same reason.
                `display:none` keeps the DOM, JS state, and Blazor component
                state alive while only one view is visible at a time. *@
@@ -170,8 +169,7 @@
                     <TerminalView
                         @ref="_terminalViewRef"
                         ResourceName="@_terminalResourceName"
-                        ReplicaIndex="@_terminalReplicaIndex"
-                        OnToolbarStateChanged="OnTerminalToolbarStateChangedAsync" />
+                        ReplicaIndex="@_terminalReplicaIndex" />
                 </div>
             }
             else

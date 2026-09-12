@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
+import { runInNewContext } from 'vm';
 import * as ts from 'typescript';
 
 function removeDirectorySafely(directory: string): void {
@@ -83,6 +84,27 @@ function runE2eRunnerAsPlatform(extensionRoot: string, platform: 'darwin' | 'lin
         timeout: 120000,
         env: environment,
     });
+}
+
+function getFixtureNuGetConfigurations(packageSources: readonly string[]): Map<string, string> {
+    const extensionRoot = path.resolve(__dirname, '..', '..');
+    const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+    const sourceFile = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    const functionNames = new Set(['writeNuGetConfigIfLocalPackageSourcesExist', 'getApprovedFallbackPackageSources', 'escapeXml']);
+    const declarations = sourceFile.statements.filter((statement): statement is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(statement) && statement.name !== undefined && functionNames.has(statement.name.text));
+    assert.strictEqual(declarations.length, functionNames.size);
+
+    // Execute the actual config writer without the runner's CLI downloads, workspace cleanup, or VS Code launch.
+    const configurations = new Map<string, string>();
+    runInNewContext(`${declarations.map(declaration => declaration.getText(sourceFile)).join('\n')}
+writeNuGetConfigIfLocalPackageSourcesExist();`, {
+        fs: { writeFileSync: (file: string, content: string) => configurations.set(file, content) },
+        getLocalPackageSourceDirectories: () => packageSources,
+        runRootNuGetConfigPath: 'run-root/NuGet.config',
+        workspaceNuGetConfigPath: 'workspace/NuGet.config',
+    });
+    return configurations;
 }
 
 function createE2eSpecFixtures(extensionRoot: string, fileNames: readonly string[]): string {
@@ -821,6 +843,60 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes("const runRootNuGetConfigPath = path.join(shortRunRoot, 'NuGet.config');"));
         assert.ok(writeConfig.includes('fs.writeFileSync(runRootNuGetConfigPath, nugetConfig);'));
         assert.ok(writeConfig.includes('fs.writeFileSync(workspaceNuGetConfigPath, nugetConfig);'));
+    });
+
+    test('limits temporary nuget.org access to Hex1b in both fixture restore scopes', () => {
+        const configurations = getFixtureNuGetConfigurations(['/packages/local', '/packages/<preview> & "daily"']);
+        const expectedConfig = `<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="e2e-source-0" value="/packages/local" />
+    <add key="e2e-source-1" value="/packages/&lt;preview&gt; &amp; &quot;daily&quot;" />
+    <add key="dotnet-public" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json" />
+    <add key="dotnet-eng" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json" />
+    <add key="dotnet9" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+    <add key="dotnet10" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet10/nuget/v3/index.json" />
+    <add key="dotnet-libraries" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-libraries/nuget/v3/index.json" />
+    <!-- Remove this source and the mapping block once Hex1b is mirrored into the approved internal feeds. -->
+    <add key="nuget-hex1b" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="e2e-source-0">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="e2e-source-1">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="dotnet-public">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="dotnet-eng">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="dotnet9">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="dotnet10">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="dotnet-libraries">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="nuget-hex1b">
+      <package pattern="Hex1b" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>
+`;
+        assert.deepStrictEqual([...configurations], [
+            ['run-root/NuGet.config', expectedConfig],
+            ['workspace/NuGet.config', expectedConfig],
+        ]);
+    });
+
+    test('does not write fixture NuGet configurations without local package sources', () => {
+        assert.deepStrictEqual([...getFixtureNuGetConfigurations([])], []);
     });
 
     test('suppresses evaluation diagnostics for intentional E2E AppHost interaction APIs', () => {

@@ -12,8 +12,8 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
-// Functional coverage for the net-new interactive behaviors implemented purely in app.js: grid
-// column auto-fit (double-click a resize handle) and the floating scroll-to-bottom button for
+// Functional coverage for interactive behaviors implemented purely in app.js: global keyboard shortcuts,
+// grid column auto-fit (double-click a resize handle), and the floating scroll-to-bottom button for
 // large scroll regions. These carry real runtime logic (column/track alignment, overflow/edge
 // thresholds) and are coupled to specific markup (".resize-handle", ".continuous-scroll-overflow").
 // Scanning resting page state can't catch a regression here, so we drive the interactions and assert
@@ -24,6 +24,82 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
     public DashboardInteractionsTests(InteractionsDashboardServerFixture dashboardServerFixture)
         : base(dashboardServerFixture)
     {
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task TerminalDockShortcut_UsesPhysicalKeyAndPreservesInputGuard()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetContentAsync("""
+                <button id="control">Control</button>
+                <input id="input">
+                <textarea id="textarea"></textarea>
+                <div id="terminal"></div>
+                <fluent-text-field id="fluent"></fluent-text-field>
+                """);
+            await page.AddScriptTagAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "wwwroot", "js", "app.js") });
+            await page.EvaluateAsync("""
+                () => {
+                    const host = document.getElementById('fluent');
+                    host.attachShadow({ mode: 'open' }).appendChild(document.createElement('input'));
+                    const terminal = document.getElementById('terminal');
+                    const view = terminal.attachShadow({ mode: 'open' }).appendChild(document.createElement('div'));
+                    view.attachShadow({ mode: 'open' }).appendChild(document.createElement('textarea'));
+                }
+                """);
+
+            var cases = new (string Key, string Code, bool Shift, bool Alt, bool Ctrl, bool Meta, string Target, int? Expected)[]
+            {
+                ("~", "Backquote", true, false, false, false, "control", 400),
+                ("\u00b0", "Backquote", true, false, false, false, "control", 400),
+                ("Dead", "Backquote", true, false, false, false, "control", 400),
+                ("~", "BracketRight", true, false, false, false, "control", null),
+                ("`", "Backquote", false, false, false, false, "control", null),
+                ("~", "Backquote", false, false, false, false, "control", null),
+                ("~", "Backquote", true, true, false, false, "control", null),
+                ("~", "Backquote", true, false, true, false, "control", null),
+                ("~", "Backquote", true, false, false, true, "control", null),
+                ("~", "Backquote", true, false, false, false, "input", null),
+                ("\u00b0", "Backquote", true, false, false, false, "textarea", null),
+                ("~", "Backquote", true, false, false, false, "terminal", null),
+                ("\u00b0", "Backquote", true, false, false, false, "fluent", null),
+                ("S", "KeyS", true, false, false, false, "control", 110),
+                ("r", "KeyR", false, false, false, false, "control", 200)
+            };
+
+            foreach (var (key, code, shiftKey, altKey, ctrlKey, metaKey, target, expected) in cases)
+            {
+                var shortcuts = await page.EvaluateAsync<int[]>("""
+                    ({ key, code, shiftKey, altKey, ctrlKey, metaKey, target }) => {
+                        const calls = [];
+                        const registration = window.registerGlobalKeydownListener({
+                            invokeMethodAsync: (_, shortcut) => {
+                                calls.push(shortcut);
+                                return Promise.resolve();
+                            }
+                        });
+                        try {
+                            const host = document.getElementById(target);
+                            let input = host;
+                            while (input.shadowRoot?.firstElementChild) {
+                                input = input.shadowRoot.firstElementChild;
+                            }
+                            input.focus();
+                            input.dispatchEvent(new KeyboardEvent('keydown', {
+                                key, code, shiftKey, altKey, ctrlKey, metaKey,
+                                bubbles: true, composed: true
+                            }));
+                            return calls;
+                        } finally {
+                            window.unregisterGlobalKeydownListener(registration);
+                        }
+                    }
+                    """, new { key, code, shiftKey, altKey, ctrlKey, metaKey, target });
+                Assert.Equal(expected is { } shortcut ? [shortcut] : Array.Empty<int>(), shortcuts);
+            }
+        });
     }
 
     [Fact]

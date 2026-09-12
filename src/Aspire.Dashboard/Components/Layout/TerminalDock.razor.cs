@@ -1,0 +1,517 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Model;
+using Aspire.DashboardService.Proto.V1;
+using Grpc.Core;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Localization;
+using Microsoft.JSInterop;
+using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageBarIntent;
+
+namespace Aspire.Dashboard.Components.Layout;
+
+/// <summary>
+/// A collapsible, tabbed dock of terminals owned by the AppHost process, toggled with <c>Shift+`</c>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The dock's chrome (visible/collapsed, which tab is selected) is per-browser-circuit, but the terminals
+/// themselves live in the AppHost. Two browsers therefore see the same tabs and the same output, and closing
+/// the dock in one browser does not disturb the other or stop any workload.
+/// </para>
+/// <para>
+/// Distinct from resource terminals, which are DCP-owned and reached through the terminal host.
+/// </para>
+/// </remarks>
+public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener, IAsyncDisposable
+{
+    private const int DefaultHeightPx = 320;
+    private const int MinimumHeightPx = 120;
+    private const int MaximumHeightPx = 1200;
+
+    private readonly List<TerminalDescriptor> _terminals = [];
+    private readonly Dictionary<string, TerminalView> _terminalViews = new(StringComparer.Ordinal);
+    private readonly CancellationTokenSource _cts = new();
+    private readonly string _elementIdPrefix = $"terminal-dock-{Guid.NewGuid():N}";
+
+    private bool _hasBeenOpened;
+    private bool _isVisible;
+    private bool _disposed;
+    private string? _activeTerminalId;
+
+    private int _heightPx = DefaultHeightPx;
+    private int _maximumHeightPx = MaximumHeightPx;
+    private Task? _watchTask;
+    private IJSObjectReference? _jsModule;
+    private DotNetObjectReference<TerminalDock>? _selfRef;
+    private ElementReference _dockElement;
+
+    /// <summary>
+    /// Terminals the user has popped out into their own window. The dock keeps the tab — the terminal is still
+    /// running and still AppHost-owned — but stops rendering a viewer for it, so the window is the only place it is
+    /// on screen. That is deliberate: a dock pane and a detached window are the same small viewport twice over, and
+    /// two attached viewers would fight over the HMP1 primary role and therefore over the PTY's grid size.
+    /// </summary>
+    private readonly HashSet<string> _detachedTerminalIds = [];
+
+    private TerminalWindowLauncher? _windowLauncher;
+    private bool _popupBlocked;
+
+    [Inject]
+    public required IDashboardClient DashboardClient { get; init; }
+
+    [Inject]
+    public required ShortcutManager ShortcutManager { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Resources.Layout> Loc { get; init; }
+
+    [Inject]
+    public required ILogger<TerminalDock> Logger { get; init; }
+
+    [Inject]
+    public required Aspire.Dashboard.Model.INotificationService NotificationService { get; init; }
+
+    [Inject]
+    public required Microsoft.FluentUI.AspNetCore.Components.INotificationService ToastService { get; init; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
+
+    public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts { get; } = new HashSet<AspireKeyboardShortcut>
+    {
+        AspireKeyboardShortcut.ToggleTerminalDock
+    };
+
+    protected override void OnInitialized()
+    {
+        ShortcutManager.AddGlobalKeydownListener(this);
+
+        // Watched eagerly rather than on first open: an `activated` notification is how AppHost code reveals a
+        // terminal it created (AspireTerminal.Show()), and that has to work in a browser that has never opened the
+        // dock. One idle server stream per circuit is the price of that.
+        _watchTask = Task.Run(() => WatchTerminalsAsync(_cts.Token), _cts.Token);
+    }
+
+    public Task OnPageKeyDownAsync(AspireKeyboardShortcut shortcut)
+        => shortcut == AspireKeyboardShortcut.ToggleTerminalDock ? ToggleAsync() : Task.CompletedTask;
+
+    /// <summary>
+    /// Shows the dock, or hides it if it is already showing.
+    /// </summary>
+    /// <remarks>
+    /// Public so the header button can drive the dock. The keyboard chord alone is not enough: <c>Shift+`</c> is
+    /// suppressed whenever focus is in a terminal or any other text input, because it types <c>~</c> there, so the
+    /// dock needs an affordance that works regardless of where focus happens to be.
+    /// </remarks>
+    public Task ToggleAsync() => InvokeAsync(() =>
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (_isVisible)
+        {
+            Hide();
+        }
+        else
+        {
+            Show();
+        }
+
+    });
+
+    private void Show()
+    {
+        _hasBeenOpened = true;
+        _isVisible = true;
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Wiring happens on the render that first materialises the dock element, which is not the component's first
+        // render — the markup is suppressed until the dock has been opened at least once.
+        if (!_disposed && _hasBeenOpened && _jsModule is null)
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Layout/TerminalDock.razor.js").ConfigureAwait(true);
+            if (_disposed)
+            {
+                await _jsModule.DisposeAsync().ConfigureAwait(true);
+                return;
+            }
+            await _jsModule.InvokeVoidAsync("registerResizeHandle", _dockElement, _selfRef, MinimumHeightPx, MaximumHeightPx).ConfigureAwait(true);
+            if (!_disposed)
+            {
+                await _jsModule.InvokeVoidAsync("registerTabNavigation", _dockElement).ConfigureAwait(true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates the dock height after pointer or keyboard resizing, or a viewport size change.
+    /// </summary>
+    /// <param name="heightPx">The requested dock height in CSS pixels.</param>
+    /// <param name="viewportHeightPx">The browser viewport height in CSS pixels.</param>
+    /// <returns>A task that completes after the dock state is updated.</returns>
+    [JSInvokable]
+    public Task SetHeightAsync(int heightPx, int viewportHeightPx) => InvokeAsync(() =>
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _maximumHeightPx = Math.Clamp(viewportHeightPx, 1, MaximumHeightPx);
+        _heightPx = Math.Clamp(heightPx, EffectiveMinimumHeightPx, _maximumHeightPx);
+        StateHasChanged();
+    });
+
+    private int EffectiveMinimumHeightPx => Math.Min(MinimumHeightPx, _maximumHeightPx);
+
+    private void Hide()
+    {
+        _isVisible = false;
+        StateHasChanged();
+    }
+
+    private void Activate(string terminalId)
+    {
+        if (!_terminals.Any(t => t.TerminalId == terminalId))
+        {
+            // A queued click can arrive after the watch stream removes its tab.
+            Logger.LogDebug("Ignored selection of removed dock terminal {TerminalId}.", terminalId);
+            return;
+        }
+
+        _activeTerminalId = terminalId;
+        StateHasChanged();
+    }
+
+    private bool IsPanelVisible => _terminals.Count == 0;
+
+    private bool IsPaneActive(string terminalId) => terminalId == _activeTerminalId;
+
+    private string GetTabId(string terminalId) => $"{_elementIdPrefix}-tab-{terminalId}";
+
+    private string GetPaneId(string terminalId) => $"{_elementIdPrefix}-pane-{terminalId}";
+
+    private TerminalWindowLauncher WindowLauncher
+        => _windowLauncher ??= new TerminalWindowLauncher(JS, OnDetachedWindowClosedAsync);
+
+    /// <summary>
+    /// Pops the active terminal out into its own window.
+    /// </summary>
+    private async Task DetachActiveAsync()
+    {
+        if (_activeTerminalId is not { } terminalId)
+        {
+            return;
+        }
+
+        _popupBlocked = false;
+
+        try
+        {
+            var url = NavigationManager.ToAbsoluteUri($"/terminal-window/apphost/{Uri.EscapeDataString(terminalId)}").ToString();
+            var fontSize = _terminalViews.TryGetValue(terminalId, out var view) ? view.FontSize : null;
+            var result = await WindowLauncher.OpenAsync(terminalId, url, fontSize).ConfigureAwait(true);
+
+            if (result is TerminalWindowOpenResult.Blocked)
+            {
+                // Surfaced in the tab strip rather than swallowed: to the user, detaching just did nothing.
+                _popupBlocked = true;
+            }
+            else
+            {
+                _detachedTerminalIds.Add(terminalId);
+                _terminalViews.Remove(terminalId);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to detach terminal {TerminalId} into a window.", terminalId);
+        }
+    }
+
+    private async Task FocusDetachedWindowAsync(string terminalId)
+    {
+        try
+        {
+            // A window the browser closed without us noticing yet would otherwise leave the pane stuck on the
+            // placeholder, so a failed focus reattaches instead.
+            if (!await WindowLauncher.FocusAsync(terminalId).ConfigureAwait(true))
+            {
+                await OnDetachedWindowClosedAsync(terminalId).ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to focus the window for terminal {TerminalId}.", terminalId);
+        }
+    }
+
+    private async Task ReturnToDockAsync(string terminalId)
+    {
+        try
+        {
+            await WindowLauncher.CloseAsync(terminalId).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Reattach regardless: leaving the pane on the placeholder because the close call failed would strand
+            // the terminal with no viewer at all.
+            Logger.LogWarning(ex, "Failed to close the window for terminal {TerminalId}.", terminalId);
+        }
+
+        _detachedTerminalIds.Remove(terminalId);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Reattaches a terminal whose window the user closed. Remounting <c>TerminalView</c> opens a fresh socket and
+    /// the HMP1 state sync replays the screen, so nothing is lost by having had no viewer in between.
+    /// </summary>
+    private Task OnDetachedWindowClosedAsync(string terminalId) => InvokeAsync(() =>
+    {
+        if (!_disposed && _detachedTerminalIds.Remove(terminalId))
+        {
+            StateHasChanged();
+        }
+    });
+
+    private async Task CloseTerminalAsync(string terminalId, string terminalTitle)
+    {
+        try
+        {
+            await DashboardClient.CloseTerminalAsync(terminalId, _cts.Token).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (_cts.IsCancellationRequested && (ex is OperationCanceledException || ex is RpcException { StatusCode: StatusCode.Cancelled }))
+        {
+            Logger.LogDebug(ex, "Stopped waiting for dock terminal {TerminalId} to close because the dashboard disconnected.", terminalId);
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded && !_disposed)
+        {
+            Logger.LogWarning(ex, "Timed out waiting for dock terminal {TerminalId} to close.", terminalId);
+
+            // Removal can arrive on the watch stream before disposal times out. Keep the clicked title rather
+            // than looking it up in the remaining tabs, and retain the warning in the notification center.
+            var title = Loc[nameof(Resources.Layout.TerminalDockCloseTimedOutTitle)].Value;
+            var message = Loc[nameof(Resources.Layout.TerminalDockCloseTimedOutMessage), terminalTitle].Value;
+            NotificationService.AddNotification(new NotificationEntry
+            {
+                Title = title,
+                Body = message,
+                Intent = FluentMessageIntent.Warning
+            });
+            await ToastService.ShowWarningToastAsync(message).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to close dock terminal {TerminalId}.", terminalId);
+        }
+    }
+
+    private async Task WatchTerminalsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var update in DashboardClient.SubscribeTerminalsAsync(cancellationToken).ConfigureAwait(false))
+            {
+                // The stream runs on a worker. Dispatch the entire update, not just the render: Razor and click
+                // handlers enumerate these collections and must never race a snapshot or removal.
+                await InvokeAsync(async () =>
+                {
+                    if (_disposed)
+                    {
+                        return;
+                    }
+
+                    List<string> endedTerminalIds = [];
+                    if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Snapshot)
+                    {
+                        var previousActiveIndex = _terminals.FindIndex(t => t.TerminalId == _activeTerminalId);
+                        _terminals.Clear();
+                        _terminals.AddRange(update.Snapshot.Terminals);
+                        if (!_terminals.Any(t => t.TerminalId == _activeTerminalId))
+                        {
+                            // Snapshots can also remove the active tab; use the same adjacent fallback as removal.
+                            _activeTerminalId = _terminals.Count > 0
+                                ? _terminals[Math.Clamp(previousActiveIndex, 0, _terminals.Count - 1)].TerminalId
+                                : null;
+                        }
+
+                        if (!string.IsNullOrEmpty(update.Snapshot.ActivatedTerminalId))
+                        {
+                            // An overflow snapshot retains the latest Show() request even if its terminal has
+                            // since been removed. Reveal the dock, but never resurrect a removed terminal's tab.
+                            _hasBeenOpened = true;
+                            _isVisible = true;
+                            if (_terminals.Any(t => t.TerminalId == update.Snapshot.ActivatedTerminalId))
+                            {
+                                _activeTerminalId = update.Snapshot.ActivatedTerminalId;
+                            }
+                        }
+
+                        // Recovery snapshots replace all prior state, including terminals removed while offline.
+                        endedTerminalIds.AddRange(_detachedTerminalIds.Where(id => !_terminals.Any(t => t.TerminalId == id)));
+                        _detachedTerminalIds.ExceptWith(endedTerminalIds);
+                        foreach (var id in _terminalViews.Keys.Where(id => !_terminals.Any(t => t.TerminalId == id)).ToArray())
+                        {
+                            _terminalViews.Remove(id);
+                        }
+                    }
+                    else if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Change &&
+                             Apply(update.Change.ChangeType, update.Change.Terminal) is { } endedTerminalId)
+                    {
+                        endedTerminalIds.Add(endedTerminalId);
+                    }
+
+                    StateHasChanged();
+                    foreach (var terminalId in endedTerminalIds)
+                    {
+                        if (_disposed)
+                        {
+                            return;
+                        }
+                        await CloseDetachedWindowAsync(terminalId).ConfigureAwait(true);
+                    }
+                }).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The component is going away or the circuit disconnected.
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Terminal dock watch stream ended unexpectedly.");
+        }
+    }
+
+    /// <summary>
+    /// Applies a change from the watch stream. Returns the id of a terminal whose detached window should be closed
+    /// because the terminal itself has ended, or <see langword="null"/> when there is nothing to close.
+    /// </summary>
+    private string? Apply(TerminalChangeType changeType, TerminalDescriptor descriptor)
+    {
+        var index = _terminals.FindIndex(t => t.TerminalId == descriptor.TerminalId);
+
+        switch (changeType)
+        {
+            case TerminalChangeType.Added or TerminalChangeType.Retitled:
+                if (index >= 0)
+                {
+                    _terminals[index] = descriptor;
+                }
+                else
+                {
+                    _terminals.Add(descriptor);
+                }
+                _activeTerminalId ??= descriptor.TerminalId;
+                break;
+
+            case TerminalChangeType.Removed:
+                _terminalViews.Remove(descriptor.TerminalId);
+                if (index >= 0)
+                {
+                    _terminals.RemoveAt(index);
+                }
+                if (_activeTerminalId == descriptor.TerminalId)
+                {
+                    // Fall back to the neighbour that took the closed tab's place, matching editor tab behaviour.
+                    var fallback = Math.Min(index, _terminals.Count - 1);
+                    _activeTerminalId = fallback >= 0 ? _terminals[fallback].TerminalId : null;
+                }
+                return _detachedTerminalIds.Remove(descriptor.TerminalId) ? descriptor.TerminalId : null;
+
+            case TerminalChangeType.Activated:
+                // Raised by AspireTerminal.Show() in the AppHost, so AppHost code can reveal its own terminal.
+                if (index < 0)
+                {
+                    _terminals.Add(descriptor);
+                }
+                _activeTerminalId = descriptor.TerminalId;
+                _hasBeenOpened = true;
+                _isVisible = true;
+                break;
+        }
+
+        return null;
+    }
+
+    private async Task CloseDetachedWindowAsync(string terminalId)
+    {
+        try
+        {
+            await WindowLauncher.CloseAsync(terminalId).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to close the window for ended terminal {TerminalId}.", terminalId);
+        }
+    }
+
+    private static string BuildEndpoint(string terminalId)
+        => $"/api/apphost-terminal?terminalId={Uri.EscapeDataString(terminalId)}";
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        ShortcutManager.RemoveGlobalKeydownListener(this);
+
+        // Stop updates before releasing browser-side state. A queued dispatcher callback observes _disposed and
+        // does nothing, and cancellation interrupts either the active RPC or its recovery wait.
+        await _cts.CancelAsync().ConfigureAwait(true);
+        if (_watchTask is { } watchTask)
+        {
+            try
+            {
+                await watchTask.ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when stopping the watch.
+            }
+        }
+
+        if (_jsModule is { } module)
+        {
+            try
+            {
+                await module.InvokeVoidAsync("unregisterResizeHandle", _dockElement).ConfigureAwait(true);
+                await module.InvokeVoidAsync("unregisterTabNavigation", _dockElement).ConfigureAwait(true);
+                await module.DisposeAsync().ConfigureAwait(true);
+            }
+            catch (JSDisconnectedException)
+            {
+                // The circuit is already gone; there is nothing left to clean up on the browser side.
+            }
+        }
+
+        _selfRef?.Dispose();
+
+        if (_windowLauncher is { } launcher)
+        {
+            // Leaves any detached windows open: they are viewers of AppHost-owned terminals and have no reason to
+            // die because this circuit went away.
+            await launcher.DisposeAsync().ConfigureAwait(true);
+        }
+
+        _cts.Dispose();
+    }
+}

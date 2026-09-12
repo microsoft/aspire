@@ -13,6 +13,17 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using static Aspire.Hosting.Interaction;
 
+#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+
+// Aspire.Hosting.Terminals cannot be imported wholesale: it declares TerminalDescriptor and TerminalChangeType,
+// which collide with the identically named proto types this file converts them into. Alias the individual types
+// instead, so the AppHost-side names read cleanly and the proto names stay unqualified.
+using AppHostTerminalChange = Aspire.Hosting.Terminals.TerminalChange;
+using AppHostTerminalChangeType = Aspire.Hosting.Terminals.TerminalChangeType;
+using AppHostTerminalDescriptor = Aspire.Hosting.Terminals.TerminalDescriptor;
+using AppHostTerminalSnapshot = Aspire.Hosting.Terminals.TerminalSnapshot;
+using TerminalService = Aspire.Hosting.Terminals.TerminalService;
+
 namespace Aspire.Hosting.Dashboard;
 
 /// <summary>
@@ -22,13 +33,20 @@ namespace Aspire.Hosting.Dashboard;
 /// An instance of this type is created for every gRPC service call, so it may not hold onto any state
 /// required beyond a single request. Longer-scoped data is stored in <see cref="DashboardServiceData"/>.
 /// </remarks>
+/// <remarks>
+/// Types from <c>Aspire.Hosting.Terminals</c> are qualified rather than imported: several of them
+/// (<c>TerminalDescriptor</c>, <c>TerminalChangeType</c>) share a name with their generated protobuf
+/// counterparts, and importing both namespaces would make every bare use ambiguous.
+/// </remarks>
 [Authorize(Policy = ResourceServiceApiKeyAuthorization.PolicyName)]
-internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore)
+internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore, TerminalService terminalService)
     : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase
 {
     // gRPC has a maximum receive size of 4MB. Force logs into batches to avoid exceeding receive size.
     // Protobuf sends strings as UTF8. Be conservative and assume the average character byte size is 2.
     public const int LogMaxBatchCharacters = 1024 * 1024 * 2;
+
+    internal const int CloseTerminalTimeoutSeconds = 10;
 
     /// <summary>
     /// The minimum dashboard version required by this AppHost build.
@@ -254,6 +272,10 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             dto.FileFilter = input.FileFilter;
         }
+        if (!string.IsNullOrEmpty(input.TerminalId))
+        {
+            dto.TerminalId = input.TerminalId;
+        }
         dto.ValidationErrors.AddRange(input.ValidationErrors);
         return dto;
     }
@@ -268,6 +290,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.Hosting.InputType.Boolean => Aspire.DashboardService.Proto.V1.InputType.Boolean,
             Aspire.Hosting.InputType.Number => Aspire.DashboardService.Proto.V1.InputType.Number,
             Aspire.Hosting.InputType.File => Aspire.DashboardService.Proto.V1.InputType.File,
+            Aspire.Hosting.InputType.Terminal => Aspire.DashboardService.Proto.V1.InputType.Terminal,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -282,6 +305,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.DashboardService.Proto.V1.InputType.Boolean => InputType.Boolean,
             Aspire.DashboardService.Proto.V1.InputType.Number => InputType.Number,
             Aspire.DashboardService.Proto.V1.InputType.File => InputType.File,
+            Aspire.DashboardService.Proto.V1.InputType.Terminal => InputType.Terminal,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -592,4 +616,196 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             throw;
         }
     }
+
+    public override async Task AttachTerminal(
+        IAsyncStreamReader<TerminalClientFrame> requestStream,
+        IServerStreamWriter<TerminalServerFrame> responseStream,
+        ServerCallContext context)
+    {
+        // Linked with ApplicationStopping so a tunnel that is otherwise idle does not keep shutdown waiting.
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, hostApplicationLifetime.ApplicationStopping);
+        var cancellationToken = linked.Token;
+
+        // The first frame selects the terminal, mirroring how UploadFile carries its metadata on the first chunk.
+        if (!await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Terminal stream is empty."));
+        }
+
+        var selector = requestStream.Current;
+        if (string.IsNullOrEmpty(selector.TerminalId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "First frame must include a terminal ID."));
+        }
+
+        var stream = new GrpcTerminalStream(requestStream, responseStream);
+        await using var _ = stream.ConfigureAwait(false);
+
+        try
+        {
+            logger.LogDebug("Attaching terminal {TerminalId} to a dashboard viewer.", selector.TerminalId);
+
+            // Returns once the terminal ends or the caller disconnects. Holding the call open for that whole time is
+            // what keeps the tunnel alive, so this must not be fire-and-forget.
+            await terminalService.AttachAsync(selector.TerminalId, stream, async ct =>
+            {
+                await stream.WriteEndedAsync(ct).ConfigureAwait(false);
+
+                // Let the dashboard consume the ended notification and close the tunnel. Returning immediately
+                // can fail a concurrent ClientHello write, cancelling the proxy's reader before it sees the status.
+                // This retains only the viewer's RPC, not the completed Hex1b workload.
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Expected. The terminal was disposed, or never existed; the dashboard may still be holding a stale dialog
+            // or dock tab open, so report it as a precondition failure rather than faulting the whole connection.
+            // Debug rather than Warning because a stale tab reattaching is routine and the client already receives the
+            // reason in the status -- anything louder would be noise an operator cannot act on.
+            logger.LogDebug(ex, "Terminal {TerminalId} is not available to attach. The dashboard is likely holding a view of a terminal that has already ended.", selector.TerminalId);
+
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Expected. The dashboard closed the tunnel, typically because the browser tab or dialog went away.
+            logger.LogDebug("Terminal {TerminalId} tunnel closed by the dashboard.", selector.TerminalId);
+        }
+        catch (Exception ex)
+        {
+            // Unexpected. Nothing else logs this call: AttachTerminal deliberately does not route through
+            // ExecuteAsync, because that would log the expected FailedPrecondition above as an error.
+            logger.LogError(ex, "Unexpected error while tunnelling terminal {TerminalId} to the dashboard.", selector.TerminalId);
+
+            throw;
+        }
+    }
+
+    public override async Task WatchTerminals(
+        WatchTerminalsRequest request,
+        IServerStreamWriter<WatchTerminalsUpdate> responseStream,
+        ServerCallContext context)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, hostApplicationLifetime.ApplicationStopping);
+        var cancellationToken = linked.Token;
+
+        // Subscribe before writing the snapshot. SubscribeDockTerminals captures both under one lock, so a terminal
+        // created concurrently lands in exactly one of them.
+        using var subscription = terminalService.SubscribeDockTerminals();
+
+        try
+        {
+            // The snapshot write belongs inside the try: if the dashboard disconnects in the window between
+            // subscribing and the first write, this throws, and letting it escape would skip the disposal above.
+            var snapshot = ToProtoTerminalSnapshot(subscription.InitialState, activatedTerminalId: null);
+            await responseStream.WriteAsync(new WatchTerminalsUpdate { Snapshot = snapshot }, cancellationToken).ConfigureAwait(false);
+
+            await foreach (var update in subscription.Subscription.WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                var message = update switch
+                {
+                    AppHostTerminalSnapshot recovery => new WatchTerminalsUpdate
+                    {
+                        Snapshot = ToProtoTerminalSnapshot(recovery.Terminals, recovery.ActivatedTerminalId)
+                    },
+                    AppHostTerminalChange change => new WatchTerminalsUpdate
+                    {
+                        Change = new TerminalChangeNotification
+                        {
+                            ChangeType = ToProtoChangeType(change.ChangeType),
+                            Terminal = ToProtoDescriptor(change.Terminal)
+                        }
+                    },
+                    _ => throw new InvalidOperationException("Unknown terminal watch update.")
+                };
+                await responseStream.WriteAsync(message, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Expected. The dashboard disconnected or the AppHost is shutting down.
+            logger.LogDebug("Terminal dock watch stream closed.");
+        }
+        catch (Exception ex)
+        {
+            // Unexpected. Without this the dock silently stops updating, because WatchTerminals does not route
+            // through ExecuteAsync and so has no ambient error logging.
+            logger.LogError(ex, "Unexpected error while watching dock terminals. The dashboard terminal dock will stop receiving updates.");
+
+            throw;
+        }
+    }
+
+    public override async Task<CloseTerminalResponse> CloseTerminal(
+        CloseTerminalRequest request,
+        ServerCallContext context)
+    {
+        if (terminalService.TryGetTerminal(request.TerminalId, out var terminal))
+        {
+            await CloseTerminalAsync(terminal, context.CancellationToken).ConfigureAwait(false);
+        }
+
+        // Closing an unknown terminal is not an error: the dashboard may be reacting to a tab the AppHost
+        // already removed.
+        return new CloseTerminalResponse();
+    }
+
+    /// <summary>
+    /// Requests disposal while bounding only the dashboard's wait for cleanup.
+    /// </summary>
+    internal async Task CloseTerminalAsync(Aspire.Hosting.Terminals.AspireTerminal terminal, CancellationToken cancellationToken)
+    {
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var timeout = Task.Delay(TimeSpan.FromSeconds(CloseTerminalTimeoutSeconds), waitCts.Token);
+
+        // DisposeAsync can block synchronously in cancellation callbacks. Run it independently so even
+        // that work is bounded by the RPC's wait, without letting a disconnect cancel the disposal.
+        var disposal = Task.Run(async () => await terminal.DisposeAsync().ConfigureAwait(false), CancellationToken.None);
+        _ = disposal.ContinueWith(
+            task => logger.LogError(task.Exception, "Failed to dispose terminal {TerminalId}.", terminal.Id),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        try
+        {
+            if (await Task.WhenAny(disposal, timeout).ConfigureAwait(false) != disposal)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Only stop waiting. Cleanup still owns the attached transports until terminal teardown
+                // finishes, and the continuation observes any failure after this RPC has returned.
+                throw new RpcException(new Status(StatusCode.DeadlineExceeded,
+                    $"Terminal '{terminal.Id}' did not finish disposing within {CloseTerminalTimeoutSeconds} seconds."));
+            }
+
+            // Preserve genuine disposal failures, including TimeoutException from the workload itself.
+            await disposal.ConfigureAwait(false);
+        }
+        finally
+        {
+            waitCts.Cancel();
+        }
+    }
+
+    private static TerminalDescriptor ToProtoDescriptor(AppHostTerminalDescriptor descriptor)
+        => new() { TerminalId = descriptor.Id, Title = descriptor.Title };
+
+    private static TerminalDescriptorList ToProtoTerminalSnapshot(
+        IEnumerable<AppHostTerminalDescriptor> terminals, string? activatedTerminalId)
+        => new()
+        {
+            Terminals = { terminals.Select(ToProtoDescriptor) },
+            ActivatedTerminalId = activatedTerminalId ?? string.Empty
+        };
+
+    private static TerminalChangeType ToProtoChangeType(AppHostTerminalChangeType changeType) => changeType switch
+    {
+        AppHostTerminalChangeType.Added => TerminalChangeType.Added,
+        AppHostTerminalChangeType.Removed => TerminalChangeType.Removed,
+        AppHostTerminalChangeType.Retitled => TerminalChangeType.Retitled,
+        AppHostTerminalChangeType.Activated => TerminalChangeType.Activated,
+        _ => TerminalChangeType.Unspecified
+    };
 }

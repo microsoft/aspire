@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <None Include="buildTransitive\Aspire.Hosting.targets" Pack="true" PackagePath="buildTransitive\$(DefaultTargetFramework)" />
+    <None Include="buildTransitive\Aspire.Hosting.Hex1b.targets" Pack="true" PackagePath="buildTransitive\$(DefaultTargetFramework)" />
   </ItemGroup>
   
   <ItemGroup>
@@ -74,6 +75,9 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" />
+    <!-- Hex1b implements AppHost terminal workloads and resource terminal automation.
+         The public AspireTerminal handle keeps these implementation types out of the API surface. -->
+    <PackageReference Include="Hex1b" />
     <PackageReference Include="KubernetesClient" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="ModelContextProtocol" />

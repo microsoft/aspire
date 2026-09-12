@@ -72,6 +72,11 @@
         <target state="translated">Configurações</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutToggleTerminalDock">
+        <source>Toggle terminal (Shift+`)</source>
+        <target state="new">Toggle terminal (Shift+`)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutUnhandledErrorMessage">
         <source>An unhandled error has occurred.</source>
         <target state="translated">Ocorreu um erro sem tratamento.</target>
@@ -140,6 +145,86 @@
       <trans-unit id="PageLayoutViewFilters">
         <source>View filters</source>
         <target state="translated">Exibir filtros</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockCloseTab">
+        <source>Close terminal '{0}'</source>
+        <target state="new">Close terminal '{0}'</target>
+        <note>{0} is the terminal's display title.</note>
+      </trans-unit>
+      <trans-unit id="TerminalDockCloseTimedOutMessage">
+        <source>Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</source>
+        <target state="new">Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</target>
+        <note>{0} is the terminal's display title.</note>
+      </trans-unit>
+      <trans-unit id="TerminalDockCloseTimedOutTitle">
+        <source>Terminal close timed out</source>
+        <target state="new">Terminal close timed out</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetach">
+        <source>Open terminal in a new window</source>
+        <target state="new">Open terminal in a new window</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetachBlocked">
+        <source>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</source>
+        <target state="new">The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetached">
+        <source>This terminal is running in a separate window.</source>
+        <target state="new">This terminal is running in a separate window.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockFocusWindow">
+        <source>Focus window</source>
+        <target state="new">Focus window</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockHeight">
+        <source>{0} pixels high</source>
+        <target state="new">{0} pixels high</target>
+        <note>{0} is the terminal dock height in CSS pixels.</note>
+      </trans-unit>
+      <trans-unit id="TerminalDockHide">
+        <source>Hide terminal panel (Shift+`)</source>
+        <target state="new">Hide terminal panel (Shift+`)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockPanelBody">
+        <source>Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</source>
+        <target state="new">Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockPanelHeading">
+        <source>No terminals</source>
+        <target state="new">No terminals</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockPanelHint">
+        <source>Press Shift+` to hide this panel.</source>
+        <target state="new">Press Shift+` to hide this panel.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockResizeHelp">
+        <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
+        <target state="new">Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockReturnToDock">
+        <source>Return to panel</source>
+        <target state="new">Return to panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockTabs">
+        <source>Terminals</source>
+        <target state="new">Terminals</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalWindowEnded">
+        <source>This terminal has ended.</source>
+        <target state="new">This terminal has ended.</target>
         <note />
       </trans-unit>
     </body>

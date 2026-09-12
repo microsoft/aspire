@@ -1937,16 +1937,33 @@ function writeNuGetConfigIfLocalPackageSourcesExist() {
   const sourceEntries = packageSources
     .map((source, index) => `    <add key="e2e-source-${index}" value="${escapeXml(source)}" />`)
     .join('\n');
-  const fallbackSourceEntries = getApprovedFallbackPackageSources()
+  const fallbackSources = getApprovedFallbackPackageSources();
+  const fallbackSourceEntries = fallbackSources
     .map(source => `    <add key="${escapeXml(source.key)}" value="${escapeXml(source.value)}" />`)
     .join('\n');
+  // Exact Hex1b mapping restricts nuget.org access. Wildcards preserve the existing local/internal
+  // source choices for every other package until the temporary source and mappings can be removed.
+  const sourceMappingEntries = [
+    ...packageSources.map((_, index) => `e2e-source-${index}`),
+    ...fallbackSources.map(source => source.key),
+  ].map(key => `    <packageSource key="${escapeXml(key)}">
+      <package pattern="*" />
+    </packageSource>`).join('\n');
   const nugetConfig = `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
     <clear />
 ${sourceEntries}
 ${fallbackSourceEntries}
+    <!-- Remove this source and the mapping block once Hex1b is mirrored into the approved internal feeds. -->
+    <add key="nuget-hex1b" value="https://api.nuget.org/v3/index.json" />
   </packageSources>
+  <packageSourceMapping>
+${sourceMappingEntries}
+    <packageSource key="nuget-hex1b">
+      <package pattern="Hex1b" />
+    </packageSource>
+  </packageSourceMapping>
 </configuration>
 `;
   // External AppHost fixtures are siblings of the workspace, while an explicitly supplied

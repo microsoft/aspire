@@ -12,6 +12,17 @@
     <Compile Include="..\..\KnownResourceNames.cs" Link="KnownResourceNames.cs" />
   </ItemGroup>
 
+  <!--
+    Scripts\ holds standalone .NET file-based apps that the AppHost launches with `dotnet run`. They must be kept out
+    of this project's compilation - each one has its own top-level statements, so compiling them here would collide
+    with the AppHost's own entry point. They are copied to the output directory instead so command handlers can
+    resolve them relative to AppContext.BaseDirectory.
+  -->
+  <ItemGroup>
+    <Compile Remove="Scripts\**\*.cs" />
+    <None Include="Scripts\**\*.cs" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Terminals.Repl\Terminals.Repl.csproj" IsAspireProjectResource="true" />
   </ItemGroup>

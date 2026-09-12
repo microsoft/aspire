@@ -6,8 +6,12 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+
+#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting;
 
@@ -160,11 +164,45 @@ internal class InteractionService : IInteractionService
         // Create the collection early to validate names and generate missing ones
         var inputCollection = new InteractionInputCollection(inputs);
         var hasFileInputs = inputs.Any(input => input.InputType == InputType.File);
+        var hasTerminalInputs = inputs.Any(input => input.InputType == InputType.Terminal);
 
         // Validate inputs.
         for (var i = 0; i < inputs.Count; i++)
         {
             var input = inputs[i];
+            if (input.InputType == InputType.Terminal)
+            {
+                // The input only borrows a terminal for presentation. Its caller-owned lifetime is independent
+                // of the dialog, so reusing the same terminal in later interactions is valid.
+                if (input.Required)
+                {
+                    throw new InvalidOperationException($"The input '{input.Name}' has {nameof(InteractionInput.Required)} set to true, but {nameof(InputType.Terminal)} inputs do not produce a value and cannot be required.");
+                }
+
+                if (input.Terminal is null)
+                {
+                    throw new InvalidOperationException($"The input '{input.Name}' is a {nameof(InputType.Terminal)} input, so {nameof(InteractionInput.Terminal)} must be set to a terminal created by the caller.");
+                }
+
+                // A dock terminal is presented as a dock tab that outlives the code which created it. Showing one in a
+                // dialog as well would render the same terminal through two competing presentations.
+                if (input.Terminal.Placement != TerminalPlacement.Dialog)
+                {
+                    throw new InvalidOperationException($"The input '{input.Name}' sets {nameof(InteractionInput.Terminal)} to a terminal whose {nameof(AspireTerminal.Placement)} is {input.Terminal.Placement}. Terminals shown by an interaction must be created with {nameof(TerminalPlacement)}.{nameof(TerminalPlacement.Dialog)}.");
+                }
+
+                // The dashboard resolves IDs in this AppHost's registry rather than using the supplied object.
+                // Require identity as well as registration; dialog placement above excludes resource-owned handles.
+                // Resolve the service only here so ordinary prompts do not require terminal infrastructure.
+                // Callers can still dispose after this check, so attachment must continue to validate availability.
+                if (_serviceProvider.GetService<TerminalService>() is not { } terminalService ||
+                    !terminalService.TryGetTerminal(input.Terminal.Id, out var registeredTerminal) ||
+                    !ReferenceEquals(input.Terminal, registeredTerminal))
+                {
+                    throw new InvalidOperationException($"The input '{input.Name}' must reference the terminal instance registered with this AppHost's {nameof(TerminalService)}.");
+                }
+            }
+
             if (input.DynamicLoading is { } dynamic)
             {
                 if (dynamic.DependsOnInputs != null)
@@ -200,6 +238,18 @@ internal class InteractionService : IInteractionService
                     .Select(input => (input.Name, InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles)))
                     .ToArray();
                 _fileUploadStore.StartInteraction(newState.InteractionId, fileInputs);
+            }
+            if (hasTerminalInputs)
+            {
+                // The dashboard addresses a terminal by id, so carry the caller's terminal id on the input. The
+                // terminal is neither created nor disposed here: the caller owns it.
+                foreach (var input in inputs)
+                {
+                    if (input.InputType == InputType.Terminal)
+                    {
+                        input.TerminalId = input.Terminal!.Id;
+                    }
+                }
             }
             AddInteractionUpdate(newState);
 

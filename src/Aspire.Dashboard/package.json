@@ -1,0 +1,13 @@
+{
+  "name": "aspire-dashboard-assets",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "update-terminal-assets": "node scripts/update-terminal-assets.mjs && node scripts/verify-terminal-assets.mjs",
+    "verify-terminal-assets": "node scripts/verify-terminal-assets.mjs",
+    "test": "node --test ../../tests/Aspire.Dashboard.Components.Tests/JavaScript/*.test.mjs"
+  },
+  "dependencies": {
+    "@hex1b/web-terminal": "0.166.0"
+  }
+}

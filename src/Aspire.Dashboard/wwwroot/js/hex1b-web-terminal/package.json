@@ -1,0 +1,42 @@
+{
+  "name": "@hex1b/web-terminal",
+  "version": "0.166.0",
+  "description": "First-party WebGPU and WebGL2 browser terminal for Hex1b",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mitchdenny/hex1b.git",
+    "directory": "src/web-terminal"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test tests/*.test.mjs && tsc -p tests/types/tsconfig.json && tsc -p tests/types/tsconfig.bundler.json",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@webgpu/types": "0.1.69",
+    "typescript": "5.9.3"
+  }
+}

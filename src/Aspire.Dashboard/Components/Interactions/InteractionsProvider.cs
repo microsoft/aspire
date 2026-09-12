@@ -222,7 +222,11 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
                     var dialogParameters = CreateDialogParameters(item, intent: null);
                     dialogParameters.Id = "interactions-input-dialog";
-                    dialogParameters.Width = "min(650px, 75vw)";
+                    // Terminals need far more room than form fields: at the default 650px cap a terminal fits roughly
+                    // 80 columns, so anything wider than that gets reflowed. Give terminal dialogs the full desktop
+                    // width budget instead.
+                    var hasTerminalInput = inputs.InputItems.Any(i => i.InputType == InputType.Terminal);
+                    dialogParameters.Width = hasTerminalInput ? "75vw" : "min(650px, 75vw)";
                     dialogParameters.OnDialogResult = EventCallback.Factory.Create<DialogResult>(this, async dialogResult =>
                     {
                         // Only send notification of completion if the dialog was cancelled.

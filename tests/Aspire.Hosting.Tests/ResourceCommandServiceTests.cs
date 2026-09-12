@@ -2,14 +2,17 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Tests;
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+#pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
 
 [Trait("Partition", "2")]
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
@@ -1308,6 +1311,123 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.True(result.Success);
         Assert.NotNull(capturedArguments);
         Assert.Equal("#submit", capturedArguments.GetString("selector"));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task ExecuteCommandAsync_TerminalArguments_ReuseSessionAcrossInteractions(bool dismissFirst, bool cancelFirst)
+    {
+        using var builder = CreateBuilder();
+        await using var terminalService = TestTerminalService.Create();
+        builder.Services.AddSingleton(terminalService);
+
+        // Exercise the real interaction lifecycle with prompting enabled, without starting a dashboard in the test.
+        builder.Services.AddSingleton<InteractionService>(services => new InteractionService(
+            services.GetRequiredService<ILogger<InteractionService>>(),
+            new DistributedApplicationOptions(),
+            services,
+            builder.Configuration,
+            services.GetRequiredService<IInteractionFileUploadStore>()));
+
+        await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+        {
+            Title = "Shell",
+            Command = new TerminalCommand("bash"),
+            Placement = TerminalPlacement.Dialog
+        });
+        var terminalDefinition = new InteractionInput
+        {
+            Name = "shell",
+            InputType = InputType.Terminal,
+            Terminal = terminal
+        };
+        var messageDefinition = new InteractionInput
+        {
+            Name = "message",
+            InputType = InputType.Text,
+            Value = "default"
+        };
+        InteractionInputCollection? capturedArguments = null;
+        var executionCount = 0;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "mycommand",
+            displayName: "My command",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                executionCount++;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions { Arguments = [terminalDefinition, messageDefinition] });
+
+        await using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+        var interactionService = app.Services.GetRequiredService<InteractionService>();
+        InteractionInput? previousInput = null;
+
+        for (var invocation = 0; invocation < 2; invocation++)
+        {
+            capturedArguments = null;
+            using var cts = new CancellationTokenSource();
+            var resultTask = app.ResourceCommands.ExecuteCommandAsync(
+                "myResource",
+                "mycommand",
+                new ResourceCommandExecutionOptions { NonInteractive = false },
+                cts.Token);
+
+            var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+            var inputs = Assert.IsType<Interaction.InputsInteractionInfo>(interaction.InteractionInfo).Inputs;
+            var input = inputs["shell"];
+            Assert.NotSame(terminalDefinition, input);
+            Assert.NotSame(previousInput, input);
+            Assert.Same(terminal, input.Terminal);
+            Assert.Equal(terminal.Id, input.TerminalId);
+            Assert.False(input.Disabled);
+            Assert.Equal("default", inputs.GetString("message"));
+
+            input.Disabled = true;
+            inputs["message"].Value = $"invocation-{invocation}";
+            var canceled = invocation == 0 && (dismissFirst || cancelFirst);
+            if (invocation == 0 && cancelFirst)
+            {
+                cts.Cancel();
+            }
+            else
+            {
+                await interactionService.ProcessInteractionFromClientAsync(
+                    interaction.InteractionId,
+                    (_, _, _) => new InteractionCompletionState { Complete = true, State = canceled ? null : inputs },
+                    CancellationToken.None).DefaultTimeout();
+            }
+
+            var result = await resultTask.DefaultTimeout();
+            Assert.Equal(!canceled, result.Success);
+            Assert.Equal(canceled, result.Canceled);
+            if (canceled)
+            {
+                Assert.Null(capturedArguments);
+            }
+            else
+            {
+                Assert.NotNull(capturedArguments);
+                Assert.Same(input, capturedArguments["shell"]);
+                Assert.Same(terminal, capturedArguments["shell"].Terminal);
+                Assert.Equal($"invocation-{invocation}", capturedArguments.GetString("message"));
+            }
+
+            Assert.Empty(interactionService.GetCurrentInteractions());
+            Assert.True(terminalService.TryGetTerminal(terminal.Id, out var registered));
+            Assert.Same(terminal, registered);
+            Assert.False(terminalDefinition.Disabled);
+            Assert.Null(terminalDefinition.TerminalId);
+            Assert.Equal("default", messageDefinition.Value);
+            previousInput = input;
+        }
+
+        Assert.Equal(dismissFirst || cancelFirst ? 1 : 2, executionCount);
     }
 
     [Fact]

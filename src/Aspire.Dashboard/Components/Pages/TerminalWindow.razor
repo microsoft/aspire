@@ -1,0 +1,26 @@
+@page "/terminal-window/apphost/{TerminalId}"
+@page "/terminal-window/resource/{ResourceName}"
+@page "/terminal-window/resource/{ResourceName}/{ReplicaIndex:int}"
+@layout EmptyLayout
+@namespace Aspire.Dashboard.Components.Pages
+@using Aspire.Dashboard.Components.Controls
+@using Aspire.Dashboard.Components.Layout
+
+<PageTitle>@_title</PageTitle>
+
+@* Without dashboard navigation or a page toolbar, the terminal fills the window and fits its available space. *@
+<div class="terminal-window">
+    @if (_ended)
+    {
+        <div class="terminal-window-ended">@Loc[nameof(Dashboard.Resources.Layout.TerminalWindowEnded)]</div>
+    }
+    else
+    {
+        <TerminalView ResourceName="@ResourceName"
+                      ReplicaIndex="@ReplicaIndex"
+                      EndpointPathAndQuery="@_endpoint"
+                      InitialFontSize="@FontSize"
+                      AutoFit="true"
+                      Chromeless="true" />
+    }
+</div>

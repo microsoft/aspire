@@ -285,7 +285,15 @@ window.copyText = function (text) {
 };
 
 function isActiveElementInput() {
-    const currentElement = document.activeElement;
+    let currentElement = document.activeElement;
+    // Document.activeElement is the shadow host when Hex1b's textarea has
+    // focus. Follow focused shadow roots so printable keys remain terminal
+    // input rather than triggering dashboard navigation shortcuts. Stop at
+    // Fluent dropdowns so their host-level input semantics are preserved.
+    // https://developer.mozilla.org/en-US/docs/Web/API/Document/activeElement
+    while (currentElement.shadowRoot?.activeElement && !currentElement.closest("fluent-dropdown")) {
+        currentElement = currentElement.shadowRoot.activeElement;
+    }
 
     // Fluent v5 renders the dropdown's focusable control as a light-DOM button. Treat the control
     // and popup options as input elements so global shortcuts don't run while a dropdown is active.
@@ -340,6 +348,14 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
 
     function calculateShortcut(e) {
         if (modifierKeysExceptShiftNotPressed(e)) {
+            // Match the physical Shift+Backquote gesture across keyboard layouts, not the produced character.
+            // The focused-input guard runs before this, so terminal and text inputs still receive their keys.
+            // To toggle from terminal input, press F6 first to focus its controls.
+            // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code
+            if (e.shiftKey && e.code === "Backquote") {
+                return 400;
+            }
+
             /* general shortcuts */
             switch (e.key) {
                 case "?": // help

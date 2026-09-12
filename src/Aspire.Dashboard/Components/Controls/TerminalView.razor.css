@@ -1,0 +1,173 @@
+.terminal-view {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0 8px 8px;
+    box-sizing: border-box;
+    background: var(--colorNeutralBackground2);
+}
+
+.terminal-frame {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+    background: #0d1117;
+    border: 2px solid #3a4250;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.terminal-chromeless {
+    padding: 0;
+}
+
+.terminal-chromeless .terminal-frame {
+    border: 0;
+    border-radius: 0;
+}
+
+.terminal-chromeless .terminal-body {
+    padding: 0;
+}
+
+.terminal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    gap: 8px;
+    min-height: 34px;
+    padding: 2px 8px;
+    background: var(--colorNeutralBackground2);
+    color: var(--colorNeutralForeground2);
+    font-size: 11px;
+}
+
+.terminal-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-inline-start: auto;
+}
+
+.terminal-font-size {
+    min-width: 32px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.terminal-focus-hint {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.terminal-titlebar {
+    display: flex;
+    align-items: center;
+    flex: 0 0 30px;
+    min-width: 0;
+    padding: 0 14px;
+    box-sizing: border-box;
+    background: linear-gradient(180deg, #1a2029 0%, #161b22 100%);
+    border-bottom: 1px solid #30363d;
+    color: #8b949e;
+    font: 12px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.terminal-title {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.terminal-dimensions {
+    flex: 0 0 auto;
+    margin-inline-start: 12px;
+    padding-inline-start: 12px;
+    border-inline-start: 1px solid #30363d;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.terminal-body {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    padding: 6px;
+    box-sizing: border-box;
+}
+
+.terminal-container {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.terminal-container ::deep ::part(selection-highlight) {
+    background: var(--colorBrandBackground);
+    opacity: 0.3;
+}
+
+.terminal-view ::deep .terminal-selection-actions {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    pointer-events: auto;
+}
+
+.terminal-view ::deep .terminal-selection-actions[hidden] {
+    display: none;
+}
+
+.terminal-view ::deep .terminal-selection-copy {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--borderRadiusMedium);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
+}
+
+.terminal-view ::deep .terminal-selection-copy::part(control) {
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+}
+
+.terminal-view ::deep .terminal-selection-copy[aria-busy="true"]::part(control) {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+@media (forced-colors: active) {
+    .terminal-container ::deep ::part(selection-highlight) {
+        background: Highlight;
+        forced-color-adjust: none;
+    }
+}
+
+.terminal-error {
+    position: absolute;
+    inset-inline: 12px;
+    top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--border-radius);
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+}

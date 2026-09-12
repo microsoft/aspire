@@ -1,0 +1,142 @@
+@namespace Aspire.Dashboard.Components.Layout
+@using Aspire.Dashboard.Components.Controls
+@using Microsoft.FluentUI.AspNetCore.Components
+
+@* The dock is always rendered once it has been opened for the first time. Collapsing translates it off-screen
+   rather than unmounting it so the terminal keeps its renderer, measured cell metrics, and WebSocket. *@
+@if (_hasBeenOpened)
+{
+    <div class="terminal-dock @(_isVisible ? "visible" : "collapsed")"
+         id="@_elementIdPrefix"
+         style="height: @(_heightPx)px;"
+         inert="@(!_isVisible)"
+         aria-hidden="@(_isVisible ? "false" : "true")"
+         @ref="_dockElement">
+        <div class="terminal-dock-resize-handle"
+             role="separator"
+             tabindex="0"
+             aria-orientation="horizontal"
+             aria-label="@Loc[nameof(Resources.Layout.TerminalDockTabs)]"
+             aria-controls="@_elementIdPrefix"
+             aria-valuemin="@EffectiveMinimumHeightPx"
+             aria-valuemax="@_maximumHeightPx"
+             aria-valuenow="@_heightPx"
+             aria-valuetext="@Loc[nameof(Resources.Layout.TerminalDockHeight), _heightPx]"
+             aria-describedby="@($"{_elementIdPrefix}-resize-help")"
+             aria-keyshortcuts="ArrowUp ArrowDown Shift+ArrowUp Shift+ArrowDown Home End"
+             title="@Loc[nameof(Resources.Layout.TerminalDockResizeHelp)]"></div>
+        <span id="@($"{_elementIdPrefix}-resize-help")" class="visually-hidden">@Loc[nameof(Resources.Layout.TerminalDockResizeHelp)]</span>
+        <div class="terminal-dock-tabstrip">
+            @* FluentTabs resets selection when closing an inactive tab (https://github.com/microsoft/fluentui-blazor/issues/3392).
+               Keep selection and removal driven by AppHost updates, with separate tab/close buttons and mounted panes. *@
+            @if (_terminals.Count > 0)
+            {
+                <div class="terminal-dock-tablist" role="tablist" aria-label="@Loc[nameof(Resources.Layout.TerminalDockTabs)]">
+                    @foreach (var terminal in _terminals)
+                    {
+                        <div class="terminal-dock-tab @(IsPaneActive(terminal.TerminalId) ? "active" : string.Empty)"
+                             @key="terminal.TerminalId">
+                            <button type="button"
+                                    role="tab"
+                                    class="terminal-dock-tab-select"
+                                    id="@GetTabId(terminal.TerminalId)"
+                                    aria-controls="@GetPaneId(terminal.TerminalId)"
+                                    aria-selected="@(IsPaneActive(terminal.TerminalId) ? "true" : "false")"
+                                    tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
+                                    @onclick="@(() => Activate(terminal.TerminalId))">
+                                <span class="terminal-dock-tab-title">@terminal.Title</span>
+                            </button>
+                            <FluentButton Appearance="ButtonAppearance.Transparent"
+                                          IconOnly="true"
+                                          Class="aspire-icon-button terminal-dock-tab-close"
+                                          Title="@Loc[nameof(Resources.Layout.TerminalDockCloseTab), terminal.Title]"
+                                          aria-label="@Loc[nameof(Resources.Layout.TerminalDockCloseTab), terminal.Title]"
+                                          tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
+                                          OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
+                                <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Default" />
+                            </FluentButton>
+                        </div>
+                    }
+                </div>
+            }
+            <div class="terminal-dock-filler"></div>
+            @if (_popupBlocked)
+            {
+                <span class="terminal-dock-popup-blocked">@Loc[nameof(Resources.Layout.TerminalDockDetachBlocked)]</span>
+            }
+            <FluentButton Appearance="ButtonAppearance.Transparent"
+                          IconOnly="true"
+                          Class="aspire-icon-button terminal-dock-detach"
+                          Title="@Loc[nameof(Resources.Layout.TerminalDockDetach)]"
+                          aria-label="@Loc[nameof(Resources.Layout.TerminalDockDetach)]"
+                          Disabled="@(IsPanelVisible || _activeTerminalId is null || _detachedTerminalIds.Contains(_activeTerminalId))"
+                          OnClick="@DetachActiveAsync">
+                <FluentIcon Value="@(new Icons.Regular.Size16.WindowNew())" Color="Color.Default" />
+            </FluentButton>
+            <FluentButton Appearance="ButtonAppearance.Transparent"
+                          IconOnly="true"
+                          Class="aspire-icon-button terminal-dock-collapse"
+                          Title="@Loc[nameof(Resources.Layout.TerminalDockHide)]"
+                          aria-label="@Loc[nameof(Resources.Layout.TerminalDockHide)]"
+                          OnClick="@Hide">
+                <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Default" />
+            </FluentButton>
+        </div>
+        <div class="terminal-dock-body">
+            @foreach (var terminal in _terminals)
+            {
+                @* Inactive panes use visibility rather than display so the terminal retains its measured grid
+                   instead of deferring its mount until the user selects the tab. *@
+                <div class="terminal-dock-pane @(IsPaneActive(terminal.TerminalId) ? "active" : "inactive")"
+                     id="@GetPaneId(terminal.TerminalId)"
+                     role="tabpanel"
+                     aria-labelledby="@GetTabId(terminal.TerminalId)"
+                     aria-hidden="@(IsPaneActive(terminal.TerminalId) ? "false" : "true")"
+                     inert="@(!IsPaneActive(terminal.TerminalId))"
+                     @key="terminal.TerminalId">
+                    @if (_detachedTerminalIds.Contains(terminal.TerminalId))
+                    {
+                        @* Deliberately does not render a TerminalView. The window is the viewer while detached, and a
+                           second attached viewer would contend for the HMP1 primary role and resize the PTY behind
+                           the window the user is actually typing into. *@
+                        <div class="terminal-dock-detached">
+                            <span>@Loc[nameof(Resources.Layout.TerminalDockDetached)]</span>
+                            <div class="terminal-dock-detached-actions">
+                                <FluentButton Appearance="ButtonAppearance.Primary"
+                                              Class="aspire-button"
+                                              OnClick="@(() => FocusDetachedWindowAsync(terminal.TerminalId))">
+                                    @Loc[nameof(Resources.Layout.TerminalDockFocusWindow)]
+                                </FluentButton>
+                                <FluentButton Appearance="ButtonAppearance.Default"
+                                              Class="aspire-button"
+                                              OnClick="@(() => ReturnToDockAsync(terminal.TerminalId))">
+                                    @Loc[nameof(Resources.Layout.TerminalDockReturnToDock)]
+                                </FluentButton>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <TerminalView @ref="_terminalViews[terminal.TerminalId]"
+                                      EndpointPathAndQuery="@BuildEndpoint(terminal.TerminalId)"
+                                      Chromeless="true"
+                                      ShowDimensionsPicker="false"
+                                      AutoFit="@(_isVisible && IsPaneActive(terminal.TerminalId))"
+                                      SizeMemoryKey="@($"dock:{terminal.TerminalId}")" />
+                    }
+                </div>
+            }
+            @if (IsPanelVisible)
+            {
+                <div class="terminal-dock-panel">
+                    <div class="terminal-dock-panel-card">
+                        <FluentIcon Value="@(new Icons.Regular.Size24.Window())" Color="Color.Default" />
+                        <h3 class="terminal-dock-panel-heading">@Loc[nameof(Resources.Layout.TerminalDockPanelHeading)]</h3>
+                        <p class="terminal-dock-panel-body">@Loc[nameof(Resources.Layout.TerminalDockPanelBody)]</p>
+                        <p class="terminal-dock-panel-hint">@Loc[nameof(Resources.Layout.TerminalDockPanelHint)]</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}

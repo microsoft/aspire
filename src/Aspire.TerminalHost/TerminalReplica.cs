@@ -47,6 +47,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
 {
     private readonly ILogger<TerminalReplica> _logger;
     private readonly ILogger<DcpUpstreamAdapter> _upstreamLogger;
+    private readonly ILogger<Hmp1UdsServerListenerFilter> _consumerListenerLogger;
     private readonly Task _runTask;
     private readonly CancellationTokenSource _stopCts;
     private readonly object _gate = new();
@@ -179,6 +180,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
         _currentRows = rows;
         _logger = loggerFactory.CreateLogger<TerminalReplica>();
         _upstreamLogger = loggerFactory.CreateLogger<DcpUpstreamAdapter>();
+        _consumerListenerLogger = loggerFactory.CreateLogger<Hmp1UdsServerListenerFilter>();
         _stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _runTask = Task.Run(() => RecycleLoopAsync(_stopCts.Token), _stopCts.Token);
     }
@@ -355,6 +357,14 @@ internal sealed class TerminalReplica : IAsyncDisposable
     /// </summary>
     private Hex1bTerminal BuildTerminal()
     {
+        int currentColumns;
+        int currentRows;
+        lock (_gate)
+        {
+            currentColumns = _currentColumns;
+            currentRows = _currentRows;
+        }
+
         // Pre-delete any stale UDS files at our paths before Hex1b tries to bind. Without
         // this, a previous host that crashed (or a stuck previous cycle that didn't get
         // to clean teardown) leaves a file at the same path, and Hmp1Transports.ListenUnixSocket
@@ -386,7 +396,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
             {
                 _logger.LogInformation(
                     "Awaiting DCP producer connection on '{ProducerUdsPath}' (cols={Cols}, rows={Rows}).",
-                    ProducerUdsPath, Columns, Rows);
+                    ProducerUdsPath, currentColumns, currentRows);
                 await foreach (var stream in Hmp1Transports.ListenUnixSocket(ProducerUdsPath, cct).ConfigureAwait(false))
                 {
                     int restartCount;
@@ -417,111 +427,140 @@ internal sealed class TerminalReplica : IAsyncDisposable
             _logger.LogInformation("DCP producer disconnected; replica will rebind.");
         };
 
-        return Hex1bTerminal.CreateBuilder()
-            .WithDimensions(Columns, Rows)
-            .WithWorkload(upstream)
-            .WithHmp1UdsServer(
-                ConsumerUdsPath,
-                srvOpts =>
+        // Hex1b's convenience HMP server creates its presentation adapter with an
+        // 80x24 default, which then overrides WithDimensions during Build(). Construct
+        // the adapter directly so both its Hello frames and the upstream PTY start with
+        // the dimensions configured by WithTerminal.
+        var downstream = CreateDownstream(upstream, currentColumns, currentRows);
+        var listener = new Hmp1UdsServerListenerFilter(
+            ConsumerUdsPath,
+            downstream,
+            _consumerListenerLogger,
+            upstream.ReportConsumerListenerFailure);
+
+        try
+        {
+            return Hex1bTerminal.CreateBuilder()
+                .WithDimensions(currentColumns, currentRows)
+                .WithWorkload(upstream)
+                .WithPresentation(downstream)
+                .AddPresentationFilter(listener)
+                .Build();
+        }
+        catch
+        {
+            listener.Dispose();
+            throw;
+        }
+    }
+
+    private Hmp1PresentationAdapter CreateDownstream(
+        DcpUpstreamAdapter upstream,
+        int currentColumns,
+        int currentRows)
+    {
+        var downstream = new Hmp1PresentationAdapter(currentColumns, currentRows);
+
+        // Track every HMP1 peer that connects/disconnects so the host can answer
+        // "who's currently attached to this replica?" via the control RPC. PeerId is
+        // assigned by Hex1b at handshake time and is unique per connection; DisplayName
+        // is the optional ClientHello label (e.g. "aspire.cli:1234", "dashboard:abc12345").
+        downstream.OnClientConnected = (e, _) =>
+        {
+            lock (_gate)
+            {
+                _peers[e.PeerId] = new TerminalHostPeerInfo
                 {
-                    // Track every HMP1 peer that connects/disconnects so the host can answer
-                    // "who's currently attached to this replica?" via the control RPC. PeerId is
-                    // assigned by Hex1b at handshake time and is unique per connection; DisplayName
-                    // is the optional ClientHello label (e.g. "aspire.cli:1234", "dashboard:abc12345").
-                    srvOpts.OnClientConnected = (e, _) =>
-                    {
-                        lock (_gate)
-                        {
-                            _peers[e.PeerId] = new TerminalHostPeerInfo
-                            {
-                                PeerId = e.PeerId,
-                                DisplayName = e.DisplayName,
-                            };
-                        }
-                        // Tag with peer attributes — viewer counts are low (single digits in
-                        // practice: one dashboard tab + maybe a CLI attach), so high-cardinality
-                        // worries don't apply here. Helps diagnose "which viewer is causing the
-                        // resize storm" in the dashboard metric explorer.
-                        var tags = new TagList
-                        {
-                            { "peer.id", e.PeerId },
-                            { "peer.name", e.DisplayName ?? "" },
-                        };
-                        TerminalHostTelemetry.ConsumerConnections.Add(1, tags);
-                        TerminalHostTelemetry.ConsumerPeersActive.Add(1, tags);
-                        _logger.LogInformation(
-                            "Consumer peer connected. PeerId={PeerId}, DisplayName='{DisplayName}'.",
-                            e.PeerId, e.DisplayName);
-                        return Task.CompletedTask;
-                    };
-                    srvOpts.OnClientDisconnected = (e, _) =>
-                    {
-                        string? displayName;
-                        lock (_gate)
-                        {
-                            _peers.TryGetValue(e.PeerId, out var existing);
-                            displayName = existing?.DisplayName;
-                            _peers.Remove(e.PeerId);
-                        }
-                        var tags = new TagList
-                        {
-                            { "peer.id", e.PeerId },
-                            { "peer.name", displayName ?? "" },
-                        };
-                        TerminalHostTelemetry.ConsumerDisconnections.Add(1, tags);
-                        TerminalHostTelemetry.ConsumerPeersActive.Add(-1, tags);
-                        _logger.LogInformation(
-                            "Consumer peer disconnected. PeerId={PeerId}.", e.PeerId);
-                        return Task.CompletedTask;
-                    };
+                    PeerId = e.PeerId,
+                    DisplayName = e.DisplayName,
+                };
+            }
+            // Tag with peer attributes — viewer counts are low (single digits in
+            // practice: one dashboard tab + maybe a CLI attach), so high-cardinality
+            // worries don't apply here. Helps diagnose "which viewer is causing the
+            // resize storm" in the dashboard metric explorer.
+            var tags = new TagList
+            {
+                { "peer.id", e.PeerId },
+                { "peer.name", e.DisplayName ?? "" },
+            };
+            TerminalHostTelemetry.ConsumerConnections.Add(1, tags);
+            TerminalHostTelemetry.ConsumerPeersActive.Add(1, tags);
+            _logger.LogInformation(
+                "Consumer peer connected. PeerId={PeerId}, DisplayName='{DisplayName}'.",
+                e.PeerId, e.DisplayName);
 
-                    // Bridge downstream → upstream resize. The consumer-side multi-head
-                    // server fires OnResized whenever the current primary peer's dims
-                    // change (RequestPrimary or explicit Resize from primary). Forward
-                    // those dims as a raw FrameResize upstream so DCP runs ConPty.Resize
-                    // and the underlying workload sees the new TIOCSWINSZ value. Without
-                    // this hook the consumer-side presentation reflects the new dims but
-                    // the actual PTY stays at whatever DCP started it at.
-                    //
-                    // Also persist the latest dimensions so `aspire terminal ps` and the
-                    // dashboard can report the current grid size without round-tripping to
-                    // every attached viewer.
-                    srvOpts.OnResized = async (e, ct) =>
-                    {
-                        lock (_gate)
-                        {
-                            _currentColumns = e.Width;
-                            _currentRows = e.Height;
-                        }
+            return Task.CompletedTask;
+        };
+        downstream.OnClientDisconnected = (e, _) =>
+        {
+            string? displayName;
+            lock (_gate)
+            {
+                _peers.TryGetValue(e.PeerId, out var existing);
+                displayName = existing?.DisplayName;
+                _peers.Remove(e.PeerId);
+            }
+            var tags = new TagList
+            {
+                { "peer.id", e.PeerId },
+                { "peer.name", displayName ?? "" },
+            };
+            TerminalHostTelemetry.ConsumerDisconnections.Add(1, tags);
+            TerminalHostTelemetry.ConsumerPeersActive.Add(-1, tags);
+            _logger.LogInformation(
+                "Consumer peer disconnected. PeerId={PeerId}.", e.PeerId);
 
-                        TerminalHostTelemetry.ResizeRequests.Add(1, new TagList
-                        {
-                            { "direction", "downstream" },
-                        });
-                        _logger.LogDebug(
-                            "Downstream resize received from primary peer: {Width}x{Height}.",
-                            e.Width, e.Height);
+            return Task.CompletedTask;
+        };
 
-                        try
-                        {
-                            await upstream.ResizeAsync(e.Width, e.Height, ct).ConfigureAwait(false);
-                            _logger.LogDebug(
-                                "Replica: forwarded downstream resize ({Width}x{Height}) to upstream PTY.",
-                                e.Width, e.Height);
-                        }
-                        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                        {
-                            // Recycle loop is shutting down; drop quietly.
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogDebug(ex,
-                                "Replica: forwarding downstream resize ({Width}x{Height}) upstream failed.",
-                                e.Width, e.Height);
-                        }
-                    };
-                })
-            .Build();
+        // Bridge downstream → upstream resize. The consumer-side multi-head
+        // server fires OnResized whenever the current primary peer's dims
+        // change (RequestPrimary or explicit Resize from primary). Forward
+        // those dims as a raw FrameResize upstream so DCP runs ConPty.Resize
+        // and the underlying workload sees the new TIOCSWINSZ value. Without
+        // this hook the consumer-side presentation reflects the new dims but
+        // the actual PTY stays at whatever DCP started it at.
+        //
+        // Also persist the latest dimensions so `aspire terminal ps` and the
+        // dashboard can report the current grid size without round-tripping to
+        // every attached viewer.
+        downstream.OnResized = async (e, ct) =>
+        {
+            lock (_gate)
+            {
+                _currentColumns = e.Width;
+                _currentRows = e.Height;
+            }
+
+            TerminalHostTelemetry.ResizeRequests.Add(1, new TagList
+            {
+                { "direction", "downstream" },
+            });
+            _logger.LogDebug(
+                "Downstream resize received from primary peer: {Width}x{Height}.",
+                e.Width, e.Height);
+
+            try
+            {
+                await upstream.ResizeAsync(e.Width, e.Height, ct).ConfigureAwait(false);
+                _logger.LogDebug(
+                    "Replica: forwarded downstream resize ({Width}x{Height}) to upstream PTY.",
+                    e.Width, e.Height);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // Recycle loop is shutting down; drop quietly.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex,
+                    "Replica: forwarding downstream resize ({Width}x{Height}) upstream failed.",
+                    e.Width, e.Height);
+            }
+        };
+
+        return downstream;
     }
 
     public async ValueTask DisposeAsync()
