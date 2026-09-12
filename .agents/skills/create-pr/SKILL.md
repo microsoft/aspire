@@ -62,7 +62,42 @@ If non-trivial UI changes are detected, add a prominent `### Screenshots / Recor
 <!-- Add screenshots/recordings here -->
 ```
 
-### 4. Build PR body from template
+### 4. Upload visual artifacts
+
+For non-trivial UI changes, upload screenshots or recordings as GitHub user attachments. Do not commit them to the source branch unless explicitly requested.
+
+Prefer `gh --attach` when advertised by `gh pr create --help` or `gh pr edit --help`. Repeat the flag for multiple files; text after `#` is the alt text:
+
+```shell
+gh pr create <other arguments> --attach './before.png#Before' --attach './after.png#After'
+gh pr edit <pr> --attach './before.png#Before' --attach './after.png#After'
+```
+
+For older GitHub CLI versions, upload each image with the authenticated attachment API. Resolve `repository_id` with `gh api repos/<owner>/<repo> --jq .id`, then send the raw file bytes:
+
+```text
+POST https://uploads.github.com/user-attachments/assets?name=<encoded-name>&content_type=<encoded-MIME-type>&repository_id=<id>
+Authorization: Bearer <gh-token>
+Content-Type: <MIME-type>
+```
+
+Example for a PNG in PowerShell:
+
+```powershell
+$repo = "<owner>/<repo>"
+$file = "<absolute-path-to-image>"
+$repoId = gh api "repos/$repo" --jq .id
+$token = gh auth token
+$name = [Uri]::EscapeDataString((Split-Path -Leaf $file))
+$uri = "https://uploads.github.com/user-attachments/assets?name=$name&content_type=image%2Fpng&repository_id=$repoId"
+(Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $token"; Accept = "application/json" } -ContentType "image/png" -InFile $file).url
+```
+
+The response is HTTP `201` with a `url` value. Keep the token in memory and never print it. This endpoint is undocumented, so prefer `gh --attach` when available.
+
+Embed the returned `user-attachments` URLs with useful alt text, using a Markdown table for before/after comparisons. Verify each URL returns HTTP `200` and renders in the final PR body.
+
+### 5. Build PR body from template
 
 - Read `.github/pull_request_template.md`.
 - Use the template structure as the PR body.
@@ -161,7 +196,7 @@ If non-trivial UI changes are detected, add a prominent `### Screenshots / Recor
 - Keep `Fixes # (issue)` unless a concrete issue number is provided.
 - Write the body to a temporary file named `pr-body.md` in the repo root.
 
-### 5. Create the PR
+### 6. Create the PR
 
 Set `GH_PAGER` to `cat` to prevent interactive paging, then create the PR. The syntax differs by shell:
 
@@ -190,7 +225,7 @@ gh pr create `
 
 > **Shell differences:** `VAR=val command` is bash syntax for setting an env var for a single command. PowerShell requires a separate `$env:VAR = "val"` statement (persists for the session, which is harmless here).
 
-### 6. Handle existing PRs
+### 7. Handle existing PRs
 
 If a PR already exists for the branch:
 - Do not create another.
@@ -204,9 +239,9 @@ If a PR already exists for the branch:
 
 - Return the existing PR URL.
 
-### 7. Clean up
+### 8. Clean up
 
-After you are completely finished creating or updating the PR (after step 5 and, if needed, step 6), delete the temporary body file:
+After you are completely finished creating or updating the PR (after step 6 and, if needed, step 7), delete the temporary body file:
 - **bash:** `rm pr-body.md`
 - **PowerShell:** `Remove-Item pr-body.md`
 
@@ -225,4 +260,4 @@ After you are completely finished creating or updating the PR (after step 5 and,
 - Keep the body aligned with `.github/pull_request_template.md`.
 - If the user asks to preview before creating, show the prepared PR body first, then create after confirmation.
 - For checklist sections with Yes/No alternatives, prefer selecting exactly one option per question when information is known.
-- **After creating the PR**, if non-trivial UI changes were detected in step 3, alert the user with a message like: "This PR includes non-trivial UI changes to [Dashboard/CLI/Extension]. Please add screenshots or screen recordings to the PR description so reviewers can evaluate the visual changes without running locally." Include the PR URL so the user can edit it directly.
+- **After creating the PR**, if non-trivial UI changes were detected in step 3, verify that the screenshots or recordings from step 4 are present and rendered in the PR description. If capture or upload was not possible, alert the user with a message like: "This PR includes non-trivial UI changes to [Dashboard/CLI/Extension], but screenshots or recordings could not be added. Please add them so reviewers can evaluate the visual changes without running locally." Include the PR URL so the user can edit it directly.
