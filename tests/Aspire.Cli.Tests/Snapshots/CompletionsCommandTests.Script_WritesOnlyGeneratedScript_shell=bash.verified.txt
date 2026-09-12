@@ -1,0 +1,23 @@
+﻿# Bash completion for Aspire. Source this file from ~/.bashrc.
+_aspire_complete()
+{
+    local line suggestion word
+    local LC_ALL=C
+    COMPREPLY=()
+    line="${COMP_LINE:0:COMP_POINT}"
+    word="${COMP_WORDS[COMP_CWORD]}"
+    # COMP_WORDS keeps the suffix after the cursor (for example, --app|XYZ).
+    # Match only the token prefix at the end of the truncated command line.
+    while [[ "$line" != *"$word" ]]; do
+        word="${word%?}"
+    done
+    while IFS= read -r suggestion; do
+        [[ -n "$suggestion" ]] || continue
+        [[ "$suggestion" == "$word"* ]] || continue
+        # Without -o filenames, Readline inserts custom candidates verbatim.
+        # Quote here to preserve argument boundaries and prevent shell expansion.
+        printf -v suggestion '%q' "$suggestion"
+        COMPREPLY+=("$suggestion")
+    done < <(command aspire '[suggest]' "$line" 2>/dev/null)
+}
+complete -o default -F _aspire_complete aspire

@@ -20,6 +20,7 @@ using Aspire.Cli.Caching;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Completions;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Documentation.ApiDocs;
@@ -51,6 +52,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
@@ -163,7 +165,7 @@ public class Program
         return null;
     }
 
-    private static string GetGlobalSettingsPath(ILogger logger)
+    private static string GetGlobalSettingsPath(ILogger logger, bool migrate)
     {
         var usersAspirePath = GetUsersAspirePath();
         var newPath = Path.Combine(usersAspirePath, Configuration.AspireConfigFile.FileName);
@@ -172,7 +174,7 @@ public class Program
         // The old file is intentionally kept so older CLI versions continue to work during
         // the transition period. Tracked by https://github.com/microsoft/aspire/issues/15239
         var legacyPath = Path.Combine(usersAspirePath, "globalsettings.json");
-        if (!File.Exists(newPath) && File.Exists(legacyPath))
+        if (migrate && !File.Exists(newPath) && File.Exists(legacyPath))
         {
             try
             {
@@ -284,6 +286,7 @@ public class Program
 
     internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null)
     {
+        var isCompletion = CompletionInvocation.Matches(args);
         // Check for --non-interactive flag early
         var nonInteractive = args?.Any(a => a == CommonOptionNames.NonInteractive) ?? false;
 
@@ -306,13 +309,16 @@ public class Program
         var builder = Host.CreateEmptyApplicationBuilder(settings);
 
         // Set up settings with appropriate paths.
-        var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger);
+        var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger, migrate: !isCompletion);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile);
 
-        TrySetLocaleOverride(LocaleHelpers.GetLocaleOverride(builder.Configuration), startupContext.Logger, startupContext.ErrorWriter);
-        WarnIfGlobalSettingsContainAppHostPath(globalSettingsFile, startupContext.ErrorWriter);
+        if (!isCompletion)
+        {
+            TrySetLocaleOverride(LocaleHelpers.GetLocaleOverride(builder.Configuration), startupContext.Logger, startupContext.ErrorWriter);
+            WarnIfGlobalSettingsContainAppHostPath(globalSettingsFile, startupContext.ErrorWriter);
+        }
 
 #if !DEBUG
         // In release builds, limit shutdown wait time for telemetry flush to 200ms
@@ -352,7 +358,9 @@ public class Program
         // - Azure Monitor provider with filtering (only exports activities with EXTERNAL_TELEMETRY=true)
         // - Profiling provider for explicit startup profiling OTLP export
         // - Diagnostic provider for DEBUG-only diagnostics
-        builder.Services.AddSingleton(sp => TelemetryConfiguration.Create(sp.GetRequiredService<IConfiguration>(), args));
+        builder.Services.AddSingleton(sp => isCompletion
+            ? new TelemetryConfiguration()
+            : TelemetryConfiguration.Create(sp.GetRequiredService<IConfiguration>(), args));
         builder.Services.AddSingleton<TelemetryManager>();
 
         // Shared services.
@@ -426,10 +434,10 @@ public class Program
         builder.Services.AddSingleton<ICliHostEnvironment>(provider =>
         {
             var configuration = provider.GetRequiredService<IConfiguration>();
-            return new CliHostEnvironment(configuration, nonInteractive);
+            return new CliHostEnvironment(configuration, nonInteractive || isCompletion);
         });
         builder.Services.AddSingleton(TimeProvider.System);
-        AddInteractionServices(builder);
+        AddInteractionServices(builder, enableExtension: !isCompletion);
         builder.Services.AddSingleton<IAppHostCandidateFinder, AppHostCandidateFinder>();
         builder.Services.AddSingleton<IProjectLocator, ProjectLocator>();
         builder.Services.AddSingleton<ISolutionLocator, SolutionLocator>();
@@ -442,7 +450,11 @@ public class Program
         builder.Services.AddSingleton<IAddCommandPrompter, AddCommandPrompter>();
         builder.Services.AddSingleton<IPublishCommandPrompter, PublishCommandPrompter>();
         builder.Services.AddSingleton<ICertificateService, CertificateService>();
-        builder.Services.AddSingleton(BuildConfigurationService);
+        builder.Services.AddSingleton<IConfigurationService>(sp => new ConfigurationService(
+            sp.GetRequiredService<IConfiguration>(),
+            sp.GetRequiredService<CliExecutionContext>(),
+            globalSettingsFile,
+            sp.GetRequiredService<ILogger<ConfigurationService>>()));
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddTelemetryServices();
         builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
@@ -628,6 +640,7 @@ public class Program
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
+        builder.Services.AddTransient<CompletionsCommand>();
         builder.Services.AddTransient<CacheCommand>();
         builder.Services.AddTransient<CertificatesCommand>();
         builder.Services.AddTransient<CertificatesCleanCommand>();
@@ -797,15 +810,6 @@ public class Program
             logger.LogError("Locale override failed: {ErrorMessage}", errorMessage);
             errorWriter.WriteLine(errorMessage);
         }
-    }
-
-    private static IConfigurationService BuildConfigurationService(IServiceProvider serviceProvider)
-    {
-        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        var logger = serviceProvider.GetRequiredService<ILogger<ConfigurationService>>();
-        var globalSettingsFile = new FileInfo(GetGlobalSettingsPath(logger));
-        return new ConfigurationService(configuration, executionContext, globalSettingsFile, logger);
     }
 
     internal static async Task DisplayFirstTimeUseNoticeIfNeededAsync(IServiceProvider serviceProvider, string[] args, CancellationToken cancellationToken = default)
@@ -996,6 +1000,13 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
+        Console.OutputEncoding = Encoding.UTF8;
+
+        if (CompletionInvocation.Matches(args))
+        {
+            return await InvokeCompletionAsync(args, Console.Out, Console.Error).ConfigureAwait(false);
+        }
+
         // Re-enable CTRL+C delivery for ourselves and any process we subsequently spawn.
         // Per https://learn.microsoft.com/windows/console/setconsolectrlhandler, the "ignore
         // CTRL+C" state is process-level and inherited across CreateProcess. If our parent was
@@ -1034,8 +1045,6 @@ public class Program
         // clock, and token. It is registered as a DI singleton below via
         // AddSingleton(instance) so the container does not take disposal ownership.
         using var cancellationManager = new ConsoleCancellationManager(finalDrainBudget: TimeSpan.FromSeconds(5));
-
-        Console.OutputEncoding = Encoding.UTF8;
 
         // Parse this before building the host because TelemetryManager reads OTEL configuration
         // during DI startup. Waiting for System.CommandLine binding would be too late: the CLI
@@ -1343,9 +1352,39 @@ public class Program
     }
 #endif
 
-    private static void AddInteractionServices(HostApplicationBuilder builder)
+    internal static async Task<int> InvokeCompletionAsync(string[] args, TextWriter output, TextWriter error)
     {
-        var extensionEndpoint = builder.Configuration[KnownConfigNames.ExtensionEndpoint];
+        // Reuse the live command model without starting hosted services, connecting to the
+        // extension, consuming the first-run notice, migrating config, or collecting telemetry.
+        var loggingOptions = ParseLoggingOptions([]);
+        using var cancellationManager = new ConsoleCancellationManager(finalDrainBudget: TimeSpan.Zero);
+        using var startupContext = new CliStartupContext(
+            loggingOptions,
+            new StartupErrorWriter(loggingOptions.LogFilePath),
+            NullLoggerFactory.Instance,
+            FileLoggerProvider.CreateDisabled(loggingOptions.LogFilePath),
+            new ConsoleLogBufferContext(),
+            NullLogger.Instance,
+            cancellationManager,
+            new IdentityChannelReader(typeof(Program).Assembly));
+        using var app = await BuildApplicationAsync(args, startupContext).ConfigureAwait(false);
+        var command = app.Services.GetRequiredService<RootCommand>();
+        if (CompletionInvocation.IsSuggestionRequest(args))
+        {
+            return CompletionInvocation.WriteSuggestions(command, args, output, error);
+        }
+
+        return await command.Parse(args).InvokeAsync(new InvocationConfiguration
+        {
+            Output = output,
+            Error = error,
+            ProcessTerminationTimeout = null
+        }).ConfigureAwait(false);
+    }
+
+    private static void AddInteractionServices(HostApplicationBuilder builder, bool enableExtension)
+    {
+        var extensionEndpoint = enableExtension ? builder.Configuration[KnownConfigNames.ExtensionEndpoint] : null;
 
         if (extensionEndpoint is not null)
         {

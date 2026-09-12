@@ -292,8 +292,9 @@ path_rules:
     reason: builds or loads the CLI E2E images consumed only by Aspire.Cli.EndToEnd.Tests
   - paths:
       - eng/scripts/pack-cli-npm-package.ps1
+      - eng/scripts/pack-cli-npm-package.pointer.README.md
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
-    reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse this script
+    reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse the pack script; Infrastructure.Tests also renders its README template
   - paths:
       - src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package-lock.json
     targets: [test:Aspire.Cli.Tests]

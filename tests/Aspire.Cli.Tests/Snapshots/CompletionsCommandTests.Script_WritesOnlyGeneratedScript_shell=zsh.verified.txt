@@ -1,0 +1,26 @@
+﻿#compdef aspire
+_aspire()
+{
+    local suggestions
+    local -a values
+    suggestions=$(command aspire '[suggest]' "${BUFFER:0:$CURSOR}" 2>/dev/null)
+    values=("${(@f)suggestions}")
+    if [[ -n "$suggestions" ]]; then
+        compadd -- "${values[@]}"
+    else
+        _default
+    fi
+}
+# A fresh Zsh profile may not have initialized the completion system yet.
+# -i audits and excludes insecure directories instead of prompting during profile
+# loading. Unlike -u, it does not trust insecure completion directories.
+# https://zsh.sourceforge.io/Doc/Release/Completion-System.html#Initialization
+if (( ! $+functions[compdef] )); then
+    autoload -Uz compinit
+    compinit -i || return
+fi
+compdef _aspire aspire
+# An autoloaded #compdef file must also complete its first invocation.
+if [[ "$funcstack[1]" == "_aspire" ]]; then
+    _aspire "$@"
+fi
