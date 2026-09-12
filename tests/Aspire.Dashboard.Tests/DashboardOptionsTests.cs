@@ -90,6 +90,26 @@ public sealed class DashboardOptionsTests
             result.FailureMessage);
     }
 
+    [Fact]
+    public void PostConfigure_NumericDashboardPersistenceMode_IsInvalid()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = "1"
+            })
+            .Build();
+        var options = GetValidOptions();
+
+        new PostConfigureDashboardOptions(configuration).PostConfigure(null, options);
+        var result = new ValidateDashboardOptions().Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            "Failed to parse dashboard persistence mode '1'. Possible values: None, Run, Resume.",
+            result.FailureMessage);
+    }
+
     #region Frontend options
 
     [Fact]
