@@ -32,7 +32,7 @@ resource mainContainer 'Microsoft.Web/sites/sitecontainers@2025-03-01' = {
 }
 
 resource webapp 'Microsoft.Web/sites@2025-03-01' = {
-  name: take('${toLower('project2')}-${uniqueString(resourceGroup().id)}', 60)
+  name: '${take(toLower('project2'), 46)}-${uniqueString(toLower('project2'), resourceGroup().id)}'
   location: location
   properties: {
     serverFarmId: env_outputs_planid
@@ -60,11 +60,11 @@ resource webapp 'Microsoft.Web/sites@2025-03-01' = {
         }
         {
           name: 'PROJECT1_HTTP'
-          value: 'https://${take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
+          value: 'https://${'${take(toLower('project1'), 46)}-${uniqueString(toLower('project1'), resourceGroup().id)}'}.azurewebsites.net'
         }
         {
           name: 'services__project1__http__0'
-          value: 'https://${take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
+          value: 'https://${'${take(toLower('project1'), 46)}-${uniqueString(toLower('project1'), resourceGroup().id)}'}.azurewebsites.net'
         }
         {
           name: 'ASPIRE_ENVIRONMENT_NAME'
@@ -126,3 +126,5 @@ resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
   }
   parent: webapp
 }
+
+output name string = '${take(toLower('project2'), 46)}-${uniqueString(toLower('project2'), resourceGroup().id)}'
