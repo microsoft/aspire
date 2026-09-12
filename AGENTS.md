@@ -38,25 +38,14 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 
 ### Conditional Test Selection
 
-When reviewing a pull request, check whether `eng/github-ci/test-trigger-map.yml`
-needs to change if the diff:
-
-* Adds, removes, or renames a test project.
-* Adds or changes a CI job, reusable workflow, or `run_*` selection gate.
-* Adds or changes a script, configuration file, or other loose input consumed by
-  CI or tests but not represented by an MSBuild project reference.
-
-Do not request manual mappings for files evaluated by projects in the
-`Aspire.slnx`-rooted ProjectGraph; Layer 1 owns them. For Layer 2 blind spots,
-verify that the map routes each path to its actual consumer, uses `ALL` for
-broad shared inputs, or explicitly classifies paths handled by unconditional or
-dedicated workflows and paths with no PR-CI consumer. A gated job implemented by
-a reusable workflow must route changes to that workflow file to the job target
-and keep its `run_*` output wiring consistent.
-
-Selector behavior changes should include focused coverage in
-`tests/Infrastructure.Tests/TestTriggerMap/`. See
-`docs/ci/test-trigger-map.md` for the map vocabulary and maintenance guidance.
+When reviewing a pull request that touches `eng/github-ci/test-trigger-map.yml`,
+`eng/github-ci/ci-skip-entirely-patterns.txt`, `tools/SelectTests/**`, CI job
+gates, reusable workflows, `run_*` outputs, loose CI/test inputs, or that adds,
+removes, or renames test projects, apply the
+[`code-review-test-trigger-map`](.github/skills/code-review-test-trigger-map/SKILL.md)
+skill. It carries the full review procedure; `docs/ci/test-trigger-map.md`
+remains the authoritative reference for the map vocabulary and maintenance
+rules.
 
 ### API Files and Public API Surface
 
@@ -552,6 +541,10 @@ The following specialized skills are available in `.agents/skills/`:
 - **reviewing-aspire-architecture**: Use only when explicitly asked for deep architectural or pattern review of an existing PR or diff, or for a concrete Aspire-domain question escalated by a generic reviewer that cannot resolve it. Do not use for design or explanation requests, ordinary reviews, or based on changed file paths.
 - **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.
 - **deprecate-integration**: Soft-sunsets a shipped hosting integration: marks its API `[Obsolete]`, adds a README warning, hides the package from `aspire add`, removes integration-specific automation, suppresses the resulting warnings in first-party consumers, and ships one final obsolete release. Use when deprecating, sunsetting, or retiring an integration.
+
+Code review skills for GitHub Copilot code review live in `.github/skills/`:
+
+- **code-review-test-trigger-map**: Reviews changes to the selective-CI test trigger map and its inputs (`eng/github-ci/test-trigger-map.yml`, `eng/github-ci/ci-skip-entirely-patterns.txt`, `tools/SelectTests/**`, workflow gates and `run_*` wiring, loose CI/test inputs, test project add/remove/rename).
 
 ## Pattern-Based Instructions
 
