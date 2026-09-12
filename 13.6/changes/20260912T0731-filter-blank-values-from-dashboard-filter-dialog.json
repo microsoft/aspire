@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Filter value comboboxes in the dashboard no longer display blank options with a count, such as an empty trace ID. Empty values are removed from suggestions while non-empty values keep their aggregated counts.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-09-12T07:31:07Z",
+  "lastMergedAt": "2026-09-12T07:31:07Z",
+  "name": "Filter blank values from dashboard filter dialog",
+  "owner": "JamesNK",
+  "prs": [
+    20081
+  ]
+}

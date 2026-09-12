@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: dashboard filter dialog no longer shows blank value options",
+  "mergedAt": "2026-09-12T07:31:07Z",
+  "number": 20081,
+  "runDate": "2026-09-12T12:05:01Z",
+  "status": "included",
+  "title": "Filter blank values from dashboard filter dialog"
+}
