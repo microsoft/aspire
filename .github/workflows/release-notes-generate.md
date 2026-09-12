@@ -128,17 +128,28 @@ maintainer to paste notes" as a fallback; the workflow has no
 The tag this run is processing is in `${{ github.event.inputs.tag_name }}`
 (this workflow is always dispatched via `workflow_dispatch` with that input).
 
-Fetch the full release record for `microsoft/aspire` by tag
-(`GET /repos/microsoft/aspire/releases/tags/<tag>`). Capture its `id`,
-`tag_name`, `name`, `body`, `published_at`, `html_url`, `draft`, and
-`prerelease`. The workflow runs with a GitHub App token that can see
-drafts in `microsoft/aspire`, so this call returns the draft record that
-`release-github-tasks.yml` created just before dispatching this workflow.
+Resolve the release by **listing** releases
+(`GET /repos/microsoft/aspire/releases?per_page=100`) and selecting the
+single entry whose `tag_name` equals `${{ github.event.inputs.tag_name }}`.
+Capture its `id`, `tag_name`, `name`, `body`, `published_at`, `html_url`,
+`draft`, and `prerelease`.
+
+Do **not** use the "get a release by tag name" endpoint
+(`GET /repos/microsoft/aspire/releases/tags/<tag>`) here: that endpoint only
+matches **published** releases and returns `404 Not Found` for drafts,
+regardless of token permissions. Because `release-github-tasks.yml` creates
+this release **as a draft** and dispatches us before it is published,
+get-by-tag would 404 and send us down the "release not found" benign no-op
+path even though the draft exists. The list endpoint, on the other hand,
+includes draft releases for a token with push access (which the App token
+has), so the matching draft record is returned. This is the same list
+pattern Step 3 uses for the previous-stable lookup.
 
 **Exit successfully with a diagnostic** if any of these are true (do not
 fail the run — these are expected states the workflow shouldn't act on):
 
-- The release can't be found.
+- The release can't be found — i.e. no listed release has a `tag_name`
+  matching the input tag.
 - `release.draft == false` — the release manager has already published the
   draft, so the body should no longer be overwritten by automation. If
   this run was a `workflow_dispatch` rerun on a published release, the
@@ -299,7 +310,7 @@ Two distinct failure classes — handle them differently:
 **Benign no-op (exit successfully with a diagnostic, emit NO safe output).**
 These are the early-exit cases already covered by Steps 1 and 2:
 
-- Release not found by tag.
+- Release not found — no listed release matches the tag.
 - `release.draft == false` (release manager already published the draft —
   body is no longer safe to overwrite by automation).
 - `release.prerelease == true`.
