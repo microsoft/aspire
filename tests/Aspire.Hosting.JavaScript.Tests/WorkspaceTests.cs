@@ -929,7 +929,7 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     [OuterloopTest("long-running docker build")]
     public async Task VerifyPnpmWorkspaceMemberDockerImageBuilds()
     {
@@ -988,7 +988,7 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     [OuterloopTest("long-running docker build")]
     public async Task VerifyYarnPnPWorkspaceMemberDockerImageBuilds()
     {
@@ -1060,7 +1060,7 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     [OuterloopTest("long-running docker build")]
     public async Task VerifyNpmWorkspaceMemberDockerImageBuilds()
     {
@@ -1129,7 +1129,7 @@ public class WorkspaceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     [OuterloopTest("long-running docker build")]
     public async Task VerifyBunWorkspaceMemberDockerImageBuilds()
     {
