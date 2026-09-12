@@ -19,6 +19,12 @@ public partial class FoundryModel
         public static readonly FoundryModel ClaudeFable5 = new() { Name = "claude-fable-5", Version = "1", Format = "Anthropic" };
 
         /// <summary>
+        /// Claude Fable 5.1 is our most intelligent Fable model and the best generally available model for coding and agents, with deeper reasoning for enterprise workflows.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeFable51 = new() { Name = "claude-fable-5-1", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
         /// Claude Haiku 4.5 delivers near-frontier performance for a wide range of use cases, and stands out as one of the best coding and agent models – with the right speed and cost to power free products and scaled sub-agents.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -29,6 +35,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel ClaudeMythos5 = new() { Name = "claude-mythos-5", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
+        /// Claude Mythos 5.1 (gated) is a new class of intelligence for cybersecurity, coding, and long-running agents. Only available as a gated research preview with access prioritized for defensive cybersecurity use cases
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeMythos51 = new() { Name = "claude-mythos-5-1", Version = "1", Format = "Anthropic" };
 
         /// <summary>
         /// Claude Mythos Preview (gated research preview) is a new class of intelligence for cybersecurity, coding, and long-running agents. Only available as a gated research preview with access prioritized for defensive cybersecurity use cases
@@ -145,6 +157,12 @@ public partial class FoundryModel
         public static readonly FoundryModel CohereEmbedV3Multilingual = new() { Name = "Cohere-embed-v3-multilingual", Version = "1", Format = "Cohere" };
 
         /// <summary>
+        /// Cohere Parse 5 is a high-performance document vision parser.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel CohereParseV5 = new() { Name = "Cohere-parse-v5", Version = "1", Format = "Cohere" };
+
+        /// <summary>
         /// Rerank improves search systems by sorting documents based on their semantic similarity to a query
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -168,18 +186,6 @@ public partial class FoundryModel
     /// </summary>
     public static partial class DeepSeek
     {
-        /// <summary>
-        /// DeepSeek-R1 excels at reasoning tasks using a step-by-step training process, such as language, scientific reasoning, and coding tasks.
-        /// </summary>
-        [AspireValue("FoundryModels")]
-        public static readonly FoundryModel DeepSeekR1 = new() { Name = "DeepSeek-R1", Version = "1", Format = "DeepSeek" };
-
-        /// <summary>
-        /// The DeepSeek R1 0528 model has improved reasoning capabilities, this version also offers a reduced hallucination rate, enhanced support for function calling, and better experience for vibe coding.
-        /// </summary>
-        [AspireValue("FoundryModels")]
-        public static readonly FoundryModel DeepSeekR10528 = new() { Name = "DeepSeek-R1-0528", Version = "1", Format = "DeepSeek" };
-
         /// <summary>
         /// DeepSeek-V3.2, a model that harmonizes high computational efficiency with superior reasoning and agent performance
         /// </summary>
@@ -257,6 +263,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel MetaLlama318BInstruct = new() { Name = "Meta-Llama-3.1-8B-Instruct", Version = "6", Format = "Meta" };
+
+        /// <summary>
+        /// Muse-Spark is a Meta text-generation model for conversational experiences, drafting, summarization, and question answering.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MuseSpark = new() { Name = "Muse-Spark", Version = "1", Format = "Meta" };
     }
 
     /// <summary>
@@ -1381,6 +1393,12 @@ public partial class FoundryModel
         public static readonly FoundryModel MaiTranscribe15 = new() { Name = "MAI-Transcribe-1.5", Version = "2026-06-02", Format = "Microsoft" };
 
         /// <summary>
+        /// The second generation of our speech-to-text model family more accurate, faster, and built to handle a wider range of real-world audio. MAI-Transcribe-2 transcribes reliably across accents, speaking styles, and noisy environments, and now covers 60 language
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MaiTranscribe2 = new() { Name = "MAI-Transcribe-2", Version = "2026-09-03", Format = "Microsoft" };
+
+        /// <summary>
         /// MAI-Voice-1 is a text-to-speech (TTS) model that generates high-quality single-speaker speech and, soon, multi-speaker speech for public preview. It produces audio that strictly follows the input transcript and supports per-turn emotion control as well as
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -2104,6 +2122,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt56Terra = new() { Name = "gpt-5.6-terra", Version = "2026-07-09", Format = "OpenAI" };
+
+        /// <summary>
+        /// GPT‑6 Astra is OpenAI's most capable frontier reasoning model, designed for complex professional and enterprise workloads.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt6Astra = new() { Name = "gpt-6-astra", Version = "2026-09-03", Format = "OpenAI" };
 
         /// <summary>
         /// Best suited for rich, asynchronous audio input/output interactions, such as creating spoken summaries from text.
@@ -3342,6 +3366,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel Grok43 = new() { Name = "grok-4.3", Version = "1", Format = "xAI" };
+
+        /// <summary>
+        /// Grok 4.6 is a multimodal large language model from xAI designed for coding, engineering, knowledge work, research, and agentic workflows, with improvements in reasoning, task completion, and long-horizon problem solving.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Grok46 = new() { Name = "grok-4.6", Version = "1", Format = "xAI" };
 
         /// <summary>
         /// Grok Code Fast 1 is a fast, economical AI model for agentic coding, built from scratch with a new architecture, trained on programming-rich data, and fine-tuned for real-world coding tasks like bug fixes and project setup.

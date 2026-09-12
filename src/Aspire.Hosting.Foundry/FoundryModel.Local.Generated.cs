@@ -201,7 +201,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/google/gemma-4-e2b-it">Gemma 4 E2B IT</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Gemma4E2bIt = new() { Name = "gemma-4-e2b-it", Version = "1", Format = "Microsoft" };
+        public static readonly FoundryModel Gemma4E2bIt = new() { Name = "gemma-4-e2b-it", Version = "3", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of gpt-oss-20b to enable local inference. This model uses RTN quantization.</para>
@@ -308,7 +308,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512">Ministral-3-3B-Instruct-2512</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Ministral33bInstruct2512 = new() { Name = "ministral-3-3b-instruct-2512", Version = "1", Format = "Microsoft" };
+        public static readonly FoundryModel Ministral33bInstruct2512 = new() { Name = "ministral-3-3b-instruct-2512", Version = "2", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Mistral-7B-Instruct-v0.2 to enable local inference on Intel GPUs.</para>
@@ -443,7 +443,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b">nemotron-3.5-asr-streaming-0.6b</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Nemotron35AsrStreaming06b = new() { Name = "nemotron-3.5-asr-streaming-0.6b", Version = "2", Format = "Microsoft" };
+        public static readonly FoundryModel Nemotron35AsrStreaming06b = new() { Name = "nemotron-3.5-asr-streaming-0.6b", Version = "3", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of nemotron-speech-streaming-en-0.6b to enable local inference. This model uses RTN quantization.</para>
@@ -488,7 +488,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b">nemotron-speech-streaming-en-0.6b</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel NemotronSpeechStreamingEn06b = new() { Name = "nemotron-speech-streaming-en-0.6b", Version = "1", Format = "Microsoft" };
+        public static readonly FoundryModel NemotronSpeechStreamingEn06b = new() { Name = "nemotron-speech-streaming-en-0.6b", Version = "2", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is a fine-tuned and optimized derivative of nemotron-speech-streaming-en-0.6b, adapted for Spanish speech recognition. The model is optimized for local inference.</para>
@@ -533,7 +533,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b">https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel NemotronSpeechStreamingEs06b = new() { Name = "nemotron-speech-streaming-es-0.6b", Version = "1", Format = "Microsoft" };
+        public static readonly FoundryModel NemotronSpeechStreamingEs06b = new() { Name = "nemotron-speech-streaming-es-0.6b", Version = "2", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Olmo-3-7B-Instruct to enable local inference. This model uses GPTQ quantization.</para>
