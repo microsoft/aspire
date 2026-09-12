@@ -31,10 +31,10 @@ This document specifies the **Aspire Bundle**, a self-contained distribution pac
 The Aspire Bundle is a platform-specific archive containing the Aspire CLI and all runtime components:
 
 - **Aspire CLI** (native AOT executable, includes native certificate management)
-- **Aspire Managed** (unified self-contained binary: Dashboard + AppHost Server + NuGet Helper)
+- **Aspire Managed** (unified self-contained binary: Dashboard + AppHost Server)
 - **Developer Control Plane (DCP)** (no longer distributed via NuGet)
 
-**Key change**: DCP and Dashboard are now bundled with the CLI installation, not downloaded as NuGet packages. Dashboard, AppHost Server, and NuGet Helper are consolidated into a single `aspire-managed` binary that dispatches via subcommands. Certificate management is handled natively in the CLI (no subprocess needed). This:
+**Key change**: DCP and Dashboard are now bundled with the CLI installation, not downloaded as NuGet packages. Dashboard and AppHost Server are consolidated into a single `aspire-managed` binary that dispatches via subcommands. NuGet and certificate management run natively in the CLI without subprocesses. This:
 
 - Eliminates large NuGet package downloads on first run
 - Ensures version consistency between CLI and runtime components
@@ -138,7 +138,7 @@ When a user runs `aspire run` with a TypeScript app host:
 
 1. **CLI reads project configuration** from `.aspire/settings.json`
 2. **CLI discovers bundle layout** using priority-based resolution
-3. **CLI downloads missing integrations** using aspire-managed's NuGet subcommand
+3. **CLI downloads missing integrations** using NuGet.Client APIs in-process
 4. **CLI generates `appsettings.json`** for the AppHost Server with integration list
 5. **CLI starts AppHost Server** using aspire-managed's server subcommand
 6. **CLI starts guest app host** (TypeScript) which connects via JSON-RPC
@@ -154,11 +154,11 @@ When a user runs `aspire run` with a TypeScript app host:
 aspire-{version}-{platform}/
 │
 ├── aspire[.exe]                        # Native AOT CLI (~25 MB)
-│                                       # (includes native certificate management)
+│                                       # (includes NuGet and certificate management)
 │
 ├── managed/                            # Unified managed binary (~65 MB)
 │   └── aspire-managed[.exe]            # Self-contained single-file executable
-│                                       # Subcommands: dashboard | server | nuget
+│                                       # Subcommands: dashboard | server
 │
 ├── dcp/                                # Developer Control Plane (~127 MB)
 │   ├── dcp[.exe]                       # Native executable
@@ -167,7 +167,7 @@ aspire-{version}-{platform}/
 └── (no more runtime/, dashboard/, aspire-server/, tools/ directories)
 ```
 
-**Key change from previous layout**: The separate `.NET Runtime` (~106 MB), `dashboard/` (~42 MB), `aspire-server/` (~19 MB), `tools/aspire-nuget/` (~5 MB), and `tools/dev-certs/` directories have been consolidated into a single `managed/aspire-managed` self-contained binary. Certificate management has been moved natively into the CLI itself, eliminating the need for a separate dev-certs tool.
+**Key change from previous layout**: The separate `.NET Runtime` (~106 MB), `dashboard/` (~42 MB), and `aspire-server/` (~19 MB) directories have been consolidated into a single `managed/aspire-managed` self-contained binary. NuGet and certificate management have moved natively into the CLI itself, eliminating the need for separate helper tools.
 
 **Total Bundle Size:**
 - **Unzipped:** ~220 MB (down from ~323 MB — eliminated separate runtime)
@@ -387,52 +387,9 @@ This dual-discovery approach ensures:
 
 ## NuGet Operations
 
-The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, which provides package search, restore, and probe manifest generation without requiring the .NET SDK.
+The native AOT CLI calls NuGet.Client APIs in-process for package search, restore, asset selection, and manifest generation. This gives bundled installations NuGet functionality without requiring either the .NET SDK or an `aspire-managed` NuGet subprocess.
 
-### NuGet Helper Commands
-
-```bash
-# Search for packages
-{managed}/aspire-managed nuget search \
-  --query "Aspire.Hosting" \
-  --prerelease \
-  --take 50 \
-  --source https://api.nuget.org/v3/index.json \
-  --format json
-
-# Restore packages
-{managed}/aspire-managed nuget restore \
-  --package "Aspire.Hosting.Redis" \
-  --version "13.2.0" \
-  --framework net10.0 \
-  --output <workspace>/.aspire/integrations/package-restore/hash/obj
-
-# Create package probe manifest from restored packages
-{managed}/aspire-managed nuget manifest \
-  --assets <workspace>/.aspire/integrations/package-restore/hash/obj/project.assets.json \
-  --output <workspace>/.aspire/integrations/package-restore/hash/integration-package-probe-manifest.json \
-  --framework net10.0
-
-```
-
-### Search Output Format
-
-```json
-{
-  "packages": [
-    {
-      "id": "Aspire.Hosting.Redis",
-      "version": "13.2.0",
-      "allVersions": ["13.1.0", "13.2.0"],
-      "description": "Redis hosting integration for Aspire",
-      "authors": ["Microsoft"],
-      "source": "nuget.org",
-      "deprecated": false
-    }
-  ],
-  "totalHits": 42
-}
-```
+The non-bundled CLI continues to use `dotnet package search` for package searches. Only operations that previously used `aspire-managed nuget` run through the in-process client.
 
 ### AppHost Integration Cache Structure
 
@@ -513,7 +470,7 @@ When a project references integrations (e.g., `Aspire.Hosting.Redis`):
 
 1. CLI reads `.aspire/settings.json` for package list
 2. CLI checks local integration cache (`<workspace>/.aspire/integrations/`)
-3. Missing packages are downloaded via NuGet Helper
+3. Missing packages are downloaded through in-process NuGet.Client APIs
 4. Packages are represented by a probe manifest that points at the NuGet package cache
 5. Project-reference outputs are copied to immutable fingerprinted layouts when needed
 6. AppHost Server loads integration assemblies at startup
@@ -531,8 +488,8 @@ When a project references integrations (e.g., `Aspire.Hosting.Redis`):
 
 When the user's project requires integrations not included in the bundle:
 
-1. CLI downloads missing packages using NuGet Helper to a project-specific cache
-2. NuGet Helper restores packages and writes a package probe manifest
+1. CLI downloads missing packages through NuGet.Client APIs to a project-specific cache
+2. CLI writes a package probe manifest from the restored package assets
 3. Project-reference outputs, when present, are copied to an immutable `ASPIRE_INTEGRATION_LIBS_PATH` layout
 4. AppHost Server loads integration assemblies via `IntegrationLoadContext`
 
@@ -716,7 +673,7 @@ The bundle installs components as siblings under `~/.aspire/`, with the CLI bina
 ├── .aspire-bundle-version  # Version marker (hex FNV-1a hash, written after extraction)
 │
 ├── managed/                # Unified managed binary (self-contained)
-│   └── aspire-managed      # Subcommands: dashboard | server | nuget
+│   └── aspire-managed      # Subcommands: dashboard | server
 │
 ├── dcp/                    # Developer Control Plane
 │   └── dcp
@@ -1309,8 +1266,11 @@ This section tracks the implementation progress of the bundle feature.
   - `NativeCertificateToolRunner` - calls `CertificateManager` directly (no subprocess)
   - `CertificateGeneration/` - vendored from aspnetcore, EventSource replaced with ILogger
 - [x] **Aspire Managed unified binary** - `src/Aspire.Managed/`
-  - Self-contained single binary: `aspire-managed dashboard|server|nuget`
-  - Replaces separate runtime, dashboard, aspire-server, and tools directories
+  - Self-contained single binary: `aspire-managed dashboard|server`
+  - Replaces separate runtime, dashboard, and aspire-server directories
+- [x] **Native NuGet operations** - `src/Aspire.Cli/NuGet/`
+  - Calls NuGet.Client APIs directly from the native AOT CLI
+  - Replaces the `aspire-managed nuget` subprocess
 - [x] **Bundle build tooling** - `tools/CreateLayout/`
   - Builds aspire-managed as self-contained single-file binary
   - Copies DCP
@@ -1351,7 +1311,7 @@ This section tracks the implementation progress of the bundle feature.
 | `src/Aspire.Cli/Layout/LayoutDiscovery.cs` | Priority-based layout discovery (env > config > relative) |
 | `src/Aspire.Cli/Layout/LayoutProcessRunner.cs` | Run managed DLLs via layout's .NET runtime |
 | `src/Aspire.Cli/NuGet/BundleNuGetService.cs` | NuGet operations wrapper for bundle mode |
-| `src/Aspire.Managed/NuGet/` | NuGet search, restore, and manifest commands (embedded in aspire-managed) |
+| `src/Aspire.Cli/NuGet/NuGetClient.cs` | In-process NuGet search, restore, asset selection, and manifest generation |
 | `src/Aspire.Cli/Projects/PrebuiltAppHostServer.cs` | Bundle-mode server runner |
 | `src/Aspire.Cli/Projects/GuestAppHostProject.cs` | Main polyglot handler with bundle/SDK mode switching |
 | `src/Aspire.Hosting/Dcp/DcpOptions.cs` | DCP/Dashboard path resolution with env var support |
@@ -1396,7 +1356,7 @@ aspire-managed (self-contained, ~65 MB)
 
 ### Build Steps
 
-1. **Build aspire-managed** as a self-contained single-file binary (includes .NET runtime, Dashboard, AppHost Server, NuGet operations)
+1. **Build aspire-managed** as a self-contained single-file binary (includes .NET runtime, Dashboard, and AppHost Server)
 2. **Download and copy DCP** binaries
 3. **Create archive** (tar.gz for Unix, ZIP for Windows) with `COPYFILE_DISABLE=1` to suppress macOS xattr headers
 4. **Create self-extracting binary** — appends tar.gz payload + 32-byte trailer to native AOT CLI
