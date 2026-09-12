@@ -3,25 +3,26 @@
 
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Controls;
 
 /// <summary>
-/// Renders an interactive terminal using xterm.js, connected to the resource's
-/// per-replica terminal session via a WebSocket bridge to the AppHost-owned
-/// terminal host (HMP v1 over Unix domain socket).
+/// Renders a GPU terminal connected to the resource's per-replica session
+/// through the dashboard's HWT1 presentation endpoint.
 /// </summary>
 public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 {
     private ElementReference _terminalElement;
+    private ElementReference _selectionTemplateElement;
     private IJSObjectReference? _jsModule;
     private DotNetObjectReference<TerminalView>? _selfRef;
     private int _terminalId;
     private string? _connectedResourceName;
     private int _connectedReplicaIndex = -1;
     // Highest reconnect generation we've observed from JS via a toolbar
-    // snapshot. The JS side bumps `state.reconnect.generation` on every
+    // snapshot. The JS side bumps `state.generation` on every
     // initTerminal / reconnectTerminal / auto-reconnect. `reconnectTerminal`
     // keeps the same terminal id, so terminal id alone can't tell us whether
     // a late-arriving `onExit` or `OnTerminalStateChanged` callback belongs
@@ -35,12 +36,18 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     // below would see _connectedResourceName == null, mistake that for "rebind
     // needed", call ReconnectAsync, and — because _terminalId is also still 0
     // — fall through to InitializeTerminalAsync a second time. Each
-    // initTerminal call appends a brand-new xterm host element to the same
+    // initTerminal call appends a brand-new terminal host element to the same
     // Blazor container, leaving multiple stacked terminals in the DOM that
     // mirror the same input/output stream. This pattern is easy to trigger
     // on a resource stop+restart where the dashboard fires a burst of
     // resource-snapshot-driven re-renders right after the page mounts.
     private bool _initStarted;
+    private bool _initializationFailed;
+    private bool _disposed;
+    private string? _terminalError;
+    private int _terminalColumns;
+    private int _terminalRows;
+    private Task? _initializationTask;
 
     /// <summary>
     /// Gets or sets the user-facing display name of the resource that owns the
@@ -58,10 +65,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     /// <summary>
     /// Raised when the JS side pushes a fresh toolbar state snapshot (role,
-    /// dims, font size, etc.). The host page subscribes so the chrome that
-    /// used to live inside the terminal frame — status badge, "Take control"
-    /// button, font controls, size dropdown, dims readout — can be rendered
-    /// in the page's existing toolbar instead.
+    /// dims, font size, etc.). The host page subscribes to render status,
+    /// "Take control", font controls and size options in its toolbar.
     /// </summary>
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
@@ -72,9 +77,15 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
+    [Inject]
+    public required IStringLocalizer<Resources.ConsoleLogs> Loc { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Resources.ControlsStrings> ControlsLoc { get; init; }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (string.IsNullOrEmpty(ResourceName))
+        if (_disposed || _initializationFailed || string.IsNullOrEmpty(ResourceName))
         {
             return;
         }
@@ -92,16 +103,12 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             var initResource = ResourceName;
             var initReplica = ReplicaIndex;
             await InitializeTerminalAsync(initResource!, initReplica);
-            // Only record the connected resource/replica when JS init actually
-            // produced a terminal. If _terminalId is still 0, InitializeTerminalAsync
-            // caught an exception; leaving _connectedResourceName null lets the
-            // rebind branch below (and future renders) notice and retry rather
-            // than silently masking the failure.
-            if (_terminalId != 0)
+            if (_disposed || _terminalId == 0)
             {
-                _connectedResourceName = initResource;
-                _connectedReplicaIndex = initReplica;
+                return;
             }
+            _connectedResourceName = initResource;
+            _connectedReplicaIndex = initReplica;
 
             if (!string.Equals(ResourceName, _connectedResourceName, StringComparison.Ordinal) ||
                 ReplicaIndex != _connectedReplicaIndex)
@@ -118,6 +125,9 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 }
                 catch (Exception)
                 {
+                    _terminalError = "mount-failed";
+                    _initializationFailed = true;
+                    StateHasChanged();
                     return;
                 }
 
@@ -132,7 +142,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         // path will set _connectedResourceName / _connectedReplicaIndex and
         // any future rebind needed will be caught on the next render after
         // that. Without this guard the rebind branch below would re-enter
-        // initialization and stack a second xterm onto the same container —
+        // initialization and stack a second terminal onto the same container —
         // see the comment on _initStarted.
         if (_initStarted && _terminalId == 0)
         {
@@ -142,8 +152,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         // The same TerminalView instance is reused across resource/replica
         // switches in the parent (e.g. ConsoleLogs page selects a different
         // terminal-enabled resource). Detect that here and rebind the
-        // underlying WebSocket; xterm.js is preserved and just gets cleared
-        // and refilled by the new connection's StateSync replay.
+        // underlying WebSocket and mounted client. The client owns a single
+        // connection; reconnect must create a fresh view and worker.
         //
         // ALL exceptions are swallowed at this layer because OnAfterRenderAsync
         // is a Blazor lifecycle method: an unhandled exception here can fail
@@ -166,9 +176,11 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             }
             catch (Exception)
             {
-                // Defensive: any other JS-side error must not bubble out of
-                // a Blazor lifecycle method. The reconnect loop on the JS
-                // side keeps retrying so a transient hiccup heals itself.
+                // Keep the failure local to this view instead of tearing down
+                // the SignalR circuit, but do not hide it from the user.
+                _terminalError = "mount-failed";
+                _initializationFailed = true;
+                StateHasChanged();
                 return;
             }
             _connectedResourceName = newResource;
@@ -176,18 +188,37 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
     }
 
-    private async Task InitializeTerminalAsync(string resourceName, int replicaIndex)
+    private Task InitializeTerminalAsync(string resourceName, int replicaIndex)
+    {
+        if (_initializationTask is { IsCompleted: false })
+        {
+            return _initializationTask;
+        }
+
+        _initStarted = true;
+        return _initializationTask = InitializeTerminalCoreAsync(resourceName, replicaIndex);
+    }
+
+    private async Task InitializeTerminalCoreAsync(string resourceName, int replicaIndex)
     {
         try
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/Components/Controls/TerminalView.razor.js");
+            var moduleUri = new Uri(new Uri(NavigationManager.BaseUri), "Components/Controls/TerminalView.razor.js");
+            _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", moduleUri.PathAndQuery);
+
+            if (_disposed)
+            {
+                await JSInteropHelpers.SafeDisposeAsync(_jsModule);
+                _jsModule = null;
+                return;
+            }
 
             _selfRef ??= DotNetObjectReference.Create(this);
 
             _connectedGeneration = -1;
             _terminalId = await _jsModule.InvokeAsync<int>(
-                "initTerminal", _terminalElement, BuildWebSocketUrl(resourceName, replicaIndex), _selfRef);
+                "initTerminal", _terminalElement, BuildWebSocketUrl(resourceName, replicaIndex), _selfRef,
+                Loc[nameof(Resources.ConsoleLogs.TerminalInputLabel)].Value, _selectionTemplateElement);
         }
         catch (JSDisconnectedException)
         {
@@ -204,17 +235,21 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             // importing the module or during initTerminal) must not bubble
             // out of a Blazor lifecycle method — that can tear down the
             // SignalR circuit and take the whole dashboard tab with it.
-            // Clear _initStarted so a subsequent render can retry, and leave
-            // _terminalId == 0 so the firstRender path in OnAfterRenderAsync
-            // does not record a connected resource for a terminal that was
-            // never created.
+            // Offer an explicit retry rather than re-entering initialization
+            // on every render while the module remains unavailable.
             _initStarted = false;
+            _initializationFailed = true;
+            _terminalError = "mount-failed";
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
         }
     }
 
     /// <summary>
-    /// Reconnects the terminal to a different resource/replica. When both
-    /// arguments match the current values this is a no-op.
+    /// Reconnects the terminal to a resource/replica. Matching arguments still
+    /// create a fresh connection so a failed connection can be retried.
     /// </summary>
     public async Task ReconnectAsync(string? newResourceName, int newReplicaIndex)
     {
@@ -225,6 +260,11 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             if (!string.IsNullOrEmpty(newResourceName))
             {
                 await InitializeTerminalAsync(newResourceName, newReplicaIndex);
+                if (_terminalId != 0)
+                {
+                    _connectedResourceName = newResourceName;
+                    _connectedReplicaIndex = newReplicaIndex;
+                }
             }
             return;
         }
@@ -248,6 +288,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             if (generation > 0)
             {
                 _connectedGeneration = generation;
+                _connectedResourceName = newResourceName;
+                _connectedReplicaIndex = newReplicaIndex;
             }
         }
         catch (JSDisconnectedException)
@@ -263,22 +305,29 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// renders whatever the most recent snapshot says.
     /// </summary>
     [JSInvokable]
-    public Task OnTerminalStateChanged(TerminalToolbarState state)
+    public async Task OnTerminalStateChanged(TerminalToolbarState state)
     {
         if (IsStaleTerminalCallback(state.TerminalId, state.Generation))
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        return OnToolbarStateChanged.InvokeAsync(state);
+        if (_terminalError != state.Error || _terminalColumns != state.Cols || _terminalRows != state.Rows)
+        {
+            _terminalError = state.Error;
+            _terminalColumns = state.Cols;
+            _terminalRows = state.Rows;
+            StateHasChanged();
+        }
+        await OnToolbarStateChanged.InvokeAsync(state);
     }
 
     private bool IsStaleTerminalCallback(int terminalId, int generation)
     {
         // Drop stale callbacks that arrive after this view was rebound. The
-        // terminal id changes when initTerminal allocates a new xterm host;
+        // terminal id changes when initTerminal allocates a new terminal host;
         // explicit reconnect keeps the id but bumps the JS-side generation.
-        if (_terminalId != 0 && terminalId != _terminalId)
+        if (_disposed || (_terminalId != 0 && terminalId != _terminalId))
         {
             return true;
         }
@@ -379,12 +428,9 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     }
 
     /// <summary>
-    /// Asks the JS terminal to recompute its layout. Called by the host
-    /// page when the terminal element transitions from hidden back to
-    /// visible (e.g. the user flips the page-level View dropdown from
-    /// Console back to Terminal) — display:none → visible does not always
-    /// trigger ResizeObserver, so forcing a relayout here guarantees the
-    /// terminal fills the available space immediately.
+    /// Notifies the JS terminal when it becomes visible, starting a deferred
+    /// mount or refreshing selection overlays without remounting the client.
+    /// The Hex1b client observes container geometry and owns terminal fitting.
     /// </summary>
     public async Task RefreshLayoutAsync()
     {
@@ -404,12 +450,47 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private string BuildWebSocketUrl(string resource, int replica)
     {
         var baseUri = new Uri(NavigationManager.BaseUri);
+        var endpoint = new Uri(baseUri, "api/terminal");
         var wsScheme = baseUri.Scheme == "https" ? "wss" : "ws";
-        return $"{wsScheme}://{baseUri.Authority}/api/terminal?resource={Uri.EscapeDataString(resource)}&replica={replica}";
+        return $"{wsScheme}://{endpoint.Authority}{endpoint.AbsolutePath}?resource={Uri.EscapeDataString(resource)}&replica={replica}";
+    }
+
+    private string GetErrorMessage() => Loc[_terminalError switch
+    {
+        "disconnected" => nameof(Resources.ConsoleLogs.TerminalDisconnected),
+        "input-failed" => nameof(Resources.ConsoleLogs.TerminalInputFailed),
+        "sizing-failed" => nameof(Resources.ConsoleLogs.TerminalSizingFailed),
+        _ => nameof(Resources.ConsoleLogs.TerminalMountFailed)
+    }];
+
+    private async Task RetryAsync()
+    {
+        _initializationFailed = false;
+        _terminalError = null;
+        try
+        {
+            await ReconnectAsync(ResourceName, ReplicaIndex);
+        }
+        catch (JSException)
+        {
+            _terminalError = "mount-failed";
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+        // JS init returns its id without waiting for the first frame, but the
+        // interop round trip can still overlap component disposal. Wait for
+        // that id before disposing the module so its worker cannot be orphaned.
+        if (_initializationTask is not null)
+        {
+            await _initializationTask;
+        }
         if (_jsModule is not null && _terminalId != 0)
         {
             try
@@ -424,7 +505,9 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         if (_jsModule is not null)
         {
             await JSInteropHelpers.SafeDisposeAsync(_jsModule);
+            _jsModule = null;
         }
+        _terminalId = 0;
         _selfRef?.Dispose();
         _selfRef = null;
     }
@@ -447,10 +530,10 @@ public sealed record TerminalToolbarState
     /// </summary>
     public string Status { get; init; } = "connecting";
 
-    /// <summary>True once the HMP1 client has a peer id assigned.</summary>
+    /// <summary>True after the mounted client has presented its first connected frame.</summary>
     public bool Connected { get; init; }
 
-    /// <summary>True when this client owns primary input on the producer.</summary>
+    /// <summary>True when this client owns resize authority; all peers can send input.</summary>
     public bool IsPrimary { get; init; }
 
     /// <summary>True when "Take control" is meaningful to surface.</summary>
@@ -465,7 +548,7 @@ public sealed record TerminalToolbarState
     /// </summary>
     public string SizeKey { get; init; } = "auto";
 
-    /// <summary>Current xterm font size in CSS pixels.</summary>
+    /// <summary>Current terminal font size in CSS pixels.</summary>
     public int FontPx { get; init; }
 
     /// <summary>Whether font ± buttons should be enabled (Auto mode + primary).</summary>
@@ -474,11 +557,14 @@ public sealed record TerminalToolbarState
     /// <summary>Whether the size dropdown should be enabled (primary).</summary>
     public bool SizeSelectEnabled { get; init; }
 
-    /// <summary>Current xterm grid width.</summary>
+    /// <summary>Current server-authoritative grid width.</summary>
     public int Cols { get; init; }
 
-    /// <summary>Current xterm grid height.</summary>
+    /// <summary>Current server-authoritative grid height.</summary>
     public int Rows { get; init; }
+
+    /// <summary>Localized error category, or <see langword="null"/> when healthy.</summary>
+    public string? Error { get; init; }
 }
 
 /// <summary>

@@ -137,6 +137,36 @@
         <target state="new">Console logs capture paused at {0}</target>
         <note>{0} is a time</note>
       </trans-unit>
+      <trans-unit id="TerminalDisconnected">
+        <source>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</source>
+        <target state="new">The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalInputFailed">
+        <source>The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</source>
+        <target state="new">The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalInputLabel">
+        <source>Interactive terminal input</source>
+        <target state="new">Interactive terminal input</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalMountFailed">
+        <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
+        <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalRetry">
+        <source>Reconnect terminal</source>
+        <target state="new">Reconnect terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalSizingFailed">
+        <source>The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</source>
+        <target state="new">The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalToolbarDecreaseFontSize">
         <source>Decrease font size</source>
         <target state="new">Decrease font size</target>

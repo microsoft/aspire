@@ -1,3 +1,34 @@
 @namespace Aspire.Dashboard.Components.Controls
 
-<div class="terminal-container" @ref="_terminalElement" style="width: 100%; height: 100%;"></div>
+<div class="terminal-view">
+    <div hidden @ref="_selectionTemplateElement">
+        <div class="terminal-selection-actions">
+            <FluentButton Class="terminal-selection-copy"
+                          Appearance="ButtonAppearance.Default"
+                          IconOnly="true"
+                          Title="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
+                          aria-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]">
+                <FluentIcon Value="new Icons.Regular.Size16.Copy()" Color="Color.Default" />
+            </FluentButton>
+        </div>
+    </div>
+    <div class="terminal-frame">
+        <div class="terminal-titlebar">
+            <span class="terminal-title">@(ResourceName ?? Loc[nameof(Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)].Value)</span>
+            @if (_terminalColumns > 0 && _terminalRows > 0)
+            {
+                <span class="terminal-dimensions" title="@Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSize)]">@_terminalColumns &times; @_terminalRows</span>
+            }
+        </div>
+        <div class="terminal-body">
+            <div class="terminal-container" @ref="_terminalElement"></div>
+            @if (_terminalError is not null)
+            {
+                <div class="terminal-error">
+                    <span role="alert">@GetErrorMessage()</span>
+                    <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.ConsoleLogs.TerminalRetry)]</FluentButton>
+                </div>
+            }
+        </div>
+    </div>
+</div>

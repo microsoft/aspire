@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
+using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
@@ -584,6 +585,8 @@ public partial class ConsoleLogsTests
     [Fact]
     public void TerminalView_InitialRender_ReconnectsWhenResourceChangesDuringInitialization()
     {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
         var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
         var initTerminal = module.Setup<int>("initTerminal", _ => true);
         var reconnectTerminal = module.Setup<int>("reconnectTerminal", _ => true);

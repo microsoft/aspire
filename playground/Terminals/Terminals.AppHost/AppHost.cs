@@ -59,6 +59,16 @@ else
         .WithTerminal(options => options.ShowTerminalHost = true);
 }
 
+builder.AddDockerfile("notcurses", "../Terminals.Notcurses")
+    .WithTerminal(options =>
+    {
+        // The demo recommends at least 80x45 for its graphics and Unicode workloads:
+        // https://manpages.ubuntu.com/manpages/noble/man1/notcurses-demo.1.html
+        options.Columns = 120;
+        options.Rows = 45;
+        options.ShowTerminalHost = true;
+    });
+
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
 // of the dashboard. It is not required in end developer code. Comment out this code
@@ -70,4 +80,3 @@ builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard
 #endif
 
 builder.Build().Run();
-
