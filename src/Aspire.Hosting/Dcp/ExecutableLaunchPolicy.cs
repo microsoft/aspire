@@ -26,7 +26,7 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
 
         var supportsDebugging = resource.SupportsDebugging(_configuration, out var debugSupport);
 
-        if (resource is ProjectResource)
+        if (resource.TryGetProjectAnnotation(out _))
         {
             if (resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out _))
             {

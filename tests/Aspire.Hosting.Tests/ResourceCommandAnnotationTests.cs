@@ -92,6 +92,7 @@ public class ResourceCommandAnnotationTests
         // Arrange
         var builder = DistributedApplication.CreateBuilder();
         var projectResource = new ProjectResource("testproject");
+        projectResource.Annotations.Add(new ProjectMetadata("test.csproj"));
         projectResource.AddLifeCycleCommands();
 
         // Act
@@ -107,6 +108,7 @@ public class ResourceCommandAnnotationTests
         // Arrange
         var builder = DistributedApplication.CreateBuilder();
         var csharpAppResource = new CSharpAppResource("testapp");
+        csharpAppResource.Annotations.Add(new ProjectMetadata("testapp.cs"));
         csharpAppResource.AddLifeCycleCommands();
 
         // Act
@@ -132,6 +134,7 @@ public class ResourceCommandAnnotationTests
     public void RebuildCommand_CommandState(string commandName, string? resourceState, ResourceCommandState commandState)
     {
         var projectResource = new ProjectResource("testproject");
+        projectResource.Annotations.Add(new ProjectMetadata("test.csproj"));
         projectResource.AddLifeCycleCommands();
 
         var rebuildCommand = projectResource.Annotations.OfType<ResourceCommandAnnotation>().Single(a => a.Name == commandName);
@@ -159,6 +162,7 @@ public class ResourceCommandAnnotationTests
         containerResource.Resource.AddLifeCycleCommands();
 
         var projectResource = new ProjectResource("testproject");
+        projectResource.Annotations.Add(new ProjectMetadata("test.csproj"));
         projectResource.AddLifeCycleCommands();
 
         Assert.DoesNotContain(containerResource.Resource.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == KnownResourceCommands.RebuildCommand);
@@ -169,6 +173,7 @@ public class ResourceCommandAnnotationTests
     public void RebuildCommand_ProjectResource_HasDescription()
     {
         var projectResource = new ProjectResource("testproject");
+        projectResource.Annotations.Add(new ProjectMetadata("test.csproj"));
         projectResource.AddLifeCycleCommands();
 
         var rebuildCommand = projectResource.Annotations.OfType<ResourceCommandAnnotation>().Single(a => a.Name == KnownResourceCommands.RebuildCommand);

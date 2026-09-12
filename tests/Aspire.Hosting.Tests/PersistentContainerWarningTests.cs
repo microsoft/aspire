@@ -27,6 +27,7 @@ public class PersistentContainerWarningTests(ITestOutputHelper testOutputHelper)
 
         var resources = new ResourceCollection();
         var container = new ContainerResource("my-container");
+        container.Annotations.Add(new ContainerImageAnnotation { Image = "my-image" });
         container.Annotations.Add(new PersistenceAnnotation { Mode = PersistenceMode.Persistent });
         resources.Add(container);
 
@@ -51,6 +52,7 @@ public class PersistentContainerWarningTests(ITestOutputHelper testOutputHelper)
 
         var resources = new ResourceCollection();
         var container = new ContainerResource("my-container");
+        container.Annotations.Add(new ContainerImageAnnotation { Image = "my-image" });
         container.Annotations.Add(new PersistenceAnnotation { Mode = PersistenceMode.Persistent });
         resources.Add(container);
 
@@ -74,7 +76,9 @@ public class PersistentContainerWarningTests(ITestOutputHelper testOutputHelper)
         var serviceProvider = services.BuildServiceProvider();
 
         var resources = new ResourceCollection();
-        resources.Add(new ContainerResource("my-container"));
+        var container = new ContainerResource("my-container");
+        container.Annotations.Add(new ContainerImageAnnotation { Image = "my-image" });
+        resources.Add(container);
 
         var model = new DistributedApplicationModel(resources);
         var beforeStartEvent = new BeforeStartEvent(serviceProvider, model);
