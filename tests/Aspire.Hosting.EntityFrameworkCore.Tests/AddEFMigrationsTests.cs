@@ -258,6 +258,18 @@ public class AddEFMigrationsTests
         Assert.Equal("{db1.connectionString}", Assert.Contains("ConnectionStrings__db1", env));
     }
 
+    [Fact]
+    public void AddEFMigrationsHasHiddenOnCompletionAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
+
+        Assert.True(migrations.Resource.TryGetLastAnnotation<HiddenAnnotation>(out var hiddenAnnotation));
+        Assert.Equal(HiddenBehavior.OnCompletion, hiddenAnnotation.Behavior);
+        Assert.Contains(0, hiddenAnnotation.SuccessfulExitCodes);
+    }
+
     // Test classes for DbContext types
     private sealed class TestDbContext { }
     private sealed class AnotherDbContext { }

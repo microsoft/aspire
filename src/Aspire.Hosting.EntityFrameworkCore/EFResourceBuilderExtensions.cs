@@ -191,6 +191,7 @@ public static class EFResourceBuilderExtensions
                 State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, KnownResourceStateStyles.Info)
             })
             .WithIconName("Database")
+            .WithHiddenOnCompletion()
             .WithPipelineStepFactory(CreateMigrationPipelineStep);
 
         AddEFMigrationCommands(innerBuilder, migrationResource, dbContextTypeName);
