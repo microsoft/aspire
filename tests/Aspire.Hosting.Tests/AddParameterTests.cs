@@ -392,6 +392,19 @@ public class AddParameterTests
     }
 
     [Fact]
+    public void ConnectionStringParameterWithDescription_SetsDescriptionAndMarkupProperties()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var parameter = appBuilder.AddConnectionString("database")
+            .WithDescription("The database connection string.", enableMarkdown: true);
+
+        var parameterResource = Assert.IsAssignableFrom<ParameterResource>(parameter.Resource);
+        Assert.Equal("The database connection string.", parameterResource.Description);
+        Assert.True(parameterResource.EnableDescriptionMarkdown);
+    }
+
+    [Fact]
     public void ParameterWithDescriptionAndCustomInput_AddsInputGeneratorAnnotation()
     {
         // Arrange
