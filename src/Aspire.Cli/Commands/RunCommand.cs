@@ -74,6 +74,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly ProfileCaptureState _profileCaptureState;
     private readonly TimeProvider _timeProvider;
+    private readonly ConsoleCancellationManager _cancellationManager;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
     // Match BackchannelLoggerProvider's 1,000-entry replay buffer.
@@ -156,6 +157,7 @@ internal sealed class RunCommand : BaseCommand
         _profilingTelemetry = profilingTelemetry;
         _profileCaptureState = profileCaptureState;
         _timeProvider = timeProvider;
+        _cancellationManager = services.CancellationManager;
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
@@ -250,6 +252,32 @@ internal sealed class RunCommand : BaseCommand
         LauncherLivenessMonitor? launcherMonitor = null;
         Task<int>? runTask = null;
         CancellationTokenSource? runCts = null;
+        CancellationTokenRegistration runCancellationRegistration = default;
+        var cancellationRequested = false;
+        TimeSpan? completedCancellationCleanupTimeout = null;
+
+        async Task DrainCancelledRunAsync()
+        {
+            if ((cancellationRequested || cancellationToken.IsCancellationRequested) &&
+                runCts is not null &&
+                runTask is { IsCompleted: false })
+            {
+                // BaseCommand owns the manager's process-wide shutdown deadline.
+                // Direct callers with an unrelated token still need a local bound.
+                var cleanupTimeout = _cancellationManager.IsCancellationRequested
+                    ? Timeout.InfiniteTimeSpan
+                    : s_appHostStartupCancellationTimeout;
+                // Do not repeat a completed bounded wait, but allow a later manager stop
+                // to upgrade it to the manager-owned drain.
+                if (completedCancellationCleanupTimeout == cleanupTimeout)
+                {
+                    return;
+                }
+
+                await CancelAppHostRunAsync(runCts, runTask, cleanupTimeout, CancellationToken.None).ConfigureAwait(false);
+                completedCancellationCleanupTimeout = cleanupTimeout;
+            }
+        }
 
         try
         {
@@ -347,7 +375,8 @@ internal sealed class RunCommand : BaseCommand
 
             // Start the project run as a pending task - we'll handle UX while it runs
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
-            runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            runCts = new CancellationTokenSource();
+            runCancellationRegistration = cancellationToken.Register(runCts.Cancel);
 
             // When this is a detached child, watch the foreground launcher during startup. If the launcher
             // is killed before the app is ready, cancel the run so the AppHost tree is torn down instead of leaking.
@@ -439,7 +468,7 @@ internal sealed class RunCommand : BaseCommand
                 catch (TimeoutException)
                 {
                     runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                    await CancelAppHostStartupAsync(runCts, runTask, cancellationToken).ConfigureAwait(false);
+                    await CancelAppHostRunAsync(runCts, runTask, s_appHostStartupCancellationTimeout, cancellationToken).ConfigureAwait(false);
                     return CreateStartupTimeoutResult(timeoutSeconds);
                 }
 
@@ -639,16 +668,6 @@ internal sealed class RunCommand : BaseCommand
                         : CommandResult.FromExitCode(exitCode);
                 }
             }
-            catch (OperationCanceledException ex) when (ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested)
-            {
-                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
-
-                // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
-                // Internal failures `return X` directly from GuestAppHostProject.RunAsync rather
-                // than flowing through this catch, so we don't need to distinguish failure codes
-                // here.
-                return CommandResult.Cancelled(CliExitCodes.Success);
-            }
             finally
             {
                 logCaptureCancellationSource.Cancel();
@@ -671,6 +690,7 @@ internal sealed class RunCommand : BaseCommand
             (runCts is not null && ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested))
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
+            cancellationRequested = true;
 
             // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
             // Internal failures `return X` directly from GuestAppHostProject.RunAsync rather
@@ -718,29 +738,56 @@ internal sealed class RunCommand : BaseCommand
         }
         finally
         {
-            if (IsDetachedStartChild() && runTask is { IsCompleted: false } detachedAppHostRun)
+            try
             {
-                // If the runTask is still running here, that is an abnormal exit. 
-                // Cancel the run and wait for the AppHost to teardown so we don't leak child processes.
                 try
                 {
-                    runCts?.Cancel();
-                    // CancellationToken.None is deliberate: root token is already cancelled.
-                    await detachedAppHostRun.WaitAsync(s_detachedAppHostTeardownTimeout, _timeProvider, CancellationToken.None).ConfigureAwait(false);
+                    // Keep the existing cancellation-first ordering and timeout budgets.
+                    // The fenced call below handles cancellation arriving during later teardown.
+                    await DrainCancelledRunAsync().ConfigureAwait(false);
+
+                    if (IsDetachedStartChild() && runTask is { IsCompleted: false } detachedAppHostRun)
+                    {
+                        // If the runTask is still running here, that is an abnormal exit.
+                        // Cancel the run and wait for teardown so we don't leak child processes.
+                        try
+                        {
+                            runCts?.Cancel();
+                            // Root cancellation must not interrupt this bounded detached-child drain.
+                            await detachedAppHostRun.WaitAsync(s_detachedAppHostTeardownTimeout, _timeProvider, CancellationToken.None).ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Detached child timed out or failed while awaiting AppHost teardown during early exit.");
+                        }
+                    }
                 }
-                catch (Exception ex)
+                finally
                 {
-                    _logger.LogDebug(ex, "Detached child timed out or failed while awaiting AppHost teardown during early exit.");
+                    if (launcherMonitor is not null)
+                    {
+                        await launcherMonitor.DisposeAsync().ConfigureAwait(false);
+                    }
                 }
             }
-
-            if (launcherMonitor is not null)
+            finally
             {
-                await launcherMonitor.DisposeAsync().ConfigureAwait(false);
+                // Close cancellation forwarding before deciding whether a drain is needed.
+                // DisposeAsync waits for an in-flight callback; cancellation after this fence
+                // cannot reach runCts and start child cleanup after we have decided to skip it.
+                await runCancellationRegistration.DisposeAsync().ConfigureAwait(false);
+                try
+                {
+                    // Preserve the selected error result, including failures in final teardown,
+                    // while retaining ownership of any cancellation cleanup already requested.
+                    await DrainCancelledRunAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    runCts?.Dispose();
+                    runActivity?.Dispose();
+                }
             }
-
-            runCts?.Dispose();
-            runActivity?.Dispose();
         }
     }
 
@@ -1477,40 +1524,50 @@ internal sealed class RunCommand : BaseCommand
         return elapsed >= startupTimeout ? TimeSpan.Zero : startupTimeout - elapsed;
     }
 
-    private async Task CancelAppHostStartupAsync(CancellationTokenSource runCancellationTokenSource, Task<int> pendingRun, CancellationToken cancellationToken)
+    private async Task CancelAppHostRunAsync(
+        CancellationTokenSource runCancellationTokenSource,
+        Task<int> pendingRun,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
     {
         runCancellationTokenSource.Cancel();
 
         try
         {
-            // The timeout is a safety net for the startup-timeout path (no Ctrl+C). When the user
-            // presses Ctrl+C, cancellationToken fires and WaitAsync exits immediately via the token
-            // rather than waiting for the full timeout duration.
-            await pendingRun.WaitAsync(s_appHostStartupCancellationTimeout, _timeProvider, cancellationToken).ConfigureAwait(false);
+            await pendingRun.WaitAsync(timeout, _timeProvider, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (runCancellationTokenSource.IsCancellationRequested || cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Cancellation of the wait must reach the command's owning cancellation handler.
+            // Only cancellation of the run task itself is safe to absorb here.
+            cancellationToken.ThrowIfCancellationRequested();
         }
-        catch (TimeoutException ex)
+        catch (TimeoutException ex) when (timeout != Timeout.InfiniteTimeSpan)
         {
             _logger.LogDebug(ex, "Timed out waiting for AppHost startup cancellation to complete.");
-            _ = ObserveAppHostRunFailureAsync(pendingRun);
+            _ = DrainAppHostRunAfterCancellationAsync(pendingRun);
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "AppHost run failed after startup cancellation.");
         }
+
+        // Cancellation can race the timeout or a run failure and lose the WaitAsync race.
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
-    private async Task ObserveAppHostRunFailureAsync(Task<int> pendingRun)
+    private async Task DrainAppHostRunAfterCancellationAsync(Task<int> pendingRun)
     {
         try
         {
             await pendingRun.ConfigureAwait(false);
         }
+        catch (OperationCanceledException)
+        {
+        }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "AppHost run failed after startup cancellation timeout.");
+            _logger.LogDebug(ex, "AppHost run failed while startup cancellation was being drained.");
         }
     }
 
