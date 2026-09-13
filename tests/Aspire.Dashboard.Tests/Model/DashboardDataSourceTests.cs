@@ -579,6 +579,48 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task SetRunPinned_FutureSchemaMetadata_PreservesUnknownProperties()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        var startedAt = new DateTimeOffset(2026, 8, 5, 12, 34, 56, TimeSpan.Zero);
+        string futureRunId;
+        string futureRunDirectory;
+
+        using (var futureRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-1))))
+        {
+            futureRunId = futureRunStore.RunId;
+            futureRunDirectory = futureRunStore.RunDirectory;
+            await InitializeAndPublishRunWithoutPruningAsync(futureRunStore);
+        }
+
+        var metadataPath = Path.Combine(futureRunDirectory, "run.json");
+        var metadata = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
+        metadata["SchemaVersion"] = DashboardRunStore.SchemaVersion + 1;
+        metadata["FutureMetadata"] = new JsonObject
+        {
+            ["Enabled"] = true,
+            ["Values"] = new JsonArray("one", "two")
+        };
+        File.WriteAllText(metadataPath, metadata.ToJsonString());
+
+        using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt));
+        await InitializeAndPublishRunAsync(currentRunStore);
+        var futureRun = Assert.Single(
+            currentRunStore.GetRuns(),
+            run => string.Equals(run.RunId, futureRunId, StringComparison.Ordinal));
+
+        currentRunStore.SetRunPinned(futureRun, isPinned: true);
+
+        using var updatedMetadata = JsonDocument.Parse(File.ReadAllText(metadataPath));
+        Assert.Equal(DashboardRunStore.SchemaVersion + 1, updatedMetadata.RootElement.GetProperty("SchemaVersion").GetInt32());
+        Assert.True(updatedMetadata.RootElement.GetProperty("IsPinned").GetBoolean());
+        var futureMetadata = updatedMetadata.RootElement.GetProperty("FutureMetadata");
+        Assert.True(futureMetadata.GetProperty("Enabled").GetBoolean());
+        Assert.Equal(["one", "two"], futureMetadata.GetProperty("Values").EnumerateArray().Select(value => value.GetString()));
+    }
+
+    [Fact]
     public async Task RunMode_PrunesOldestIncompatibleRunWhenLimitIsExceeded()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);

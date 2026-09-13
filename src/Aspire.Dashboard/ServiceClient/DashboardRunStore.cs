@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.Dashboard.Configuration;
 using Aspire.Shared;
 using Microsoft.Extensions.Options;
@@ -626,6 +627,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         public string? ApplicationName { get; init; }
         public required string DatabaseFileName { get; init; }
         public bool IsPinned { get; init; }
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtensionData { get; init; }
     }
 }
 
