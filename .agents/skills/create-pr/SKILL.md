@@ -66,7 +66,23 @@ If non-trivial UI changes are detected, add a prominent `### Screenshots / Recor
 
 For non-trivial UI changes, upload screenshots or recordings as GitHub user attachments. Do not commit them to the source branch unless explicitly requested.
 
-Prefer `gh --attach` when advertised by `gh pr create --help` or `gh pr edit --help`. Prepare one flag per file and append the flags to the final `gh pr create` command in step 6 or `gh pr edit` command in step 7. For images, text after `#` is the alt text. Videos do not support alt text and must omit the `#` suffix:
+Before uploading, inspect every artifact for secrets, credentials, tokens, customer or confidential data, private URLs, and unintended personal information. Redact or regenerate any artifact that contains sensitive data, and do not upload it until the inspection passes. Treat uploads as permanent public data because this public repository exposes attachments to everyone and the attachment API has no deletion endpoint.
+
+Prefer `gh --attach` when advertised by `gh pr create --help` or `gh pr edit --help`. Before invoking `gh`, replace the `<!-- Add screenshots/recordings here -->` placeholder in `pr-body.md` with local Markdown references at the intended location. Use a table for before/after images when appropriate:
+
+```markdown
+| Before | After |
+| --- | --- |
+| ![Before](./before.png) | ![After](./after.png) |
+```
+
+Place an image-style reference to a video on its own line in its own paragraph so GitHub CLI rewrites it to a bare asset URL that renders as a player:
+
+```markdown
+![Screen recording](./demo.mp4)
+```
+
+Prepare one flag per referenced file and append the flags to the final `gh pr create` command in step 6 or `gh pr edit` command in step 7. GitHub CLI rewrites the local references to uploaded URLs; without references, it appends the attachments to the end of the body. For images, text after `#` is the alt text when the body does not already provide it. Videos do not support alt text and must omit the `#` suffix:
 
 ```shell
 --attach './before.png#Before' --attach './after.png#After' --attach './demo.mp4'
@@ -77,7 +93,7 @@ For older GitHub CLI versions, upload each image with the authenticated attachme
 ```text
 POST https://uploads.github.com/user-attachments/assets?name=<encoded-name>&content_type=<encoded-MIME-type>&repository_id=<id>
 Authorization: Bearer <gh-token>
-Content-Type: <MIME-type>
+Content-Type: application/octet-stream
 ```
 
 Example for a PNG in PowerShell:
@@ -89,7 +105,7 @@ $repoId = gh api "repos/$repo" --jq .id
 $token = gh auth token
 $name = [Uri]::EscapeDataString((Split-Path -Leaf $file))
 $uri = "https://uploads.github.com/user-attachments/assets?name=$name&content_type=image%2Fpng&repository_id=$repoId"
-(Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $token"; Accept = "application/json" } -ContentType "image/png" -InFile $file).url
+(Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $token"; Accept = "application/json" } -ContentType "application/octet-stream" -InFile $file).url
 ```
 
 The response is HTTP `201` with a `url` value. Keep the token in memory and never print it. This endpoint is undocumented, so prefer `gh --attach` when available.
