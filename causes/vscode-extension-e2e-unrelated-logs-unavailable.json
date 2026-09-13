@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "VS Code extension E2E tests fail with unavailable logs and generic exit code 1, unrelated to PR changes",
   "test_name": "VS Code extension E2E (matrix shards, e.g. browser-debugger / workspace-target-proof / edge-cases)",
-  "error_pattern": "Run extension E2E tests step fails with 'Process completed with exit code 1.' Job logs could not be fetched ('Failed to fetch logs for job'). Occurs on the 'browser-debugger' shard (Windows and Linux, chrome/msedge browsers), unrelated to PR changes touching aspire-starter template.json",
+  "error_pattern": "Run extension E2E tests step fails with 'Process completed with exit code 1.' Job logs could not be fetched ('Failed to fetch logs for job'). Occurs on the 'browser-debugger' shard (Windows and Linux, chrome/msedge browsers), unrelated to PR changes touching Aspire.Cli backchannel/RunCommand code.",
   "occurrences": [
     {
       "run_id": 32704259463,
@@ -32,6 +32,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
       "pr_number": 20031,
       "observed_at": "2026-09-13T09:05:26Z"
+    },
+    {
+      "run_id": 34783506552,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34783506552",
+      "job": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (windows-latest))",
+      "pr_number": 20021,
+      "observed_at": "2026-09-13T21:49:39Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19618"

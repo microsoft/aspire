@@ -1,0 +1,16 @@
+{
+  "id": "templates-windows-install-sdk-nuget-based-testing",
+  "type": "infra-failure",
+  "title": "Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (windows-latest) fails during 'Install sdk for nuget based testing' step",
+  "error_pattern": "Job 'Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (windows-latest))' fails at the 'Install sdk for nuget based testing' step with 'Process completed with exit code 1.'. Job logs unavailable ('Failed to fetch logs for job'). PR only modifies Aspire.Cli backchannel/RunCommand code, unrelated to the templates SDK install pipeline.",
+  "occurrences": [
+    {
+      "run_id": 34783506552,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34783506552",
+      "job": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (windows-latest))",
+      "pr_number": 20021,
+      "observed_at": "2026-09-13T21:49:39Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20100"
+}

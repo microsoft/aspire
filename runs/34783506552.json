@@ -1,0 +1,50 @@
+{
+  "run_id": 34783506552,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34783506552",
+  "analyzed_at": "2026-09-13T21:49:39Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20021,
+    "title": "Fix extension CLI teardown during AppHost build",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-fix-dynamic-debug-teardown",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20021"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (windows-latest))",
+      "id": 103796218020,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34783506552/job/103796218020",
+      "classification": "flaky-test",
+      "reason": "Fails at 'Install sdk for nuget based testing' step with generic exit code 1. Job logs were unavailable, and the PR only touches src/Aspire.Cli/Backchannel/ExtensionRpcTarget.cs and RunCommand.cs plus their tests, unrelated to the templates SDK install pipeline.",
+      "failed_steps": ["Install sdk for nuget based testing"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "id": 103796304197,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34783506552/job/103796304197",
+      "classification": "flaky-test",
+      "reason": "Fails at 'Run extension E2E tests' step with generic exit code 1, no TRX/logs available. This matches a known recurring flaky pattern for the browser-debugger E2E shard that is unrelated to Aspire.Cli backchannel/RunCommand changes in this PR.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 103796304279,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34783506552/job/103796304279",
+      "classification": "flaky-test",
+      "reason": "Fails at 'Run extension E2E tests' step with generic exit code 1, no TRX/logs available. Same recurring flaky browser-debugger E2E shard pattern as the Linux counterpart in this run, unrelated to PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "templates-windows-install-sdk-nuget-based-testing",
+    "vscode-extension-e2e-unrelated-logs-unavailable"
+  ]
+}
