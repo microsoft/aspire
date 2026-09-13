@@ -80,7 +80,7 @@ function extractTestFailures(trx) {
 // TRX display names can contain backticks and line breaks. Collapse line breaks
 // and use a fence longer than any backtick run so the name cannot inject Markdown.
 function toInlineCode(value) {
-    const normalized = String(value).replace(/\r?\n/g, ' ');
+    const normalized = String(value).replace(/\r\n?|\n/g, ' ');
     const longestRun = (normalized.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 0);
     const fence = '`'.repeat(longestRun + 1);
     const pad = normalized.startsWith('`') || normalized.endsWith('`') ? ' ' : '';

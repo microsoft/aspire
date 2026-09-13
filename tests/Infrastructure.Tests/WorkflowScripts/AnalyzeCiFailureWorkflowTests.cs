@@ -216,7 +216,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         {
             new
             {
-                test = "Tests.SampleTheory(`value`)\n@maintainers",
+                test = "Tests.SampleTheory(`value`)\r@carriage-return\r\n@windows-line-ending\n@maintainers",
                 error = "Expected ``` but got value",
                 stack_trace = "at ````frame````",
                 standard_output = "before\n```\n@team\n# heading",
@@ -227,7 +227,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var output = await InvokeScriptAsync("format-test-failures", failures);
 
         var expected = """
-            ### ``Tests.SampleTheory(`value`) @maintainers``
+            ### ``Tests.SampleTheory(`value`) @carriage-return @windows-line-ending @maintainers``
 
             **Error:**
             ````
