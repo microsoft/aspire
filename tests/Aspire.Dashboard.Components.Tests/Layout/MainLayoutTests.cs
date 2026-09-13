@@ -311,6 +311,72 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.True(menuItem.Checked);
     }
 
+    [Fact]
+    public void DashboardRunSelect_IncompatibleHistoricalRunIsDisplayedAndDisabled()
+    {
+        var incompatibleRun = new DashboardRunDescriptor(
+            RunId: "incompatible",
+            SchemaVersion: DashboardRunStore.SchemaVersion - 1,
+            StartedAtUtc: new DateTimeOffset(2025, 1, 2, 12, 30, 0, TimeSpan.Zero),
+            EndedAtUtc: new DateTimeOffset(2025, 1, 2, 13, 30, 0, TimeSpan.Zero),
+            CleanShutdown: true,
+            ApplicationName: "TestApp",
+            DatabasePath: string.Empty,
+            IsCurrent: false);
+        var currentRun = new DashboardRunDescriptor(
+            RunId: "current",
+            SchemaVersion: DashboardRunStore.SchemaVersion,
+            StartedAtUtc: DateTimeOffset.UnixEpoch,
+            EndedAtUtc: null,
+            CleanShutdown: false,
+            ApplicationName: "TestApp",
+            DatabasePath: string.Empty,
+            IsCurrent: true);
+        var unavailableRun = new DashboardRunDescriptor(
+            RunId: "unavailable",
+            SchemaVersion: DashboardRunStore.SchemaVersion,
+            StartedAtUtc: new DateTimeOffset(2025, 1, 3, 12, 30, 0, TimeSpan.Zero),
+            EndedAtUtc: null,
+            CleanShutdown: false,
+            ApplicationName: "TestApp",
+            DatabasePath: string.Empty,
+            IsCurrent: false)
+        {
+            IsSelectable = false
+        };
+        var runStore = new FluentUISetupHelpers.TestDashboardRunStore([currentRun, unavailableRun, incompatibleRun]);
+        SetupMainLayoutServices(dashboardRunStore: runStore);
+        var expectedRunText = FormatHelpers.FormatTimeWithOptionalDate(
+            Services.GetRequiredService<BrowserTimeProvider>(),
+            incompatibleRun.StartedAtUtc.UtcDateTime);
+        var cut = RenderComponent<DashboardRunSelect>(builder =>
+        {
+            builder.Add(component => component.SelectedRunId, currentRun.RunId);
+            builder.Add(component => component.SelectedRunIsCurrent, true);
+            builder.Add(component => component.SelectedRunStartedAtUtc, currentRun.StartedAtUtc);
+        });
+
+        cut.Find("fluent-button").Click();
+
+        var items = cut.FindComponent<AspireMenuButton>().Instance.Items;
+        Assert.DoesNotContain(items, item => string.Equals(item.Text, FormatHelpers.FormatTimeWithOptionalDate(
+            Services.GetRequiredService<BrowserTimeProvider>(),
+            unavailableRun.StartedAtUtc.UtcDateTime), StringComparison.Ordinal));
+        var incompatibleItem = items[2];
+        Assert.Equal(expectedRunText, incompatibleItem.Text);
+        Assert.True(incompatibleItem.IsDisabled);
+        Assert.Equal("This run can't be viewed because it was created by an incompatible version of the dashboard.", incompatibleItem.Tooltip);
+        Assert.IsType<Icons.Regular.Size16.Pin>(incompatibleItem.SecondaryActionIcon);
+        Assert.NotNull(incompatibleItem.OnSecondaryActionClick);
+        var incompatibleMenuItem = cut.WaitForElements("fluent-menu-item")[1];
+        Assert.True(incompatibleMenuItem.HasAttribute("disabled"));
+        Assert.Equal(incompatibleItem.Tooltip, incompatibleMenuItem.GetAttribute("title"));
+
+        Assert.Single(incompatibleMenuItem.QuerySelectorAll("fluent-button")).Click();
+
+        Assert.True(incompatibleRun.IsPinned);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
