@@ -45,9 +45,110 @@ export function isCsDevKitInstalled() {
 }
 
 export const csharpExtensionId = 'ms-dotnettools.csharp';
+export const minimumCsharpBlazorWasmDebuggingVersion = '2.145.15-prerelease';
 export const azureFunctionsExtensionId = 'ms-azuretools.vscode-azurefunctions';
 export const mauiExtensionId = 'ms-dotnettools.dotnet-maui';
 export const codeLldbExtensionId = 'vadimcn.vscode-lldb';
+
+type CsharpExtensionVersionProvider = () => string | undefined;
+let csharpExtensionVersionProvider: CsharpExtensionVersionProvider = () => {
+    const extension = vscode.extensions.getExtension(csharpExtensionId);
+    return typeof extension?.packageJSON?.version === 'string' ? extension.packageJSON.version : undefined;
+};
+
+export type CsharpBlazorWasmDebuggingSupport =
+    | { status: 'missing' }
+    | { status: 'outdated'; installedVersion: string }
+    | { status: 'supported'; installedVersion: string };
+
+export function useCsharpExtensionVersionProviderForTests(provider: CsharpExtensionVersionProvider): vscode.Disposable {
+    const previous = csharpExtensionVersionProvider;
+    csharpExtensionVersionProvider = provider;
+    return new vscode.Disposable(() => { csharpExtensionVersionProvider = previous; });
+}
+
+export function getCsharpBlazorWasmDebuggingSupport(): CsharpBlazorWasmDebuggingSupport {
+    const installedVersion = csharpExtensionVersionProvider();
+    if (installedVersion === undefined) {
+        return { status: 'missing' };
+    }
+
+    const installed = parseSemanticVersion(installedVersion);
+    const minimum = parseSemanticVersion(minimumCsharpBlazorWasmDebuggingVersion)!;
+    if (!installed || compareSemanticVersions(installed, minimum) < 0) {
+        return { status: 'outdated', installedVersion };
+    }
+
+    return { status: 'supported', installedVersion };
+}
+
+type NumericVersionCore = readonly [major: number, minor: number, patch: number];
+
+interface SemanticVersion {
+    readonly core: NumericVersionCore;
+    readonly prerelease: readonly string[];
+}
+
+function parseSemanticVersion(version: string): SemanticVersion | undefined {
+    // SemVer permits only ASCII alphanumerics and hyphens in dot-separated prerelease/build
+    // identifiers. Build metadata is validated here but intentionally omitted from the result
+    // because it does not affect precedence. See https://semver.org/#spec-item-11.
+    const identifier = '[0-9A-Za-z-]+';
+    const match = new RegExp(
+        `^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)` +
+        `(?:-(${identifier}(?:\\.${identifier})*))?` +
+        `(?:\\+${identifier}(?:\\.${identifier})*)?$`).exec(version);
+    if (!match) {
+        return undefined;
+    }
+
+    const core: NumericVersionCore = [Number(match[1]), Number(match[2]), Number(match[3])];
+    if (core.some(component => !Number.isSafeInteger(component))) {
+        return undefined;
+    }
+
+    const prerelease = match[4]?.split('.') ?? [];
+    if (prerelease.some(part => /^\d+$/.test(part) && part.length > 1 && part.startsWith('0'))) {
+        return undefined;
+    }
+
+    return { core, prerelease };
+}
+
+function compareSemanticVersions(left: SemanticVersion, right: SemanticVersion): number {
+    for (let index = 0; index < left.core.length; index++) {
+        if (left.core[index] !== right.core[index]) {
+            return left.core[index] - right.core[index];
+        }
+    }
+
+    if (left.prerelease.length === 0 || right.prerelease.length === 0) {
+        return right.prerelease.length - left.prerelease.length;
+    }
+
+    for (let index = 0; index < Math.min(left.prerelease.length, right.prerelease.length); index++) {
+        const leftPart = left.prerelease[index];
+        const rightPart = right.prerelease[index];
+        if (leftPart === rightPart) {
+            continue;
+        }
+
+        const leftIsNumeric = /^\d+$/.test(leftPart);
+        const rightIsNumeric = /^\d+$/.test(rightPart);
+        if (leftIsNumeric && rightIsNumeric) {
+            return leftPart.length === rightPart.length
+                ? (leftPart < rightPart ? -1 : 1)
+                : leftPart.length - rightPart.length;
+        }
+        if (leftIsNumeric !== rightIsNumeric) {
+            return leftIsNumeric ? -1 : 1;
+        }
+
+        return leftPart < rightPart ? -1 : 1;
+    }
+
+    return left.prerelease.length - right.prerelease.length;
+}
 
 export function isCsharpInstalled() {
     return isExtensionInstalled(csharpExtensionId);

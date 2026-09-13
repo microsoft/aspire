@@ -130,6 +130,20 @@ ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true ASPIRE_EXTENSION_E2E_DOTNET_RUN
 ASPIRE_EXTENSION_E2E_ENABLE_WINUI=true ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=/path/to/vscode-dotnet-runtime.vsix ASPIRE_EXTENSION_E2E_CSHARP_VSIX=/path/to/vscode-csharp-win32-x64.vsix ASPIRE_EXTENSION_E2E_SHARD=winui-debug ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/winUiDebug.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ```
 
+#### Blazor WebAssembly browser debugger E2E
+
+Run the managed browser debugger proof with platform-specific .NET Install Tool and C# VSIX files:
+
+```bash
+ASPIRE_EXTENSION_E2E_SHARD=browser-debugger \
+ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/browserDebugger.e2e.test.js \
+ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX="$DOTNET_RUNTIME_VSIX" \
+ASPIRE_EXTENSION_E2E_CSHARP_VSIX="$CSHARP_VSIX" \
+corepack yarn test:e2e
+```
+
+Linux exercises Chrome, while Windows exercises Edge. The shard generates standalone, hosted-global, and hosted-per-page .NET 10 fixtures. Both VSIX files must match the current platform, and C# must be 2.145.15-prerelease or newer.
+
 The E2E fixtures target .NET 10, matching the SDK pinned by the repository's `global.json`. The Azure Functions shard additionally requires Azure Functions Core Tools v4 (`func`) on `PATH`. It installs the real .NET Install Tool, C#, Azure Resource Groups, and Azure Functions extensions into the isolated VS Code instance, generates a dedicated HTTPS certificate with shell-sensitive arguments, and activates the Azure Functions extension so it registers its `func` task definition and listeners. Aspire then creates and runs a registered `func: host start` task for the generated .NET isolated Functions resource; the shard probes its HTTPS endpoint and verifies that stopping the Aspire resource ends the same VS Code task. CI runs this shard on Linux with pinned, checksum-verified copies of Core Tools 4.12.1, .NET Install Tool 3.1.0, C# 2.148.23 for Linux x64, Azure Resource Groups 0.12.7, and Azure Functions 1.22.0.
 
 The `winui-debug` shard is Windows-only. It installs pinned .NET Install Tool and C# VSIX files into the offline VS Code instance, generates a self-contained unpackaged WinUI project, and debugs it as an Aspire project resource. Before starting Aspire, the shard waits for the C# definition provider to resolve the XAML-generated `InitializeComponent` method. This prevents the C# language server's design-time build and the Aspire CLI build from invoking `XamlCompiler.exe` against the same `obj\...\input.json`; a restore or prebuild alone is insufficient because the later build still runs the XAML compiler passes. The app then writes a readiness marker from `Application.OnLaunched`; reaching that marker proves WinUI passed the `Application.Start` failure point covered by the regression. Dependabot does not update the raw Marketplace VSIX URLs or checksums. Treat them as regression inputs rather than current-version dependencies: rebaseline them manually only when VS Code compatibility requires it or the fixture is deliberately moved, and before changing the C# version verify that the old `TargetPath` launch still reproduces [the original crash](https://github.com/microsoft/aspire/issues/19091) while the `RunCommand` launch passes.
