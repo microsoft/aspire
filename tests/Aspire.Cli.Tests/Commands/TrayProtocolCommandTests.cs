@@ -125,8 +125,8 @@ public class TrayProtocolCommandTests(ITestOutputHelper outputHelper)
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var selected = Connection(path, int.MaxValue);
         var sibling = Connection(path, int.MaxValue - 1);
-        monitor.AddConnection("selected", "selected", selected);
-        monitor.AddConnection("sibling", "sibling", sibling);
+        monitor.AddConnection("selected", selected);
+        monitor.AddConnection("sibling", sibling);
         var identity = new TestProcessIdentityProvider
         {
             GetStartTime = _ => scenario == "identity_unavailable" ? null : scenario == "identity_mismatch" ? 1001 : 1000
@@ -136,18 +136,18 @@ public class TrayProtocolCommandTests(ITestOutputHelper outputHelper)
         {
             identity.GetStartTime = _ =>
             {
-                monitor.RemoveConnection("selected", "selected");
-                monitor.AddConnection("replacement", "replacement", replacement);
+                monitor.RemoveConnection("selected");
+                monitor.AddConnection("replacement", replacement);
                 return 1000;
             };
         }
         if (scenario == "not_found")
         {
-            monitor.RemoveConnection("selected", "selected");
+            monitor.RemoveConnection("selected");
         }
         if (scenario == "ambiguous")
         {
-            monitor.AddConnection("duplicate", "duplicate", Connection(path, int.MaxValue));
+            monitor.AddConnection("duplicate", Connection(path, int.MaxValue));
         }
         if (scenario == "discovery_failed")
         {
@@ -178,6 +178,9 @@ public class TrayProtocolCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(rpcExpected ? 1 : 0, selected.StopAppHostCallCount);
         Assert.Equal(0, sibling.StopAppHostCallCount);
         Assert.Equal(0, replacement.StopAppHostCallCount);
+        Assert.Equal(scenario is "stopped" or "replacement" ? 1 : 0, Assert.IsType<TestAppHostSocket>(selected.Socket).TryDeleteCallCount);
+        Assert.Equal(0, Assert.IsType<TestAppHostSocket>(sibling.Socket).TryDeleteCallCount);
+        Assert.Equal(0, Assert.IsType<TestAppHostSocket>(replacement.Socket).TryDeleteCallCount);
         Assert.Equal(1, monitor.ScanCallCount);
         Assert.False(monitor.LastPruneOrphanedSockets);
         Assert.True(monitor.LastThrowOnDiscoveryFailure);
@@ -241,8 +244,8 @@ public class TrayProtocolCommandTests(ITestOutputHelper outputHelper)
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var selected = Connection(path, int.MaxValue);
         var sibling = Connection(path, int.MaxValue - 1);
-        monitor.AddConnection("selected", "selected", selected);
-        monitor.AddConnection("sibling", "sibling", sibling);
+        monitor.AddConnection("selected", selected);
+        monitor.AddConnection("sibling", sibling);
         var identityRead = false;
         var identity = new TestProcessIdentityProvider
         {

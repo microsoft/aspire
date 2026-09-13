@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+
 using Aspire.Cli.Projects;
+using Aspire.TestUtilities;
 using Aspire.TypeSystem;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -204,6 +207,7 @@ public class JavaAppHostToolchainResolverTests(ITestOutputHelper outputHelper)
                     UpToDateCheck = new CommandUpToDateCheck
                     {
                         Inputs = ["{appHostFile}", ".", ".aspire/modules/**", "src/main/java/**"],
+                        Outputs = [Path.Combine(".java-build", "AppHost.class")],
                         FileExtensions = [".java"],
                         StampFile = Path.Combine(".java-build", ".aspire-compile-stamp")
                     }
@@ -217,13 +221,18 @@ public class JavaAppHostToolchainResolverTests(ITestOutputHelper outputHelper)
         // A dependency bump touches no Java source: the descriptor changes and a differently-named JAR
         // is staged. Neither reaches a check whose inputs are only source roots, so the AppHost keeps
         // running bytecode compiled against the version that is no longer on the classpath.
-        var inputs = Assert.Single(spec.PreExecute!).UpToDateCheck!.Inputs;
+        var check = Assert.Single(spec.PreExecute!).UpToDateCheck!;
+        var inputs = check.Inputs;
         foreach (var descriptor in expectedDescriptors)
         {
             Assert.Contains(descriptor.Replace('/', Path.DirectorySeparatorChar), inputs);
         }
 
         Assert.Contains(Path.Combine(outputDirectoryName, "aspire-deps"), inputs);
+        var expectedClassesDirectory = buildFileName == "pom.xml"
+            ? Path.Combine("target", "classes")
+            : Path.Combine("build", "classes", "java", "main");
+        Assert.Equal([Path.Combine(expectedClassesDirectory, "AppHost.class")], check.Outputs!);
     }
 
     [Fact]
@@ -357,6 +366,318 @@ public class JavaAppHostToolchainResolverTests(ITestOutputHelper outputHelper)
             Assert.Equal([rootWrapperPath], invocation.PrefixArgs);
         }
     }
+
+    [Fact]
+    [OuterloopTest("Downloads Maven plugins and dependencies into an empty local repository")]
+    public async Task ApplyToRuntimeSpec_ForMavenReactor_StagesAnUninstalledSiblingFromAnEmptyLocalRepository()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = CreateMavenReactor(workspace.Path);
+        var localRepository = Directory.CreateDirectory(Path.Combine(workspace.Path, "empty-maven-repository"));
+
+        var resolution = JavaAppHostToolchainResolver.Resolve(appHostDirectory);
+        JavaAppHostToolchainResolver.ApplyToRuntimeSpec(
+            CreateJavacRuntimeSpec(),
+            resolution,
+            appHostDirectory,
+            out var installDependencies);
+
+        AssertWrapperInvocation(
+            Path.Combine(workspace.Path, OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw"),
+            appHostDirectory.FullName,
+            [
+                "-B", "-q",
+                "-f", Path.Combine("..", "..", "..", "..", "pom.xml"),
+                "-pl", "apphost,!apphost,.",
+                "-am",
+                "install",
+                "-Dmaven.test.skip=true"
+            ],
+            installDependencies![0]);
+
+        var installResult = await RunCommandAsync(
+            installDependencies[0],
+            appHostDirectory.FullName,
+            new Dictionary<string, string>
+            {
+                ["MAVEN_OPTS"] = $"-Dmaven.repo.local={localRepository.FullName}"
+            });
+
+        Assert.True(installResult.ExitCode == 0, installResult.Output);
+
+        var copyDependencies = installDependencies[1];
+        AssertWrapperInvocation(
+            Path.Combine(workspace.Path, OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw"),
+            appHostDirectory.FullName,
+            [
+                "-B", "-q",
+                "-f", Path.Combine("..", "..", "..", "..", "pom.xml"),
+                "-pl", "apphost",
+                "dependency:copy-dependencies",
+                $"-DoutputDirectory={Path.Combine("target", "aspire-deps")}",
+                "-DincludeScope=runtime"
+            ],
+            copyDependencies);
+
+        var copyResult = await RunCommandAsync(
+            copyDependencies,
+            appHostDirectory.FullName,
+            new Dictionary<string, string>
+            {
+                ["MAVEN_OPTS"] = $"-Dmaven.repo.local={localRepository.FullName}"
+            });
+
+        Assert.True(copyResult.ExitCode == 0, copyResult.Output);
+        Assert.True(
+            File.Exists(Path.Combine(resolution.ProjectDirectory.FullName, "target", "aspire-deps", "library-1.0-SNAPSHOT.jar")),
+            copyResult.Output);
+    }
+
+    [Fact]
+    [OuterloopTest("Downloads Maven plugins and dependencies into an empty local repository")]
+    public async Task ApplyToRuntimeSpec_ForIndependentMavenReactorModule_AnchorsTheUpstreamInstallAtTheAggregator()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = CreateIndependentMavenReactor(workspace.Path);
+        var localRepository = Directory.CreateDirectory(Path.Combine(workspace.Path, "empty-maven-repository"));
+
+        var resolution = JavaAppHostToolchainResolver.Resolve(appHostDirectory);
+        JavaAppHostToolchainResolver.ApplyToRuntimeSpec(
+            CreateJavacRuntimeSpec(),
+            resolution,
+            appHostDirectory,
+            out var installDependencies);
+
+        AssertWrapperInvocation(
+            Path.Combine(workspace.Path, OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw"),
+            appHostDirectory.FullName,
+            [
+                "-B", "-q",
+                "-f", Path.Combine("..", "..", "..", "..", "pom.xml"),
+                "-pl", "apphost,!apphost,.",
+                "-am",
+                "install",
+                "-Dmaven.test.skip=true"
+            ],
+            installDependencies![0]);
+
+        var installResult = await RunCommandAsync(
+            installDependencies[0],
+            appHostDirectory.FullName,
+            new Dictionary<string, string>
+            {
+                ["MAVEN_OPTS"] = $"-Dmaven.repo.local={localRepository.FullName}"
+            });
+
+        Assert.True(installResult.ExitCode == 0, installResult.Output);
+    }
+
+    [Fact]
+    public void ApplyToRuntimeSpec_WithUnrelatedAncestorMavenWrapper_TargetsStandaloneProject()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(
+            Path.Combine(workspace.Path, "pom.xml"),
+            "<project xmlns=\"http://maven.apache.org/POM/4.0.0\"><modelVersion>4.0.0</modelVersion></project>");
+        var wrapperPath = WriteWrapper(workspace.Path, OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw");
+
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "standalone"));
+        File.WriteAllText(Path.Combine(appHostDirectory.FullName, "pom.xml"), "<project />");
+
+        var resolution = JavaAppHostToolchainResolver.Resolve(appHostDirectory);
+        var spec = JavaAppHostToolchainResolver.ApplyToRuntimeSpec(CreateJavacRuntimeSpec(), resolution, appHostDirectory);
+
+        AssertWrapperInvocation(
+            wrapperPath,
+            appHostDirectory.FullName,
+            [
+                "-B", "-q",
+                "dependency:copy-dependencies",
+                $"-DoutputDirectory={Path.Combine("target", "aspire-deps")}",
+                "-DincludeScope=runtime"
+            ],
+            spec.InstallDependencies!);
+    }
+
+    private static DirectoryInfo CreateMavenReactor(string root)
+    {
+        File.WriteAllText(Path.Combine(root, "pom.xml"), """
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.example</groupId>
+              <artifactId>reactor</artifactId>
+              <version>1.0-SNAPSHOT</version>
+              <packaging>pom</packaging>
+                            <properties>
+                                <maven.compiler.release>21</maven.compiler.release>
+                            </properties>
+              <modules>
+                <module>library</module>
+                <module>apphost</module>
+              </modules>
+            </project>
+            """);
+
+        var libraryDirectory = Directory.CreateDirectory(Path.Combine(root, "library"));
+        File.WriteAllText(Path.Combine(libraryDirectory.FullName, "pom.xml"), """
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <parent>
+                <groupId>com.example</groupId>
+                <artifactId>reactor</artifactId>
+                <version>1.0-SNAPSHOT</version>
+                <relativePath>../pom.xml</relativePath>
+              </parent>
+              <artifactId>library</artifactId>
+            </project>
+            """);
+        var librarySources = Directory.CreateDirectory(Path.Combine(libraryDirectory.FullName, "src", "main", "java", "com", "example"));
+        File.WriteAllText(
+            Path.Combine(librarySources.FullName, "Library.java"),
+            "package com.example; public final class Library { }");
+
+        var appHostProjectDirectory = Directory.CreateDirectory(Path.Combine(root, "apphost"));
+        File.WriteAllText(Path.Combine(appHostProjectDirectory.FullName, "pom.xml"), """
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <parent>
+                <groupId>com.example</groupId>
+                <artifactId>reactor</artifactId>
+                <version>1.0-SNAPSHOT</version>
+                <relativePath>../pom.xml</relativePath>
+              </parent>
+              <artifactId>apphost</artifactId>
+              <dependencies>
+                <dependency>
+                  <groupId>com.example</groupId>
+                  <artifactId>library</artifactId>
+                  <version>${project.version}</version>
+                </dependency>
+              </dependencies>
+            </project>
+            """);
+        var appHostDirectory = Directory.CreateDirectory(
+            Path.Combine(appHostProjectDirectory.FullName, "src", "main", "java"));
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "AppHost.java"),
+            "import aspire.*; public final class AppHost { }");
+
+        var wrapperSource = Path.Combine(
+            GetRepoRoot(),
+            "playground",
+            "JavaAppHost",
+            "forecast");
+        File.Copy(
+            Path.Combine(wrapperSource, OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw"),
+            Path.Combine(root, OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw"));
+        var wrapperDirectory = Directory.CreateDirectory(Path.Combine(root, ".mvn", "wrapper"));
+        File.Copy(
+            Path.Combine(wrapperSource, ".mvn", "wrapper", "maven-wrapper.properties"),
+            Path.Combine(wrapperDirectory.FullName, "maven-wrapper.properties"));
+
+        return appHostDirectory;
+    }
+
+    private static DirectoryInfo CreateIndependentMavenReactor(string root)
+    {
+        File.WriteAllText(Path.Combine(root, "pom.xml"), """
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.example.aggregator</groupId>
+              <artifactId>reactor</artifactId>
+              <version>1.0-SNAPSHOT</version>
+              <packaging>pom</packaging>
+              <modules>
+                <module>apphost</module>
+              </modules>
+            </project>
+            """);
+
+        var appHostProjectDirectory = Directory.CreateDirectory(Path.Combine(root, "apphost"));
+        File.WriteAllText(Path.Combine(appHostProjectDirectory.FullName, "pom.xml"), """
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.example.apphost</groupId>
+              <artifactId>apphost</artifactId>
+              <version>1.0-SNAPSHOT</version>
+            </project>
+            """);
+        var appHostDirectory = Directory.CreateDirectory(
+            Path.Combine(appHostProjectDirectory.FullName, "src", "main", "java"));
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "AppHost.java"),
+            "import aspire.*; public final class AppHost { }");
+
+        var wrapperSource = Path.Combine(
+            GetRepoRoot(),
+            "playground",
+            "JavaAppHost",
+            "forecast");
+        File.Copy(
+            Path.Combine(wrapperSource, OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw"),
+            Path.Combine(root, OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw"));
+        var wrapperDirectory = Directory.CreateDirectory(Path.Combine(root, ".mvn", "wrapper"));
+        File.Copy(
+            Path.Combine(wrapperSource, ".mvn", "wrapper", "maven-wrapper.properties"),
+            Path.Combine(wrapperDirectory.FullName, "maven-wrapper.properties"));
+
+        return appHostDirectory;
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunCommandAsync(
+        CommandSpec command,
+        string workingDirectory,
+        IReadOnlyDictionary<string, string> environmentVariables)
+    {
+        var startInfo = new ProcessStartInfo(command.Command)
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        foreach (var argument in command.Args)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        foreach (var (name, value) in environmentVariables)
+        {
+            startInfo.Environment[name] = value;
+        }
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start '{command.Command}'.");
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMinutes(10));
+
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync();
+            }
+
+            if (TestContext.Current.CancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+
+            return (-1, $"Maven timed out after 10 minutes.{Environment.NewLine}{await standardOutput}{Environment.NewLine}{await standardError}");
+        }
+
+        return (process.ExitCode, $"{await standardOutput}{Environment.NewLine}{await standardError}");
+    }
+
+    private static string GetRepoRoot()
+        => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
     [Theory]
     [InlineData(true, "mvnw", "mvnw.cmd")]

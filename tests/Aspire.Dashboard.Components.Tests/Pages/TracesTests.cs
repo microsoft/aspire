@@ -1,12 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,7 +17,6 @@ using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -60,20 +62,11 @@ public class TracesTests : DashboardTestContext
     [InlineData(true, 0)]
     public async Task Render_AtTraceLimit_LimitMessageOnlyDisplayedForLiveRun(bool isReadOnly, int expectedMessageCount)
     {
-        var messageCount = 0;
-        var messageService = new TestMessageService(_ =>
-        {
-            messageCount++;
-            return Task.FromResult(new Message());
-        });
-
         SetupTracesServices();
-        Services.AddSingleton<IMessageService>(messageService);
         Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions
         {
             TelemetryLimits = { MaxTraceCount = 1 }
         }));
-
         var timestamp = DateTime.UnixEpoch;
         await FluentUISetupHelpers.ConfigureTelemetryRepository(this, isReadOnly, telemetryRepository => telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
@@ -90,12 +83,13 @@ public class TracesTests : DashboardTestContext
                 }
             }
         }));
-
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
-        var cut = RenderComponent<Traces>(builder => builder.AddCascadingValue(viewport));
+        var cut = FluentUISetupHelpers.RenderMessageBarProviderWithPage<Traces>(this, viewport);
 
-        cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, messageCount));
+        var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
+        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, cut.FindComponents<DashboardMessageBar>().Count));
     }
 
     private void SetupTracesServices()

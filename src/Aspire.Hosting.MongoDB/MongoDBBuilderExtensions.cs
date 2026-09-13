@@ -1,11 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
-
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using MongoDB.Bson;
 using MongoDB.Driver;
+
+#pragma warning disable ASPIRECERTIFICATES001
+#pragma warning disable ASPIREDOCKERFILEBUILDER001
+#pragma warning disable ASPIREMONGODB001
 
 namespace Aspire.Hosting;
 
@@ -60,40 +66,106 @@ public static class MongoDBBuilderExtensions
 
         var passwordParameter = password?.Resource ?? ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, $"{name}-password", special: false);
 
-        var mongoDBContainer = new MongoDBServerResource(name, userName?.Resource, passwordParameter);
+        var mongoServerResource = new MongoDBServerResource(name, userName?.Resource, passwordParameter)
+        {
+            PasswordParameterWasGenerated = password is null,
+        };
 
         string? connectionString = null;
 
-        builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(mongoDBContainer, async (@event, ct) =>
-        {
-            connectionString = await mongoDBContainer.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
-
-            if (connectionString == null)
-            {
-                throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{mongoDBContainer.Name}' resource but the connection string was null.");
-            }
-        });
-
         var healthCheckKey = $"{name}_check";
-        // cache the client so it is reused on subsequent calls to the health check
-        IMongoClient? client = null;
+        // NOTE: `clientFactory` is invoked every time the healthcheck is performed. We cache the client so it is reused.
+        var client = null as IMongoClient;
         builder.Services.AddHealthChecks()
-            .AddMongoDb(
-                sp => client ??= new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable")),
-                name: healthCheckKey);
+            .AddMyMongoDb(
+                name: healthCheckKey,
+                clientFactory: sp => client ??= new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable")),
+                // NOTE: Without a database as the target of the healthcheck, the healthcheck runs a `listDatabases` command against the Mongo server. This is problematic in cases where the Mongo server is a replica set secondary node, because during the phase in which the replica set is being initialized, the secondary node will return an error when `listDatabases` is called. To avoid this, we specify a database to use for the healthcheck. The healthcheck will then run a `ping` command against the specified database instead of `listDatabases`, which works even on a secondary node during replica set initialization.
+                databaseNameFactory: _ => mongoServerResource.Databases.Values.FirstOrDefault(defaultValue: MongoDBServerResource.DefaultAuthenticationDatabase)
+            );
 
-        return builder
-            .AddResource(mongoDBContainer)
+        var mongoBuilder = builder
+            .AddResource(mongoServerResource)
             .WithEndpoint(port: port, targetPort: DefaultContainerPort, name: MongoDBServerResource.PrimaryEndpointName)
             .WithImage(MongoDBContainerImageTags.Image, MongoDBContainerImageTags.Tag)
             .WithImageRegistry(MongoDBContainerImageTags.Registry)
             .WithIconName("DatabaseMultiple")
             .WithEnvironment(context =>
             {
-                context.EnvironmentVariables[UserEnvVarName] = mongoDBContainer.UserNameReference;
-                context.EnvironmentVariables[PasswordEnvVarName] = mongoDBContainer.PasswordParameter!;
+                context.EnvironmentVariables[UserEnvVarName] = mongoServerResource.UserNameReference;
+                context.EnvironmentVariables[PasswordEnvVarName] = mongoServerResource.PasswordParameter!;
             })
-            .WithHealthCheck(healthCheckKey);
+            .OnConnectionStringAvailable(async (resource, @event, ct) =>
+            {
+                connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
+                    ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{resource.Name}' resource but the connection string was null.");
+            })
+            .WithHealthCheck(healthCheckKey)
+            .WithCertificateTrustConfiguration(context =>
+            {
+                // NOTE: `mongod` refuses to start when it is handed TLS file arguments without TLS actually being turned on, so these are only added once the endpoint has been marked as TLS-enabled.
+                if (mongoServerResource.TlsEnabled)
+                {
+                    context.Arguments.Add("--tlsCAFile");
+                    context.Arguments.Add(context.CertificateBundlePath);
+                }
+
+                return Task.CompletedTask;
+            })
+            .WithHttpsCertificateConfiguration(context =>
+            {
+                if (mongoServerResource.TlsEnabled)
+                {
+                    context.Arguments.Add("--tlsCertificateKeyFile");
+                    context.Arguments.Add(context.CertificateWithKeyPath);
+
+                    if (context.Password is not null)
+                    {
+                        context.Arguments.Add("--tlsCertificateKeyFilePassword"); // NOTE: See https://www.mongodb.com/docs/manual/tutorial/configure-ssl/#tls-ssl-certificate-passphrase
+                        context.Arguments.Add(context.Password);
+                    }
+                }
+
+                return Task.CompletedTask;
+            });
+
+        if (builder.ExecutionContext.IsRunMode)
+        {
+            mongoBuilder.SubscribeHttpsEndpointsUpdate(context =>
+            {
+                // NOTE: This callback also fires when the resource has explicitly asked for the developer certificate
+                // (which is what `WithMember` does for replica set members) but no developer certificate exists on the
+                // machine. Turning TLS on then would hand `mongod` a `--tlsMode` that it has no certificate to satisfy
+                // and it would refuse to start, so the server is left serving plain TCP instead.
+                var certificateIsAvailable =
+                    (mongoServerResource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var certificateAnnotation) && certificateAnnotation.Certificate is not null)
+                    || !context.Services.GetRequiredService<IDeveloperCertificateService>().Certificates.IsEmpty;
+
+                if (!certificateIsAvailable)
+                {
+                    return;
+                }
+
+                // A certificate is available for this resource, so turn TLS on for the MongoDB endpoint. Marking the
+                // endpoint itself is what makes `MongoDBServerResource.TlsEnabled` — and therefore the `tls=true`
+                // segment of the connection string — light up.
+                mongoBuilder
+                    .WithEndpoint(MongoDBServerResource.PrimaryEndpointName, endpoint => endpoint.TlsEnabled = true)
+                    .WithArgs(context =>
+                    {
+                        context.Args.Add("--tlsMode");
+                        context.Args.Add(GetTlsModeArgument(mongoServerResource.TlsMode));
+                        context.Args.Add("--tlsAllowConnectionsWithoutCertificates"); // NOTE: This allows clients to connect without having to provide the certificate+key and the CA from their end (that's called mutual TLS and is unnecessary).
+
+                        if (mongoServerResource.TlsAllowInvalidCertificates)
+                        {
+                            context.Args.Add("--tlsAllowInvalidCertificates");
+                        }
+                    });
+            });
+        }
+
+        return mongoBuilder;
     }
 
     /// <summary>
@@ -164,14 +236,15 @@ public static class MongoDBBuilderExtensions
         containerName ??= $"{builder.Resource.Name}-mongoexpress";
 
         var mongoExpressContainer = new MongoExpressContainerResource(containerName);
-        var resourceBuilder = builder.ApplicationBuilder.AddResource(mongoExpressContainer)
-                                                        .WithImage(MongoDBContainerImageTags.MongoExpressImage, MongoDBContainerImageTags.MongoExpressTag)
-                                                        .WithImageRegistry(MongoDBContainerImageTags.MongoExpressRegistry)
-                                                        .WithIconName("WindowDatabase")
-                                                        .WithEnvironment(context => ConfigureMongoExpressContainer(context, builder.Resource))
-                                                        .WithHttpEndpoint(targetPort: 8081, name: "http")
-                                                        .WithParentRelationship(builder)
-                                                        .ExcludeFromManifest();
+        var resourceBuilder = builder.ApplicationBuilder
+            .AddResource(mongoExpressContainer)
+            .WithImage(MongoDBContainerImageTags.MongoExpressImage, MongoDBContainerImageTags.MongoExpressTag)
+            .WithImageRegistry(MongoDBContainerImageTags.MongoExpressRegistry)
+            .WithIconName("WindowDatabase")
+            .WithEnvironment(context => ConfigureMongoExpressContainer(context, builder.Resource))
+            .WithHttpEndpoint(targetPort: 8081, name: "http")
+            .WithParentRelationship(builder)
+            .ExcludeFromManifest();
 
         configureContainer?.Invoke(resourceBuilder);
 
@@ -267,6 +340,235 @@ public static class MongoDBBuilderExtensions
         return builder.WithContainerFiles(initPath, importFullPath);
     }
 
+    /// <summary>
+    /// Configures the MongoDB server to bind to and listen on all network interfaces.
+    /// </summary>
+    /// <remarks>
+    /// See https://www.mongodb.com/docs/manual/reference/configuration-options/#mongodb-setting-net.bindIpAll
+    /// </remarks>
+    /// <param name="builder">The MongoDB server resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    [Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<MongoDBServerResource> WithBindIpAll(this IResourceBuilder<MongoDBServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        // NOTE: `mongod` refuses to start when an option is given more than once, and `WithReplicaSet` calls this, so a
+        // perfectly reasonable `.WithBindIpAll().WithReplicaSet("rs0")` would otherwise produce a container that cannot
+        // start.
+        if (builder.Resource.HasAnnotationOfType<MongoDBServerBindAllIpAnnotation>())
+        {
+            return builder;
+        }
+
+        return builder
+            .WithAnnotation(new MongoDBServerBindAllIpAnnotation())
+            .WithArgs("--bind_ip_all");
+    }
+
+    /// <summary>
+    /// Annotates a MongoDB server resource as a member of a replica set with the specified name. This will configure the necessary command line arguments on the MongoDB container to initialize it as a member of the replica set.
+    /// </summary>
+    /// <remarks>
+    /// This method will normally be called by the replica set resource builder when you add a MongoDB server resource as a member of the replica set using <see cref="MongoDBReplicaSetBuilderExtensions.WithMember(IResourceBuilder{MongoDBReplicaSetResource}, IResourceBuilder{MongoDBServerResource})"/>. It can also be called directly if you are looking for lower-level control.
+    /// </remarks>
+    /// <param name="builder">The MongoDB server resource builder.</param>
+    /// <param name="name">The name of the replica set the server is a member of.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    [Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string name)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ThrowIfPublishMode(builder.ApplicationBuilder, nameof(WithReplicaSet));
+
+        // NOTE: `mongod` refuses to start when `--replSet` is given more than once, so calling this twice has to either be
+        // a no-op or an error rather than appending a second option.
+        if (builder.Resource.ReplicaSetName is { } existingName)
+        {
+            return string.Equals(existingName, name, StringComparisons.ResourceName)
+                ? builder
+                : throw new InvalidOperationException($"The MongoDB server resource '{builder.Resource.Name}' is already configured as a member of the replica set '{existingName}' and cannot also be a member of '{name}'.");
+        }
+
+        builder.Resource.ReplicaSetName = name;
+        return builder
+            .WithAnnotation(new MongoDBServerReplicaSetAnnotation(name))
+            .WithBindIpAll()
+            .WithArgs("--replSet", name);
+    }
+
+    /// <summary>
+    /// Sets up a keyfile for internal authentication between members of a MongoDB replica set, with the specified <paramref name="keyValue"/> as the content of the file.
+    /// </summary>
+    /// <remarks>
+    /// The keyfile is a shared secret. Every member of the replica set (or sharded cluster) should have the same keyfile, and possession of that secret is what authenticates a connection as "a legitimate member of this cluster."
+    /// See https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-with-keyfile-access-control/
+    /// </remarks>
+    /// <param name="builder">The MongoDB server resource builder.</param>
+    /// <param name="keyValue">The content of the keyfile. This is a shared secret: every member of the replica set has to be given the same value, and anything holding it can authenticate as a member of the cluster.</param>
+    /// <param name="keyFilePath">The absolute path the keyfile is mounted at inside the container, which has to include a file name. Defaults to <c>/etc/rs.key</c>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    [Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<MongoDBServerResource> WithKeyFile(
+        this IResourceBuilder<MongoDBServerResource> builder,
+        IExpressionValue keyValue,
+        string keyFilePath = "/etc/rs.key"
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(keyValue);
+        ArgumentException.ThrowIfNullOrEmpty(keyFilePath);
+
+        var lastSeparatorIndex = keyFilePath.LastIndexOf('/');
+        if (!keyFilePath.StartsWith('/') ||
+            keyFilePath.Contains('\\') ||
+            lastSeparatorIndex == keyFilePath.Length - 1 ||
+            string.IsNullOrWhiteSpace(keyFilePath[(lastSeparatorIndex + 1)..]) ||
+            keyFilePath[(lastSeparatorIndex + 1)..] is "." or "..")
+        {
+            throw new ArgumentException("The key file path must be an absolute container path with a file name.", nameof(keyFilePath));
+        }
+
+        var keyFileDirectory = lastSeparatorIndex == 0 ? "/" : keyFilePath[..lastSeparatorIndex];
+        var keyFileName = keyFilePath[(lastSeparatorIndex + 1)..];
+
+        // NOTE: The keyfile is a shared secret. Publishers materialize container files into the publish artifact (e.g. Docker Compose writes the contents straight into the generated YAML), which would leak it, so publishing is rejected outright until the keyfile can be published as a secret.
+        ThrowIfPublishMode(builder.ApplicationBuilder, nameof(WithKeyFile));
+
+        // NOTE: `mongod` refuses to start when `--keyFile` is given more than once, and each call would also mount another
+        // copy of the file, so a repeat of the very same configuration is a no-op and anything else is an error.
+        if (builder.Resource.TryGetLastAnnotation<MongoDBServerKeyFileAnnotation>(out var existingKeyFile))
+        {
+            return existingKeyFile.Value == keyValue && string.Equals(existingKeyFile.FilePath, keyFilePath, StringComparison.Ordinal)
+                ? builder
+                : throw new InvalidOperationException($"The MongoDB server resource '{builder.Resource.Name}' already has a key file configured at '{existingKeyFile.FilePath}'. A MongoDB server can only have one key file; note that adding a server to a replica set gives it the replica set's shared key file.");
+        }
+
+        return builder
+            .WithAnnotation(new MongoDBServerKeyFileAnnotation(keyValue, keyFilePath))
+            .WithContainerFiles(
+                destinationPath: keyFileDirectory,
+                callback: async (_, ct) => [new ContainerFile
+                {
+                    Name = keyFileName,
+                    Contents = await keyValue.GetValueAsync(ct).ConfigureAwait(false),
+                    Mode = UnixFileMode.UserRead,
+                }],
+                // NOTE: 999 is the default user and group id used by the official MongoDB container image for the mongod process
+                defaultOwner: 999,
+                defaultGroup: 999
+            )
+            .WithArgs("--keyFile", keyFilePath);
+    }
+
+    /// <summary>
+    /// Configures the <c>--tlsMode</c> the MongoDB server is started with when TLS is active.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// TLS itself is not turned on by this method. A MongoDB server resource serves TLS whenever an HTTPS/TLS certificate
+    /// is available for it — by default the ASP.NET Core developer certificate — and serves plain TCP otherwise. Use
+    /// <see cref="ResourceBuilderExtensions.WithHttpsDeveloperCertificate{TResource}"/> or
+    /// <see cref="ResourceBuilderExtensions.WithHttpsCertificate{TResource}"/> to opt in explicitly, and
+    /// <see cref="ResourceBuilderExtensions.WithoutHttpsCertificate{TResource}"/> to opt out. This method only controls
+    /// how strict the server is about TLS on incoming connections once TLS is active; the default is
+    /// <see cref="MongoDBTlsMode.RequireTls"/>.
+    /// </para>
+    /// <para>
+    /// See https://www.mongodb.com/docs/manual/reference/configuration-options/#mongodb-setting-net.tls.mode
+    /// </para>
+    /// <example>
+    /// Let clients connect either with or without TLS:
+    /// <code lang="csharp">
+    /// var mongo = builder.AddMongoDB("mongo")
+    ///     .WithTlsMode(MongoDBTlsMode.PreferTls);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="builder">The MongoDB server resource builder.</param>
+    /// <param name="mode">The TLS mode to run the MongoDB server in.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    [Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<MongoDBServerResource> WithTlsMode(
+        this IResourceBuilder<MongoDBServerResource> builder,
+        MongoDBTlsMode mode = MongoDBTlsMode.RequireTls
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (!Enum.IsDefined(mode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, $"Unsupported TLS mode: {mode}");
+        }
+        // NOTE: The certificate material is only made available to the container in run mode, so a published container configured for TLS would be started without a certificate and fail. Publishing is rejected until publish-time certificate support exists.
+        ThrowIfPublishMode(builder.ApplicationBuilder, nameof(WithTlsMode));
+
+        return builder.WithAnnotation(new MongoDBServerTlsModeAnnotation(mode), ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
+    /// Configures the MongoDB server to accept TLS connections whose peer certificate cannot be validated, by passing
+    /// <c>--tlsAllowInvalidCertificates</c> to <c>mongod</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This weakens certificate authentication and should only be used when a peer legitimately cannot present a
+    /// certificate this server is able to validate. It is what
+    /// <see cref="MongoDBReplicaSetBuilderExtensions.WithMember(IResourceBuilder{MongoDBReplicaSetResource}, IResourceBuilder{MongoDBServerResource})"/>
+    /// uses today, because replica set members authenticate to each other with the same certificate they serve to clients
+    /// and that certificate does not carry a <c>clientAuth</c> extended key usage.
+    /// </para>
+    /// <para>
+    /// See https://www.mongodb.com/docs/manual/reference/program/mongod/#std-option-mongod.--tlsAllowInvalidCertificates
+    /// </para>
+    /// <example>
+    /// <code lang="csharp">
+    /// var mongo = builder.AddMongoDB("mongo")
+    ///     .WithTlsAllowInvalidCertificates();
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="builder">The MongoDB server resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    [Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<MongoDBServerResource> WithTlsAllowInvalidCertificates(this IResourceBuilder<MongoDBServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ThrowIfPublishMode(builder.ApplicationBuilder, nameof(WithTlsAllowInvalidCertificates));
+
+        return builder.WithAnnotation(new MongoDBServerTlsAllowInvalidCertificatesAnnotation(), ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    private static string GetTlsModeArgument(MongoDBTlsMode mode) => mode switch
+    {
+        MongoDBTlsMode.AllowTls => "allowTLS",
+        MongoDBTlsMode.PreferTls => "preferTLS",
+        MongoDBTlsMode.RequireTls => "requireTLS",
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, $"Unsupported TLS mode: {mode}"),
+    };
+
+    /// <summary>
+    /// Throws when the app host is running in publish mode, for the features of this integration that are only
+    /// implemented for local orchestration.
+    /// </summary>
+    internal static void ThrowIfPublishMode(IDistributedApplicationBuilder builder, string feature)
+    {
+        if (builder.ExecutionContext.IsPublishMode)
+        {
+            throw new NotSupportedException($"'{feature}' is not supported when publishing or deploying the application. Publish support for this MongoDB feature has not been implemented yet; it can only be used when running the app host locally.");
+        }
+    }
+
     private static void ConfigureMongoExpressContainer(EnvironmentCallbackContext context, MongoDBServerResource resource)
     {
         // Mongo Express assumes Mongo is being accessed over a default Aspire container network and hardcodes the resource address
@@ -275,13 +577,208 @@ public static class MongoDBBuilderExtensions
         var targetPort = resource.PrimaryEndpoint.TargetPort;
         if (targetPort is int targetPortValue)
         {
-            context.EnvironmentVariables["ME_CONFIG_MONGODB_PORT"] = targetPortValue.ToString(CultureInfo.InvariantCulture);
+            var port = targetPortValue.ToString(CultureInfo.InvariantCulture);
+            context.EnvironmentVariables["ME_CONFIG_MONGODB_PORT"] = port;
+            // NOTE: Before starting Mongo Express, the image's entrypoint waits for the server to accept connections, and it
+            // takes the address to wait on from `ME_CONFIG_MONGODB_URL` alone — the image ships a default of
+            // `mongodb://mongo:27017`. Leaving that default in place makes every container spend its whole retry budget
+            // waiting on a host that does not exist before it even starts.
+            // NOTE: This variable does not need to carry credentials or TLS options, because Mongo Express itself ignores
+            // it: it only reads `ME_CONFIG_MONGODB_URL` when `ME_CONFIG_MONGODB_SERVER` is unset, which it is not here.
+            context.EnvironmentVariables["ME_CONFIG_MONGODB_URL"] = $"mongodb://{resource.Name}:{port}";
         }
         context.EnvironmentVariables["ME_CONFIG_BASICAUTH"] = "false";
         if (resource.PasswordParameter is not null)
         {
             context.EnvironmentVariables["ME_CONFIG_MONGODB_ADMINUSERNAME"] = resource.UserNameReference;
             context.EnvironmentVariables["ME_CONFIG_MONGODB_ADMINPASSWORD"] = resource.PasswordParameter;
+        }
+
+        if (resource.TlsEnabled)
+        {
+            // NOTE: The server only accepts TLS connections, and Mongo Express defaults to plain TCP, so it has to be told
+            // to speak TLS as well or it cannot connect at all.
+            context.EnvironmentVariables["ME_CONFIG_MONGODB_SSL"] = "true";
+            // NOTE: Mongo Express reaches the server at its resource name on the container network, which is not a name that
+            // any certificate Aspire can issue for the server will carry, and it exposes no way to keep chain validation
+            // while relaxing only the host name check. This mirrors the relaxation that replica set members need for the
+            // connections they make to each other.
+            context.EnvironmentVariables["ME_CONFIG_MONGODB_SSLVALIDATE"] = "false";
+        }
+    }
+}
+
+/// <summary>
+/// Defines the TLS mode for MongoDB server.
+/// </summary>
+/// <remarks>
+/// See https://www.mongodb.com/docs/manual/reference/configuration-options/#mongodb-setting-net.tls.mode
+/// </remarks>
+[Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public enum MongoDBTlsMode
+{
+    /// <summary>
+    /// Connections between servers do not use TLS. For incoming connections, the server accepts both TLS and non-TLS.
+    /// </summary>
+    AllowTls,
+
+    /// <summary>
+    /// Connections between servers use TLS. For incoming connections, the server accepts both TLS and non-TLS.
+    /// </summary>
+    PreferTls,
+
+    /// <summary>
+    /// The server uses and accepts only TLS encrypted connections.
+    /// </summary>
+    RequireTls,
+}
+
+/// <summary>
+/// Represents the intent to configure a MongoDB server resource to bind to and listen on all network interfaces.
+/// </summary>
+internal sealed record MongoDBServerBindAllIpAnnotation : IResourceAnnotation;
+
+/// <summary>
+/// Represents the intent to configure a MongoDB server resource as a member of a replica set with the specified name.
+/// </summary>
+internal sealed record MongoDBServerReplicaSetAnnotation(
+    string Name
+) : IResourceAnnotation;
+
+/// <summary>
+/// Represents the intent to configure a MongoDB server resource with a keyfile for internal authentication between members of a replica set, with the specified <paramref name="Value"/> as the content of the keyfile and the specified <paramref name="FilePath"/> as the path to the keyfile in the container.
+/// </summary>
+internal sealed record MongoDBServerKeyFileAnnotation(
+    IExpressionValue Value,
+    string FilePath
+) : IResourceAnnotation;
+
+/// <summary>
+/// Represents the intent to run a MongoDB server resource in a specific TLS mode when TLS is active.
+/// </summary>
+internal sealed record MongoDBServerTlsModeAnnotation(
+    MongoDBTlsMode Mode
+) : IResourceAnnotation;
+
+/// <summary>
+/// Represents the intent to configure a MongoDB server resource to accept TLS connections whose peer certificate cannot be validated.
+/// </summary>
+internal sealed record MongoDBServerTlsAllowInvalidCertificatesAnnotation : IResourceAnnotation;
+
+// NOTE: The two types below are derived from `MongoDbHealthCheckBuilderExtensions` and `MongoDbHealthCheck` in
+// AspNetCore.Diagnostics.HealthChecks (https://github.com/Xabaril/AspNetCore.Diagnostics.HealthChecks), which is licensed
+// under the Apache License, Version 2.0. See THIRD-PARTY-NOTICES.TXT for the license notice.
+// NOTE: They are modified rather than used as they are, so that the check can target a specific database and select the
+// nearest server. Pinging a database matters for a replica set member, whose `listDatabases` fails while the set is being
+// initialized, and so does the read preference, because a member has no primary until the set has been initiated.
+internal static class MyMongoDbHealthCheckBuilderExtensions
+{
+    private const string NAME = "mongodb";
+
+    public static IHealthChecksBuilder AddMyMongoDb(
+        this IHealthChecksBuilder builder,
+        Func<IServiceProvider, IMongoClient>? clientFactory = default,
+        Func<IServiceProvider, string>? databaseNameFactory = default,
+        string? name = default,
+        HealthStatus? failureStatus = default,
+        IEnumerable<string>? tags = default,
+        TimeSpan? timeout = default)
+    {
+        return builder.Add(new HealthCheckRegistration(
+            name ?? NAME,
+            sp => Factory(sp, clientFactory, databaseNameFactory),
+            failureStatus,
+            tags,
+            timeout));
+
+        static MyMongoDbHealthCheck Factory(IServiceProvider sp, Func<IServiceProvider, IMongoClient>? clientFactory, Func<IServiceProvider, string>? databaseNameFactory)
+        {
+            // The user might have registered a factory for MongoClient type, but not for the abstraction (IMongoClient).
+            // That is why we try to resolve MongoClient first.
+            IMongoClient client = clientFactory?.Invoke(sp) ?? sp.GetService<MongoClient>() ?? sp.GetRequiredService<IMongoClient>();
+            string? databaseName = databaseNameFactory?.Invoke(sp);
+            return new(client, databaseName);
+        }
+    }
+}
+internal class MyMongoDbHealthCheck : IHealthCheck
+{
+    // When running the tests locally during development, don't re-attempt
+    // as it prolongs the time it takes to run the tests.
+    private const int MAX_PING_ATTEMPTS
+#if DEBUG
+        = 1;
+#else
+        = 2;
+#endif
+
+    private static readonly Lazy<BsonDocumentCommand<BsonDocument>> s_command = new(() => new(BsonDocument.Parse("{ping:1}")));
+    private readonly IMongoClient _client;
+    private readonly string? _specifiedDatabase;
+
+    public MyMongoDbHealthCheck(IMongoClient client, string? databaseName = default)
+    {
+        _client = client;
+        _specifiedDatabase = databaseName;
+    }
+
+    /// <inheritdoc />
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(_specifiedDatabase))
+            {
+                // some users can't list all databases depending on database privileges, with
+                // this you can check a specified database.
+                // Related with issue #43 and #617
+
+                // For most operations where it is possible, the MongoDB driver itself will retry exactly once
+                // to cover switches in the primary and temporary short term network outages.
+                // Due to the RunCommand being a lower level function, according to the spec (https://github.com/mongodb/specifications/blob/master/source/run-command/run-command.rst#retryability)
+                // for it, it is not retryable and this extends to the ping.
+                for (int attempt = 1; attempt <= MAX_PING_ATTEMPTS; attempt++)
+
+                {
+                    try
+                    {
+                        await _client
+                            .GetDatabase(_specifiedDatabase)
+                            // NOTE: `RunCommandAsync` selects a server with `ReadPreference.Primary` unless it is told
+                            // otherwise, rather than inheriting the preference from the connection string. That is the wrong
+                            // question for a liveness ping: a MongoDB server that carries `--replSet` has no primary until
+                            // its replica set has been initiated, so requiring one would keep it unhealthy for as long as it
+                            // is waiting to be initiated — which is exactly when something else may be waiting on it.
+                            .RunCommandAsync(s_command.Value, readPreference: ReadPreference.Nearest, cancellationToken: cancellationToken)
+                            .ConfigureAwait(false);
+                        break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception)
+                    {
+                        if (MAX_PING_ATTEMPTS == attempt)
+                        {
+                            throw;
+                        }
+
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                }
+            }
+            else
+            {
+                using var cursor = await _client.ListDatabaseNamesAsync(cancellationToken).ConfigureAwait(false);
+                await cursor.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return HealthCheckResult.Healthy();
+        }
+        catch (Exception ex)
+        {
+            return new HealthCheckResult(context.Registration.FailureStatus, exception: ex);
         }
     }
 }

@@ -10,6 +10,23 @@ namespace Aspire.Dashboard.Tests.Model;
 public class InputViewModelTests
 {
     [Fact]
+    public void Value_NullIsNormalizedToEmptyString()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Choose Color",
+            InputType = InputType.Choice,
+            Value = "blue"
+        };
+        var viewModel = new InputViewModel(input);
+
+        viewModel.Value = null;
+
+        Assert.Equal(string.Empty, viewModel.Value);
+        Assert.Equal(string.Empty, input.Value);
+    }
+
+    [Fact]
     public void InputViewModel_ChoiceWithoutPlaceholder_DefaultsToFirstOption()
     {
         // Arrange
@@ -69,6 +86,7 @@ public class InputViewModelTests
 
         // Assert
         Assert.Equal("blue", viewModel.Value);
+        Assert.Equal("blue", viewModel.SelectedOption?.Id);
     }
 
     [Fact]
@@ -177,6 +195,25 @@ public class InputViewModelTests
 
         // Assert - When AllowCustomChoice is true, value should not default
         Assert.True(string.IsNullOrEmpty(viewModel.Value));
+    }
+
+    [Fact]
+    public void InputViewModel_CustomChoiceWithFreeFormValue_CreatesSelectedOption()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Choose Color",
+            InputType = InputType.Choice,
+            AllowCustomChoice = true,
+            Value = "purple"
+        };
+        input.Options.Add("red", "Red");
+        input.Options.Add("blue", "Blue");
+
+        var viewModel = new InputViewModel(input);
+
+        Assert.Equal("purple", viewModel.SelectedOption?.Id);
+        Assert.Equal("purple", viewModel.SelectedOption?.Name);
     }
 
     [Fact]

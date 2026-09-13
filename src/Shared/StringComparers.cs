@@ -31,6 +31,7 @@ internal static class StringComparers
     public static StringComparer CultureName => StringComparer.OrdinalIgnoreCase;
     public static StringComparer CommandName => StringComparer.Ordinal;
     public static StringComparer CliInputOrOutput => StringComparer.Ordinal;
+    public static StringComparer FileSystemPath => Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
     public static StringComparer InteractionInputName => StringComparer.OrdinalIgnoreCase;
     public static StringComparer NetworkId => StringComparer.Ordinal;
     public static StringComparer NuGetPackageId => StringComparer.OrdinalIgnoreCase;
@@ -76,6 +77,7 @@ internal static class StringComparisons
     public static StringComparison CultureName => StringComparison.OrdinalIgnoreCase;
     public static StringComparison CommandName => StringComparison.Ordinal;
     public static StringComparison CliInputOrOutput => StringComparison.Ordinal;
+    public static StringComparison FileSystemPath => Path.DirectorySeparatorChar == '\\' ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
     public static StringComparison InteractionInputName => StringComparison.OrdinalIgnoreCase;
     public static StringComparison NetworkId => StringComparison.Ordinal;
     public static StringComparison NuGetPackageId => StringComparison.OrdinalIgnoreCase;

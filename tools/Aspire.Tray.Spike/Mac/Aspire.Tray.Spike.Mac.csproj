@@ -11,6 +11,7 @@
     <EmbeddedResource Include="../../../src/Shared/Aspire_icon_256.png" LogicalName="aspire.png" />
     <Compile Include="../../../src/Shared/BundleVersionLease.cs" Link="Shared/BundleVersionLease.cs" />
     <Compile Include="../../../src/Shared/BundleDiscovery.cs" Link="Shared/BundleDiscovery.cs" />
+    <Compile Include="../../../src/Shared/HeldFileLease.cs" Link="Shared/HeldFileLease.cs" />
   </ItemGroup>
 
   <Target Name="ValidateTrayPublish" BeforeTargets="PrepareForPublish">

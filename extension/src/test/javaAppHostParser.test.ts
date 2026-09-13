@@ -171,6 +171,82 @@ suite('Java AppHost parser', () => {
         assert.strictEqual(await (await getParserForDocument(explicitDoc))!.findAppHostEntryPointLine!(explicitDoc), 3);
     });
 
+    test('does not let a nested class main override the enclosing AppHost entry point', async () => {
+        const document = javaDoc([
+            'class AppHost {',
+            '    void main() {',
+            '        var builder = DistributedApplication.CreateBuilder();',
+            '        builder.build().run();',
+            '    }',
+            '',
+            '    static class Helper {',
+            '        public static void main(String[] args) {',
+            '        }',
+            '    }',
+            '}',
+        ].join('\n'));
+        const parser = await getParserForDocument(document);
+
+        assert.strictEqual(await parser!.findAppHostEntryPointLine!(document), 1);
+    });
+
+    test('skips main-like methods that are not Java entry points', async () => {
+        const cases = [
+            {
+                name: 'unsupported parameter before an instance main',
+                content: [
+                    'void main(int value) {',
+                    '}',
+                    '',
+                    'void main() throws Exception {',
+                    '    var builder = DistributedApplication.CreateBuilder();',
+                    '    builder.build().run();',
+                    '}',
+                ].join('\n'),
+                expectedLine: 3,
+            },
+            {
+                name: 'non-void method before a static main',
+                content: [
+                    'class AppHost {',
+                    '    int main() { return 0; }',
+                    '',
+                    '    public static void main(String[] args) throws Exception {',
+                    '        var builder = DistributedApplication.CreateBuilder(args);',
+                    '        builder.build().run();',
+                    '    }',
+                    '}',
+                ].join('\n'),
+                expectedLine: 3,
+            },
+            {
+                name: 'private method before a static main',
+                content: [
+                    'class AppHost {',
+                    '    private void main() {',
+                    '    }',
+                    '',
+                    '    public static void main(String[] args) throws Exception {',
+                    '        var builder = DistributedApplication.CreateBuilder(args);',
+                    '        builder.build().run();',
+                    '    }',
+                    '}',
+                ].join('\n'),
+                expectedLine: 4,
+            },
+        ];
+
+        for (const testCase of cases) {
+            const document = javaDoc(testCase.content);
+            const parser = await getParserForDocument(document);
+
+            assert.strictEqual(
+                await parser!.findAppHostEntryPointLine!(document),
+                testCase.expectedLine,
+                testCase.name);
+        }
+    });
+
     // The tests above parse hand-written approximations of the playground AppHosts. Those stay
     // readable, but they drift: they do not exercise array initializers, `new Options().path(...)`
     // arguments, or comments interleaved through a builder chain. When the real files stop being

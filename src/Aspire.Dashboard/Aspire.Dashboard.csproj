@@ -14,7 +14,7 @@
 
     <!-- This Application is a framework-dependent application that targets .NET 8.0. This means that the
     application is not able to run if the place where it is deployed does not have the .NET 8.0 runtime installed.
-    Given we want to be able to support people running on environments where they only have the 9.0 SDK/runtime installed,
+    Given we want to be able to support people running on environments where they only have a newer SDK/runtime installed,
     we allow roll-forward to the next major in order to support these customers.-->
     <RollForward>Major</RollForward>
 
@@ -62,7 +62,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Microsoft.Data.Sqlite.Core" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
-    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" />
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components">
+      <!-- Daily Fluent UI previews are signed with an untrusted, untimestamped certificate. -->
+      <NoWarn Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'">NU3018;NU3027;NU3042</NoWarn>
+    </PackageReference>
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />

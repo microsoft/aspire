@@ -1373,13 +1373,15 @@ internal sealed class BicepProvisioner(
     {
         static void ValidateUnknownPrincipalParameter(ProvisioningContext context)
         {
-            // Well-known principal parameters can only be populated in run mode.
-            // In publish mode, principal parameters must be provided by the creator of the bicep resource.
+            // Application principal parameters can only be populated in run mode. Published artifacts
+            // bind them from their outer template because the application identity can differ from the
+            // credential applying the deployment.
 
             // We assume that the BicepProvisioner only runs in publish mode during `aspire deploy` operations
             // and not from azd. azd fills in principal parameters during its deployment process with a managed
-            // identity it creates. But the BicepProvisioner only fills them in with the current principal,
-            // which is not correct in publish mode.
+            // identity it creates. The deployment-principal parameters are the exception: direct `aspire deploy`
+            // intentionally binds them from the current credential because that identity performs subsequent
+            // data-plane operations.
             if (context.ExecutionContext.IsPublishMode)
             {
                 throw new InvalidOperationException("An Azure principal parameter was not supplied a value. Ensure you are using an environment that supports role assignments, for example AddAzureContainerAppEnvironment.");
@@ -1393,6 +1395,17 @@ internal sealed class BicepProvisioner(
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = context.Principal.Id;
         }
 
+        var hasUserPrincipalId = resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId);
+        var populatedUserPrincipalId = false;
+        if (hasUserPrincipalId && userPrincipalId is null)
+        {
+            // Published artifacts bind this deployment-principal parameter from the outer
+            // main.bicep template. Direct `aspire deploy` has no outer template, so use the
+            // authenticated principal that performs the data-plane deployment.
+            resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = context.Principal.Id;
+            populatedUserPrincipalId = true;
+        }
+
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalName, out var principalName) && principalName is null)
         {
             ValidateUnknownPrincipalParameter(context);
@@ -1402,7 +1415,17 @@ internal sealed class BicepProvisioner(
 
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var principalType) && principalType is null)
         {
-            ValidateUnknownPrincipalParameter(context);
+            if (hasUserPrincipalId && !populatedUserPrincipalId)
+            {
+                throw new InvalidOperationException(
+                    $"The Azure parameter '{AzureBicepResource.KnownParameters.PrincipalType}' must be supplied when " +
+                    $"'{AzureBicepResource.KnownParameters.UserPrincipalId}' is provided explicitly.");
+            }
+
+            if (!hasUserPrincipalId)
+            {
+                ValidateUnknownPrincipalParameter(context);
+            }
 
             // Use the principal type detected from the credential's access token (the `idtyp`
             // claim) instead of hardcoding "User". A hardcoded "User" caused the role-assignment

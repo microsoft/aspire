@@ -4817,17 +4817,58 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(callback);
 
+        return builder.WithLaunchToolArgs(
+            ctx =>
+            {
+                callback(ctx);
+                return Task.CompletedTask;
+            },
+            ownedByLaunchConfigurationType,
+            showInCommandLine);
+    }
+
+    /// <summary>
+    /// Asynchronously declares the resource's launch tool arguments.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="callback">
+    /// Callback that produces the launch tool arguments. It is invoked with an empty
+    /// <see cref="CommandLineArgsCallbackContext.Args"/> list.
+    /// </param>
+    /// <param name="ownedByLaunchConfigurationType">
+    /// The debug launch configuration type that performs this tool invocation, or <see langword="null"/> when
+    /// the prefix is always passed to the launched program.
+    /// </param>
+    /// <param name="showInCommandLine">Whether these arguments appear in the dashboard command line.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="builder"/> or <paramref name="callback"/> is null.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="ownedByLaunchConfigurationType"/> is empty.
+    /// </exception>
+    /// <remarks>
+    /// The ordering, IDE ownership, visibility, and replacement behavior is the same as the synchronous overload.
+    /// </remarks>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Generic launch tool argument support is not part of the ATS surface.")]
+    public static IResourceBuilder<T> WithLaunchToolArgs<T>(
+        this IResourceBuilder<T> builder,
+        Func<CommandLineArgsCallbackContext, Task> callback,
+        string? ownedByLaunchConfigurationType = null,
+        bool showInCommandLine = true)
+        where T : IResourceWithArgs
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
         if (ownedByLaunchConfigurationType is not null)
         {
             ArgumentException.ThrowIfNullOrEmpty(ownedByLaunchConfigurationType);
         }
 
         return builder.WithAnnotation(new LaunchToolArgsCallbackAnnotation(
-            ctx =>
-            {
-                callback(ctx);
-                return Task.CompletedTask;
-            },
+            callback,
             ownedByLaunchConfigurationType,
             showInCommandLine));
     }

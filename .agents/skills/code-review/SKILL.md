@@ -116,6 +116,28 @@ Use the impact analysis to drive coverage review. A PR can have many tests and s
 
 When the impact analysis is useful to explain a test finding, present it concisely in the finding: identify the impacted code path, the regression risk, and the missing test shape. For example: "This changes `DcpExecutor.PrepareServices()` port allocation timing, but there is no regression test showing a dependent resource can resolve the endpoint before workload creation."
 
+### Conditional Test Selection Impact
+
+Apply the repository-wide Conditional Test Selection rules in `AGENTS.md`.
+Trace new test projects, CI jobs, workflows, scripts, and loose inputs to their
+actual consumers before deciding whether the map needs to change.
+
+Flag concrete selection gaps:
+
+- Treat files evaluated by the `Aspire.slnx` ProjectGraph as Layer 1-owned and
+  projects outside that graph as Layer 2 blind spots.
+- Route Layer 2 inputs to their precise consumer, to `ALL` for broad impact, or
+  explicitly outside the selector. Do not allow `ignore` or prefilter entries
+  to hide a real PR-CI consumer.
+- Require `run_*` wiring for gated `job:` targets, advisory classification for
+  targets outside the regular PR matrix or job gates, and routing from reusable
+  workflow implementations to the jobs they implement.
+
+Selector behavior changes must keep the action, workflow gates, tool, map,
+tests, and canonical documentation synchronized. Require real-map tests for
+curated routing changes and focused synthetic-map tests for engine or CLI
+behavior. See `docs/ci/test-trigger-map.md` for the complete contract.
+
 ### Test Coverage Review
 
 Every review must evaluate whether the PR has appropriate tests for the type of behavior being changed. Do not require tests for purely mechanical refactors, comments, or documentation-only changes, but do flag missing or insufficient coverage when production behavior changes and there is no explicit, convincing justification in the PR. Regression coverage is especially important: bug fixes and behavior changes should include tests that would have failed before the fix, not just broad happy-path coverage or regenerated snapshots.
@@ -177,6 +199,19 @@ When code is moved from one file to another (e.g., extracting a class), treat th
 - **Flag pre-existing issues in moved code.** If buggy or unsafe code is copy-pasted into a new file, flag it. The refactoring is an opportunity to fix it. Mark these as "Pre-existing issue, good opportunity to fix during this refactoring."
 - **Diff old vs. new behavior.** When a type/class is deleted and replaced, explicitly compare the old and new implementations. Look for: removed overrides, changed exception behavior, relaxed validation, lost invariant checks.
 - **Check callers of removed types.** If `OldClass` is removed and replaced by `NewClass<T>`, verify that all call sites that depended on `OldClass`-specific behavior still work correctly.
+
+### Aspire-domain escalation
+
+Complete the generic review before considering `reviewing-aspire-architecture`. Never invoke that specialist first merely because the PR touches hosting core, Azure integrations, dashboard, CLI, components, resource types, the app model, or deployment behavior.
+
+After the generic pass, use a focused architectural escalation when all of these are true:
+
+1. The diff provides concrete evidence of a potential correctness issue.
+2. Resolving it depends on a named Aspire-specific contract or lifecycle rule outside this skill's review rules.
+3. The generic review cannot determine whether the behavior is correct from the diff, surrounding code, tests, and existing comments.
+4. The escalation can be expressed as one focused question with the relevant files, evidence, impact if incorrect, and reason specialist knowledge is required.
+
+Do not escalate a concern that is already a concrete generic finding, merely high-risk code, a request for a second opinion, or a broad desire for more confidence. Preserve the completed generic findings, run at most one focused escalation for the change-set revision, and merge only net-new high-confidence specialist findings. Do not rerun the generic review after the specialist returns.
 
 ## Step 5: Present Findings to the User
 

@@ -30,7 +30,7 @@ func main() {
 
 	postgres.WithInitFiles("./init")
 
-	postgres.WithHostPort(5432)
+	postgres.WithHostPort(aspire.Float64Ptr(5432))
 
 	if err = postgres.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))

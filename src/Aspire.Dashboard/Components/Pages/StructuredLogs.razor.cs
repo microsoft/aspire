@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
@@ -47,12 +48,9 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private string? _pendingFocusElementId;
     private AspirePageContentLayout? _contentLayout;
     private string _filter = string.Empty;
-    private FluentDataGrid<LogSummary>? _dataGrid;
+    private AspireFluentDataGrid<LogSummary>? _dataGrid;
     private GridColumnManager _manager = null!;
     private IList<GridColumn> _gridColumns = null!;
-
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
 
     public string BasePath => DashboardUrls.StructuredLogsBasePath;
     public string SessionStorageKey => BrowserStorageKeys.StructuredLogsPageState;
@@ -94,7 +92,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
 
     [Inject]
-    public required IMessageService MessageService { get; init; }
+    public required DashboardMessageBarService MessageService { get; init; }
 
     [Inject]
     public required PauseManager PauseManager { get; init; }
@@ -150,7 +148,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             else if (!logs.IsFull && TelemetryRepository.MaxLogLimitMessage is { } message)
             {
                 // Telemetry could have been cleared from the dashboard. Automatically remove full message on data update.
-                message.Close();
+                await message.CloseAsync();
             }
         }
 
@@ -170,8 +168,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlsStringsLoc);
 
         _gridColumns = [
             new GridColumn(Name: ResourceColumn, DesktopWidth: "2fr", MobileWidth: "1fr"),
@@ -271,10 +267,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         _resourceChanged = true;
 
-        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
-        {
-            await ClearSelectedLogEntryAsync();
-        }
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
 
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
@@ -352,7 +345,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private async Task HandleFilterDialog(DialogResult result)
     {
-        if (result.Data is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
+        if (result.Value is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
         {
             if (filterResult.Delete)
             {
@@ -372,10 +365,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             }
         }
 
-        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
-        {
-            await ClearSelectedLogEntryAsync();
-        }
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
 
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
     }
@@ -385,7 +375,25 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         ViewModel.FilterText = _filter;
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
 
-        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
+    }
+
+    internal async Task ClearSelectedLogEntryIfExcludedAsync(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
+    {
+        if (PageViewModel.SelectedLogEntry is null)
+        {
+            return;
+        }
+
+        // An older filter query could finish after a newer query and clear the selection using stale filters.
+        // The query is constrained to one log and filter changes are user-driven, so this is unlikely and not
+        // worth the additional state and coordination required to guard against it.
+        var isExcluded = await PageViewModel.IsSelectedLogEntryExcludedByFiltersAsync(
+            TelemetryRepository,
+            textFilter,
+            fieldFilters,
+            _cts.Token);
+        if (isExcluded)
         {
             await ClearSelectedLogEntryAsync();
         }
@@ -584,12 +592,13 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         public StructureLogsDetailsViewModel? SelectedLogEntry { get; set; }
 
         /// <summary>
-        /// Returns true when the selected log entry is excluded by any of the active filters
-        /// (log level, text filter, or field filters).
-        /// Delegates to <see cref="StructuredLogsViewModel.BuildFilters"/> to ensure consistent
-        /// behavior with the grid query.
+        /// Returns <see langword="true"/> when the selected log entry is excluded by the active filters.
         /// </summary>
-        public bool IsSelectedLogEntryExcludedByFilters(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
+        public async Task<bool> IsSelectedLogEntryExcludedByFiltersAsync(
+            ITelemetryRepository telemetryRepository,
+            string textFilter,
+            IReadOnlyList<FieldTelemetryFilter> fieldFilters,
+            CancellationToken cancellationToken)
         {
             if (SelectedLogEntry is null)
             {
@@ -598,16 +607,15 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
             var entry = SelectedLogEntry.LogEntry;
             var filters = StructuredLogsViewModel.BuildFilters(fieldFilters, textFilter, SelectedLogLevel.Id);
-
-            foreach (var filter in filters.GetEnabledFilters())
+            var matchingLogs = await telemetryRepository.GetLogsAsync(new GetLogsContext
             {
-                if (!filter.Apply([entry]).Any())
-                {
-                    return true;
-                }
-            }
-
-            return false;
+                ResourceKeys = [],
+                StartIndex = 0,
+                Count = 1,
+                Filters = filters,
+                LogIds = [entry.InternalId]
+            }, cancellationToken).ConfigureAwait(false);
+            return matchingLogs.Items.Count == 0;
         }
     }
 

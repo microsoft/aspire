@@ -1533,6 +1533,9 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         public Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, CancellationToken cancellationToken = default)
             => Task.FromResult(new DeploymentStateSection(sectionName, [], 0));
 
+        public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+            => AcquireSectionAsync(sectionName, cancellationToken);
+
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => Task.CompletedTask;

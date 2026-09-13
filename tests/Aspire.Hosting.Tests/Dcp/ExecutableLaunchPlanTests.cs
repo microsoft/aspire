@@ -95,6 +95,37 @@ public class ExecutableLaunchPlanTests
     }
 
     [Fact]
+    public async Task ExternalBuildLaunchConfigurationWithoutProjectMetadataReportsActualType()
+    {
+        var resource = new ExecutableResource("app", "tool", "/tmp");
+        resource.Annotations.Add(SupportsDebuggingAnnotation.Create(
+            resource.Name,
+            KnownLaunchConfigurationTypes.ProjectWithExternalBuild,
+            static _ => Task.FromResult(new ProjectLaunchConfiguration { ProjectPath = "/tmp/app.csproj" })));
+        var configurationValues =
+            new Dictionary<string, string?>
+            {
+                [DcpExecutor.DebugSessionPortVar] = "12345",
+                [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+                {
+                    ProtocolsSupported = ["test"],
+                    SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.ProjectWithExternalBuild]
+                })
+            };
+
+        var exception = await Assert.ThrowsAsync<FailedToApplyEnvironmentException>(
+            () => ResolveLaunchPlanAsync(
+                resource,
+                CreateExecutionConfiguration([]),
+                configurationValues));
+
+        Assert.Equal(
+            $"Resource 'app' declares \"{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}\" debug launch support (WithDebugSupport) but has no project metadata. " +
+            $"The \"{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}\" launch configuration type is reserved for .NET project resources; use a resource that carries IProjectMetadata or a different launch configuration type.",
+            exception.Message);
+    }
+
+    [Fact]
     public async Task LegacyProjectRecipeProducesCompleteProcessInvocation()
     {
         var projectPath = Path.Combine("tmp", "project.csproj");

@@ -6,7 +6,6 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -102,7 +101,7 @@ internal sealed partial class StopCommand
             return StopResponse("stop_failed", CliExitCodes.FailedToDotnetRunAppHost);
         }
 
-        AppHostHelper.TryDeleteSocketFile(connection.SocketPath, _logger);
+        connection.Socket.TryDelete();
         return StopResponse("stopped", CliExitCodes.Success);
     }
 

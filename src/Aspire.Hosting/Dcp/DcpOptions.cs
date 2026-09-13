@@ -74,12 +74,14 @@ internal sealed class DcpOptions
     public bool RandomizePorts { get; set; }
 
     /// <summary>
-    /// The first port in the range used to allocate unspecified public ports for proxyless endpoints.
+    /// The first port in the range used to allocate unspecified public ports for proxyless endpoints
+    /// and target ports for proxied executable endpoints.
     /// </summary>
     public int ProxylessEndpointPortRangeStart { get; set; } = 10000;
 
     /// <summary>
-    /// The last port in the range used to allocate unspecified public ports for proxyless endpoints.
+    /// The last port in the range used to allocate unspecified public ports for proxyless endpoints
+    /// and target ports for proxied executable endpoints.
     /// </summary>
     /// <remarks>
     /// The default leaves room for Aspire to persist stable allocated ports in the future while staying

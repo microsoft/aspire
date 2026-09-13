@@ -1689,7 +1689,7 @@ internal sealed partial class TypeScriptApiProjector
             AtsTypeCategory.Handle => GetWrapperOrHandleName(typeRef.TypeId),
             AtsTypeCategory.Dto => GetDtoInterfaceName(typeRef.TypeId),
             AtsTypeCategory.Callback => "Function",  // Callbacks handled separately with full signature
-            AtsTypeCategory.Array => $"{MapTypeRefToTypeScript(typeRef.ElementType)}[]",
+            AtsTypeCategory.Array => FormatArrayType(typeRef.ElementType, MapTypeRefToTypeScript(typeRef.ElementType)),
             AtsTypeCategory.List => $"AspireList<{MapTypeRefToTypeScript(typeRef.ElementType)}>",
             AtsTypeCategory.Dict => typeRef.IsReadOnly
                 ? $"Record<{MapTypeRefToTypeScript(typeRef.KeyType)}, {MapTypeRefToTypeScript(typeRef.ValueType)}>"
@@ -1722,11 +1722,19 @@ internal sealed partial class TypeScriptApiProjector
 
         return typeRef.Category switch
         {
-            AtsTypeCategory.Array or AtsTypeCategory.List => $"{MapDtoPropertyTypeToTypeScript(typeRef.ElementType)}[]",
+            AtsTypeCategory.Array or AtsTypeCategory.List => FormatArrayType(typeRef.ElementType, MapDtoPropertyTypeToTypeScript(typeRef.ElementType)),
             AtsTypeCategory.Dict => $"Record<{MapDtoPropertyTypeToTypeScript(typeRef.KeyType)}, {MapDtoPropertyTypeToTypeScript(typeRef.ValueType)}>",
             AtsTypeCategory.Union => MapDtoUnionTypeToTypeScript(typeRef),
             _ => MapTypeRefToTypeScript(typeRef)
         };
+    }
+
+    private static string FormatArrayType(AtsTypeRef? elementType, string mappedElementType)
+    {
+        var requiresGrouping = elementType?.Category == AtsTypeCategory.Union ||
+            elementType is { IsNullable: true, Category: AtsTypeCategory.Primitive or AtsTypeCategory.Enum };
+
+        return requiresGrouping ? $"({mappedElementType})[]" : $"{mappedElementType}[]";
     }
 
     internal string MapDtoUnionTypeToTypeScript(AtsTypeRef typeRef)
@@ -2056,6 +2064,22 @@ internal sealed partial class TypeScriptApiProjector
     }
 
     /// <summary>
+    /// Extracts the trailing segment of a capability ID, for example "withDataVolume" from
+    /// "Aspire.Hosting.Azure.Storage/withDataVolume".
+    /// </summary>
+    /// <remarks>
+    /// This only needs to be a better-than-nothing disambiguator, not a uniquely correct name. It is
+    /// one rung of a widening ladder that starts at the projected method name and ends at a
+    /// numerically suffixed name, so a collision here simply falls through to the next rung.
+    /// </remarks>
+    private static string GetCapabilityName(string capabilityId)
+    {
+        var slashIndex = capabilityId.LastIndexOf('/');
+
+        return slashIndex >= 0 ? capabilityId[(slashIndex + 1)..] : capabilityId;
+    }
+
+    /// <summary>
     /// Gets the options interface name for a specific capability, accounting for type conflicts.
     /// Falls back to the default name derived from the capability if no specific mapping exists.
     /// </summary>
@@ -2123,7 +2147,9 @@ internal sealed partial class TypeScriptApiProjector
     }
 
     /// <summary>
-    /// Registers an options interface to be generated later.
+    /// Registers an options interface to be generated later. The interface name is derived from the
+    /// projected method name; when capabilities share a method name but carry different option
+    /// shapes, a separate interface is derived from the capability ID instead.
     /// </summary>
     /// <param name="capabilityId">The capability the interface is being registered for.</param>
     /// <param name="methodName">The method name the interface is derived from.</param>
@@ -2145,6 +2171,17 @@ internal sealed partial class TypeScriptApiProjector
         // Check if an existing interface with this name is compatible
         if (_optionsInterfacesToGenerate.TryGetValue(baseInterfaceName, out var existingParams))
         {
+            var capabilityName = GetCapabilityName(capabilityId);
+            if (!string.Equals(capabilityName, methodName, StringComparison.Ordinal)
+                && !AreOptionsExactMatch(existingParams, optionalParams))
+            {
+                // Capabilities can share a projected method name while accepting different options.
+                // Reusing the method-name interface would let callers pass options that the selected
+                // capability implementation never reads, so fall back to the capability ID.
+                RegisterDisambiguatedOptionsInterface(capabilityId, capabilityName, optionalParams, owningAssemblyName);
+                return;
+            }
+
             if (AreOptionsCompatible(existingParams, optionalParams))
             {
                 // Compatible - merge any new parameters and share the interface
@@ -2152,29 +2189,42 @@ internal sealed partial class TypeScriptApiProjector
                 return;
             }
 
-            // Incompatible - find or create a suffixed interface.
-            for (var suffix = 1; ; suffix++)
-            {
-                var suffixedName = GetOptionsInterfaceName($"{methodName}{suffix}");
-                if (!_optionsInterfacesToGenerate.TryGetValue(suffixedName, out var suffixedParams))
-                {
-                    // Create a new interface with this suffix
-                    AssignOptionsInterface(capabilityId, suffixedName, optionalParams, owningAssemblyName);
-                    return;
-                }
-
-                if (AreOptionsCompatible(suffixedParams, optionalParams))
-                {
-                    // Compatible with this suffixed interface - share it
-                    AssignOptionsInterface(capabilityId, suffixedName, optionalParams, owningAssemblyName);
-                    return;
-                }
-            }
+            RegisterDisambiguatedOptionsInterface(capabilityId, capabilityName, optionalParams, owningAssemblyName);
         }
         else
         {
             // First registration - create the interface
             AssignOptionsInterface(capabilityId, baseInterfaceName, optionalParams, owningAssemblyName);
+        }
+    }
+
+    /// <summary>
+    /// Registers an options interface named after the capability rather than the projected method
+    /// name, widening to a numeric suffix only when the capability name itself collides.
+    /// </summary>
+    private void RegisterDisambiguatedOptionsInterface(
+        string capabilityId,
+        string capabilityName,
+        List<AtsParameterInfo> optionalParams,
+        string owningAssemblyName)
+    {
+        var capabilityInterfaceName = GetOptionsInterfaceName(capabilityName);
+        if (!_optionsInterfacesToGenerate.TryGetValue(capabilityInterfaceName, out var capabilityParameters)
+            || AreOptionsCompatible(capabilityParameters, optionalParams))
+        {
+            AssignOptionsInterface(capabilityId, capabilityInterfaceName, optionalParams, owningAssemblyName);
+            return;
+        }
+
+        for (var suffix = 1; ; suffix++)
+        {
+            var suffixedName = GetOptionsInterfaceName($"{capabilityName}{suffix}");
+            if (!_optionsInterfacesToGenerate.TryGetValue(suffixedName, out var suffixedParams)
+                || AreOptionsCompatible(suffixedParams, optionalParams))
+            {
+                AssignOptionsInterface(capabilityId, suffixedName, optionalParams, owningAssemblyName);
+                return;
+            }
         }
     }
 
@@ -2237,6 +2287,29 @@ internal sealed partial class TypeScriptApiProjector
                 return false;
             }
         }
+        return true;
+    }
+
+    /// <summary>
+    /// Checks whether two option sets are positionally identical. Used to tell a genuine overload of
+    /// the same shape apart from two distinct capabilities that merely project to the same name.
+    /// </summary>
+    private static bool AreOptionsExactMatch(List<AtsParameterInfo> existing, List<AtsParameterInfo> candidate)
+    {
+        if (existing.Count != candidate.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < existing.Count; i++)
+        {
+            if (!string.Equals(existing[i].Name, candidate[i].Name, StringComparison.Ordinal)
+                || !AreParameterTypesEqual(existing[i], candidate[i]))
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 

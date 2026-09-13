@@ -1,10 +1,10 @@
 .dimension-tag {
-    border-radius: calc(var(--control-corner-radius)* 1px);
-    padding: calc(((var(--design-unit)* 0.5) - var(--stroke-width))* 1px) calc((var(--design-unit) - var(--stroke-width))* 1px);
-    border: calc(var(--stroke-width)* 1px) solid transparent;
-    background: var(--neutral-fill-secondary-rest);
-    font-size: var(--type-ramp-minus-1-font-size);
-    line-height: var(--type-ramp-minus-1-line-height);
+    border-radius: var(--borderRadiusLarge);
+    padding: 1px 3px;
+    border: var(--strokeWidthThin) solid transparent;
+    background: var(--colorNeutralBackground1Selected);
+    font-size: var(--fontSizeBase200);
+    line-height: var(--lineHeightBase200);
     color: inherit;
     font-family: inherit;
 }
@@ -20,19 +20,19 @@
 }
 
 .filter-value-tag:hover {
-    border-color: var(--accent-foreground-hover);
+    border-color: var(--colorBrandForegroundLinkHover);
 }
 
 .included-in-filters {
-    color: var(--foreground-on-accent-rest);
-    background: var(--accent-fill-rest);
+    color: var(--colorNeutralForegroundOnBrand);
+    background: var(--colorBrandBackground);
 }
 
 ::deep .fluent-overflow-item:has(.included-in-filters) {
     /* change ellipsis color */
-    color: var(--foreground-on-accent-rest);
+    color: var(--colorNeutralForegroundOnBrand);
 }
 
 .included-in-filters:hover {
-    border-color: var(--accent-foreground-hover);
+    border-color: var(--colorBrandForegroundLinkHover);
 }

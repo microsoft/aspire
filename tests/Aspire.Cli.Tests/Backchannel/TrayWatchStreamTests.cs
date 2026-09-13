@@ -201,13 +201,13 @@ public class TrayWatchStreamTests
             for (var i = 0; i <= TrayCliProtocol.MaximumAppHosts; i++)
             {
                 var connection = Connection("/project/a.cs", i + 1);
-                monitor.AddConnection(connection.Hash, connection.SocketPath, connection);
+                monitor.AddConnection(connection.SocketPath, connection);
             }
         }
         else
         {
             var connection = Connection("/" + new string('x', TrayCliProtocol.MaximumMessageLength), 1);
-            monitor.AddConnection(connection.Hash, connection.SocketPath, connection);
+            monitor.AddConnection(connection.SocketPath, connection);
         }
         var messages = new List<TrayWatchMessage>();
 
@@ -334,7 +334,6 @@ public class TrayWatchStreamTests
 
     private static TestAppHostAuxiliaryBackchannel Connection(string path, int pid) => new()
     {
-        Hash = $"hash-{pid}",
         SocketPath = $"socket-{pid}",
         AppHostInfo = new AppHostInformation { AppHostPath = path, ProcessId = pid }
     };

@@ -73,6 +73,14 @@ aspire <command> [options]
 
 ## Examples
 
+To initialize an empty C# AppHost without discovering incidental `.sln` or `.slnx` files, run this from the repository root:
+
+```bash
+aspire init --file-based --language csharp
+```
+
+This creates `apphost.cs` and its supporting configuration in the current directory instead of creating a solution-based AppHost project. `--file-based` requires C#: it reports an error before scaffolding if another language is selected explicitly, configured, or chosen at the language prompt. Omit `--file-based` (or pass `--file-based false`) to use normal non-C# scaffolding. It does not overwrite existing AppHosts or suppress agent setup.
+
 ```bash
 # Create a new Aspire application
 aspire new

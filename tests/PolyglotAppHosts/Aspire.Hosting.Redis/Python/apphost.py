@@ -1,7 +1,11 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import RedisModules, create_builder
+from aspire_app import RedisCommanderResource, RedisModules, create_builder
+
+
+def configure_redis_commander(container: RedisCommanderResource) -> None:
+    container.with_host_port(port=8082)
 
 
 with create_builder() as builder:
@@ -24,7 +28,7 @@ with create_builder() as builder:
     new_password = builder.add_parameter("parameter")
     cache2.with_password(new_password)
     # withRedisCommander — with configureContainer callback exercising withHostPort
-    cache.with_redis_commander()
+    cache.with_redis_commander(configure_container=configure_redis_commander)
     # withRedisInsight — with configureContainer callback exercising withHostPort, withDataVolume, withDataBindMount
     cache.with_redis_insight()
     # ---- Property access on RedisResource (ExposeProperties = true) ----

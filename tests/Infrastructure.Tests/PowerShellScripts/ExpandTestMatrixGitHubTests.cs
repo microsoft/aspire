@@ -575,20 +575,17 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         // Read split results from GITHUB_OUTPUT file
         var splitOutputs = ParseGitHubOutputFile(githubOutputFile);
         var noNugets = splitOutputs["tests_matrix_no_nugets"];
-        var noNugetsOverflow = splitOutputs["tests_matrix_no_nugets_overflow"];
         var nugetsLinux = splitOutputs["tests_matrix_requires_nugets_linux"];
         var nugetsWindows = splitOutputs["tests_matrix_requires_nugets_windows"];
         var nugetsMacos = splitOutputs["tests_matrix_requires_nugets_macos"];
         var cliArchiveMatrix = splitOutputs["tests_matrix_requires_cli_archive"];
 
-        var allNoNugets = noNugets.Include.Concat(noNugetsOverflow.Include).ToArray();
-
         // Regular project: 1 project × 3 OSes = 3
-        var regularEntries = allNoNugets.Where(e => e.ProjectName == "RegularProject").ToArray();
+        var regularEntries = noNugets.Include.Where(e => e.ProjectName == "RegularProject").ToArray();
         Assert.Equal(3, regularEntries.Length);
 
         // Split project: 2 classes × 3 OSes = 6
-        var splitEntries = allNoNugets.Where(e => e.ProjectName == "SplitMultiOS").ToArray();
+        var splitEntries = noNugets.Include.Where(e => e.ProjectName == "SplitMultiOS").ToArray();
         Assert.Equal(6, splitEntries.Length);
         Assert.Equal(2, splitEntries.Count(e => e.RunsOn == "ubuntu-latest"));
         Assert.Equal(2, splitEntries.Count(e => e.RunsOn == "windows-latest"));
@@ -607,7 +604,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         Assert.True(cliE2eEntries[0].Properties.GetValueOrDefault("requiresCliArchive"));
 
         // Total no-nugets: 3 + 6 = 9, Total nugets: 1 (linux only), Total cli-archive: 1
-        Assert.Equal(9, allNoNugets.Length);
+        Assert.Equal(9, noNugets.Include.Length);
         Assert.Single(nugetsLinux.Include);
         Assert.Empty(nugetsWindows.Include);
         Assert.Empty(nugetsMacos.Include);

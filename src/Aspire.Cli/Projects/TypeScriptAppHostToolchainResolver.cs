@@ -15,7 +15,8 @@ internal enum TypeScriptAppHostToolchain
     Npm,
     Bun,
     Yarn,
-    Pnpm
+    Pnpm,
+    Deno
 }
 
 internal static class TypeScriptAppHostToolchainResolver
@@ -28,6 +29,9 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string YarnConfigFileName = ".yarnrc.yml";
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
+    private const string DenoLockFileName = "deno.lock";
+    private const string DenoJsonFileName = "deno.json";
+    private const string DenoJsoncFileName = "deno.jsonc";
 
     public static bool IsTypeScriptLanguage(LanguageInfo? language)
     {
@@ -87,6 +91,21 @@ internal static class TypeScriptAppHostToolchainResolver
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnConfigFileName, candidateDirectory);
             }
 
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, DenoLockFileName)))
+            {
+                return CreateLockFileResolution(TypeScriptAppHostToolchain.Deno, DenoLockFileName, candidateDirectory);
+            }
+
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, DenoJsonFileName)))
+            {
+                return CreateLockFileResolution(TypeScriptAppHostToolchain.Deno, DenoJsonFileName, candidateDirectory);
+            }
+
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, DenoJsoncFileName)))
+            {
+                return CreateLockFileResolution(TypeScriptAppHostToolchain.Deno, DenoJsoncFileName, candidateDirectory);
+            }
+
             if (File.Exists(Path.Combine(candidateDirectory.FullName, PackageLockFileName)))
             {
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Npm, PackageLockFileName, candidateDirectory);
@@ -113,6 +132,7 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Bun => "bun",
             TypeScriptAppHostToolchain.Yarn => "yarn",
             TypeScriptAppHostToolchain.Pnpm => "pnpm",
+            TypeScriptAppHostToolchain.Deno => "deno",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
@@ -130,6 +150,7 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Bun => "Bun",
             TypeScriptAppHostToolchain.Yarn => "Yarn",
             TypeScriptAppHostToolchain.Pnpm => "pnpm",
+            TypeScriptAppHostToolchain.Deno => "Deno",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
@@ -155,8 +176,15 @@ internal static class TypeScriptAppHostToolchainResolver
             Execute = CreateExecuteCommand(toolchain, tsConfigFileName),
             WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName),
             PublishExecute = baseRuntimeSpec.PublishExecute,
-            ExtensionLaunchCapability = baseRuntimeSpec.ExtensionLaunchCapability,
-            CertificateBundleEnvironmentVariable = baseRuntimeSpec.CertificateBundleEnvironmentVariable,
+            ExtensionLaunchCapability = toolchain == TypeScriptAppHostToolchain.Deno
+                ? KnownCapabilities.Deno
+                : baseRuntimeSpec.ExtensionLaunchCapability,
+            // DENO_CERT is supported across the Deno 2 range. NODE_EXTRA_CA_CERTS, inherited from
+            // the Node runtime spec, is only available in Deno 2.8 and later.
+            // https://docs.deno.com/runtime/reference/env_variables/#special-environment-variables
+            CertificateBundleEnvironmentVariable = toolchain == TypeScriptAppHostToolchain.Deno
+                ? "DENO_CERT"
+                : baseRuntimeSpec.CertificateBundleEnvironmentVariable,
             MigrationFiles = baseRuntimeSpec.MigrationFiles
         };
     }
@@ -199,6 +227,14 @@ internal static class TypeScriptAppHostToolchainResolver
                     Command = "pnpm",
                     Args = ["exec", "tsc", "--noEmit", "-p", tsConfigFileName]
                 },
+                // Deno type-checks with its own compiler and config (deno.json), so there is no
+                // tsc/tsconfig step. Use the unstable spelling because the shorter alias was not
+                // added until Deno 2.4: https://github.com/denoland/deno/releases/tag/v2.4.0.
+                TypeScriptAppHostToolchain.Deno => new CommandSpec
+                {
+                    Command = "deno",
+                    Args = ["check", "--unstable-sloppy-imports", "{appHostFile}"]
+                },
                 _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
             }
         ];
@@ -222,6 +258,15 @@ internal static class TypeScriptAppHostToolchainResolver
             {
                 Command = "pnpm",
                 Args = ["exec", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"]
+            },
+            // Deno runs the AppHost as its own runtime (no tsx transpiler). Unlike Node/Bun, Deno is
+            // not permissive for package.json projects: APIs like Deno.env/Deno.serve throw NotCapable
+            // without flags (and error non-interactively rather than prompting). The AppHost needs
+            // full host access, so `-A` grants all permissions, mirroring how Node/Bun run unrestricted.
+            TypeScriptAppHostToolchain.Deno => new CommandSpec
+            {
+                Command = "deno",
+                Args = ["run", "-A", "--unstable-sloppy-imports", "{appHostFile}"]
             },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
@@ -276,6 +321,14 @@ internal static class TypeScriptAppHostToolchainResolver
                     "--exec", $"pnpm exec tsc --noEmit -p {tsConfigFileName} && pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
+            // Deno has a native file watcher, so nodemon is unnecessary. `--check` makes each restart
+            // type-check before running, matching the nodemon "tsc --noEmit && run" behavior other
+            // toolchains emulate. `-A` grants full permissions as on the non-watch execute command.
+            TypeScriptAppHostToolchain.Deno => new CommandSpec
+            {
+                Command = "deno",
+                Args = ["run", "-A", "--unstable-sloppy-imports", "--check", "--watch", "{appHostFile}"]
+            },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
@@ -323,6 +376,13 @@ internal static class TypeScriptAppHostToolchainResolver
                     throw CreateYarnClassicNotSupportedException($"'{packageManager}' in {packageJsonPath}");
                 }
 
+                if (toolchain == TypeScriptAppHostToolchain.Deno && IsDenoPreV2PackageManager(packageManager))
+                {
+                    throw new DenoVersionNotSupportedException(
+                        $"Deno versions earlier than 2 are not supported for TypeScript AppHosts because dependency restore requires Deno 2 or later. " +
+                        $"Upgrade '{packageManager}' in {packageJsonPath} to Deno 2 or later.");
+                }
+
                 reason = $"packageManager '{packageManager}' found in {packageJsonPath}";
                 return true;
             }
@@ -345,6 +405,7 @@ internal static class TypeScriptAppHostToolchainResolver
             "bun" => TypeScriptAppHostToolchain.Bun,
             "yarn" => TypeScriptAppHostToolchain.Yarn,
             "pnpm" => TypeScriptAppHostToolchain.Pnpm,
+            "deno" => TypeScriptAppHostToolchain.Deno,
             _ => null
         };
 
@@ -367,10 +428,25 @@ internal static class TypeScriptAppHostToolchainResolver
             (version.Length == 1 || !char.IsAsciiDigit(version[1]));
     }
 
+    private static bool IsDenoPreV2PackageManager(string packageManager)
+    {
+        const string denoPackageManagerPrefix = "deno@";
+
+        if (!packageManager.StartsWith(denoPackageManagerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var version = packageManager[denoPackageManagerPrefix.Length..];
+        var majorEnd = version.IndexOfAny('.', '-', '+');
+        var majorText = majorEnd >= 0 ? version[..majorEnd] : version;
+        return int.TryParse(majorText, out var majorVersion) && majorVersion < 2;
+    }
+
     private static YarnClassicNotSupportedException CreateYarnClassicNotSupportedException(string upgradeTarget)
     {
         return new YarnClassicNotSupportedException(
-            $"Yarn Classic is not supported for TypeScript AppHosts. Upgrade {upgradeTarget} to Yarn 4 or later, or use npm, pnpm, or Bun.");
+            $"Yarn Classic is not supported for TypeScript AppHosts. Upgrade {upgradeTarget} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.");
     }
 
     private static bool IsYarnClassicLockFile(string yarnLockFilePath)

@@ -301,7 +301,7 @@ public class ProfilingTelemetryTests
         {
         }
 
-        using (profilingTelemetry.StartDetachedWaitForBackchannel(childProcessId: 1, expectedHash: "hash", hasLegacyHash: false))
+        using (profilingTelemetry.StartDetachedWaitForBackchannel(childProcessId: 1))
         {
         }
 
@@ -335,7 +335,7 @@ public class ProfilingTelemetryTests
             }
         }
 
-        using (profilingTelemetry.StartDetachedWaitForBackchannel(childProcessId: 1, expectedHash: "hash", hasLegacyHash: false))
+        using (profilingTelemetry.StartDetachedWaitForBackchannel(childProcessId: 1))
         {
         }
 

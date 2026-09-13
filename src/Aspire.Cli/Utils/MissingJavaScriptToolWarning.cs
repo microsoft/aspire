@@ -15,7 +15,8 @@ internal static class MissingJavaScriptToolWarning
         "npx is not installed or not found in PATH.",
         "bun is not installed or not found in PATH.",
         "yarn is not installed or not found in PATH.",
-        "pnpm is not installed or not found in PATH."
+        "pnpm is not installed or not found in PATH.",
+        "deno is not installed or not found in PATH."
     ];
 
     public static bool IsMatch(IEnumerable<(OutputLineStream Stream, string Line)> lines)

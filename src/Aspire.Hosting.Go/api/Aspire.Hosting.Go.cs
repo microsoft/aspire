@@ -18,7 +18,16 @@ namespace Aspire.Hosting
             where T : Go.GoAppResource { throw null; }
 
         [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithDelveServer<T>(this ApplicationModel.IResourceBuilder<T> builder, Go.DelveServerOptions? options = null)
+            where T : Go.GoAppResource { throw null; }
+
+        [System.Obsolete("Use WithDelveServer() or WithDelveServer(DelveServerOptions) instead.")]
+        [AspireExportIgnore(Reason = "This obsolete compatibility overload is C#-only. Polyglot AppHosts use the DelveServerOptions overload.")]
         public static ApplicationModel.IResourceBuilder<T> WithDelveServer<T>(this ApplicationModel.IResourceBuilder<T> builder, int port = 2345)
+            where T : Go.GoAppResource { throw null; }
+
+        [AspireExportIgnore(Reason = "This C# convenience overload uses default options. Polyglot AppHosts use the DelveServerOptions overload.")]
+        public static ApplicationModel.IResourceBuilder<T> WithDelveServer<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : Go.GoAppResource { throw null; }
 
         [AspireExport]
@@ -45,6 +54,22 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Go
 {
+    [AspireDto]
+    public sealed partial class DelveServerOptions
+    {
+        public bool AcceptMultiClient { get { throw null; } init { } }
+
+        public bool ContinueOnStart { get { throw null; } init { } }
+
+        public bool Log { get { throw null; } init { } }
+
+        public string? LogOutput { get { throw null; } init { } }
+
+        public bool? OnlySameUser { get { throw null; } init { } }
+
+        public int Port { get { throw null; } init { } }
+    }
+
     [AspireExport(ExposeProperties = true)]
     public partial class GoAppResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
     {

@@ -2,7 +2,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-top: calc(var(--design-unit) * 10px);
+    margin-top: 40px;
 }
 
 .error-code {
@@ -12,6 +12,6 @@
 }
 
 .error-description {
-    font-size: var(--type-ramp-plus-6-font-size);
-    line-height: var(--type-ramp-plus-6-line-height);
+    font-size: var(--fontSizeHero900);
+    line-height: var(--lineHeightHero900);
 }
