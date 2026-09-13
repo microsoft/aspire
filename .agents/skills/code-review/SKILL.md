@@ -142,13 +142,16 @@ behavior. See `docs/ci/test-trigger-map.md` for the complete contract.
 
 Every review must evaluate whether the PR has appropriate tests for the type of behavior being changed. Do not require tests for purely mechanical refactors, comments, or documentation-only changes, but do flag missing or insufficient coverage when production behavior changes and there is no explicit, convincing justification in the PR. Regression coverage is especially important: bug fixes and behavior changes should include tests that would have failed before the fix, not just broad happy-path coverage or regenerated snapshots.
 
+Do not require tests for visual-only styling changes, including CSS selectors, colors, opacity, cursors, hover/focus/active appearance, or theme tokens. In particular, do not request Playwright assertions for computed styles or exact color values. Tests remain appropriate when styling changes also affect functional interaction, DOM or accessibility semantics, state transitions, or whether a user can complete a workflow.
+
 Use this mapping when deciding whether coverage is appropriate:
 
 | Change type | Expected coverage to look for |
 |-------------|-------------------------------|
 | Core logic, resource model, integrations, parsers, validation, error handling, public API behavior | Unit or integration tests in the matching `tests/*.*Tests/` project |
 | User-visible Aspire CLI commands, prompts, terminal workflows, install/update behavior, or command output contracts | CLI end-to-end coverage under `tests/Aspire.Cli.EndToEnd.Tests/`, in addition to focused unit tests where practical |
-| Dashboard UI, browser-only behavior, authentication flows, layout, or interactions that bUnit cannot realistically exercise | Dashboard Playwright coverage under `tests/Aspire.Dashboard.Tests/Integration/Playwright/`, in addition to `tests/Aspire.Dashboard.Tests/` or `tests/Aspire.Dashboard.Components.Tests/` coverage for logic/components |
+| Dashboard UI logic, browser-only functional behavior, authentication flows, or interactions that bUnit cannot realistically exercise | Dashboard Playwright coverage under `tests/Aspire.Dashboard.Tests/Integration/Playwright/`, in addition to `tests/Aspire.Dashboard.Tests/` or `tests/Aspire.Dashboard.Components.Tests/` coverage for logic/components |
+| Visual-only CSS, theme, color, opacity, cursor, or interaction-state appearance changes | No automated coverage required; do not request computed-style, exact-color, or screenshot assertions solely for these changes |
 | Deployment, publish, provisioning, generated Kubernetes/Helm/Bicep/Docker artifacts, Azure resource wiring, or deployed endpoint behavior | Deployment end-to-end coverage under `tests/Aspire.Deployment.EndToEnd.Tests/` when the behavior depends on actual deployment; generated artifact snapshot tests alone are not sufficient for deployment behavior changes |
 | VS Code extension commands, tree views, debugger flows, RPC/DCP/MCP integration, extension UI, or CLI integration visible through VS Code | VS Code extension E2E coverage under `extension/src/test-e2e/`, in addition to Mocha unit tests under `extension/src/test/` where practical |
 
@@ -188,6 +191,7 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 - Suggestions for refactoring unrelated code
 - Missing API file regeneration (this is expected during development)
 - Missing tests for documentation-only changes, comment-only changes, mechanical renames, or refactors that demonstrably preserve behavior
+- Missing tests for visual-only styling changes, including computed styles, exact colors, and hover/focus/active appearance, unless the change also affects functional interaction or accessibility semantics
 - Standard C# API review concerns such as naming, namespaces, framework design guidance, and general .NET/C# API breaking changes. These are handled by the dedicated `api-review` skill; this generic review only checks the stable ATS surface used for polyglot SDK generation.
 - ATS breaking changes when the affected package or project contains `<SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>`, or when the affected exported API has `[Experimental]` or ATS experimental metadata.
 - The initial placeholder entry in `extension/CHANGELOG.md` created by `extension-release.yml` for bot-authored `extension-release/*` PRs. It is expected, asynchronously replaced by `extension-changelog.md`, and merge-gated by `extension-changelog-finalized.yml`. Continue to flag unrelated placeholders or incomplete release notes outside this exact release flow.
