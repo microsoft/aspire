@@ -711,9 +711,9 @@ safe-outputs:
                     LABELS="ci-failure-cause,test-failure"
                   fi
 
-                  # Build the title via jq to avoid shell metacharacter issues
-                  # with agent-generated cause titles.
-                  ISSUE_TITLE=$(jq -r '"[CI Failure] " + .title' "$CAUSE_FILE")
+                  # Normalize agent-generated titles before passing them to GitHub.
+                  ISSUE_TITLE=$(node .github/workflows/analyze-ci-failure.js \
+                    issue-title "$ANALYSIS_FILE" "$CAUSE_FILE")
                   CREATED_ISSUE_URL=$(gh issue create --repo "$REPO" \
                     --title "$ISSUE_TITLE" \
                     --label "$LABELS" \

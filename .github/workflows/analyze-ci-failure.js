@@ -125,13 +125,23 @@ function getCauseJobName(analysis, cause) {
     return cause.job_name || analysis.failed_jobs?.[0]?.name || 'unknown';
 }
 
+function getObservedAt(analysis) {
+    const analyzedAt = analysis.analyzed_at;
+
+    // The analysis is model-generated. Preserve its timestamp when valid, but do not let
+    // a missing or malformed optional field prevent every cause from being published.
+    return typeof analyzedAt === 'string' && !Number.isNaN(Date.parse(analyzedAt))
+        ? analyzedAt
+        : new Date().toISOString();
+}
+
 function buildOccurrence(analysis, cause) {
     return {
         run_id: analysis.run_id,
         run_url: analysis.run_url || '',
         job: getCauseJobName(analysis, cause),
         pr_number: analysis.pr?.number || 0,
-        observed_at: analysis.analyzed_at,
+        observed_at: getObservedAt(analysis),
     };
 }
 
@@ -147,6 +157,10 @@ function buildOccurrenceRow(analysis, cause) {
     const date = occurrence.observed_at.split('T', 1)[0];
 
     return `| ${date} | [${occurrence.run_id}](${occurrence.run_url}) | ${occurrence.job} | #${occurrence.pr_number} |`;
+}
+
+function normalizeIssueTitle(value) {
+    return redactSensitiveData(value).replace(/\r\n?|\n/g, ' ').trim();
 }
 
 function getFailureInformation(analysis, cause) {
@@ -181,6 +195,7 @@ function getFailureInformation(analysis, cause) {
 function buildIssueBody(analysis, cause, marker) {
     const jobName = getCauseJobName(analysis, cause);
     const failureInformation = getFailureInformation(analysis, cause);
+    const title = normalizeIssueTitle(cause.title);
     const testName = cause.test_name || '';
     const outputSummary = cause.type === 'flaky-test' ? 'Test output' : 'Job output snippet';
     const buildError = testName
@@ -214,7 +229,9 @@ ${escapeHtml(redactSensitiveData(failureInformation.details))}
 
 ## Description
 
-${cause.title}
+<pre>
+${escapeHtml(title)}
+</pre>
 
 **Type**: ${cause.type}
 
@@ -262,6 +279,9 @@ function main(args) {
         case 'issue-body':
             process.stdout.write(buildIssueBody(analysis, getCause(), marker));
             break;
+        case 'issue-title':
+            process.stdout.write(`[CI Failure] ${normalizeIssueTitle(getCause().title)}`);
+            break;
         default:
             throw new Error(`Unsupported operation '${operation}'.`);
     }
@@ -280,6 +300,8 @@ module.exports = {
     extractTestFailures,
     formatTestFailures,
     getCauseJobName,
+    getObservedAt,
+    normalizeIssueTitle,
     redactJson,
     redactSensitiveData,
     toCodeBlock,

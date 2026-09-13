@@ -87,7 +87,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         {
             id = "sample-theory-flake",
             type = "flaky-test",
-            title = "Sample theory is flaky",
+            title = "Sample theory is flaky\r\n@maintainers\r# Heading",
             test_name = "Tests.SampleTheory(`value`)\n@maintainers",
             job_name = "Tests / Linux",
             error_pattern = "Expected actual"
@@ -143,7 +143,9 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
             ## Description
 
-            Sample theory is flaky
+            <pre>
+            Sample theory is flaky @maintainers # Heading
+            </pre>
 
             **Type**: flaky-test
 
@@ -155,6 +157,56 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             """.ReplaceLineEndings("\n");
 
         Assert.Equal(expected, body);
+
+        var title = await InvokeScriptAsync("issue-title", analysis, cause);
+        Assert.Equal("[CI Failure] Sample theory is flaky @maintainers # Heading", title);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task OccurrenceOperationsUseCurrentTimeWhenAnalysisTimestampIsMissingOrInvalid()
+    {
+        object[] analyses =
+        [
+            new
+            {
+                run_id = 987654,
+                run_url = "https://github.com/microsoft/aspire/actions/runs/987654",
+                pr = new { number = 18763 },
+                failed_jobs = new[] { new { name = "Tests / Linux" } }
+            },
+            new
+            {
+                run_id = 987654,
+                run_url = "https://github.com/microsoft/aspire/actions/runs/987654",
+                analyzed_at = "not-a-timestamp",
+                pr = new { number = 18763 },
+                failed_jobs = new[] { new { name = "Tests / Linux" } }
+            }
+        ];
+        var cause = new
+        {
+            id = "linux-network-failure",
+            type = "infra-failure",
+            title = "Linux network failure",
+            job_name = "Tests / Linux"
+        };
+
+        foreach (var analysis in analyses)
+        {
+            var before = DateTimeOffset.UtcNow;
+
+            var output = await InvokeScriptAsync("add-occurrence", analysis, cause);
+            var after = DateTimeOffset.UtcNow;
+            var result = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+            var occurrence = Assert.Single(result.GetProperty("occurrences").EnumerateArray());
+            var observedAt = occurrence.GetProperty("observed_at").GetDateTimeOffset();
+
+            Assert.InRange(observedAt, before, after);
+
+            var occurrenceRow = await InvokeScriptAsync("occurrence-row", analysis, cause);
+            Assert.Matches(@"^\| \d{4}-\d{2}-\d{2} \|", occurrenceRow);
+        }
     }
 
     [Fact]
