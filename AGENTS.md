@@ -58,6 +58,10 @@ Selector behavior changes should include focused coverage in
 `tests/Infrastructure.Tests/TestTriggerMap/`. See
 `docs/ci/test-trigger-map.md` for the map vocabulary and maintenance guidance.
 
+### Visual-only styling changes
+
+When reviewing a pull request, do not request automated tests solely for visual-only styling changes, including CSS selectors, colors, opacity, cursors, hover/focus/active appearance, or theme tokens. In particular, do not request Playwright assertions for computed styles or exact color values. Tests are appropriate when a styling change also affects functional interaction, DOM or accessibility semantics, state transitions, or whether a user can complete a workflow.
+
 ### API Files and Public API Surface
 
 The API files located in `*/api/*.cs` (e.g., `src/Aspire.Hosting/api/Aspire.Hosting.cs`) track the public API surface that has already been shipped in the latest release. These files are auto-generated and serve as a baseline for API compatibility checks.
