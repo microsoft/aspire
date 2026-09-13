@@ -49,7 +49,7 @@ resource account_kv_primaryaccesskey__account 'Microsoft.KeyVault/vaults/secrets
   parent: account_kv
 }
 
-resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'api'
   location: location
   properties: {
