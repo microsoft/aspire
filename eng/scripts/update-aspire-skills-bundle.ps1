@@ -158,29 +158,47 @@ try {
         }
     })
 
+    New-Item -ItemType Directory -Force -Path $embeddedDir | Out-Null
+    foreach ($preparedBundle in $preparedBundles) {
+        $definition = $preparedBundle.Definition
+        $asset = $preparedBundle.Asset
+
+        Get-ChildItem -Path $embeddedDir -File -Force |
+            Where-Object {
+                $_.Name -match "^$([regex]::Escape($definition.AssetPrefix))-.*\.(zip|tar\.gz|tgz)$" -and
+                $_.Name -ne $asset.name
+            } |
+            Remove-Item -Force
+
+        Copy-Item -Path $preparedBundle.ArchivePath -Destination (Join-Path $embeddedDir $asset.name) -Force
+    }
+
     # Sync the telemetry hook scripts from the same release. Hooks are SOURCE files in aspire-skills
     # (hooks/scripts/track-telemetry.{sh,ps1}), so they are pinned to the immutable commit the release
     # tag points at and fetched via the contents API (see aspire-skills-bundle.common.ps1). Releases
     # that predate the telemetry hooks feature do not contain hooks/scripts/*, so a missing hook is a
     # warning + skip during the transition rather than a hard failure of the whole bundle update;
     # verification only enforces hooks once they are recorded in metadata.
-    # Fetch every hook before modifying tracked files. Hooks are not a sibling bundle, but they stay
-    # pinned to the same immutable release commit.
+    New-Item -ItemType Directory -Force -Path $hooksDir | Out-Null
     $hookMetadata = $null
-    $hookContents = [ordered]@{}
     try {
         $hookCommitSha = Get-AspireSkillsReleaseCommitSha -Repository $Repository -Tag $release.tagName
 
         # Fetch every hook first and only write to disk + record metadata once all fetches succeed.
         # Writing inside the fetch loop could leave one fresh + one stale file (and no hooks metadata)
         # if a later fetch failed, after which verify-aspire-skills-bundle.ps1 would silently skip hook
-        # verification. Collecting first makes the on-disk update atomic.
+        # verification.
+        $hookContents = [ordered]@{}
         $hookHashes = [ordered]@{}
         foreach ($hookFileName in Get-AspireSkillsHookFileNames) {
             Write-Host "Syncing hook script '$hookFileName' from '$Repository' at commit '$hookCommitSha'..."
             $hookBytes = Get-AspireSkillsHookContent -Repository $Repository -CommitSha $hookCommitSha -FileName $hookFileName
             $hookContents[$hookFileName] = $hookBytes
             $hookHashes[$hookFileName] = Get-AspireSkillsSha512Hex -Bytes $hookBytes
+        }
+
+        foreach ($hookFileName in $hookContents.Keys) {
+            [System.IO.File]::WriteAllBytes((Join-Path $hooksDir $hookFileName), $hookContents[$hookFileName])
         }
 
         $hookMetadata = [ordered]@{
@@ -194,28 +212,15 @@ try {
         # auth, rate limit) stays fatal so a real error can never silently ship a hook-less bundle.
         if ($_.Exception.Message -match 'HTTP 404|Not Found') {
             Write-Warning "Skipping telemetry hook sync for release '$($release.tagName)': hooks not present in this release."
-            $hookContents.Clear()
         }
         else {
             throw
         }
     }
 
-    New-Item -ItemType Directory -Force -Path $embeddedDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $hooksDir | Out-Null
-
     foreach ($preparedBundle in $preparedBundles) {
         $definition = $preparedBundle.Definition
         $asset = $preparedBundle.Asset
-
-        Get-ChildItem -Path $embeddedDir -File -Force |
-            Where-Object {
-                $_.Name -match "^$([regex]::Escape($definition.AssetPrefix))-.*\.(zip|tar\.gz|tgz)$" -and
-                $_.Name -ne $asset.name
-            } |
-            Remove-Item -Force
-
-        Copy-Item -Path $preparedBundle.ArchivePath -Destination (Join-Path $embeddedDir $asset.name) -Force
 
         $metadata = [ordered]@{
             version = $normalizedVersion
@@ -234,19 +239,10 @@ try {
         Write-Host "Embedded $($definition.DisplayName) bundle updated to '$($asset.name)' with SHA-512 '$($preparedBundle.Sha512)'."
     }
 
-    foreach ($hookFileName in $hookContents.Keys) {
-        [System.IO.File]::WriteAllBytes((Join-Path $hooksDir $hookFileName), $hookContents[$hookFileName])
-    }
-
     $installerContent = Get-Content -Raw -Path $installerPath
-    $versionPattern = 'internal const string Version = "[^"]+";'
-    $versionMatches = [regex]::Matches($installerContent, $versionPattern)
-    if ($versionMatches.Count -ne 1) {
-        throw "Expected exactly one Aspire Skills bundle version constant in '$installerPath', but found $($versionMatches.Count)."
-    }
     $installerContent = [regex]::Replace(
         $installerContent,
-        $versionPattern,
+        'internal const string Version = "[^"]+";',
         "internal const string Version = ""$normalizedVersion"";")
     Set-TextFile -Path $installerPath -Content $installerContent
 

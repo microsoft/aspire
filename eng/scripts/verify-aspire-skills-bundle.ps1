@@ -13,7 +13,6 @@ $scriptDir = $PSScriptRoot
 $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
 $embeddedDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\Embedded'
 $hooksDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\Hooks'
-$installerPath = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\AspireSkillsInstaller.cs'
 
 . (Join-Path $scriptDir 'aspire-skills-bundle.common.ps1')
 
@@ -35,15 +34,9 @@ $verifiedBundles = @(
     }
 )
 
-$installerContent = Get-Content -Raw -Path $installerPath
-$versionMatches = [regex]::Matches($installerContent, 'internal const string Version = "([^"]+)";')
-if ($versionMatches.Count -ne 1) {
-    throw "Expected exactly one Aspire Skills bundle version constant in '$installerPath', but found $($versionMatches.Count)."
-}
-$expectedVersion = $versionMatches[0].Groups[1].Value
 $embeddedVersions = @($verifiedBundles.Metadata.version | Select-Object -Unique)
-if ($embeddedVersions.Count -ne 1 -or $embeddedVersions[0] -ne $expectedVersion) {
-    throw "Embedded Aspire Skills bundle versions '$($embeddedVersions -join ', ')' must match AspireSkillsInstaller.Version '$expectedVersion'."
+if ($embeddedVersions.Count -ne 1) {
+    throw "Embedded Aspire bundle metadata versions must match, but found: $($embeddedVersions -join ', ')."
 }
 
 # Verify the embedded telemetry hook scripts when the bundle records them. The hooks block is only

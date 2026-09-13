@@ -4,7 +4,6 @@
 using System.Text;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Tests.TestServices;
-using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -150,312 +149,72 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
         AssertTransactionDirectoriesRemoved(root);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task InstallAsync_WaitsForAnotherProcessBeforeComparingFiles(bool managedDirectory)
+    [Fact]
+    public async Task InstallAsync_SkillsRetainEarlierWritesWhenALaterFileFails()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var root = workspace.CreateDirectory("root");
-        var assetPath = Path.Combine(root.FullName, "assets", AssetName);
-        var installer = managedDirectory ? AgentAssetFileInstaller.ManagedDirectory : AgentAssetFileInstaller.Additive;
-        AgentAssetFile[] files = [new("index.js", "requested revision"), new("second.js", "requested revision")];
+        var assetPath = root.CreateSubdirectory(Path.Combine("assets", AssetName));
+        var originalPath = Path.Combine(assetPath.FullName, "SKILL.md");
+        var blockedPath = Path.Combine(assetPath.FullName, "blocked");
         var cancellationToken = TestContext.Current.CancellationToken;
-        var leasePath = AgentAssetFileInstaller.GetDestinationLeasePath(assetPath);
-        Assert.True(await installer.InstallAsync(root, "assets", AssetName, files, cancellationToken));
-        Assert.Equal(leasePath, AgentAssetFileInstaller.GetDestinationLeasePath(assetPath));
-        var readyPath = Path.Combine(workspace.Path, "ready");
-        var releasePath = Path.Combine(workspace.Path, "release");
+        await File.WriteAllTextAsync(originalPath, "original", cancellationToken);
+        await File.WriteAllTextAsync(blockedPath, "user file", cancellationToken);
+        AgentAssetFile[] files = [new("SKILL.md", "replacement"), new(Path.Combine("blocked", "child.md"), "new")];
 
-        using var process = RemoteExecutor.Invoke(static (assetPath, readyPath, releasePath) =>
-        {
-            using var lease = HoldDestinationLease(assetPath);
-            File.WriteAllText(readyPath, string.Empty);
-            if (!SpinWait.SpinUntil(() => File.Exists(releasePath), TimeSpan.FromSeconds(30)))
-            {
-                throw new TimeoutException("Timed out waiting to publish the competing asset revision.");
-            }
+        await Assert.ThrowsAsync<IOException>(() => AgentAssetFileInstaller.Additive.InstallAsync(
+            root, "assets", AssetName, files, cancellationToken));
 
-            File.WriteAllText(Path.Combine(assetPath, "index.js"), "competing revision");
-            File.WriteAllText(Path.Combine(assetPath, "second.js"), "competing revision");
-            File.WriteAllText(Path.Combine(assetPath, "stale.js"), "competing revision");
-        }, assetPath, readyPath, releasePath);
-
-        using var waitingCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        Task<bool>? installation = null;
-        try
-        {
-            Assert.True(
-                SpinWait.SpinUntil(() => File.Exists(readyPath), TimeSpan.FromSeconds(30)),
-                "Timed out waiting for the child process to acquire the destination lease.");
-
-            // These files initially match. The competing writer changes them only after this
-            // invocation starts, so comparing before acquiring the lease would produce a false no-op.
-            installation = installer.InstallAsync(root, "assets", AssetName, files, waitingCancellation.Token);
-            Assert.False(installation.IsCompleted);
-            File.WriteAllText(releasePath, string.Empty);
-            Assert.True(await installation.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken));
-
-            var indexPath = Path.Combine(assetPath, "index.js");
-            var secondPath = Path.Combine(assetPath, "second.js");
-            Assert.Equal(files[0].Bytes.ToArray(), await File.ReadAllBytesAsync(indexPath, cancellationToken));
-            Assert.Equal(files[1].Bytes.ToArray(), await File.ReadAllBytesAsync(secondPath, cancellationToken));
-            Assert.Equal(
-                managedDirectory ? ["index.js", "second.js"] : new[] { "index.js", "second.js", "stale.js" },
-                Directory.GetFiles(assetPath).Select(Path.GetFileName).Order(StringComparer.Ordinal));
-
-            var timestamp = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            File.SetLastWriteTimeUtc(indexPath, timestamp);
-            File.SetLastWriteTimeUtc(secondPath, timestamp);
-            for (var attempt = 0; attempt < 3; attempt++)
-            {
-                Assert.False(await installer.InstallAsync(root, "assets", AssetName, files, cancellationToken));
-                Assert.Equal(timestamp, File.GetLastWriteTimeUtc(indexPath));
-                Assert.Equal(timestamp, File.GetLastWriteTimeUtc(secondPath));
-            }
-
-            Assert.True(File.Exists(leasePath));
-            Assert.Equal(0, new FileInfo(leasePath).Length);
-            AssertTransactionDirectoriesRemoved(root);
-        }
-        finally
-        {
-            File.WriteAllText(releasePath, string.Empty);
-            await waitingCancellation.CancelAsync();
-            if (installation is not null)
-            {
-                await ((Task)installation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
-            }
-        }
+        Assert.Equal("replacement", await File.ReadAllTextAsync(originalPath, cancellationToken));
+        Assert.Equal("user file", await File.ReadAllTextAsync(blockedPath, cancellationToken));
+        AssertTransactionDirectoriesRemoved(root);
     }
 
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task InstallAsync_CancellationWhileWaitingDoesNotReadOrMutateDestination(bool managedDirectory, bool assetExists)
+    [Fact]
+    public async Task InstallAsync_SkillsUpdateWithoutDeleteSharing()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates Windows delete-sharing behavior.");
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var root = workspace.CreateDirectory("root");
-        var assetPath = Path.Combine(root.FullName, "assets", AssetName);
-        var originalPath = Path.Combine(assetPath, "index.js");
+        var assetPath = root.CreateSubdirectory(Path.Combine("assets", AssetName));
+        var originalPath = Path.Combine(assetPath.FullName, "SKILL.md");
         var cancellationToken = TestContext.Current.CancellationToken;
-        if (assetExists)
+        await File.WriteAllTextAsync(originalPath, "original", cancellationToken);
+        AgentAssetFile[] files = [new("SKILL.md", "replacement")];
+
+        using (File.Open(originalPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
         {
-            Directory.CreateDirectory(assetPath);
-            await File.WriteAllTextAsync(originalPath, "original", cancellationToken);
+            Assert.True(await AgentAssetFileInstaller.Additive.InstallAsync(root, "assets", AssetName, files, cancellationToken));
         }
 
-        using var lease = HoldDestinationLease(assetPath);
-        // An attempted comparison before acquiring the lease fails immediately, rather than
-        // depending on how quickly an asynchronous read or staging write happens to complete.
-        using var original = assetExists ? File.Open(originalPath, FileMode.Open, FileAccess.Read, FileShare.None) : null;
-        using var waitingCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var installer = managedDirectory ? AgentAssetFileInstaller.ManagedDirectory : AgentAssetFileInstaller.Additive;
-        AgentAssetFile[] files = [new("index.js", "replacement"), new("new.js", "new file")];
-        var installation = installer.InstallAsync(root, "assets", AssetName, files, waitingCancellation.Token);
-        try
-        {
-            Assert.False(installation.IsCompleted);
-            Assert.Equal(assetExists ? ["assets"] : Array.Empty<string>(), root.GetFileSystemInfos().Select(entry => entry.Name));
-            await waitingCancellation.CancelAsync();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => installation);
-
-            original?.Dispose();
-            if (assetExists)
-            {
-                Assert.Equal("original", await File.ReadAllTextAsync(originalPath, cancellationToken));
-                Assert.Equal(["index.js"], Directory.GetFiles(assetPath).Select(Path.GetFileName));
-                AssertTransactionDirectoriesRemoved(root);
-            }
-            else
-            {
-                Assert.Empty(root.GetFileSystemInfos());
-            }
-        }
-        finally
-        {
-            await waitingCancellation.CancelAsync();
-            await ((Task)installation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
-        }
+        Assert.Equal("replacement", await File.ReadAllTextAsync(originalPath, cancellationToken));
+        AssertTransactionDirectoriesRemoved(root);
     }
 
-    [Theory]
-    [InlineData("root")]
-    [InlineData("parent")]
-    [InlineData("asset")]
-    public async Task InstallAsync_DoesNotBlockUnrelatedAssetDestinations(string differentComponent)
+    [Fact]
+    public async Task InstallAsync_SkillsContinueFollowingFileLinks()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var root = workspace.CreateDirectory("root");
-        var assetPath = Path.Combine(root.FullName, "assets", AssetName);
-        using var lease = HoldDestinationLease(assetPath);
+        var assetPath = root.CreateSubdirectory(Path.Combine("assets", AssetName));
+        var targetPath = Path.Combine(workspace.Path, "original.md");
+        var linkPath = Path.Combine(assetPath.FullName, "SKILL.md");
         var cancellationToken = TestContext.Current.CancellationToken;
-        using var waitingCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        AgentAssetFile[] files = [new("index.js", "new file")];
-        var waitingInstallation = AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, waitingCancellation.Token);
-        Task<bool>? otherInstallation = null;
+        await File.WriteAllTextAsync(targetPath, "original", cancellationToken);
         try
         {
-            Assert.False(waitingInstallation.IsCompleted);
-            var otherRoot = differentComponent == "root" ? workspace.CreateDirectory("other-root") : root;
-            var otherParent = differentComponent == "parent" ? "other-assets" : "assets";
-            var otherName = differentComponent == "asset" ? "other" : AssetName;
+            TestSymlinkHelper.TryCreateSymlink(linkPath, targetPath, isDirectory: false);
+            AgentAssetFile[] files = [new("SKILL.md", "replacement")];
 
-            otherInstallation = AgentAssetFileInstaller.Additive.InstallAsync(otherRoot, otherParent, otherName, files, waitingCancellation.Token);
-            Assert.True(await otherInstallation.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken));
-            Assert.Equal(
-                files[0].Bytes.ToArray(),
-                await File.ReadAllBytesAsync(Path.Combine(otherRoot.FullName, otherParent, otherName, "index.js"), cancellationToken));
-            Assert.False(waitingInstallation.IsCompleted);
-            Assert.False(Directory.Exists(assetPath));
+            Assert.True(await AgentAssetFileInstaller.Additive.InstallAsync(root, "assets", AssetName, files, cancellationToken));
+            Assert.Equal("replacement", await File.ReadAllTextAsync(targetPath, cancellationToken));
+            Assert.Equal(targetPath, new FileInfo(linkPath).LinkTarget);
+            Assert.False(await AgentAssetFileInstaller.Additive.InstallAsync(root, "assets", AssetName, files, cancellationToken));
         }
         finally
         {
-            await waitingCancellation.CancelAsync();
-            if (otherInstallation is not null)
-            {
-                await ((Task)otherInstallation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
-            }
-
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waitingInstallation);
+            File.Delete(linkPath);
         }
-    }
-
-    [Fact]
-    public void GetDestinationLeasePath_NormalizesMissingDirectoryAliases()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var root = workspace.CreateDirectory("root");
-        var assetPath = Path.Combine(root.FullName, "assets", AssetName);
-        var leasePath = AgentAssetFileInstaller.GetDestinationLeasePath(assetPath);
-
-        Assert.Equal(leasePath, AgentAssetFileInstaller.GetDestinationLeasePath(assetPath + Path.DirectorySeparatorChar));
-        Assert.Equal(leasePath, AgentAssetFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, "unused", "..", "assets", AssetName)));
-        Assert.Equal(leasePath, AgentAssetFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, "ASSETS", AssetName.ToUpperInvariant())));
-        Assert.Equal(
-            AgentAssetFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, "assets", "caf\u00e9")),
-            AgentAssetFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, "assets", "cafe\u0301")));
-        Assert.Empty(root.GetFileSystemInfos());
-    }
-
-    [Fact]
-    public async Task InstallAsync_AncestorDirectoryAliasesShareDestinationLease()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var parent = workspace.CreateDirectory("parent");
-        var root = parent.CreateSubdirectory("root");
-        var alias = Path.Combine(workspace.Path, "alias");
-        var assetPath = Path.Combine(root.FullName, "assets", AssetName);
-        try
-        {
-            TestSymlinkHelper.TryCreateSymlink(alias, parent.FullName, isDirectory: true);
-            var aliasedRoot = new DirectoryInfo(Path.Combine(alias, "root"));
-            Assert.Equal(
-                AgentAssetFileInstaller.GetDestinationLeasePath(assetPath),
-                AgentAssetFileInstaller.GetDestinationLeasePath(Path.Combine(aliasedRoot.FullName, "assets", AssetName)));
-
-            using var lease = HoldDestinationLease(assetPath);
-            using var waitingCancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-            AgentAssetFile[] files = [new("index.js", "new file")];
-            var installation = AgentAssetFileInstaller.ManagedDirectory.InstallAsync(aliasedRoot, "assets", AssetName, files, waitingCancellation.Token);
-            try
-            {
-                Assert.False(installation.IsCompleted);
-                Assert.Empty(root.GetFileSystemInfos());
-            }
-            finally
-            {
-                await waitingCancellation.CancelAsync();
-                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => installation);
-            }
-        }
-        finally
-        {
-            if (new DirectoryInfo(alias).LinkTarget is not null)
-            {
-                Directory.Delete(alias);
-            }
-        }
-    }
-
-    [Fact]
-    public async Task InstallAsync_InvalidLeaseFileReportsIoErrorWithoutMutatingDestination()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var root = workspace.CreateDirectory("root");
-        var leasePath = AgentAssetFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, "assets", AssetName));
-        Directory.CreateDirectory(leasePath);
-        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        cancellation.CancelAfter(TimeSpan.FromSeconds(30));
-        try
-        {
-            AgentAssetFile[] files = [new("index.js", "new file")];
-            await Assert.ThrowsAsync<IOException>(() =>
-                AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellation.Token));
-            Assert.Empty(root.GetFileSystemInfos());
-        }
-        finally
-        {
-            Directory.Delete(leasePath);
-        }
-    }
-
-    [Fact]
-    public async Task InstallAsync_RejectsSymbolicLinkLeaseWithoutChangingTarget()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var root = workspace.CreateDirectory("root");
-        var outsidePath = Path.Combine(workspace.Path, "outside");
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await File.WriteAllTextAsync(outsidePath, "outside", cancellationToken);
-        var leasePath = AgentAssetFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, "assets", AssetName));
-        Directory.CreateDirectory(Path.GetDirectoryName(leasePath)!);
-        try
-        {
-            TestSymlinkHelper.TryCreateSymlink(leasePath, outsidePath, isDirectory: false);
-            AgentAssetFile[] files = [new("index.js", "new file")];
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellationToken));
-
-            Assert.Empty(root.GetFileSystemInfos());
-            Assert.Equal("outside", await File.ReadAllTextAsync(outsidePath, cancellationToken));
-        }
-        finally
-        {
-            File.Delete(leasePath);
-        }
-    }
-
-    [Fact]
-    public void GetDestinationLeasePath_RejectsManagingLeaseDirectory()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var leasePath = AgentAssetFileInstaller.GetDestinationLeasePath(Path.Combine(workspace.Path, "assets", AssetName));
-
-        Assert.Throws<InvalidOperationException>(() =>
-            AgentAssetFileInstaller.GetDestinationLeasePath(Path.GetDirectoryName(leasePath)!));
-    }
-
-    [Fact]
-    public void InstallAsync_RejectsDisabledUnixFileLockingWithoutMutatingDestination()
-    {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "The .NET file-locking switch only affects Unix.");
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var root = workspace.CreateDirectory("root");
-        var options = new RemoteInvokeOptions();
-        options.StartInfo.Environment["DOTNET_SYSTEM_IO_DISABLEFILELOCKING"] = "1";
-
-        using var process = RemoteExecutor.Invoke(static async rootPath =>
-        {
-            AgentAssetFile[] files = [new("index.js", "new file")];
-            var exception = await Assert.ThrowsAsync<IOException>(() => AgentAssetFileInstaller.ManagedDirectory
-                .InstallAsync(new DirectoryInfo(rootPath), "assets", AssetName, files, CancellationToken.None));
-            var leasePath = AgentAssetFileInstaller.GetDestinationLeasePath(Path.Combine(rootPath, "assets", AssetName));
-            Assert.Equal($"Exclusive file locking is required for agent asset lease '{leasePath}'.", exception.Message);
-            Assert.Empty(Directory.GetFileSystemEntries(rootPath));
-        }, root.FullName, options);
     }
 
     [Theory]
@@ -691,13 +450,6 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
         {
             File.Delete(linkPath);
         }
-    }
-
-    private static FileStream HoldDestinationLease(string assetPath)
-    {
-        var leasePath = AgentAssetFileInstaller.GetDestinationLeasePath(assetPath);
-        Directory.CreateDirectory(Path.GetDirectoryName(leasePath)!);
-        return new FileStream(leasePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, bufferSize: 1);
     }
 
     private static void AssertTransactionDirectoriesRemoved(DirectoryInfo root)

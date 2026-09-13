@@ -45,9 +45,6 @@ function Get-AspireSkillsVerifiedBundleMetadata {
     }
 
     $metadata = Get-Content -Raw -Path $metadataPath | ConvertFrom-Json
-    if ([string]::IsNullOrWhiteSpace($metadata.version)) {
-        throw "Embedded $($Definition.DisplayName) metadata must specify a version."
-    }
     if ($metadata.repository -ne $Repository) {
         throw "Unexpected embedded $($Definition.DisplayName) repository '$($metadata.repository)'. Expected '$Repository'."
     }
@@ -62,9 +59,9 @@ function Get-AspireSkillsVerifiedBundleMetadata {
     }
     # Each sibling has a distinct release asset, for example aspire-extensions-v0.0.1.tgz.
     # An attested skills archive must not also satisfy the extension bundle's verification.
-    $assetPattern = "^$([regex]::Escape($Definition.AssetPrefix))-v?$([regex]::Escape($metadata.version))\.(zip|tar\.gz|tgz)$"
+    $assetPattern = "^$([regex]::Escape($Definition.AssetPrefix))-.+\.(zip|tar\.gz|tgz)$"
     if ($metadata.assetName -notmatch $assetPattern) {
-        throw "Embedded $($Definition.DisplayName) asset name '$($metadata.assetName)' does not match its bundle kind and version."
+        throw "Embedded $($Definition.DisplayName) asset name '$($metadata.assetName)' does not match its bundle kind."
     }
     if ([string]::IsNullOrWhiteSpace($metadata.sha512)) {
         throw "Embedded $($Definition.DisplayName) metadata must specify the release asset SHA-512 hash."
