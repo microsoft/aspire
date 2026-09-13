@@ -3,7 +3,6 @@
 
 using System.CommandLine;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Git;
 using Aspire.Cli.Projects;
@@ -21,7 +20,7 @@ internal sealed class McpInitCommand : BaseCommand
 
     public McpInitCommand(
         IAgentEnvironmentDetector agentEnvironmentDetector,
-        IAspireSkillsInstaller aspireSkillsInstaller,
+        IAgentAssetCatalogProvider assetCatalogProvider,
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
@@ -33,7 +32,7 @@ internal sealed class McpInitCommand : BaseCommand
         // Create the AgentInitCommand to delegate execution to
         _agentInitCommand = new AgentInitCommand(
             agentEnvironmentDetector,
-            aspireSkillsInstaller,
+            assetCatalogProvider,
             playwrightCliInstaller,
             gitRepository,
             languageDiscovery,

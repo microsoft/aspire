@@ -4,6 +4,7 @@
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -31,7 +32,7 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
                     switch (choice)
                     {
                         case AgentAssetLocation location:
-                            Assert.Equal(expectedKind, location.AssetKind);
+                            Assert.Contains(location, expectedKind is AgentAssetKind.Skill ? SkillCatalog.KnownLocations : ExtensionCatalog.KnownLocations);
                             return location.IsDefault;
                         case AgentAssetDefinition asset:
                             Assert.Equal(expectedKind, asset.AssetKind);
@@ -122,6 +123,117 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
         Assert.Equal(installed, File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "extensions", "aspire-doctor", "extension.mjs")));
         Assert.False(Directory.Exists(Path.Combine(home.FullName, ".copilot", "extensions")));
         Assert.Equal(installed ? [AgentAssetKind.Extension] : [], Assert.IsType<FakeAspireSkillsInstaller>(provider.GetRequiredService<IAspireSkillsInstaller>()).RequestedAssetKinds);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Assets_SummarizeLocationsOnlyWhenFilesChange(bool installSkills)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
+                .Where(choice => choice switch
+                {
+                    AgentAssetLocation location => ExtensionCatalog.KnownLocations.Contains(location) ||
+                        (installSkills && location == SkillCatalog.Standard),
+                    AgentAssetDefinition asset => asset.Name == "aspire-doctor" ||
+                        (installSkills && asset.Name == "aspire"),
+                    _ => false
+                })
+                .ToList()
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: home);
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var arguments = $"agent init --skill-locations {(installSkills ? "standard" : "none")} --skills aspire --extension-locations all --extensions aspire-doctor";
+
+        var exitCode = await command.Parse(arguments).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var summaries = interaction.DisplayedMessages
+            .Where(message => message.Emoji.Equals(KnownEmojis.Robot))
+            .Select(message => message.Message)
+            .ToArray();
+        Assert.Equal(installSkills ? 2 : 1, summaries.Length);
+
+        var secondExitCode = await command.Parse(arguments).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, secondExitCode);
+        Assert.Equal(summaries, interaction.DisplayedMessages
+            .Where(message => message.Emoji.Equals(KnownEmojis.Robot))
+            .Select(message => message.Message));
+
+        var extensionDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "extensions", "aspire-doctor");
+        await File.WriteAllTextAsync(Path.Combine(extensionDirectory, "stale.js"), "old package file", TestContext.Current.CancellationToken);
+        var skillNotesPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "notes.md");
+        if (installSkills)
+        {
+            await File.WriteAllTextAsync(skillNotesPath, "user-authored notes", TestContext.Current.CancellationToken);
+        }
+
+        var updateExitCode = await command.Parse(arguments).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, updateExitCode);
+        Assert.Equal(
+            ["extension.mjs", Path.Combine("ui", "icon.bin")],
+            Directory.GetFiles(extensionDirectory, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(extensionDirectory, path))
+                .Order(StringComparer.Ordinal));
+        if (installSkills)
+        {
+            Assert.Equal("user-authored notes", await File.ReadAllTextAsync(skillNotesPath, TestContext.Current.CancellationToken));
+        }
+
+        var updatedSummaries = interaction.DisplayedMessages
+            .Where(message => message.Emoji.Equals(KnownEmojis.Robot))
+            .Select(message => message.Message)
+            .ToArray();
+        Assert.Equal(summaries.Length + 1, updatedSummaries.Length);
+
+        var finalExitCode = await command.Parse(arguments).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, finalExitCode);
+        Assert.Equal(updatedSummaries, interaction.DisplayedMessages
+            .Where(message => message.Emoji.Equals(KnownEmojis.Robot))
+            .Select(message => message.Message));
+        await Verify(new
+        {
+            Initial = summaries,
+            AfterStaleRemoval = updatedSummaries.Skip(summaries.Length).ToArray()
+        }).UseParameters(installSkills);
+    }
+
+    [Fact]
+    public async Task ExtensionFileFailure_ReportsExtensionPathAndPreservesSkills()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var extensionDirectory = workspace.CreateDirectory(Path.Combine(".github", "extensions"));
+        var blockedPath = Path.Combine(extensionDirectory.FullName, "aspire-doctor");
+        await File.WriteAllTextAsync(blockedPath, "user-owned file", TestContext.Current.CancellationToken);
+        var interaction = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("agent init --skill-locations standard --skills aspire --extension-locations project --extensions aspire-doctor")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var error = Assert.Single(interaction.DisplayedErrors);
+        await Verify(error.Replace(workspace.WorkspaceRoot.FullName, "[workspace]", StringComparison.Ordinal).Replace('\\', '/'), "txt");
+        Assert.Equal("user-owned file", await File.ReadAllTextAsync(blockedPath, TestContext.Current.CancellationToken));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md")));
+        Assert.Empty(interaction.DisplayedSuccess);
     }
 
     [Theory]

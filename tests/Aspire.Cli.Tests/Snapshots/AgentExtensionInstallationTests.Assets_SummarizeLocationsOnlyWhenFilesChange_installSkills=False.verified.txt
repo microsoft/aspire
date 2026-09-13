@@ -1,0 +1,12 @@
+﻿{
+  Initial: [    
+Installed Aspire extensions:
+  Extensions: aspire-doctor
+  Locations: .github/extensions, ~/.copilot/extensions
+  ],
+  AfterStaleRemoval: [    
+Installed Aspire extensions:
+  Extensions: aspire-doctor
+  Locations: .github/extensions
+  ]
+}

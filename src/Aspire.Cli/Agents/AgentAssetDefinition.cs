@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Agents;
 
@@ -13,36 +12,6 @@ namespace Aspire.Cli.Agents;
 [DebuggerDisplay("AssetKind = {AssetKind}, Name = {Name}, IsDefault = {IsDefault}")]
 internal sealed class AgentAssetDefinition
 {
-    /// <summary>
-    /// The Playwright CLI skill, managed by its external installer.
-    /// </summary>
-    public static readonly AgentAssetDefinition PlaywrightCli = new(
-        AgentAssetKind.Skill,
-        "playwright-cli",
-        AgentCommandStrings.SkillDescription_PlaywrightCli,
-        AgentAssetSourceKind.ExternalInstaller,
-        files: [],
-        installExcludedRelativePaths: [],
-        isDefault: false);
-
-    /// <summary>
-    /// The dotnet-inspect skill, offered only for .NET AppHosts.
-    /// </summary>
-    public static readonly AgentAssetDefinition DotnetInspect = new(
-        AgentAssetKind.Skill,
-        CommonAgentApplicators.DotnetInspectSkillName,
-        AgentCommandStrings.SkillDescription_DotnetInspect,
-        AgentAssetSourceKind.Static,
-        files: [new AgentAssetFile("SKILL.md", CommonAgentApplicators.DotnetInspectSkillFileContent)],
-        installExcludedRelativePaths: [],
-        isDefault: false,
-        applicableLanguages: [KnownLanguageId.CSharp]);
-
-    /// <summary>
-    /// Gets CLI-defined assets that are not sourced from a bundle.
-    /// </summary>
-    public static IReadOnlyList<AgentAssetDefinition> CliDefined { get; } = [PlaywrightCli, DotnetInspect];
-
     internal AgentAssetDefinition(
         AgentAssetKind assetKind,
         string name,
@@ -60,8 +29,11 @@ internal sealed class AgentAssetDefinition
         Name = name;
         Description = description;
         SourceKind = sourceKind;
-        Files = [.. files];
         InstallExcludedRelativePaths = [.. installExcludedRelativePaths];
+        Files = files
+            .Where(file => ShouldInstallFile(file.RelativePath))
+            .OrderBy(static file => file.RelativePath, StringComparer.Ordinal)
+            .ToArray();
         IsDefault = isDefault;
         ApplicableLanguages = applicableLanguages is null ? [] : [.. applicableLanguages];
     }
@@ -69,10 +41,11 @@ internal sealed class AgentAssetDefinition
     /// <summary>
     /// Creates a bundle-sourced asset, selected by default in all installation flows.
     /// </summary>
-    internal static AgentAssetDefinition CreateAspireSkillsBundle(
+    internal static AgentAssetDefinition CreateBundled(
         AgentAssetKind assetKind,
         string name,
         string description,
+        IReadOnlyList<AgentAssetFile> files,
         IReadOnlyList<string>? installExcludedRelativePaths = null,
         IReadOnlyList<string>? applicableLanguages = null)
     {
@@ -80,8 +53,8 @@ internal sealed class AgentAssetDefinition
             assetKind,
             name,
             description,
-            AgentAssetSourceKind.AspireSkillsBundle,
-            files: [],
+            AgentAssetSourceKind.Bundled,
+            files,
             installExcludedRelativePaths: installExcludedRelativePaths ?? [],
             isDefault: true,
             applicableLanguages);
@@ -96,11 +69,11 @@ internal sealed class AgentAssetDefinition
     public AgentAssetSourceKind SourceKind { get; }
 
     /// <summary>
-    /// Gets files stored directly on this definition.
+    /// Gets the resolved installable payload, with exclusions applied and paths ordered.
     /// </summary>
     public IReadOnlyList<AgentAssetFile> Files { get; }
 
-    public bool HasInstallableFiles => Files.Count > 0 || SourceKind is AgentAssetSourceKind.AspireSkillsBundle;
+    public bool HasInstallableFiles => Files.Count > 0;
 
     public IReadOnlyList<string> InstallExcludedRelativePaths { get; }
 
@@ -109,9 +82,9 @@ internal sealed class AgentAssetDefinition
     public IReadOnlyList<string> ApplicableLanguages { get; }
 
     /// <summary>
-    /// Gets whether a bundled file should be installed.
+    /// Gets whether a file should be installed.
     /// </summary>
-    public bool ShouldInstallFile(string relativePath)
+    private bool ShouldInstallFile(string relativePath)
     {
         foreach (var excludedPath in InstallExcludedRelativePaths)
         {
@@ -150,6 +123,6 @@ internal sealed class AgentAssetDefinition
 internal enum AgentAssetSourceKind
 {
     Static,
-    AspireSkillsBundle,
+    Bundled,
     ExternalInstaller,
 }

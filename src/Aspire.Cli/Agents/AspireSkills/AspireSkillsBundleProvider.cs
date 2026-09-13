@@ -10,7 +10,6 @@ using System.Text.Json.Serialization.Metadata;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 
 namespace Aspire.Cli.Agents.AspireSkills;
@@ -20,33 +19,7 @@ namespace Aspire.Cli.Agents.AspireSkills;
 /// </summary>
 internal interface IAspireSkillsBundleProvider
 {
-    AgentAssetKind AssetKind { get; }
-
-    string AssetKindName { get; }
-
-    string AssetPrefix { get; }
-
-    string CacheDirectoryName { get; }
-
-    string DisplayName { get; }
-
-    string ManifestFileName { get; }
-
-    string ManifestAssetsPropertyName { get; }
-
-    string ContentRootDirectoryName { get; }
-
-    string RequiredFileName { get; }
-
-    string EmbeddedArchiveResourceName { get; }
-
-    string EmbeddedMetadataResourceName { get; }
-
-    string VersionOverrideKey { get; }
-
-    string DisablePackageValidationKey { get; }
-
-    string MaxCacheAgeKey { get; }
+    AspireSkillsBundleDescriptor Descriptor { get; }
 
     Task<AspireSkillsBundle> CreateAsync(
         FileInfo archive,
@@ -68,16 +41,9 @@ internal interface IAspireSkillsBundleProvider
 }
 
 /// <summary>
-/// Creates and loads validated Aspire Skills bundles for one agent asset kind.
+/// Creates and loads bundles using a catalog's layout and required-file validation.
 /// </summary>
-/// <remarks>
-/// This is the shared implementation for manifest loading, AOT-safe envelope mapping,
-/// extraction, compatibility checks, safe names/paths, hashes, and bundle construction.
-/// Concrete subclasses (see <see cref="SkillBundleProvider"/> and
-/// <see cref="ExtensionBundleProvider"/>) contribute only kind-specific immutable metadata
-/// and any genuinely different validation behavior via <see cref="ValidateRequiredFile"/>.
-/// </remarks>
-internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
+internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 {
     private const int MaxAssetNameLength = 64;
 
@@ -108,45 +74,23 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     private readonly string _currentSdkVersion;
     private readonly ILogger _logger;
     private readonly Lazy<EmbeddedAspireSkillsBundleMetadata?> _embeddedMetadata;
+    private readonly Action<string, ReadOnlySpan<byte>> _validateRequiredFile;
 
-    protected AspireSkillsBundleProvider(CliExecutionContext executionContext, ILogger logger)
-    {
-        ArgumentNullException.ThrowIfNull(executionContext);
-        ArgumentNullException.ThrowIfNull(logger);
-
-        // The CLI and SDK share one resolved identity version. IdentitySdkVersion removes
-        // build metadata so both values can be compared with manifest SemVer ranges.
-        _currentCliVersion = executionContext.IdentitySdkVersion;
-        _currentSdkVersion = executionContext.IdentitySdkVersion;
-        _logger = logger;
-        _embeddedMetadata = new Lazy<EmbeddedAspireSkillsBundleMetadata?>(LoadEmbeddedMetadata);
-    }
-
-    protected AspireSkillsBundleProvider()
-        : this(
-            VersionHelper.GetDefaultSdkVersion(),
-            VersionHelper.GetDefaultSdkVersion(),
-            NullLogger.Instance)
-    {
-        // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
-        // this convenience constructor is only used by tests. Production resolves the
-        // effective CLI identity through CliExecutionContext.
-    }
-
-    protected AspireSkillsBundleProvider(string currentCliVersion, string currentSdkVersion)
-        : this(currentCliVersion, currentSdkVersion, NullLogger.Instance)
-    {
-    }
-
-    private protected AspireSkillsBundleProvider(
+    public AspireSkillsBundleProvider(
+        AspireSkillsBundleDescriptor descriptor,
+        Action<string, ReadOnlySpan<byte>> validateRequiredFile,
         string currentCliVersion,
         string currentSdkVersion,
         ILogger logger)
     {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        ArgumentNullException.ThrowIfNull(validateRequiredFile);
         ArgumentException.ThrowIfNullOrWhiteSpace(currentCliVersion);
         ArgumentException.ThrowIfNullOrWhiteSpace(currentSdkVersion);
         ArgumentNullException.ThrowIfNull(logger);
 
+        Descriptor = descriptor;
+        _validateRequiredFile = validateRequiredFile;
         _currentCliVersion = currentCliVersion;
         _currentSdkVersion = currentSdkVersion;
         _logger = logger;
@@ -154,35 +98,9 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     }
 
     /// <summary>
-    /// Gets the agent asset kind provided by this bundle provider.
+    /// Gets the fixed identity and layout used throughout this provider's lifetime.
     /// </summary>
-    public abstract AgentAssetKind AssetKind { get; }
-
-    public abstract string AssetKindName { get; }
-
-    public abstract string AssetPrefix { get; }
-
-    public abstract string CacheDirectoryName { get; }
-
-    public abstract string DisplayName { get; }
-
-    public abstract string ManifestFileName { get; }
-
-    public abstract string ManifestAssetsPropertyName { get; }
-
-    public abstract string ContentRootDirectoryName { get; }
-
-    public abstract string RequiredFileName { get; }
-
-    public abstract string EmbeddedArchiveResourceName { get; }
-
-    public abstract string EmbeddedMetadataResourceName { get; }
-
-    public string VersionOverrideKey => AspireSkillsInstaller.VersionOverrideKey;
-
-    public string DisablePackageValidationKey => AspireSkillsInstaller.DisablePackageValidationKey;
-
-    public string MaxCacheAgeKey => AspireSkillsInstaller.MaxCacheAgeKey;
+    public AspireSkillsBundleDescriptor Descriptor { get; }
 
     /// <summary>
     /// Creates an Aspire Skills bundle from an archive and materializes its validated files
@@ -204,7 +122,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
         Directory.CreateDirectory(bundleDirectory.FullName);
         var temporaryDirectoryRoot = bundleDirectory.Parent
-            ?? throw new InvalidOperationException($"The {DisplayName} bundle staging directory must have a parent directory.");
+            ?? throw new InvalidOperationException($"The {Descriptor.DisplayName} bundle staging directory must have a parent directory.");
         // Keep extraction beside the staging directory rather than inside it. If Windows AV or
         // indexing holds an extracted file open, best-effort cleanup must not block the later
         // atomic move that publishes the validated staging directory.
@@ -217,7 +135,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         ExtractArchive(archive.FullName, extractionDirectory.FullName);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var bundleRoot = FindBundleRoot(extractionDirectory.FullName, ManifestFileName);
+        var bundleRoot = FindBundleRoot(extractionDirectory.FullName, Descriptor.ManifestFileName);
         var bundle = await LoadAsync(bundleRoot, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
 
         CopyDirectory(bundleRoot.FullName, bundleDirectory.FullName);
@@ -234,13 +152,13 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     {
         ArgumentNullException.ThrowIfNull(bundleDirectory);
 
-        var manifestPath = Path.Combine(bundleDirectory.FullName, ManifestFileName);
+        var manifestPath = Path.Combine(bundleDirectory.FullName, Descriptor.ManifestFileName);
         if (!File.Exists(manifestPath))
         {
-            throw new InvalidOperationException($"{DisplayName} bundle manifest was not found at '{manifestPath}'.");
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle manifest was not found at '{manifestPath}'.");
         }
 
-        SkillBundleManifest? manifest;
+        AspireSkillsBundleManifest? manifest;
         try
         {
             await using var manifestStream = File.OpenRead(manifestPath);
@@ -251,24 +169,24 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
         catch (JsonException ex)
         {
-            throw new InvalidOperationException($"{DisplayName} bundle manifest is invalid.", ex);
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle manifest is invalid.", ex);
         }
 
         if (manifest is null)
         {
-            throw new InvalidOperationException($"{DisplayName} bundle manifest is empty or invalid.");
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle manifest is empty or invalid.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         return CreateBundle(bundleDirectory, manifest, skipCompatibilityCheck);
     }
 
-    public virtual EmbeddedAspireSkillsBundleMetadata? GetEmbeddedMetadata()
+    public EmbeddedAspireSkillsBundleMetadata? GetEmbeddedMetadata()
     {
         return _embeddedMetadata.Value;
     }
 
-    public virtual async Task<AspireSkillsBundle?> CreateEmbeddedBundleAsync(
+    public async Task<AspireSkillsBundle?> CreateEmbeddedBundleAsync(
         DirectoryInfo bundleDirectory,
         CancellationToken cancellationToken)
     {
@@ -288,7 +206,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
         Directory.CreateDirectory(bundleDirectory.FullName);
         var temporaryDirectoryRoot = bundleDirectory.Parent
-            ?? throw new InvalidOperationException($"The {DisplayName} bundle staging directory must have a parent directory.");
+            ?? throw new InvalidOperationException($"The {Descriptor.DisplayName} bundle staging directory must have a parent directory.");
         // Keep the archive beside the staging directory so a transient Windows file lock during
         // best-effort cleanup cannot prevent the validated staging directory from being published.
         using var temporaryDirectory = TemporaryCacheDirectory.Create(
@@ -313,13 +231,13 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
     private Stream? OpenEmbeddedArchive()
     {
-        var stream = typeof(AspireSkillsBundleProvider).Assembly.GetManifestResourceStream(EmbeddedArchiveResourceName);
+        var stream = typeof(AspireSkillsBundleProvider).Assembly.GetManifestResourceStream(Descriptor.EmbeddedArchiveResourceName);
         if (stream is null)
         {
             _logger.LogDebug(
                 "Embedded {BundleDisplayName} archive resource {ResourceName} was not found.",
-                DisplayName,
-                EmbeddedArchiveResourceName);
+                Descriptor.DisplayName,
+                Descriptor.EmbeddedArchiveResourceName);
         }
 
         return stream;
@@ -327,13 +245,13 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
     private EmbeddedAspireSkillsBundleMetadata? LoadEmbeddedMetadata()
     {
-        using var stream = typeof(AspireSkillsBundleProvider).Assembly.GetManifestResourceStream(EmbeddedMetadataResourceName);
+        using var stream = typeof(AspireSkillsBundleProvider).Assembly.GetManifestResourceStream(Descriptor.EmbeddedMetadataResourceName);
         if (stream is null)
         {
             _logger.LogDebug(
                 "Embedded {BundleDisplayName} metadata resource {ResourceName} was not found.",
-                DisplayName,
-                EmbeddedMetadataResourceName);
+                Descriptor.DisplayName,
+                Descriptor.EmbeddedMetadataResourceName);
             return null;
         }
 
@@ -347,8 +265,8 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             {
                 _logger.LogDebug(
                     "Embedded {BundleDisplayName} metadata resource {ResourceName} was empty.",
-                    DisplayName,
-                    EmbeddedMetadataResourceName);
+                    Descriptor.DisplayName,
+                    Descriptor.EmbeddedMetadataResourceName);
             }
 
             return metadata;
@@ -358,23 +276,23 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             _logger.LogWarning(
                 ex,
                 "Embedded {BundleDisplayName} metadata resource {ResourceName} could not be parsed.",
-                DisplayName,
-                EmbeddedMetadataResourceName);
+                Descriptor.DisplayName,
+                Descriptor.EmbeddedMetadataResourceName);
             return null;
         }
     }
 
-    internal JsonTypeInfo<SkillBundleManifest> CreateManifestTypeInfo()
+    internal JsonTypeInfo<AspireSkillsBundleManifest> CreateManifestTypeInfo()
     {
-        var manifestAssetsPropertyName = ManifestAssetsPropertyName;
+        var manifestAssetsPropertyName = Descriptor.ManifestAssetsPropertyName;
         var resolver = AspireSkillsJsonSerializerContext.Default.WithAddedModifier(typeInfo =>
         {
-            if (typeInfo.Type != typeof(SkillBundleManifest))
+            if (typeInfo.Type != typeof(AspireSkillsBundleManifest))
             {
                 return;
             }
 
-            var assetsPropertyName = JsonNamingPolicy.CamelCase.ConvertName(nameof(SkillBundleManifest.Assets));
+            var assetsPropertyName = JsonNamingPolicy.CamelCase.ConvertName(nameof(AspireSkillsBundleManifest.Assets));
             var assetsProperty = typeInfo.Properties.Single(property =>
                 string.Equals(property.Name, assetsPropertyName, StringComparison.Ordinal));
             // Published manifests use a kind-specific top-level collection, such as:
@@ -388,36 +306,36 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             TypeInfoResolver = resolver,
         };
 
-        return (JsonTypeInfo<SkillBundleManifest>)options.GetTypeInfo(typeof(SkillBundleManifest));
+        return (JsonTypeInfo<AspireSkillsBundleManifest>)options.GetTypeInfo(typeof(AspireSkillsBundleManifest));
     }
 
     /// <summary>
-    /// Validates the content of the bundle's required file (e.g., SKILL.md frontmatter).
-    /// The base implementation performs no additional validation.
+    /// Preserves skill text semantics while retaining extension payloads as bytes.
     /// </summary>
-    protected virtual void ValidateRequiredFile(string assetName, ReadOnlySpan<byte> content)
+    private AgentAssetFile CreateAssetFile(string relativePath, byte[] bytes)
     {
-    }
+        if (Descriptor.AssetKind is AgentAssetKind.Skill)
+        {
+            // All skill files were decoded as text and written as UTF-8, regardless of
+            // filename extension. Keep that behavior for scripts such as helper.py too.
+            return new(relativePath, AgentAssetFile.DecodeText(bytes));
+        }
 
-    /// <summary>
-    /// Gets how an installed file should be compared with its validated bundle bytes.
-    /// </summary>
-    protected virtual AgentAssetFileComparison GetFileComparison(string relativePath)
-    {
-        return s_textFileExtensions.Contains(Path.GetExtension(relativePath))
+        var comparison = s_textFileExtensions.Contains(Path.GetExtension(relativePath))
             ? AgentAssetFileComparison.NormalizedUtf8Text
             : AgentAssetFileComparison.ExactBytes;
+        return new(relativePath, bytes, comparison);
     }
 
     private AspireSkillsBundle CreateBundle(
         DirectoryInfo bundleDirectory,
-        SkillBundleManifest manifest,
+        AspireSkillsBundleManifest manifest,
         bool skipCompatibilityCheck)
     {
         var version = manifest.Version;
         if (string.IsNullOrWhiteSpace(version))
         {
-            throw new InvalidOperationException($"{DisplayName} bundle manifest must specify a version.");
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle manifest must specify a version.");
         }
 
         // The bundle's `supports` range gates remotely acquired bundles, including cache
@@ -434,63 +352,56 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         if (assets is not { Length: > 0 })
         {
             throw new InvalidOperationException(
-                $"{DisplayName} bundle manifest must contain at least one asset.");
+                $"{Descriptor.DisplayName} bundle manifest must contain at least one asset.");
         }
 
         var assetNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        List<ValidatedAspireSkillsBundleAsset> validatedAssets = [];
+        List<AgentAssetDefinition> validatedAssets = [];
         foreach (var asset in assets)
         {
             if (asset is null)
             {
-                throw new InvalidOperationException($"{DisplayName} bundle manifest contains an empty asset entry.");
+                throw new InvalidOperationException($"{Descriptor.DisplayName} bundle manifest contains an empty asset entry.");
             }
 
             var assetName = asset.Name;
             if (string.IsNullOrWhiteSpace(assetName))
             {
-                throw new InvalidOperationException($"{DisplayName} bundle manifest contains an asset without a name.");
+                throw new InvalidOperationException($"{Descriptor.DisplayName} bundle manifest contains an asset without a name.");
             }
 
             ValidateAssetName(assetName);
             if (!assetNames.Add(assetName))
             {
                 throw new InvalidOperationException(
-                    $"{DisplayName} bundle manifest contains duplicate asset '{assetName}'.");
+                    $"{Descriptor.DisplayName} bundle manifest contains duplicate asset '{assetName}'.");
             }
 
             if (string.IsNullOrWhiteSpace(asset.Description))
             {
                 throw new InvalidOperationException(
-                    $"{DisplayName} bundle asset '{assetName}' must specify a description.");
+                    $"{Descriptor.DisplayName} bundle asset '{assetName}' must specify a description.");
             }
 
             var assetFiles = asset.Files;
             if (assetFiles is not { Length: > 0 })
             {
                 throw new InvalidOperationException(
-                    $"{DisplayName} bundle asset '{assetName}' does not contain any files.");
+                    $"{Descriptor.DisplayName} bundle asset '{assetName}' does not contain any files.");
             }
 
             var installExcludedRelativePaths = (asset.InstallExcludedRelativePaths ?? [])
                 .Select(NormalizeRelativePath)
                 .ToArray();
-            if (installExcludedRelativePaths.Contains(RequiredFileName, StringComparer.OrdinalIgnoreCase))
+            if (installExcludedRelativePaths.Contains(Descriptor.RequiredFileName, StringComparer.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(string.Format(
                     CultureInfo.InvariantCulture,
                     "{0} bundle asset '{1}' cannot exclude {2} from installation.",
-                    DisplayName,
+                    Descriptor.DisplayName,
                     assetName,
-                    RequiredFileName));
+                    Descriptor.RequiredFileName));
             }
-
-            var definition = AgentAssetDefinition.CreateAspireSkillsBundle(
-                AssetKind,
-                assetName,
-                asset.Description,
-                installExcludedRelativePaths,
-                asset.ApplicableLanguages ?? []);
 
             var filePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var hasRequiredFile = false;
@@ -500,7 +411,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 if (file is null)
                 {
                     throw new InvalidOperationException(
-                        $"{DisplayName} bundle asset '{assetName}' contains an empty file entry.");
+                        $"{Descriptor.DisplayName} bundle asset '{assetName}' contains an empty file entry.");
                 }
 
                 var validatedFile = ValidateFile(bundleDirectory, assetName, file);
@@ -509,13 +420,13 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                     throw new InvalidOperationException(string.Format(
                         CultureInfo.InvariantCulture,
                         "{0} bundle asset '{1}' contains duplicate file '{2}'.",
-                        DisplayName,
+                        Descriptor.DisplayName,
                         assetName,
                         validatedFile.RelativePath));
                 }
 
                 files.Add(validatedFile);
-                hasRequiredFile |= string.Equals(validatedFile.RelativePath, RequiredFileName, StringComparison.Ordinal);
+                hasRequiredFile |= string.Equals(validatedFile.RelativePath, Descriptor.RequiredFileName, StringComparison.Ordinal);
             }
 
             if (!hasRequiredFile)
@@ -523,15 +434,21 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 throw new InvalidOperationException(string.Format(
                     CultureInfo.InvariantCulture,
                     "{0} bundle asset '{1}' must contain {2}.",
-                    DisplayName,
+                    Descriptor.DisplayName,
                     assetName,
-                    RequiredFileName));
+                    Descriptor.RequiredFileName));
             }
 
-            validatedAssets.Add(new ValidatedAspireSkillsBundleAsset(definition, files));
+            validatedAssets.Add(AgentAssetDefinition.CreateBundled(
+                Descriptor.AssetKind,
+                assetName,
+                asset.Description,
+                files,
+                installExcludedRelativePaths,
+                asset.ApplicableLanguages ?? []));
         }
 
-        return new AspireSkillsBundle(version, AssetKind, validatedAssets);
+        return new AspireSkillsBundle(version, Descriptor.AssetKind, validatedAssets);
     }
 
     private void ValidateAssetName(string assetName)
@@ -547,29 +464,29 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
                 "{0} bundle asset name '{1}' must be 1-{2} characters, use only lowercase ASCII letters, digits, and hyphens, and must not start or end with a hyphen or contain consecutive hyphens.",
-                DisplayName,
+                Descriptor.DisplayName,
                 assetName,
                 MaxAssetNameLength));
         }
 
-        if (IsWindowsDeviceName(assetName))
+        if (!IsSafePathSegment(assetName))
         {
             throw new InvalidOperationException(
-                $"{DisplayName} bundle asset name '{assetName}' is not portable.");
+                $"{Descriptor.DisplayName} bundle asset name '{assetName}' is not portable.");
         }
     }
 
     private AgentAssetFile ValidateFile(
         DirectoryInfo bundleDirectory,
         string assetName,
-        SkillBundleFile file)
+        AspireSkillsBundleFile file)
     {
         var relativePath = NormalizeRelativePath(file.RelativePath);
-        var fullPath = Path.Combine(bundleDirectory.FullName, ContentRootDirectoryName, assetName, relativePath);
+        var fullPath = Path.Combine(bundleDirectory.FullName, Descriptor.ContentRootDirectoryName, assetName, relativePath);
         if (!File.Exists(fullPath))
         {
             throw new InvalidOperationException(
-                $"{DisplayName} bundle file '{relativePath}' in asset '{assetName}' was not found.");
+                $"{Descriptor.DisplayName} bundle file '{relativePath}' in asset '{assetName}' was not found.");
         }
 
         // Hash and decode the same bytes so a concurrent filesystem change cannot
@@ -595,29 +512,28 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         else
         {
             throw new InvalidOperationException(
-                $"{DisplayName} bundle file '{relativePath}' in asset '{assetName}' does not specify a SHA-512 or SHA-256 hash.");
+                $"{Descriptor.DisplayName} bundle file '{relativePath}' in asset '{assetName}' does not specify a SHA-512 or SHA-256 hash.");
         }
 
         if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"{DisplayName} bundle file '{relativePath}' in asset '{assetName}' failed {algorithmName} verification.");
+                $"{Descriptor.DisplayName} bundle file '{relativePath}' in asset '{assetName}' failed {algorithmName} verification.");
         }
 
-        var comparison = GetFileComparison(relativePath);
-        if (string.Equals(relativePath, RequiredFileName, StringComparison.Ordinal))
+        if (string.Equals(relativePath, Descriptor.RequiredFileName, StringComparison.Ordinal))
         {
-            ValidateRequiredFile(assetName, bytes);
+            _validateRequiredFile(assetName, bytes);
         }
 
-        return new AgentAssetFile(relativePath, bytes, comparison);
+        return CreateAssetFile(relativePath, bytes);
     }
 
     internal string NormalizeRelativePath(string? relativePath)
     {
         if (string.IsNullOrWhiteSpace(relativePath))
         {
-            throw new InvalidOperationException($"{DisplayName} bundle contains an empty relative path.");
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle contains an empty relative path.");
         }
 
         var normalizedPath = relativePath
@@ -626,31 +542,36 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
         if (Path.IsPathRooted(normalizedPath))
         {
-            throw new InvalidOperationException($"{DisplayName} bundle path '{relativePath}' must be relative.");
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle path '{relativePath}' must be relative.");
         }
 
         var segments = normalizedPath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0 || segments.Any(static segment => !IsPortablePathSegment(segment)))
+        if (segments.Length == 0 || segments.Any(segment => !IsSafePathSegment(segment)))
         {
-            throw new InvalidOperationException($"{DisplayName} bundle path '{relativePath}' is not safe.");
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle path '{relativePath}' is not safe.");
         }
 
         return Path.Combine(segments);
     }
 
-    private static bool IsPortablePathSegment(string segment)
+    private bool IsSafePathSegment(string segment)
     {
-        // Bundle paths can be validated on one platform and installed on another. Reject the
-        // Windows-invalid character set, trailing dot/space aliases, and DOS device names
-        // everywhere so a bundle accepted on Unix cannot fail or address a different file on
-        // Windows. Device names remain reserved when followed by an extension (for example,
-        // "NUL.txt"), so compare only the portion before the first dot.
+        // Preserve the existing skill path contract: traversal, control characters and
+        // Windows-invalid characters (including ':' for alternate data streams) are rejected.
         // See https://learn.microsoft.com/windows/win32/fileio/naming-a-file.
-        return segment is not "." and not ".." &&
-            !segment.EndsWith('.') &&
-            !segment.EndsWith(' ') &&
-            !segment.Any(static character => char.IsControl(character) || character is '<' or '>' or ':' or '"' or '|' or '?' or '*') &&
-            !IsWindowsDeviceName(segment.Split('.')[0]);
+        if (segment is "." or ".." ||
+            segment.Any(static character => char.IsControl(character) || character is '<' or '>' or ':' or '"' or '|' or '?' or '*'))
+        {
+            return false;
+        }
+
+        // Executable extension bundles additionally reject Windows aliases on all platforms.
+        // Device names remain reserved with extensions, for example "NUL.txt". Do not apply
+        // this new portability policy to previously accepted skill names and exclusions.
+        return Descriptor.AssetKind is not AgentAssetKind.Extension ||
+            (!segment.EndsWith('.') &&
+             !segment.EndsWith(' ') &&
+             !IsWindowsDeviceName(segment.Split('.')[0]));
     }
 
     private static bool IsWindowsDeviceName(string name)
@@ -699,7 +620,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             throw new InvalidOperationException(string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.AspireSkillsInstaller_ArchiveHashVerificationFailed,
-                DisplayName,
+                Descriptor.DisplayName,
                 expectedHash,
                 actualHash));
         }
@@ -757,7 +678,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
                 default:
                     throw new InvalidDataException(
-                        $"{DisplayName} bundle archive entry '{entry.Name}' has unsupported type '{entry.EntryType}'.");
+                        $"{Descriptor.DisplayName} bundle archive entry '{entry.Name}' has unsupported type '{entry.EntryType}'.");
             }
         }
     }
@@ -798,16 +719,16 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         var segments = normalizedEntryName.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (Path.IsPathRooted(normalizedEntryName) ||
             segments.Length == 0 ||
-            segments.Any(static segment => !IsPortablePathSegment(segment)))
+            segments.Any(segment => !IsSafePathSegment(segment)))
         {
-            throw new InvalidDataException($"{DisplayName} bundle archive entry '{entryName}' is not safe.");
+            throw new InvalidDataException($"{Descriptor.DisplayName} bundle archive entry '{entryName}' is not safe.");
         }
 
         var destinationPath = Path.GetFullPath(Path.Combine(destinationRoot, normalizedEntryName.Replace('/', Path.DirectorySeparatorChar)));
         if (!destinationPath.StartsWith(destinationRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
             !string.Equals(destinationPath, destinationRoot, StringComparison.Ordinal))
         {
-            throw new InvalidDataException($"{DisplayName} bundle archive entry '{entryName}' escapes the extraction directory.");
+            throw new InvalidDataException($"{Descriptor.DisplayName} bundle archive entry '{entryName}' escapes the extraction directory.");
         }
 
         return destinationPath;
@@ -843,14 +764,14 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
                 "Downloaded {0} bundle contains multiple '{1}' files.",
-                DisplayName,
+                Descriptor.DisplayName,
                 manifestFileName));
         }
 
         throw new InvalidOperationException(string.Format(
             CultureInfo.InvariantCulture,
             "Downloaded {0} bundle does not contain '{1}'.",
-            DisplayName,
+            Descriptor.DisplayName,
             manifestFileName));
     }
 
@@ -872,16 +793,16 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
     }
 
-    private void ValidateCompatibility(SkillBundleSupports? supports, string currentCliVersion, string currentSdkVersion)
+    private void ValidateCompatibility(AspireSkillsBundleSupports? supports, string currentCliVersion, string currentSdkVersion)
     {
         if (supports is null)
         {
-            throw new InvalidOperationException($"{DisplayName} bundle manifest must specify supported Aspire versions.");
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle manifest must specify supported Aspire versions.");
         }
 
         if (string.IsNullOrWhiteSpace(supports.AspireCli))
         {
-            throw new InvalidOperationException($"{DisplayName} bundle manifest must specify supports.aspireCli.");
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle manifest must specify supports.aspireCli.");
         }
 
         if (!IsVersionInRange(currentCliVersion, supports.AspireCli))
@@ -889,7 +810,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
                 "{0} bundle supports Aspire CLI versions '{1}', but the current CLI version is '{2}'.",
-                DisplayName,
+                Descriptor.DisplayName,
                 supports.AspireCli,
                 currentCliVersion));
         }
@@ -900,7 +821,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
                 "{0} bundle supports Aspire SDK versions '{1}', but the current SDK version is '{2}'.",
-                DisplayName,
+                Descriptor.DisplayName,
                 supports.AspireSdk,
                 currentSdkVersion));
         }
@@ -912,7 +833,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         var comparators = range.Replace(',', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (comparators.Length == 0)
         {
-            throw new InvalidOperationException($"{DisplayName} bundle contains an empty version range.");
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle contains an empty version range.");
         }
 
         foreach (var comparator in comparators)
@@ -944,7 +865,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             "<" => comparison < 0,
             "<=" => comparison <= 0,
             "=" or "==" => comparison == 0,
-            _ => throw new InvalidOperationException($"{DisplayName} bundle contains unsupported version comparator '{op}'.")
+            _ => throw new InvalidOperationException($"{Descriptor.DisplayName} bundle contains unsupported version comparator '{op}'.")
         };
     }
 
@@ -957,7 +878,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 var operand = comparator[op.Length..];
                 if (string.IsNullOrWhiteSpace(operand))
                 {
-                    throw new InvalidOperationException($"{DisplayName} bundle contains an invalid version comparator '{comparator}'.");
+                    throw new InvalidOperationException($"{Descriptor.DisplayName} bundle contains an invalid version comparator '{comparator}'.");
                 }
 
                 return (op, operand);
@@ -971,7 +892,7 @@ internal abstract class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     {
         if (!SemVersion.TryParse(version, SemVersionStyles.Any, out var parsedVersion))
         {
-            throw new InvalidOperationException($"{DisplayName} bundle contains an invalid version value '{version}'.");
+            throw new InvalidOperationException($"{Descriptor.DisplayName} bundle contains an invalid version value '{version}'.");
         }
 
         return SemVersion.Parse(

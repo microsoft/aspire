@@ -226,12 +226,12 @@ internal sealed class InitCommand : BaseCommand
     {
         var commands = new List<string>();
 
-        if (selectedLocations.Contains(AgentAssetLocation.ClaudeCode))
+        if (selectedLocations.Contains(SkillCatalog.ClaudeCode))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedLocations.Contains(AgentAssetLocation.OpenCode))
+        if (selectedLocations.Contains(SkillCatalog.OpenCode))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }

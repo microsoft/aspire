@@ -18,7 +18,6 @@ namespace Aspire.Cli.Agents.AspireSkills;
 internal sealed class AspireSkillsInstaller(
     IGitHubArtifactAttestationVerifier githubArtifactAttestationVerifier,
     IHttpClientFactory httpClientFactory,
-    IEnumerable<IAspireSkillsBundleProvider> bundleProviders,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
     IConfiguration configuration,
@@ -51,41 +50,18 @@ internal sealed class AspireSkillsInstaller(
     private static readonly TimeSpan s_cacheLockMaxRetryDelay = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan s_defaultMaxCacheAge = TimeSpan.FromDays(7);
 
-    private readonly IReadOnlyDictionary<AgentAssetKind, IAspireSkillsBundleProvider> _providers = CreateProviders(bundleProviders);
-
     public Task<AspireSkillsInstallResult> InstallAsync(
-        AgentAssetKind assetKind,
+        IAspireSkillsBundleProvider provider,
         CancellationToken cancellationToken)
     {
-        if (!_providers.TryGetValue(assetKind, out var provider))
-        {
-            return Task.FromResult(AspireSkillsInstallResult.Unavailable);
-        }
+        ArgumentNullException.ThrowIfNull(provider);
 
         return interactionService.ShowStatusAsync(
             string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.AspireSkillsInstaller_InstallingStatus,
-                provider.DisplayName),
+                provider.Descriptor.DisplayName),
             () => InstallCoreAsync(provider, cancellationToken));
-    }
-
-    private static IReadOnlyDictionary<AgentAssetKind, IAspireSkillsBundleProvider> CreateProviders(
-        IEnumerable<IAspireSkillsBundleProvider> bundleProviders)
-    {
-        ArgumentNullException.ThrowIfNull(bundleProviders);
-
-        var providersByKind = new Dictionary<AgentAssetKind, IAspireSkillsBundleProvider>();
-        foreach (var provider in bundleProviders)
-        {
-            if (!providersByKind.TryAdd(provider.AssetKind, provider))
-            {
-                throw new InvalidOperationException(
-                    $"Multiple Aspire Skills bundle providers are registered for asset kind '{provider.AssetKind}'.");
-            }
-        }
-
-        return providersByKind;
     }
 
     internal static bool IsCacheLockContention(IOException exception, bool isWindows)
@@ -106,18 +82,18 @@ internal sealed class AspireSkillsInstaller(
         CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartReportedActivity(TelemetryActivityName);
-        var effectiveVersion = configuration[provider.VersionOverrideKey];
+        var effectiveVersion = configuration[VersionOverrideKey];
         if (string.IsNullOrWhiteSpace(effectiveVersion))
         {
             effectiveVersion = AspireSkillsInstaller.Version;
         }
 
-        activity?.SetTag($"aspire.{provider.AssetKindName}.version", effectiveVersion);
+        activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.version", effectiveVersion);
 
         var cacheRoot = GetCacheRoot(provider);
         Directory.CreateDirectory(cacheRoot);
 
-        var validationDisabled = string.Equals(configuration[provider.DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
+        var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
         var embeddedMetadata = provider.GetEmbeddedMetadata();
 
         async Task<AspireSkillsInstallResult> CompleteInstallationAsync(AspireSkillsBundle bundle, string archiveSha512)
@@ -138,7 +114,7 @@ internal sealed class AspireSkillsInstaller(
         var remoteFetchEnabled = features.IsFeatureEnabled(
             KnownFeatures.AspireSkillsRemoteFetchEnabled,
             KnownFeatures.GetFeatureMetadata(KnownFeatures.AspireSkillsRemoteFetchEnabled)!.DefaultValue);
-        activity?.SetTag($"aspire.{provider.AssetKindName}.remote_fetch_enabled", remoteFetchEnabled);
+        activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.remote_fetch_enabled", remoteFetchEnabled);
 
         AcquisitionResult? githubResult = null;
         if (remoteFetchEnabled)
@@ -151,7 +127,7 @@ internal sealed class AspireSkillsInstaller(
 
             if (githubResult.Status == AcquisitionStatus.Failed)
             {
-                logger.LogDebug("{BundleDisplayName} GitHub acquisition failed for version {Version}; falling back to embedded snapshot. Failure: {Failure}", provider.DisplayName, effectiveVersion, githubResult.Message);
+                logger.LogDebug("{BundleDisplayName} GitHub acquisition failed for version {Version}; falling back to embedded snapshot. Failure: {Failure}", provider.Descriptor.DisplayName, effectiveVersion, githubResult.Message);
             }
             else if (!githubResult.GitHubReleaseMetadataAvailable ||
                      githubResult.KnownGitHubArchiveSha256 is not null)
@@ -173,7 +149,7 @@ internal sealed class AspireSkillsInstaller(
                 {
                     logger.LogDebug(
                         "Using a previously verified GitHub {BundleDisplayName} bundle for version {Version} because GitHub is unavailable.",
-                        provider.DisplayName,
+                        provider.Descriptor.DisplayName,
                         effectiveVersion);
                     return await CompleteInstallationAsync(
                         offlineCachedResult.Bundle!,
@@ -183,7 +159,7 @@ internal sealed class AspireSkillsInstaller(
         }
         else
         {
-            logger.LogDebug("{BundleDisplayName} remote fetch feature '{Feature}' is disabled; using the embedded snapshot.", provider.DisplayName, KnownFeatures.AspireSkillsRemoteFetchEnabled);
+            logger.LogDebug("{BundleDisplayName} remote fetch feature '{Feature}' is disabled; using the embedded snapshot.", provider.Descriptor.DisplayName, KnownFeatures.AspireSkillsRemoteFetchEnabled);
         }
 
         var embeddedResult = await InstallFromEmbeddedAsync(provider, cacheRoot, effectiveVersion, embeddedMetadata, activity, cancellationToken).ConfigureAwait(false);
@@ -195,7 +171,7 @@ internal sealed class AspireSkillsInstaller(
         var unavailableMessage = string.Format(
             CultureInfo.CurrentCulture,
             AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable,
-            provider.DisplayName);
+            provider.Descriptor.DisplayName);
         var failureMessage = embeddedResult.Status == AcquisitionStatus.Failed
             ? embeddedResult.Message ?? unavailableMessage
             : githubResult is { Status: AcquisitionStatus.Failed, Message: { } githubMessage }
@@ -224,7 +200,7 @@ internal sealed class AspireSkillsInstaller(
             var release = await TryGetGitHubReleaseAsync(provider, httpClient, version, cancellationToken).ConfigureAwait(false);
             if (release is null)
             {
-                logger.LogDebug("{BundleDisplayName} GitHub release was unavailable for version {Version}.", provider.DisplayName, version);
+                logger.LogDebug("{BundleDisplayName} GitHub release was unavailable for version {Version}.", provider.Descriptor.DisplayName, version);
                 return AcquisitionResult.Unavailable();
             }
 
@@ -232,7 +208,7 @@ internal sealed class AspireSkillsInstaller(
             var asset = FindGitHubReleaseAsset(provider, release, version);
             if (asset is null)
             {
-                logger.LogDebug("{BundleDisplayName} GitHub release {TagName} does not contain a supported bundle asset for version {Version}.", provider.DisplayName, release.TagName, version);
+                logger.LogDebug("{BundleDisplayName} GitHub release {TagName} does not contain a supported bundle asset for version {Version}.", provider.Descriptor.DisplayName, release.TagName, version);
                 return AcquisitionResult.Unavailable(githubReleaseMetadataAvailable: true);
             }
 
@@ -258,7 +234,7 @@ internal sealed class AspireSkillsInstaller(
             var archivePath = Path.Combine(tempDirectory.FullName, GetSafeFileName(provider, asset.Name));
             if (!await TryDownloadGitHubAssetAsync(httpClient, asset.DownloadUrl, archivePath, cancellationToken).ConfigureAwait(false))
             {
-                logger.LogDebug("{BundleDisplayName} GitHub release asset {AssetName} was unavailable for version {Version}.", provider.DisplayName, asset.Name, version);
+                logger.LogDebug("{BundleDisplayName} GitHub release asset {AssetName} was unavailable for version {Version}.", provider.Descriptor.DisplayName, asset.Name, version);
                 return AcquisitionResult.Unavailable(knownGitHubArchiveSha256, githubReleaseMetadataAvailable);
             }
 
@@ -271,7 +247,7 @@ internal sealed class AspireSkillsInstaller(
                     throw new InvalidDataException(string.Format(
                         CultureInfo.InvariantCulture,
                         "{0} GitHub release asset '{1}' failed SHA-256 verification.",
-                        provider.DisplayName,
+                        provider.Descriptor.DisplayName,
                         asset.Name));
                 }
 
@@ -306,18 +282,18 @@ internal sealed class AspireSkillsInstaller(
                     githubArchiveSha256,
                     validationDisabled ? BundleArchiveSource.UnverifiedGitHub : BundleArchiveSource.VerifiedGitHub,
                     cancellationToken).ConfigureAwait(false);
-                activity?.SetTag($"aspire.{provider.AssetKindName}.source", "github");
-                activity?.SetTag($"aspire.{provider.AssetKindName}.cache_hit", false);
+                activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.source", "github");
+                activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.cache_hit", false);
                 return AcquisitionResult.Installed(bundle, archiveSha512, githubArchiveSha256);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
             {
                 // Includes version-mismatch failures from ValidateCompatibility, which fall back to the embedded snapshot.
-                logger.LogDebug(ex, "Downloaded {BundleDisplayName} GitHub release asset {AssetName} is invalid.", provider.DisplayName, asset.Name);
+                logger.LogDebug(ex, "Downloaded {BundleDisplayName} GitHub release asset {AssetName} is invalid.", provider.Descriptor.DisplayName, asset.Name);
                 return AcquisitionResult.Failed(string.Format(
                     CultureInfo.CurrentCulture,
                     AgentCommandStrings.AspireSkillsInstaller_InvalidBundle,
-                    provider.DisplayName,
+                    provider.Descriptor.DisplayName,
                     ex.Message));
             }
         }
@@ -325,14 +301,14 @@ internal sealed class AspireSkillsInstaller(
         // cancellation before treating the remote source as unavailable.
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            logger.LogDebug(ex, "{BundleDisplayName} GitHub release acquisition timed out for version {Version}.", provider.DisplayName, version);
+            logger.LogDebug(ex, "{BundleDisplayName} GitHub release acquisition timed out for version {Version}.", provider.Descriptor.DisplayName, version);
             return AcquisitionResult.Unavailable(knownGitHubArchiveSha256, githubReleaseMetadataAvailable);
         }
         // A truncated response body throws HttpIOException rather than HttpRequestException.
         // Catch it explicitly so local cache and archive I/O failures still propagate.
         catch (Exception ex) when (ex is HttpRequestException or HttpIOException or JsonException)
         {
-            logger.LogDebug(ex, "{BundleDisplayName} GitHub release acquisition failed for version {Version}.", provider.DisplayName, version);
+            logger.LogDebug(ex, "{BundleDisplayName} GitHub release acquisition failed for version {Version}.", provider.Descriptor.DisplayName, version);
             return AcquisitionResult.Unavailable(knownGitHubArchiveSha256, githubReleaseMetadataAvailable);
         }
     }
@@ -347,7 +323,7 @@ internal sealed class AspireSkillsInstaller(
     {
         if (metadata is null)
         {
-            logger.LogDebug("No embedded {BundleDisplayName} bundle metadata is available.", provider.DisplayName);
+            logger.LogDebug("No embedded {BundleDisplayName} bundle metadata is available.", provider.Descriptor.DisplayName);
             return AcquisitionResult.Unavailable();
         }
 
@@ -357,7 +333,7 @@ internal sealed class AspireSkillsInstaller(
                 string.Format(
                     CultureInfo.CurrentCulture,
                     AgentCommandStrings.AspireSkillsInstaller_InvalidMetadata,
-                    provider.DisplayName,
+                    provider.Descriptor.DisplayName,
                     metadataError));
         }
 
@@ -365,7 +341,7 @@ internal sealed class AspireSkillsInstaller(
         {
             logger.LogDebug(
                 "Embedded {BundleDisplayName} bundle version {EmbeddedVersion} does not match requested version {Version}.",
-                provider.DisplayName,
+                provider.Descriptor.DisplayName,
                 metadata.Version,
                 version);
             return AcquisitionResult.Unavailable();
@@ -400,7 +376,7 @@ internal sealed class AspireSkillsInstaller(
                 cancellationToken).ConfigureAwait(false);
             if (bundle is null)
             {
-                logger.LogDebug("Embedded {BundleDisplayName} archive is unavailable for version {Version}.", provider.DisplayName, version);
+                logger.LogDebug("Embedded {BundleDisplayName} archive is unavailable for version {Version}.", provider.Descriptor.DisplayName, version);
                 return AcquisitionResult.Unavailable();
             }
 
@@ -414,17 +390,17 @@ internal sealed class AspireSkillsInstaller(
                 version: version,
                 source: BundleArchiveSource.Embedded,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
-            activity?.SetTag($"aspire.{provider.AssetKindName}.source", "embedded");
-            activity?.SetTag($"aspire.{provider.AssetKindName}.cache_hit", false);
+            activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.source", "embedded");
+            activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.cache_hit", false);
             return AcquisitionResult.Installed(bundle, expectedArchiveSha512);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
         {
-            logger.LogDebug(ex, "Embedded {BundleDisplayName} bundle {AssetName} is invalid.", provider.DisplayName, metadata.AssetName);
+            logger.LogDebug(ex, "Embedded {BundleDisplayName} bundle {AssetName} is invalid.", provider.Descriptor.DisplayName, metadata.AssetName);
             return AcquisitionResult.Failed(string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.AspireSkillsInstaller_InvalidBundle,
-                provider.DisplayName,
+                provider.Descriptor.DisplayName,
                 ex.Message));
         }
     }
@@ -438,7 +414,7 @@ internal sealed class AspireSkillsInstaller(
             return string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.AspireSkillsInstaller_MissingMetadataVersion,
-                provider.DisplayName);
+                provider.Descriptor.DisplayName);
         }
 
         if (!string.Equals(metadata.Repository, GitHubRepository, StringComparison.OrdinalIgnoreCase))
@@ -446,7 +422,7 @@ internal sealed class AspireSkillsInstaller(
             return string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.AspireSkillsInstaller_MetadataRepositoryMismatch,
-                provider.DisplayName,
+                provider.Descriptor.DisplayName,
                 metadata.Repository,
                 GitHubRepository);
         }
@@ -456,7 +432,7 @@ internal sealed class AspireSkillsInstaller(
             return string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.AspireSkillsInstaller_MissingMetadataTag,
-                provider.DisplayName);
+                provider.Descriptor.DisplayName);
         }
 
         if (string.IsNullOrWhiteSpace(metadata.AssetName))
@@ -464,7 +440,7 @@ internal sealed class AspireSkillsInstaller(
             return string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.AspireSkillsInstaller_MissingMetadataAssetName,
-                provider.DisplayName);
+                provider.Descriptor.DisplayName);
         }
 
         if (string.IsNullOrWhiteSpace(metadata.Sha512))
@@ -472,7 +448,7 @@ internal sealed class AspireSkillsInstaller(
             return string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.AspireSkillsInstaller_MissingMetadataSha512,
-                provider.DisplayName);
+                provider.Descriptor.DisplayName);
         }
 
         return null;
@@ -526,7 +502,7 @@ internal sealed class AspireSkillsInstaller(
                 logger.LogDebug(
                     "Failed to fetch GitHub release {Tag} for the {BundleDisplayName} bundle: HTTP {StatusCode}.",
                     tag,
-                    provider.DisplayName,
+                    provider.Descriptor.DisplayName,
                     response.StatusCode);
                 return null;
             }
@@ -614,8 +590,8 @@ internal sealed class AspireSkillsInstaller(
 
         foreach (var archiveExtension in new[] { ".zip", ".tar.gz", ".tgz" })
         {
-            yield return $"{provider.AssetPrefix}-{prefixedVersion}{archiveExtension}";
-            yield return $"{provider.AssetPrefix}-{unprefixedVersion}{archiveExtension}";
+            yield return $"{provider.Descriptor.AssetPrefix}-{prefixedVersion}{archiveExtension}";
+            yield return $"{provider.Descriptor.AssetPrefix}-{unprefixedVersion}{archiveExtension}";
         }
     }
 
@@ -653,7 +629,7 @@ internal sealed class AspireSkillsInstaller(
         Activity? activity,
         CancellationToken cancellationToken)
     {
-        activity?.SetTag($"aspire.{provider.AssetKindName}.cache_hit", false);
+        activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.cache_hit", false);
         if (expectedArchiveSha512 is null &&
             expectedGitHubArchiveSha256 is null &&
             !requireVerifiedGitHubSource)
@@ -724,7 +700,7 @@ internal sealed class AspireSkillsInstaller(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogDebug(ex, "Failed to enumerate cached {BundleDisplayName} bundles for version {Version}.", provider.DisplayName, version);
+            logger.LogDebug(ex, "Failed to enumerate cached {BundleDisplayName} bundles for version {Version}.", provider.Descriptor.DisplayName, version);
             return null;
         }
 
@@ -770,7 +746,7 @@ internal sealed class AspireSkillsInstaller(
         {
             logger.LogDebug(
                 "Ignoring cached {BundleDisplayName} bundle at {CacheDirectory} because GitHub attestation verification was not recorded.",
-                provider.DisplayName,
+                provider.Descriptor.DisplayName,
                 cacheDirectory);
             return null;
         }
@@ -786,7 +762,7 @@ internal sealed class AspireSkillsInstaller(
             {
                 logger.LogDebug(
                     "Ignoring cached {BundleDisplayName} bundle at {CacheDirectory} because its archive SHA-512 does not match its cache identity.",
-                    provider.DisplayName,
+                    provider.Descriptor.DisplayName,
                     cacheDirectory);
                 return null;
             }
@@ -800,7 +776,7 @@ internal sealed class AspireSkillsInstaller(
             {
                 logger.LogDebug(
                     "Ignoring cached {BundleDisplayName} bundle at {CacheDirectory} because its GitHub archive SHA-256 does not match the current release asset.",
-                    provider.DisplayName,
+                    provider.Descriptor.DisplayName,
                     cacheDirectory);
                 return null;
             }
@@ -811,14 +787,13 @@ internal sealed class AspireSkillsInstaller(
                 skipCompatibilityCheck).ConfigureAwait(false);
             ValidateBundleVersion(provider, bundle, version);
             TouchLastUsed(provider, cacheDirectory);
-            activity?.SetTag($"aspire.{provider.AssetKindName}.source", "cache");
-            activity?.SetTag($"aspire.{provider.AssetKindName}.cache_hit", true);
-            logger.LogDebug("Using cached {BundleDisplayName} bundle from {CacheDirectory}.", provider.DisplayName, cacheDirectory);
+            activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.cache_hit", true);
+            logger.LogDebug("Using cached {BundleDisplayName} bundle from {CacheDirectory}.", provider.Descriptor.DisplayName, cacheDirectory);
             return AcquisitionResult.Installed(bundle, cachedArchiveSha512, cachedGitHubArchiveSha256);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            logger.LogDebug(ex, "Ignoring invalid cached {BundleDisplayName} bundle at {CacheDirectory}.", provider.DisplayName, cacheDirectory);
+            logger.LogDebug(ex, "Ignoring invalid cached {BundleDisplayName} bundle at {CacheDirectory}.", provider.Descriptor.DisplayName, cacheDirectory);
             return null;
         }
     }
@@ -911,14 +886,14 @@ internal sealed class AspireSkillsInstaller(
 
         if (Directory.Exists(targetDir))
         {
-            logger.LogDebug("Replacing {BundleDisplayName} cache directory {CacheDirectory}.", provider.DisplayName, targetDir);
+            logger.LogDebug("Replacing {BundleDisplayName} cache directory {CacheDirectory}.", provider.Descriptor.DisplayName, targetDir);
             TryDeleteDirectory(provider, targetDir);
             if (Directory.Exists(targetDir))
             {
                 throw new InvalidOperationException(string.Format(
                     CultureInfo.InvariantCulture,
                     "Could not replace {0} cache directory '{1}'.",
-                    provider.DisplayName,
+                    provider.Descriptor.DisplayName,
                     targetDir));
             }
         }
@@ -1003,7 +978,7 @@ internal sealed class AspireSkillsInstaller(
                 {
                     logger.LogDebug(
                         "Acquiring the {BundleDisplayName} bundle cache lock for version {Version} failed with HRESULT {HResult}; retrying in {DelayMilliseconds} ms (retry {RetryCount} of {MaxRetries}).",
-                        provider.DisplayName,
+                        provider.Descriptor.DisplayName,
                         version,
                         ex.HResult,
                         retryDelay.TotalMilliseconds,
@@ -1014,7 +989,7 @@ internal sealed class AspireSkillsInstaller(
                 {
                     logger.LogDebug(
                         "Acquiring the {BundleDisplayName} bundle cache lock for version {Version} failed with HRESULT {HResult}; retrying in {DelayMilliseconds} ms.",
-                        provider.DisplayName,
+                        provider.Descriptor.DisplayName,
                         version,
                         ex.HResult,
                         retryDelay.TotalMilliseconds);
@@ -1039,7 +1014,7 @@ internal sealed class AspireSkillsInstaller(
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
                 "{0} bundle version '{1}' does not match expected version '{2}'.",
-                provider.DisplayName,
+                provider.Descriptor.DisplayName,
                 bundle.Version,
                 expectedVersion));
         }
@@ -1059,7 +1034,7 @@ internal sealed class AspireSkillsInstaller(
 
     private string GetCacheRoot(IAspireSkillsBundleProvider provider)
     {
-        return Path.Combine(executionContext.CacheDirectory.FullName, provider.CacheDirectoryName);
+        return Path.Combine(executionContext.CacheDirectory.FullName, provider.Descriptor.CacheDirectoryName);
     }
 
     private static string GetVersionCacheDirectory(string cacheRoot, string version)
@@ -1086,7 +1061,7 @@ internal sealed class AspireSkillsInstaller(
             return;
         }
 
-        var maxAge = ReadWindow(configuration, provider.MaxCacheAgeKey, s_defaultMaxCacheAge);
+        var maxAge = ReadWindow(configuration, MaxCacheAgeKey, s_defaultMaxCacheAge);
         string[] cacheDirectories;
         try
         {
@@ -1094,7 +1069,7 @@ internal sealed class AspireSkillsInstaller(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogDebug(ex, "Failed to enumerate {BundleDisplayName} cache directories for cleanup.", provider.DisplayName);
+            logger.LogDebug(ex, "Failed to enumerate {BundleDisplayName} cache directories for cleanup.", provider.Descriptor.DisplayName);
             return;
         }
 
@@ -1119,7 +1094,7 @@ internal sealed class AspireSkillsInstaller(
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    logger.LogDebug(ex, "Failed to evaluate temporary {BundleDisplayName} cache directory {Directory} for cleanup.", provider.DisplayName, directory);
+                    logger.LogDebug(ex, "Failed to evaluate temporary {BundleDisplayName} cache directory {Directory} for cleanup.", provider.Descriptor.DisplayName, directory);
                 }
 
                 continue;
@@ -1175,7 +1150,7 @@ internal sealed class AspireSkillsInstaller(
                 logger.LogDebug(
                     ex,
                     "Skipping cleanup of {BundleDisplayName} cache version {Version} because it could not be evaluated.",
-                    provider.DisplayName,
+                    provider.Descriptor.DisplayName,
                     version);
             }
         }
@@ -1185,8 +1160,8 @@ internal sealed class AspireSkillsInstaller(
         IAspireSkillsBundleProvider provider,
         string versionCacheDirectory)
     {
-        return Directory.Exists(Path.Combine(versionCacheDirectory, provider.ContentRootDirectoryName)) ||
-            File.Exists(Path.Combine(versionCacheDirectory, provider.ManifestFileName)) ||
+        return Directory.Exists(Path.Combine(versionCacheDirectory, provider.Descriptor.ContentRootDirectoryName)) ||
+            File.Exists(Path.Combine(versionCacheDirectory, provider.Descriptor.ManifestFileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, ArchiveSha512FileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, GitHubArchiveSha256FileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, GitHubAttestationVerifiedFileName)) ||
@@ -1199,8 +1174,8 @@ internal sealed class AspireSkillsInstaller(
     {
         // Older CLIs stored extracted files directly in the version directory. Remove only
         // those known entries so digest-addressed children created by newer CLIs remain intact.
-        TryDeleteDirectory(provider, Path.Combine(versionCacheDirectory, provider.ContentRootDirectoryName));
-        TryDeleteFile(provider, Path.Combine(versionCacheDirectory, provider.ManifestFileName));
+        TryDeleteDirectory(provider, Path.Combine(versionCacheDirectory, provider.Descriptor.ContentRootDirectoryName));
+        TryDeleteFile(provider, Path.Combine(versionCacheDirectory, provider.Descriptor.ManifestFileName));
         TryDeleteFile(provider, Path.Combine(versionCacheDirectory, ArchiveSha512FileName));
         TryDeleteFile(provider, Path.Combine(versionCacheDirectory, GitHubArchiveSha256FileName));
         TryDeleteFile(provider, Path.Combine(versionCacheDirectory, GitHubAttestationVerifiedFileName));
@@ -1233,7 +1208,7 @@ internal sealed class AspireSkillsInstaller(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogDebug(ex, "Failed to update {BundleDisplayName} cache last-used marker for {Directory}.", provider.DisplayName, directory);
+            logger.LogDebug(ex, "Failed to update {BundleDisplayName} cache last-used marker for {Directory}.", provider.Descriptor.DisplayName, directory);
         }
     }
 
@@ -1261,7 +1236,7 @@ internal sealed class AspireSkillsInstaller(
             safeName = safeName.Replace(invalidCharacter, '_');
         }
 
-        return string.IsNullOrWhiteSpace(safeName) ? $"{provider.AssetPrefix}-{Guid.NewGuid():N}.archive" : safeName;
+        return string.IsNullOrWhiteSpace(safeName) ? $"{provider.Descriptor.AssetPrefix}-{Guid.NewGuid():N}.archive" : safeName;
     }
 
     private void TryDeleteDirectory(IAspireSkillsBundleProvider provider, string directory)
@@ -1275,7 +1250,7 @@ internal sealed class AspireSkillsInstaller(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogDebug(ex, "Failed to delete {BundleDisplayName} cache directory {Directory}.", provider.DisplayName, directory);
+            logger.LogDebug(ex, "Failed to delete {BundleDisplayName} cache directory {Directory}.", provider.Descriptor.DisplayName, directory);
         }
     }
 
@@ -1287,7 +1262,7 @@ internal sealed class AspireSkillsInstaller(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogDebug(ex, "Failed to delete {BundleDisplayName} cache file {Path}.", provider.DisplayName, path);
+            logger.LogDebug(ex, "Failed to delete {BundleDisplayName} cache file {Path}.", provider.Descriptor.DisplayName, path);
         }
     }
 

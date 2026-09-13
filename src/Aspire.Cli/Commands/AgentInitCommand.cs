@@ -6,7 +6,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Git;
@@ -24,7 +23,7 @@ namespace Aspire.Cli.Commands;
 internal sealed class AgentInitCommand : BaseCommand
 {
     private readonly IAgentEnvironmentDetector _agentEnvironmentDetector;
-    private readonly IAspireSkillsInstaller _aspireSkillsInstaller;
+    private readonly IAgentAssetCatalogProvider _assetCatalogProvider;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly IGitRepository _gitRepository;
     private readonly ILanguageDiscovery _languageDiscovery;
@@ -33,7 +32,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
     public AgentInitCommand(
         IAgentEnvironmentDetector agentEnvironmentDetector,
-        IAspireSkillsInstaller aspireSkillsInstaller,
+        IAgentAssetCatalogProvider assetCatalogProvider,
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
@@ -43,7 +42,7 @@ internal sealed class AgentInitCommand : BaseCommand
         : base("init", AgentCommandStrings.InitCommand_Description, services)
     {
         _agentEnvironmentDetector = agentEnvironmentDetector;
-        _aspireSkillsInstaller = aspireSkillsInstaller;
+        _assetCatalogProvider = assetCatalogProvider;
         _playwrightCliInstaller = playwrightCliInstaller;
         _gitRepository = gitRepository;
         _languageDiscovery = languageDiscovery;
@@ -66,7 +65,7 @@ internal sealed class AgentInitCommand : BaseCommand
     internal static readonly Option<string?> s_skillLocationsOption = new("--skill-locations")
     {
         Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillLocationsOptionDescription,
-            string.Join(",", AgentAssetLocation.GetLocations(AgentAssetKind.Skill).Select(l => l.Id)),
+            string.Join(",", SkillCatalog.KnownLocations.Select(l => l.Id)),
             ConsoleInteractionService.AllChoice,
             ConsoleInteractionService.NoneChoice),
         Recursive = true
@@ -75,7 +74,7 @@ internal sealed class AgentInitCommand : BaseCommand
     internal static readonly Option<string?> s_skillsOption = new("--skills")
     {
         Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillsOptionDescription,
-            string.Join(",", AgentAssetDefinition.CliDefined.Select(s => s.Name)),
+            string.Join(",", SkillCatalog.CliDefined.Select(s => s.Name)),
             ConsoleInteractionService.AllChoice,
             ConsoleInteractionService.NoneChoice),
         Recursive = true
@@ -84,7 +83,7 @@ internal sealed class AgentInitCommand : BaseCommand
     internal static readonly Option<string?> s_extensionLocationsOption = new("--extension-locations")
     {
         Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_ExtensionLocationsOptionDescription,
-            string.Join(",", AgentAssetLocation.GetLocations(AgentAssetKind.Extension).Select(l => l.Id)),
+            string.Join(",", ExtensionCatalog.KnownLocations.Select(l => l.Id)),
             ConsoleInteractionService.AllChoice,
             ConsoleInteractionService.NoneChoice),
         Recursive = true
@@ -226,8 +225,8 @@ internal sealed class AgentInitCommand : BaseCommand
             async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken),
             emoji: KnownEmojis.Robot);
 
-        // Detect the AppHost language to determine which skills to offer.
-        // When no language is detected (e.g., standalone `aspire agent init`), language-restricted skills are excluded.
+        // Detect the AppHost language to determine which assets to offer.
+        // When no language is detected (e.g., standalone `aspire agent init`), language-restricted assets are excluded.
         var detectedLanguage = await _languageDiscovery.DetectLanguageRecursiveAsync(workspaceRoot, cancellationToken);
 
         // Apply deprecated config migrations silently (these are fixes, not choices)
@@ -247,74 +246,17 @@ internal sealed class AgentInitCommand : BaseCommand
             }
         }
 
-        // --- Phase 1: Skill location selection ---
-        var skillLocations = AgentAssetLocation.GetLocations(AgentAssetKind.Skill);
-        var defaultLocationIds = string.Join(",", skillLocations.Where(l => l.IsDefault).Select(l => l.Id));
-        var skillLocationsBindingWithDefault = skillLocationsBinding.WithDefault(defaultLocationIds);
-
-        var selectedLocations = await InteractionService.PromptForSelectionsAsync(
+        // --- Phases 1 and 2: Skill location and asset selection ---
+        var skillSelection = await SelectAssetsAsync(
+            AgentAssetKind.Skill,
+            skillLocationsBinding,
+            skillsBinding,
+            detectedLanguage,
             AgentCommandStrings.InitCommand_SelectSkillLocations,
-            skillLocations,
-            loc => $"{loc.DisplayName} — {loc.Description}",
-            preSelected: skillLocations.Where(l => l.IsDefault),
-            optional: true,
-            binding: skillLocationsBindingWithDefault,
-            echoSelected: false,
-            cancellationToken: cancellationToken);
-
-        // --- Phase 2: Skill selection (only if locations were selected) ---
-        IReadOnlyList<AgentAssetDefinition> selectedSkills = [];
-        AspireSkillsBundle? aspireSkillsBundle = null;
-        string? bundleInstallFailureMessage = null;
-
-        if (selectedLocations.Count > 0)
-        {
-            IReadOnlyList<AgentAssetDefinition> availableSkills;
-            if (ShouldSkipBundleCatalogResolution(skillsBinding))
-            {
-                availableSkills = AgentAssetDefinition.CliDefined
-                    .Where(s => s.IsApplicableToLanguage(detectedLanguage))
-                    .ToList();
-            }
-            else
-            {
-                (availableSkills, aspireSkillsBundle, bundleInstallFailureMessage) = await ResolveAvailableSkillsAsync(detectedLanguage, cancellationToken);
-            }
-
-            // Order the merged catalog deterministically by name so the prompt is stable
-            // regardless of manifest order. OrdinalIgnoreCase matches the case-insensitive
-            // --skills parsing used elsewhere.
-            availableSkills = [.. availableSkills.OrderBy(static s => s.Name, StringComparer.OrdinalIgnoreCase)];
-
-            var defaultSkills = availableSkills.Where(static s => s.IsDefault).ToList();
-            var defaultSkillNames = string.Join(",", defaultSkills.Select(s => s.Name));
-            var skillsBindingWithDefault = skillsBinding.WithDefault(defaultSkillNames);
-
-            // When the bundle failed to install and the caller passed an explicit --skills value
-            // that names a bundle-only skill, the upcoming MatchChoicesOrThrow will reject the
-            // value as "not a valid choice" with no hint that the underlying cause was the
-            // bundle. Surface the install failure first so users can see why the catalog is short.
-            // We only do this when the value contains a name that is not in the available catalog
-            // and not a CLI-defined skill, so happy-path runs stay silent.
-            if (bundleInstallFailureMessage is not null)
-            {
-                var (wasProvided, requestedSkills, _) = PromptBinding.Resolve(skillsBindingWithDefault);
-                if (wasProvided && requestedSkills is not null && HasUnknownBundleSkillCandidate(requestedSkills, availableSkills))
-                {
-                    InteractionService.DisplayError(bundleInstallFailureMessage);
-                }
-            }
-
-            selectedSkills = await InteractionService.PromptForSelectionsAsync(
-                AgentCommandStrings.InitCommand_SelectSkills,
-                availableSkills,
-                skill => $"{skill.Name.EscapeMarkup()} — {SimplifyDescription(skill.Description).EscapeMarkup()}",
-                preSelected: defaultSkills,
-                optional: true,
-                binding: skillsBindingWithDefault,
-                echoSelected: false,
-                cancellationToken: cancellationToken);
-        }
+            AgentCommandStrings.InitCommand_SelectSkills,
+            cancellationToken);
+        var selectedLocations = skillSelection.Locations;
+        var selectedSkills = skillSelection.Assets;
 
         // --- Phase 2b: MCP server configuration ---
         // `mcpBinding` is only supplied by standalone `aspire agent init` (see s_mcpOption).
@@ -337,68 +279,28 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // --- Phase 3: Apply skill files for selected locations × skills ---
-        // Each skill file write is fast (small markdown files), so sequential execution
-        // is fine — parallelizing would complicate error handling for no meaningful gain.
-        var hasErrors = false;
-
-        var installedSkills = new List<InstalledSkillSummaryItem>();
-
         foreach (var location in selectedLocations)
         {
             context.AddSkillBaseDirectory(location.RelativeAssetDirectory);
-
-            foreach (var skill in selectedSkills)
-            {
-                // Playwright CLI is installed via PlaywrightCliInstaller, not as a static skill file
-                if (!skill.HasInstallableFiles)
-                {
-                    continue;
-                }
-
-                if (skill.SourceKind is AgentAssetSourceKind.AspireSkillsBundle && aspireSkillsBundle is null)
-                {
-                    continue;
-                }
-
-                var installResult = await InstallSkillAsync(
-                    workspaceRoot,
-                    location.RelativeAssetDirectory,
-                    skill,
-                    aspireSkillsBundle,
-                    isUserLevel: false,
-                    cancellationToken);
-                hasErrors |= !installResult.Succeeded;
-                if (installResult.UpdatedSkill is not null)
-                {
-                    installedSkills.Add(installResult.UpdatedSkill);
-                }
-
-                if (location.Scopes.HasFlag(AgentAssetLocationScope.User))
-                {
-                    installResult = await InstallSkillAsync(
-                        ExecutionContext.HomeDirectory,
-                        location.RelativeAssetDirectory,
-                        skill,
-                        aspireSkillsBundle,
-                        isUserLevel: true,
-                        cancellationToken);
-                    hasErrors |= !installResult.Succeeded;
-                    if (installResult.UpdatedSkill is not null)
-                    {
-                        installedSkills.Add(installResult.UpdatedSkill);
-                    }
-                }
-            }
         }
 
-        DisplayInstalledSkillsSummary(installedSkills);
+        var hasErrors = skillSelection.HasErrors;
+        hasErrors |= await InstallAssetsAsync(
+            skillSelection,
+            workspaceRoot,
+            new AssetInstallationMessages(
+                AgentCommandStrings.InitCommand_FailedToInstallSkill,
+                AgentCommandStrings.InitCommand_InstalledSkillsSummary,
+                AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
+                AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations),
+            cancellationToken);
 
         hasErrors |= await InstallExtensionsAsync(
             context, workspaceRoot, extensionLocationsBinding, extensionsBinding, detectedLanguage, cancellationToken);
 
         // --- Phase 4: Handle Playwright CLI (installs binary + mirrors skill files to registered directories) ---
         var selectedSkillDirs = selectedLocations.Select(l => l.RelativeAssetDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (selectedSkills.Contains(AgentAssetDefinition.PlaywrightCli) && selectedLocations.Count > 0)
+        if (selectedSkills.Contains(SkillCatalog.PlaywrightCli) && selectedLocations.Count > 0)
         {
             try
             {
@@ -531,101 +433,59 @@ internal sealed class AgentInitCommand : BaseCommand
             _ => client.ToString(),
         };
 
-    private async Task<(IReadOnlyList<AgentAssetDefinition> Skills, AspireSkillsBundle? Bundle, string? FailureMessage)> ResolveAvailableSkillsAsync(LanguageId? detectedLanguage, CancellationToken cancellationToken)
+    private async Task<AgentAssetSelection> SelectAssetsAsync(
+        AgentAssetKind assetKind,
+        PromptBinding<string?> locationsBinding,
+        PromptBinding<string?> assetsBinding,
+        LanguageId? detectedLanguage,
+        string locationsPrompt,
+        string assetsPrompt,
+        CancellationToken cancellationToken)
     {
-        var skills = new List<AgentAssetDefinition>();
-        AspireSkillsBundle? bundle = null;
-        string? failureMessage = null;
-
-        var result = await _aspireSkillsInstaller.InstallAsync(AgentAssetKind.Skill, cancellationToken);
-        if (result.Status is AspireSkillsInstallStatus.Installed)
+        var catalog = _assetCatalogProvider.GetCatalog(assetKind);
+        var defaultLocations = catalog.Locations.Where(static location => location.IsDefault).ToList();
+        var selectedLocations = await InteractionService.PromptForSelectionsAsync(
+            locationsPrompt,
+            catalog.Locations,
+            location => $"{location.DisplayName} — {location.Description}",
+            preSelected: defaultLocations,
+            optional: true,
+            binding: locationsBinding.WithDefault(string.Join(",", defaultLocations.Select(static location => location.Id))),
+            echoSelected: false,
+            cancellationToken: cancellationToken);
+        if (selectedLocations.Count == 0)
         {
-            bundle = result.Bundle ?? throw new InvalidOperationException("Aspire skills installer returned an installed result without a bundle.");
-            skills.AddRange(bundle.Assets.Where(static skill => !IsCliDefinedSkillName(skill.Name)));
-        }
-        else
-        {
-            // Preserve the install failure so the caller can surface it only when the user
-            // passed an explicit --skills value that names a bundle-only skill. Happy-path
-            // (interactive prompt with the embedded fallback) stays silent.
-            failureMessage = result.Message;
+            return new(catalog, selectedLocations, [], HasErrors: false);
         }
 
-        // When the bundle is unavailable (network failure, version mismatch, etc.), fall back
-        // silently to the CLI-defined skills. The installer already logs the underlying cause
-        // at debug level, so the user is not interrupted with a warning they cannot act on.
-        skills.AddRange(AgentAssetDefinition.CliDefined);
-
-        return (skills
-            .Where(s => s.IsApplicableToLanguage(detectedLanguage))
-            .ToList(), bundle, failureMessage);
-    }
-
-    private static bool HasUnknownBundleSkillCandidate(string requestedSkills, IReadOnlyList<AgentAssetDefinition> availableSkills)
-    {
-        // Tokens like "all" / "none" don't name skills, so the "looks like a bundle skill but missing"
-        // diagnostic doesn't apply — let the normal validation path handle them.
-        if (string.IsNullOrWhiteSpace(requestedSkills) ||
-            string.Equals(requestedSkills, ConsoleInteractionService.AllChoice, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(requestedSkills, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase))
+        var (wasProvided, requestedAssets, _) = PromptBinding.Resolve(assetsBinding);
+        var result = await _assetCatalogProvider.ResolveAsync(
+            assetKind, wasProvided ? requestedAssets : null, detectedLanguage, cancellationToken);
+        if (result.DiagnosticMessage is { } message)
         {
-            return false;
+            InteractionService.DisplayError(message);
         }
 
-        var requested = requestedSkills.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        foreach (var name in requested)
+        if (result.IsFailure)
         {
-            if (IsCliDefinedSkillName(name))
-            {
-                continue;
-            }
-
-            if (!availableSkills.Any(s => s.HasName(name, StringComparison.OrdinalIgnoreCase)))
-            {
-                // A non-CLI name that isn't in the catalog is exactly the case the bundle would have provided.
-                return true;
-            }
+            return new(catalog, selectedLocations, [], HasErrors: true);
         }
 
-        return false;
-    }
-
-    private static bool ShouldSkipBundleCatalogResolution(PromptBinding<string?> skillsBinding)
-    {
-        var (wasProvided, optionValue, _) = PromptBinding.Resolve(skillsBinding);
-        if (!wasProvided)
-        {
-            return false;
-        }
-
-        return ShouldSkipBundleCatalogResolution(optionValue);
-    }
-
-    private static bool ShouldSkipBundleCatalogResolution(string? value)
-    {
-        if (string.Equals(value, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(value) ||
-            string.Equals(value, ConsoleInteractionService.AllChoice, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var selectedSkillNames = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return selectedSkillNames.Length > 0 &&
-               selectedSkillNames.All(static name => IsCliDefinedSkillName(name));
-    }
-
-    private static bool IsCliDefinedSkillName(string name)
-    {
-        return AgentAssetDefinition.CliDefined.Any(skill => skill.HasName(name, StringComparison.OrdinalIgnoreCase));
+        var defaultAssets = result.Assets.Where(static asset => asset.IsDefault).ToList();
+        var selectedAssets = await InteractionService.PromptForSelectionsAsync(
+            assetsPrompt,
+            result.Assets,
+            asset => $"{asset.Name.EscapeMarkup()} — {SimplifyDescription(asset.Description).EscapeMarkup()}",
+            preSelected: defaultAssets,
+            optional: true,
+            binding: assetsBinding.WithDefault(string.Join(",", defaultAssets.Select(static asset => asset.Name))),
+            echoSelected: false,
+            cancellationToken: cancellationToken);
+        return new(catalog, selectedLocations, selectedAssets, HasErrors: false);
     }
 
     /// <summary>
-    /// Extracts the single short sentence from a skill description so the selection prompt
+    /// Extracts the single short sentence from an asset description so the selection prompt
     /// stays readable.
     /// </summary>
     /// <remarks>
@@ -685,55 +545,66 @@ internal sealed class AgentInitCommand : BaseCommand
     }
 
     /// <summary>
-    /// Installs the files for a skill at the specified location, creating or updating them as needed.
+    /// Installs selected file-backed assets and reports only changed destinations.
     /// </summary>
-    /// <returns>The install result, including the skill/location pair when files were updated.</returns>
-    private async Task<SkillInstallResult> InstallSkillAsync(
-        DirectoryInfo rootDirectory,
-        string relativeSkillDirectory,
-        AgentAssetDefinition skill,
-        AspireSkillsBundle? aspireSkillsBundle,
-        bool isUserLevel,
+    private async Task<bool> InstallAssetsAsync(
+        AgentAssetSelection selection,
+        DirectoryInfo workspaceRoot,
+        AssetInstallationMessages messages,
         CancellationToken cancellationToken)
     {
-        var relativeSkillPath = Path.Combine(relativeSkillDirectory, skill.Name);
-        var fullSkillDirectoryPath = Path.Combine(rootDirectory.FullName, relativeSkillPath);
+        // External installers (such as Playwright CLI) are handled by their own flow.
+        var fileBackedAssets = selection.Assets.Where(static asset => asset.HasInstallableFiles).ToArray();
+        var installedAssets = new List<InstalledAssetSummaryItem>();
+        var hasErrors = false;
 
-        try
+        // Preserve location -> asset -> workspace/user ordering, including the first-seen
+        // order used by summaries and failure messages.
+        foreach (var location in selection.Locations)
         {
-            var skillFiles = await GetSkillFilesAsync(skill, aspireSkillsBundle, cancellationToken);
-            var anyFileUpdated = await AgentAssetFileInstaller.InstallAsync(
-                rootDirectory, relativeSkillDirectory, skill, skillFiles, cancellationToken);
-
-            if (!anyFileUpdated)
+            foreach (var asset in fileBackedAssets)
             {
-                return new(Succeeded: true, UpdatedSkill: null);
+                foreach (var target in selection.Catalog.ResolveInstallTargets(
+                    location, workspaceRoot, ExecutionContext.HomeDirectory, _environment))
+                {
+                    try
+                    {
+                        if (await selection.Catalog.FileInstaller.InstallAsync(
+                            target.RootDirectory, target.RelativeAssetDirectory, asset.Name, asset.Files, cancellationToken))
+                        {
+                            installedAssets.Add(new(asset.Name, target.DisplayDirectory));
+                        }
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or AggregateException)
+                    {
+                        InteractionService.DisplayError(
+                            string.Format(CultureInfo.CurrentCulture, messages.FailureFormat, asset.Name,
+                                Path.Combine(target.RootDirectory.FullName, target.RelativeAssetDirectory, asset.Name), ex.Message));
+                        hasErrors = true;
+                    }
+                }
             }
+        }
 
-            var displayLocation = GetDisplaySkillDirectory(relativeSkillDirectory, isUserLevel);
-            return new(Succeeded: true, new InstalledSkillSummaryItem(skill.Name, displayLocation));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or AggregateException)
-        {
-            InteractionService.DisplayError(
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, fullSkillDirectoryPath, ex.Message));
-            return new(Succeeded: false, UpdatedSkill: null);
-        }
+        DisplayInstalledAssetsSummary(installedAssets, messages);
+        return hasErrors;
     }
 
-    private void DisplayInstalledSkillsSummary(IReadOnlyList<InstalledSkillSummaryItem> installedSkills)
+    private void DisplayInstalledAssetsSummary(
+        IReadOnlyList<InstalledAssetSummaryItem> installedAssets,
+        AssetInstallationMessages messages)
     {
-        if (installedSkills.Count == 0)
+        if (installedAssets.Count == 0)
         {
             return;
         }
 
-        var skillNames = string.Join(", ", GetUniqueValues(installedSkills.Select(static installedSkill => installedSkill.SkillName)));
-        var locations = string.Join(", ", GetUniqueValues(installedSkills.Select(static installedSkill => installedSkill.DisplayLocation)));
+        var assetNames = string.Join(", ", GetUniqueValues(installedAssets.Select(static asset => asset.AssetName)));
+        var locations = string.Join(", ", GetUniqueValues(installedAssets.Select(static asset => asset.DisplayLocation)));
         var message = string.Join(Environment.NewLine,
-            AgentCommandStrings.InitCommand_InstalledSkillsSummary,
-            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills, skillNames)}",
-            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, locations)}");
+            messages.SummaryHeading,
+            $"  {string.Format(CultureInfo.CurrentCulture, messages.AssetNamesFormat, assetNames)}",
+            $"  {string.Format(CultureInfo.CurrentCulture, messages.LocationsFormat, locations)}");
 
         InteractionService.DisplayMessage(KnownEmojis.Robot, message);
     }
@@ -754,35 +625,6 @@ internal sealed class AgentInitCommand : BaseCommand
         return uniqueValues;
     }
 
-    private static string GetDisplaySkillDirectory(string relativeSkillDirectory, bool isUserLevel)
-    {
-        var displayRelativeSkillDirectory = relativeSkillDirectory
-            .Replace(Path.DirectorySeparatorChar, '/')
-            .Replace(Path.AltDirectorySeparatorChar, '/');
-
-        return isUserLevel ? $"~/{displayRelativeSkillDirectory}" : displayRelativeSkillDirectory;
-    }
-
-    private static async Task<IReadOnlyList<AgentAssetFile>> GetSkillFilesAsync(AgentAssetDefinition skill, AspireSkillsBundle? aspireSkillsBundle, CancellationToken cancellationToken)
-    {
-        if (skill.Files.Count > 0)
-        {
-            return skill.Files.Where(file => skill.ShouldInstallFile(file.RelativePath)).ToList();
-        }
-
-        if (skill.SourceKind is AgentAssetSourceKind.AspireSkillsBundle)
-        {
-            if (aspireSkillsBundle is null)
-            {
-                throw new InvalidOperationException($"Aspire skills bundle was not resolved for skill '{skill.Name}'.");
-            }
-
-            return await aspireSkillsBundle.GetAssetFilesAsync(skill, cancellationToken);
-        }
-
-        throw new InvalidOperationException($"Skill '{skill.Name}' does not define installable files.");
-    }
-
     private async Task<bool> InstallExtensionsAsync(
         AgentEnvironmentScanContext context,
         DirectoryInfo workspaceRoot,
@@ -799,9 +641,10 @@ internal sealed class AgentInitCommand : BaseCommand
             return false;
         }
 
-        // Only Copilot App currently loads these extensions. Explicit options still allow
-        // provisioning a workspace for another machine without requiring that client locally.
-        if (!context.DetectedClients.Contains(AgentClientKind.CopilotApp))
+        // Explicit options allow provisioning a workspace for another machine without
+        // requiring a compatible client locally.
+        var catalog = _assetCatalogProvider.GetCatalog(AgentAssetKind.Extension);
+        if (!catalog.IsCompatibleWith(context.DetectedClients))
         {
             if (!locationsProvided && !extensionsProvided)
             {
@@ -811,86 +654,39 @@ internal sealed class AgentInitCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.InitCommand_NoCompatibleClientForExplicitExtensions);
         }
 
-        var locations = AgentAssetLocation.GetLocations(AgentAssetKind.Extension);
-        var defaultLocations = locations.Where(l => l.IsDefault).ToList();
-        var selectedLocations = await InteractionService.PromptForSelectionsAsync(
+        var selection = await SelectAssetsAsync(
+            AgentAssetKind.Extension,
+            locationsBinding,
+            extensionsBinding,
+            detectedLanguage,
             AgentCommandStrings.InitCommand_SelectExtensionLocations,
-            locations,
-            location => $"{location.DisplayName} — {location.Description}",
-            preSelected: defaultLocations,
-            optional: true,
-            binding: locationsBinding.WithDefault(string.Join(",", defaultLocations.Select(l => l.Id))),
-            echoSelected: false,
-            cancellationToken: cancellationToken);
-        if (selectedLocations.Count == 0)
-        {
-            return false;
-        }
-
-        var result = await _aspireSkillsInstaller.InstallAsync(AgentAssetKind.Extension, cancellationToken);
-        if (result.Status is not AspireSkillsInstallStatus.Installed)
-        {
-            InteractionService.DisplayError(result.Message ?? AgentCommandStrings.InitCommand_ExtensionBundleUnavailable);
-            return true;
-        }
-
-        var bundle = result.Bundle ?? throw new InvalidOperationException("Extension installer returned an installed result without a bundle.");
-        var extensions = bundle.Assets
-            .Where(asset => asset.IsApplicableToLanguage(detectedLanguage))
-            .OrderBy(asset => asset.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var defaultExtensions = extensions.Where(asset => asset.IsDefault).ToList();
-        var selectedExtensions = await InteractionService.PromptForSelectionsAsync(
             AgentCommandStrings.InitCommand_SelectExtensions,
-            extensions,
-            asset => $"{asset.Name.EscapeMarkup()} — {SimplifyDescription(asset.Description).EscapeMarkup()}",
-            preSelected: defaultExtensions,
-            optional: true,
-            binding: extensionsBinding.WithDefault(string.Join(",", defaultExtensions.Select(asset => asset.Name))),
-            echoSelected: false,
-            cancellationToken: cancellationToken);
+            cancellationToken);
 
-        var installed = new List<InstalledSkillSummaryItem>();
-        var hasErrors = false;
-        foreach (var location in selectedLocations)
-        {
-            var target = location.Scopes.HasFlag(AgentAssetLocationScope.Workspace)
-                ? new AgentAssetInstallTarget(workspaceRoot, location.RelativeAssetDirectory, GetDisplaySkillDirectory(location.RelativeAssetDirectory, isUserLevel: false))
-                : location.ResolveUserInstallTarget(ExecutionContext.HomeDirectory, _environment);
-            foreach (var extension in selectedExtensions)
-            {
-                try
-                {
-                    var files = await bundle.GetAssetFilesAsync(extension, cancellationToken);
-                    if (await AgentAssetFileInstaller.InstallAsync(target.RootDirectory, target.RelativeAssetDirectory, extension, files, cancellationToken))
-                    {
-                        installed.Add(new(extension.Name, target.DisplayDirectory));
-                    }
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or AggregateException)
-                {
-                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
-                        AgentCommandStrings.InitCommand_FailedToInstallExtension, extension.Name,
-                        Path.Combine(target.RootDirectory.FullName, target.RelativeAssetDirectory, extension.Name), ex.Message));
-                    hasErrors = true;
-                }
-            }
-        }
-
-        if (installed.Count > 0)
-        {
-            InteractionService.DisplayMessage(KnownEmojis.Robot, string.Join(Environment.NewLine,
+        return selection.HasErrors || await InstallAssetsAsync(
+            selection,
+            workspaceRoot,
+            new AssetInstallationMessages(
+                AgentCommandStrings.InitCommand_FailedToInstallExtension,
                 AgentCommandStrings.InitCommand_InstalledExtensionsSummary,
-                $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledExtensionsSummaryExtensions, string.Join(", ", GetUniqueValues(installed.Select(asset => asset.SkillName))))}",
-                $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledExtensionsSummaryLocations, string.Join(", ", GetUniqueValues(installed.Select(asset => asset.DisplayLocation))))}"));
-        }
-
-        return hasErrors;
+                AgentCommandStrings.InitCommand_InstalledExtensionsSummaryExtensions,
+                AgentCommandStrings.InitCommand_InstalledExtensionsSummaryLocations),
+            cancellationToken);
     }
 
-    private sealed record InstalledSkillSummaryItem(string SkillName, string DisplayLocation);
+    private sealed record InstalledAssetSummaryItem(string AssetName, string DisplayLocation);
 
-    private readonly record struct SkillInstallResult(bool Succeeded, InstalledSkillSummaryItem? UpdatedSkill);
+    private sealed record AgentAssetSelection(
+        IAgentAssetCatalog Catalog,
+        IReadOnlyList<AgentAssetLocation> Locations,
+        IReadOnlyList<AgentAssetDefinition> Assets,
+        bool HasErrors);
+
+    private sealed record AssetInstallationMessages(
+        string FailureFormat,
+        string SummaryHeading,
+        string AssetNamesFormat,
+        string LocationsFormat);
 }
 
 internal readonly record struct AgentInitExecutionResult(

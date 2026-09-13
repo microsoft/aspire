@@ -9,19 +9,19 @@ namespace Aspire.Cli.Agents.AspireSkills;
 /// <summary>
 /// Describes a published Aspire Skills bundle.
 /// </summary>
-internal sealed class SkillBundleManifest
+internal sealed class AspireSkillsBundleManifest
 {
     public string? Version { get; init; }
 
-    public SkillBundleSupports? Supports { get; init; }
+    public AspireSkillsBundleSupports? Supports { get; init; }
 
-    public SkillBundleAsset?[] Assets { get; init; } = [];
+    public AspireSkillsBundleAsset?[] Assets { get; init; } = [];
 }
 
 /// <summary>
-/// Describes the Aspire versions supported by a skills bundle.
+/// Describes the Aspire versions supported by an Aspire Skills bundle.
 /// </summary>
-internal sealed class SkillBundleSupports
+internal sealed class AspireSkillsBundleSupports
 {
     public string? AspireCli { get; init; }
 
@@ -29,9 +29,9 @@ internal sealed class SkillBundleSupports
 }
 
 /// <summary>
-/// Describes a single skill in an Aspire Skills bundle.
+/// Describes a single asset in an Aspire Skills bundle.
 /// </summary>
-internal sealed class SkillBundleAsset
+internal sealed class AspireSkillsBundleAsset
 {
     public string? Name { get; init; }
 
@@ -41,18 +41,18 @@ internal sealed class SkillBundleAsset
 
     public string[] InstallExcludedRelativePaths { get; init; } = [];
 
-    public SkillBundleFile?[] Files { get; init; } = [];
+    public AspireSkillsBundleFile?[] Files { get; init; } = [];
 }
 
 /// <summary>
 /// Describes a single file in an Aspire Skills bundle.
 /// </summary>
-internal sealed class SkillBundleFile
+internal sealed class AspireSkillsBundleFile
 {
     public string? RelativePath { get; init; }
 
-    // Lowercase hex SHA-512 of the file contents (preferred), read from `skill-manifest.json` inside the
-    // bundle archive (an optional `sha512-` SRI-style prefix is tolerated). Emitted per-file by current
+    // Lowercase hex SHA-512 of the file contents (preferred), read from `skill-manifest.json` or
+    // `extension-manifest.json` (an optional `sha512-` SRI-style prefix is tolerated). Emitted per-file by current
     // microsoft/aspire-skills' build-aspire-bundles.mjs and verified by AspireSkillsBundleProvider.
     public string? Sha512 { get; init; }
 
@@ -88,7 +88,7 @@ internal sealed class EmbeddedAspireSkillsBundleMetadata
     ReadCommentHandling = JsonCommentHandling.Skip,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true)]
-[JsonSerializable(typeof(SkillBundleManifest))]
+[JsonSerializable(typeof(AspireSkillsBundleManifest))]
 [JsonSerializable(typeof(EmbeddedAspireSkillsBundleMetadata))]
 internal sealed partial class AspireSkillsJsonSerializerContext : JsonSerializerContext
 {

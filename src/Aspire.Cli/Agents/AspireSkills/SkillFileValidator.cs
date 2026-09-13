@@ -2,76 +2,22 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Text;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Provides the Aspire Skills bundle containing agent skills.
+/// Validates the frontmatter required by agent hosts in SKILL.md files.
 /// </summary>
-internal class SkillBundleProvider : AspireSkillsBundleProvider
+internal static class SkillFileValidator
 {
     private const int MaxSkillDescriptionLength = 1024;
 
-    public SkillBundleProvider(
-        CliExecutionContext executionContext,
-        ILogger<SkillBundleProvider> logger)
-        : base(executionContext, logger)
+    public static void Validate(string assetName, ReadOnlySpan<byte> content)
     {
+        ValidateFrontmatter(assetName, AgentAssetFile.DecodeText(content));
     }
 
-    internal SkillBundleProvider(CliExecutionContext executionContext)
-        : base(executionContext, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance)
-    {
-    }
-
-    internal SkillBundleProvider()
-    {
-    }
-
-    internal SkillBundleProvider(string currentCliVersion, string currentSdkVersion)
-        : base(currentCliVersion, currentSdkVersion)
-    {
-    }
-
-    public override AgentAssetKind AssetKind => AgentAssetKind.Skill;
-
-    public override string AssetKindName => "skills";
-
-    public override string AssetPrefix => "aspire-skills";
-
-    public override string CacheDirectoryName => "aspire-skills";
-
-    public override string DisplayName => "Aspire skills";
-
-    public override string ManifestFileName => "skill-manifest.json";
-
-    public override string ManifestAssetsPropertyName => "skills";
-
-    public override string ContentRootDirectoryName => "skills";
-
-    public override string RequiredFileName => "SKILL.md";
-
-    public override string EmbeddedArchiveResourceName => "aspire-skills.bundle.tgz";
-
-    public override string EmbeddedMetadataResourceName => "aspire-skills.metadata.json";
-
-    protected override void ValidateRequiredFile(string assetName, ReadOnlySpan<byte> content)
-    {
-        try
-        {
-            ValidateSkillFileFrontmatter(assetName, AgentAssetFile.DecodeText(content));
-        }
-        catch (DecoderFallbackException ex)
-        {
-            throw new InvalidOperationException(
-                $"Aspire skills bundle skill '{assetName}' must contain valid UTF-8 in SKILL.md.",
-                ex);
-        }
-    }
-
-    internal static void ValidateSkillFileFrontmatter(string skillName, string content)
+    private static void ValidateFrontmatter(string skillName, string content)
     {
         var frontmatterName = GetFrontmatterValue(content, "name");
         if (string.IsNullOrWhiteSpace(frontmatterName))

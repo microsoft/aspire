@@ -16,6 +16,11 @@ internal enum AgentAssetFileComparison
     ExactBytes,
 
     /// <summary>
+    /// Text is decoded with BOM detection and compared after normalizing line endings.
+    /// </summary>
+    NormalizedText,
+
+    /// <summary>
     /// UTF-8 text is compared after normalizing line endings.
     /// </summary>
     NormalizedUtf8Text,
@@ -34,7 +39,7 @@ internal sealed class AgentAssetFile
         : this(
             relativePath,
             Encoding.UTF8.GetBytes(content),
-            AgentAssetFileComparison.NormalizedUtf8Text)
+            AgentAssetFileComparison.NormalizedText)
     {
     }
 
@@ -61,9 +66,9 @@ internal sealed class AgentAssetFile
     public ReadOnlyMemory<byte> Bytes { get; }
 
     /// <summary>
-    /// Gets the file content decoded as strict UTF-8 text.
+    /// Gets the file content decoded according to its text comparison policy.
     /// </summary>
-    public string Content => DecodeText(Bytes.Span);
+    public string Content => DecodeContent(Bytes.Span);
 
     /// <summary>
     /// Gets how existing file content is compared with this payload.
@@ -75,16 +80,23 @@ internal sealed class AgentAssetFile
     /// </summary>
     public bool ContentEquals(ReadOnlySpan<byte> existingContent)
     {
+        // Identical payloads are always equivalent, including non-UTF-8 files whose
+        // extensions normally indicate text (for example a UTF-16 PowerShell script).
+        if (Bytes.Span.SequenceEqual(existingContent))
+        {
+            return true;
+        }
+
         if (Comparison is AgentAssetFileComparison.ExactBytes)
         {
-            return Bytes.Span.SequenceEqual(existingContent);
+            return false;
         }
 
         try
         {
             return string.Equals(
                 Content.ReplaceLineEndings("\n"),
-                DecodeText(existingContent).ReplaceLineEndings("\n"),
+                DecodeContent(existingContent).ReplaceLineEndings("\n"),
                 StringComparison.Ordinal);
         }
         catch (DecoderFallbackException)
@@ -94,10 +106,25 @@ internal sealed class AgentAssetFile
     }
 
     /// <summary>
-    /// Decodes strict UTF-8 content, discarding a leading byte order mark when present.
+    /// Decodes text with the same BOM detection and replacement fallback as skill file reads.
     /// </summary>
     internal static string DecodeText(ReadOnlySpan<byte> content)
     {
+        // Skills have historically used StreamReader/File.ReadAllText, including support
+        // for UTF-16/UTF-32 BOMs and replacement decoding. Binary extension support must
+        // not tighten that existing text contract.
+        using var stream = new MemoryStream(content.ToArray(), writable: false);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
+    }
+
+    private string DecodeContent(ReadOnlySpan<byte> content)
+    {
+        if (Comparison is AgentAssetFileComparison.NormalizedText)
+        {
+            return DecodeText(content);
+        }
+
         var text = s_strictUtf8.GetString(content);
         return text.Length > 0 && text[0] == '\uFEFF' ? text[1..] : text;
     }

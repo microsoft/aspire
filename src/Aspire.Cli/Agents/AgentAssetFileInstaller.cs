@@ -2,40 +2,72 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.IO.Hashing;
+using System.Text;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Installs file-backed agent assets with staged writes and rollback on publication failure.
+/// Serializes file-backed agent asset writers with staged writes and rollback on publication failure.
 /// </summary>
-internal static class AgentAssetFileInstaller
+internal sealed class AgentAssetFileInstaller
 {
-    // Match Windows and default macOS volume behavior. Case-sensitive macOS volumes
-    // conservatively retain differently cased files rather than deleting a possible alias.
-    private static readonly StringComparer s_pathComparer = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+    private static readonly StringComparer s_pathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
+
+    private static readonly TimeSpan s_leaseRetryDelay = TimeSpan.FromMilliseconds(100);
+
+    private readonly Action<string, HashSet<string>, List<StagedFile>> _collectStaleFiles;
+
+    private AgentAssetFileInstaller(Action<string, HashSet<string>, List<StagedFile>> collectStaleFiles)
+    {
+        _collectStaleFiles = collectStaleFiles;
+    }
+
+    /// <summary>
+    /// Adds or updates supplied files without removing user-authored files.
+    /// </summary>
+    public static AgentAssetFileInstaller Additive { get; } = new(static (_, _, _) => { });
+
+    /// <summary>
+    /// Synchronizes package-owned files, including stale-file removals in the same transaction.
+    /// </summary>
+    public static AgentAssetFileInstaller ManagedDirectory { get; } = new(CollectStaleFiles);
 
     /// <summary>
     /// Installs an asset's files, returning whether any files were updated or removed.
     /// </summary>
-    public static async Task<bool> InstallAsync(
+    public async Task<bool> InstallAsync(
         DirectoryInfo rootDirectory,
         string relativeAssetDirectory,
-        AgentAssetDefinition asset,
+        string assetName,
         IReadOnlyList<AgentAssetFile> files,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var assetName = NormalizeRelativePath(asset.Name);
+        assetName = NormalizeRelativePath(assetName);
         if (assetName.Contains(Path.DirectorySeparatorChar))
         {
-            throw new InvalidOperationException($"Agent asset name '{asset.Name}' must be a single directory name.");
+            throw new InvalidOperationException($"Agent asset name '{assetName}' must be a single directory name.");
         }
 
+        relativeAssetDirectory = NormalizeRelativePath(relativeAssetDirectory);
         var rootPath = rootDirectory.FullName;
-        var parentPath = Path.Combine(rootPath, NormalizeRelativePath(relativeAssetDirectory));
+        var parentPath = Path.Combine(rootPath, relativeAssetDirectory);
         var assetPath = Path.Combine(parentPath, assetName);
+        ValidateOrCreateDirectory(rootPath, assetPath, createMissing: false);
+
+        // Resolve ancestors above the installation root as well. Use the resolved path for both
+        // the lease and writes so a caller's directory alias cannot redirect a waiting writer.
+        rootPath = ResolveDirectoryPath(rootPath);
+        parentPath = Path.Combine(rootPath, relativeAssetDirectory);
+        assetPath = Path.Combine(parentPath, assetName);
+
+        // Comparison and stale-file planning must happen after acquisition: another revision may
+        // have been installed while we waited. Keep the lease through rollback and staging cleanup.
+        using var destinationLease = await AcquireDestinationLeaseAsync(assetPath, cancellationToken);
         ValidateOrCreateDirectory(rootPath, assetPath, createMissing: false);
 
         var expectedPaths = new HashSet<string>(s_pathComparer);
@@ -71,12 +103,10 @@ internal static class AgentAssetFileInstaller
                 stagedFiles.Add(new(destinationPath, stagedPath));
             }
 
-            if (asset.AssetKind is AgentAssetKind.Extension && Directory.Exists(assetPath))
+            if (Directory.Exists(assetPath))
             {
-                // Extension directories are package-owned executable trees. Keeping old files
-                // can leave an incompatible mix of JavaScript/UI versions. Skills stay additive.
                 ValidateOrCreateDirectory(rootPath, assetPath, createMissing: false);
-                CollectStaleFiles(assetPath, expectedPaths, stagedFiles);
+                _collectStaleFiles(assetPath, expectedPaths, stagedFiles);
             }
 
             if (stagedFiles.Count == 0)
@@ -95,6 +125,126 @@ internal static class AgentAssetFileInstaller
         {
             DeleteTransactionDirectory(stagingPath);
         }
+    }
+
+    /// <summary>
+    /// Gets the stable, per-user lease path for an installed asset directory.
+    /// </summary>
+    internal static string GetDestinationLeasePath(string assetPath)
+    {
+        var homePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!Path.IsPathFullyQualified(homePath))
+        {
+            throw new IOException("The user profile directory is required to coordinate agent asset installation.");
+        }
+
+        // Like CLI backchannels, leases are shared by installations under the user's profile,
+        // not a particular ASPIRE_HOME, worktree, or bundle version. Do not put them in the
+        // cache (which can be cleared) or the managed payload (which can remove stale files).
+        var leaseDirectory = ResolveDirectoryPath(Path.Combine(homePath, ".aspire", "cli", "agent-asset-locks"));
+        var assetIdentity = GetDirectoryIdentity(assetPath);
+        var leaseDirectoryIdentity = GetDirectoryIdentity(leaseDirectory);
+        if (leaseDirectoryIdentity == assetIdentity ||
+            leaseDirectoryIdentity.StartsWith(assetIdentity + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Agent asset destination '{assetPath}' contains the installer lease directory.");
+        }
+
+        var leaseName = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(assetIdentity))).ToLowerInvariant();
+        return Path.Combine(leaseDirectory, $"{leaseName}.lock");
+    }
+
+    private static string ResolveDirectoryPath(string path)
+        => PathNormalizer.TryResolveSymlinks(path, out var resolvedPath)
+            ? resolvedPath
+            : throw new IOException($"Could not resolve agent asset directory '{path}'.");
+
+    private static string GetDirectoryIdentity(string path)
+    {
+        // Normalize before hashing even when the destination does not exist yet. Folding case
+        // and Unicode also covers case-insensitive volumes mounted on Unix; on case-sensitive
+        // volumes this can only serialize otherwise independent writers, never split a lease.
+        return Path.TrimEndingDirectorySeparator(ResolveDirectoryPath(path))
+            .Normalize(NormalizationForm.FormC)
+            .ToUpperInvariant();
+    }
+
+    private static async Task<FileStream> AcquireDestinationLeaseAsync(string assetPath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var leasePath = GetDestinationLeasePath(assetPath);
+        var leaseDirectory = GetParentDirectory(leasePath);
+        var leaseRoot = Path.GetPathRoot(leasePath)!;
+        ValidateOrCreateDirectory(leaseRoot, leaseDirectory, createMissing: true);
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ValidateOrCreateDirectory(leaseRoot, leaseDirectory, createMissing: false);
+            ValidateDestinationFile(leasePath);
+
+            FileStream lease;
+            try
+            {
+                // Retain the empty file when closing. FileLock uses DeleteOnClose, which can
+                // unlink a Unix lock while a waiter opens it and allow a third writer to lock
+                // a different inode. An OS handle has no thread affinity across awaits.
+                lease = new FileStream(leasePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, bufferSize: 1);
+            }
+            catch (IOException ex) when (IsLeaseContention(ex))
+            {
+                await Task.Delay(s_leaseRetryDelay, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            try
+            {
+                ValidateOrCreateDirectory(leaseRoot, leaseDirectory, createMissing: false);
+                if (!ValidateDestinationFile(leasePath))
+                {
+                    throw new IOException($"Agent asset lease '{leasePath}' disappeared during acquisition.");
+                }
+
+                if (!OperatingSystem.IsWindows())
+                {
+                    VerifyExclusiveLease(leasePath);
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                return lease;
+            }
+            catch
+            {
+                lease.Dispose();
+                throw;
+            }
+        }
+    }
+
+    private static void VerifyExclusiveLease(string leasePath)
+    {
+        try
+        {
+            // As in HeldFileLease, fail closed if Unix flock is unsupported or disabled:
+            // FileStream can otherwise succeed without actually acquiring an exclusive lock.
+            // https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/Microsoft/Win32/SafeHandles/SafeFileHandle.Unix.cs
+            using var verification = new FileStream(leasePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None, bufferSize: 1);
+        }
+        catch (IOException ex) when (IsLeaseContention(ex))
+        {
+            return;
+        }
+
+        throw new IOException($"Exclusive file locking is required for agent asset lease '{leasePath}'.");
+    }
+
+    private static bool IsLeaseContention(IOException exception)
+    {
+        // Windows sharing/lock violations are HRESULTs. Unix FileStream exposes EWOULDBLOCK
+        // as raw errno (11 on Linux, 35 on macOS). Other I/O and access failures must surface.
+        return OperatingSystem.IsWindows()
+            ? exception.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021)
+            : exception.HResult is 11 or 35;
     }
 
     private static string NormalizeRelativePath(string path)

@@ -29,22 +29,20 @@ public class AspireSkillsInstallerTests
     private const string GitHubReleaseAssetBuildType = "https://actions.github.io/buildtypes/workflow/v1";
 
     [Fact]
-    public async Task InstallAsync_ReturnsUnavailableWhenProviderIsNotRegistered()
+    public async Task InstallAsync_WhenProviderIsNull_ThrowsArgumentNullException()
     {
         var rootDirectory = CreateTempDirectory();
 
         try
         {
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var installer = CreateInstaller(executionContext);
+            var (installer, _, _) = CreateInstaller(executionContext);
 
-            var result = await installer.InstallAsync(
-                (AgentAssetKind)int.MaxValue,
-                TestContext.Current.CancellationToken);
+            var exception = await Assert.ThrowsAsync<ArgumentNullException>(() => installer.InstallAsync(
+                null!,
+                TestContext.Current.CancellationToken));
 
-            Assert.Equal(AspireSkillsInstallStatus.Unavailable, result.Status);
-            Assert.Null(result.Bundle);
-            Assert.Null(result.Message);
+            Assert.Equal("provider", exception.ParamName);
         }
         finally
         {
@@ -73,13 +71,13 @@ public class AspireSkillsInstallerTests
                 reportedSourceName,
                 $"Test.{Path.GetRandomFileName()}");
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: await CreateEmbeddedBundleProviderAsync(),
                 features: new TestFeatures(),
                 telemetry: telemetry);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             var activity = Assert.Single(activities, static activity => activity.OperationName == AspireSkillsInstaller.TelemetryActivityName);
@@ -95,6 +93,15 @@ public class AspireSkillsInstallerTests
             Assert.Equal(
                 false,
                 activity.GetTagItem("aspire.skills.remote_fetch_enabled"));
+
+            var cachedResult = await installer.InstallAsync(skillProvider, TestContext.Current.CancellationToken);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, cachedResult.Status);
+            var cachedActivity = Assert.Single(activities, item =>
+                item.OperationName == AspireSkillsInstaller.TelemetryActivityName && item != activity);
+            Assert.Equal(AspireSkillsInstaller.Version, cachedActivity.GetTagItem("aspire.skills.version"));
+            Assert.Equal(true, cachedActivity.GetTagItem("aspire.skills.cache_hit"));
+            Assert.Null(cachedActivity.GetTagItem("aspire.skills.source"));
         }
         finally
         {
@@ -124,19 +131,19 @@ public class AspireSkillsInstallerTests
                 $"Test.{Path.GetRandomFileName()}");
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var embeddedExtensionBundleProvider = await CreateExtensionEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(
+            var (installer, _, extensionProvider) = CreateInstaller(
                 executionContext,
                 embeddedExtensionBundleProvider: embeddedExtensionBundleProvider,
                 features: new TestFeatures(),
                 telemetry: telemetry);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Extension, TestContext.Current.CancellationToken);
+            var result = await installer.InstallAsync(extensionProvider, TestContext.Current.CancellationToken);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             var extension = Assert.Single(result.Bundle!.Assets);
             Assert.Equal("aspire-doctor", extension.Name);
-            Assert.Equal(AgentAssetSourceKind.AspireSkillsBundle, extension.SourceKind);
-            var extensionFiles = await result.Bundle.GetAssetFilesAsync(extension, TestContext.Current.CancellationToken);
+            Assert.Equal(AgentAssetSourceKind.Bundled, extension.SourceKind);
+            var extensionFiles = extension.Files;
             Assert.Collection(
                 extensionFiles,
                 file =>
@@ -157,11 +164,11 @@ public class AspireSkillsInstallerTests
             Assert.Equal(false, activity.GetTagItem("aspire.extensions.cache_hit"));
             Assert.Equal(false, activity.GetTagItem("aspire.extensions.remote_fetch_enabled"));
 
-            var cachedResult = await installer.InstallAsync(AgentAssetKind.Extension, TestContext.Current.CancellationToken);
+            var cachedResult = await installer.InstallAsync(extensionProvider, TestContext.Current.CancellationToken);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, cachedResult.Status);
             var cachedExtension = Assert.Single(cachedResult.Bundle!.Assets);
-            var cachedFiles = await cachedResult.Bundle.GetAssetFilesAsync(cachedExtension, TestContext.Current.CancellationToken);
+            var cachedFiles = cachedExtension.Files;
             Assert.Equal(extensionFiles.Select(static file => file.RelativePath), cachedFiles.Select(static file => file.RelativePath));
             Assert.All(extensionFiles.Zip(cachedFiles), static pair => Assert.Equal(pair.First.Bytes.ToArray(), pair.Second.Bytes.ToArray()));
             var bundleActivities = activities
@@ -170,7 +177,7 @@ public class AspireSkillsInstallerTests
             Assert.Equal(2, bundleActivities.Count);
             var cachedActivity = bundleActivities[1];
             Assert.Equal(AspireSkillsInstaller.Version, cachedActivity.GetTagItem("aspire.extensions.version"));
-            Assert.Equal("cache", cachedActivity.GetTagItem("aspire.extensions.source"));
+            Assert.Null(cachedActivity.GetTagItem("aspire.extensions.source"));
             Assert.Equal(true, cachedActivity.GetTagItem("aspire.extensions.cache_hit"));
             Assert.Equal(false, cachedActivity.GetTagItem("aspire.extensions.remote_fetch_enabled"));
         }
@@ -190,7 +197,7 @@ public class AspireSkillsInstallerTests
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var skillsProvider = await CreateEmbeddedBundleProviderAsync();
             var extensionsProvider = await CreateExtensionEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(
+            var (installer, skillProvider, extensionProvider) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: skillsProvider,
                 embeddedExtensionBundleProvider: extensionsProvider,
@@ -198,8 +205,8 @@ public class AspireSkillsInstallerTests
 
             AspireSkillsInstallResult[] results =
             [
-                await installer.InstallAsync(AgentAssetKind.Skill, TestContext.Current.CancellationToken),
-                await installer.InstallAsync(AgentAssetKind.Extension, TestContext.Current.CancellationToken)
+                await installer.InstallAsync(skillProvider, TestContext.Current.CancellationToken),
+                await installer.InstallAsync(extensionProvider, TestContext.Current.CancellationToken)
             ];
 
             Assert.All(results, static result => Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status));
@@ -235,13 +242,13 @@ public class AspireSkillsInstallerTests
             await CreateCachedBundleAsync(cachedBundleDirectory, archiveSha512: embeddedBundleProvider.Metadata!.Sha512);
             var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when remote fetch is disabled."));
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -294,7 +301,7 @@ public class AspireSkillsInstallerTests
                 }
             };
             var logger = new TestLogger<AspireSkillsInstaller>(new TestLoggerFactory(sink, enabled: true));
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features,
@@ -309,7 +316,7 @@ public class AspireSkillsInstallerTests
                 bufferSize: 1,
                 FileOptions.Asynchronous);
 
-            var installTask = installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var installTask = installer.InstallAsync(skillProvider, CancellationToken.None);
             var completedTask = await Task.WhenAny(cleanupRetryBudgetExceeded.Task, installTask).WaitAsync(TimeSpan.FromSeconds(10));
 
             Assert.Same(cleanupRetryBudgetExceeded.Task, completedTask);
@@ -358,12 +365,12 @@ public class AspireSkillsInstallerTests
                 return new HttpResponseMessage(HttpStatusCode.InternalServerError);
             });
             var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 githubArtifactAttestationVerifier: attestationVerifier);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -411,12 +418,12 @@ public class AspireSkillsInstallerTests
                 };
             });
             var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 githubArtifactAttestationVerifier: attestationVerifier);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -426,7 +433,7 @@ public class AspireSkillsInstallerTests
                 cachedBundleDirectory,
                 AspireSkillsInstaller.GitHubAttestationVerifiedFileName)));
             var skill = Assert.Single(result.Bundle.Assets);
-            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
+            var skillFile = Assert.Single(skill.Files);
             Assert.Contains("# Downloaded GitHub", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -467,20 +474,20 @@ public class AspireSkillsInstallerTests
                 })
                 .Build();
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 configuration: configuration);
 
-            var firstResult = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var firstResult = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, firstResult.Status);
             Assert.False(File.Exists(Path.Combine(
                 GetBundleCacheDirectory(executionContext, archiveSha512),
                 AspireSkillsInstaller.GitHubAttestationVerifiedFileName)));
 
-            var secondInstaller = CreateInstaller(executionContext);
-            var secondResult = await secondInstaller.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var (secondInstaller, secondSkillProvider, _) = CreateInstaller(executionContext);
+            var secondResult = await secondInstaller.InstallAsync(secondSkillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Failed, secondResult.Status);
         }
@@ -527,9 +534,9 @@ public class AspireSkillsInstallerTests
                     Content = new ByteArrayContent(archiveBytes)
                 };
             });
-            var installer = CreateInstaller(executionContext, httpMessageHandler: handler);
+            var (installer, skillProvider, _) = CreateInstaller(executionContext, httpMessageHandler: handler);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -547,7 +554,7 @@ public class AspireSkillsInstallerTests
                     cachedBundleDirectory,
                     AspireSkillsInstaller.GitHubArchiveSha256FileName)));
             var skill = Assert.Single(result.Bundle.Assets);
-            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
+            var skillFile = Assert.Single(skill.Files);
             Assert.Contains("# Downloaded GitHub", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -565,17 +572,17 @@ public class AspireSkillsInstallerTests
         {
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var oldEmbeddedBundleProvider = await CreateEmbeddedBundleProviderAsync(new SkillBundleSupports
+            var oldEmbeddedBundleProvider = await CreateEmbeddedBundleProviderAsync(new AspireSkillsBundleSupports
             {
                 AspireCli = ">=0.0.1 <0.0.2",
                 AspireSdk = ">=0.0.1 <0.0.2"
             });
-            var oldInstaller = CreateInstaller(
+            var (oldInstaller, oldSkillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: oldEmbeddedBundleProvider,
                 features: features);
 
-            var oldResult = await oldInstaller.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var oldResult = await oldInstaller.InstallAsync(oldSkillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, oldResult.Status);
             Assert.NotNull(oldResult.Bundle);
@@ -584,12 +591,12 @@ public class AspireSkillsInstallerTests
                 oldEmbeddedBundleProvider.Metadata!.Sha512!);
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             Assert.NotEqual(oldEmbeddedBundleProvider.Metadata!.Sha512, embeddedBundleProvider.Metadata!.Sha512);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -604,19 +611,19 @@ public class AspireSkillsInstallerTests
                     cachedBundleDirectory,
                     AspireSkillsInstaller.ArchiveSha512FileName)));
             var oldSkill = oldResult.Bundle.Assets[0];
-            Assert.NotEmpty(await oldResult.Bundle.GetAssetFilesAsync(oldSkill, CancellationToken.None));
+            Assert.NotEmpty(oldSkill.Files);
 
             var restoredEmbeddedBundleProvider = new TestEmbeddedBundleProvider
             {
                 Metadata = oldEmbeddedBundleProvider.Metadata,
                 ArchiveBytes = oldEmbeddedBundleProvider.ArchiveBytes
             };
-            var restoredInstaller = CreateInstaller(
+            var (restoredInstaller, restoredSkillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: restoredEmbeddedBundleProvider,
                 features: features);
 
-            var restoredResult = await restoredInstaller.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var restoredResult = await restoredInstaller.InstallAsync(restoredSkillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, restoredResult.Status);
             Assert.False(restoredEmbeddedBundleProvider.CreateBundleCalled);
@@ -639,12 +646,12 @@ public class AspireSkillsInstallerTests
             await CreateCachedBundleAsync(cachedBundleDirectory);
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -681,18 +688,18 @@ public class AspireSkillsInstallerTests
                 archiveSha512: embeddedBundleProvider.Metadata!.Sha512);
             await File.WriteAllTextAsync(Path.Combine(cachedBundleDirectory, "skill-manifest.json"), "{");
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
             var skill = Assert.Single(result.Bundle.Assets);
-            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
+            var skillFile = Assert.Single(skill.Files);
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -715,13 +722,13 @@ public class AspireSkillsInstallerTests
             Directory.CreateDirectory(Path.Combine(cachedBundleDirectory, ".lastused"));
             var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when remote fetch is disabled."));
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -757,13 +764,13 @@ public class AspireSkillsInstallerTests
                 long.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
             var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when remote fetch is disabled."));
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -804,13 +811,13 @@ public class AspireSkillsInstallerTests
                 })
                 .Build();
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 configuration: configuration,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.False(Directory.Exists(staleVersionDirectory));
@@ -851,13 +858,13 @@ public class AspireSkillsInstallerTests
                 })
                 .Build();
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 configuration: configuration,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.False(Directory.Exists(staleVersionDirectory));
@@ -902,7 +909,7 @@ public class AspireSkillsInstallerTests
                 }
             };
             var logger = new TestLogger<AspireSkillsInstaller>(new TestLoggerFactory(sink, enabled: true));
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 configuration: configuration,
                 embeddedBundleProvider: embeddedBundleProvider,
@@ -918,7 +925,7 @@ public class AspireSkillsInstallerTests
                 bufferSize: 1,
                 FileOptions.Asynchronous);
 
-            var installTask = installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var installTask = installer.InstallAsync(skillProvider, CancellationToken.None);
             await retryObserved.Task.WaitAsync(TimeSpan.FromSeconds(10));
             await WriteLastUsedAsync(staleCacheDirectory, DateTimeOffset.UtcNow);
             await staleVersionLock.DisposeAsync();
@@ -964,7 +971,7 @@ public class AspireSkillsInstallerTests
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
             var sink = new TestSink();
             var logger = new TestLogger<AspireSkillsInstaller>(new TestLoggerFactory(sink, enabled: true));
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 configuration: configuration,
                 embeddedBundleProvider: embeddedBundleProvider,
@@ -979,7 +986,7 @@ public class AspireSkillsInstallerTests
                 bufferSize: 1,
                 FileOptions.Asynchronous))
             {
-                var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+                var result = await installer.InstallAsync(skillProvider, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
 
                 Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
                 Assert.True(Directory.Exists(staleCacheDirectory));
@@ -989,7 +996,7 @@ public class AspireSkillsInstallerTests
                     context.Message?.Contains("Skipping cleanup", StringComparison.Ordinal) == true));
             }
 
-            var cleanupResult = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var cleanupResult = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, cleanupResult.Status);
             Assert.False(Directory.Exists(staleCacheDirectory));
@@ -1033,13 +1040,13 @@ public class AspireSkillsInstallerTests
                 })
                 .Build();
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 configuration: configuration,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.True(Directory.Exists(currentCacheDirectory));
@@ -1062,12 +1069,12 @@ public class AspireSkillsInstallerTests
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.True(File.Exists(Path.Combine(
@@ -1108,14 +1115,14 @@ public class AspireSkillsInstallerTests
                 }
             };
             var logger = new TestLogger<AspireSkillsInstaller>(new TestLoggerFactory(sink, enabled: true));
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features,
                 logger: logger);
             using var cancellationTokenSource = new CancellationTokenSource();
 
-            var installTask = installer.InstallAsync(AgentAssetKind.Skill, cancellationTokenSource.Token);
+            var installTask = installer.InstallAsync(skillProvider, cancellationTokenSource.Token);
             await retryObserved.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.False(installTask.IsCompleted);
             cancellationTokenSource.Cancel();
@@ -1151,12 +1158,12 @@ public class AspireSkillsInstallerTests
 
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.All(staleDirectories, directory => Assert.False(Directory.Exists(directory)));
@@ -1200,12 +1207,12 @@ public class AspireSkillsInstallerTests
                 VerificationStarted = verificationStarted,
                 VerificationGate = verificationGate.Task
             };
-            var firstInstaller = CreateInstaller(
+            var (firstInstaller, firstSkillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 githubArtifactAttestationVerifier: attestationVerifier);
 
-            firstInstallTask = firstInstaller.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            firstInstallTask = firstInstaller.InstallAsync(firstSkillProvider, CancellationToken.None);
             await verificationStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
             var cacheRoot = Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills");
@@ -1214,12 +1221,12 @@ public class AspireSkillsInstallerTests
 
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var secondInstaller = CreateInstaller(
+            var (secondInstaller, secondSkillProvider, _) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var secondResult = await secondInstaller.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var secondResult = await secondInstaller.InstallAsync(secondSkillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, secondResult.Status);
             Assert.True(Directory.Exists(activeTemporaryDirectory));
@@ -1251,9 +1258,9 @@ public class AspireSkillsInstallerTests
         try
         {
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var installer = CreateInstaller(executionContext);
+            var (installer, skillProvider, _) = CreateInstaller(executionContext);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
             Assert.Contains("GitHub", result.Message);
@@ -1273,9 +1280,9 @@ public class AspireSkillsInstallerTests
         {
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
+            var (installer, skillProvider, _) = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -1297,12 +1304,12 @@ public class AspireSkillsInstallerTests
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             var handler = new MockHttpMessageHandler(new HttpIOException(HttpRequestError.ResponseEnded));
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -1325,12 +1332,12 @@ public class AspireSkillsInstallerTests
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             var handler = new MockHttpMessageHandler(
                 new TaskCanceledException("The request timed out.", new TimeoutException()));
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -1358,10 +1365,10 @@ public class AspireSkillsInstallerTests
                 throw new OperationCanceledException(cancellationTokenSource.Token);
             });
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var installer = CreateInstaller(executionContext, httpMessageHandler: handler);
+            var (installer, skillProvider, _) = CreateInstaller(executionContext, httpMessageHandler: handler);
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                () => installer.InstallAsync(AgentAssetKind.Skill, cancellationTokenSource.Token));
+                () => installer.InstallAsync(skillProvider, cancellationTokenSource.Token));
             Assert.True(requestObserved);
         }
         finally
@@ -1386,15 +1393,15 @@ public class AspireSkillsInstallerTests
                 archiveSha512: verifiedArchiveSha512,
                 githubAttestationVerified: true,
                 skillBody: "# Verified GitHub");
-            var installer = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
+            var (installer, skillProvider, _) = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.False(embeddedBundleProvider.CreateBundleCalled);
             var skill = Assert.Single(result.Bundle.Assets);
-            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
+            var skillFile = Assert.Single(skill.Files);
             Assert.Contains("# Verified GitHub", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1424,7 +1431,7 @@ public class AspireSkillsInstallerTests
             var incompatibleCacheDirectory = GetBundleCacheDirectory(executionContext, incompatibleArchiveSha512);
             await CreateCachedBundleAsync(
                 incompatibleCacheDirectory,
-                supports: new SkillBundleSupports
+                supports: new AspireSkillsBundleSupports
                 {
                     AspireCli = ">=99.0.0 <100.0.0",
                     AspireSdk = ">=99.0.0 <100.0.0"
@@ -1435,15 +1442,15 @@ public class AspireSkillsInstallerTests
             await WriteLastUsedAsync(incompatibleCacheDirectory, DateTimeOffset.UtcNow);
 
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
+            var (installer, skillProvider, _) = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.False(embeddedBundleProvider.CreateBundleCalled);
             var skill = Assert.Single(result.Bundle.Assets);
-            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
+            var skillFile = Assert.Single(skill.Files);
             Assert.Contains("# Compatible GitHub", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1486,19 +1493,19 @@ public class AspireSkillsInstallerTests
                 assetDownloadRequested = true;
                 return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
             });
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.True(assetDownloadRequested);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
             var skill = Assert.Single(result.Bundle.Assets);
-            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
+            var skillFile = Assert.Single(skill.Files);
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1548,19 +1555,19 @@ public class AspireSkillsInstallerTests
                 return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
             });
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.True(assetDownloadRequested);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
             var skill = Assert.Single(result.Bundle.Assets);
-            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
+            var skillFile = Assert.Single(skill.Files);
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1582,14 +1589,14 @@ public class AspireSkillsInstallerTests
             // Throw on any HTTP call so we can prove the GitHub path was never invoked.
             var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when remote fetch is disabled."));
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 githubArtifactAttestationVerifier: attestationVerifier,
                 embeddedBundleProvider: embeddedBundleProvider,
                 features: features);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -1603,14 +1610,14 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task SkillBundleProvider_CreatesEmbeddedBundle()
+    public async Task BundleProvider_CreatesEmbeddedSkillsBundle()
     {
         var rootDirectory = CreateTempDirectory();
 
         try
         {
             var bundleDirectory = new DirectoryInfo(Path.Combine(rootDirectory, "bundle"));
-            var bundleProvider = new SkillBundleProvider();
+            var bundleProvider = TestBundleProviderFactory.CreateSkills();
 
             var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(bundleProvider.GetEmbeddedMetadata());
             var bundle = await bundleProvider.CreateEmbeddedBundleAsync(bundleDirectory, CancellationToken.None);
@@ -1629,14 +1636,14 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task ExtensionBundleProvider_CreatesEmbeddedBundle()
+    public async Task BundleProvider_CreatesEmbeddedExtensionsBundle()
     {
         var rootDirectory = CreateTempDirectory();
 
         try
         {
             var bundleDirectory = new DirectoryInfo(Path.Combine(rootDirectory, "bundle"));
-            var bundleProvider = new ExtensionBundleProvider();
+            var bundleProvider = TestBundleProviderFactory.CreateExtensions();
 
             var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(bundleProvider.GetEmbeddedMetadata());
             var bundle = await bundleProvider.CreateEmbeddedBundleAsync(bundleDirectory, CancellationToken.None);
@@ -1656,7 +1663,7 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task SkillBundleProvider_WhenTemporaryEmbeddedArchiveIsLocked_CanPromoteBundle()
+    public async Task BundleProvider_WhenTemporaryEmbeddedArchiveIsLocked_CanPromoteBundle()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates Windows delete-sharing behavior.");
 
@@ -1667,7 +1674,8 @@ public class AspireSkillsInstallerTests
         {
             var stageDirectory = new DirectoryInfo(Path.Combine(rootDirectory, ".stage-test"));
             var targetDirectory = Path.Combine(rootDirectory, "cached");
-            lockingBundleProvider = new ArchiveLockingAspireSkillsBundleProvider();
+            lockingBundleProvider = new ArchiveLockingAspireSkillsBundleProvider(
+                TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory)));
 
             var bundle = await lockingBundleProvider.CreateEmbeddedBundleAsync(stageDirectory, CancellationToken.None);
 
@@ -1692,11 +1700,11 @@ public class AspireSkillsInstallerTests
         {
             var archivePath = Path.Combine(rootDirectory, "bundle.tgz");
             var archiveBytes = await CreateBundleArchiveBytesAsync(
-                new SkillBundleSupports { AspireCli = ">=99.0.0 <100.0.0" });
+                new AspireSkillsBundleSupports { AspireCli = ">=99.0.0 <100.0.0" });
             await File.WriteAllBytesAsync(archivePath, archiveBytes);
 
             var bundleDirectory = new DirectoryInfo(Path.Combine(rootDirectory, "bundle"));
-            var provider = new SkillBundleProvider("13.4.0", "13.4.0");
+            var provider = TestBundleProviderFactory.CreateSkills("13.4.0", "13.4.0");
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.CreateAsync(
                 new FileInfo(archivePath),
@@ -1726,7 +1734,7 @@ public class AspireSkillsInstallerTests
 
             var bundleDirectory = Path.Combine(rootDirectory, "bundle");
             await CreateCachedBundleAsync(bundleDirectory);
-            var provider = new SkillBundleProvider();
+            var provider = TestBundleProviderFactory.CreateSkills();
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.CreateAsync(
                 new FileInfo(archivePath),
@@ -1743,14 +1751,14 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task SkillBundleProvider_WhenEmbeddedCreationIsCancelled_RemovesTemporaryArchive()
+    public async Task BundleProvider_WhenEmbeddedCreationIsCancelled_RemovesTemporaryArchive()
     {
         var rootDirectory = CreateTempDirectory();
 
         try
         {
             var bundleDirectory = new DirectoryInfo(Path.Combine(rootDirectory, "bundle"));
-            var bundleProvider = new SkillBundleProvider();
+            var bundleProvider = TestBundleProviderFactory.CreateSkills();
             using var cancellationTokenSource = new CancellationTokenSource();
             cancellationTokenSource.Cancel();
 
@@ -1797,13 +1805,13 @@ public class AspireSkillsInstallerTests
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 githubArtifactAttestationVerifier: attestationVerifier,
                 embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -1862,20 +1870,20 @@ public class AspireSkillsInstallerTests
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 githubArtifactAttestationVerifier: attestationVerifier,
                 embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.False(attestationVerifier.VerifyCalled);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
             var skill = Assert.Single(result.Bundle.Assets);
-            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
+            var skillFile = Assert.Single(skill.Files);
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1917,20 +1925,20 @@ public class AspireSkillsInstallerTests
                 skillBody: "# Verified Offline");
             var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 githubArtifactAttestationVerifier: attestationVerifier,
                 embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.True(attestationVerifier.VerifyCalled);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
             var skill = Assert.Single(result.Bundle.Assets);
-            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
+            var skillFile = Assert.Single(skill.Files);
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1976,13 +1984,13 @@ public class AspireSkillsInstallerTests
                 Result = new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.WorkflowMismatch }
             };
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 githubArtifactAttestationVerifier: attestationVerifier,
                 embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -1992,7 +2000,7 @@ public class AspireSkillsInstallerTests
                 cachedGitHubDirectory,
                 AspireSkillsInstaller.GitHubAttestationVerifiedFileName)));
             var skill = Assert.Single(result.Bundle.Assets);
-            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
+            var skillFile = Assert.Single(skill.Files);
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -2001,8 +2009,10 @@ public class AspireSkillsInstallerTests
         }
     }
 
-    [Fact]
-    public async Task InstallAsync_WhenVersionOverrideDoesNotMatchEmbeddedBundle_DoesNotUseEmbeddedBundle()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallAsync_WhenVersionOverrideDoesNotMatchEmbeddedBundle_DoesNotUseEmbeddedBundle(bool isExtension)
     {
         var rootDirectory = CreateTempDirectory();
 
@@ -2015,13 +2025,18 @@ public class AspireSkillsInstallerTests
                 })
                 .Build();
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(
+            var embeddedBundleProvider = isExtension
+                ? await CreateExtensionEmbeddedBundleProviderAsync()
+                : await CreateEmbeddedBundleProviderAsync();
+            var (installer, skillProvider, extensionProvider) = CreateInstaller(
                 executionContext,
                 configuration: configuration,
-                embeddedBundleProvider: embeddedBundleProvider);
+                embeddedBundleProvider: isExtension ? null : embeddedBundleProvider,
+                embeddedExtensionBundleProvider: isExtension ? embeddedBundleProvider : null);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(
+                isExtension ? extensionProvider : skillProvider,
+                CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
             Assert.False(embeddedBundleProvider.CreateBundleCalled);
@@ -2041,7 +2056,6 @@ public class AspireSkillsInstallerTests
 
         try
         {
-            var assetKind = isExtension ? AgentAssetKind.Extension : AgentAssetKind.Skill;
             var kindName = isExtension ? "extensions" : "skills";
             var expectedHash = new string('0', 128);
             var embeddedBundleProvider = isExtension
@@ -2057,12 +2071,14 @@ public class AspireSkillsInstallerTests
                 Sha512 = expectedHash
             };
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var installer = CreateInstaller(
+            var (installer, skillProvider, extensionProvider) = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: isExtension ? null : embeddedBundleProvider,
                 embeddedExtensionBundleProvider: isExtension ? embeddedBundleProvider : null);
 
-            var result = await installer.InstallAsync(assetKind, CancellationToken.None);
+            var result = await installer.InstallAsync(
+                isExtension ? extensionProvider : skillProvider,
+                CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
             Assert.Equal(
@@ -2088,16 +2104,16 @@ public class AspireSkillsInstallerTests
             // stamped ">=13.4.0 <13.5.0"). The embedded path must still install the bundle —
             // otherwise an offline user with a version-mismatched embedded snapshot would lose
             // access to all bundled skills.
-            var staleSupports = new SkillBundleSupports
+            var staleSupports = new AspireSkillsBundleSupports
             {
                 AspireCli = ">=0.0.1 <0.0.2",
                 AspireSdk = ">=0.0.1 <0.0.2"
             };
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync(supports: staleSupports);
-            var installer = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
+            var (installer, skillProvider, _) = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -2125,15 +2141,15 @@ public class AspireSkillsInstallerTests
             var cachedBundleDirectory = GetBundleCacheDirectory(executionContext, embeddedBundleProvider.Metadata!.Sha512!);
             await CreateCachedBundleAsync(
                 cachedBundleDirectory,
-                supports: new SkillBundleSupports
+                supports: new AspireSkillsBundleSupports
                 {
                     AspireCli = ">=0.0.1 <0.0.2",
                     AspireSdk = ">=0.0.1 <0.0.2"
                 },
                 archiveSha512: embeddedBundleProvider.Metadata!.Sha512);
-            var installer = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
+            var (installer, skillProvider, _) = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -2158,7 +2174,7 @@ public class AspireSkillsInstallerTests
             var cachedBundleDirectory = GetBundleCacheDirectory(executionContext, archiveSha512);
             await CreateCachedBundleAsync(
                 cachedBundleDirectory,
-                supports: new SkillBundleSupports
+                supports: new AspireSkillsBundleSupports
                 {
                     AspireCli = ">=99.0.0 <100.0.0",
                     AspireSdk = ">=99.0.0 <100.0.0"
@@ -2181,12 +2197,12 @@ public class AspireSkillsInstallerTests
                 return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
             });
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            var installer = CreateInstaller(
+            var (installer, skillProvider, _) = CreateInstaller(
                 executionContext,
                 httpMessageHandler: handler,
                 embeddedBundleProvider: embeddedBundleProvider);
 
-            var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
+            var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
@@ -2199,7 +2215,10 @@ public class AspireSkillsInstallerTests
         }
     }
 
-    private static AspireSkillsInstaller CreateInstaller(
+    private static (
+        AspireSkillsInstaller Installer,
+        IAspireSkillsBundleProvider SkillProvider,
+        IAspireSkillsBundleProvider ExtensionProvider) CreateInstaller(
         CliExecutionContext executionContext,
         HttpMessageHandler? httpMessageHandler = null,
         TestGitHubArtifactAttestationVerifier? githubArtifactAttestationVerifier = null,
@@ -2210,20 +2229,16 @@ public class AspireSkillsInstallerTests
         AspireCliTelemetry? telemetry = null,
         ILogger<AspireSkillsInstaller>? logger = null)
     {
-        IAspireSkillsBundleProvider[] bundleProviders =
-        [
-            new TestSkillBundleProvider(
-                executionContext,
-                embeddedBundleProvider ?? new TestEmbeddedBundleProvider()),
-            new TestExtensionBundleProvider(
-                executionContext,
-                embeddedExtensionBundleProvider ?? new TestEmbeddedBundleProvider(new ExtensionBundleProvider()))
-        ];
+        var skillProvider = new TestBundleProvider(
+            AspireSkillsAssetSource.CreateBundleProvider(AgentAssetKind.Skill, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance),
+            embeddedBundleProvider ?? new TestEmbeddedBundleProvider());
+        var extensionProvider = new TestBundleProvider(
+            AspireSkillsAssetSource.CreateBundleProvider(AgentAssetKind.Extension, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance),
+            embeddedExtensionBundleProvider ?? new TestEmbeddedBundleProvider(TestBundleProviderFactory.CreateExtensions()));
 
-        return new AspireSkillsInstaller(
+        var installer = new AspireSkillsInstaller(
             githubArtifactAttestationVerifier ?? new TestGitHubArtifactAttestationVerifier(),
             new MockHttpClientFactory(httpMessageHandler ?? new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))),
-            bundleProviders,
             new TestInteractionService(),
             executionContext,
             configuration ?? new ConfigurationBuilder().Build(),
@@ -2233,11 +2248,13 @@ public class AspireSkillsInstallerTests
             features ?? new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, true),
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
             logger ?? NullLogger<AspireSkillsInstaller>.Instance);
+
+        return (installer, skillProvider, extensionProvider);
     }
 
     private static async Task CreateCachedBundleAsync(
         string bundleDirectory,
-        SkillBundleSupports? supports = null,
+        AspireSkillsBundleSupports? supports = null,
         string? archiveSha512 = null,
         string? githubArchiveSha256 = null,
         bool githubAttestationVerified = false,
@@ -2257,19 +2274,19 @@ public class AspireSkillsInstallerTests
             {{skillBody}}
             """);
 
-        var manifest = new SkillBundleManifest
+        var manifest = new AspireSkillsBundleManifest
         {
             Version = AspireSkillsInstaller.Version,
             Supports = supports ?? CreateSupports(),
             Assets =
             [
-                new SkillBundleAsset
+                new AspireSkillsBundleAsset
                 {
                     Name = CommonAgentApplicators.AspireSkillName,
                     Description = AspireSkillDescription,
                     Files =
                     [
-                        new SkillBundleFile
+                        new AspireSkillsBundleFile
                         {
                             RelativePath = "SKILL.md",
                             Sha512 = ComputeSha512(skillPath)
@@ -2281,7 +2298,7 @@ public class AspireSkillsInstallerTests
 
         var manifestJson = JsonSerializer.Serialize(
             manifest,
-            new SkillBundleProvider().CreateManifestTypeInfo());
+            TestBundleProviderFactory.CreateSkills().CreateManifestTypeInfo());
         await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
 
         if (archiveSha512 is not null)
@@ -2311,9 +2328,9 @@ public class AspireSkillsInstallerTests
             lastUsed.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    private static SkillBundleSupports CreateSupports()
+    private static AspireSkillsBundleSupports CreateSupports()
     {
-        return new SkillBundleSupports
+        return new AspireSkillsBundleSupports
         {
             AspireCli = ">=0.0.0 <999.0.0",
             AspireSdk = ">=0.0.0 <999.0.0"
@@ -2321,7 +2338,7 @@ public class AspireSkillsInstallerTests
     }
 
     private static async Task<byte[]> CreateBundleArchiveBytesAsync(
-        SkillBundleSupports? supports = null,
+        AspireSkillsBundleSupports? supports = null,
         string skillBody = "# Aspire",
         bool includeGitHubAttestationMarker = false,
         bool malformedManifest = false,
@@ -2393,7 +2410,7 @@ public class AspireSkillsInstallerTests
             AspireSkillsBundleProvider.NormalizeSha512(archiveSha512));
     }
 
-    private static async Task<TestEmbeddedBundleProvider> CreateEmbeddedBundleProviderAsync(SkillBundleSupports? supports = null)
+    private static async Task<TestEmbeddedBundleProvider> CreateEmbeddedBundleProviderAsync(AspireSkillsBundleSupports? supports = null)
     {
         var archiveBytes = await CreateBundleArchiveBytesAsync(supports);
         return new TestEmbeddedBundleProvider
@@ -2413,7 +2430,7 @@ public class AspireSkillsInstallerTests
     private static async Task<TestEmbeddedBundleProvider> CreateExtensionEmbeddedBundleProviderAsync()
     {
         var archiveBytes = await CreateExtensionBundleArchiveBytesAsync();
-        return new TestEmbeddedBundleProvider(new ExtensionBundleProvider())
+        return new TestEmbeddedBundleProvider(TestBundleProviderFactory.CreateExtensions())
         {
             Metadata = new EmbeddedAspireSkillsBundleMetadata
             {
@@ -2443,24 +2460,24 @@ public class AspireSkillsInstallerTests
             var binaryPath = Path.Combine(extensionDirectory, "icon.bin");
             await File.WriteAllBytesAsync(binaryPath, [0x00, 0x80, 0xFF, 0x0D, 0x0A]);
 
-            var manifest = new SkillBundleManifest
+            var manifest = new AspireSkillsBundleManifest
             {
                 Version = AspireSkillsInstaller.Version,
                 Supports = CreateSupports(),
                 Assets =
                 [
-                    new SkillBundleAsset
+                    new AspireSkillsBundleAsset
                     {
                         Name = extensionName,
                         Description = "Runs Aspire doctor in a canvas",
                         Files =
                         [
-                            new SkillBundleFile
+                            new AspireSkillsBundleFile
                             {
                                 RelativePath = "extension.mjs",
                                 Sha512 = ComputeSha512(extensionPath)
                             },
-                            new SkillBundleFile
+                            new AspireSkillsBundleFile
                             {
                                 RelativePath = "icon.bin",
                                 Sha512 = ComputeSha512(binaryPath)
@@ -2469,7 +2486,7 @@ public class AspireSkillsInstallerTests
                     }
                 ]
             };
-            var manifestJson = JsonSerializer.Serialize(manifest, new ExtensionBundleProvider().CreateManifestTypeInfo());
+            var manifestJson = JsonSerializer.Serialize(manifest, TestBundleProviderFactory.CreateExtensions().CreateManifestTypeInfo());
             await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "extension-manifest.json"), manifestJson);
 
             await using var archiveStream = new MemoryStream();
@@ -2574,7 +2591,7 @@ public class AspireSkillsInstallerTests
 
     private sealed class TestEmbeddedBundleProvider(AspireSkillsBundleProvider? bundleProvider = null)
     {
-        private readonly AspireSkillsBundleProvider _bundleProvider = bundleProvider ?? new SkillBundleProvider();
+        private readonly AspireSkillsBundleProvider _bundleProvider = bundleProvider ?? TestBundleProviderFactory.CreateSkills();
 
         public EmbeddedAspireSkillsBundleMetadata? Metadata { get; set; }
 
@@ -2616,41 +2633,39 @@ public class AspireSkillsInstallerTests
         }
     }
 
-    private sealed class TestSkillBundleProvider(
-        CliExecutionContext executionContext,
-        TestEmbeddedBundleProvider embeddedProvider) : SkillBundleProvider(executionContext)
+    private sealed class TestBundleProvider(
+        AspireSkillsBundleProvider reader,
+        TestEmbeddedBundleProvider embeddedProvider) : IAspireSkillsBundleProvider
     {
-        public override EmbeddedAspireSkillsBundleMetadata? GetEmbeddedMetadata()
-        {
-            return embeddedProvider.GetMetadata();
-        }
+        public AspireSkillsBundleDescriptor Descriptor => reader.Descriptor;
 
-        public override Task<AspireSkillsBundle?> CreateEmbeddedBundleAsync(
+        public Task<AspireSkillsBundle> CreateAsync(
+            FileInfo archive,
             DirectoryInfo bundleDirectory,
-            CancellationToken cancellationToken)
-        {
-            return embeddedProvider.CreateBundleAsync(bundleDirectory, cancellationToken);
-        }
+            string expectedArchiveSha512,
+            CancellationToken cancellationToken,
+            bool skipCompatibilityCheck = false)
+            => reader.CreateAsync(archive, bundleDirectory, expectedArchiveSha512, cancellationToken, skipCompatibilityCheck);
+
+        public Task<AspireSkillsBundle> LoadAsync(
+            DirectoryInfo bundleDirectory,
+            CancellationToken cancellationToken,
+            bool skipCompatibilityCheck = false)
+            => reader.LoadAsync(bundleDirectory, cancellationToken, skipCompatibilityCheck);
+
+        public EmbeddedAspireSkillsBundleMetadata? GetEmbeddedMetadata()
+            => embeddedProvider.GetMetadata();
+
+        public Task<AspireSkillsBundle?> CreateEmbeddedBundleAsync(DirectoryInfo bundleDirectory, CancellationToken cancellationToken)
+            => embeddedProvider.CreateBundleAsync(bundleDirectory, cancellationToken);
     }
 
-    private sealed class TestExtensionBundleProvider(
-        CliExecutionContext executionContext,
-        TestEmbeddedBundleProvider embeddedProvider) : ExtensionBundleProvider(executionContext)
-    {
-        public override EmbeddedAspireSkillsBundleMetadata? GetEmbeddedMetadata()
-        {
-            return embeddedProvider.GetMetadata();
-        }
-
-        public override Task<AspireSkillsBundle?> CreateEmbeddedBundleAsync(
-            DirectoryInfo bundleDirectory,
-            CancellationToken cancellationToken)
-        {
-            return embeddedProvider.CreateBundleAsync(bundleDirectory, cancellationToken);
-        }
-    }
-
-    private sealed class ArchiveLockingAspireSkillsBundleProvider : SkillBundleProvider, IDisposable
+    private sealed class ArchiveLockingAspireSkillsBundleProvider(CliExecutionContext executionContext) : AspireSkillsBundleProvider(
+        TestBundleProviderFactory.CreateSkills().Descriptor,
+        SkillFileValidator.Validate,
+        executionContext.IdentitySdkVersion,
+        executionContext.IdentitySdkVersion,
+        NullLogger.Instance), IDisposable
     {
         private FileStream? _archiveLock;
 

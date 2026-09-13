@@ -505,7 +505,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
             if (items.FirstOrDefault() is AgentAssetLocation)
             {
-                return [AgentAssetLocation.Standard, AgentAssetLocation.ClaudeCode, AgentAssetLocation.OpenCode];
+                return [SkillCatalog.Standard, SkillCatalog.ClaudeCode, SkillCatalog.OpenCode];
             }
 
             Assert.All(items, static item => Assert.IsType<AgentAssetDefinition>(item));
@@ -556,7 +556,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
             if (items.FirstOrDefault() is AgentAssetLocation)
             {
-                return [AgentAssetLocation.Standard];
+                return [SkillCatalog.Standard];
             }
 
             return items

@@ -307,7 +307,7 @@ internal sealed class PlaywrightCliInstaller(
     private static HashSet<string> SnapshotPlaywrightSkillDirs(string repoRoot)
     {
         var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var location in AgentAssetLocation.GetLocations(AgentAssetKind.Skill))
+        foreach (var location in SkillCatalog.KnownLocations)
         {
             var dir = Path.Combine(repoRoot, location.RelativeAssetDirectory, PlaywrightCliSkillName);
             if (Directory.Exists(dir))
@@ -357,7 +357,7 @@ internal sealed class PlaywrightCliInstaller(
         // Clean up playwright-cli directories that were created during this run
         // in locations the user didn't select. We only remove directories that
         // didn't exist before install — pre-existing content is never touched.
-        foreach (var location in AgentAssetLocation.GetLocations(AgentAssetKind.Skill))
+        foreach (var location in SkillCatalog.KnownLocations)
         {
             if (selectedSkillDirectories.Contains(location.RelativeAssetDirectory))
             {

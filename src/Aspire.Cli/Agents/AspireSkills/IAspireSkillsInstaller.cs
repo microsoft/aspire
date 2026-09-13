@@ -9,9 +9,9 @@ namespace Aspire.Cli.Agents.AspireSkills;
 internal interface IAspireSkillsInstaller
 {
     /// <summary>
-    /// Ensures the Aspire Skills bundle for the specified asset kind is available in the local cache.
+    /// Ensures the specified provider's bundle is available in the local cache.
     /// </summary>
     Task<AspireSkillsInstallResult> InstallAsync(
-        AgentAssetKind assetKind,
+        IAspireSkillsBundleProvider provider,
         CancellationToken cancellationToken);
 }

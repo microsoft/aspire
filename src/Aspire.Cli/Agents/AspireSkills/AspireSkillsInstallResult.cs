@@ -14,7 +14,7 @@ internal enum AspireSkillsInstallStatus
     Installed,
 
     /// <summary>
-    /// No bundle provider is registered for the requested asset kind.
+    /// The bundle is unavailable from its provider.
     /// </summary>
     Unavailable,
 

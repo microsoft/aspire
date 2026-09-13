@@ -3260,7 +3260,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             var items = choices.Cast<object>().ToList();
             if (items.FirstOrDefault() is AgentAssetLocation)
             {
-                return [AgentAssetLocation.Standard];
+                return [SkillCatalog.Standard];
             }
 
             Assert.All(items, static item => Assert.IsType<AgentAssetDefinition>(item));

@@ -1,0 +1,16 @@
+﻿{
+  Initial: [    
+Installed Aspire agent skills:
+  Skills: aspire
+  Locations: .agents/skills, ~/.agents/skills
+    
+Installed Aspire extensions:
+  Extensions: aspire-doctor
+  Locations: .github/extensions, ~/.copilot/extensions
+  ],
+  AfterStaleRemoval: [    
+Installed Aspire extensions:
+  Extensions: aspire-doctor
+  Locations: .github/extensions
+  ]
+}
