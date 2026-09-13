@@ -1,0 +1,56 @@
+{
+  "run_id": 34747853466,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34747853466",
+  "analyzed_at": "2026-09-13T09:05:26Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20031,
+    "title": "Constrain aspire-starter port replacers to localhost: URLs",
+    "author": "bart-vmware",
+    "state": "closed",
+    "head_branch": "fix-dynamic-port-replacements",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20031"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 103699182890,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34747853466/job/103699182890",
+      "classification": "flaky-test",
+      "reason": "Test SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings fails because a remote dotnet build of Aspire.Hosting.csproj emits unexpected warnings (Expected: 0, Actual: 6), unrelated to the PR's change to a template.json file. This exact failure matches a known recurring flaky-test cause with 7 prior occurrences.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 103700244783,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34747853466/job/103700244783",
+      "classification": "flaky-test",
+      "reason": "Run extension E2E tests step failed with generic exit code 1; job logs were unavailable. The PR only changes an aspire-starter template.json file, unrelated to the VS Code extension. Matches known recurring flaky pattern for the 'browser-debugger' shard.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "id": 103700244833,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34747853466/job/103700244833",
+      "classification": "flaky-test",
+      "reason": "Run extension E2E tests step failed with generic exit code 1; job logs were unavailable. The PR only changes an aspire-starter template.json file, unrelated to the VS Code extension. Matches known recurring flaky pattern for the 'browser-debugger' shard.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception.",
+      "stack_trace": "Child exception:\n  Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   6\n   at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/SdkDumpCommandTests.cs:line 280\n--- End of stack trace from previous location ---\n   at Microsoft.DotNet.RemoteExecutor.Program.Main(String[] args) in /_/src/Microsoft.DotNet.RemoteExecutor/src/Program.cs:line 65",
+      "classification": "flaky",
+      "reason": "This test asserts that building Aspire.Hosting.csproj emits zero warnings, but the build in CI emitted 6. The PR only touches an aspire-starter template.json file and has no connection to Aspire.Hosting build warnings. This exact test/error matches a known recurring flaky cause (cli-sdkdumpcommandtests-doesnotemitwarnings-flaky) with 7 prior occurrences, the most recent just hours before this run."
+    }
+  ],
+  "causes": ["cli-sdkdumpcommandtests-doesnotemitwarnings-flaky", "vscode-extension-e2e-unrelated-logs-unavailable"]
+}
