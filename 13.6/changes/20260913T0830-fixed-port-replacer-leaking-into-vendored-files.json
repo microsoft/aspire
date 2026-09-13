@@ -1,0 +1,21 @@
+{
+  "area": "Templates",
+  "areaEmoji": "📄",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@bart-vmware"
+  ],
+  "description": "The aspire-starter template's port substitution previously replaced any matching numeric literal, corrupting unrelated values in vendored files like bootstrap.bundle.js when they happened to match a default port. Port substitution now only applies in `localhost:<port>` contexts, so generated projects no longer have spurious diffs in vendored assets.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩹",
+  "firstMergedAt": "2026-09-13T08:30:20Z",
+  "lastMergedAt": "2026-09-13T08:30:20Z",
+  "name": "Fixed port replacer leaking into vendored files",
+  "owner": "JamesNK",
+  "prs": [
+    20031
+  ]
+}

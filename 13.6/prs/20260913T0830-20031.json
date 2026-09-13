@@ -1,0 +1,9 @@
+{
+  "author": "bart-vmware",
+  "comment": "Fixed template port replacer leaking into vendored files like bootstrap.bundle.js",
+  "mergedAt": "2026-09-13T08:30:20Z",
+  "number": 20031,
+  "runDate": "2026-09-13T12:04:00Z",
+  "status": "included",
+  "title": "Constrain aspire-starter port replacers to localhost: URLs"
+}
