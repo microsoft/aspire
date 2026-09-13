@@ -66,11 +66,10 @@ If non-trivial UI changes are detected, add a prominent `### Screenshots / Recor
 
 For non-trivial UI changes, upload screenshots or recordings as GitHub user attachments. Do not commit them to the source branch unless explicitly requested.
 
-Prefer `gh --attach` when advertised by `gh pr create --help` or `gh pr edit --help`. Repeat the flag for multiple files; text after `#` is the alt text:
+Prefer `gh --attach` when advertised by `gh pr create --help` or `gh pr edit --help`. Prepare one flag per file and append the flags to the final `gh pr create` command in step 6 or `gh pr edit` command in step 7. For images, text after `#` is the alt text. Videos do not support alt text and must omit the `#` suffix:
 
 ```shell
-gh pr create <other arguments> --attach './before.png#Before' --attach './after.png#After'
-gh pr edit <pr> --attach './before.png#Before' --attach './after.png#After'
+--attach './before.png#Before' --attach './after.png#After' --attach './demo.mp4'
 ```
 
 For older GitHub CLI versions, upload each image with the authenticated attachment API. Resolve `repository_id` with `gh api repos/<owner>/<repo> --jq .id`, then send the raw file bytes:
@@ -208,7 +207,9 @@ GH_PAGER=cat gh pr create \
   --base <base-branch> \
   --head <head-branch> \
   --title "<pr-title>" \
-  --body-file pr-body.md
+  --body-file pr-body.md \
+  --attach './before.png#Before' \
+  --attach './after.png#After'
 ```
 
 **PowerShell/Windows:**
@@ -218,8 +219,12 @@ gh pr create `
   --base <base-branch> `
   --head <head-branch> `
   --title "<pr-title>" `
-  --body-file pr-body.md
+  --body-file pr-body.md `
+  --attach './before.png#Before' `
+  --attach './after.png#After'
 ```
+
+Omit the `--attach` lines when step 4 did not prepare visual artifacts. Attach videos without a `#` suffix.
 
 > **Why `GH_PAGER=cat`?** The `gh` CLI pipes long output through a pager (like `less`) by default, which blocks in non-interactive terminals. Setting it to `cat` disables paging so output prints directly.
 
@@ -231,9 +236,11 @@ If a PR already exists for the branch:
 - Do not create another.
 - If requested (or if the body is still mostly unfilled template text), update it:
 
-  **bash:** `GH_PAGER=cat gh pr edit <pr-number-or-url> --body-file pr-body.md`
+  **bash:** `GH_PAGER=cat gh pr edit <pr-number-or-url> --body-file pr-body.md --attach './before.png#Before' --attach './demo.mp4'`
 
-  **PowerShell:** `$env:GH_PAGER = "cat"; gh pr edit <pr-number-or-url> --body-file pr-body.md`
+  **PowerShell:** `$env:GH_PAGER = "cat"; gh pr edit <pr-number-or-url> --body-file pr-body.md --attach './before.png#Before' --attach './demo.mp4'`
+
+- Omit the `--attach` flags when step 4 did not prepare visual artifacts. Attach videos without a `#` suffix.
 
 - If a label needs to be applied to an existing PR, use `gh pr edit <pr-number-or-url> --add-label <label-name>`.
 
@@ -252,7 +259,7 @@ After you are completely finished creating or updating the PR (after step 6 and,
 | `gh: command not found` | Tell the user to install `gh` from https://cli.github.com/ |
 | `gh auth` not logged in | Tell the user to run `gh auth login` |
 | `git push` rejected | Inform the user; do not force-push without explicit permission |
-| PR already exists | Follow step 6 (Handle existing PRs) above |
+| PR already exists | Follow step 7 (Handle existing PRs) above |
 
 ## Notes
 
