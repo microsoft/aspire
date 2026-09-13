@@ -7,9 +7,24 @@
         <target state="new">Stop all running AppHosts</target>
         <note />
       </trans-unit>
+      <trans-unit id="AmbiguousAppHostPid">
+        <source>Multiple AppHost connections match PID {0}. No AppHosts were stopped.</source>
+        <target state="new">Multiple AppHost connections match PID {0}. No AppHosts were stopped.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostIdentifierWithProcessId">
         <source>{0} (PID {1})</source>
         <target state="new">{0} (PID {1})</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostNotRunningAtPathWithPid">
+        <source>No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</source>
+        <target state="new">No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostNotRunningWithPid">
+        <source>No running AppHost with PID {0} was found. No AppHosts were stopped.</source>
+        <target state="new">No running AppHost with PID {0} was found. No AppHosts were stopped.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStoppedSuccessfully">
@@ -87,9 +102,24 @@
         <target state="new">Persistent resources for {0} cleaned up.</target>
         <note />
       </trans-unit>
+      <trans-unit id="PidMustBePositive">
+        <source>The --pid option must be a positive integer.</source>
+        <target state="new">The --pid option must be a positive integer.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PidOptionDescription">
+        <source>Stop only the AppHost with this positive process ID (not the CLI process ID). With --apphost, the project file path must also match exactly. Cannot be combined with --all or --force.</source>
+        <target state="new">Stop only the AppHost with this positive process ID (not the CLI process ID). With --apphost, the project file path must also match exactly. Cannot be combined with --all or --force.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="needs-review-translation">Aspire AppHost プロジェクト ファイルへのパス。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProtocolRequiresExactIdentity">
+        <source>The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed.</source>
+        <target state="new">The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

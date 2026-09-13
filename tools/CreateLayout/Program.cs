@@ -49,6 +49,11 @@ public static class Program
             Description = "Create archive (zip/tar.gz) after building"
         };
 
+        var trayAppOption = new Option<string?>("--tray-app")
+        {
+            Description = "Pre-built Aspire Tray.app directory (required for macOS; signed before layout assembly)"
+        };
+
         var verboseOption = new Option<bool>("--verbose")
         {
             Description = "Enable verbose output"
@@ -60,6 +65,7 @@ public static class Program
         rootCommand.Options.Add(ridOption);
         rootCommand.Options.Add(bundleVersionOption);
         rootCommand.Options.Add(archiveOption);
+        rootCommand.Options.Add(trayAppOption);
         rootCommand.Options.Add(verboseOption);
 
         rootCommand.SetAction(async (parseResult, cancellationToken) =>
@@ -73,7 +79,7 @@ public static class Program
 
             try
             {
-                using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, version, verbose);
+                using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, version, verbose, parseResult.GetValue(trayAppOption));
                 await builder.BuildAsync().ConfigureAwait(false);
 
                 if (createArchive)
@@ -109,14 +115,16 @@ internal sealed class LayoutBuilder : IDisposable
     private readonly string _rid;
     private readonly string _version;
     private readonly bool _verbose;
+    private readonly string? _trayAppPath;
 
-    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string version, bool verbose)
+    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string version, bool verbose, string? trayAppPath)
     {
         _outputPath = Path.GetFullPath(outputPath);
         _artifactsPath = Path.GetFullPath(artifactsPath);
         _rid = rid;
         _version = version;
         _verbose = verbose;
+        _trayAppPath = trayAppPath;
     }
 
     public void Dispose()
@@ -139,9 +147,49 @@ internal sealed class LayoutBuilder : IDisposable
 
         // Copy components
         CopyManaged();
+        CopyTray();
         await CopyDcpAsync().ConfigureAwait(false);
 
         Log("Layout build complete!");
+    }
+
+    internal void CopyTray()
+    {
+        // Only macOS is a shipping tray implementation. Do not accidentally package
+        // the Windows scaffold just because its build artifacts happen to exist.
+        if (!_rid.StartsWith("osx-", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_trayAppPath))
+        {
+            throw new InvalidOperationException("The macOS bundle requires --tray-app pointing to the pre-built Aspire Tray.app.");
+        }
+
+        foreach (var relativePath in new[] { "Contents/MacOS/aspire-tray", "Contents/Info.plist", "Contents/Resources/Aspire.icns", "Contents/_CodeSignature/CodeResources" })
+        {
+            var path = Path.Combine(_trayAppPath, relativePath);
+            if (!File.Exists(path))
+            {
+                throw new InvalidOperationException($"Required macOS tray payload not found: {path}. Publish the tray app before creating the bundle.");
+            }
+        }
+
+        var executablePath = Path.Combine(_trayAppPath, "Contents", "MacOS", "aspire-tray");
+        if (OperatingSystem.IsWindows())
+        {
+            throw new InvalidOperationException("macOS tray bundles must be assembled on a Unix host to preserve executable permissions.");
+        }
+        if ((File.GetUnixFileMode(executablePath) & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) == 0)
+        {
+            throw new InvalidOperationException($"The macOS tray payload is not executable: {executablePath}");
+        }
+
+        // Copy the sealed app verbatim, including hidden files, resources and
+        // _CodeSignature. Reconstructing the app from its executable invalidates signing.
+        CopyDirectory(_trayAppPath, Path.Combine(_outputPath, "tray", "Aspire Tray.app"));
+        Log("Copied Aspire Tray.app to tray/");
     }
 
     private void CopyManaged()
@@ -247,12 +295,16 @@ internal sealed class LayoutBuilder : IDisposable
             var psi = new ProcessStartInfo
             {
                 FileName = "tar",
-                Arguments = $"-czf \"{archivePath}\" -C \"{Path.GetDirectoryName(_outputPath)}\" \"{Path.GetFileName(_outputPath)}\"",
+                Arguments = $"{(OperatingSystem.IsMacOS() ? "--no-xattrs " : "")}-czf \"{archivePath}\" -C \"{Path.GetDirectoryName(_outputPath)}\" \"{Path.GetFileName(_outputPath)}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false
             };
-            // Prevent macOS from including resource forks/extended attributes in the archive
+            // COPYFILE_DISABLE suppresses AppleDouble files, but BSD tar still emits
+            // binary PAX attributes such as "SCHILY.xattr.com.apple.provenance=\x01\x02..."
+            // unless --no-xattrs is set. Those records can contain NUL/newline bytes
+            // that .NET's TarReader rejects. App signatures live in the Mach-O and
+            // _CodeSignature files, so excluding filesystem xattrs preserves the seal.
             psi.Environment["COPYFILE_DISABLE"] = "1";
 
             using var process = Process.Start(psi);
@@ -375,12 +427,21 @@ internal sealed class LayoutBuilder : IDisposable
         {
             var destFile = Path.Combine(destination, Path.GetFileName(file));
             File.Copy(file, destFile, overwrite: true);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(destFile, File.GetUnixFileMode(file));
+            }
         }
 
         foreach (var dir in Directory.GetDirectories(source))
         {
             var destDir = Path.Combine(destination, Path.GetFileName(dir));
             CopyDirectory(dir, destDir);
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(destination, File.GetUnixFileMode(source));
         }
     }
 

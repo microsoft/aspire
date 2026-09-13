@@ -85,7 +85,24 @@ jobs:
           /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }}
           ${{ inputs.versionOverrideArg }}
 
+      # This project intentionally stays outside the product solution and uses no
+      # desktop session. Run its contract/lifecycle tests explicitly on macOS.
+      - name: Test tray shared contracts and lifecycle
+        if: runner.os == 'macOS'
+        run: >
+          ./dotnet.sh test
+          --project tools/Aspire.Tray.Spike/Tests/Aspire.Tray.Spike.Tests.csproj
+          --configuration ${{ inputs.configuration }}
+          --no-launch-profile
+          --
+          --filter-not-trait "quarantined=true"
+          --filter-not-trait "outerloop=true"
+
       - name: Build bundle payload archive
+        # SkipNativeBuild skips only the outer CLI. On macOS, Bundle.proj still
+        # publishes and ad-hoc signs Aspire Tray.app before archiving the payload.
+        # It also verifies the extracted app, signature and execute bits without
+        # starting the GUI (CI does not guarantee an interactive desktop session).
         run: >
           ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
           msbuild

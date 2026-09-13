@@ -1,0 +1,213 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Formats.Tar;
+using System.IO.Compression;
+using System.Runtime.Versioning;
+using System.Xml.Linq;
+using Aspire.Tools.CreateLayout;
+using Xunit;
+
+namespace Infrastructure.Tests;
+
+public sealed class TrayBundleTests(ITestOutputHelper output)
+{
+    [Theory]
+    [InlineData("linux-x64")]
+    [InlineData("linux-arm64")]
+    [InlineData("win-x64")]
+    [InlineData("win-arm64")]
+    public void NonMacLayoutsDoNotPackageTray(string rid)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "test", false, "missing.app");
+
+        builder.CopyTray();
+
+        Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.Path));
+    }
+
+    [Theory]
+    [InlineData("osx-arm64")]
+    [InlineData("osx-x64")]
+    public void MacLayoutRequiresExplicitTrayInput(string rid)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "test", false, null);
+
+        var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
+
+        Assert.Contains("--tray-app", error.Message);
+    }
+
+    [Theory]
+    [InlineData("Contents/MacOS/aspire-tray")]
+    [InlineData("Contents/Info.plist")]
+    [InlineData("Contents/Resources/Aspire.icns")]
+    [InlineData("Contents/_CodeSignature/CodeResources")]
+    public void MacLayoutRejectsIncompleteTray(string missingFile)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var source = CreateApp(workspace.Path);
+        File.Delete(Path.Combine(source, missingFile));
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "test", false, source);
+
+        var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
+
+        Assert.Contains(Path.Combine(source, missingFile), error.Message);
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public void MacLayoutRejectsNonExecutableTray()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix executable mode check.");
+        using var workspace = TemporaryWorkspace.Create(output);
+        var source = CreateApp(workspace.Path);
+        File.SetUnixFileMode(Path.Combine(source, "Contents/MacOS/aspire-tray"), UnixFileMode.UserRead);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "test", false, source);
+
+        var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
+
+        Assert.Contains("not executable", error.Message);
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task AppResourcesSignaturesAndExecutableModesSurviveCopyAndArchive()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "macOS bundles are assembled on Unix.");
+        using var workspace = TemporaryWorkspace.Create(output);
+        var source = CreateApp(workspace.Path);
+        var layout = Path.Combine(workspace.Path, "osx-arm64");
+        var destination = Path.Combine(layout, "tray", "Aspire Tray.app");
+        using var builder = new LayoutBuilder(layout, workspace.Path, "osx-arm64", "test", false, source);
+
+        builder.CopyTray();
+
+        var expectedFiles = Directory.GetFiles(source, "*", SearchOption.AllDirectories)
+            .Select(file => Path.GetRelativePath(source, file)).Order().ToArray();
+        Assert.Equal(expectedFiles, Directory.GetFiles(destination, "*", SearchOption.AllDirectories)
+            .Select(file => Path.GetRelativePath(destination, file)).Order().ToArray());
+        foreach (var file in expectedFiles)
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(source, file)), File.ReadAllBytes(Path.Combine(destination, file)));
+            Assert.Equal(File.GetUnixFileMode(Path.Combine(source, file)), File.GetUnixFileMode(Path.Combine(destination, file)));
+        }
+
+        var archivePath = await builder.CreateArchiveAsync();
+        await using var archive = File.OpenRead(archivePath);
+        await using var gzip = new GZipStream(archive, CompressionMode.Decompress);
+        await using var tar = new TarReader(gzip);
+        var archivedFiles = new List<string>();
+        while (await tar.GetNextEntryAsync() is { } entry)
+        {
+            if (entry.EntryType is not (TarEntryType.RegularFile or TarEntryType.V7RegularFile))
+            {
+                continue;
+            }
+            const string prefix = "osx-arm64/tray/Aspire Tray.app/";
+            Assert.StartsWith(prefix, entry.Name);
+            var relativePath = entry.Name[prefix.Length..];
+            archivedFiles.Add(relativePath);
+            Assert.Equal(File.GetUnixFileMode(Path.Combine(source, relativePath)), entry.Mode);
+            using var content = new MemoryStream();
+            await entry.DataStream!.CopyToAsync(content);
+            Assert.Equal(File.ReadAllBytes(Path.Combine(source, relativePath)), content.ToArray());
+        }
+
+        Assert.Equal(expectedFiles, archivedFiles.Order());
+    }
+
+    [Fact]
+    public void BundlePublishesTrayBeforeLayoutIndependentlyOfNativeCliSkip()
+    {
+        var project = LoadProject("eng/Bundle.proj");
+        var build = Target(project, "Build");
+        var dependencies = build.Attribute("DependsOnTargets")!.Value.Split(';', StringSplitOptions.TrimEntries);
+        Assert.True(Array.IndexOf(dependencies, "_PublishNativeTray") < Array.IndexOf(dependencies, "_RunCreateLayout"));
+        Assert.Equal("$(TargetRid.StartsWith('osx-')) and '$(SkipTrayBuild)' != 'true'", Target(project, "_PublishNativeTray").Attribute("Condition")!.Value);
+        Assert.Equal("'$(SkipNativeBuild)' != 'true'", Target(project, "_PublishNativeCli").Attribute("Condition")!.Value);
+        Assert.Contains("--tray-app \"$(TrayAppPath)\"", Target(project, "_RunCreateLayout").Value);
+        var cliPublish = Target(project, "_PublishNativeCli");
+        Assert.Equal("--output \"$(CliPublishDir)\"", Assert.Single(cliPublish.Descendants("_CliPublishOutputArg")).Value);
+        Assert.Contains("$(_CliPublishOutputArg)", Assert.Single(cliPublish.Elements("Exec")).Attribute("Command")!.Value);
+    }
+
+    [Fact]
+    public void SigningUsesWholeAppAndRestoresItWithoutPublishing()
+    {
+        var project = LoadProject("tools/Aspire.Tray.Spike/Mac/Aspire.Tray.Spike.Mac.csproj");
+        Assert.Equal("Publish", Target(project, "PackageTray").Attribute("AfterTargets")!.Value);
+        var restore = Target(project, "RestoreSignedTray");
+        Assert.Null(restore.Attribute("DependsOnTargets"));
+        Assert.Contains(restore.Elements("Exec"), exec => exec.Attribute("Command")!.Value.StartsWith("ditto -xk", StringComparison.Ordinal));
+        Assert.Contains(restore.Elements("Exec"), exec => exec.Attribute("Command")!.Value.Contains("anchor apple generic", StringComparison.Ordinal));
+
+        var signing = LoadProject("eng/Signing.props");
+        var rule = Assert.Single(signing.Descendants("FileSignInfo"), element => element.Attribute("Include")?.Value == "AspireTray.app");
+        Assert.Equal("MacDeveloperHardenWithNotarization", rule.Attribute("CertificateName")!.Value);
+        Assert.Contains(signing.Descendants("ItemsToSign"), element => element.Attribute("Include")?.Value == "$(ArtifactsBinDir)Aspire.Tray/**/signing/AspireTray.app");
+
+        var pipeline = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng/pipelines/templates/build_sign_native.yml"));
+        var prepare = pipeline.IndexOf("/t:PrepareTraySigning", StringComparison.Ordinal);
+        var sign = pipeline.IndexOf("SignManaged.binlog", StringComparison.Ordinal);
+        var restoreApp = pipeline.IndexOf("/t:RestoreSignedTray", StringComparison.Ordinal);
+        var layout = pipeline.IndexOf("/t:_RestoreDcpPackage;_RunCreateLayout", StringComparison.Ordinal);
+        Assert.True(prepare >= 0 && prepare < sign && sign < restoreApp && restoreApp < layout);
+        Assert.Contains("/p:SkipTrayBuild=true", pipeline);
+    }
+
+    [Fact]
+    public void NativePayloadVerificationRunsAfterLayoutAndSharedTestsRunInMacCi()
+    {
+        var project = LoadProject("eng/Bundle.proj");
+        var verification = Target(project, "_VerifyNativeTrayArchive");
+        Assert.Equal("_RunCreateLayout", verification.Attribute("AfterTargets")!.Value);
+        Assert.Equal("$(TargetRid.StartsWith('osx-'))", verification.Attribute("Condition")!.Value);
+        var command = Assert.Single(verification.Elements("Exec")).Attribute("Command")!.Value;
+        Assert.Contains("verify-tray-payload.sh", command);
+        Assert.Contains("aspire-$(BundleVersion)-$(TargetRid).tar.gz", command);
+
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github/workflows/build-cli-native-archives.yml"));
+        var testStep = workflow.IndexOf("- name: Test tray shared contracts and lifecycle", StringComparison.Ordinal);
+        var payloadStep = workflow.IndexOf("- name: Build bundle payload archive", StringComparison.Ordinal);
+        Assert.True(testStep >= 0 && testStep < payloadStep);
+        var step = workflow[testStep..payloadStep];
+        Assert.Contains("if: runner.os == 'macOS'", step);
+        Assert.Contains("./dotnet.sh test", step);
+        Assert.Contains("--project tools/Aspire.Tray.Spike/Tests/Aspire.Tray.Spike.Tests.csproj", step);
+        Assert.Contains("--filter-not-trait \"quarantined=true\"", step);
+        Assert.Contains("--filter-not-trait \"outerloop=true\"", step);
+    }
+
+    private static XDocument LoadProject(string path) => XDocument.Load(Path.Combine(RepoRoot.Path, path));
+
+    private static XElement Target(XDocument project, string name)
+        => Assert.Single(project.Descendants("Target"), target => target.Attribute("Name")?.Value == name);
+
+    private static string CreateApp(string workspace)
+    {
+        var source = Path.Combine(workspace, "source with spaces", "Aspire Tray.app");
+        foreach (var file in new[]
+        {
+            "Contents/MacOS/aspire-tray",
+            "Contents/Info.plist",
+            "Contents/Resources/Aspire.icns",
+            "Contents/Resources/.hidden",
+            "Contents/_CodeSignature/CodeResources"
+        })
+        {
+            var path = Path.Combine(source, file);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, file);
+        }
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(Path.Combine(source, "Contents/MacOS/aspire-tray"),
+                UnixFileMode.UserRead | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
+
+        return source;
+    }
+}

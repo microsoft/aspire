@@ -8,8 +8,10 @@ using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -76,6 +78,10 @@ internal sealed partial class PsCommand : BaseCommand
     private readonly IEnvironment _environment;
     private readonly OrphanedAppHostCollector _collector;
     private readonly ILogger<PsCommand> _logger;
+    private readonly IProcessIdentityProvider _processIdentityProvider;
+    private readonly TimeProvider _timeProvider;
+    private readonly TrayProtocolOutput _protocolOutput;
+    private static readonly Option<int?> s_protocolVersionOption = new("--protocol-version") { Hidden = true };
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
     {
         Description = PsCommandStrings.JsonOptionDescription
@@ -90,6 +96,9 @@ internal sealed partial class PsCommand : BaseCommand
         IAuxiliaryBackchannelMonitor backchannelMonitor,
         IEnvironment environment,
         OrphanedAppHostCollector collector,
+        IProcessIdentityProvider processIdentityProvider,
+        TimeProvider timeProvider,
+        TrayProtocolOutput protocolOutput,
         ILogger<PsCommand> logger,
         CommonCommandServices services)
         : base("ps", PsCommandStrings.Description, services)
@@ -98,16 +107,34 @@ internal sealed partial class PsCommand : BaseCommand
         _environment = environment;
         _collector = collector;
         _logger = logger;
+        _processIdentityProvider = processIdentityProvider;
+        _timeProvider = timeProvider;
+        _protocolOutput = protocolOutput;
 
         Options.Add(s_formatOption);
         Options.Add(s_followOption);
+        Options.Add(s_protocolVersionOption);
     }
+
+    protected override bool IsJsonFormatRequested(ParseResult parseResult)
+        => parseResult.GetValue(s_protocolVersionOption) is not null || base.IsJsonFormatRequested(parseResult);
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
         var format = parseResult.GetValue(s_formatOption);
+
+        if (parseResult.GetValue(s_protocolVersionOption) is { } protocolVersion)
+        {
+            if (protocolVersion != TrayCliProtocol.Version || !parseResult.GetValue(s_followOption) || format != OutputFormat.Json)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, PsCommandStrings.ProtocolRequiresFollowJson);
+            }
+
+            var stream = new TrayWatchStream(_backchannelMonitor, _processIdentityProvider, _timeProvider, _logger);
+            return CommandResult.FromExitCode(await stream.RunAsync(_protocolOutput.WriteLineAsync, cancellationToken).ConfigureAwait(false));
+        }
 
         if (parseResult.GetValue(s_followOption))
         {

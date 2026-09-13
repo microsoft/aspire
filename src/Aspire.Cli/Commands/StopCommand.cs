@@ -15,7 +15,7 @@ using Semver;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class StopCommand : BaseCommand
+internal sealed partial class StopCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
@@ -49,11 +49,19 @@ internal sealed class StopCommand : BaseCommand
         Description = StopCommandStrings.ForceOptionDescription
     };
 
+    private static readonly Option<int?> s_pidOption = new("--pid")
+    {
+        Description = StopCommandStrings.PidOptionDescription
+    };
+
     public StopCommand(
         AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
         IEnvironment environment,
         ProcessTreeGracefulShutdownService processShutdownService,
+        IAuxiliaryBackchannelMonitor backchannelMonitor,
+        IProcessIdentityProvider processIdentityProvider,
+        TrayProtocolOutput protocolOutput,
         IProjectLocator projectLocator,
         IAppHostInfoResolver appHostInfoResolver,
         ILanguageDiscovery languageDiscovery,
@@ -68,6 +76,9 @@ internal sealed class StopCommand : BaseCommand
         _hostEnvironment = hostEnvironment;
         _environment = environment;
         _processShutdownService = processShutdownService;
+        _backchannelMonitor = backchannelMonitor;
+        _processIdentityProvider = processIdentityProvider;
+        _protocolOutput = protocolOutput;
         _projectLocator = projectLocator;
         _appHostInfoResolver = appHostInfoResolver;
         _languageDiscovery = languageDiscovery;
@@ -79,14 +90,48 @@ internal sealed class StopCommand : BaseCommand
         Options.Add(s_appHostOption);
         Options.Add(s_allOption);
         Options.Add(s_forceOption);
+        Options.Add(s_pidOption);
+        Options.Add(s_protocolVersionOption);
+        Options.Add(s_startedAtOption);
+        Options.Add(s_formatOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        if (parseResult.GetValue(s_protocolVersionOption) is not null)
+        {
+            return await ExecuteProtocolAsync(parseResult, cancellationToken).ConfigureAwait(false);
+        }
+
+        // A supplied lifetime must never be silently downgraded to legacy PID-only stopping.
+        if (parseResult.GetResult(s_startedAtOption) is { Implicit: false } ||
+            parseResult.GetResult(s_formatOption) is { Implicit: false })
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, StopCommandStrings.ProtocolRequiresExactIdentity);
+        }
+
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var stopAll = parseResult.GetValue(s_allOption);
         var force = parseResult.GetValue(s_forceOption);
+        var processId = parseResult.GetValue(s_pidOption);
         using var activity = _profilingTelemetry.StartStopCommand(stopAll, passedAppHostProjectFile is not null);
+
+        if (processId is { } pid)
+        {
+            if (pid <= 0)
+            {
+                return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), StopCommandStrings.PidMustBePositive);
+            }
+
+            if (stopAll || force)
+            {
+                return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_pidOption.Name, stopAll ? s_allOption.Name : s_forceOption.Name));
+            }
+
+            // An instance selector must never fall through to project discovery, project-wide
+            // batching, or orphan/persistent cleanup, even when the selected instance disappears.
+            return CommandResult.FromExitCode(CompleteStopActivity(activity, await StopAppHostByPidAsync(pid, passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)));
+        }
 
         // Validate mutual exclusivity of --all and --project
         if (stopAll && passedAppHostProjectFile is not null)
@@ -117,6 +162,40 @@ internal sealed class StopCommand : BaseCommand
         }
 
         return CommandResult.FromExitCode(CompleteStopActivity(activity, await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken)));
+    }
+
+    private async Task<int> StopAppHostByPidAsync(int processId, FileInfo? appHostFile, CancellationToken cancellationToken)
+    {
+        var results = await _connectionResolver.ResolveAllConnectionsAsync(
+            SharedCommandStrings.ScanningForRunningAppHosts,
+            cancellationToken,
+            pruneOrphanedSockets: false).ConfigureAwait(false);
+
+        var connections = results
+            .Where(result => result.Connection?.AppHostInfo is { } info &&
+                info.ProcessId == processId &&
+                (appHostFile is null || GetAppHostPathComparer().Equals(info.AppHostPath, appHostFile.FullName)))
+            .Select(result => result.Connection!)
+            .ToArray();
+
+        if (connections.Length == 0)
+        {
+            InteractionService.DisplayError(appHostFile is null
+                ? string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostNotRunningWithPid, processId)
+                : string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostNotRunningAtPathWithPid, appHostFile.FullName, processId));
+            return CliExitCodes.FailedToFindProject;
+        }
+
+        if (connections.Length != 1)
+        {
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AmbiguousAppHostPid, processId));
+            return CliExitCodes.FailedToFindProject;
+        }
+
+        var connection = connections[0];
+        _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
+        var identifier = GetAppHostIdentifier(connection, GetSingleAppHostDisplayPath(connection), includeProcessId: true);
+        return await StopAppHostAsync(connection, identifier, useConnectionOnly: true, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<int> ForceStopAppHostAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
@@ -237,7 +316,7 @@ internal sealed class StopCommand : BaseCommand
             }
 
             _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
-            var exitCode = await StopAppHostAsync(connection, GetSingleAppHostDisplayPath(connection), cancellationToken).ConfigureAwait(false);
+            var exitCode = await StopAppHostAsync(connection, GetSingleAppHostDisplayPath(connection), useConnectionOnly: false, cancellationToken).ConfigureAwait(false);
             return new StopAppHostResult(exitCode, appHostFile);
         }
 
@@ -277,7 +356,7 @@ internal sealed class StopCommand : BaseCommand
         }
 
         _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
-        var exitCode = await StopAppHostAsync(result.Connection!, GetSingleAppHostDisplayPath(result.Connection!), cancellationToken).ConfigureAwait(false);
+        var exitCode = await StopAppHostAsync(result.Connection!, GetSingleAppHostDisplayPath(result.Connection!), useConnectionOnly: false, cancellationToken).ConfigureAwait(false);
         return new StopAppHostResult(exitCode, appHostFile);
     }
 
@@ -332,7 +411,7 @@ internal sealed class StopCommand : BaseCommand
                 ? displayPaths[appHostPath]
                 : GetSingleAppHostDisplayPath(connection);
             var appHostIdentifier = GetAppHostIdentifier(connection, displayPath, includeProcessId);
-            return StopAppHostAsync(connection, appHostIdentifier, cancellationToken);
+            return StopAppHostAsync(connection, appHostIdentifier, useConnectionOnly: false, cancellationToken);
         }).ToArray();
 
         var results = await Task.WhenAll(stopTasks).ConfigureAwait(false);
@@ -474,7 +553,7 @@ internal sealed class StopCommand : BaseCommand
             var displayPath = displayPaths[appHostPath];
             var appHostIdentifier = GetAppHostIdentifier(connection, displayPath, appHostPathCounts[appHostPath] > 1);
             _logger.LogDebug("Queuing stop for AppHost: {AppHostPath}", appHostPath);
-            return StopAppHostAsync(connection, appHostIdentifier, cancellationToken);
+            return StopAppHostAsync(connection, appHostIdentifier, useConnectionOnly: false, cancellationToken);
         }).ToArray();
 
         var results = await Task.WhenAll(stopTasks);
@@ -486,9 +565,9 @@ internal sealed class StopCommand : BaseCommand
     }
 
     /// <summary>
-    /// Stops a single AppHost by sending a stop signal to its CLI process or falling back to RPC.
+    /// Stops a single AppHost, optionally restricting shutdown to its original RPC connection.
     /// </summary>
-    private async Task<int> StopAppHostAsync(IAppHostAuxiliaryBackchannel connection, string appHostIdentifier, CancellationToken cancellationToken)
+    private async Task<int> StopAppHostAsync(IAppHostAuxiliaryBackchannel connection, string appHostIdentifier, bool useConnectionOnly, CancellationToken cancellationToken)
     {
         // Stop the selected AppHost
         var appHostPath = connection.AppHostInfo?.AppHostPath ?? "Unknown";
@@ -501,7 +580,9 @@ internal sealed class StopCommand : BaseCommand
 
         var stopped = await InteractionService.ShowStatusAsync(
             string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostIdentifier),
-            async () => await _processShutdownService.StopAppHostAsync(appHostInfo, connection.StopAppHostAsync, cancellationToken).ConfigureAwait(false));
+            () => useConnectionOnly
+                ? _processShutdownService.StopAppHostByConnectionAsync(appHostInfo!, connection.StopAppHostAsync, cancellationToken)
+                : _processShutdownService.StopAppHostAsync(appHostInfo, connection.StopAppHostAsync, cancellationToken));
 
         // Reset cursor position after spinner
         InteractionService.DisplayPlainText("");

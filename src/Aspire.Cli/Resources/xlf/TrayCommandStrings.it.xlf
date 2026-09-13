@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="it" original="../TrayCommandStrings.resx">
+    <body>
+      <trans-unit id="BundleRequired">
+        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a macOS Aspire bundle that includes the tray companion.</source>
+        <target state="new">The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a macOS Aspire bundle that includes the tray companion.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Manage the macOS menu bar companion (Experimental)</source>
+        <target state="new">Manage the macOS menu bar companion (Experimental)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelperFailed">
+        <source>The Aspire tray '{0}' helper failed with exit code {1}.</source>
+        <target state="new">The Aspire tray '{0}' helper failed with exit code {1}.</target>
+        <note>{0} is the start or stop subcommand name. {1} is the helper exit code.</note>
+      </trans-unit>
+      <trans-unit id="HelperTimedOut">
+        <source>The Aspire tray '{0}' helper did not acknowledge completion within 30 seconds.</source>
+        <target state="new">The Aspire tray '{0}' helper did not acknowledge completion within 30 seconds.</target>
+        <note>{0} is the start or stop subcommand name.</note>
+      </trans-unit>
+      <trans-unit id="MacOSOnly">
+        <source>The experimental Aspire tray is currently supported only on macOS.</source>
+        <target state="new">The experimental Aspire tray is currently supported only on macOS.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NativeCliRequired">
+        <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
+        <target state="new">Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationFailed">
+        <source>Could not complete Aspire tray '{0}': {1}</source>
+        <target state="new">Could not complete Aspire tray '{0}': {1}</target>
+        <note>{0} is the start or stop subcommand name. {1} is the underlying error message.</note>
+      </trans-unit>
+      <trans-unit id="PayloadMissing">
+        <source>The CLI bundle does not contain the macOS tray companion (tray/Aspire Tray.app/Contents/MacOS/aspire-tray). Install a macOS Aspire bundle that includes the experimental tray, or run 'aspire setup --force' to repair an incomplete extraction.</source>
+        <target state="new">The CLI bundle does not contain the macOS tray companion (tray/Aspire Tray.app/Contents/MacOS/aspire-tray). Install a macOS Aspire bundle that includes the experimental tray, or run 'aspire setup --force' to repair an incomplete extraction.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartDescription">
+        <source>Start or restore the macOS tray icon (Experimental)</source>
+        <target state="new">Start or restore the macOS tray icon (Experimental)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Started">
+        <source>The experimental Aspire tray is ready.</source>
+        <target state="new">The experimental Aspire tray is ready.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StopDescription">
+        <source>Stop the macOS tray without stopping AppHosts (Experimental)</source>
+        <target state="new">Stop the macOS tray without stopping AppHosts (Experimental)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Stopped">
+        <source>The Aspire tray is stopped. AppHosts were not stopped.</source>
+        <target state="new">The Aspire tray is stopped. AppHosts were not stopped.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

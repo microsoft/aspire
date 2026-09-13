@@ -33,6 +33,7 @@ The Aspire Bundle is a platform-specific archive containing the Aspire CLI and a
 - **Aspire CLI** (native AOT executable, includes native certificate management)
 - **Aspire Managed** (unified self-contained binary: Dashboard + AppHost Server + NuGet Helper)
 - **Developer Control Plane (DCP)** (no longer distributed via NuGet)
+- **Aspire Tray** (macOS NativeAOT AppKit menu-bar companion; optional for older layouts and absent on Linux/Windows)
 
 **Key change**: DCP and Dashboard are now bundled with the CLI installation, not downloaded as NuGet packages. Dashboard, AppHost Server, and NuGet Helper are consolidated into a single `aspire-managed` binary that dispatches via subcommands. Certificate management is handled natively in the CLI (no subprocess needed). This:
 
@@ -164,8 +165,22 @@ aspire-{version}-{platform}/
 │   ├── dcp[.exe]                       # Native executable
 │   └── ...
 │
+├── tray/                               # macOS only
+│   └── Aspire Tray.app/
+│       └── Contents/
+│           ├── MacOS/aspire-tray       # NativeAOT executable
+│           ├── Info.plist             # Product version, LSUIElement
+│           ├── Resources/Aspire.icns  # App icon
+│           └── _CodeSignature/       # Sealed app resources
+│
 └── (no more runtime/, dashboard/, aspire-server/, tools/ directories)
 ```
+
+In installed versioned layouts these components live under `versions/{id}/`,
+accessed through the `bundle/` link. `LayoutConfiguration.GetTrayPath()` returns
+the executable path only when discovery finds it. Tray absence does not invalidate
+an existing layout; new macOS payloads, however, must include the complete app.
+Windows tray sources are an unvalidated read-only scaffold and are not packaged.
 
 **Key change from previous layout**: The separate `.NET Runtime` (~106 MB), `dashboard/` (~42 MB), `aspire-server/` (~19 MB), `tools/aspire-nuget/` (~5 MB), and `tools/dev-certs/` directories have been consolidated into a single `managed/aspire-managed` self-contained binary. Certificate management has been moved natively into the CLI itself, eliminating the need for a separate dev-certs tool.
 
@@ -1402,25 +1417,69 @@ aspire-managed (self-contained, ~65 MB)
 ### Build Steps
 
 1. **Build aspire-managed** as a self-contained single-file binary (includes .NET runtime, Dashboard, AppHost Server, NuGet operations)
-2. **Download and copy DCP** binaries
-3. **Create archive** (tar.gz for Unix, ZIP for Windows) with `COPYFILE_DISABLE=1` to suppress macOS xattr headers
-4. **Create self-extracting binary** — appends tar.gz payload + 32-byte trailer to native AOT CLI
+2. **Build the macOS tray app**, when targeting `osx-arm64` or `osx-x64`. This uses the base .NET SDK, NativeAOT and Xcode command-line tools; no macOS workload or third-party GUI framework is needed.
+3. **Sign bundle components** in official builds, before layout assembly
+4. **Restore and copy DCP** binaries
+5. **Create the payload archive** (tar.gz on every platform), preserving executable modes and the complete tray app, with `COPYFILE_DISABLE=1` and macOS `tar --no-xattrs` to suppress filesystem metadata
+6. **Publish the native CLI**, embedding the payload as a resource
 
 ### Self-Extracting Binary Build
 
-`Bundle.proj` passes `--embed-in-cli` to `CreateLayout`, which:
-
-1. Takes the native AOT CLI binary and the tar.gz archive
-2. Copies the CLI binary to `{output}.bundle`
-3. Appends the tar.gz payload
-4. Writes the 32-byte trailer (magic + offset + size + version hash)
-5. Replaces the original CLI binary with the bundle
+`Bundle.proj` invokes `CreateLayout --archive`, then publishes the CLI with
+`BundlePayloadPath` pointing at that archive. `SkipNativeBuild=true` skips only
+the final CLI publish: it still builds the native tray payload on macOS.
 
 ```bash
-# Build command
-dotnet msbuild eng/Bundle.proj /p:TargetRid=osx-arm64 /p:Configuration=Release /p:BundleRuntimeVersion=10.0.102
-
-# Output: artifacts/bundle/osx-arm64/aspire (self-extracting, ~134 MB)
+./dotnet.sh msbuild eng/Bundle.proj /p:TargetRid=osx-arm64 /p:Configuration=Release
 ```
 
-The resulting binary is a valid native executable that also contains the full bundle. Running `aspire --version` works immediately; `aspire setup` extracts the payload.
+The resulting CLI is a valid native executable containing the full bundle.
+Running `aspire --version` works immediately; `aspire setup` extracts the payload.
+For local validation alongside a running CLI, use
+`/p:CliPublishDir="$PWD/artifacts/tray-cli-validation"` to place the final CLI
+in a separate directory instead of overwriting the default publish output.
+
+### macOS Tray Packaging and Signing
+
+The native tray project remains at `tools/Aspire.Tray.Spike/Mac/`. Its `PackageTray`
+target runs after publish and assembles
+`artifacts/bin/Aspire.Tray/{Configuration}/net10.0/{rid}/app/Aspire Tray.app`.
+It stamps numeric `CFBundleVersion`/`CFBundleShortVersionString` from `VersionPrefix`,
+records the full product version (including Arcade's official build suffix) in `AspireVersion`, generates `Resources/Aspire.icns`
+from the shared Aspire artwork, and ad-hoc signs the app for local/GitHub builds.
+No running spike output is reused.
+
+Publish just this app (without publishing the CLI or the managed payload):
+
+```bash
+bash tools/Aspire.Tray.Spike/Mac/publish.sh osx-arm64
+# Equivalent shared build target:
+./dotnet.sh msbuild eng/Bundle.proj /t:_PublishNativeTray /p:TargetRid=osx-arm64 /p:Configuration=Release
+```
+
+Official `build_sign_native.yml` builds the app, invokes `PrepareTraySigning` to
+produce Arcade's ZIP-based `.app` signing input, then signs it through
+`eng/Signing.props` using `MacDeveloperHardenWithNotarization`. `RestoreSignedTray`
+extracts the signed app and verifies its seal and Apple signing anchor before
+`CreateLayout` copies it. The layout-only invocation never republishes the app.
+For an explicit full `Bundle.proj` invocation over signed input, pass
+`SkipTrayBuild=true` (and `SkipManagedBuild=true` for the already signed managed
+binary). `TrayAppPath` can select a different prepared app directory.
+
+`CreateLayout --tray-app <app-directory>` copies the complete app to
+`tray/Aspire Tray.app`, including resources, hidden files and signatures. It fails
+explicitly for a macOS payload missing its executable, plist, icon or resource signature, or one whose
+executable has lost all execute bits. Older installed bundles remain usable
+without a tray. No Windows tray payload is produced.
+
+After layout creation, `_VerifyNativeTrayArchive` extracts the app from the actual
+tar.gz payload and checks its executable, plist, icon, signature and execute bits.
+This covers both GitHub and official signing paths before CLI embedding.
+The macOS native-archives workflow explicitly runs
+`tools/Aspire.Tray.Spike/Tests/Aspire.Tray.Spike.Tests.csproj` for shared
+contract/lifecycle coverage. Neither verification nor these tests launch the GUI;
+native GUI smoke testing requires a known interactive desktop session.
+
+Local ad-hoc signing does **not** validate Developer ID signing, notarization or
+Gatekeeper behavior. Those require an official signing run and validation of the
+extracted shipped app on a clean Mac; pipeline wiring alone is not release validation.

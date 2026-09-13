@@ -6,13 +6,17 @@
 
     This project:
     1. Publishes the unified managed binary (Aspire.Managed) as self-contained
-    2. Publishes native CLI (unless SkipNativeBuild=true)
+    2. Publishes the native macOS tray app (even with SkipNativeBuild=true)
     3. Restores DCP package
     4. Runs CreateLayout to assemble the bundle
+    5. Publishes native CLI with the embedded payload (unless SkipNativeBuild=true)
 
     Options:
     - SkipNativeBuild=true: Skip building native CLI (use pre-built from artifacts)
     - SkipManagedBuild=true: Skip building managed projects (use pre-built)
+    - SkipTrayBuild=true: Use a pre-built macOS app (required after official signing)
+    - TrayAppPath: Override the pre-built macOS app directory
+    - CliPublishDir: Override the final native CLI publish directory (e.g. for isolated local validation)
     - BundleVersion: Version string for the bundle (auto-computed in CI if not set)
   -->
 
@@ -40,6 +44,8 @@
     <ManagedProjectPath>$(RepoRoot)src\Aspire.Managed\Aspire.Managed.csproj</ManagedProjectPath>
     <AppHostProjectPath>$(RepoRoot)src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj</AppHostProjectPath>
     <CreateLayoutProjectPath>$(RepoRoot)tools\CreateLayout\CreateLayout.csproj</CreateLayoutProjectPath>
+    <TrayProjectPath>$(RepoRoot)tools\Aspire.Tray.Spike\Mac\Aspire.Tray.Spike.Mac.csproj</TrayProjectPath>
+    <TrayAppPath Condition="'$(TrayAppPath)' == ''">$(ArtifactsDir)bin\Aspire.Tray\$(Configuration)\net10.0\$(TargetRid)\app\Aspire Tray.app</TrayAppPath>
 
     <!-- Bundle version: use VersionSuffix from CI if provided, else dev version for local builds -->
     <!-- In GitHub Actions CI: VersionSuffix is set via /p:VersionSuffix=pr.XXXX.gSHA -->
@@ -48,6 +54,7 @@
 
     <!-- Forward VersionSuffix to Exec-invoked dotnet commands (MSBuild properties don't flow to child processes) -->
     <_VersionSuffixArg Condition="'$(VersionSuffix)' != ''">/p:VersionSuffix=$(VersionSuffix)</_VersionSuffixArg>
+    <_OfficialBuildIdArg Condition="'$(OfficialBuildId)' != ''">/p:OfficialBuildId=$(OfficialBuildId)</_OfficialBuildIdArg>
 
     <!-- Binlog arguments for dotnet commands -->
     <_BinlogArg Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)</_BinlogArg>
@@ -58,6 +65,7 @@
     _ShowBanner;
     _CleanCaches;
     _PublishManagedProjects;
+    _PublishNativeTray;
     _RestoreDcpPackage;
     _RunCreateLayout;
     _PublishNativeCli">
@@ -89,9 +97,10 @@
       <_CliBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishCli.binlog</_CliBinlog>
       <!-- The tar.gz archive produced by CreateLayout is embedded as a resource in the CLI binary -->
       <_BundleArchivePath>$(ArtifactsDir)bundle\aspire-$(BundleVersion)-$(TargetRid).tar.gz</_BundleArchivePath>
+      <_CliPublishOutputArg Condition="'$(CliPublishDir)' != ''">--output "$(CliPublishDir)"</_CliPublishOutputArg>
     </PropertyGroup>
     <Message Importance="high" Text="Publishing native AOT CLI with embedded bundle: $(_BundleArchivePath)" />
-    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_VersionSuffixArg) $(_CliBinlog)" />
+    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) $(_CliPublishOutputArg) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_VersionSuffixArg) $(_CliBinlog)" />
   </Target>
 
   <Target Name="_PublishManagedProjects" Condition="'$(SkipManagedBuild)' != 'true'">
@@ -101,6 +110,22 @@
     <Message Importance="high" Text="Publishing aspire-managed (self-contained)..." />
     <!-- Publish as self-contained single-file for the target RID -->
     <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_ManagedBinlog)" />
+  </Target>
+
+  <!-- SkipNativeBuild skips the outer CLI publish, not native payload components.
+       Official builds publish/sign the app first, then reuse it with SkipTrayBuild. -->
+  <Target Name="_PublishNativeTray" Condition="$(TargetRid.StartsWith('osx-')) and '$(SkipTrayBuild)' != 'true'">
+    <PropertyGroup>
+      <_TrayBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishTray.binlog</_TrayBinlog>
+    </PropertyGroup>
+    <Message Importance="high" Text="Publishing native macOS tray app..." />
+    <!-- Reuse Arcade's product version calculation without importing its entire
+         build/analyzer stack into the workload-free native app project. -->
+    <Exec Command="dotnet msbuild &quot;$(ManagedProjectPath)&quot; -nologo -getProperty:Version $(_VersionSuffixArg) $(_OfficialBuildIdArg)"
+          ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_TrayProductVersion" />
+    </Exec>
+    <Exec Command="dotnet publish &quot;$(TrayProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:TrayAppPath=&quot;$(TrayAppPath)&quot; /p:Version=$(_TrayProductVersion) $(_VersionSuffixArg) $(_TrayBinlog)" />
   </Target>
 
   <Target Name="_RestoreDcpPackage">
@@ -136,10 +161,17 @@
       <_ArtifactsDirArg>$(ArtifactsDir.TrimEnd('\').TrimEnd('/'))</_ArtifactsDirArg>
 
       <_CreateLayoutArgs>--output "$(_BundleOutputDirArg)" --artifacts "$(_ArtifactsDirArg)" --rid $(TargetRid) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
+      <_CreateLayoutArgs Condition="$(TargetRid.StartsWith('osx-'))">$(_CreateLayoutArgs) --tray-app "$(TrayAppPath)"</_CreateLayoutArgs>
     </PropertyGroup>
 
     <Message Importance="high" Text="Creating bundle layout..." />
     <Exec Command="dotnet run --project &quot;$(CreateLayoutProjectPath)&quot; -c $(Configuration) -- $(_CreateLayoutArgs)" />
+  </Target>
+
+  <!-- Verify the actual tar payload, not the source app. This also runs in the
+       official layout-only path, after signing and before native CLI embedding. -->
+  <Target Name="_VerifyNativeTrayArchive" AfterTargets="_RunCreateLayout" Condition="$(TargetRid.StartsWith('osx-'))">
+    <Exec Command="bash &quot;$(RepoRoot)tools/CreateLayout/verify-tray-payload.sh&quot; &quot;$(ArtifactsDir)bundle/aspire-$(BundleVersion)-$(TargetRid).tar.gz&quot; &quot;$(TargetRid)&quot;" />
   </Target>
 
 </Project>

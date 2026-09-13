@@ -153,6 +153,21 @@
   <data name="ForceOptionDescription" xml:space="preserve">
     <value>Stop the AppHost and clean up its persistent resources</value>
   </data>
+  <data name="PidOptionDescription" xml:space="preserve">
+    <value>Stop only the AppHost with this positive process ID (not the CLI process ID). With --apphost, the project file path must also match exactly. Cannot be combined with --all or --force.</value>
+  </data>
+  <data name="PidMustBePositive" xml:space="preserve">
+    <value>The --pid option must be a positive integer.</value>
+  </data>
+  <data name="AppHostNotRunningWithPid" xml:space="preserve">
+    <value>No running AppHost with PID {0} was found. No AppHosts were stopped.</value>
+  </data>
+  <data name="AppHostNotRunningAtPathWithPid" xml:space="preserve">
+    <value>No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</value>
+  </data>
+  <data name="AmbiguousAppHostPid" xml:space="preserve">
+    <value>Multiple AppHost connections match PID {0}. No AppHosts were stopped.</value>
+  </data>
   <data name="CouldNotDetermineAppHostPath" xml:space="preserve">
     <value>Could not determine the AppHost project path.</value>
   </data>
@@ -185,5 +200,8 @@
   </data>
   <data name="UnknownAspireHostingVersion" xml:space="preserve">
     <value>an unknown version</value>
+  </data>
+  <data name="ProtocolRequiresExactIdentity" xml:space="preserve">
+    <value>The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed.</value>
   </data>
 </root>

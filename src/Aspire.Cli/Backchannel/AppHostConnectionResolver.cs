@@ -51,20 +51,22 @@ internal sealed class AppHostConnectionResolver(
 {
     /// <summary>
     /// Resolves all running AppHost connections using socket-first discovery.
-    /// Used when stopping all running AppHosts (e.g., via --all flag).
+    /// Supports global discovery without project selection.
     /// </summary>
     /// <param name="scanningMessage">Message to display while scanning for AppHosts.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="pruneOrphanedSockets">Whether to delete unrelated orphaned sockets during discovery.</param>
     /// <returns>All resolved connections, or an empty array if none found.</returns>
     public async Task<AppHostConnectionResult[]> ResolveAllConnectionsAsync(
         string scanningMessage,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool pruneOrphanedSockets = true)
     {
         var connections = await interactionService.ShowStatusAsync(
             scanningMessage,
             async () =>
             {
-                await backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+                await backchannelMonitor.ScanAsync(cancellationToken, pruneOrphanedSockets).ConfigureAwait(false);
                 return backchannelMonitor.Connections.ToList();
             });
 

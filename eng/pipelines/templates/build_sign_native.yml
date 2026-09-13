@@ -214,6 +214,29 @@ jobs:
                 $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
               displayName: 🟣Ad-hoc codesign aspire-managed with JIT entitlements
 
+          # Build the native AppKit app on macOS only. No macOS .NET workload is
+          # needed. Complete the app (plist/icon/ad-hoc seal) BEFORE official signing.
+          - ${{ if eq(parameters.agentOs, 'macos') }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                msbuild
+                $(Build.SourcesDirectory)/eng/Bundle.proj
+                /t:_PublishNativeTray
+                /p:Configuration=$(_BuildConfig)
+                /p:TargetRid=${{ targetRid }}
+                ${{ parameters.extraBuildArgs }}
+                /bl:$(Build.Arcade.LogsPath)PublishTray.binlog
+              displayName: 🟣Prepare native tray app
+            - ${{ if eq(parameters.codeSign, true) }}:
+              - script: >-
+                  $(Build.SourcesDirectory)/$(dotnetScript)
+                  msbuild
+                  $(Build.SourcesDirectory)/tools/Aspire.Tray.Spike/Mac/Aspire.Tray.Spike.Mac.csproj
+                  /t:PrepareTraySigning
+                  /p:Configuration=$(_BuildConfig)
+                  /p:RuntimeIdentifier=${{ targetRid }}
+                displayName: 🟣Prepare tray app signing input
+
           - ${{ if eq(parameters.codeSign, true) }}:
             - script: >-
                 $(Build.SourcesDirectory)/$(scriptName)
@@ -221,9 +244,20 @@ jobs:
                 ${{ parameters.extraBuildArgs }}
                 -projects $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
                 /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
-              displayName: 🟣Sign aspire-managed
+              # eng/Signing.props also includes the prepared macOS .app transport.
+              displayName: 🟣Sign bundle components
               env:
                 SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+          - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                msbuild
+                $(Build.SourcesDirectory)/tools/Aspire.Tray.Spike/Mac/Aspire.Tray.Spike.Mac.csproj
+                /t:RestoreSignedTray
+                /p:Configuration=$(_BuildConfig)
+                /p:RuntimeIdentifier=${{ targetRid }}
+              displayName: 🟣Restore and verify signed tray app
 
           # On macOS/Linux, restore the execute bit after Arcade signing.
           # MicroBuild rewrites the binary file during signing, which resets permissions
@@ -247,6 +281,7 @@ jobs:
               /p:Configuration=$(_BuildConfig)
               /p:TargetRid=${{ targetRid }}
               /p:BundleVersion=ci-bundlepayload
+              /p:SkipTrayBuild=true
               /p:ContinuousIntegrationBuild=true
               /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
             displayName: 🟣Create bundle layout

@@ -1,0 +1,4 @@
+<Project>
+  <!-- Native app assembly is defined in the Mac project. Official signing is
+       performed by the repository's Arcade signing stage before embedding. -->
+</Project>

@@ -51,6 +51,10 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public bool StopAppHostResult { get; set; } = true;
 
+    private int _stopAppHostCallCount;
+    public int StopAppHostCallCount => Volatile.Read(ref _stopAppHostCallCount);
+    public Func<CancellationToken, Task<bool>>? StopAppHostHandler { get; set; }
+
     /// <summary>
     /// Gets or sets the function to call when CallResourceMcpToolAsync is invoked.
     /// </summary>
@@ -249,7 +253,8 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<bool> StopAppHostAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(StopAppHostResult);
+        Interlocked.Increment(ref _stopAppHostCallCount);
+        return StopAppHostHandler?.Invoke(cancellationToken) ?? Task.FromResult(StopAppHostResult);
     }
 
     /// <summary>

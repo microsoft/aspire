@@ -47,6 +47,11 @@
         <target state="needs-review-translation">Ausgabe im JSON-Format.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProtocolRequiresFollowJson">
+        <source>The experimental tray protocol requires --protocol-version 1 --follow --format json.</source>
+        <target state="new">The experimental tray protocol requires --protocol-version 1 --follow --format json.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnknownPath">
         <source>Unknown</source>
         <target state="translated">Unbekannt</target>

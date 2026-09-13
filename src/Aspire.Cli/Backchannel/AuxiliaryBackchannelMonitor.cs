@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
@@ -63,8 +64,22 @@ internal sealed class AuxiliaryBackchannelMonitor(
     public IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) =>
         _connectionsByHash.TryGetValue(hash, out var connections) ? connections.Values : [];
 
-    public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default, bool readOnly = false)
     {
+        if (readOnly)
+        {
+            // Polling also observes directories created after an initially empty discovery, without
+            // creating those directories ourselves. This path owns no detached watcher tasks.
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1), _timeProvider);
+            do
+            {
+                await ScanAsync(cancellationToken, pruneOrphanedSockets: false, throwOnDiscoveryFailure: true).ConfigureAwait(false);
+                yield return Connections.ToList();
+            }
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
+            yield break;
+        }
+
         var connectionChanges = Channel.CreateUnbounded<bool>(new UnboundedChannelOptions
         {
             SingleReader = true
@@ -78,7 +93,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             Directory.CreateDirectory(_backchannelsDirectory);
             Directory.CreateDirectory(_legacyBackchannelsDirectory);
 
-            await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
+            await ProcessDirectoryChangesAsync(cancellationToken, pruneOrphanedSockets: true, throwOnDiscoveryFailure: false).ConfigureAwait(false);
             yield return Connections.ToList();
 
             using var fileProvider = new PhysicalFileProvider(_backchannelsDirectory);
@@ -121,7 +136,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         {
             await foreach (var _ in WatchForChangesAsync(fileProvider, watchPattern, cancellationToken).ConfigureAwait(false))
             {
-                await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
+                await ProcessDirectoryChangesAsync(cancellationToken, pruneOrphanedSockets: true, throwOnDiscoveryFailure: false).ConfigureAwait(false);
                 QueueConnectionChange();
             }
         }
@@ -225,9 +240,9 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// <summary>
     /// Triggers an immediate scan of the backchannels directory for new/removed AppHosts.
     /// </summary>
-    public Task ScanAsync(CancellationToken cancellationToken = default)
+    public Task ScanAsync(CancellationToken cancellationToken = default, bool pruneOrphanedSockets = true, bool throwOnDiscoveryFailure = false)
     {
-        return UpdateConnectionsAsync(cancellationToken);
+        return ProcessDirectoryChangesAsync(cancellationToken, pruneOrphanedSockets, throwOnDiscoveryFailure);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -256,7 +271,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             Directory.CreateDirectory(_legacyBackchannelsDirectory);
 
             // Scan for existing sockets on startup.
-            await ProcessDirectoryChangesAsync(stoppingToken).ConfigureAwait(false);
+            await ProcessDirectoryChangesAsync(stoppingToken, pruneOrphanedSockets: true, throwOnDiscoveryFailure: false).ConfigureAwait(false);
 
             // Use file watcher with polling enabled for reliability.
             using var fileProvider = new PhysicalFileProvider(_backchannelsDirectory);
@@ -295,20 +310,16 @@ internal sealed class AuxiliaryBackchannelMonitor(
         }
     }
 
-    private async Task UpdateConnectionsAsync(CancellationToken cancellationToken)
-    {
-        await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<IReadOnlyList<Task>> ProcessDirectoryChangesAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<Task>> ProcessDirectoryChangesAsync(CancellationToken cancellationToken, bool pruneOrphanedSockets, bool throwOnDiscoveryFailure)
     {
         var connectTasks = new List<Task>();
         var failedSockets = new ConcurrentBag<string>();
+        Exception? discoveryFailure = null;
 
         await _scanLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var currentFiles = new HashSet<string>(GetSocketFiles(), StringComparer.OrdinalIgnoreCase);
+            var currentFiles = new HashSet<string>(GetSocketFiles(throwOnDiscoveryFailure), StringComparer.OrdinalIgnoreCase);
 
             // Find new files (files that exist now but weren't known before)
             var newFiles = currentFiles.Except(_knownSocketFiles, StringComparer.OrdinalIgnoreCase).ToList();
@@ -316,7 +327,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             foreach (var newFile in newFiles)
             {
                 logger.LogDebug("Socket created: {SocketPath}", newFile);
-                connectTasks.Add(TryConnectToSocketAsync(newFile, failedSockets, cancellationToken));
+                connectTasks.Add(TryConnectToSocketAsync(newFile, failedSockets, pruneOrphanedSockets, cancellationToken));
             }
 
             // Find removed files (files that were known but no longer exist)
@@ -349,6 +360,10 @@ internal sealed class AuxiliaryBackchannelMonitor(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Error processing directory changes");
+            if (throwOnDiscoveryFailure)
+            {
+                discoveryFailure = ex;
+            }
         }
         finally
         {
@@ -359,6 +374,11 @@ internal sealed class AuxiliaryBackchannelMonitor(
         if (connectTasks.Count > 0)
         {
             await Task.WhenAll(connectTasks).ConfigureAwait(false);
+        }
+
+        if (discoveryFailure is not null)
+        {
+            ExceptionDispatchInfo.Capture(discoveryFailure).Throw();
         }
 
         // Remove failed sockets from known files so they can be retried on next scan
@@ -373,7 +393,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         return connectTasks;
     }
 
-    private async Task TryConnectToSocketAsync(string socketPath, ConcurrentBag<string> failedSockets, CancellationToken cancellationToken)
+    private async Task TryConnectToSocketAsync(string socketPath, ConcurrentBag<string> failedSockets, bool pruneOrphanedSockets, CancellationToken cancellationToken)
     {
         var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath);
         if (string.IsNullOrEmpty(hash))
@@ -400,7 +420,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             // (A new process could theoretically start with the same PID between our checks)
             try
             {
-                if (!AppHostHelper.ProcessExists(pidValue))
+                if (pruneOrphanedSockets && !AppHostHelper.ProcessExists(pidValue))
                 {
                     File.Delete(socketPath);
                     logger.LogDebug("Deleted orphaned socket: {SocketPath}", socketPath);
@@ -579,27 +599,40 @@ internal sealed class AuxiliaryBackchannelMonitor(
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    private IEnumerable<string> GetSocketFiles()
+    private IEnumerable<string> GetSocketFiles(bool throwOnDiscoveryFailure)
     {
-        if (Directory.Exists(_backchannelsDirectory))
+        foreach (var socketPath in GetFiles(_backchannelsDirectory, "*"))
         {
-            foreach (var socketPath in Directory.GetFiles(_backchannelsDirectory))
+            if (AppHostHelper.ExtractHashFromSocketPath(socketPath) is not null)
             {
-                if (AppHostHelper.ExtractHashFromSocketPath(socketPath) is not null)
-                {
-                    yield return socketPath;
-                }
+                yield return socketPath;
             }
         }
 
-        if (Directory.Exists(_legacyBackchannelsDirectory))
+        // Support both "auxi.sock.*" and "aux.sock.*" for backward compatibility.
+        // Note: "aux" is a reserved device name on Windows < 11, but we still scan for it
+        // to support sockets created by older AppHost versions.
+        foreach (var socketPath in GetFiles(_legacyBackchannelsDirectory, "aux*.sock.*"))
         {
-            // Support both "auxi.sock.*" and "aux.sock.*" for backward compatibility.
-            // Note: "aux" is a reserved device name on Windows < 11, but we still scan for it
-            // to support sockets created by older AppHost versions.
-            foreach (var socketPath in Directory.GetFiles(_legacyBackchannelsDirectory, "aux*.sock.*"))
+            yield return socketPath;
+        }
+
+        string[] GetFiles(string directory, string pattern)
+        {
+            if (!throwOnDiscoveryFailure && !Directory.Exists(directory))
             {
-                yield return socketPath;
+                return [];
+            }
+
+            try
+            {
+                return Directory.GetFiles(directory, pattern);
+            }
+            catch (DirectoryNotFoundException) when (throwOnDiscoveryFailure)
+            {
+                // A never-created discovery directory is empty, but access/IO failures must
+                // propagate. Directory.Exists would hide those failures as an empty snapshot.
+                return [];
             }
         }
     }
@@ -616,7 +649,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         {
             await foreach (var changed in WatchForChangesAsync(fileProvider, watchPattern, cancellationToken))
             {
-                await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
+                await ProcessDirectoryChangesAsync(cancellationToken, pruneOrphanedSockets: true, throwOnDiscoveryFailure: false).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
