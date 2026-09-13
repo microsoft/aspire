@@ -124,6 +124,8 @@ Single-instance ownership uses an OS file lock under
 `~/Library/Application Support/Aspire/TraySpike/instance.lock`; the empty file
 remains after exit, but its lock is released automatically. NativeAOT's Unix
 named mutex implementation does not provide cross-process exclusion.
+Before opening the lock, the state directory's owner-only permissions are
+enforced even when the directory already exists.
 
 The publish target creates an accessory `.app` with `LSUIElement`, so it has no
 Dock icon. Local and GitHub builds use an ad-hoc hardened-runtime signature.
@@ -154,7 +156,9 @@ requires release-pipeline validation; this remains a draft feedback POC.
   Complete replacement snapshots prevent incremental reconnect lists.
   Heartbeats maintain liveness without creating presentation updates.
 - Unexpected EOF, liveness timeout, and discovery failures disable stale actions
-  and retry with backoff capped at ten seconds. Incompatible output and declared
+  and retry with backoff capped at ten seconds. A snapshot alone does not reset
+  that backoff; a heartbeat must confirm the session survived a liveness window.
+  Incompatible output and declared
   size limits fail closed without retrying indefinitely. Raw CLI output and
   dashboard URLs are not logged.
 - Dashboard actions revalidate the selected instance and open only absolute

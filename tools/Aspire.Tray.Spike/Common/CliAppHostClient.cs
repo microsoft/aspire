@@ -14,14 +14,15 @@ internal sealed class CliAppHostClient : IAppHostClient
     private readonly string _cliPath;
     private readonly TimeSpan _livenessTimeout;
     private readonly TimeSpan _retryDelay;
+    private readonly TimeProvider _timeProvider;
     private readonly CliAppHostCommands _commands;
 
     public CliAppHostClient(string cliPath)
-        : this(cliPath, TimeSpan.FromSeconds(60), TrayCliProtocol.LivenessTimeout, TimeSpan.FromSeconds(1))
+        : this(cliPath, TimeSpan.FromSeconds(60), TrayCliProtocol.LivenessTimeout, TimeSpan.FromSeconds(1), TimeProvider.System)
     {
     }
 
-    internal CliAppHostClient(string cliPath, TimeSpan stopTimeout, TimeSpan livenessTimeout, TimeSpan retryDelay)
+    internal CliAppHostClient(string cliPath, TimeSpan stopTimeout, TimeSpan livenessTimeout, TimeSpan retryDelay, TimeProvider timeProvider)
     {
         _ = CliProcess.CreateStartInfo(cliPath);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(livenessTimeout, TimeSpan.Zero);
@@ -29,6 +30,7 @@ internal sealed class CliAppHostClient : IAppHostClient
         _cliPath = cliPath;
         _livenessTimeout = livenessTimeout;
         _retryDelay = retryDelay;
+        _timeProvider = timeProvider;
         _commands = new(cliPath, stopTimeout);
     }
 
@@ -44,7 +46,7 @@ internal sealed class CliAppHostClient : IAppHostClient
             cancellationToken.ThrowIfCancellationRequested();
             yield return latest with { Discovery = DiscoveryState.Connecting };
             Exception failure;
-            var stream = WatchConnectionAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
+            var stream = WatchConnectionAsync(() => delay = _retryDelay, cancellationToken).GetAsyncEnumerator(cancellationToken);
             await using (stream.ConfigureAwait(false))
             {
                 while (true)
@@ -70,7 +72,6 @@ internal sealed class CliAppHostClient : IAppHostClient
                         break;
                     }
                     latest = stream.Current;
-                    delay = _retryDelay;
                     yield return latest;
                 }
             }
@@ -88,7 +89,7 @@ internal sealed class CliAppHostClient : IAppHostClient
                 yield break;
             }
             yield return latest with { Discovery = DiscoveryState.Disconnected };
-            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(delay, _timeProvider, cancellationToken).ConfigureAwait(false);
             delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 10));
         }
     }
@@ -97,7 +98,7 @@ internal sealed class CliAppHostClient : IAppHostClient
         => CliProcess.CreateStartInfo(executable, "ps", "--follow", "--format", "json",
             "--protocol-version", "1", "--non-interactive", "--nologo");
 
-    private async IAsyncEnumerable<AppHostSnapshot> WatchConnectionAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    private async IAsyncEnumerable<AppHostSnapshot> WatchConnectionAsync(Action onHealthyConnection, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         using var process = Process.Start(CreateWatchStartInfo(_cliPath))
             ?? throw new InvalidOperationException("Could not start the Aspire CLI.");
@@ -108,7 +109,7 @@ internal sealed class CliAppHostClient : IAppHostClient
             process.StandardInput.Close();
             stderr = CliProcess.DrainAsync(process.StandardError, streams.Token);
             streams.CancelAfter(_livenessTimeout);
-            var receivedSnapshot = false;
+            long? firstSnapshotTimestamp = null;
             await foreach (var line in CliProtocol.ReadLinesAsync(process.StandardOutput, streams.Token).ConfigureAwait(false))
             {
                 var message = CliProtocol.ReadWatchMessage(line);
@@ -117,10 +118,16 @@ internal sealed class CliAppHostClient : IAppHostClient
                 {
                     case "snapshot":
                         var snapshot = CliProtocol.ReadSnapshot(message);
-                        receivedSnapshot = true;
+                        firstSnapshotTimestamp ??= _timeProvider.GetTimestamp();
                         yield return snapshot;
                         break;
-                    case "heartbeat" when receivedSnapshot:
+                    case "heartbeat" when firstSnapshotTimestamp is { } timestamp:
+                        // Every launch emits an initial snapshot, including children in a crash loop.
+                        // Reset only when a later heartbeat proves the session survived a liveness window.
+                        if (_timeProvider.GetElapsedTime(timestamp) >= _livenessTimeout)
+                        {
+                            onHealthyConnection();
+                        }
                         break;
                     case "error":
                         throw new CliDiscoveryException(message.ErrorCode!);
@@ -129,7 +136,7 @@ internal sealed class CliAppHostClient : IAppHostClient
                 }
             }
             // EOF is a lost watcher, never evidence that all AppHosts stopped.
-            if (!receivedSnapshot)
+            if (firstSnapshotTimestamp is null)
             {
                 throw new CliProtocolException();
             }

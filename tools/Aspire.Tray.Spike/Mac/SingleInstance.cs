@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Aspire.Shared;
 using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Tray.Spike;
@@ -23,11 +24,13 @@ internal static partial class SingleInstance
             "Library", "Application Support", "Aspire", "TraySpike");
 
     public static FileStream? TryAcquire()
+        => TryAcquire(DirectoryPath);
+
+    internal static FileStream? TryAcquire(string directory)
     {
         // NativeAOT's Unix named Mutex implementation is process-local:
         // https://github.com/dotnet/runtime/issues/110348
-        var directory = DirectoryPath;
-        Directory.CreateDirectory(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        DirectoryHelper.CreateWithOwnerOnlyPermissions(directory);
 
         FileStream stream;
         try

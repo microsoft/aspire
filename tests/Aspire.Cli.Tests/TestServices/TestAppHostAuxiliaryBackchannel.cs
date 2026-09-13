@@ -47,6 +47,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the dashboard URLs state to return from GetDashboardUrlsAsync.
     /// </summary>
     public DashboardUrlsState? DashboardUrlsState { get; set; }
+    public Func<CancellationToken, Task<DashboardUrlsState?>>? GetDashboardUrlsHandler { get; set; }
 
     /// <summary>
     /// Gets or sets the AppHost info response to return from GetAppHostInfoV2Async.
@@ -122,7 +123,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(DashboardUrlsState);
+        return GetDashboardUrlsHandler?.Invoke(cancellationToken) ?? Task.FromResult(DashboardUrlsState);
     }
 
     public Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default)

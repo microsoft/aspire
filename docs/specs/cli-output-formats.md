@@ -177,7 +177,13 @@ seconds after the first snapshot and do not modify the consumer's state.
 `processStartTimeUnixMilliseconds` is the stable process lifetime read from the
 operating system using `ProcessStartTimeHelper`. It is omitted when unavailable;
 such a row can be displayed and its dashboard opened, but it must not enable Stop.
-`dashboardUrl` is optional. Paths and PIDs identify AppHosts, not launcher CLI
+`dashboardUrl` is optional. Lookups run with at most eight concurrent RPCs, a
+two-second deadline per lookup, and a five-second enrichment budget per snapshot.
+Timed-out, failed, or not-yet-started lookups leave the URL unavailable without
+removing the AppHost or failing discovery. Cancellation stops outstanding waits;
+it does not disconnect or stop AppHosts. An RPC that has not acknowledged cancellation
+retains its concurrency slot across snapshots, and is not retried while outstanding.
+Paths and PIDs identify AppHosts, not launcher CLI
 processes. Dashboard URLs may contain login tokens and should not be logged.
 
 A discovery failure is not an empty snapshot. It emits a terminal error and exits

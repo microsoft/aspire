@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Tray.Spike.Tests.Helpers;
+using Microsoft.Extensions.Time.Testing;
 using static Aspire.Tray.Spike.Tests.CliProtocolTests;
 
 namespace Aspire.Tray.Spike.Tests;
@@ -139,7 +140,7 @@ public class CliAppHostClientTests
             printf 'first\n' > "$0.attempt"
             printf '%s\n' '{{Snapshot(Host(42))}}'
             """);
-        var client = new CliAppHostClient(cli.Path, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(10));
+        var client = new CliAppHostClient(cli.Path, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(10), TimeProvider.System);
         var stream = client.WatchAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
         await using var lifetime = stream.ConfigureAwait(true);
         Assert.True(await stream.MoveNextAsync());
@@ -162,7 +163,7 @@ public class CliAppHostClientTests
             printf '{"version":1,"type":"snapshot","appHosts":[]}\n'
             exec /bin/sleep 60
             """);
-        var client = new CliAppHostClient(cli.Path, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1));
+        var client = new CliAppHostClient(cli.Path, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1), TimeProvider.System);
         var stream = client.WatchAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
         await using var lifetime = stream.ConfigureAwait(true);
         Assert.True(await stream.MoveNextAsync());
@@ -186,5 +187,76 @@ public class CliAppHostClientTests
         await cancellation.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next);
         Assert.True(process.HasExited);
+    }
+
+    [Theory(Skip = "The fixture requires /bin/sh.", SkipUnless = nameof(SupportsShell))]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShortLivedSessionsRetainExponentialBackoff(bool emitHeartbeat)
+    {
+        using var cli = new FixtureCli("""
+            printf '{"version":1,"type":"snapshot","appHosts":[]}\n'
+            """ + (emitHeartbeat ? """
+
+            printf '{"version":1,"type":"heartbeat"}\n'
+            """ : ""));
+        var time = new FakeTimeProvider();
+        var client = new CliAppHostClient(cli.Path, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(1), time);
+        await using var stream = client.WatchAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        Assert.True(await stream.MoveNextAsync());
+        Assert.Equal(DiscoveryState.Connecting, stream.Current.Discovery);
+
+        foreach (var seconds in new[] { 1, 2, 4, 8, 10, 10 })
+        {
+            Assert.True(await stream.MoveNextAsync());
+            Assert.Equal(DiscoveryState.Live, stream.Current.Discovery);
+            Assert.True(await stream.MoveNextAsync());
+            Assert.Equal(DiscoveryState.Disconnected, stream.Current.Discovery);
+            var reconnect = stream.MoveNextAsync().AsTask();
+            time.Advance(TimeSpan.FromSeconds(seconds) - TimeSpan.FromMilliseconds(1));
+            Assert.False(reconnect.IsCompleted);
+            time.Advance(TimeSpan.FromMilliseconds(1));
+            Assert.True(await reconnect.WaitAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(DiscoveryState.Connecting, stream.Current.Discovery);
+        }
+    }
+
+    [Fact(Skip = "The fixture requires /bin/sh.", SkipUnless = nameof(SupportsShell))]
+    public async Task SustainedHeartbeatResetsRetryBackoff()
+    {
+        using var cli = new FixtureCli("""
+            printf '{"version":1,"type":"snapshot","appHosts":[]}\n'
+            if [ -e "$0.attempt" ]; then
+                while [ ! -e "$0.heartbeat" ]; do /bin/sleep 0.01; done
+                printf '{"version":1,"type":"heartbeat"}\n'
+                printf '{"version":1,"type":"snapshot","appHosts":[]}\n'
+            fi
+            printf 'first\n' > "$0.attempt"
+            """);
+        var time = new FakeTimeProvider();
+        var client = new CliAppHostClient(cli.Path, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(1), time);
+        await using var stream = client.WatchAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        Assert.True(await stream.MoveNextAsync());
+        Assert.True(await stream.MoveNextAsync());
+        Assert.True(await stream.MoveNextAsync());
+        Assert.Equal(DiscoveryState.Disconnected, stream.Current.Discovery);
+        var reconnect = stream.MoveNextAsync().AsTask();
+        time.Advance(TimeSpan.FromSeconds(1));
+        Assert.True(await reconnect.WaitAsync(TestContext.Current.CancellationToken));
+        Assert.True(await stream.MoveNextAsync());
+        Assert.Equal(DiscoveryState.Live, stream.Current.Discovery);
+
+        time.Advance(TimeSpan.FromSeconds(30));
+        File.WriteAllText(cli.Path + ".heartbeat", "ready");
+        Assert.True(await stream.MoveNextAsync());
+        Assert.Equal(DiscoveryState.Live, stream.Current.Discovery);
+        Assert.True(await stream.MoveNextAsync());
+        Assert.Equal(DiscoveryState.Disconnected, stream.Current.Discovery);
+        reconnect = stream.MoveNextAsync().AsTask();
+        time.Advance(TimeSpan.FromMilliseconds(999));
+        Assert.False(reconnect.IsCompleted);
+        time.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.True(await reconnect.WaitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(DiscoveryState.Connecting, stream.Current.Discovery);
     }
 }

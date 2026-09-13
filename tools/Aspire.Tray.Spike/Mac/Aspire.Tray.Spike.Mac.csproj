@@ -12,6 +12,7 @@
     <Compile Include="../../../src/Shared/BundleVersionLease.cs" Link="Shared/BundleVersionLease.cs" />
     <Compile Include="../../../src/Shared/BundleDiscovery.cs" Link="Shared/BundleDiscovery.cs" />
     <Compile Include="../../../src/Shared/HeldFileLease.cs" Link="Shared/HeldFileLease.cs" />
+    <Compile Include="../../../src/Shared/DirectoryHelper.cs" Link="Shared/DirectoryHelper.cs" />
   </ItemGroup>
 
   <Target Name="ValidateTrayPublish" BeforeTargets="PrepareForPublish">

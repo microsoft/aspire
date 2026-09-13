@@ -18,6 +18,12 @@ internal sealed class TrayWatchStream(
     TimeProvider timeProvider,
     ILogger logger)
 {
+    internal static TimeSpan DashboardLookupTimeout { get; } = TimeSpan.FromSeconds(2);
+    internal static TimeSpan DashboardSnapshotTimeout { get; } = TimeSpan.FromSeconds(5);
+    internal const int MaximumConcurrentDashboardLookups = 8;
+
+    private readonly HashSet<IAppHostAuxiliaryBackchannel> _pendingDashboardLookups = new(ReferenceEqualityComparer.Instance);
+
     public async Task<int> RunAsync(Func<string, CancellationToken, Task> writeLineAsync, CancellationToken cancellationToken)
     {
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -152,38 +158,28 @@ internal sealed class TrayWatchStream(
                     return Error("discovery_failed");
                 }
 
-                var hosts = new List<TrayAppHost>();
+                var candidates = new List<(IAppHostAuxiliaryBackchannel Connection, TrayAppHost Host)>();
                 foreach (var connection in connections.Current)
                 {
                     if (connection.AppHostInfo is not { } info)
                     {
                         continue;
                     }
-                    if (hosts.Count == TrayCliProtocol.MaximumAppHosts)
+                    if (candidates.Count == TrayCliProtocol.MaximumAppHosts)
                     {
                         return Error("limit_exceeded");
                     }
 
-                    string? dashboardUrl = null;
-                    try
-                    {
-                        dashboardUrl = (await connection.GetDashboardUrlsAsync(token).ConfigureAwait(false))?.BaseUrlWithLoginToken;
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        logger.LogDebug(ex, "Dashboard URL unavailable for AppHost PID {Pid}.", info.ProcessId);
-                    }
-
                     var startedAt = processIdentityProvider.GetStartTimeUnixMilliseconds(info.ProcessId);
-                    hosts.Add(new TrayAppHost
+                    candidates.Add((connection, new TrayAppHost
                     {
                         AppHostPath = info.AppHostPath,
                         AppHostPid = info.ProcessId,
-                        ProcessStartTimeUnixMilliseconds = startedAt is > 0 ? startedAt : null,
-                        DashboardUrl = dashboardUrl
-                    });
+                        ProcessStartTimeUnixMilliseconds = startedAt is > 0 ? startedAt : null
+                    }));
                 }
 
+                var hosts = await EnrichDashboardUrlsAsync(candidates, token).ConfigureAwait(false);
                 var message = new TrayWatchMessage
                 {
                     Version = TrayCliProtocol.Version,
@@ -206,6 +202,93 @@ internal sealed class TrayWatchStream(
                 logger.LogDebug(ex, "Tray protocol AppHost discovery failed.");
                 return Error("discovery_failed");
             }
+        }
+    }
+
+    private async Task<TrayAppHost[]> EnrichDashboardUrlsAsync(
+        List<(IAppHostAuxiliaryBackchannel Connection, TrayAppHost Host)> candidates,
+        CancellationToken cancellationToken)
+    {
+        var hosts = candidates.Select(candidate => candidate.Host).ToArray();
+        // Per-call deadlines alone still scale with the number of unresponsive peers.
+        // Keep the entire optional enrichment well below the protocol's 30-second liveness
+        // budget, including the initial snapshot, without issuing unbounded concurrent RPCs.
+        using var snapshotTimeout = new CancellationTokenSource(DashboardSnapshotTimeout, timeProvider);
+        await Parallel.ForEachAsync(Enumerable.Range(0, hosts.Length), new ParallelOptions
+        {
+            MaxDegreeOfParallelism = MaximumConcurrentDashboardLookups,
+            CancellationToken = cancellationToken
+        }, async (index, token) =>
+        {
+            var connection = candidates[index].Connection;
+            if (snapshotTimeout.IsCancellationRequested || !TryBeginDashboardLookup(connection))
+            {
+                return;
+            }
+
+            using var lookupTimeout = new CancellationTokenSource(DashboardLookupTimeout, timeProvider);
+            using var lookupCancellation = CancellationTokenSource.CreateLinkedTokenSource(token, snapshotTimeout.Token, lookupTimeout.Token);
+            Task<DashboardUrlsState?>? pendingLookup = null;
+            try
+            {
+                lookupCancellation.Token.ThrowIfCancellationRequested();
+                pendingLookup = connection.GetDashboardUrlsAsync(lookupCancellation.Token);
+                var urls = await pendingLookup.WaitAsync(lookupCancellation.Token).ConfigureAwait(false);
+                // Each worker owns one array element; only completed results reach serialization.
+                hosts[index] = hosts[index] with { DashboardUrl = urls?.BaseUrlWithLoginToken };
+            }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested)
+            {
+                logger.LogDebug("Dashboard URL lookup timed out or was canceled for AppHost PID {Pid}.", hosts[index].AppHostPid);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogDebug(ex, "Dashboard URL unavailable for AppHost PID {Pid}.", hosts[index].AppHostPid);
+            }
+            finally
+            {
+                if (pendingLookup is null)
+                {
+                    CompleteDashboardLookup(connection);
+                }
+                else
+                {
+                    // Local cancellation must not wait for the remote peer to acknowledge it.
+                    // Retain its slot until the actual RPC completes, so later snapshots cannot
+                    // accumulate abandoned requests. Observe late faults without disconnecting.
+                    _ = pendingLookup.ContinueWith(
+                        task =>
+                        {
+                            _ = task.Exception;
+                            CompleteDashboardLookup(connection);
+                        },
+                        CancellationToken.None,
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                }
+            }
+        }).ConfigureAwait(false);
+
+        if (snapshotTimeout.IsCancellationRequested)
+        {
+            logger.LogDebug("Dashboard URL snapshot lookup budget expired; unavailable URLs were omitted.");
+        }
+        return hosts;
+    }
+
+    private bool TryBeginDashboardLookup(IAppHostAuxiliaryBackchannel connection)
+    {
+        lock (_pendingDashboardLookups)
+        {
+            return _pendingDashboardLookups.Count < MaximumConcurrentDashboardLookups && _pendingDashboardLookups.Add(connection);
+        }
+    }
+
+    private void CompleteDashboardLookup(IAppHostAuxiliaryBackchannel connection)
+    {
+        lock (_pendingDashboardLookups)
+        {
+            _pendingDashboardLookups.Remove(connection);
         }
     }
 
