@@ -32,18 +32,6 @@ function Invoke-GitHubCli {
     }
 }
 
-function Get-UnprefixedVersion([string]$Value) {
-    if ([string]::IsNullOrWhiteSpace($Value)) {
-        throw 'A version is required.'
-    }
-
-    if ($Value.StartsWith('v', [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $Value.Substring(1)
-    }
-
-    return $Value
-}
-
 function Get-CurrentEmbeddedVersion {
     if (-not (Test-Path $metadataPath)) {
         throw "Embedded Aspire skills metadata was not found at '$metadataPath'. Pass -Version to choose the initial version."
@@ -106,7 +94,11 @@ else {
     Get-UnprefixedVersion $Version
 }
 
-New-Item -ItemType Directory -Force -Path $embeddedDir | Out-Null
+$installerContent = Get-Content -Raw -Path $installerPath
+$versionMatch = Get-AspireSkillsInstallerVersionMatch -Content $installerContent -Path $installerPath
+$installerContent = $installerContent.Replace(
+    $versionMatch.Value,
+    "internal const string Version = ""$normalizedVersion"";")
 
 Write-Host "Resolving Aspire skills release '$normalizedVersion' from '$Repository'..."
 $release = Get-GitHubRelease $normalizedVersion
@@ -127,13 +119,6 @@ try {
     Invoke-GitHubCli attestation verify $archivePath --repo $Repository --cert-identity $certIdentity --cert-oidc-issuer 'https://token.actions.githubusercontent.com'
 
     $hash = (Get-FileHash -Algorithm SHA512 $archivePath).Hash.ToLowerInvariant()
-    $targetArchivePath = Join-Path $embeddedDir $asset.name
-
-    Get-ChildItem -Path $embeddedDir -File -Force |
-        Where-Object { $_.Name -match '^aspire-skills-.*\.(zip|tar\.gz|tgz)$' -and $_.Name -ne $asset.name } |
-        Remove-Item -Force
-
-    Copy-Item -Path $archivePath -Destination $targetArchivePath -Force
 
     # Sync the telemetry hook scripts from the same release. Hooks are SOURCE files in aspire-skills
     # (hooks/scripts/track-telemetry.{sh,ps1}), so they are pinned to the immutable commit the release
@@ -141,26 +126,20 @@ try {
     # that predate the telemetry hooks feature do not contain hooks/scripts/*, so a missing hook is a
     # warning + skip during the transition rather than a hard failure of the whole bundle update;
     # verification only enforces hooks once they are recorded in metadata.
-    New-Item -ItemType Directory -Force -Path $hooksDir | Out-Null
     $hookMetadata = $null
+    $hookContents = [ordered]@{}
     try {
         $hookCommitSha = Get-AspireSkillsReleaseCommitSha -Repository $Repository -Tag $release.tagName
 
-        # Fetch every hook first and only write to disk + record metadata once all fetches succeed.
-        # Writing inside the fetch loop could leave one fresh + one stale file (and no hooks metadata)
-        # if a later fetch failed, after which verify-aspire-skills-bundle.ps1 would silently skip hook
-        # verification. Collecting first makes the on-disk update atomic.
-        $hookContents = [ordered]@{}
+        # Fetch every hook before changing the tracked archive, metadata, or hooks. A failure on the
+        # second fetch must leave the existing bundle intact, not replace its archive or just one hook.
+        # This preparation does not roll back filesystem failures during the subsequent writes.
         $hookHashes = [ordered]@{}
         foreach ($hookFileName in Get-AspireSkillsHookFileNames) {
             Write-Host "Syncing hook script '$hookFileName' from '$Repository' at commit '$hookCommitSha'..."
             $hookBytes = Get-AspireSkillsHookContent -Repository $Repository -CommitSha $hookCommitSha -FileName $hookFileName
             $hookContents[$hookFileName] = $hookBytes
             $hookHashes[$hookFileName] = Get-AspireSkillsSha512Hex -Bytes $hookBytes
-        }
-
-        foreach ($hookFileName in $hookContents.Keys) {
-            [System.IO.File]::WriteAllBytes((Join-Path $hooksDir $hookFileName), $hookContents[$hookFileName])
         }
 
         $hookMetadata = [ordered]@{
@@ -174,10 +153,24 @@ try {
         # auth, rate limit) stays fatal so a real error can never silently ship a hook-less bundle.
         if ($_.Exception.Message -match 'HTTP 404|Not Found') {
             Write-Warning "Skipping telemetry hook sync for release '$($release.tagName)': hooks not present in this release."
+            $hookContents.Clear()
         }
         else {
             throw
         }
+    }
+
+    New-Item -ItemType Directory -Force -Path $embeddedDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $hooksDir | Out-Null
+
+    Get-ChildItem -Path $embeddedDir -File -Force |
+        Where-Object { $_.Name -match '^aspire-skills-.*\.(zip|tar\.gz|tgz)$' -and $_.Name -ne $asset.name } |
+        Remove-Item -Force
+
+    Copy-Item -Path $archivePath -Destination (Join-Path $embeddedDir $asset.name) -Force
+
+    foreach ($hookFileName in $hookContents.Keys) {
+        [System.IO.File]::WriteAllBytes((Join-Path $hooksDir $hookFileName), $hookContents[$hookFileName])
     }
 
     $metadata = [ordered]@{
@@ -192,11 +185,6 @@ try {
     }
     Set-TextFile -Path $metadataPath -Content ($metadata | ConvertTo-Json -Depth 10)
 
-    $installerContent = Get-Content -Raw -Path $installerPath
-    $installerContent = [regex]::Replace(
-        $installerContent,
-        'internal const string Version = "[^"]+";',
-        "internal const string Version = ""$normalizedVersion"";")
     Set-TextFile -Path $installerPath -Content $installerContent
 
     $cliProjectContent = Get-Content -Raw -Path $cliProjectPath

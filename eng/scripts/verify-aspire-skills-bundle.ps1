@@ -13,6 +13,7 @@ $scriptDir = $PSScriptRoot
 $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
 $embeddedDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\Embedded'
 $metadataPath = Join-Path $embeddedDir 'aspire-skills.metadata.json'
+$installerPath = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\AspireSkillsInstaller.cs'
 $hooksDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\Hooks'
 
 . (Join-Path $scriptDir 'aspire-skills-bundle.common.ps1')
@@ -26,6 +27,12 @@ if (-not (Test-Path $metadataPath)) {
 }
 
 $metadata = Get-Content -Raw -Path $metadataPath | ConvertFrom-Json
+
+if (-not ($metadata.PSObject.Properties.Name -contains 'version') -or [string]::IsNullOrWhiteSpace($metadata.version)) {
+    throw "Embedded Aspire skills metadata must specify a version."
+}
+
+$normalizedVersion = Get-UnprefixedVersion $metadata.version
 
 if ($metadata.repository -ne $Repository) {
     throw "Unexpected embedded bundle repository '$($metadata.repository)'. Expected '$Repository'."
@@ -43,8 +50,22 @@ if ($metadata.assetName -ne [System.IO.Path]::GetFileName($metadata.assetName)) 
     throw "Embedded Aspire skills asset name '$($metadata.assetName)' must not contain path separators."
 }
 
+# Releases use names such as aspire-skills-v0.0.1.tgz or aspire-skills-0.0.1.zip.
+# Escape the version so dots and prerelease/build metadata must match literally.
+$assetPattern = "^aspire-skills-v?$([regex]::Escape($normalizedVersion))\.(zip|tar\.gz|tgz)$"
+if ($metadata.assetName -notmatch $assetPattern) {
+    throw "Embedded Aspire skills asset name '$($metadata.assetName)' does not match metadata version '$($metadata.version)' or a supported archive extension."
+}
+
 if ([string]::IsNullOrWhiteSpace($metadata.sha512)) {
     throw "Embedded Aspire skills metadata must specify the release asset SHA-512 hash."
+}
+
+$installerContent = Get-Content -Raw -Path $installerPath
+$versionMatch = Get-AspireSkillsInstallerVersionMatch -Content $installerContent -Path $installerPath
+$installerVersion = $versionMatch.Groups[1].Value
+if ($normalizedVersion -ne (Get-UnprefixedVersion $installerVersion)) {
+    throw "Embedded Aspire skills metadata version '$($metadata.version)' must match AspireSkillsInstaller.Version '$installerVersion'."
 }
 
 $archivePath = Join-Path $embeddedDir $metadata.assetName

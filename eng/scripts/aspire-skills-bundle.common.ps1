@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 
-# Shared helpers for syncing and verifying the embedded Aspire telemetry hook scripts
+# Shared helpers for maintaining the embedded Aspire skills bundle and telemetry hook scripts
 # (track-telemetry.sh / track-telemetry.ps1).
 #
 # The hook scripts live canonically in microsoft/aspire-skills under hooks/scripts/. They are SOURCE
@@ -13,6 +13,32 @@ Set-StrictMode -Version Latest
 
 $script:AspireSkillsHookFileNames = @('track-telemetry.sh', 'track-telemetry.ps1')
 $script:AspireSkillsHookRepoDirectory = 'hooks/scripts'
+
+function Get-UnprefixedVersion([string]$Value) {
+    if (-not [string]::IsNullOrEmpty($Value) -and $Value.StartsWith('v', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $Value = $Value.Substring(1)
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        throw 'A version is required.'
+    }
+
+    return $Value
+}
+
+function Get-AspireSkillsInstallerVersionMatch {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Content,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $versionMatches = [regex]::Matches($Content, 'internal const string Version = "([^"]+)";')
+    if ($versionMatches.Count -ne 1) {
+        throw "Expected exactly one AspireSkillsInstaller.Version constant in '$Path', but found $($versionMatches.Count)."
+    }
+
+    return $versionMatches[0]
+}
 
 function Get-AspireSkillsHookFileNames {
     return $script:AspireSkillsHookFileNames
