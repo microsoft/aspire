@@ -1,0 +1,70 @@
+{
+  "run_id": 34740434278,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34740434278",
+  "analyzed_at": "2026-09-13T07:18:14Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20020,
+    "title": "Stabilize Deno debugger breakpoint setup",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-deno-debugger-failure",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20020"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
+      "id": 103684772156,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34740434278/job/103684772156",
+      "classification": "flaky-test",
+      "reason": "Process completed with exit code 2, job logs unavailable, no TRX failures extracted. A SelectTests warning shows git merge-base failed (no common ancestor) causing a fallback to run ALL tests, which can surface unrelated failures. PR only modifies extension/src/debugger/languages/deno.ts and extension/src/test/denoDebugger.test.ts, unrelated to Infrastructure.Tests.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 103684777711,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34740434278/job/103684777711",
+      "classification": "flaky-test",
+      "reason": "Process completed with exit code 1, job logs unavailable, no TRX failures extracted. Matches known recurring cause 'cli-windows-tests-unrelated-exit-code-1'. PR only modifies extension/ files, unrelated to Aspire.Cli.Tests.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 103684777759,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34740434278/job/103684777759",
+      "classification": "flaky-test",
+      "reason": "Process completed with exit code 2, job logs unavailable, no TRX failures extracted. PR only modifies extension/ files, unrelated to Aspire.Cli.Tests.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 103685941604,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34740434278/job/103685941604",
+      "classification": "flaky-test",
+      "reason": "Process completed with exit code 1, job logs unavailable, no TRX failures extracted. Matches known recurring cause 'vscode-extension-e2e-unrelated-logs-unavailable'. The browser-debugger shard tests browser (Chrome/Edge) debugging, not the Deno debugger code changed by this PR.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "id": 103685941618,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34740434278/job/103685941618",
+      "classification": "flaky-test",
+      "reason": "Process completed with exit code 1, job logs unavailable, no TRX failures extracted. Matches known recurring cause 'vscode-extension-e2e-unrelated-logs-unavailable'. The browser-debugger shard tests browser (Chrome/Edge) debugging, not the Deno debugger code changed by this PR.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "infrastructure-tests-ubuntu-unrelated-exit-code-2",
+    "cli-windows-tests-unrelated-exit-code-1",
+    "cli-ubuntu-tests-unrelated-exit-code-2",
+    "vscode-extension-e2e-unrelated-logs-unavailable"
+  ]
+}

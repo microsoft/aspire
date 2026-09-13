@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "VS Code extension E2E tests fail with unavailable logs and generic exit code 1, unrelated to PR changes",
   "test_name": "VS Code extension E2E (matrix shards, e.g. browser-debugger / workspace-target-proof / edge-cases)",
-  "error_pattern": "Run extension E2E tests step fails with 'Process completed with exit code 1.' Job logs could not be fetched ('Failed to fetch logs for job'). Occurs on PRs unrelated to the extension codebase or to the failing shard, similar to known extension-e2eshardmatrix-windows-flaky pattern.",
+  "error_pattern": "Run extension E2E tests step fails with 'Process completed with exit code 1.' Job logs could not be fetched ('Failed to fetch logs for job'). Occurs on the 'browser-debugger' shard (Windows and Linux, chrome/msedge browsers), unrelated to PR changes touching extension/src/debugger/languages/deno.ts and denoDebugger.test.ts (deno-specific code, not used by the browser debugger launch path).",
   "occurrences": [
     {
       "run_id": 32704259463,
@@ -18,6 +18,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
       "pr_number": 20067,
       "observed_at": "2026-09-13T06:24:17Z"
+    },
+    {
+      "run_id": 34740434278,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34740434278",
+      "job": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
+      "pr_number": 20020,
+      "observed_at": "2026-09-13T07:18:14Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19618"

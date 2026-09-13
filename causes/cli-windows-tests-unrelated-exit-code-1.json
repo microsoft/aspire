@@ -1,9 +1,8 @@
 {
   "id": "cli-windows-tests-unrelated-exit-code-1",
   "type": "flaky-test",
-  "title": "CLI (windows-latest) test job fails with generic exit code 1, unrelated to PR changes (issue template only)",
-  "test_name": "N/A",
-  "error_pattern": "Process completed with exit code 1. (Run tests (Windows) step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. PR only modifies .github/ISSUE_TEMPLATE/10_bug_report.yml, unrelated to CLI test code.",
+  "title": "CLI (windows-latest) test job fails with generic exit code 1, unrelated to PR changes",
+  "error_pattern": "Process completed with exit code 1. (Run tests (Windows) step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. PR only modifies extension/ files, unrelated to CLI test code.",
   "occurrences": [
     {
       "run_id": 32774802376,
@@ -11,6 +10,13 @@
       "job": "Tests / Cli / Cli (windows-latest)",
       "pr_number": 19048,
       "observed_at": "2026-08-24T21:26:16Z"
+    },
+    {
+      "run_id": 34740434278,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34740434278",
+      "job": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
+      "pr_number": 20020,
+      "observed_at": "2026-09-13T07:18:14Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19634"

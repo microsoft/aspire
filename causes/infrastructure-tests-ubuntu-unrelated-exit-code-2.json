@@ -1,0 +1,16 @@
+{
+  "id": "infrastructure-tests-ubuntu-unrelated-exit-code-2",
+  "type": "flaky-test",
+  "title": "Infrastructure.Tests (ubuntu-latest) job fails with generic exit code 2, unrelated to PR changes",
+  "error_pattern": "Process completed with exit code 2. (Run tests (Linux/macOS) step failed; job logs unavailable: 'Failed to fetch logs for job'). SelectTests warning: git merge-base exited 1 (no common ancestor) -- fell back to running ALL tests for the PR, which can surface unrelated pre-existing failures. No TRX test failures extracted. PR only modifies extension/ files, unrelated to Infrastructure.Tests.",
+  "occurrences": [
+    {
+      "run_id": 34740434278,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34740434278",
+      "job": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
+      "pr_number": 20020,
+      "observed_at": "2026-09-13T07:18:14Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20090"
+}
