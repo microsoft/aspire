@@ -248,8 +248,9 @@ jobs:
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard
               displayName: 🟣Restore execute permissions on managed executables
 
-          # Package the already-published/signed Dashboard without republishing it,
-          # which would replace the signed executable.
+          # Repack the already-published/signed Dashboard without republishing it,
+          # which would replace the signed executable. Common.projitems recreates
+          # the runtime ZIP with Overwrite=true, replacing the pre-signing archive.
           - script: >-
               $(Build.SourcesDirectory)/$(dotnetScript)
               build
