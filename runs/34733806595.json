@@ -1,0 +1,56 @@
+{
+  "run_id": 34733806595,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34733806595",
+  "analyzed_at": "2026-09-13T03:17:58Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 20001,
+    "title": "Complete managed Blazor WebAssembly debugging in VS Code",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-complete-blazor-wasm-debugging",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20001"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 103661660654,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34733806595/job/103661660654",
+      "classification": "flaky-test",
+      "reason": "Test failure is Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings failing because a remote-executed dotnet build of Aspire.Hosting.csproj emitted unexpected warnings (Expected: 0, Actual: 6). The PR only modifies VS Code extension files, not Aspire.Cli or Aspire.Hosting code, and this matches a known recurring flaky-test cause with 6 prior occurrences.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 103662691662,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34733806595/job/103662691662",
+      "classification": "code-issue",
+      "reason": "The PR directly adds and modifies browser debugging functionality (extension/src/debugger/languages/browser.ts, extension/src/debugger/browserDebugSessionTermination.ts, extension/src/test-e2e/browserDebugger.e2e.test.ts) and this job runs the 'browser-debugger' E2E shard which specifically exercises that new code. Job logs were unavailable, but the direct correspondence between the PR's changes and the failing shard's subject matter indicates the failure stems from the PR's changes rather than an unrelated flaky shard.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "id": 103662691664,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34733806595/job/103662691664",
+      "classification": "code-issue",
+      "reason": "Same reasoning as the Windows browser-debugger shard: the PR adds new browser debugging session termination logic and a dedicated browserDebugger.e2e.test.ts test file, and this Linux shard exercises exactly that code path. This is the second of two platform legs failing on the same PR-introduced feature, strengthening the code-issue classification.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.SdkDumpCommandTests.SdkDumpCi_ForHostingProject_DoesNotEmitWarnings",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception.",
+      "stack_trace": "Child exception:\n  Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   6\n   at Aspire.Cli.Tests.Commands.SdkDumpCommandTests.<>c.<<SdkDumpCi_ForHostingProject_DoesNotEmitWarnings>b__18_0>d.MoveNext() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/SdkDumpCommandTests.cs:line 280\n--- End of stack trace from previous location ---\n   at Microsoft.DotNet.RemoteExecutor.Program.Main(String[] args) in /_/src/Microsoft.DotNet.RemoteExecutor/src/Program.cs:line 65",
+      "classification": "flaky",
+      "reason": "PR does not touch Aspire.Cli or Aspire.Hosting.csproj code; matches known recurring cause 'cli-sdkdumpcommandtests-doesnotemitwarnings-flaky' with 6 prior occurrences, where unrelated build warnings unexpectedly appear during a remote-executed build of Aspire.Hosting.csproj."
+    }
+  ],
+  "causes": ["cli-sdkdumpcommandtests-doesnotemitwarnings-flaky"]
+}
