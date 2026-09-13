@@ -49,7 +49,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout analysis helpers
-  uses: actions/checkout@v4.3.1
+        uses: actions/checkout@v4.3.1
         with:
           sparse-checkout: |
             .github/workflows/analyze-ci-failure.js

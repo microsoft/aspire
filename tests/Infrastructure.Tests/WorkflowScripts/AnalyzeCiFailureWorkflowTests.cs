@@ -287,6 +287,8 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("accessToken=opaque-secret", "accessToken=[REDACTED]")]
     [InlineData("refreshToken: opaque-secret", "refreshToken: [REDACTED]")]
     [InlineData("_authToken=opaque-secret", "_authToken=[REDACTED]")]
+    [InlineData("Password=\"secret;tail\";Timeout=30", "Password=\"[REDACTED]\";Timeout=30")]
+    [InlineData("Password='secret;tail';Timeout=30", "Password='[REDACTED]';Timeout=30")]
     [RequiresTools(["node"])]
     public async Task RedactOperationRemovesTokenValues(string value, string expected)
     {
