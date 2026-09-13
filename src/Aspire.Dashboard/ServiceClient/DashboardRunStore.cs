@@ -133,6 +133,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 DirectoryHelper.CreateWithOwnerOnlyPermissions(_runsDirectory);
                 CurrentWorkingDirectory = Path.Combine(_runsDirectory, runId);
                 DatabasePath = Path.Combine(CurrentWorkingDirectory, DatabaseFileName);
+                // Assume that if the run directory can be created, then files in the run directory can be written as well.
                 Directory.CreateDirectory(CurrentWorkingDirectory);
                 var runLock = OpenRequiredRunLock(
                     CurrentWorkingDirectory,
