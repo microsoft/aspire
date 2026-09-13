@@ -10,6 +10,11 @@
       "version": "v5.0.5",
       "sha": "27d5ce7f107fe9357f9df03efb73ab90386fccae"
     },
+    "actions/checkout@v4": {
+      "repo": "actions/checkout",
+      "version": "v4",
+      "sha": "11d5960a326750d5838078e36cf38b85af677262"
+    },
     "actions/checkout@v4.3.1": {
       "repo": "actions/checkout",
       "version": "v4.3.1",
