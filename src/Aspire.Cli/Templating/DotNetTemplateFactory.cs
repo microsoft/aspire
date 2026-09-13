@@ -14,7 +14,6 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
-using Spectre.Console;
 
 namespace Aspire.Cli.Templating;
 
@@ -237,6 +236,21 @@ internal class DotNetTemplateFactory(
             },
             async (template, inputs, parseResult, ct) =>
             {
+                var specifiedAppHostProject = parseResult.GetValue(_appHostOption);
+                if (specifiedAppHostProject is not null)
+                {
+                    if (Directory.Exists(specifiedAppHostProject.FullName) || !IsCompatibleIntegrationTestAppHost(specifiedAppHostProject))
+                    {
+                        interactionService.DisplayError(TemplatingStrings.IntegrationTestAppHostMustBeCSharpProject);
+                        return new TemplateResult(CliExitCodes.FailedToFindProject);
+                    }
+
+                    if (!File.Exists(specifiedAppHostProject.FullName))
+                    {
+                        throw new ProjectLocatorException(ErrorStrings.ProjectFileDoesntExist, ProjectLocatorFailureReason.ProjectFileDoesntExist);
+                    }
+                }
+
                 var testTemplate = await prompter.PromptForTemplateAsync(
                     [msTestTemplate, xunitTemplate, nunitTemplate],
                     ct,
@@ -253,130 +267,47 @@ internal class DotNetTemplateFactory(
             languageId: KnownLanguageId.CSharp);
     }
 
-    private async Task<(FileInfo? AppHostProject, TemplateResult? Error)> ResolveIntegrationTestAppHostAsync(
-        string templateName,
-        string templateVersion,
-        string projectName,
-        string outputPath,
-        ParseResult parseResult,
+    private async Task<FileInfo?> ResolveIntegrationTestAppHostAsync(
+        FileInfo? specifiedAppHostProject,
         CancellationToken cancellationToken)
     {
-        // Probe the installed template rather than guessing from its version: local builds can
-        // reuse older version numbers, and older daily packages may lack the reference symbols.
-        // "dotnet new aspire-mstest --dry-run --WithAppHostReference false" neither writes files
-        // nor runs post-creation actions, and false avoids needing an AppHost for the probe.
-        var collector = new OutputCollector();
-        var probeExitCode = await runner.NewProjectAsync(
-            templateName,
-            projectName,
-            outputPath,
-            ["--dry-run", "--WithAppHostReference", "false"],
-            new ProcessInvocationOptions
-            {
-                StandardOutputCallback = collector.AppendOutput,
-                StandardErrorCallback = collector.AppendOutput,
-            },
-            cancellationToken);
-
-        var specifiedAppHostProject = parseResult.GetValue(_appHostOption);
-
-        // The only template parameter in the probe is WithAppHostReference. Exit code 127 means
-        // it is unsupported; other failures must still surface instead of becoming standalone.
-        // See https://aka.ms/templating-exit-codes#127.
-        if (probeExitCode == 127)
-        {
-            if (specifiedAppHostProject is not null)
-            {
-                interactionService.DisplayError(string.Format(
-                    CultureInfo.CurrentCulture,
-                    TemplatingStrings.IntegrationTestAppHostReferenceNotSupported,
-                    templateName,
-                    templateVersion));
-                return (null, new TemplateResult(CliExitCodes.FailedToCreateNewProject));
-            }
-
-            logger.LogDebug(
-                "Template {TemplateName} from Aspire.ProjectTemplates {TemplateVersion} does not support AppHost references. Generating a standalone integration test project.",
-                templateName,
-                templateVersion);
-            return (null, null);
-        }
-
-        if (probeExitCode != 0)
-        {
-            return (null, HandleProjectCreationFailure(probeExitCode, collector));
-        }
-
-        var specifiedAppHostProjectIsDirectory = specifiedAppHostProject is not null
-            && Directory.Exists(specifiedAppHostProject.FullName);
         AppHostProjectSearchResult searchResult;
         try
         {
-            // Resolve every candidate before selecting one because the generic locator also
-            // discovers AppHost types that a C# integration test project cannot reference.
+            // Throw mode reuses configured selections without scanning and stops discovery once
+            // ambiguity is established. Implicit ambiguity means standalone, not a command failure.
             searchResult = await projectLocator.UseOrFindAppHostProjectFileAsync(
                 specifiedAppHostProject,
-                MultipleAppHostProjectsFoundBehavior.None,
+                MultipleAppHostProjectsFoundBehavior.Throw,
                 createSettingsFile: false,
                 cancellationToken);
         }
         catch (ProjectLocatorException ex) when (
             specifiedAppHostProject is null &&
             ex.FailureReason is ProjectLocatorFailureReason.NoProjectFileFound
+                or ProjectLocatorFailureReason.MultipleProjectFilesFound
                 or ProjectLocatorFailureReason.AppHostsMayNotBeBuildable
                 or ProjectLocatorFailureReason.UnsupportedProjects)
         {
             // AppHost discovery improves the generated test project when possible, but the underlying
             // templates also support standalone projects. Explicit --apphost errors still surface.
-            logger.LogDebug(ex, "No compatible AppHost project was discovered. Generating a standalone integration test project.");
-            searchResult = new AppHostProjectSearchResult(null, []);
+            logger.LogDebug(ex, "Cannot determine a single workspace AppHost project for the integration test project. Generating a standalone test project.");
+            return null;
         }
 
         var appHostProject = searchResult.SelectedProjectFile;
-        if (appHostProject is null || !IsCompatibleIntegrationTestAppHost(appHostProject))
+        if (appHostProject is not null && IsCompatibleIntegrationTestAppHost(appHostProject))
         {
-            if (appHostProject is not null)
-            {
-                logger.LogDebug(
-                    "The selected AppHost {AppHostProjectPath} cannot be referenced by a C# integration test project. Considering other discovered AppHosts.",
-                    appHostProject.FullName);
-            }
-
-            // A workspace setting can select a non-C# AppHost even when the discovery result
-            // also contains compatible C# projects. Explicit directories can likewise contain
-            // several AppHost types. Filter the complete candidate set before deciding whether
-            // to generate standalone, select automatically, prompt, or fail.
-            var compatibleAppHostProjects = searchResult.AllProjectFileCandidates
-                .Where(IsCompatibleIntegrationTestAppHost)
-                .ToList();
-            appHostProject = compatibleAppHostProjects.Count switch
-            {
-                1 => compatibleAppHostProjects[0],
-                > 1 when hostEnvironment.SupportsInteractiveInput => await interactionService.PromptForSelectionAsync(
-                    InteractionServiceStrings.SelectAppHostToUse,
-                    compatibleAppHostProjects,
-                    projectFile => $"{projectFile.Name.EscapeMarkup()} ({Path.GetRelativePath(executionContext.WorkingDirectory.FullName, projectFile.FullName).EscapeMarkup()})",
-                    cancellationToken: cancellationToken),
-                > 1 => throw new ProjectLocatorException(
-                    ErrorStrings.MultipleProjectFilesFound,
-                    ProjectLocatorFailureReason.MultipleProjectFilesFound,
-                    specifiedAppHostProjectIsDirectory),
-                _ => null
-            };
+            return appHostProject;
         }
 
-        if (specifiedAppHostProject is not null && appHostProject is null)
+        if (specifiedAppHostProject is not null)
         {
-            if (searchResult.SelectedProjectFile is null && searchResult.AllProjectFileCandidates.Count == 0)
-            {
-                throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.NoProjectFileFound);
-            }
-
-            interactionService.DisplayError(TemplatingStrings.IntegrationTestAppHostMustBeCSharpProject);
-            return (null, new TemplateResult(CliExitCodes.FailedToFindProject));
+            throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.NoProjectFileFound);
         }
 
-        return (appHostProject, null);
+        logger.LogDebug("No unambiguous C# AppHost project was selected. Generating a standalone integration test project.");
+        return null;
     }
 
     private static bool IsCompatibleIntegrationTestAppHost(FileInfo appHostProject)
@@ -636,6 +567,13 @@ internal class DotNetTemplateFactory(
             // Some templates have additional arguments that need to be applied to the `dotnet new` command
             // when it is executed. This callback will get those arguments and potentially prompt for them.
             var extraArgs = await extraArgsCallback(parseResult, cancellationToken);
+
+            FileInfo? appHostProject = null;
+            if (resolveIntegrationTestAppHost)
+            {
+                appHostProject = await ResolveIntegrationTestAppHostAsync(parseResult.GetValue(_appHostOption), cancellationToken);
+            }
+
             var installOutcome = await templateNuGetConfigService.InstallTemplatePackageAsync(
                 selectedTemplateDetails,
                 sourceOverride: inputs.Source,
@@ -653,22 +591,51 @@ internal class DotNetTemplateFactory(
 
             interactionService.DisplayMessage(KnownEmojis.Package, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.UsingProjectTemplatesVersion, installOutcome.TemplateVersion));
 
-            FileInfo? appHostProject = null;
-            if (resolveIntegrationTestAppHost)
+            if (appHostProject is not null)
             {
-                var (resolvedAppHostProject, error) = await ResolveIntegrationTestAppHostAsync(
+                // Only referenceable AppHosts need a capability probe; standalone creation goes
+                // straight to dotnet new. Probe the installed template rather than guessing from
+                // its version, since local builds and daily packages can have misleading versions.
+                // "dotnet new aspire-mstest --dry-run --WithAppHostReference false" does not create
+                // project files or run post-actions, and false avoids requiring reference details.
+                var collector = new OutputCollector();
+                var probeExitCode = await runner.NewProjectAsync(
                     template.Name,
-                    selectedTemplateDetails.Package.Version,
                     name,
                     outputPath,
-                    parseResult,
+                    ["--dry-run", "--WithAppHostReference", "false"],
+                    new ProcessInvocationOptions
+                    {
+                        StandardOutputCallback = collector.AppendOutput,
+                        StandardErrorCallback = collector.AppendOutput,
+                    },
                     cancellationToken);
-                if (error is not null)
-                {
-                    return error;
-                }
 
-                appHostProject = resolvedAppHostProject;
+                // WithAppHostReference is the only template parameter in the probe, so exit 127
+                // means it is unsupported. Other failures must not become standalone creation.
+                // See https://aka.ms/templating-exit-codes#127.
+                if (probeExitCode == 127)
+                {
+                    if (parseResult.GetValue(_appHostOption) is not null)
+                    {
+                        interactionService.DisplayError(string.Format(
+                            CultureInfo.CurrentCulture,
+                            TemplatingStrings.IntegrationTestAppHostReferenceNotSupported,
+                            template.Name,
+                            selectedTemplateDetails.Package.Version));
+                        return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+                    }
+
+                    logger.LogDebug(
+                        "Template {TemplateName} from Aspire.ProjectTemplates {TemplateVersion} does not support AppHost references. Generating a standalone integration test project.",
+                        template.Name,
+                        selectedTemplateDetails.Package.Version);
+                    appHostProject = null;
+                }
+                else if (probeExitCode != 0)
+                {
+                    return HandleProjectCreationFailure(probeExitCode, collector);
+                }
             }
 
             if (appHostProject is not null)
