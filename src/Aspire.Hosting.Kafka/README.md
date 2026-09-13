@@ -34,6 +34,31 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(kafka);
 ```
 
+## Authentication
+
+The broker is protected with SASL/PLAIN authentication over the `SASL_PLAINTEXT` security protocol. A random
+password is generated when none is supplied, and is stored in the AppHost user secrets so that it is stable
+across runs. Supply your own parameters to control the credentials:
+
+```csharp
+var userName = builder.AddParameter("kafka-user");
+var password = builder.AddParameter("kafka-password", secret: true);
+
+var kafka = builder.AddKafka("messaging", userName: userName, password: password);
+```
+
+When no user name is supplied the broker accepts the user `kafka`.
+
+Authentication can be turned off, which makes the broker listen in plaintext:
+
+```csharp
+var kafka = builder.AddKafka("messaging").WithPassword(null);
+```
+
+> [!WARNING]
+> The password is used to derive the broker configuration, not the stored data, so changing it does not
+> invalidate an existing data volume. Clients connecting outside of Aspire must be updated to authenticate.
+
 ## Connection Properties
 
 When you reference a Kafka resource using `WithReference`, the following connection properties are made available to the consuming project:
@@ -46,8 +71,10 @@ The Kafka server resource exposes the following connection properties:
 |---------------|-------------|
 | `Host` | The host-facing Kafka listener hostname or IP address |
 | `Port` | The host-facing Kafka listener port |
+| `Username` | The SASL user name for authentication. Only present when the broker is password protected |
+| `Password` | The SASL password for authentication. Only present when the broker is password protected |
 
-Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `messaging` becomes `MESSAGING_URI`.
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Host` property of a resource called `messaging` becomes `MESSAGING_HOST`.
 
 ## Additional documentation
 

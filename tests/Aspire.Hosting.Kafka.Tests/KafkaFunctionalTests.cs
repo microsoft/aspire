@@ -112,6 +112,43 @@ public class KafkaFunctionalTests(ITestOutputHelper testOutputHelper)
         }
     }
 
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    public async Task VerifyKafkaResourceRejectsUnauthenticatedClients()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        var kafka = builder.AddKafka("kafka");
+
+        using var app = builder.Build();
+
+        await app.StartAsync();
+        await app.WaitForHealthyAsync(kafka);
+
+        // Connect using the bootstrap servers alone, deliberately dropping the SASL credentials that the
+        // connection string carries.
+        var bootstrapServers = await kafka.Resource.PrimaryEndpoint.Property(EndpointProperty.HostAndPort).GetValueAsync(cts.Token);
+
+        var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
+
+        hb.Configuration[$"ConnectionStrings:{kafka.Resource.Name}"] = bootstrapServers;
+
+        hb.AddKafkaProducer<string, string>("kafka", configureSettings: settings => settings.Config.MessageTimeoutMs = 5000);
+
+        using var host = hb.Build();
+
+        await host.StartAsync();
+
+        var producer = host.Services.GetRequiredService<IProducer<string, string>>();
+
+        await Assert.ThrowsAsync<ProduceException<string, string>>(
+            () => producer.ProduceAsync("test-topic", new Message<string, string> { Key = "test-key", Value = "test-value" }, cts.Token));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

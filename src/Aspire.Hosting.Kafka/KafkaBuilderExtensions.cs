@@ -19,6 +19,18 @@ public static class KafkaBuilderExtensions
     private const int KafkaUIPort = 8080;
     private const string Target = "/var/lib/kafka/data";
 
+    // Listener names used when the broker is not password protected. These are kept for backwards
+    // compatibility with app models that opt out of authentication.
+    private const string PlaintextExternalListenerName = "PLAINTEXT_HOST";
+    private const string PlaintextInternalListenerName = "PLAINTEXT_INTERNAL";
+
+    // Listener names used when the broker is password protected. These deliberately contain no
+    // underscore: the Confluent image translates KAFKA_FOO_BAR into the foo.bar broker property, so an
+    // underscore that is part of a listener name has to be escaped as a double underscore in
+    // KAFKA_LISTENER_NAME_<LISTENER>_PLAIN_SASL_JAAS_CONFIG. Underscore free names avoid that ambiguity.
+    private const string SaslExternalListenerName = "EXTERNAL";
+    private const string SaslInternalListenerName = "INTERNAL";
+
     /// <summary>
     /// Adds a Kafka resource to the application. A container is used for local development.
     /// </summary>
@@ -30,24 +42,71 @@ public static class KafkaBuilderExtensions
     /// <param name="port">The host port of Kafka broker.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KafkaServerResource}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
-    [AspireExport]
-    public static IResourceBuilder<KafkaServerResource> AddKafka(this IDistributedApplicationBuilder builder, [ResourceName] string name, int? port = null)
+    [AspireExportIgnore(Reason = "Convenience overload. Use the overload with optional userName and password parameters instead.")]
+    public static IResourceBuilder<KafkaServerResource> AddKafka(this IDistributedApplicationBuilder builder, [ResourceName] string name, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        var kafka = new KafkaServerResource(name);
+        return builder.AddKafka(name, port, null, null);
+    }
 
-        string? connectionString = null;
+    /// <summary>
+    /// Adds a Kafka resource to the application. A container is used for local development.
+    /// The broker is protected with SASL/PLAIN authentication using a generated password unless one is provided.
+    /// </summary>
+    /// <remarks>
+    /// This version of the package defaults to the <inheritdoc cref="KafkaContainerImageTags.Tag"/> tag of the <inheritdoc cref="KafkaContainerImageTags.Image"/> container image.
+    /// </remarks>
+    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
+    /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency</param>
+    /// <param name="port">The host port of Kafka broker.</param>
+    /// <param name="userName">The parameter used to provide the SASL user name for the Kafka broker. If <see langword="null"/> a default value will be used.</param>
+    /// <param name="password">The parameter used to provide the SASL password for the Kafka broker. If <see langword="null"/> a random password will be generated.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KafkaServerResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    public static IResourceBuilder<KafkaServerResource> AddKafka(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        int? port = null,
+        IResourceBuilder<ParameterResource>? userName = null,
+        IResourceBuilder<ParameterResource>? password = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        // The password ends up inside a JAAS configuration string and inside the connection string, both of
+        // which are quote sensitive, so restrict the generated value to alphanumeric characters.
+        var passwordParameter = password?.Resource ?? ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, $"{name}-password", special: false);
+
+        var kafka = new KafkaServerResource(name, userName?.Resource, passwordParameter);
+
+        ProducerConfig? healthCheckConfiguration = null;
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(kafka, async (@event, ct) =>
         {
-            connectionString = await kafka.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            // The health check talks to the broker directly, so it needs the bootstrap servers and the
+            // credentials rather than the connection string, which is not a bootstrap server list once
+            // authentication is enabled.
+            var bootstrapServers = await kafka.PrimaryEndpoint.Property(EndpointProperty.HostAndPort).GetValueAsync(ct).ConfigureAwait(false);
 
-            if (connectionString == null)
+            if (bootstrapServers == null)
             {
                 throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{kafka.Name}' resource but the connection string was null.");
             }
+
+            var configuration = new ProducerConfig { BootstrapServers = bootstrapServers };
+
+            if (kafka.PasswordParameter is not null)
+            {
+                configuration.SecurityProtocol = SecurityProtocol.SaslPlaintext;
+                configuration.SaslMechanism = SaslMechanism.Plain;
+                configuration.SaslUsername = await kafka.UserNameReference.GetValueAsync(ct).ConfigureAwait(false);
+                configuration.SaslPassword = await kafka.PasswordParameter.GetValueAsync(ct).ConfigureAwait(false);
+            }
+
+            healthCheckConfiguration = configuration;
         });
 
         var healthCheckKey = $"{name}_check";
@@ -63,8 +122,7 @@ public static class KafkaBuilderExtensions
             sp =>
             {
                 var options = new KafkaHealthCheckOptions();
-                options.Configuration = new ProducerConfig();
-                options.Configuration.BootstrapServers = connectionString ?? throw new InvalidOperationException("Connection string is unavailable");
+                options.Configuration = healthCheckConfiguration ?? throw new InvalidOperationException("Connection string is unavailable");
                 return new KafkaHealthCheck(options);
             },
             failureStatus: default,
@@ -79,6 +137,39 @@ public static class KafkaBuilderExtensions
             .WithIconName("MailMultiple")
             .WithEnvironment(context => ConfigureKafkaContainer(context, kafka))
             .WithHealthCheck(healthCheckKey);
+    }
+
+    /// <summary>
+    /// Configures the SASL password used by the Kafka broker.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="password">The parameter used to provide the SASL password for the Kafka resource. If <see langword="null"/>, authentication is disabled and the broker listens in plaintext.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KafkaServerResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    public static IResourceBuilder<KafkaServerResource> WithPassword(this IResourceBuilder<KafkaServerResource> builder, IResourceBuilder<ParameterResource>? password)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.PasswordParameter = password?.Resource;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the SASL user name used by the Kafka broker.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="userName">The parameter used to provide the SASL user name for the Kafka resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KafkaServerResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    public static IResourceBuilder<KafkaServerResource> WithUserName(this IResourceBuilder<KafkaServerResource> builder, IResourceBuilder<ParameterResource> userName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(userName);
+
+        builder.Resource.UserNameParameter = userName.Resource;
+        return builder;
     }
 
     /// <summary>
@@ -122,9 +213,9 @@ public static class KafkaBuilderExtensions
                 int i = 0;
                 foreach (var kafkaResource in kafkaResources)
                 {
-                    var endpoint = kafkaResource.InternalEndpoint;
+                    var resource = kafkaResource;
                     int index = i;
-                    kafkaUiBuilder.WithEnvironment(context => ConfigureKafkaUIContainer(context, endpoint, index));
+                    kafkaUiBuilder.WithEnvironment(context => ConfigureKafkaUIContainer(context, resource, index));
 
                     i++;
                 }
@@ -137,8 +228,10 @@ public static class KafkaBuilderExtensions
             return builder;
         }
 
-        static void ConfigureKafkaUIContainer(EnvironmentCallbackContext context, EndpointReference endpoint, int index)
+        static void ConfigureKafkaUIContainer(EnvironmentCallbackContext context, KafkaServerResource resource, int index)
         {
+            var endpoint = resource.InternalEndpoint;
+
             var bootstrapServers = context.ExecutionContext.IsRunMode
                 // In run mode, Kafka UI assumes Kafka is being accessed over a default Aspire container network and hardcodes the host as the Kafka resource name
                 // This will need to be refactored once updated service discovery APIs are available
@@ -147,6 +240,13 @@ public static class KafkaBuilderExtensions
 
             context.EnvironmentVariables[$"KAFKA_CLUSTERS_{index}_NAME"] = endpoint.Resource.Name;
             context.EnvironmentVariables[$"KAFKA_CLUSTERS_{index}_BOOTSTRAPSERVERS"] = bootstrapServers;
+
+            if (resource.PasswordParameter is not null)
+            {
+                context.EnvironmentVariables[$"KAFKA_CLUSTERS_{index}_PROPERTIES_SECURITY_PROTOCOL"] = "SASL_PLAINTEXT";
+                context.EnvironmentVariables[$"KAFKA_CLUSTERS_{index}_PROPERTIES_SASL_MECHANISM"] = "PLAIN";
+                context.EnvironmentVariables[$"KAFKA_CLUSTERS_{index}_PROPERTIES_SASL_JAAS_CONFIG"] = BuildJaasConfig(resource);
+            }
         }
 
     }
@@ -212,10 +312,17 @@ public static class KafkaBuilderExtensions
         // When not explicitly set default configuration is applied.
         // See https://github.com/confluentinc/kafka-images/blob/master/local/include/etc/confluent/docker/configureDefaults for more details.
 
+        // Only the two client facing listeners are protected. The KRaft controller listener and the
+        // inter broker listener are bound to the loopback interface inside the container, so they stay PLAINTEXT.
+        var saslEnabled = resource.PasswordParameter is not null;
+        var externalListener = saslEnabled ? SaslExternalListenerName : PlaintextExternalListenerName;
+        var internalListener = saslEnabled ? SaslInternalListenerName : PlaintextInternalListenerName;
+        var clientProtocol = saslEnabled ? "SASL_PLAINTEXT" : "PLAINTEXT";
+
         // Define the default listeners + an internal listener for the container to broker communication
-        context.EnvironmentVariables[$"KAFKA_LISTENERS"] = $"PLAINTEXT://localhost:29092,CONTROLLER://localhost:29093,PLAINTEXT_HOST://0.0.0.0:{KafkaBrokerPort},PLAINTEXT_INTERNAL://0.0.0.0:{KafkaInternalBrokerPort}";
-        // Defaults default listeners security protocol map + the internal listener to be PLAINTEXT
-        context.EnvironmentVariables["KAFKA_LISTENER_SECURITY_PROTOCOL_MAP"] = "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT";
+        context.EnvironmentVariables[$"KAFKA_LISTENERS"] = $"PLAINTEXT://localhost:29092,CONTROLLER://localhost:29093,{externalListener}://0.0.0.0:{KafkaBrokerPort},{internalListener}://0.0.0.0:{KafkaInternalBrokerPort}";
+        // Defaults default listeners security protocol map + the client facing listeners protocol
+        context.EnvironmentVariables["KAFKA_LISTENER_SECURITY_PROTOCOL_MAP"] = $"CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,{externalListener}:{clientProtocol},{internalListener}:{clientProtocol}";
 
         // primaryEndpoint is the endpoint that is exposed to the host machine
         var primaryEndpoint = resource.PrimaryEndpoint;
@@ -223,12 +330,36 @@ public static class KafkaBuilderExtensions
         var internalEndpoint = resource.InternalEndpoint;
 
         var advertisedListeners = context.ExecutionContext.IsRunMode
-            // In run mode, PLAINTEXT_INTERNAL assumes kafka is being accessed over a default Aspire container network and hardcodes the resource address
+            // In run mode, the internal listener assumes kafka is being accessed over a default Aspire container network and hardcodes the resource address
             // This will need to be refactored once updated service discovery APIs are available
-            ? ReferenceExpression.Create($"PLAINTEXT://localhost:29092,PLAINTEXT_HOST://localhost:{primaryEndpoint.Property(EndpointProperty.Port)},PLAINTEXT_INTERNAL://{resource.Name}:{internalEndpoint.Property(EndpointProperty.TargetPort)}")
-            : ReferenceExpression.Create($"PLAINTEXT://{primaryEndpoint.Property(EndpointProperty.Host)}:29092,PLAINTEXT_HOST://{primaryEndpoint.Property(EndpointProperty.HostAndPort)},PLAINTEXT_INTERNAL://{internalEndpoint.Property(EndpointProperty.HostAndPort)}");
+            ? ReferenceExpression.Create($"PLAINTEXT://localhost:29092,{externalListener}://localhost:{primaryEndpoint.Property(EndpointProperty.Port)},{internalListener}://{resource.Name}:{internalEndpoint.Property(EndpointProperty.TargetPort)}")
+            : ReferenceExpression.Create($"PLAINTEXT://{primaryEndpoint.Property(EndpointProperty.Host)}:29092,{externalListener}://{primaryEndpoint.Property(EndpointProperty.HostAndPort)},{internalListener}://{internalEndpoint.Property(EndpointProperty.HostAndPort)}");
 
         context.EnvironmentVariables["KAFKA_ADVERTISED_LISTENERS"] = advertisedListeners;
+
+        if (saslEnabled)
+        {
+            // Authentication only. No authorizer is configured, so every authenticated client keeps full access.
+            context.EnvironmentVariables["KAFKA_SASL_ENABLED_MECHANISMS"] = "PLAIN";
+
+            var jaasConfig = BuildJaasConfig(resource);
+            context.EnvironmentVariables[$"KAFKA_LISTENER_NAME_{externalListener}_PLAIN_SASL_JAAS_CONFIG"] = jaasConfig;
+            context.EnvironmentVariables[$"KAFKA_LISTENER_NAME_{internalListener}_PLAIN_SASL_JAAS_CONFIG"] = jaasConfig;
+        }
+    }
+
+    /// <summary>
+    /// Builds the JAAS configuration declaring the single SASL/PLAIN user accepted by the broker.
+    /// </summary>
+    private static ReferenceExpression BuildJaasConfig(KafkaServerResource resource)
+    {
+        var userName = resource.UserNameReference;
+        var password = resource.PasswordParameter!;
+
+        // username/password are the credentials the broker presents when it acts as a client, user_<name>
+        // declares the credentials the broker accepts from clients.
+        return ReferenceExpression.Create(
+            $"org.apache.kafka.common.security.plain.PlainLoginModule required username=\"{userName}\" password=\"{password}\" user_{userName}=\"{password}\";");
     }
 
     /// <summary>
