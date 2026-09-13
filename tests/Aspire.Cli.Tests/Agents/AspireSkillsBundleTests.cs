@@ -3,6 +3,7 @@
 
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
@@ -46,6 +47,75 @@ public class AspireSkillsBundleTests
             Assert.Contains(files, file => file.RelativePath == "SKILL.md");
             Assert.Contains(files, file => file.RelativePath == Path.Combine("references", "app-commands.md"));
             Assert.DoesNotContain(files, file => file.RelativePath == Path.Combine("evals", "evals.json"));
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(65001)]
+    [InlineData(1200)]
+    [InlineData(1201)]
+    [InlineData(12000)]
+    [InlineData(12001)]
+    public async Task LoadAsync_SkillsPreserveBomAwareTextDecodingForAllFiles(int codePage)
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            var encoding = Encoding.GetEncoding(codePage);
+            var skillContent = CreateSkillFileContent(body: "# Caf\u00e9");
+            const string scriptContent = "print('caf\u00e9')\n";
+            await CreateBundleAsync(bundleDirectory, new Dictionary<string, byte[]>
+            {
+                ["SKILL.md"] = [.. encoding.GetPreamble(), .. encoding.GetBytes(skillContent)],
+                ["scripts/helper.py"] = [.. encoding.GetPreamble(), .. encoding.GetBytes(scriptContent)]
+            }, hashOverride: null, supports: null, installExcludedRelativePaths: null);
+
+            var bundle = await LoadBundleAsync(s_bundleProvider, bundleDirectory);
+            var files = await bundle.GetSkillFilesAsync(AspireSkillDefinition, TestContext.Current.CancellationToken);
+
+            Assert.Collection(files,
+                file =>
+                {
+                    Assert.Equal("SKILL.md", file.RelativePath);
+                    Assert.Equal(skillContent, file.Content);
+                },
+                file =>
+                {
+                    Assert.Equal(Path.Combine("scripts", "helper.py"), file.RelativePath);
+                    Assert.Equal(scriptContent, file.Content);
+                });
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_SkillsPreserveReplacementDecodingRegardlessOfSuffix()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            var skillContent = CreateSkillFileContent();
+            await CreateBundleAsync(bundleDirectory, new Dictionary<string, byte[]>
+            {
+                ["SKILL.md"] = [.. Encoding.UTF8.GetBytes(skillContent), 0xff],
+                ["references/data.bin"] = [0x41, 0xff]
+            }, hashOverride: null, supports: null, installExcludedRelativePaths: null);
+
+            var bundle = await LoadBundleAsync(s_bundleProvider, bundleDirectory);
+            var files = await bundle.GetSkillFilesAsync(AspireSkillDefinition, TestContext.Current.CancellationToken);
+
+            Assert.Collection(files,
+                file => Assert.Equal(new SkillAssetFile("SKILL.md", skillContent + "\uFFFD"), file),
+                file => Assert.Equal(new SkillAssetFile(Path.Combine("references", "data.bin"), "A\uFFFD"), file));
         }
         finally
         {
@@ -827,12 +897,27 @@ public class AspireSkillsBundleTests
             skipCompatibilityCheck);
     }
 
-    private static async Task CreateBundleAsync(
+    private static Task CreateBundleAsync(
         string bundleDirectory,
         Dictionary<string, string> files,
         string? hashOverride = null,
         SkillBundleSupports? supports = null,
         IReadOnlyList<string>? installExcludedRelativePaths = null)
+    {
+        return CreateBundleAsync(
+            bundleDirectory,
+            files.ToDictionary(static pair => pair.Key, static pair => Encoding.UTF8.GetBytes(pair.Value)),
+            hashOverride,
+            supports,
+            installExcludedRelativePaths);
+    }
+
+    private static async Task CreateBundleAsync(
+        string bundleDirectory,
+        Dictionary<string, byte[]> files,
+        string? hashOverride,
+        SkillBundleSupports? supports,
+        IReadOnlyList<string>? installExcludedRelativePaths)
     {
         var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName);
         Directory.CreateDirectory(skillDirectory);
@@ -841,7 +926,7 @@ public class AspireSkillsBundleTests
         {
             var fullPath = Path.Combine(skillDirectory, AspireSkillsBundleProvider.NormalizeRelativePath(relativePath));
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-            await File.WriteAllTextAsync(fullPath, content);
+            await File.WriteAllBytesAsync(fullPath, content);
         }
 
         var manifest = new SkillBundleManifest

@@ -1,0 +1,3 @@
+﻿Installed Aspire agent skills:
+  Skills: aspire, aspire-deployment
+  Locations: ~/.agents/skills, .agents/skills, .github/skills

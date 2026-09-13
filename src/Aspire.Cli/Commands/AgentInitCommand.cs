@@ -669,29 +669,8 @@ internal sealed class AgentInitCommand : BaseCommand
         try
         {
             var skillFiles = await GetSkillFilesAsync(skill, aspireSkillsBundle, cancellationToken);
-            var anyFileUpdated = false;
-
-            foreach (var skillFile in skillFiles)
-            {
-                var fullPath = Path.Combine(rootDirectory.FullName, relativeSkillPath, skillFile.RelativePath);
-                var directory = Path.GetDirectoryName(fullPath);
-                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                if (File.Exists(fullPath))
-                {
-                    var existingContent = await File.ReadAllTextAsync(fullPath, cancellationToken);
-                    if (string.Equals(existingContent.ReplaceLineEndings("\n"), skillFile.Content.ReplaceLineEndings("\n"), StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-                }
-
-                await File.WriteAllTextAsync(fullPath, skillFile.Content, cancellationToken);
-                anyFileUpdated = true;
-            }
+            var anyFileUpdated = await SkillFileInstaller.Instance.InstallAsync(
+                rootDirectory, relativeSkillDirectory, skill.Name, skillFiles, cancellationToken);
 
             if (!anyFileUpdated)
             {

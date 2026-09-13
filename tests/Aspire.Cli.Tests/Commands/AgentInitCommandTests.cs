@@ -96,6 +96,136 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AgentInitCommand_PreservesLocationSkillThenTargetSummaryOrder()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        const string aspireContent = "# Aspire";
+        const string deploymentContent = "# Deployment";
+        var bundle = new AspireSkillsBundle(AspireSkillsInstaller.Version,
+        [
+            new(SkillDefinition.CreateAspireSkillsBundle("aspire", "Aspire"), [new("SKILL.md", aspireContent)]),
+            new(SkillDefinition.CreateAspireSkillsBundle("aspire-deployment", "Deployment"), [new("SKILL.md", deploymentContent)])
+        ]);
+        var existingWorkspaceSkill = workspace.WorkspaceRoot.CreateSubdirectory(Path.Combine(".agents", "skills", "aspire"));
+        var existingHomeSkill = home.CreateSubdirectory(Path.Combine(".agents", "skills", "aspire-deployment"));
+        await File.WriteAllTextAsync(Path.Combine(existingWorkspaceSkill.FullName, "SKILL.md"), aspireContent, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(existingHomeSkill.FullName, "SKILL.md"), deploymentContent, TestContext.Current.CancellationToken);
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
+        interaction.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
+            .Where(choice => choice switch
+            {
+                SkillLocation location => location == SkillLocation.Standard || location == SkillLocation.GitHubSkills,
+                SkillDefinition skill => skill.SourceKind is SkillSourceKind.AspireSkillsBundle,
+                _ => false
+            })
+            .ToList();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, home);
+            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
+                serviceProvider.GetRequiredService<CliExecutionContext>(),
+                AspireSkillsInstallResult.Installed(bundle));
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("agent init --skill-locations standard,github --skills aspire,aspire-deployment")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var summary = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot));
+        await Verify(summary.Message, "txt");
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_StagingFailurePreservesExistingSkillFiles()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var skillDirectory = workspace.WorkspaceRoot.CreateSubdirectory(Path.Combine(".github", "skills", "aspire"));
+        var originalPath = Path.Combine(skillDirectory.FullName, "SKILL.md");
+        var blockedPath = Path.Combine(skillDirectory.FullName, "references");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await File.WriteAllTextAsync(originalPath, "original", cancellationToken);
+        await File.WriteAllTextAsync(blockedPath, "user file", cancellationToken);
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
+        interaction.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
+            .Where(choice => choice switch
+            {
+                SkillLocation location => location == SkillLocation.GitHubSkills,
+                SkillDefinition skill => skill.HasName(CommonAgentApplicators.AspireSkillName),
+                _ => false
+            })
+            .ToList();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("agent init --skill-locations github --skills aspire")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal("original", await File.ReadAllTextAsync(originalPath, cancellationToken));
+        Assert.Equal("user file", await File.ReadAllTextAsync(blockedPath, cancellationToken));
+        Assert.Equal(["SKILL.md", "references"], skillDirectory.GetFileSystemInfos().Select(entry => entry.Name).Order(StringComparer.Ordinal));
+        Assert.Contains(skillDirectory.FullName, Assert.Single(interaction.DisplayedErrors), StringComparison.Ordinal);
+        Assert.Empty(Directory.GetDirectories(skillDirectory.Parent!.FullName, ".aspire.*"));
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_PublicationFailureRollsBackExistingSkillFiles()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates Windows delete-sharing behavior.");
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var skillDirectory = workspace.WorkspaceRoot.CreateSubdirectory(Path.Combine(".github", "skills", "aspire"));
+        var referenceDirectory = skillDirectory.CreateSubdirectory("references");
+        var originalPath = Path.Combine(skillDirectory.FullName, "SKILL.md");
+        var lockedPath = Path.Combine(referenceDirectory.FullName, "app-commands.md");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await File.WriteAllTextAsync(originalPath, "original", cancellationToken);
+        await File.WriteAllTextAsync(lockedPath, "locked", cancellationToken);
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
+        interaction.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
+            .Where(choice => choice switch
+            {
+                SkillLocation location => location == SkillLocation.GitHubSkills,
+                SkillDefinition skill => skill.HasName(CommonAgentApplicators.AspireSkillName),
+                _ => false
+            })
+            .ToList();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        using (File.Open(lockedPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        {
+            var exitCode = await command.Parse("agent init --skill-locations github --skills aspire")
+                .InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        }
+
+        Assert.Equal("original", await File.ReadAllTextAsync(originalPath, cancellationToken));
+        Assert.Equal("locked", await File.ReadAllTextAsync(lockedPath, cancellationToken));
+        Assert.Equal(
+            new[] { "SKILL.md", Path.Combine("references", "app-commands.md") },
+            Directory.GetFiles(skillDirectory.FullName, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(skillDirectory.FullName, path)).Order(StringComparer.Ordinal));
+        Assert.Contains(skillDirectory.FullName, Assert.Single(interaction.DisplayedErrors), StringComparison.Ordinal);
+        Assert.Empty(Directory.GetDirectories(skillDirectory.Parent!.FullName, ".aspire.*"));
+    }
+
+    [Fact]
     public async Task AgentInitCommand_IncludesSpecificSkillDirectory_WhenInstallFails()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
