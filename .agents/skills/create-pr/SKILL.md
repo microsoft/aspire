@@ -68,7 +68,7 @@ For non-trivial UI changes, upload screenshots or recordings as GitHub user atta
 
 Before uploading, inspect every artifact for secrets, credentials, tokens, customer or confidential data, private URLs, and unintended personal information. Redact or regenerate any artifact that contains sensitive data, and do not upload it until the inspection passes. Treat uploads as permanent public data because this public repository exposes attachments to everyone and the attachment API has no deletion endpoint.
 
-Prefer `gh --attach` when advertised by `gh pr create --help` or `gh pr edit --help`. Before invoking `gh`, replace the `<!-- Add screenshots/recordings here -->` placeholder in `pr-body.md` with local Markdown references at the intended location. Use a table for before/after images when appropriate:
+Prefer `gh --attach` when advertised by `gh pr create --help` or `gh pr edit --help`. Prepare local Markdown references for step 5 to insert at the intended location in `pr-body.md`. Use a table for before/after images when appropriate:
 
 ```markdown
 | Before | After |
@@ -88,7 +88,7 @@ Prepare one flag per referenced file and append the flags to the final `gh pr cr
 --attach './before.png#Before' --attach './after.png#After' --attach './demo.mp4'
 ```
 
-For older GitHub CLI versions, upload each image with the authenticated attachment API. Resolve `repository_id` with `gh api repos/<owner>/<repo> --jq .id`, then send the raw file bytes:
+For older GitHub CLI versions, upload each supported image or video with the authenticated attachment API. Resolve `repository_id` with `gh api repos/<owner>/<repo> --jq .id`, determine the artifact's MIME type, and send the raw file bytes:
 
 ```text
 POST https://uploads.github.com/user-attachments/assets?name=<encoded-name>&content_type=<encoded-MIME-type>&repository_id=<id>
@@ -96,26 +96,39 @@ Authorization: Bearer <gh-token>
 Content-Type: application/octet-stream
 ```
 
-Example for a PNG in PowerShell:
+Example for a supported image or video in PowerShell:
 
 ```powershell
 $repo = "<owner>/<repo>"
-$file = "<absolute-path-to-image>"
+$file = "<absolute-path-to-image-or-video>"
 $repoId = gh api "repos/$repo" --jq .id
 $token = gh auth token
 $name = [Uri]::EscapeDataString((Split-Path -Leaf $file))
-$uri = "https://uploads.github.com/user-attachments/assets?name=$name&content_type=image%2Fpng&repository_id=$repoId"
-(Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $token"; Accept = "application/json" } -ContentType "application/octet-stream" -InFile $file).url
+$contentType = switch ([IO.Path]::GetExtension($file).ToLowerInvariant()) {
+  ".png"  { "image/png" }
+  ".jpg"  { "image/jpeg" }
+  ".jpeg" { "image/jpeg" }
+  ".gif"  { "image/gif" }
+  ".webp" { "image/webp" }
+  ".mp4"  { "video/mp4" }
+  ".mov"  { "video/quicktime" }
+  ".webm" { "video/webm" }
+  default { throw "Unsupported attachment type: $([IO.Path]::GetExtension($file))" }
+}
+$encodedContentType = [Uri]::EscapeDataString($contentType)
+$uri = "https://uploads.github.com/user-attachments/assets?name=$name&content_type=$encodedContentType&repository_id=$repoId"
+$assetUrl = (Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $token"; Accept = "application/json" } -ContentType "application/octet-stream" -InFile $file).url
 ```
 
 The response is HTTP `201` with a `url` value. Keep the token in memory and never print it. This endpoint is undocumented, so prefer `gh --attach` when available.
 
-Embed the returned `user-attachments` URLs with useful alt text, using a Markdown table for before/after comparisons. Verify each URL returns HTTP `200` and renders in the final PR body.
+Embed returned image URLs with useful alt text, using a Markdown table for before/after comparisons. Place a returned video URL bare on its own line in its own paragraph so GitHub renders it as a player. Verify each URL returns HTTP `200` and renders in the final PR body.
 
 ### 5. Build PR body from template
 
 - Read `.github/pull_request_template.md`.
 - Use the template structure as the PR body.
+- If step 4 prepared visual artifacts, replace the `<!-- Add screenshots/recordings here -->` placeholder with the prepared Markdown references before running the create or edit command. Use local paths for `gh --attach` or the returned `user-attachments` URLs for the API fallback. Do not leave the placeholder in the final body.
 - Fill known details in `## Description` with reviewer- and user-facing context:
   - Lead with **why** the change matters: the user problem, scenario, or workflow it improves.
   - Summarize the user-visible behavior before implementation details: what users can now do, see, configure, or call.
