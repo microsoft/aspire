@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Fixes generated Deno debug launch args (--inspect-wait to --inspect-brk) so breakpoints in startup code are reliably hit",
+  "mergedAt": "2026-09-13T05:29:44Z",
+  "number": 20020,
+  "runDate": "2026-09-13T06:06:33Z",
+  "status": "included",
+  "title": "Stabilize Deno debugger breakpoint setup"
+}

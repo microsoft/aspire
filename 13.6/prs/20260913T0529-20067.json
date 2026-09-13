@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Test-only fix for a flaky E2E test readiness race; no product or user-facing change",
+  "mergedAt": "2026-09-13T05:29:16Z",
+  "number": 20067,
+  "runDate": "2026-09-13T06:06:33Z",
+  "status": "excluded",
+  "title": "Fix Azure Functions E2E HTTPS endpoint readiness race"
+}

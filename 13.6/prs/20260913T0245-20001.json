@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "New managed Blazor WebAssembly debugging support in VS Code extension",
+  "mergedAt": "2026-09-13T02:45:00Z",
+  "number": 20001,
+  "runDate": "2026-09-13T06:06:33Z",
+  "status": "included",
+  "title": "Complete managed Blazor WebAssembly debugging in VS Code"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Debugging a Blazor WebAssembly client resource in the VS Code extension now hands the browser launch to the C# extension's managed `blazorwasm` debugger instead of always starting a plain JavaScript debugger, so breakpoints set in client C# code are hit directly. Generic browser resources continue to use js-debug.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧵",
+  "firstMergedAt": "2026-09-13T02:45:00Z",
+  "lastMergedAt": "2026-09-13T02:45:00Z",
+  "name": "Managed Blazor WebAssembly debugging in VS Code",
+  "owner": "adamint",
+  "prs": [
+    20001
+  ]
+}
