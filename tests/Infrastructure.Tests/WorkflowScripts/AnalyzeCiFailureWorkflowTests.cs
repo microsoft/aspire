@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text.Json;
 using Aspire.TestUtilities;
 using Xunit;
@@ -289,6 +290,9 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("_authToken=opaque-secret", "_authToken=[REDACTED]")]
     [InlineData("Password=\"secret;tail\";Timeout=30", "Password=\"[REDACTED]\";Timeout=30")]
     [InlineData("Password='secret;tail';Timeout=30", "Password='[REDACTED]';Timeout=30")]
+    [InlineData("dotnet tool --api-key opaque-secret --verbosity detailed", "dotnet tool --api-key [REDACTED] --verbosity detailed")]
+    [InlineData("command --password \"secret;tail\" --verbose", "command --password \"[REDACTED]\" --verbose")]
+    [InlineData("command --client-secret 'secret;tail'", "command --client-secret '[REDACTED]'")]
     [RequiresTools(["node"])]
     public async Task RedactOperationRemovesTokenValues(string value, string expected)
     {
@@ -296,6 +300,34 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var redacted = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
 
         Assert.Equal(expected, redacted.GetProperty("diagnostic").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node", "yq"])]
+    public async Task ExtractTestFailuresReadsStandardOutputAndErrorFromTrx()
+    {
+        var trxPath = Path.Combine(_workspace.Path, "results.trx");
+        TestTrxBuilder.CreateTrxFile(
+            trxPath,
+            new TestTrxCase("Tests.Type.Passing", "Tests.Type.Passing", "Passed"),
+            new TestTrxCase(
+                CanonicalTestName: "Tests.Type.Failing",
+                DisplayName: "Tests.Type.Failing(value: 42)",
+                Outcome: "Failed",
+                ErrorMessage: "Expected 42 but got 41",
+                StackTrace: "at Tests.Type.Failing() in Tests.cs:line 10",
+                StdOut: "standard output text",
+                StdErr: "standard error text"));
+
+        var trxJson = await ConvertTrxToJsonAsync(trxPath);
+        var output = await InvokeScriptAsync("extract-test-failures", trxJson);
+        var failure = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+
+        Assert.Equal("Tests.Type.Failing(value: 42)", failure.GetProperty("test").GetString());
+        Assert.Equal("Expected 42 but got 41", failure.GetProperty("error").GetString());
+        Assert.Equal("at Tests.Type.Failing() in Tests.cs:line 10", failure.GetProperty("stack_trace").GetString());
+        Assert.Equal("standard output text", failure.GetProperty("standard_output").GetString());
+        Assert.Equal("standard error text", failure.GetProperty("standard_error").GetString());
     }
 
     private static object CreateAnalysis(object[]? failedTests = null)
@@ -346,5 +378,31 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal(0, result.ExitCode);
 
         return result.Output.ReplaceLineEndings("\n");
+    }
+
+    private static async Task<JsonElement> ConvertTrxToJsonAsync(string trxPath)
+    {
+        using var process = new Process();
+        process.StartInfo.FileName = "yq";
+        process.StartInfo.ArgumentList.Add("-p");
+        process.StartInfo.ArgumentList.Add("xml");
+        process.StartInfo.ArgumentList.Add("-o");
+        process.StartInfo.ArgumentList.Add("json");
+        process.StartInfo.ArgumentList.Add(".");
+        process.StartInfo.ArgumentList.Add(trxPath);
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.UseShellExecute = false;
+
+        process.Start();
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        Assert.True(process.ExitCode == 0, $"yq failed with exit code {process.ExitCode}: {stderr}");
+
+        return JsonSerializer.Deserialize<JsonElement>(stdout, s_jsonOptions);
     }
 }

@@ -255,27 +255,16 @@ jobs:
                 echo "  - $(basename "$f") ($(stat -c%s "$f" 2>/dev/null || echo "?") bytes)"
               done || true
 
-              # Parse TRX files for failed tests using yq (pre-installed) + jq.
-              # yq converts XML to JSON, then jq extracts failed test info.
+              # Parse TRX files for failed tests using yq (pre-installed) and the workflow helper.
+              # yq converts XML to JSON, then the helper extracts failed test info.
               # TRX uses UnitTestResult elements with outcome="Failed" containing
               # Output/ErrorInfo/Message and Output/ErrorInfo/StackTrace.
               > ci-failure-data/test-failures.jsonl
               find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | while IFS= read -r TRX_FILE; do
                 echo "Processing: $(basename "$TRX_FILE")"
-                yq -p xml -o json '.' "$TRX_FILE" 2>/dev/null | jq -r '
-                  # Navigate to UnitTestResult — may be array or single object
-                  (.TestRun.Results.UnitTestResult // []) |
-                  (if type == "array" then . else [.] end) |
-                  map(select(.["+@outcome"] == "Failed")) |
-                  .[] |
-                  {
-                    test: (.["+@testName"] // ""),
-                    error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end),
-                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end),
-                    standard_output: ((.Output.StdOut // "") | if type == "object" then (.["+content"] // "") else tostring end),
-                    standard_error: ((.Output.StdErr // "") | if type == "object" then (.["+content"] // "") else tostring end)
-                  }
-                ' >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
+                yq -p xml -o json '.' "$TRX_FILE" 2>/dev/null |
+                  node .github/workflows/analyze-ci-failure.js extract-test-failures - \
+                    >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
               done
               jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
               rm -f ci-failure-data/test-failures.jsonl

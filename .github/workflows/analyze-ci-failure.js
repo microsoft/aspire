@@ -28,6 +28,8 @@ function redactSensitiveData(value) {
         .replace(/\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|(?:npm|pypi)-[A-Za-z0-9_-]{20,})\b/g, '[REDACTED]')
         .replace(/([?&](?:sig|signature|token|access_token|api[_-]?key|password|secret|client_secret)=)[^&\s]+/gi, '$1[REDACTED]')
         .replace(/(["'](?:password|passwd|pwd|token|_?authToken|accessToken|refreshToken|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|connection[_-]?string)["']\s*:\s*["'])[^"'\r\n]*(["'])/gi, '$1[REDACTED]$2')
+        .replace(/((?:^|\s)--(?:password|passwd|pwd|token|auth[_-]?token|access[_-]?token|refresh[_-]?token|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|connection[_-]?string|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)\s+)(["'])(?:(?!\2)[^\r\n])*\2/gim, '$1$2[REDACTED]$2')
+        .replace(/((?:^|[^\S\r\n])--(?:password|passwd|pwd|token|auth[_-]?token|access[_-]?token|refresh[_-]?token|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|connection[_-]?string|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)[^\S\r\n]+)(?!["'])([^\s]+)/gim, '$1[REDACTED]')
         .replace(/\b((?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)|_?authToken|accessToken|refreshToken)(\s*[:=]\s*)(["'])(?:(?!\3)[^\r\n])*\3/gi, '$1$2$3[REDACTED]$3')
         .replace(/\b((?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)|_?authToken|accessToken|refreshToken)(\s*[:=]\s*)(?!["'])([^;\r\n]+)/gi, '$1$2[REDACTED]');
 }
@@ -50,6 +52,29 @@ function redactJson(value, propertyName) {
     }
 
     return value;
+}
+
+function getTrxText(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    return typeof value === 'object' ? String(value['+content'] ?? '') : String(value);
+}
+
+function extractTestFailures(trx) {
+    const results = trx?.TestRun?.Results?.UnitTestResult ?? [];
+    const resultList = Array.isArray(results) ? results : [results];
+
+    return resultList
+        .filter(result => result['+@outcome'] === 'Failed')
+        .map(result => ({
+            test: String(result['+@testName'] ?? ''),
+            error: getTrxText(result.Output?.ErrorInfo?.Message),
+            stack_trace: getTrxText(result.Output?.ErrorInfo?.StackTrace),
+            standard_output: getTrxText(result.Output?.StdOut),
+            standard_error: getTrxText(result.Output?.StdErr),
+        }));
 }
 
 // TRX display names can contain backticks and line breaks. Collapse line breaks
@@ -202,37 +227,40 @@ ${buildOccurrenceRow(analysis, cause)}
 }
 
 function readJson(path) {
-    return JSON.parse(fs.readFileSync(path, 'utf8'));
+    return JSON.parse(fs.readFileSync(path === '-' ? 0 : path, 'utf8'));
 }
 
 function main(args) {
     const [operation, analysisPath, causePath, marker] = args;
-
-    if (operation === 'redact') {
-        process.stdout.write(JSON.stringify(redactJson(readJson(analysisPath))));
-        return;
-    }
-
-    if (operation === 'format-test-failures') {
-        process.stdout.write(formatTestFailures(readJson(analysisPath)));
-        return;
-    }
-
     const analysis = readJson(analysisPath);
-    const cause = readJson(causePath);
+    let cause;
+    const getCause = () => cause ??= readJson(causePath);
 
     switch (operation) {
+        case 'redact':
+            process.stdout.write(JSON.stringify(redactJson(analysis)));
+            break;
+        case 'extract-test-failures': {
+            const failures = extractTestFailures(analysis);
+            if (failures.length > 0) {
+                process.stdout.write(`${failures.map(failure => JSON.stringify(failure)).join('\n')}\n`);
+            }
+            break;
+        }
+        case 'format-test-failures':
+            process.stdout.write(formatTestFailures(analysis));
+            break;
         case 'job-name':
-            process.stdout.write(getCauseJobName(analysis, cause));
+            process.stdout.write(getCauseJobName(analysis, getCause()));
             break;
         case 'add-occurrence':
-            process.stdout.write(JSON.stringify(addOccurrence(analysis, cause)));
+            process.stdout.write(JSON.stringify(addOccurrence(analysis, getCause())));
             break;
         case 'occurrence-row':
-            process.stdout.write(buildOccurrenceRow(analysis, cause));
+            process.stdout.write(buildOccurrenceRow(analysis, getCause()));
             break;
         case 'issue-body':
-            process.stdout.write(buildIssueBody(analysis, cause, marker));
+            process.stdout.write(buildIssueBody(analysis, getCause(), marker));
             break;
         default:
             throw new Error(`Unsupported operation '${operation}'.`);
@@ -249,6 +277,7 @@ module.exports = {
     buildOccurrence,
     buildOccurrenceRow,
     escapeHtml,
+    extractTestFailures,
     formatTestFailures,
     getCauseJobName,
     redactJson,
