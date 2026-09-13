@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only change: makes MAUI build queue timeout tests use an injectable TimeProvider instead of wall-clock delays to fix flakiness. No user-facing behavior change.",
+  "mergedAt": "2026-09-12T23:06:06Z",
+  "number": 20064,
+  "runDate": "2026-09-13T00:07:45Z",
+  "status": "excluded",
+  "title": "Fix MAUI build queue timeout test flakiness"
+}
