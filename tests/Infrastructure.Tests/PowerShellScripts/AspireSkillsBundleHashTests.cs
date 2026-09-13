@@ -182,27 +182,30 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
         AssertTrackedFilesUnchanged(originalFiles);
     }
 
-    [Fact]
+    [Theory]
     [RequiresTools(["pwsh"])]
-    public async Task VerificationRequiresMatchingInstallerVersion()
+    [InlineData("0.0.1", "0.0.2")]
+    [InlineData("v0.0.1", "0.0.1")]
+    [InlineData("0.0.1", "v0.0.1")]
+    public async Task VerificationRequiresMatchingInstallerVersion(string metadataVersion, string installerVersion)
     {
-        CreateBundleFixture();
-        WriteInstallerVersions("0.0.2");
+        CreateBundleFixture(metadataVersion);
+        WriteInstallerVersions(installerVersion);
 
         var result = await RunMaintenanceScriptAsync(VerifyScriptName);
 
         Assert.Equal(
-            "Embedded Aspire skills metadata version '0.0.1' must match AspireSkillsInstaller.Version '0.0.2'.",
+            $"Embedded Aspire skills metadata version '{metadataVersion}' must match AspireSkillsInstaller.Version '{installerVersion}'.",
             GetScriptError(result));
         Assert.Empty(GetGhCalls(result));
     }
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task VerificationAcceptsEquivalentVersionPrefixes()
+    public async Task VerificationAcceptsInstallerVersionCaseDifferences()
     {
         CreateBundleFixture("v0.0.1");
-        WriteInstallerVersions("0.0.1");
+        WriteInstallerVersions("V0.0.1");
 
         var result = await RunMaintenanceScriptAsync(VerifyScriptName);
 

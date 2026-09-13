@@ -64,7 +64,9 @@ if ([string]::IsNullOrWhiteSpace($metadata.sha512)) {
 $installerContent = Get-Content -Raw -Path $installerPath
 $versionMatch = Get-AspireSkillsInstallerVersionMatch -Content $installerContent -Path $installerPath
 $installerVersion = $versionMatch.Groups[1].Value
-if ($normalizedVersion -ne (Get-UnprefixedVersion $installerVersion)) {
+# Match InstallFromEmbeddedAsync's ordinal, case-insensitive comparison. Only release/asset
+# resolution treats a leading 'v' as optional; metadata-to-installer agreement does not.
+if (-not [string]::Equals($metadata.version, $installerVersion, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Embedded Aspire skills metadata version '$($metadata.version)' must match AspireSkillsInstaller.Version '$installerVersion'."
 }
 
