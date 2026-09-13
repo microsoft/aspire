@@ -78,6 +78,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     private readonly string? _runsDirectory;
     private readonly string? _metadataPath;
+    private readonly string _applicationMarkerFileName;
     private readonly string? _temporaryDirectory;
     private readonly FileLock? _runLock;
     private DashboardRunMetadata _metadata;
@@ -103,6 +104,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         _timeProvider = timeProvider;
         _deleteRunDirectory = deleteRunDirectory;
         var applicationName = string.IsNullOrWhiteSpace(options.Value.ApplicationName) ? "Aspire" : options.Value.ApplicationName;
+        _applicationMarkerFileName = GetApplicationDirectoryName(applicationName);
         var startedAt = timeProvider.GetUtcNow();
         // A millisecond timestamp collision is very unlikely. The exclusive run lock below also ensures that if two
         // Dashboard instances resolve the same run ID concurrently, the second fails instead of sharing the database.
@@ -113,35 +115,49 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         PersistenceMode = options.Value.Data.PersistenceMode;
 
         // Persistent data can contain environment variables, telemetry, and console logs. Restrict the
-        // application directory so the database, WAL, shared-memory, and metadata files aren't exposed
+        // persistence directory so the database, WAL, shared-memory, and metadata files aren't exposed
         // to other local users even when the data root was created with a permissive umask.
         switch (PersistenceMode)
         {
             case DashboardPersistenceMode.None:
+                // CreateTempSubdirectory uses owner-only permissions (0700) on Unix and inherits the
+                // current user's temporary directory ACL on Windows.
                 _temporaryDirectory = Directory.CreateTempSubdirectory(TemporaryDirectoryPrefix).FullName;
-                RunDirectory = _temporaryDirectory;
-                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
-                _runLock = OpenRunLock(RunDirectory);
+                CurrentWorkingDirectory = _temporaryDirectory;
+                DatabasePath = Path.Combine(CurrentWorkingDirectory, DatabaseFileName);
+                _runLock = OpenRunLock(CurrentWorkingDirectory);
                 DeleteAbandonedTemporaryDirectories(deleteRunDirectory);
                 break;
             case DashboardPersistenceMode.Run:
-                var applicationDirectory = GetApplicationDirectory(options.Value.Data.Directory, applicationName);
-                DirectoryHelper.CreateWithOwnerOnlyPermissions(applicationDirectory);
-                _runsDirectory = Path.Combine(applicationDirectory, "runs");
-                RunDirectory = Path.Combine(_runsDirectory, runId);
-                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
-                Directory.CreateDirectory(RunDirectory);
-                _runLock = OpenRequiredRunLock(
-                    RunDirectory,
+                _runsDirectory = GetRunsDirectory(options.Value.Data.Directory);
+                DirectoryHelper.CreateWithOwnerOnlyPermissions(_runsDirectory);
+                CurrentWorkingDirectory = Path.Combine(_runsDirectory, runId);
+                DatabasePath = Path.Combine(CurrentWorkingDirectory, DatabaseFileName);
+                // Assume that if the run directory can be created, then files in the run directory can be written as well.
+                Directory.CreateDirectory(CurrentWorkingDirectory);
+                var runLock = OpenRequiredRunLock(
+                    CurrentWorkingDirectory,
                     $"Dashboard run '{runId}' is already in use by another dashboard process.");
-                _metadataPath = Path.Combine(RunDirectory, "run.json");
+                try
+                {
+                    File.WriteAllText(Path.Combine(CurrentWorkingDirectory, _applicationMarkerFileName), string.Empty);
+                    _runLock = runLock;
+                }
+                catch
+                {
+                    runLock.Dispose();
+                    throw;
+                }
+                _metadataPath = Path.Combine(CurrentWorkingDirectory, "run.json");
                 break;
             case DashboardPersistenceMode.Resume:
-                RunDirectory = GetApplicationDirectory(options.Value.Data.Directory, applicationName);
-                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
-                DirectoryHelper.CreateWithOwnerOnlyPermissions(RunDirectory);
+                var resumesDirectory = GetResumesDirectory(options.Value.Data.Directory);
+                DirectoryHelper.CreateWithOwnerOnlyPermissions(resumesDirectory);
+                CurrentWorkingDirectory = Path.Combine(resumesDirectory, _applicationMarkerFileName);
+                DatabasePath = Path.Combine(CurrentWorkingDirectory, DatabaseFileName);
+                DirectoryHelper.CreateWithOwnerOnlyPermissions(CurrentWorkingDirectory);
                 var resumeRunLock = OpenRequiredRunLock(
-                    RunDirectory,
+                    CurrentWorkingDirectory,
                     $"Dashboard data for application '{applicationName}' is already in use by another dashboard process. Database path: '{DatabasePath}'.");
                 try
                 {
@@ -185,18 +201,18 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         _runs = new(LoadRuns);
 
         _logger.LogDebug(
-            "Dashboard run store initialized with persistence mode '{PersistenceMode}'. Run directory: '{RunDirectory}'. Database path: '{DatabasePath}'.",
+            "Dashboard run store initialized with persistence mode '{PersistenceMode}'. Current working directory: '{CurrentWorkingDirectory}'. Database path: '{DatabasePath}'.",
             PersistenceMode,
-            RunDirectory,
+            CurrentWorkingDirectory,
             DatabasePath);
     }
 
     private void DeleteAbandonedTemporaryDirectories(Action<string> deleteRunDirectory)
     {
-        var temporaryRoot = Directory.GetParent(RunDirectory)!.FullName;
+        var temporaryRoot = Directory.GetParent(CurrentWorkingDirectory)!.FullName;
         foreach (var directory in Directory.EnumerateDirectories(temporaryRoot, $"{TemporaryDirectoryPrefix}*"))
         {
-            if (string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase) ||
+            if (string.Equals(directory, CurrentWorkingDirectory, StringComparison.OrdinalIgnoreCase) ||
                 !File.Exists(Path.Combine(directory, DatabaseFileName)))
             {
                 continue;
@@ -222,7 +238,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
     }
 
-    public string RunDirectory { get; }
+    public string CurrentWorkingDirectory { get; }
     public string DatabasePath { get; }
     public string RunId => _metadata.RunId;
     public DashboardPersistenceMode PersistenceMode { get; }
@@ -337,14 +353,21 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     {
         var runs = new List<DashboardRunDescriptor>
         {
-            CreateDescriptor(_metadata, RunDirectory, isCurrent: true)
+            CreateDescriptor(_metadata, CurrentWorkingDirectory, isCurrent: true)
         };
 
         if (SupportsRunSelection && Directory.Exists(_runsDirectory))
         {
             foreach (var directory in Directory.EnumerateDirectories(_runsDirectory))
             {
-                if (string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(directory, CurrentWorkingDirectory, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // Each run has an empty file named with its application directory key. Checking that marker first
+                // avoids opening and deserializing run.json for every other application in the shared runs directory.
+                if (!File.Exists(Path.Combine(directory, _applicationMarkerFileName)))
                 {
                     continue;
                 }
@@ -376,7 +399,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             .ToArray();
         _logger.LogDebug(
             "Dashboard run discovery completed in directory '{RunsDirectory}'. Run count: {RunCount}. Run IDs: {RunIds}.",
-            _runsDirectory ?? RunDirectory,
+            _runsDirectory ?? CurrentWorkingDirectory,
             orderedRuns.Length,
             string.Join(", ", orderedRuns.Select(run => run.RunId)));
 
@@ -395,11 +418,11 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             {
                 Directory.Delete(_temporaryDirectory, recursive: true);
             }
-            else if (PersistenceMode == DashboardPersistenceMode.Run && Directory.Exists(RunDirectory))
+            else if (PersistenceMode == DashboardPersistenceMode.Run && Directory.Exists(CurrentWorkingDirectory))
             {
                 // Run metadata is published only after the host starts listening. If startup fails first, remove
                 // the initialized database so the attempted run never appears as empty historical data.
-                _deleteRunDirectory(RunDirectory);
+                _deleteRunDirectory(CurrentWorkingDirectory);
             }
         }
         finally
@@ -537,13 +560,17 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     internal static string GetApplicationDirectory(string? dataRoot, string applicationName)
     {
-        if (string.IsNullOrWhiteSpace(dataRoot))
-        {
-            dataRoot = Path.Combine(AspireHomeDirectory.GetDefault(), "dashboard");
-        }
-
-        return Path.Combine(Path.GetFullPath(dataRoot), GetApplicationDirectoryName(applicationName));
+        return Path.Combine(GetResumesDirectory(dataRoot), GetApplicationDirectoryName(applicationName));
     }
+
+    internal static string GetRunsDirectory(string? dataRoot) => Path.Combine(GetDataRoot(dataRoot), "runs");
+
+    internal static string GetResumesDirectory(string? dataRoot) => Path.Combine(GetDataRoot(dataRoot), "resumes");
+
+    private static string GetDataRoot(string? dataRoot) => Path.GetFullPath(
+        string.IsNullOrWhiteSpace(dataRoot)
+            ? Path.Combine(AspireHomeDirectory.GetDefault(), "dashboard")
+            : dataRoot);
 
     private static void DeleteDatabaseFiles(string databasePath)
     {
