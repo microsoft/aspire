@@ -19,6 +19,8 @@ Your goal is to **create a PR** and always **use the repository PR template** at
 Before starting, verify:
 - `gh` CLI is available: run `gh --version`. If missing, tell the user to install it from https://cli.github.com/.
 - Authentication is configured: run `gh auth status`. If not authenticated, tell the user to run `gh auth login`.
+- If the PR needs screenshots or recordings, verify `gh` is version 2.99.0 or later. The `--attach` flag was introduced in 2.99.0; if the installed version is older, update `gh` before creating the PR.
+- Media uploads require GitHub.com or GitHub Enterprise Cloud, repository `WRITE`, `MAINTAIN`, or `ADMIN` permission, and an OAuth, classic PAT, or fine-grained PAT token. GitHub Enterprise Server and GitHub App tokens do not support uploads.
 
 ## Procedure
 
@@ -35,7 +37,7 @@ Before starting, verify:
 - **Title**: concise summary of the change.
 - **Labels**: add labels only when they are clearly applicable. Use the `breaking-change` label when the PR breaks public APIs or fundamentally changes the behavior of an existing scenario. Do not use it for every behavior change, additive feature, routine bug fix, or implementation-only change. Examples from existing `breaking-change` issues include API shape/semantics changes, obsoleting a public API, changing endpoint allocation/wait behavior, changing Docker Compose publish behavior, and disabling local auth for Azure resources.
 
-### 3. Detect non-trivial UI changes
+### 3. Detect non-trivial UI changes and collect media
 
 Before building the PR body, check whether the diff includes **non-trivial UI changes** to any of these areas:
 
@@ -48,19 +50,31 @@ A change is **non-trivial** if it does more than:
 - Adjust a single CSS property (e.g., margin, padding) without changing visual structure
 - Change a tooltip or aria-label
 
-If non-trivial UI changes are detected, add a prominent `### Screenshots / Recordings` subsection in the PR body (under `## Description`) with the following content:
+If non-trivial UI changes are detected:
+
+- Find or capture relevant local screenshots or recordings before creating the PR. Prefer before/after screenshots for visual changes and a short GIF or video for interactive changes.
+- Use `gh pr create --attach` to upload local media with the PR. Repeat `--attach` for each file, up to 50 files per command.
+- Supported formats are `png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`, `mp4`, `mov`, and `webm`.
+- For each image, put a local Markdown reference in the body using the same path passed to `--attach`, for example `![Dashboard showing the new resource state](./artifacts/dashboard-resource-state.png)`. `gh` replaces the local path with the uploaded GitHub URL while preserving the Markdown alt text.
+- Give standalone images useful alt text after `#` in the attachment argument and quote the whole argument, for example `--attach './artifacts/dashboard-resource-state.png#Dashboard showing the new resource state'`. The filename is used if alt text is omitted. Do not add alt text to video attachment arguments.
+- Never leave a local media path in the submitted PR body without passing the matching file through `--attach`.
+- If media cannot be captured, explain the scenario reviewers should test and leave a clear TODO instead of inventing an image.
+
+Add a prominent `### Screenshots / Recordings` subsection under `## Description`. When local media is available, use:
 
 ```markdown
 ### Screenshots / Recordings
 
-> **This PR includes UI changes.** Please add screenshots or screen recordings so reviewers can evaluate the visual changes without running locally.
->
-> - For before/after comparisons, place them side-by-side or label them clearly.
-> - For interactive changes (animations, transitions, new flows), prefer a short screen recording (GIF or video).
-> - If you cannot capture visuals now, note what scenario to test and mark this section as TODO.
+**Before**
 
-<!-- Add screenshots/recordings here -->
+![Dashboard before the change](./artifacts/dashboard-before.png)
+
+**After**
+
+![Dashboard after the change](./artifacts/dashboard-after.png)
 ```
+
+Pass both files to `gh pr create` with matching `--attach` flags. If media is not available, use the existing UI-change notice and a TODO describing the exact scenario to capture.
 
 ### 4. Build PR body from template
 
@@ -94,8 +108,9 @@ If non-trivial UI changes are detected, add a prominent `### Screenshots / Recor
     ```markdown
     ### User-facing usage
     The dashboard now shows <new state or action> on the <page/panel>, so users can <outcome> without <old workaround>.
-    Screenshot: ![Dashboard showing <feature>](<uploaded screenshot URL>)
+    Screenshot: ![Dashboard showing <feature>](./artifacts/<screenshot-file>.png)
     ```
+    Pass the local screenshot to `gh pr create --attach`; do not upload it separately or replace the path manually.
   - **CLI changes**:
     ````markdown
     ### User-facing usage
@@ -163,7 +178,9 @@ If non-trivial UI changes are detected, add a prominent `### Screenshots / Recor
 
 ### 5. Create the PR
 
-Set `GH_PAGER` to `cat` to prevent interactive paging, then create the PR. The syntax differs by shell:
+Set `GH_PAGER` to `cat` to prevent interactive paging, then create the PR. Add one `--attach` flag per local screenshot or recording referenced by the body. If the body does not reference an attached path, `gh` appends the uploaded media to the body instead.
+
+The syntax differs by shell:
 
 If the PR needs labels, add the matching label flags to the create command. For breaking public API changes or fundamental existing-scenario behavior changes, include `--label breaking-change`.
 
@@ -173,7 +190,9 @@ GH_PAGER=cat gh pr create \
   --base <base-branch> \
   --head <head-branch> \
   --title "<pr-title>" \
-  --body-file pr-body.md
+  --body-file pr-body.md \
+  --attach './artifacts/dashboard-before.png#Dashboard before the change' \
+  --attach './artifacts/dashboard-after.png#Dashboard after the change'
 ```
 
 **PowerShell/Windows:**
@@ -183,12 +202,18 @@ gh pr create `
   --base <base-branch> `
   --head <head-branch> `
   --title "<pr-title>" `
-  --body-file pr-body.md
+  --body-file pr-body.md `
+  --attach './artifacts/dashboard-before.png#Dashboard before the change' `
+  --attach './artifacts/dashboard-after.png#Dashboard after the change'
 ```
+
+Omit the example `--attach` flags when the PR has no media, and replace every example path and description with the actual local files and alt text.
 
 > **Why `GH_PAGER=cat`?** The `gh` CLI pipes long output through a pager (like `less`) by default, which blocks in non-interactive terminals. Setting it to `cat` disables paging so output prints directly.
 
 > **Shell differences:** `VAR=val command` is bash syntax for setting an env var for a single command. PowerShell requires a separate `$env:VAR = "val"` statement (persists for the session, which is harmless here).
+
+After creation, inspect the PR body with `gh pr view <pr-number-or-url> --json body --jq .body`. Confirm that GitHub URLs replaced every local media path. If a local path remains, update the PR with the matching `--attach` flag before reporting success.
 
 ### 6. Handle existing PRs
 
@@ -196,11 +221,12 @@ If a PR already exists for the branch:
 - Do not create another.
 - If requested (or if the body is still mostly unfilled template text), update it:
 
-  **bash:** `GH_PAGER=cat gh pr edit <pr-number-or-url> --body-file pr-body.md`
+  **bash:** `GH_PAGER=cat gh pr edit <pr-number-or-url> --body-file pr-body.md --attach './artifacts/dashboard-after.png#Dashboard after the change'`
 
-  **PowerShell:** `$env:GH_PAGER = "cat"; gh pr edit <pr-number-or-url> --body-file pr-body.md`
+  **PowerShell:** `$env:GH_PAGER = "cat"; gh pr edit <pr-number-or-url> --body-file pr-body.md --attach './artifacts/dashboard-after.png#Dashboard after the change'`
 
 - If a label needs to be applied to an existing PR, use `gh pr edit <pr-number-or-url> --add-label <label-name>`.
+- Repeat `--attach` for all local media referenced by the replacement body. When only appending media to the existing body, omit `--body-file`; `gh pr edit <pr-number-or-url> --attach <file>` preserves the current body and appends the upload.
 
 - Return the existing PR URL.
 
@@ -218,6 +244,9 @@ After you are completely finished creating or updating the PR (after step 5 and,
 | `gh auth` not logged in | Tell the user to run `gh auth login` |
 | `git push` rejected | Inform the user; do not force-push without explicit permission |
 | PR already exists | Follow step 6 (Handle existing PRs) above |
+| `unknown flag: --attach` | Update `gh` to version 2.99.0 or later |
+| Media upload is unsupported for the host or token | Explain that attachments require GitHub.com or GitHub Enterprise Cloud and a supported user token; do not submit broken local paths |
+| One attachment in a batch fails | Treat the command as failed. Earlier files may still have uploaded and the PR may still exist, so inspect the printed PR URL and body before retrying only the missing attachments |
 
 ## Notes
 
@@ -225,4 +254,4 @@ After you are completely finished creating or updating the PR (after step 5 and,
 - Keep the body aligned with `.github/pull_request_template.md`.
 - If the user asks to preview before creating, show the prepared PR body first, then create after confirmation.
 - For checklist sections with Yes/No alternatives, prefer selecting exactly one option per question when information is known.
-- **After creating the PR**, if non-trivial UI changes were detected in step 3, alert the user with a message like: "This PR includes non-trivial UI changes to [Dashboard/CLI/Extension]. Please add screenshots or screen recordings to the PR description so reviewers can evaluate the visual changes without running locally." Include the PR URL so the user can edit it directly.
+- **After creating the PR**, if non-trivial UI changes were detected but media could not be attached, alert the user with a message like: "This PR includes non-trivial UI changes to [Dashboard/CLI/Extension], but screenshots or recordings are still needed. The PR description identifies the scenario to capture." Include the PR URL so the user can edit it directly.
