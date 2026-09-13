@@ -1,18 +1,23 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Stages skill text files and restores their originals if publication fails.
+/// Serializes skill text file installation and restores originals if publication fails.
 /// </summary>
 internal sealed class SkillFileInstaller(Action<string, string> moveFile)
 {
     private static readonly StringComparer s_pathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
+
+    private static readonly TimeSpan s_leaseRetryDelay = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
     /// Gets the installer that publishes files using same-volume renames.
@@ -40,6 +45,22 @@ internal sealed class SkillFileInstaller(Action<string, string> moveFile)
         var rootPath = Path.TrimEndingDirectorySeparator(rootDirectory.FullName);
         var parentPath = Path.Combine(rootPath, relativeSkillDirectory);
         var skillPath = Path.Combine(parentPath, skillName);
+        ValidateOrCreateDirectory(rootPath, skillPath, createMissing: false);
+
+        // Only ancestors above the installation root may be aliases. Keep the root itself
+        // unresolved so a newly introduced root link still fails validation after the wait.
+        if (Path.GetDirectoryName(rootPath) is { } rootParent)
+        {
+            rootPath = Path.Combine(ResolveDirectoryPath(rootParent), Path.GetFileName(rootPath));
+        }
+
+        parentPath = Path.Combine(rootPath, relativeSkillDirectory);
+        skillPath = Path.Combine(parentPath, skillName);
+
+        // Use resolved paths for both writes and the lease, so retargeting an ancestor alias
+        // cannot redirect a waiting installer. Enumerate and compare only after acquisition:
+        // another process may have changed initially equal files while we waited.
+        using var destinationLease = await AcquireDestinationLeaseAsync(skillPath, cancellationToken);
         ValidateOrCreateDirectory(rootPath, skillPath, createMissing: false);
 
         var destinations = new HashSet<string>(s_pathComparer);
@@ -116,6 +137,145 @@ internal sealed class SkillFileInstaller(Action<string, string> moveFile)
             // Also preserve its diagnostic if removing the staged files fails.
             CleanupTransactionDirectories(rootPath, stagingPath, rollbackIncomplete ? null : backupPath, failure);
         }
+    }
+
+    /// <summary>
+    /// Gets the stable, per-user lease path for an installed skill directory.
+    /// </summary>
+    internal static string GetDestinationLeasePath(string skillPath)
+        => GetDestinationLeasePath(skillPath, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+
+    /// <summary>
+    /// Gets a destination lease path under the supplied user profile.
+    /// </summary>
+    internal static string GetDestinationLeasePath(string skillPath, string userProfilePath)
+    {
+        if (!Path.IsPathFullyQualified(userProfilePath))
+        {
+            throw new IOException("The user profile directory is required to coordinate skill installation.");
+        }
+
+        var homePath = ResolveDirectoryPath(userProfilePath);
+        if (!TryGetAttributes(homePath, out _))
+        {
+            throw new IOException($"The user profile directory '{userProfilePath}' does not exist.");
+        }
+
+        // These locks belong to the actual user profile, not ASPIRE_HOME, a workspace cache,
+        // a bundle version, or the installed payload. Resolve only the profile's aliases:
+        // resolving the entire lease directory would hide links in .aspire/cli/agent-asset-locks.
+        var leaseDirectory = Path.Combine(homePath, ".aspire", "cli", "agent-asset-locks");
+        ValidateOrCreateDirectory(homePath, leaseDirectory, createMissing: false);
+        var skillIdentity = GetDirectoryIdentity(skillPath);
+        var leaseDirectoryIdentity = GetDirectoryIdentity(leaseDirectory);
+        var skillPrefix = Path.EndsInDirectorySeparator(skillIdentity)
+            ? skillIdentity
+            : skillIdentity + Path.DirectorySeparatorChar;
+        if (leaseDirectoryIdentity == skillIdentity ||
+            leaseDirectoryIdentity.StartsWith(skillPrefix, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Skill destination '{skillPath}' contains the installer lease directory.");
+        }
+
+        var leaseName = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(skillIdentity))).ToLowerInvariant();
+        return Path.Combine(leaseDirectory, $"{leaseName}.lock");
+    }
+
+    private static string ResolveDirectoryPath(string path)
+        => PathNormalizer.TryResolveSymlinks(path, out var resolvedPath)
+            ? resolvedPath
+            : throw new IOException($"Could not resolve skill installation directory '{path}'.");
+
+    private static string GetDirectoryIdentity(string path)
+    {
+        // Normalize even missing destinations. Case folding and Unicode Form C also cover
+        // case-insensitive Unix volumes; on case-sensitive volumes this may serialize two
+        // independent destinations, but never gives aliases of one destination different locks.
+        return Path.TrimEndingDirectorySeparator(ResolveDirectoryPath(path))
+            .Normalize(NormalizationForm.FormC)
+            .ToUpperInvariant();
+    }
+
+    private static async Task<FileStream> AcquireDestinationLeaseAsync(string skillPath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var leasePath = GetDestinationLeasePath(skillPath);
+        var leaseDirectory = GetParentDirectory(leasePath);
+        var leaseRoot = Path.GetPathRoot(leasePath)!;
+        ValidateOrCreateDirectory(leaseRoot, leaseDirectory, createMissing: true);
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ValidateOrCreateDirectory(leaseRoot, leaseDirectory, createMissing: false);
+            ValidateDestinationFile(leasePath);
+
+            FileStream lease;
+            try
+            {
+                // Retain the empty file after closing the handle. FileLock's DeleteOnClose
+                // can unlink a Unix lock while a waiter opens it, allowing a third writer to
+                // lock a different inode. OS handles also have no thread affinity across awaits.
+                lease = new FileStream(leasePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, bufferSize: 1);
+            }
+            catch (IOException ex) when (IsLeaseContention(ex))
+            {
+                await Task.Delay(s_leaseRetryDelay, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            var acquired = false;
+            try
+            {
+                ValidateOrCreateDirectory(leaseRoot, leaseDirectory, createMissing: false);
+                if (!ValidateDestinationFile(leasePath))
+                {
+                    throw new IOException($"Skill installation lease '{leasePath}' disappeared during acquisition.");
+                }
+
+                if (!OperatingSystem.IsWindows())
+                {
+                    VerifyExclusiveLease(leasePath);
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                acquired = true;
+                return lease;
+            }
+            finally
+            {
+                if (!acquired)
+                {
+                    lease.Dispose();
+                }
+            }
+        }
+    }
+
+    private static void VerifyExclusiveLease(string leasePath)
+    {
+        try
+        {
+            // As in HeldFileLease, a second open verifies Unix flock was actually enforced.
+            // FileStream can succeed without a lock when flock is unsupported or disabled.
+            // https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/Microsoft/Win32/SafeHandles/SafeFileHandle.Unix.cs
+            using var verification = new FileStream(leasePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None, bufferSize: 1);
+        }
+        catch (IOException ex) when (IsLeaseContention(ex))
+        {
+            return;
+        }
+
+        throw new IOException($"Exclusive file locking is required for skill installation lease '{leasePath}'.");
+    }
+
+    private static bool IsLeaseContention(IOException exception)
+    {
+        // Windows reports sharing/lock violation HRESULTs. Unix reports raw EWOULDBLOCK:
+        // 11 on Linux, 35 on macOS. Do not retry unrelated I/O or permission errors.
+        return OperatingSystem.IsWindows()
+            ? exception.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021)
+            : exception.HResult == (OperatingSystem.IsMacOS() ? 35 : 11);
     }
 
     private static string GetParentDirectory(string path)

@@ -4,6 +4,8 @@
 using System.Text;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Hosting.Utils;
+using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -122,6 +124,585 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
         Assert.False(await SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, [], TestContext.Current.CancellationToken));
 
         Assert.Empty(root.GetFileSystemInfos());
+        AssertDestinationLeaseReleased(Path.Combine(root.FullName, RelativeSkillDirectory, SkillName));
+    }
+
+    [Fact]
+    public async Task InstallAsync_WaitsForAnotherProcessBeforeEnumeratingOrComparingFiles()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var skillPath = Path.Combine(root.FullName, RelativeSkillDirectory, SkillName);
+        SkillAssetFile[] files = [new("SKILL.md", "requested revision"), new("helper.py", "requested revision")];
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var leasePath = SkillFileInstaller.GetDestinationLeasePath(skillPath);
+        Assert.True(await SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, files, cancellationToken));
+        Assert.Equal(leasePath, SkillFileInstaller.GetDestinationLeasePath(skillPath));
+        var readyPath = Path.Combine(workspace.Path, "ready");
+        var releasePath = Path.Combine(workspace.Path, "release");
+
+        using var process = RemoteExecutor.Invoke(static (skillPath, readyPath, releasePath) =>
+        {
+            using var lease = HoldDestinationLease(skillPath);
+            File.WriteAllText(readyPath, string.Empty);
+            WaitForSignal(releasePath, CancellationToken.None);
+            File.WriteAllText(Path.Combine(skillPath, "SKILL.md"), "competing revision");
+            File.WriteAllText(Path.Combine(skillPath, "helper.py"), "competing revision");
+            File.WriteAllText(Path.Combine(skillPath, "user.txt"), "user file");
+        }, skillPath, readyPath, releasePath);
+
+        using var waitingCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var enumerations = 0;
+        IEnumerable<SkillAssetFile> GetFiles()
+        {
+            Interlocked.Increment(ref enumerations);
+            foreach (var file in files)
+            {
+                yield return file;
+            }
+        }
+
+        Task<bool>? installation = null;
+        try
+        {
+            WaitForSignal(readyPath, cancellationToken);
+            waitingCancellation.CancelAfter(TimeSpan.FromSeconds(30));
+
+            // Both files initially match. The other process changes them only after this
+            // invocation starts, so pre-lease comparisons would incorrectly skip the update.
+            installation = SkillFileInstaller.Instance.InstallAsync(
+                root, RelativeSkillDirectory, SkillName, GetFiles(), waitingCancellation.Token);
+            Assert.False(installation.IsCompleted);
+            Assert.Equal(0, Volatile.Read(ref enumerations));
+            File.WriteAllText(releasePath, string.Empty);
+            Assert.True(await installation.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken));
+            Assert.Equal(1, Volatile.Read(ref enumerations));
+
+            foreach (var file in files)
+            {
+                Assert.Equal(file.Content, await File.ReadAllTextAsync(Path.Combine(skillPath, file.RelativePath), cancellationToken));
+            }
+
+            Assert.Equal("user file", await File.ReadAllTextAsync(Path.Combine(skillPath, "user.txt"), cancellationToken));
+            Assert.Equal(["SKILL.md", "helper.py", "user.txt"], Directory.GetFiles(skillPath).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+
+            var timestamp = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            foreach (var file in files)
+            {
+                File.SetLastWriteTimeUtc(Path.Combine(skillPath, file.RelativePath), timestamp);
+            }
+
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                Assert.False(await SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, files, cancellationToken));
+                foreach (var file in files)
+                {
+                    Assert.Equal(timestamp, File.GetLastWriteTimeUtc(Path.Combine(skillPath, file.RelativePath)));
+                }
+            }
+
+            AssertDestinationLeaseReleased(skillPath);
+            AssertTransactionDirectoriesRemoved(root);
+        }
+        finally
+        {
+            File.WriteAllText(releasePath, string.Empty);
+            await waitingCancellation.CancelAsync();
+            if (installation is not null)
+            {
+                await ((Task)installation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallAsync_CancellationWhileWaitingDoesNotReadOrMutateDestination(bool skillExists)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var skillPath = Path.Combine(root.FullName, RelativeSkillDirectory, SkillName);
+        var originalPath = Path.Combine(skillPath, "SKILL.md");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        if (skillExists)
+        {
+            Directory.CreateDirectory(skillPath);
+            await File.WriteAllTextAsync(originalPath, "original", cancellationToken);
+        }
+
+        SkillAssetFile[] files = [new("SKILL.md", "replacement"), new("helper.py", "new file")];
+        var enumerations = 0;
+        IEnumerable<SkillAssetFile> GetFiles()
+        {
+            Interlocked.Increment(ref enumerations);
+            foreach (var file in files)
+            {
+                yield return file;
+            }
+        }
+
+        using (HoldDestinationLease(skillPath))
+        // A pre-lease comparison must fail immediately, not depend on async read timing.
+        using (var original = skillExists ? File.Open(originalPath, FileMode.Open, FileAccess.Read, FileShare.None) : null)
+        {
+            using var waitingCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var installation = SkillFileInstaller.Instance.InstallAsync(
+                root, RelativeSkillDirectory, SkillName, GetFiles(), waitingCancellation.Token);
+            try
+            {
+                Assert.False(installation.IsCompleted);
+                Assert.Equal(0, Volatile.Read(ref enumerations));
+                Assert.Equal(skillExists ? [RelativeSkillDirectory] : Array.Empty<string>(), root.GetFileSystemInfos().Select(entry => entry.Name));
+                await waitingCancellation.CancelAsync();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => installation);
+                Assert.Equal(0, Volatile.Read(ref enumerations));
+            }
+            finally
+            {
+                await waitingCancellation.CancelAsync();
+                await ((Task)installation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+            }
+        }
+
+        if (skillExists)
+        {
+            Assert.Equal("original", await File.ReadAllTextAsync(originalPath, cancellationToken));
+            Assert.Equal(["SKILL.md"], Directory.GetFiles(skillPath).Select(Path.GetFileName));
+            AssertTransactionDirectoriesRemoved(root);
+        }
+        else
+        {
+            Assert.Empty(root.GetFileSystemInfos());
+        }
+
+        AssertDestinationLeaseReleased(skillPath);
+        Assert.True(await SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, files, cancellationToken));
+    }
+
+    [Theory]
+    [InlineData("root")]
+    [InlineData("parent")]
+    [InlineData("skill")]
+    public async Task InstallAsync_DoesNotBlockUnrelatedSkillDestinations(string differentComponent)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var skillPath = Path.Combine(root.FullName, RelativeSkillDirectory, SkillName);
+        using var lease = HoldDestinationLease(skillPath);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var waitingCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        SkillAssetFile[] files = [new("SKILL.md", "new file")];
+        var waitingInstallation = SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, files, waitingCancellation.Token);
+        Task<bool>? otherInstallation = null;
+        try
+        {
+            Assert.False(waitingInstallation.IsCompleted);
+            var otherRoot = differentComponent == "root" ? workspace.CreateDirectory("other-root") : root;
+            var otherParent = differentComponent == "parent" ? "other-skills" : RelativeSkillDirectory;
+            var otherName = differentComponent == "skill" ? "other" : SkillName;
+
+            otherInstallation = SkillFileInstaller.Instance.InstallAsync(otherRoot, otherParent, otherName, files, waitingCancellation.Token);
+            Assert.True(await otherInstallation.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken));
+            Assert.Equal("new file", await File.ReadAllTextAsync(Path.Combine(otherRoot.FullName, otherParent, otherName, "SKILL.md"), cancellationToken));
+            Assert.False(waitingInstallation.IsCompleted);
+            Assert.False(Directory.Exists(skillPath));
+        }
+        finally
+        {
+            await waitingCancellation.CancelAsync();
+            if (otherInstallation is not null)
+            {
+                await ((Task)otherInstallation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+            }
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waitingInstallation);
+        }
+    }
+
+    [Fact]
+    public void GetDestinationLeasePath_NormalizesMissingDirectoryAliases()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var skillPath = Path.Combine(root.FullName, "missing", RelativeSkillDirectory, SkillName);
+        var leasePath = SkillFileInstaller.GetDestinationLeasePath(skillPath);
+
+        Assert.Equal(leasePath, SkillFileInstaller.GetDestinationLeasePath(skillPath + Path.DirectorySeparatorChar));
+        Assert.Equal(leasePath, SkillFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, "unused", "..", "missing", RelativeSkillDirectory, SkillName)));
+        Assert.Equal(leasePath, SkillFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, "MISSING", "SKILLS", SkillName.ToUpperInvariant())));
+        Assert.Equal(
+            SkillFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, RelativeSkillDirectory, "caf\u00e9")),
+            SkillFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, RelativeSkillDirectory, "cafe\u0301")));
+        Assert.Empty(root.GetFileSystemInfos());
+
+        Directory.CreateDirectory(skillPath);
+        Assert.Equal(leasePath, SkillFileInstaller.GetDestinationLeasePath(skillPath));
+    }
+
+    [Fact]
+    public void GetDestinationLeasePath_UsesUserProfileIndependentlyOfAspireHome()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var skillPath = Path.Combine(workspace.Path, RelativeSkillDirectory, SkillName);
+        var leasePath = SkillFileInstaller.GetDestinationLeasePath(skillPath);
+        var homePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.Equal(
+            Path.Combine(PathNormalizer.ResolveSymlinks(homePath), ".aspire", "cli", "agent-asset-locks"),
+            Path.GetDirectoryName(leasePath));
+        var alternateHome = workspace.CreateDirectory("alternate-home");
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment["ASPIRE_HOME"] = alternateHome.FullName;
+
+        using (RemoteExecutor.Invoke(static (skillPath, expectedLeasePath) =>
+        {
+            Assert.Equal(expectedLeasePath, SkillFileInstaller.GetDestinationLeasePath(skillPath));
+        }, skillPath, leasePath, options))
+        {
+        }
+
+        Assert.Empty(alternateHome.GetFileSystemInfos());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallAsync_AncestorAliasesShareLeaseAndCannotRedirectWaitingInstallation(bool rootExists)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var parent = workspace.CreateDirectory("parent");
+        var root = new DirectoryInfo(Path.Combine(parent.FullName, "root"));
+        if (rootExists)
+        {
+            root.Create();
+        }
+
+        var otherParent = workspace.CreateDirectory("other-parent");
+        var alias = Path.Combine(workspace.Path, "alias");
+        var skillPath = Path.Combine(root.FullName, RelativeSkillDirectory, SkillName);
+        using var waitingCancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        Task<bool>? installation = null;
+        try
+        {
+            TestSymlinkHelper.TryCreateSymlink(alias, parent.FullName);
+            var aliasedRoot = new DirectoryInfo(Path.Combine(alias, "root"));
+            Assert.Equal(
+                SkillFileInstaller.GetDestinationLeasePath(skillPath),
+                SkillFileInstaller.GetDestinationLeasePath(Path.Combine(aliasedRoot.FullName, RelativeSkillDirectory, SkillName)));
+
+            SkillAssetFile[] files = [new("SKILL.md", "new file")];
+            using (HoldDestinationLease(skillPath))
+            {
+                installation = SkillFileInstaller.Instance.InstallAsync(aliasedRoot, RelativeSkillDirectory, SkillName, files, waitingCancellation.Token);
+                Assert.False(installation.IsCompleted);
+                Assert.False(Directory.Exists(skillPath));
+
+                Directory.Delete(alias);
+                TestSymlinkHelper.TryCreateSymlink(alias, otherParent.FullName);
+            }
+
+            Assert.True(await installation.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+            Assert.Equal("new file", await File.ReadAllTextAsync(Path.Combine(skillPath, "SKILL.md"), TestContext.Current.CancellationToken));
+            Assert.Empty(otherParent.GetFileSystemInfos());
+            AssertDestinationLeaseReleased(skillPath);
+            AssertTransactionDirectoriesRemoved(root);
+        }
+        finally
+        {
+            await waitingCancellation.CancelAsync();
+            if (installation is not null)
+            {
+                await ((Task)installation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+            }
+
+            if (new DirectoryInfo(alias).LinkTarget is not null)
+            {
+                Directory.Delete(alias);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("root")]
+    [InlineData("parent")]
+    [InlineData("skill")]
+    public async Task InstallAsync_RejectsDestinationLinksIntroducedWhileWaiting(string linkKind)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var outside = workspace.CreateDirectory("outside");
+        var skillPath = Path.Combine(root.FullName, RelativeSkillDirectory, SkillName);
+        var linkPath = linkKind switch
+        {
+            "root" => root.FullName,
+            "parent" => Path.Combine(root.FullName, RelativeSkillDirectory),
+            _ => skillPath
+        };
+        using var waitingCancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        Task<bool>? installation = null;
+        try
+        {
+            using (HoldDestinationLease(skillPath))
+            {
+                SkillAssetFile[] files = [new("SKILL.md", "new file")];
+                installation = SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, files, waitingCancellation.Token);
+                Assert.False(installation.IsCompleted);
+                if (linkKind == "root")
+                {
+                    root.Delete();
+                }
+                else
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
+                }
+
+                TestSymlinkHelper.TryCreateSymlink(linkPath, outside.FullName);
+            }
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                installation.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+            Assert.Empty(outside.GetFileSystemInfos());
+        }
+        finally
+        {
+            await waitingCancellation.CancelAsync();
+            if (installation is not null)
+            {
+                await ((Task)installation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+            }
+
+            if (new DirectoryInfo(linkPath).LinkTarget is not null)
+            {
+                Directory.Delete(linkPath);
+            }
+        }
+
+        AssertDestinationLeaseReleased(skillPath);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("relative-profile")]
+    [InlineData("missing")]
+    [InlineData("file")]
+    public void GetDestinationLeasePath_RejectsMissingOrInvalidUserProfiles(string profileKind)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var profilePath = profileKind is "missing" or "file" ? Path.Combine(workspace.Path, profileKind) : profileKind;
+        if (profileKind == "file")
+        {
+            File.WriteAllText(profilePath, "not a directory");
+        }
+
+        Assert.Throws<IOException>(() =>
+            SkillFileInstaller.GetDestinationLeasePath(Path.Combine(workspace.Path, RelativeSkillDirectory, SkillName), profilePath));
+        Assert.Equal(profileKind == "file" ? ["file"] : Array.Empty<string>(), workspace.WorkspaceRoot.GetFileSystemInfos().Select(entry => entry.Name));
+    }
+
+    [Theory]
+    [InlineData(".aspire")]
+    [InlineData(".aspire/cli")]
+    [InlineData(".aspire/cli/agent-asset-locks")]
+    public void GetDestinationLeasePath_RejectsInvalidLeaseDirectories(string relativePath)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var profile = workspace.CreateDirectory("profile");
+        var blockedPath = Path.Combine(profile.FullName, Path.Combine(relativePath.Split('/')));
+        Directory.CreateDirectory(Path.GetDirectoryName(blockedPath)!);
+        File.WriteAllText(blockedPath, "not a directory");
+
+        Assert.Throws<IOException>(() =>
+            SkillFileInstaller.GetDestinationLeasePath(Path.Combine(workspace.Path, RelativeSkillDirectory, SkillName), profile.FullName));
+
+        Assert.Equal("not a directory", File.ReadAllText(blockedPath));
+        Assert.Equal([blockedPath], Directory.GetFiles(profile.FullName, "*", SearchOption.AllDirectories));
+    }
+
+    [Theory]
+    [InlineData(".aspire", false)]
+    [InlineData(".aspire/cli", false)]
+    [InlineData(".aspire/cli/agent-asset-locks", false)]
+    [InlineData(".aspire", true)]
+    [InlineData(".aspire/cli", true)]
+    [InlineData(".aspire/cli/agent-asset-locks", true)]
+    public void GetDestinationLeasePath_RejectsLinkedLeaseDirectories(string relativePath, bool dangling)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var profile = workspace.CreateDirectory("profile");
+        var outside = workspace.CreateDirectory("outside");
+        var outsidePath = Path.Combine(outside.FullName, "keep.txt");
+        File.WriteAllText(outsidePath, "outside");
+        var linkPath = Path.Combine(profile.FullName, Path.Combine(relativePath.Split('/')));
+        Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
+        try
+        {
+            TestSymlinkHelper.TryCreateSymlink(linkPath, dangling ? Path.Combine(outside.FullName, "missing") : outside.FullName);
+
+            Assert.Throws<InvalidOperationException>(() =>
+                SkillFileInstaller.GetDestinationLeasePath(Path.Combine(workspace.Path, RelativeSkillDirectory, SkillName), profile.FullName));
+
+            Assert.Equal("outside", File.ReadAllText(outsidePath));
+            Assert.Equal(["keep.txt"], outside.GetFileSystemInfos().Select(entry => entry.Name));
+        }
+        finally
+        {
+            if (new DirectoryInfo(linkPath).LinkTarget is not null)
+            {
+                Directory.Delete(linkPath);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("lease")]
+    [InlineData("cli")]
+    [InlineData("profile")]
+    [InlineData("volume")]
+    public void GetDestinationLeasePath_RejectsDestinationsContainingLeaseDirectory(string destinationKind)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var profile = workspace.CreateDirectory("profile");
+        var leaseDirectory = Path.GetDirectoryName(SkillFileInstaller.GetDestinationLeasePath(
+            Path.Combine(workspace.Path, RelativeSkillDirectory, SkillName), profile.FullName))!;
+        var destinationPath = destinationKind switch
+        {
+            "lease" => leaseDirectory,
+            "cli" => Path.GetDirectoryName(leaseDirectory)!,
+            "profile" => profile.FullName,
+            _ => Path.GetPathRoot(profile.FullName)!
+        };
+
+        Assert.Throws<InvalidOperationException>(() => SkillFileInstaller.GetDestinationLeasePath(destinationPath, profile.FullName));
+        Assert.Equal(leaseDirectory, Path.GetDirectoryName(SkillFileInstaller.GetDestinationLeasePath(leaseDirectory + "-other", profile.FullName)));
+        Assert.Empty(profile.GetFileSystemInfos());
+    }
+
+    [Fact]
+    public async Task InstallAsync_InvalidLeaseFileReportsIoErrorWithoutMutatingDestination()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var leasePath = SkillFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, RelativeSkillDirectory, SkillName));
+        Directory.CreateDirectory(leasePath);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cancellation.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            SkillAssetFile[] files = [new("SKILL.md", "new file")];
+            await Assert.ThrowsAsync<IOException>(() =>
+                SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, files, cancellation.Token));
+            Assert.Empty(root.GetFileSystemInfos());
+        }
+        finally
+        {
+            Directory.Delete(leasePath);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallAsync_RejectsSymbolicLinkLeaseWithoutChangingTarget(bool dangling)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var outsidePath = Path.Combine(workspace.Path, "outside");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await File.WriteAllTextAsync(outsidePath, "outside", cancellationToken);
+        var leasePath = SkillFileInstaller.GetDestinationLeasePath(Path.Combine(root.FullName, RelativeSkillDirectory, SkillName));
+        Directory.CreateDirectory(Path.GetDirectoryName(leasePath)!);
+        try
+        {
+            TestSymlinkHelper.TryCreateSymlink(leasePath, dangling ? outsidePath + "-missing" : outsidePath, isDirectory: false);
+            SkillAssetFile[] files = [new("SKILL.md", "new file")];
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, files, cancellationToken));
+
+            Assert.Empty(root.GetFileSystemInfos());
+            Assert.Equal("outside", await File.ReadAllTextAsync(outsidePath, cancellationToken));
+            Assert.False(File.Exists(outsidePath + "-missing"));
+        }
+        finally
+        {
+            if (new FileInfo(leasePath).LinkTarget is not null)
+            {
+                File.Delete(leasePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_InaccessibleLeaseReportsAccessErrorWithoutMutatingDestination()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess, "Requires enforced Unix file permissions.");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var skillPath = Path.Combine(root.FullName, RelativeSkillDirectory, SkillName);
+        var leasePath = SkillFileInstaller.GetDestinationLeasePath(skillPath);
+        using (HoldDestinationLease(skillPath))
+        {
+        }
+
+        var originalAttributes = File.GetAttributes(leasePath);
+        var originalMode = OperatingSystem.IsWindows() ? default : File.GetUnixFileMode(leasePath);
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                File.SetAttributes(leasePath, originalAttributes | FileAttributes.ReadOnly);
+            }
+            else
+            {
+                File.SetUnixFileMode(leasePath, UnixFileMode.UserRead);
+            }
+
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            cancellation.CancelAfter(TimeSpan.FromSeconds(30));
+            SkillAssetFile[] files = [new("SKILL.md", "new file")];
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, files, cancellation.Token));
+
+            Assert.Empty(root.GetFileSystemInfos());
+        }
+        finally
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                File.SetAttributes(leasePath, originalAttributes);
+            }
+            else
+            {
+                File.SetUnixFileMode(leasePath, originalMode);
+            }
+        }
+
+        AssertDestinationLeaseReleased(skillPath);
+    }
+
+    [Fact]
+    public async Task InstallAsync_RejectsDisabledUnixFileLockingWithoutMutatingDestination()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The .NET file-locking switch only affects Unix.");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment["DOTNET_SYSTEM_IO_DISABLEFILELOCKING"] = "1";
+
+        using (RemoteExecutor.Invoke(static async rootPath =>
+        {
+            SkillAssetFile[] files = [new("SKILL.md", "new file")];
+            var exception = await Assert.ThrowsAsync<IOException>(() => SkillFileInstaller.Instance
+                .InstallAsync(new DirectoryInfo(rootPath), RelativeSkillDirectory, SkillName, files, CancellationToken.None));
+            var leasePath = SkillFileInstaller.GetDestinationLeasePath(Path.Combine(rootPath, RelativeSkillDirectory, SkillName));
+            Assert.Equal($"Exclusive file locking is required for skill installation lease '{leasePath}'.", exception.Message);
+            Assert.Empty(Directory.GetFileSystemEntries(rootPath));
+        }, root.FullName, options))
+        {
+        }
+
+        AssertDestinationLeaseReleased(Path.Combine(root.FullName, RelativeSkillDirectory, SkillName));
+        Assert.True(await SkillFileInstaller.Instance.InstallAsync(
+            root, RelativeSkillDirectory, SkillName, [new("SKILL.md", "new file")], TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -190,6 +771,7 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal("original", await File.ReadAllTextAsync(originalPath, cancellationToken));
         Assert.Equal(["SKILL.md"], skillDirectory.GetFileSystemInfos().Select(entry => entry.Name));
         AssertTransactionDirectoriesRemoved(root);
+        AssertDestinationLeaseReleased(skillDirectory.FullName);
     }
 
     [Fact]
@@ -244,6 +826,7 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal("original", await File.ReadAllTextAsync(originalPath, cancellationToken));
         Assert.Equal(["SKILL.md"], skillDirectory.GetFileSystemInfos().Select(entry => entry.Name));
         AssertTransactionDirectoriesRemoved(root);
+        AssertDestinationLeaseReleased(skillDirectory.FullName);
     }
 
     [Theory]
@@ -261,8 +844,9 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var installer = new SkillFileInstaller((source, destination) =>
         {
+            AssertDestinationLeaseHeld(skillDirectory.FullName);
             cancellation.Cancel();
-            if (failPublication && destination == newPath)
+            if (failPublication && destination == PathNormalizer.ResolveSymlinks(newPath))
             {
                 throw new IOException("Publication failed.");
             }
@@ -287,6 +871,7 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
 
         Assert.True(cancellation.IsCancellationRequested);
         AssertTransactionDirectoriesRemoved(root);
+        AssertDestinationLeaseReleased(skillDirectory.FullName);
     }
 
     [Theory]
@@ -308,7 +893,9 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
         var publicationFailed = false;
         var installer = new SkillFileInstaller((source, destination) =>
         {
-            if (!publicationFailed && (failMovingOriginal ? source == lastPath : destination == lastPath))
+            AssertDestinationLeaseHeld(skillDirectory.FullName);
+            var resolvedLastPath = PathNormalizer.ResolveSymlinks(lastPath);
+            if (!publicationFailed && (failMovingOriginal ? source == resolvedLastPath : destination == resolvedLastPath))
             {
                 publicationFailed = true;
                 throw new IOException("Publication failed.");
@@ -327,6 +914,7 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal("last original", await File.ReadAllTextAsync(lastPath, cancellationToken));
         Assert.Equal(["SKILL.md", "last.py"], skillDirectory.GetFiles().Select(file => file.Name).Order(StringComparer.Ordinal));
         AssertTransactionDirectoriesRemoved(root);
+        AssertDestinationLeaseReleased(skillDirectory.FullName);
 
         Assert.True(await SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, files, cancellationToken));
         Assert.False(await SkillFileInstaller.Instance.InstallAsync(root, RelativeSkillDirectory, SkillName, files, cancellationToken));
@@ -359,6 +947,7 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal("locked", await File.ReadAllTextAsync(lockedPath, cancellationToken));
         Assert.Equal(["SKILL.md", "locked.py"], skillDirectory.GetFiles().Select(file => file.Name).Order(StringComparer.Ordinal));
         AssertTransactionDirectoriesRemoved(root);
+        AssertDestinationLeaseReleased(skillDirectory.FullName);
     }
 
     [Theory]
@@ -383,7 +972,8 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
         FileStream? stagingLock = null;
         var installer = new SkillFileInstaller((source, destination) =>
         {
-            if (!publicationFailed && destination == lastPath)
+            AssertDestinationLeaseHeld(skillDirectory.FullName);
+            if (!publicationFailed && destination == PathNormalizer.ResolveSymlinks(lastPath))
             {
                 publicationFailed = true;
                 if (failStagingCleanup)
@@ -394,7 +984,7 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
                 throw new IOException("Publication failed.");
             }
 
-            if (publicationFailed && destination == originalPath)
+            if (publicationFailed && destination == PathNormalizer.ResolveSymlinks(originalPath))
             {
                 throw new IOException("Rollback failed.");
             }
@@ -408,8 +998,8 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
             var exception = await Assert.ThrowsAsync<IOException>(() =>
                 installer.InstallAsync(root, RelativeSkillDirectory, SkillName, files, cancellationToken));
 
-            var backupPath = Assert.Single(Directory.GetDirectories(
-                Path.Combine(root.FullName, RelativeSkillDirectory), $".{SkillName}.rollback.*"));
+            var backupPath = PathNormalizer.ResolveSymlinks(Assert.Single(Directory.GetDirectories(
+                Path.Combine(root.FullName, RelativeSkillDirectory), $".{SkillName}.rollback.*")));
             Assert.Contains($"Original files were preserved under '{backupPath}'.", exception.Message, StringComparison.Ordinal);
             var failures = Assert.IsType<AggregateException>(exception.InnerException);
             if (failStagingCleanup)
@@ -434,11 +1024,51 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
             // The preserved original remains usable for explicit recovery after the error.
             File.Move(backupFile, originalPath);
             Assert.Equal(originalBytes, await File.ReadAllBytesAsync(originalPath, cancellationToken));
+            AssertDestinationLeaseReleased(skillDirectory.FullName);
         }
         finally
         {
             stagingLock?.Dispose();
         }
+    }
+
+    [Fact]
+    public async Task InstallAsync_CleanupFailureReleasesDestinationLease()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates Windows delete-sharing behavior.");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var skillPath = Path.Combine(root.FullName, RelativeSkillDirectory, SkillName);
+        FileStream? cleanupLock = null;
+        string? stagingPath = null;
+        var installer = new SkillFileInstaller((source, destination) =>
+        {
+            AssertDestinationLeaseHeld(skillPath);
+            File.Move(source, destination);
+            stagingPath = Path.GetDirectoryName(source)!;
+            var blockedPath = Path.Combine(stagingPath, "cleanup-blocker");
+            File.WriteAllText(blockedPath, "prevent staging cleanup");
+            cleanupLock = File.Open(blockedPath, FileMode.Open, FileAccess.Read, FileShare.None);
+        });
+        try
+        {
+            var exception = await Assert.ThrowsAsync<IOException>(() => installer.InstallAsync(
+                root, RelativeSkillDirectory, SkillName, [new("SKILL.md", "new file")], TestContext.Current.CancellationToken));
+
+            Assert.Contains("Skill transaction cleanup failed.", exception.Message, StringComparison.Ordinal);
+            Assert.Equal("new file", await File.ReadAllTextAsync(Path.Combine(skillPath, "SKILL.md"), TestContext.Current.CancellationToken));
+            AssertDestinationLeaseReleased(skillPath);
+        }
+        finally
+        {
+            cleanupLock?.Dispose();
+            if (stagingPath is not null && Directory.Exists(stagingPath))
+            {
+                Directory.Delete(stagingPath, recursive: true);
+            }
+        }
+
+        AssertTransactionDirectoriesRemoved(root);
     }
 
     [Theory]
@@ -668,4 +1298,33 @@ public class SkillFileInstallerTests(ITestOutputHelper outputHelper)
 
     private static void AssertTransactionDirectoriesRemoved(DirectoryInfo root)
         => Assert.Empty(Directory.GetDirectories(Path.Combine(root.FullName, RelativeSkillDirectory), $".{SkillName}.*"));
+
+    private static FileStream HoldDestinationLease(string skillPath)
+    {
+        var leasePath = SkillFileInstaller.GetDestinationLeasePath(skillPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(leasePath)!);
+        return new FileStream(leasePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, bufferSize: 1);
+    }
+
+    private static void AssertDestinationLeaseHeld(string skillPath)
+        => Assert.Throws<IOException>(() =>
+        {
+            using var unexpectedLease = HoldDestinationLease(skillPath);
+        });
+
+    private static void AssertDestinationLeaseReleased(string skillPath)
+    {
+        Assert.True(File.Exists(SkillFileInstaller.GetDestinationLeasePath(skillPath)));
+        using var lease = HoldDestinationLease(skillPath);
+        Assert.Equal(0, lease.Length);
+    }
+
+    private static void WaitForSignal(string path, CancellationToken cancellationToken)
+    {
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return File.Exists(path);
+        }, TimeSpan.FromSeconds(30)), $"Timed out waiting for signal '{path}'.");
+    }
 }
