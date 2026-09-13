@@ -24,6 +24,7 @@ function redactSensitiveData(value) {
         .replace(/\b(authorization|proxy-authorization)(\s*:\s*)(basic|bearer)\s+[^\s,;]+/gi, '$1$2$3 [REDACTED]')
         .replace(/\b(x-api-key|api-key|access-token|client-secret)(\s*:\s*)[^\s,;]+/gi, '$1$2[REDACTED]')
         .replace(/\b([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^\s/:@]*:[^\s/@]+@/g, '$1[REDACTED]:[REDACTED]@')
+        .replace(/\b([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^\s/:@]+@/g, '$1[REDACTED]@')
         .replace(/\b(eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/g, '[REDACTED]')
         .replace(/\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|(?:npm|pypi)-[A-Za-z0-9_-]{20,})\b/g, '[REDACTED]')
         .replace(/([?&](?:sig|signature|token|access_token|api[_-]?key|password|secret|client_secret)=)[^&\s]+/gi, '$1[REDACTED]')

@@ -306,6 +306,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Theory]
+    [InlineData("https://opaque-credential@example.com/path", "https://[REDACTED]@example.com/path")]
     [InlineData("https://user:pass@example.com/path", "https://[REDACTED]:[REDACTED]@example.com/path")]
     [InlineData("postgresql://dbuser:dbpass@postgres.example/db", "postgresql://[REDACTED]:[REDACTED]@postgres.example/db")]
     [InlineData("mongodb+srv://mongo-user:mongo-pass@mongo.example/db", "mongodb+srv://[REDACTED]:[REDACTED]@mongo.example/db")]
