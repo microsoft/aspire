@@ -20,6 +20,10 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> AddMongoDB(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
         [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithBindIpAll(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
         [AspireExport]
@@ -35,9 +39,43 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithInitFiles(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, string source) { throw null; }
 
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithKeyFile(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, ApplicationModel.IExpressionValue keyValue, string keyFilePath = "/etc/rs.key") { throw null; }
+
         [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithMongoExpress<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<MongoDB.MongoExpressContainerResource>>? configureContainer = null, string? containerName = null)
             where T : ApplicationModel.MongoDBServerResource { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithReplicaSet(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, string name) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithTlsAllowInvalidCertificates(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithTlsMode(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, MongoDBTlsMode mode = MongoDBTlsMode.RequireTls) { throw null; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static partial class MongoDBReplicaSetBuilderExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBReplicaSetResource> AddMongoDBReplicaSet(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBReplicaSetResource> WithMember(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBReplicaSetResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> member) { throw null; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum MongoDBTlsMode
+    {
+        AllowTls = 0,
+        PreferTls = 1,
+        RequireTls = 2
     }
 }
 
@@ -60,6 +98,27 @@ namespace Aspire.Hosting.ApplicationModel
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport(ExposeProperties = true)]
+    public sealed partial class MongoDBReplicaSetResource : Resource, IResourceWithWaitSupport, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
+    {
+        public MongoDBReplicaSetResource(string name, ParameterResource keyFile, ParameterResource? sharedUserName, ParameterResource sharedPassword) : base(default!) { }
+
+        public ReferenceExpression ConnectionStringExpression { get { throw null; } }
+
+        public System.Collections.Generic.IEnumerable<MongoDBServerResource> Members { get { throw null; } }
+
+        public ParameterResource SharedKeyFileParameter { get { throw null; } }
+
+        public ParameterResource SharedPasswordParameter { get { throw null; } }
+
+        public ParameterResource? SharedUserNameParameter { get { throw null; } }
+
+        public ReferenceExpression SharedUserNameReference { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
+    }
+
     [AspireExport(ExposeProperties = true)]
     public partial class MongoDBServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
@@ -78,6 +137,12 @@ namespace Aspire.Hosting.ApplicationModel
         public EndpointReferenceExpression Port { get { throw null; } }
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public string? ReplicaSetName { get { throw null; } }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public bool TlsEnabled { get { throw null; } }
 
         public ReferenceExpression UriExpression { get { throw null; } }
 

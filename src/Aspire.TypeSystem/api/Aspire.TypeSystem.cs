@@ -8,6 +8,17 @@
 //------------------------------------------------------------------------------
 namespace Aspire.TypeSystem
 {
+    public sealed partial class ApiReferenceExportOptions
+    {
+        public ApiReferenceExportOptions(string packageName, string packageVersion, System.Collections.Generic.IReadOnlyCollection<string> exportingAssemblyNames) { }
+
+        public System.Collections.Generic.IReadOnlyCollection<string> ExportingAssemblyNames { get { throw null; } }
+
+        public string PackageName { get { throw null; } }
+
+        public string PackageVersion { get { throw null; } }
+    }
+
     public sealed partial class AspireExportData
     {
         public string? Description { get { throw null; } init { } }
@@ -417,6 +428,19 @@ namespace Aspire.TypeSystem
         public required string Command { get { throw null; } init { } }
 
         public System.Collections.Generic.Dictionary<string, string>? EnvironmentVariables { get { throw null; } init { } }
+
+        public CommandUpToDateCheck? UpToDateCheck { get { throw null; } init { } }
+    }
+
+    public sealed partial class CommandUpToDateCheck
+    {
+        public string[]? FileExtensions { get { throw null; } init { } }
+
+        public required string[] Inputs { get { throw null; } init { } }
+
+        public string[]? Outputs { get { throw null; } init { } }
+
+        public required string StampFile { get { throw null; } init { } }
     }
 
     public sealed partial class DetectionResult
@@ -457,6 +481,13 @@ namespace Aspire.TypeSystem
         public const string ResourceBuilderInterface = "Aspire.Hosting.ApplicationModel.IResourceBuilder`1";
         public const string ResourceInterface = "Aspire.Hosting.ApplicationModel.IResource";
         public const string ValueProviderInterface = "Aspire.Hosting.ApplicationModel.IValueProvider";
+    }
+
+    public partial interface IApiReferenceExporter
+    {
+        string Language { get; }
+
+        System.Text.Json.JsonElement ExportApi(AtsContext context, ApiReferenceExportOptions options, System.Threading.CancellationToken cancellationToken);
     }
 
     public partial interface ICodeGenerator

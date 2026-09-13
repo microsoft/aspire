@@ -70,10 +70,10 @@ namespace Aspire.Hosting
 
     public static partial class ConnectionStringBuilderExtensions
     {
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnectionString dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addConnectionString dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, string name, ApplicationModel.ReferenceExpression connectionStringExpression) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts should build a ReferenceExpression explicitly and use the canonical addConnectionString export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts should build a ReferenceExpression explicitly and use the canonical addConnectionString export.")]
         public static ApplicationModel.IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, string name, System.Action<ApplicationModel.ReferenceExpressionBuilder> connectionStringBuilder) { throw null; }
     }
 
@@ -87,11 +87,11 @@ namespace Aspire.Hosting
     public static partial class ContainerRegistryResourceBuilderExtensions
     {
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainerRegistry dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addContainerRegistry dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerRegistryResource> AddContainerRegistry(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> endpoint, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? repository = null) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainerRegistry dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addContainerRegistry dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerRegistryResource> AddContainerRegistry(this IDistributedApplicationBuilder builder, string name, string endpoint, string? repository = null) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -119,7 +119,7 @@ namespace Aspire.Hosting
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, string name, string contextPath, System.Func<ApplicationModel.DockerfileBuilderCallbackContext, System.Threading.Tasks.Task> callback, string? stage = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddDockerfileFactory(this IDistributedApplicationBuilder builder, string name, string contextPath, System.Func<ApplicationModel.DockerfileFactoryContext, string> dockerfileFactory, string? stage = null) { throw null; }
 
         [AspireExport]
@@ -133,7 +133,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithBindMount<T>(this ApplicationModel.IResourceBuilder<T> builder, string source, string target, bool isReadOnly = false)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withBuildArg dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withBuildArg dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithBuildArg<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> value)
             where T : ApplicationModel.ContainerResource { throw null; }
 
@@ -200,7 +200,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithDockerfileBuilder<T>(this ApplicationModel.IResourceBuilder<T> builder, string contextPath, System.Func<ApplicationModel.DockerfileBuilderCallbackContext, System.Threading.Tasks.Task> callback, string? stage = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
         public static ApplicationModel.IResourceBuilder<T> WithDockerfileFactory<T>(this ApplicationModel.IResourceBuilder<T> builder, string contextPath, System.Func<ApplicationModel.DockerfileFactoryContext, string> dockerfileFactory, string? stage = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
@@ -281,7 +281,7 @@ namespace Aspire.Hosting
 
         public static IDistributedApplicationBuilder CreateBuilder(DistributedApplicationOptions options) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal createBuilder dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal createBuilder dispatcher export.")]
         public static IDistributedApplicationBuilder CreateBuilder(string[] args) { throw null; }
 
         public virtual void Dispose() { }
@@ -532,7 +532,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> PublishAsDockerFile<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Collections.Generic.IEnumerable<ApplicationModel.DockerBuildArg>? buildArgs)
             where T : ApplicationModel.ExecutableResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the overload with the optional configure callback.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the overload with the optional configure callback.")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsDockerFile<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.ExecutableResource { throw null; }
 
@@ -553,16 +553,16 @@ namespace Aspire.Hosting
 
     public static partial class ExternalServiceBuilderExtensions
     {
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addExternalService dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> urlParameter) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addExternalService dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, string name, string url) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addExternalService dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, string name, System.Uri uri) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withHttpHealthCheck export wrapper.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withHttpHealthCheck export wrapper.")]
         public static ApplicationModel.IResourceBuilder<ExternalServiceResource> WithHttpHealthCheck(this ApplicationModel.IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null) { throw null; }
     }
 
@@ -702,6 +702,22 @@ namespace Aspire.Hosting
         public System.Threading.Tasks.Task<byte[]> ReadAllBytesAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
+    [AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
+    public sealed partial class InteractionFileCollection : System.Collections.Generic.IReadOnlyList<InteractionFile>, System.Collections.Generic.IEnumerable<InteractionFile>, System.Collections.IEnumerable, System.Collections.Generic.IReadOnlyCollection<InteractionFile>, System.IDisposable
+    {
+        internal InteractionFileCollection() { }
+
+        public int Count { get { throw null; } }
+
+        public InteractionFile this[int index] { get { throw null; } }
+
+        public void Dispose() { }
+
+        public System.Collections.Generic.IEnumerator<InteractionFile> GetEnumerator() { throw null; }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { throw null; }
+    }
+
     [AspireDto]
     [System.Diagnostics.DebuggerDisplay("Name = {Name}, InputType = {InputType}, Required = {Required}, Value = {Value}")]
     public sealed partial class InteractionInput
@@ -721,6 +737,7 @@ namespace Aspire.Hosting
 
         public string? FileFilter { get { throw null; } init { } }
 
+        [System.Obsolete("Use GetFiles() and dispose the returned collection when the files are no longer needed.")]
         [AspireExportIgnore(Reason = "InteractionFile contains non-serializable methods and server-local paths; polyglot callers use InteractionInputFile from base.mts.")]
         public System.Collections.Generic.IReadOnlyList<InteractionFile>? Files { get { throw null; } }
 
@@ -741,6 +758,9 @@ namespace Aspire.Hosting
         public bool Required { get { throw null; } init { } }
 
         public string? Value { get { throw null; } set { } }
+
+        [AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
+        public InteractionFileCollection GetFiles() { throw null; }
     }
 
     [AspireExport]
@@ -809,6 +829,12 @@ namespace Aspire.Hosting
 
     public partial interface IProjectMetadata : ApplicationModel.IResourceAnnotation
     {
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        System.Collections.Generic.IReadOnlyDictionary<string, string> BuildEnvironment { get; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        string? BuildWorkingDirectory { get; }
+
         bool IsFileBasedApp { get; }
 
         LaunchSettings? LaunchSettings { get; }
@@ -940,12 +966,16 @@ namespace Aspire.Hosting
 
         public static void AddOtlpEnvironment(ApplicationModel.IResource resource, Microsoft.Extensions.Configuration.IConfiguration configuration, Microsoft.Extensions.Hosting.IHostEnvironment environment) { }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withOtlpExporter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithOtlpExporter<T>(this ApplicationModel.IResourceBuilder<T> builder, OtlpProtocol protocol)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withOtlpExporter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithOtlpExporter<T>(this ApplicationModel.IResourceBuilder<T> builder)
+            where T : ApplicationModel.IResourceWithEnvironment { throw null; }
+
+        [AspireExportIgnore(Reason = "Optional OTLP exporter registration is currently used by C# hosting integrations only.")]
+        public static ApplicationModel.IResourceBuilder<T> WithOtlpExporterIfEndpointAvailable<T>(this ApplicationModel.IResourceBuilder<T> builder, OtlpProtocol protocol)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
     }
 
@@ -971,19 +1001,19 @@ namespace Aspire.Hosting
 
     public static partial class ParameterResourceBuilderExtensions
     {
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnectionString dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addConnectionString dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> AddConnectionString(this IDistributedApplicationBuilder builder, string name, string? environmentVariableName = null) { throw null; }
 
         [AspireExportIgnore(Reason = "ParameterDefault is not an ATS-exported type.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, string name, ApplicationModel.ParameterDefault value, bool secret = false, bool persist = false) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addParameter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, string name, bool secret = false) { throw null; }
 
         [AspireExportIgnore(Reason = "Raw Func<string> delegate — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, string name, System.Func<string> valueGetter, bool publishValueAsDefault = false, bool secret = false) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addParameter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, string name, string value, bool publishValueAsDefault = false, bool secret = false) { throw null; }
 
         [AspireExport]
@@ -1026,20 +1056,20 @@ namespace Aspire.Hosting
     public static partial class ProjectResourceBuilderExtensions
     {
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addCSharpApp dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path, System.Action<ProjectResourceOptions> configure) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addCSharpApp dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject(this IDistributedApplicationBuilder builder, string name, string projectPath, System.Action<ProjectResourceOptions> configure) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject(this IDistributedApplicationBuilder builder, string name, string projectPath, string? launchProfileName) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject(this IDistributedApplicationBuilder builder, string name, string projectPath) { throw null; }
 
         [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
@@ -1065,7 +1095,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> WithEndpointsInEnvironment(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, System.Func<ApplicationModel.EndpointAnnotation, bool> filter) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Project launch defaults are applied by the .NET language integration, not by polyglot app hosts.")]
+        [AspireExportIgnore(Reason = "Project launch defaults are applied by the .NET language integration, not by polyglot AppHosts.")]
         public static ApplicationModel.IResourceBuilder<TProjectResource> WithProjectDefaults<TProjectResource>(this ApplicationModel.IResourceBuilder<TProjectResource> builder, ProjectResourceOptions options)
             where TProjectResource : class, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithArgs { throw null; }
 
@@ -1133,11 +1163,11 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<TResource> SubscribeHttpsEndpointsUpdate<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, System.Action<ApplicationModel.HttpsEndpointUpdateCallbackContext> callback)
             where TResource : ApplicationModel.IResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitFor dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal waitFor dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WaitFor<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> dependency, ApplicationModel.WaitBehavior waitBehavior)
             where T : ApplicationModel.IResourceWithWaitSupport { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitFor dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal waitFor dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WaitFor<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> dependency)
             where T : ApplicationModel.IResourceWithWaitSupport { throw null; }
 
@@ -1145,11 +1175,11 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WaitForCompletion<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> dependency, int exitCode = 0)
             where T : ApplicationModel.IResourceWithWaitSupport { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitForStart dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal waitForStart dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WaitForStart<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> dependency, ApplicationModel.WaitBehavior waitBehavior)
             where T : ApplicationModel.IResourceWithWaitSupport { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitForStart dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal waitForStart dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WaitForStart<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> dependency)
             where T : ApplicationModel.IResourceWithWaitSupport { throw null; }
 
@@ -1157,7 +1187,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.CommandLineArgsCallbackContext> callback)
             where T : ApplicationModel.IResourceWithArgs { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withArgsCallback.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the synchronous Action<> overload via withArgsCallback.")]
         public static ApplicationModel.IResourceBuilder<T> WithArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.CommandLineArgsCallbackContext, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IResourceWithArgs { throw null; }
 
@@ -1201,11 +1231,11 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithComputeEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IComputeEnvironmentResource> computeEnvironmentResource)
             where T : ApplicationModel.IComputeResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withConnectionProperty dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withConnectionProperty dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithConnectionProperty<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.ReferenceExpression value)
             where T : ApplicationModel.IResourceWithConnectionString { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withConnectionProperty dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withConnectionProperty dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithConnectionProperty<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string value)
             where T : ApplicationModel.IResourceWithConnectionString { throw null; }
 
@@ -1216,6 +1246,11 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithContainerFilesSource<T>(this ApplicationModel.IResourceBuilder<T> builder, string sourcePath)
             where T : IResourceWithContainerFiles { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
+        public static ApplicationModel.IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.LaunchConfigurationCallbackContext, System.Threading.Tasks.Task<TLaunchConfiguration>> launchConfigurationProducer, string launchConfigurationType)
+            where T : ApplicationModel.IResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
@@ -1247,14 +1282,14 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port, int? targetPort, string? scheme, string? name, string? env, bool? isProxied, bool? isExternal)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEndpointCallback export, which exposes EndpointUpdateContext instead of EndpointAnnotation.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEndpointCallback export, which exposes EndpointUpdateContext instead of EndpointAnnotation.")]
         public static ApplicationModel.IResourceBuilder<T> WithEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, string endpointName, System.Action<ApplicationModel.EndpointAnnotation> callback, bool createIfNotExists = true)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithEndpoints> WithEndpointProxySupport(this ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithEndpoints> builder, bool proxyEnabled) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.EnvironmentCallbackContext> callback)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -1262,23 +1297,23 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.EnvironmentCallbackContext, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.EndpointReference endpointReference)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IExpressionValue value)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string envVarName, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> resource)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> parameter)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IResourceBuilder<ExternalServiceResource> externalService)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -1286,7 +1321,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, in ApplicationModel.ReferenceExpression.ExpressionInterpolatedStringHandler value)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.ReferenceExpression value)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -1294,7 +1329,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, System.Func<string> callback)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string? value)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -1392,7 +1427,7 @@ namespace Aspire.Hosting
             where T : ApplicationModel.IResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
         public static ApplicationModel.IResourceBuilder<T> WithImagePushOptions<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.ContainerImagePushOptionsCallbackContext> callback)
             where T : ApplicationModel.IComputeResource { throw null; }
 
@@ -1404,6 +1439,11 @@ namespace Aspire.Hosting
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         [AspireExportIgnore(Reason = "Generic launch tool argument support is not part of the ATS surface.")]
         public static ApplicationModel.IResourceBuilder<T> WithLaunchToolArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.CommandLineArgsCallbackContext> callback, string? ownedByLaunchConfigurationType = null, bool showInCommandLine = true)
+            where T : ApplicationModel.IResourceWithArgs { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Generic launch tool argument support is not part of the ATS surface.")]
+        public static ApplicationModel.IResourceBuilder<T> WithLaunchToolArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.CommandLineArgsCallbackContext, System.Threading.Tasks.Task> callback, string? ownedByLaunchConfigurationType = null, bool showInCommandLine = true)
             where T : ApplicationModel.IResourceWithArgs { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -1443,41 +1483,41 @@ namespace Aspire.Hosting
             where T : ApplicationModel.IResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot app hosts.")]
+        [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot AppHosts.")]
         public static ApplicationModel.IResourceBuilder<TResource> WithProcessCommand<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string commandName, string displayName, System.Func<ApplicationModel.ExecuteCommandContext, ApplicationModel.ProcessCommandSpec> processSpecFactory, ApplicationModel.ProcessCommandOptions? commandOptions = null)
             where TResource : ApplicationModel.IResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot app hosts.")]
+        [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot AppHosts.")]
         public static ApplicationModel.IResourceBuilder<TResource> WithProcessCommand<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string commandName, string displayName, System.Func<ApplicationModel.ExecuteCommandContext, System.Threading.Tasks.ValueTask<ApplicationModel.ProcessCommandSpec>> processSpecFactory, ApplicationModel.ProcessCommandOptions? commandOptions = null)
             where TResource : ApplicationModel.IResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Process commands start local processes from AppHost callbacks and cannot be represented in polyglot app hosts.")]
+        [AspireExportIgnore(Reason = "Process commands start local processes from AppHost callbacks and cannot be represented in polyglot AppHosts.")]
         public static ApplicationModel.IResourceBuilder<TResource> WithProcessCommand<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string commandName, string displayName, string executablePath, System.Collections.Generic.IReadOnlyList<string>? arguments = null, ApplicationModel.ProcessCommandOptions? commandOptions = null)
             where TResource : ApplicationModel.IResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.EndpointReference endpointReference)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withReference dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withReference dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> source, string? connectionName = null, bool optional = false)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts can use the generic withReference dispatcher with an ExternalServiceResource builder.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts can use the generic withReference dispatcher with an ExternalServiceResource builder.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ExternalServiceResource> externalService)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference export.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<IResourceWithServiceDiscovery> source, string name)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference export.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<IResourceWithServiceDiscovery> source)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, string name, System.Uri uri)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -1520,7 +1560,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithSessionLifetime<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withUrl dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withUrl dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithUrl<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.ReferenceExpression url, string? displayText = null)
             where T : ApplicationModel.IResource { throw null; }
 
@@ -1528,7 +1568,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithUrl<T>(this ApplicationModel.IResourceBuilder<T> builder, in ApplicationModel.ReferenceExpression.ExpressionInterpolatedStringHandler url, string? displayText = null)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withUrl dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withUrl dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithUrl<T>(this ApplicationModel.IResourceBuilder<T> builder, string url, string? displayText = null)
             where T : ApplicationModel.IResource { throw null; }
 
@@ -1536,7 +1576,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithUrlForEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, string endpointName, System.Action<ApplicationModel.ResourceUrlAnnotation> callback)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the Action<ResourceUrlAnnotation> overload for withUrlForEndpoint.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the Action<ResourceUrlAnnotation> overload for withUrlForEndpoint.")]
         public static ApplicationModel.IResourceBuilder<T> WithUrlForEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, string endpointName, System.Func<ApplicationModel.EndpointReference, ApplicationModel.ResourceUrlAnnotation> callback)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
@@ -1544,7 +1584,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithUrls<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.ResourceUrlsCallbackContext> callback)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withUrlsCallback.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the synchronous Action<> overload via withUrlsCallback.")]
         public static ApplicationModel.IResourceBuilder<T> WithUrls<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.ResourceUrlsCallbackContext, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IResource { throw null; }
     }
@@ -1575,7 +1615,7 @@ namespace Aspire.Hosting
     public static partial class TerminalResourceBuilderExtensions
     {
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETERMINAL001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the parameterless withTerminal dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the parameterless withTerminal dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithTerminal<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.TerminalOptions>? configure = null)
             where T : ApplicationModel.IResource { throw null; }
     }
@@ -1584,6 +1624,13 @@ namespace Aspire.Hosting
     {
         public static string Generate<T>(ApplicationModel.IResourceBuilder<T> builder, string suffix)
             where T : ApplicationModel.IResource { throw null; }
+    }
+
+    public static partial class VolumeResourceBuilderExtensions
+    {
+        [AspireExportIgnore(Reason = "Polyglot export is via CoreExports.WithVolume which reorders parameters.")]
+        public static ApplicationModel.IResourceBuilder<T> WithVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string target, string env, bool isReadOnly = false)
+            where T : ApplicationModel.IComputeResource, ApplicationModel.IResourceWithEnvironment { throw null; }
     }
 }
 
@@ -2237,6 +2284,8 @@ namespace Aspire.Hosting.ApplicationModel
 
     public static partial class CustomResourceKnownProperties
     {
+        public static string ConnectionProperties { get { throw null; } }
+
         public static string ConnectionString { get { throw null; } }
 
         public static string Source { get { throw null; } }
@@ -2514,6 +2563,8 @@ namespace Aspire.Hosting.ApplicationModel
 
     public static partial class EndpointHostHelpers
     {
+        public static System.Threading.Tasks.ValueTask<string?> GetUrlWithTargetHostAsync(EndpointReference endpoint, System.Threading.CancellationToken cancellationToken = default) { throw null; }
+
         public static bool IsDevLocalhostTld(string? host) { throw null; }
 
         public static bool IsDevLocalhostTld(System.Uri? uri) { throw null; }
@@ -2703,6 +2754,9 @@ namespace Aspire.Hosting.ApplicationModel
         public required string Command { get { throw null; } set { } }
 
         public required string WorkingDirectory { get { throw null; } set { } }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public bool WorkingDirectoryExplicitlySet { get { throw null; } }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -3046,6 +3100,10 @@ namespace Aspire.Hosting.ApplicationModel
         ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference);
     }
 
+    public partial interface IComputeEnvironmentWithVolumeMounts : IComputeEnvironmentResource, IResource
+    {
+    }
+
     public partial interface IComputeResource : IResource
     {
     }
@@ -3282,6 +3340,7 @@ namespace Aspire.Hosting.ApplicationModel
     public static partial class KnownLaunchConfigurationTypes
     {
         public const string Project = "project";
+        public const string ProjectWithExternalBuild = "project-with-external-build.v1";
     }
 
     public static partial class KnownNetworkIdentifiers
@@ -3327,6 +3386,20 @@ namespace Aspire.Hosting.ApplicationModel
         public static readonly string Info;
         public static readonly string Success;
         public static readonly string Warn;
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class LaunchConfigurationCallbackContext
+    {
+        internal LaunchConfigurationCallbackContext() { }
+
+        public System.Threading.CancellationToken CancellationToken { get { throw null; } }
+
+        public System.Collections.Generic.IReadOnlyDictionary<string, string> EnvironmentVariables { get { throw null; } }
+
+        public string Mode { get { throw null; } }
+
+        public IResource Resource { get { throw null; } }
     }
 
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, LaunchProfileName = {LaunchProfileName}")]
@@ -3634,6 +3707,18 @@ namespace Aspire.Hosting.ApplicationModel
     {
         public ProjectLaunchConfiguration() : base(default!) { }
 
+        [System.Text.Json.Serialization.JsonPropertyName("build_configuration")]
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? BuildConfiguration { get { throw null; } set { } }
+
+        [System.Text.Json.Serialization.JsonPropertyName("build_environment")]
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public System.Collections.Generic.Dictionary<string, string>? BuildEnvironment { get { throw null; } set { } }
+
+        [System.Text.Json.Serialization.JsonPropertyName("build_working_directory")]
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? BuildWorkingDirectory { get { throw null; } set { } }
+
         [System.Text.Json.Serialization.JsonPropertyName("disable_launch_profile")]
         public bool DisableLaunchProfile { get { throw null; } set { } }
 
@@ -3642,11 +3727,16 @@ namespace Aspire.Hosting.ApplicationModel
 
         [System.Text.Json.Serialization.JsonPropertyName("project_path")]
         public required string ProjectPath { get { throw null; } set { } }
+
+        [System.Text.Json.Serialization.JsonPropertyName("suppress_build")]
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool SuppressBuild { get { throw null; } set { } }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class ProjectLaunchDefaultsAnnotation : IResourceAnnotation
     {
+        public EndpointAnnotation? DefaultHttpsEndpoint { get { throw null; } }
     }
 
     [System.Diagnostics.DebuggerDisplay("{DebuggerToString(),nq}")]
@@ -4137,7 +4227,7 @@ namespace Aspire.Hosting.ApplicationModel
         public static bool TryGetUrls(this IResource resource, out System.Collections.Generic.IEnumerable<ResourceUrlAnnotation>? urls) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
         public static IResourceBuilder<T> WithContainerBuildOptions<T>(this IResourceBuilder<T> builder, System.Action<ContainerBuildOptionsCallbackContext> callback)
             where T : IResource, IComputeResource { throw null; }
 
@@ -4395,6 +4485,21 @@ namespace Aspire.Hosting.ApplicationModel
         public void SetException(System.Exception exception) { }
 
         public void SetValue(T value) { }
+    }
+
+    public sealed partial class VolumeMountBindingAnnotation : IResourceAnnotation
+    {
+        public VolumeMountBindingAnnotation(string volumeName) { }
+
+        public string? EnvironmentVariableName { get { throw null; } init { } }
+
+        public string? MountPath { get { throw null; } init { } }
+
+        public System.Func<EnvironmentCallbackContext, string>? RunModeHostPathResolver { get { throw null; } init { } }
+
+        public string VolumeName { get { throw null; } }
+
+        public string ResolvePath(EnvironmentCallbackContext context) { throw null; }
     }
 
     [System.Diagnostics.DebuggerDisplay("{Source}", Name = "{Target}")]
@@ -4684,6 +4789,9 @@ namespace Aspire.Hosting.Pipelines
     {
         [AspireExport]
         public static IDistributedApplicationPipeline DisableBuildOnlyContainerValidation(this IDistributedApplicationPipeline pipeline) { throw null; }
+
+        [AspireExportIgnore(Reason = "Delegate callbacks are not ATS-compatible.")]
+        public static IDistributedApplicationPipeline WithFinalAction(this IDistributedApplicationPipeline pipeline, string stepName, System.Func<PipelineStepContext, System.Threading.Tasks.Task> action) { throw null; }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -4691,6 +4799,7 @@ namespace Aspire.Hosting.Pipelines
     {
         string? StateFilePath { get; }
 
+        System.Threading.Tasks.Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, System.Threading.CancellationToken cancellationToken = default);
         System.Threading.Tasks.Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, System.Threading.CancellationToken cancellationToken = default);
         System.Threading.Tasks.Task ClearAllStateAsync(System.Threading.CancellationToken cancellationToken = default);
         System.Threading.Tasks.Task DeleteSectionAsync(DeploymentStateSection section, System.Threading.CancellationToken cancellationToken = default);
@@ -4935,7 +5044,7 @@ namespace Aspire.Hosting.Pipelines
         public static ApplicationModel.IResourceBuilder<T> WithPipelineConfiguration<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<PipelineConfigurationContext> callback)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withPipelineConfiguration.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the synchronous Action<> overload via withPipelineConfiguration.")]
         public static ApplicationModel.IResourceBuilder<T> WithPipelineConfiguration<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<PipelineConfigurationContext, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IResource { throw null; }
 
@@ -5154,6 +5263,38 @@ namespace Aspire.Hosting.Publishing
         public ContainerTargetPlatform? TargetPlatform { get { throw null; } init { } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ContainerImageConfig
+    {
+        public ContainerImageConfig(System.Collections.Generic.IReadOnlyList<string> entrypoint, System.Collections.Generic.IReadOnlyList<string> command, string? workingDirectory) { }
+
+        public System.Collections.Generic.IReadOnlyList<string> Command { get { throw null; } }
+
+        public System.Collections.Generic.IReadOnlyList<string> Entrypoint { get { throw null; } }
+
+        public string? WorkingDirectory { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ContainerImageConfigInspectionResult
+    {
+        internal ContainerImageConfigInspectionResult() { }
+
+        public string? ErrorMessage { get { throw null; } }
+
+        public string? RawJson { get { throw null; } }
+
+        public ContainerImageInspectionStatus Status { get { throw null; } }
+
+        public static ContainerImageConfigInspectionResult Unsupported { get { throw null; } }
+
+        public static ContainerImageConfigInspectionResult Failure(string errorMessage, string? rawJson = null) { throw null; }
+
+        public static ContainerImageConfigInspectionResult Success(ContainerImageConfig config, string? rawJson = null) { throw null; }
+
+        public bool TryGetConfig(out ContainerImageConfig? config) { throw null; }
+    }
+
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public enum ContainerImageDestination
     {
@@ -5166,6 +5307,46 @@ namespace Aspire.Hosting.Publishing
     {
         Docker = 0,
         Oci = 1
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum ContainerImageInspectionStatus
+    {
+        Succeeded = 0,
+        Unsupported = 1,
+        Failed = 2
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ContainerImageManifest
+    {
+        public ContainerImageManifest(string digest, string operatingSystem, string architecture) { }
+
+        public string Architecture { get { throw null; } }
+
+        public string Digest { get { throw null; } }
+
+        public string OperatingSystem { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ContainerImageManifestInspectionResult
+    {
+        internal ContainerImageManifestInspectionResult() { }
+
+        public string? ErrorMessage { get { throw null; } }
+
+        public string? RawJson { get { throw null; } }
+
+        public ContainerImageInspectionStatus Status { get { throw null; } }
+
+        public static ContainerImageManifestInspectionResult Unsupported { get { throw null; } }
+
+        public static ContainerImageManifestInspectionResult Failure(string errorMessage, string? rawJson = null) { throw null; }
+
+        public static ContainerImageManifestInspectionResult Success(System.Collections.Generic.IReadOnlyList<ContainerImageManifest> manifests, string? rawJson = null) { throw null; }
+
+        public bool TryGetManifest(string operatingSystem, string architecture, out ContainerImageManifest? manifest) { throw null; }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -5191,6 +5372,8 @@ namespace Aspire.Hosting.Publishing
         System.Threading.Tasks.Task ComposeDownAsync(ComposeOperationContext context, System.Threading.CancellationToken cancellationToken);
         System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<ComposeServiceInfo>?> ComposeListServicesAsync(ComposeOperationContext context, System.Threading.CancellationToken cancellationToken);
         System.Threading.Tasks.Task ComposeUpAsync(ComposeOperationContext context, System.Threading.CancellationToken cancellationToken);
+        System.Threading.Tasks.Task<ContainerImageConfigInspectionResult> InspectImageConfigAsync(string imageName, System.Threading.CancellationToken cancellationToken);
+        System.Threading.Tasks.Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, System.Threading.CancellationToken cancellationToken);
         System.Threading.Tasks.Task LoginToRegistryAsync(string registryServer, string username, string password, System.Threading.CancellationToken cancellationToken);
         System.Threading.Tasks.Task PushImageAsync(ApplicationModel.IResource resource, System.Threading.CancellationToken cancellationToken);
         System.Threading.Tasks.Task RemoveImageAsync(string imageName, System.Threading.CancellationToken cancellationToken);

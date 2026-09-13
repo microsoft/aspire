@@ -52,10 +52,10 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "CapabilityHostBuilder is not ATS-compatible.")]
         public static Foundry.CapabilityHostBuilder AddCapabilityHost(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, string name) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addModelDeployment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> AddModelDeployment(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, string name, Foundry.FoundryModel model) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addModelDeployment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> AddModelDeployment(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, string name, string modelName, string modelVersion, string format) { throw null; }
 
         [AspireExport]
@@ -74,16 +74,19 @@ namespace Aspire.Hosting
 
     public static partial class FoundryExtensions
     {
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDeployment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> AddDeployment(this ApplicationModel.IResourceBuilder<Foundry.FoundryResource> builder, string name, Foundry.FoundryModel model) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDeployment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> AddDeployment(this ApplicationModel.IResourceBuilder<Foundry.FoundryResource> builder, string name, string modelName, string modelVersion, string format) { throw null; }
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryResource> AddFoundry(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
         [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Foundry.FoundryResource> RunAsFoundryLocal(this ApplicationModel.IResourceBuilder<Foundry.FoundryResource> builder, string? endpoint = null) { throw null; }
+
+        [AspireExportIgnore(Reason = "Binary compatibility overload. Polyglot app hosts use the overload with the optional endpoint.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryResource> RunAsFoundryLocal(this ApplicationModel.IResourceBuilder<Foundry.FoundryResource> builder) { throw null; }
 
         [AspireExport("withFoundryDeploymentProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
@@ -92,6 +95,36 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "CognitiveServicesBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the FoundryRole-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithRoleAssignments<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Foundry.FoundryResource> target, params global::Azure.Provisioning.CognitiveServices.CognitiveServicesBuiltInRole[] roles)
             where T : ApplicationModel.IResource { throw null; }
+    }
+
+    public static partial class FoundryToolboxBuilderExtensions
+    {
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the FoundryToolboxOptions overload instead.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> AddToolbox(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, string name, System.Action<Foundry.FoundryToolboxResource>? configure = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> AsExisting(this ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> builder) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> PublishAsExisting(this ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> builder) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> RunAsExisting(this ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> builder) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> WithAISearchTool(this ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> builder, string name, ApplicationModel.IResourceBuilder<Azure.AzureSearchResource> search, string indexName, string? description = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> WithDescription(this ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> builder, string description) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union overload instead.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> WithMcpTool(this ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> builder, string name, ApplicationModel.EndpointReference endpoint, Foundry.FoundryToolboxMcpToolOptions? options = null) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union overload instead.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> WithMcpTool(this ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> builder, string name, string endpoint, Foundry.FoundryToolboxMcpToolOptions? options = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> WithWebSearchTool(this ApplicationModel.IResourceBuilder<Foundry.FoundryToolboxResource> builder, string name = "web-search", string? description = null) { throw null; }
     }
 
     public static partial class HostedAgentResourceBuilderExtensions
@@ -431,6 +464,8 @@ namespace Aspire.Hosting.Foundry
 
         public string Format { get { throw null; } set { } }
 
+        public string? LocalModelId { get { throw null; } set { } }
+
         public string ModelName { get { throw null; } set { } }
 
         public string ModelVersion { get { throw null; } set { } }
@@ -463,8 +498,6 @@ namespace Aspire.Hosting.Foundry
             public static readonly FoundryModel ClaudeMythos5;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeMythosPreview;
-            [AspireValue("FoundryModels")]
-            public static readonly FoundryModel ClaudeOpus41;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeOpus45;
             [AspireValue("FoundryModels")]
@@ -520,15 +553,13 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekR10528;
             [AspireValue("FoundryModels")]
-            public static readonly FoundryModel DeepSeekV30324;
-            [AspireValue("FoundryModels")]
-            public static readonly FoundryModel DeepSeekV31;
-            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV32;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV32Speciale;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV4Flash;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel DeepSeekV4Flash0731;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV4Pro;
         }
@@ -541,6 +572,8 @@ namespace Aspire.Hosting.Foundry
             public static readonly FoundryModel DeepseekR115b;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepseekR17b;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Gemma4E2bIt;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptOss20b;
             [AspireValue("FoundryModels")]
@@ -714,8 +747,6 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel Ministral3B;
             [AspireValue("FoundryModels")]
-            public static readonly FoundryModel MistralDocumentAi2505;
-            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralDocumentAi2512;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralLarge3;
@@ -735,8 +766,6 @@ namespace Aspire.Hosting.Foundry
             public static readonly FoundryModel CodexMini;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel ComputerUsePreview;
-            [AspireValue("FoundryModels")]
-            public static readonly FoundryModel Davinci002;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt41;
             [AspireValue("FoundryModels")]
@@ -760,8 +789,6 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt51;
             [AspireValue("FoundryModels")]
-            public static readonly FoundryModel Gpt51Chat;
-            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt51Codex;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt51CodexMax;
@@ -770,11 +797,7 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt52;
             [AspireValue("FoundryModels")]
-            public static readonly FoundryModel Gpt52Chat;
-            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt52Codex;
-            [AspireValue("FoundryModels")]
-            public static readonly FoundryModel Gpt53Chat;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt53Codex;
             [AspireValue("FoundryModels")]
@@ -793,8 +816,6 @@ namespace Aspire.Hosting.Foundry
             public static readonly FoundryModel Gpt56Sol;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt56Terra;
-            [AspireValue("FoundryModels")]
-            public static readonly FoundryModel Gpt5Chat;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt5Codex;
             [AspireValue("FoundryModels")]
@@ -929,6 +950,64 @@ namespace Aspire.Hosting.Foundry
         System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
+    }
+
+    [AspireDto]
+    public sealed partial class FoundryToolboxMcpApprovalFilter
+    {
+        public bool? ReadOnly { get { throw null; } set { } }
+
+        public string[]? ToolNames { get { throw null; } set { } }
+    }
+
+    [AspireDto]
+    public sealed partial class FoundryToolboxMcpApprovalPolicy
+    {
+        public FoundryToolboxMcpApprovalFilter? Always { get { throw null; } set { } }
+
+        public FoundryToolboxMcpGlobalApprovalMode? Global { get { throw null; } set { } }
+
+        public FoundryToolboxMcpApprovalFilter? Never { get { throw null; } set { } }
+    }
+
+    public enum FoundryToolboxMcpGlobalApprovalMode
+    {
+        Never = 0,
+        Always = 1
+    }
+
+    [AspireDto]
+    public sealed partial class FoundryToolboxMcpToolOptions
+    {
+        public FoundryToolboxMcpApprovalPolicy? ApprovalPolicy { get { throw null; } set { } }
+
+        public string? ServerDescription { get { throw null; } set { } }
+
+        public string? ServerLabel { get { throw null; } set { } }
+    }
+
+    [AspireExport]
+    public sealed partial class FoundryToolboxResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
+    {
+        public FoundryToolboxResource(string name, AzureCognitiveServicesProjectResource parent, string? version = null) : base(default!) { }
+
+        public string ApiVersion { get { throw null; } set { } }
+
+        public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
+
+        public StaticValueProvider<string> DeployedVersion { get { throw null; } }
+
+        public string Description { get { throw null; } set { } }
+
+        public System.Collections.Generic.IDictionary<string, string> Metadata { get { throw null; } init { } }
+
+        public AzureCognitiveServicesProjectResource Parent { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
+
+        public string? Version { get { throw null; } set { } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
     [AspireExport]

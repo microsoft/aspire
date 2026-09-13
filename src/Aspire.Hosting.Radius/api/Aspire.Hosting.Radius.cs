@@ -10,11 +10,11 @@ namespace Aspire.Hosting
 {
     public static partial class RadiusCloudProviderExtensions
     {
-        [AspireExportIgnore]
+        [AspireExportIgnore(Reason = "The credential-selection callback exposes the in-flight provider builder interface, which the ATS exporter cannot render (ASPIREEXPORT008).")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> WithAwsProvider(this ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> builder, string accountId, string region, System.Action<Radius.CloudProviders.IAwsRadiusProviderBuilder> configure) { throw null; }
 
-        [AspireExportIgnore]
+        [AspireExportIgnore(Reason = "The credential-selection callback exposes the in-flight provider builder interface, which the ATS exporter cannot render (ASPIREEXPORT008).")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> WithAzureProvider(this ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> builder, string subscriptionId, string resourceGroup, System.Action<Radius.CloudProviders.IAzureRadiusProviderBuilder> configure) { throw null; }
     }
@@ -35,6 +35,69 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> WithNamespace(this ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> builder, string kubernetesNamespace) { throw null; }
     }
+
+    public static partial class RadiusRecipeParameterExtensions
+    {
+        [AspireExportIgnore(Reason = "The configure callback over a mutable dictionary is not representable in the ATS catalog (ASPIREEXPORT008).")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> WithRecipeParameters(this ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> builder, System.Action<System.Collections.Generic.IDictionary<string, object>> configure) { throw null; }
+
+        [AspireExportIgnore(Reason = "The configure callback over a mutable dictionary is not representable in the ATS catalog (ASPIREEXPORT008).")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> WithRecipeParameters(this ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> builder, string resourceType, System.Action<System.Collections.Generic.IDictionary<string, object>> configure) { throw null; }
+    }
+
+    public static partial class RadiusSecretStoreConsumerExtensions
+    {
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Experimental Radius secret-store consumer surface; there is no polyglot ATS equivalent yet.")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> WithBicepRegistryAuthentication(this ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> radius, string registryHost, ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> store) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Experimental Radius secret-store consumer surface; there is no polyglot ATS equivalent yet.")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> WithRecipeEnvironmentSecret(this ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> radius, string variableName, ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> store, string key) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Experimental Radius secret-store consumer surface; there is no polyglot ATS equivalent yet.")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> WithTerraformGitAuthentication(this ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> radius, string gitHost, ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> store) { throw null; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class RadiusSecretStoreDataBuilder
+    {
+        internal RadiusSecretStoreDataBuilder() { }
+
+        public RadiusSecretStoreDataBuilder Add(string key, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> parameter, Radius.RadiusSecretStoreEncoding? encoding = null) { throw null; }
+    }
+
+    public static partial class RadiusSecretStoreExtensions
+    {
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; there is no polyglot ATS equivalent yet.")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> AddRadiusSecretStore(this IDistributedApplicationBuilder builder, string name, Radius.RadiusSecretStoreType type) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; the data-binding callback is not ATS-compatible.")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> WithData(this ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> store, System.Action<RadiusSecretStoreDataBuilder> configure) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; the data binding is not ATS-compatible.")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> WithData(this ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> store, string key, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> parameter, Radius.RadiusSecretStoreEncoding? encoding = null) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; there is no polyglot ATS equivalent yet.")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> WithExistingSecret(this ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> store, string namespaceAndName, params string[] keys) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Sealed-secret deploy-timing knob with no polyglot ATS equivalent.")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> WithMaterializationTimeout(this ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> store, System.TimeSpan timeout) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; there is no polyglot ATS equivalent yet.")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> WithSealedSecret(this ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource> store, string manifestPath, params string[] keys) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; the population callback is not ATS-compatible.")]
+        public static ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> WithSecretStore(this ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> radius, string name, Radius.RadiusSecretStoreType type, System.Action<ApplicationModel.IResourceBuilder<Radius.RadiusSecretStoreResource>> configure) { throw null; }
+    }
 }
 
 namespace Aspire.Hosting.Radius
@@ -53,16 +116,58 @@ namespace Aspire.Hosting.Radius
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public ApplicationModel.ReferenceExpression GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
     }
+
+    public sealed partial class RadiusProviderReference
+    {
+        internal RadiusProviderReference() { }
+
+        public static RadiusProviderReference AwsAccountId { get { throw null; } }
+
+        public static RadiusProviderReference AwsRegion { get { throw null; } }
+
+        public static RadiusProviderReference AzureResourceGroup { get { throw null; } }
+
+        public static RadiusProviderReference AzureSubscriptionId { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum RadiusSecretStoreEncoding
+    {
+        Raw = 0,
+        Base64 = 1
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class RadiusSecretStoreResource : ApplicationModel.Resource
+    {
+        internal RadiusSecretStoreResource() : base(default!) { }
+
+        public System.TimeSpan MaterializationTimeout { get { throw null; } }
+
+        public RadiusSecretStoreType Type { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum RadiusSecretStoreType
+    {
+        Generic = 0,
+        Certificate = 1,
+        BasicAuthentication = 2,
+        AzureWorkloadIdentity = 3,
+        AwsIrsa = 4
+    }
 }
 
 namespace Aspire.Hosting.Radius.CloudProviders
 {
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IAwsRadiusProviderBuilder
     {
         IAwsRadiusProviderBuilder WithAccessKey(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> accessKeyId, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> secretAccessKey);
         IAwsRadiusProviderBuilder WithIrsa(string iamRoleArn);
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IAzureRadiusProviderBuilder
     {
         IAzureRadiusProviderBuilder WithServicePrincipal(string tenantId, string clientId, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> clientSecret);
@@ -90,6 +195,8 @@ namespace Aspire.Hosting.Radius.Publishing
         public System.Collections.Generic.List<Constructs.RadiusRecipePackConstruct> RecipePacks { get { throw null; } }
 
         public System.Collections.Generic.List<Constructs.RadiusResourceTypeConstruct> ResourceTypeInstances { get { throw null; } }
+
+        public System.Collections.Generic.List<Constructs.RadiusSecretStoreConstruct> SecretStores { get { throw null; } }
     }
 }
 
@@ -249,6 +356,36 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs
         public Azure.Provisioning.BicepDictionary<object> RecipeParameters { get { throw null; } set { } }
 
         public Azure.Provisioning.BicepValue<string> ResourceName { get { throw null; } set { } }
+
+        protected override void DefineProvisionableProperties() { }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class RadiusSecretStoreConstruct : Azure.Provisioning.Primitives.ProvisionableResource
+    {
+        public RadiusSecretStoreConstruct(string bicepIdentifier) : base(default!, default, default) { }
+
+        public Azure.Provisioning.BicepValue<string> ApplicationId { get { throw null; } set { } }
+
+        public Azure.Provisioning.BicepDictionary<RadiusSecretStoreDataEntryConstruct> Data { get { throw null; } set { } }
+
+        public Azure.Provisioning.BicepValue<string> EnvironmentId { get { throw null; } set { } }
+
+        public Azure.Provisioning.BicepValue<string> ResourceReference { get { throw null; } set { } }
+
+        public Azure.Provisioning.BicepValue<string> StoreName { get { throw null; } set { } }
+
+        public Azure.Provisioning.BicepValue<string> StoreType { get { throw null; } set { } }
+
+        protected override void DefineProvisionableProperties() { }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class RadiusSecretStoreDataEntryConstruct : Azure.Provisioning.Primitives.ProvisionableConstruct
+    {
+        public Azure.Provisioning.BicepValue<string> Encoding { get { throw null; } set { } }
+
+        public Azure.Provisioning.BicepValue<string> Value { get { throw null; } set { } }
 
         protected override void DefineProvisionableProperties() { }
     }

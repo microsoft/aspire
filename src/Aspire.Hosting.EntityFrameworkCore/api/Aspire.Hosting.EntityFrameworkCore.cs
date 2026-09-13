@@ -25,10 +25,10 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> WithMigrationOutputDirectory(this ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> builder, string outputDirectory) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withMigrationsProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> WithMigrationsProject(this ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> builder, string projectPath) { throw null; }
 
-        [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type. Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
+        [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type. Polyglot AppHosts use the internal withMigrationsProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> WithMigrationsProject<TProject>(this ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> builder)
             where TProject : IProjectMetadata, new() { throw null; }
     }
@@ -41,10 +41,10 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, string name, string dbContextTypeName, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.DotnetToolResource>>? configureToolResource) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, string name, string dbContextTypeName) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, string name) { throw null; }
     }
 }
