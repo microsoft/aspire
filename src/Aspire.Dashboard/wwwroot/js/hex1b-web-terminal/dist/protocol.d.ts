@@ -4,6 +4,7 @@ export declare const LIMITS: Readonly<{
     frameBytes: number;
     metadataBytes: number;
     titleUnits: 4096;
+    commandMarkParameterUnits: 8192;
     cells: 262144;
     images: 4096;
     placements: 16384;

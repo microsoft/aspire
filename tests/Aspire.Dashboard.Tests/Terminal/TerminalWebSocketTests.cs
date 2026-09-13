@@ -16,6 +16,49 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task BrowserView_ReflowsRetainedHistoryAndPreservesSoftWrapsAfterReconnect(bool useGrpc)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var browser = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(browser, _ => true, timeout.Token);
+        await SendAsync(browser, """{"type":"requestPrimary","columns":100,"rows":30}""", timeout.Token);
+        await ReadUntilAsync(browser, frame => frame.GetProperty("peer").GetProperty("isPrimary").GetBoolean(), timeout.Token);
+
+        var text = new string('A', 19) + "\u754ce\u0301" + new string('B', 43) + "-END";
+        var lines = Enumerable.Range(0, 35).Select(i => $"{i:D2}:{text}").ToArray();
+        host.Workload.Write(string.Join("\r\n", lines) + "\r\nready");
+        await ReadUntilAsync(browser, frame => frame.GetProperty("history").GetProperty("totalRows").GetInt32() >= 36, timeout.Token);
+
+        var requestId = 1;
+        foreach (var width in new[] { 20, 40, 100 })
+        {
+            await SendAsync(browser, JsonSerializer.Serialize(new { type = "resize", columns = width, rows = 30 }), timeout.Token);
+            // Each line occupies 72 cells: the wide glyph and combining mark cancel in the UTF-16 length.
+            var expectedRows = lines.Length * ((72 + width - 1) / width) + 1;
+            var resized = await ReadUntilAsync(browser, frame => frame.GetProperty("columns").GetInt32() == width &&
+                frame.GetProperty("history").GetProperty("totalRows").GetInt32() == expectedRows, timeout.Token);
+            Assert.Equal(expectedRows, resized.GetProperty("history").GetProperty("totalRows").GetInt32());
+            Assert.Equal(lines[0], await ReadFirstLogicalLineAsync(browser, requestId, timeout.Token));
+            requestId += 4;
+        }
+
+        // Clear the screen, then leave a complete wrapped logical line on it for a fresh peer's replay.
+        host.Workload.Write("\u001b[3J\u001b[2J\u001b[H" + text + "\r\nreconnect-ready");
+        await host.WaitForProducerTextAsync("reconnect-ready", timeout.Token);
+        await SendAsync(browser, """{"type":"resize","columns":20,"rows":30}""", timeout.Token);
+        await ReadUntilAsync(browser, frame => frame.GetProperty("columns").GetInt32() == 20, timeout.Token);
+        await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "Reconnect", timeout.Token);
+        using var reconnected = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(reconnected, _ => true, timeout.Token);
+        Assert.Equal(text, await ReadFirstLogicalLineAsync(reconnected, 1, timeout.Token));
+        await reconnected.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task BrowserView_PreservesRemotePrimaryAndResizeAcrossReconnect(bool useGrpc)
     {
         await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
@@ -573,6 +616,39 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
         await browser.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", timeout.Token);
         await host.WaitForAttachmentsReleasedAsync(timeout.Token);
         Assert.Equal(useGrpc ? 1 : 0, host.DisposedAttachments);
+    }
+
+    private static async Task<string?> ReadFirstLogicalLineAsync(WebSocket socket, int requestId, CancellationToken cancellationToken)
+    {
+        // Scroll to retained history, rather than only testing the freshly replayed live screen.
+        await SendAsync(socket, JsonSerializer.Serialize(new { type = "viewport", requestId, delta = -10000 }), cancellationToken);
+        var frame = await ReadUntilAsync(socket,
+            frame => frame.GetProperty("history").GetProperty("requestId").GetInt32() == requestId, cancellationToken);
+        Assert.Equal(0, frame.GetProperty("history").GetProperty("top").GetInt32());
+        var history = frame.GetProperty("history");
+        // HWT line selection returns the logical line, including soft-wrapped continuations.
+        await SendAsync(socket, JsonSerializer.Serialize(new
+        {
+            type = "selection",
+            action = "start",
+            mode = "line",
+            requestId = requestId + 1,
+            column = 0,
+            generation = history.GetProperty("generation").GetString(),
+            rowId = history.GetProperty("rowIds")[0].GetString()
+        }), cancellationToken);
+        var selection = await ReadUntilAsync(socket,
+            frame => frame.GetProperty("history").GetProperty("selection").GetProperty("status").GetString() == "valid",
+            cancellationToken);
+        var text = selection.GetProperty("history").GetProperty("selection").GetProperty("text").GetString();
+        await SendAsync(socket, JsonSerializer.Serialize(new { type = "selection", action = "clear", requestId = requestId + 2 }), cancellationToken);
+        await ReadUntilAsync(socket,
+            frame => frame.GetProperty("history").GetProperty("selection").GetProperty("status").GetString() != "valid",
+            cancellationToken);
+        await SendAsync(socket, JsonSerializer.Serialize(new { type = "viewport", live = true, requestId = requestId + 3 }), cancellationToken);
+        await ReadUntilAsync(socket,
+            frame => frame.GetProperty("history").GetProperty("requestId").GetInt32() == requestId + 3, cancellationToken);
+        return text;
     }
 
     private static async Task<WebSocketReceiveResult> ReadCloseAsync(WebSocket socket, CancellationToken cancellationToken)

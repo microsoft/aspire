@@ -5,6 +5,7 @@ export const LIMITS = Object.freeze({
     frameBytes: 96 * 1024 * 1024,
     metadataBytes: 8 * 1024 * 1024,
     titleUnits: 4096,
+    commandMarkParameterUnits: 8192,
     cells: 262144,
     images: 4096,
     placements: 16384,
@@ -124,6 +125,32 @@ function validateMetadata(metadata) {
         integer(shell.lastExitCode, "terminal shell exit code", -2147483648, 2147483647);
     if (shell.phase === "unknown" && shell.lastExitCode !== null)
         throw new Error("Unknown terminal shell phase has an exit code");
+    const workingDirectory = metadata.workingDirectory;
+    if (!isRecord(workingDirectory))
+        throw new Error("Invalid terminal working directory");
+    const wdFields = [workingDirectory.uri, workingDirectory.host, workingDirectory.path];
+    if (wdFields.every(field => field === null)) {
+        // No directory reported yet.
+    }
+    else if (wdFields.some(field => typeof field !== "string" || field.length > LIMITS.metadataBytes)) {
+        throw new Error("Invalid terminal working directory");
+    }
+    const commandMark = metadata.commandMark;
+    if (commandMark !== null) {
+        if (!isRecord(commandMark) || typeof commandMark.phase !== "string" ||
+            !["unknown", "prompt", "commandLine", "executing", "finished"].includes(commandMark.phase)) {
+            throw new Error("Invalid terminal command mark");
+        }
+        if (commandMark.exitCode !== null) {
+            integer(commandMark.exitCode, "terminal command mark exit code", -2147483648, 2147483647);
+            if (commandMark.phase !== "finished")
+                throw new Error("Non-finished terminal command mark has an exit code");
+        }
+        if (commandMark.rawParameters !== null &&
+            (typeof commandMark.rawParameters !== "string" || commandMark.rawParameters.length > LIMITS.commandMarkParameterUnits)) {
+            throw new Error("Invalid terminal command mark parameters");
+        }
+    }
     const columns = integer(metadata.columns, "columns", 1, 1024);
     const rows = integer(metadata.rows, "rows", 1, 512);
     if (typeof metadata.mouseTracking !== "number" || ![0, 9, 1000, 1002, 1003].includes(metadata.mouseTracking)) {

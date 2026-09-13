@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using Aspire.Shared.TerminalHost;
 using Hex1b;
+using Hex1b.Reflow;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.TerminalHost;
@@ -444,6 +445,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
                 .WithDimensions(currentColumns, currentRows)
                 .WithWorkload(upstream)
                 .WithPresentation(downstream)
+                .WithScrollback(10000)
                 .AddPresentationFilter(listener)
                 .Build();
         }
@@ -459,7 +461,8 @@ internal sealed class TerminalReplica : IAsyncDisposable
         int currentColumns,
         int currentRows)
     {
-        var downstream = new Hmp1PresentationAdapter(currentColumns, currentRows);
+        var downstream = new Hmp1PresentationAdapter(currentColumns, currentRows)
+            .WithReflow(GhosttyReflowStrategy.Instance);
 
         // Track every HMP1 peer that connects/disconnects so the host can answer
         // "who's currently attached to this replica?" via the control RPC. PeerId is

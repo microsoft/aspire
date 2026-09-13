@@ -185,6 +185,7 @@ workers, fonts, and the intended WebSocket endpoint.
 | `onTitleChange` | Initial authoritative workload title, then distinct presented changes; see below. |
 | `onClose` | Native WebSocket close details, including pre-mount transport failure; not workload completion. |
 | `onProgressChange`, `onShellIntegrationChange` | Initial authoritative activity, then distinct presented changes for host-owned chrome. |
+| `onWorkingDirectoryChange`, `onCommandMarkChange` | Initial authoritative OSC 7 directory and latest OSC 133 marker, then distinct presented changes; see below. |
 | `inputBindings`, `onInput`, `actions` | Per-view input policy and custom actions. |
 | `onSelectionUI` | Synchronous, cancelable UI notification hook. |
 
@@ -195,7 +196,8 @@ Font size is an integer from 8–32, defaulting to 16. Import `MIN_FONT_SIZE` an
 ownership. `requestPrimary()` explicitly requests ownership; inspect `peer` or
 `onRoleChange` to observe the result.
 
-The handle exposes `geometry`, `peer`, `connected`, `readOnly`, `title`, `progress`, `shellIntegration`, `stats`, `screenText`,
+The handle exposes `geometry`, `peer`, `connected`, `readOnly`, `title`, `progress`, `shellIntegration`,
+`workingDirectory`, `commandMark`, `stats`, `screenText`,
 `sizing`, `viewport`, `selection`, `inputBindings`, and `inputContext`.
 Metrics start empty; check optional fields before using them. History may be
 unavailable, and selection can be unavailable, none, pending, valid, or
@@ -204,7 +206,8 @@ their state-specific values. `screenText` reflects the presented viewport, not
 an independently reconstructed ANSI buffer.
 
 Callbacks include `onGeometry`, `onRoleChange`, `onTitleChange`, `onSizingChange`, `onStats`,
-`onProgressChange`, `onShellIntegrationChange`, `onViewportChange`, `onSelectionChange`, `onStatus`, and `onInputError`.
+`onProgressChange`, `onShellIntegrationChange`, `onWorkingDirectoryChange`, `onCommandMarkChange`,
+`onViewportChange`, `onSelectionChange`, `onStatus`, and `onInputError`.
 
 ### Live read-only views
 
@@ -341,11 +344,28 @@ A/B/C preserve the last reported result, and D replaces it, including clearing
 it to null when the shell omits its status. No command text, history, or output
 locations are retained by these APIs.
 
-Both getters return defensive copies. Their callbacks receive the first
+`terminal.workingDirectory` exposes OSC 7 state as `{ uri, host, path }`, all
+`null` until the first report. `uri` is the raw reported `file://` URI; `host`
+and `path` are derived from it (`host` is `""` for a local/unqualified
+authority). A malformed or non-`file` URI leaves the previous value unchanged.
+
+`terminal.commandMark` exposes the single most-recently-reported OSC 133 marker
+as `{ phase, exitCode, rawParameters } | null` — `null` until the first marker.
+`phase` uses the same enum as `shellIntegration.phase`. `exitCode` is non-null
+only on a `finished` (D) marker. `rawParameters` is the verbatim
+`key=value[;key=value...]` text trailing the marker (for example a
+`cmdline_url` extension on marker C), or `null` when none was present; use the
+exported `parseCommandMarkParameters(rawParameters)` helper to parse it into a
+`Map`, or `getCmdlineUrl(mark)` as a shortcut for the `cmdline_url` entry. This
+is **not** a command-mark history — only the latest marker is exposed, mirroring
+`shellIntegration`. A host that wants its own history should accumulate
+distinct values from `onCommandMarkChange` itself.
+
+All four getters return defensive copies. Their callbacks receive the first
 authoritative presented state before mount resolves, then distinct presented
-changes. Both getters are updated before either activity callback. Callbacks
-use the same direct, synchronous host-callback convention as title changes;
-host exceptions are not swallowed or retried.
+changes. All four getters are updated before their corresponding activity
+callback. Callbacks use the same direct, synchronous host-callback convention
+as title changes; host exceptions are not swallowed or retried.
 
 Frames coalesce: the browser might see only Finished for a fast command, or
 miss an entire command whose final state is unchanged. These callbacks are
@@ -356,15 +376,16 @@ and a new mount receives its own baseline.
 This example creates optional chrome outside the terminal:
 
 ```ts
-import { WebTerminal } from "@hex1b/web-terminal";
+import { WebTerminal, getCmdlineUrl } from "@hex1b/web-terminal";
 
 const status = document.createElement("span");
+const cwd = document.createElement("span");
 const progress = document.createElement("progress");
 progress.max = 100;
 progress.hidden = true;
 const container = document.createElement("div");
 container.style.cssText = "width:800px;height:480px";
-document.body.append(status, progress, container);
+document.body.append(status, cwd, progress, container);
 
 const terminal = await WebTerminal.mount(container, {
   url: "/ws/terminal",
@@ -378,6 +399,13 @@ const terminal = await WebTerminal.mount(container, {
     status.textContent = value.phase +
       (value.lastExitCode === null ? "" : ` (last exit ${value.lastExitCode})`);
   },
+  onWorkingDirectoryChange(value) {
+    cwd.textContent = value.path ?? "";
+  },
+  onCommandMarkChange(value) {
+    const cmdlineUrl = getCmdlineUrl(value);
+    if (cmdlineUrl) console.log("Command link:", cmdlineUrl);
+  },
   onStats(stats) {
     if (!stats.connected) {
       progress.hidden = true;
@@ -385,7 +413,7 @@ const terminal = await WebTerminal.mount(container, {
     }
   }
 });
-console.log(terminal.progress, terminal.shellIntegration);
+console.log(terminal.progress, terminal.shellIntegration, terminal.workingDirectory, terminal.commandMark);
 ```
 
 No title, document chrome, or progress UI is changed automatically by the

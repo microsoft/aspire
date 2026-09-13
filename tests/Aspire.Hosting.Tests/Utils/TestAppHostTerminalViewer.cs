@@ -4,6 +4,7 @@
 using Aspire.Hosting.Terminals;
 using Hex1b;
 using Hex1b.Automation;
+using Hex1b.Reflow;
 using Microsoft.AspNetCore.InternalTesting;
 
 #pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
@@ -14,7 +15,7 @@ internal sealed class TestAppHostTerminalViewer : IAsyncDisposable
 {
     private readonly CancellationTokenSource _attachmentCts = new();
     private readonly CancellationTokenSource _clientCts = new();
-    private readonly TaskCompletionSource _connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<IHmp1ConnectionHandle> _connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TestDuplexStream _serverStream;
     private readonly TestDuplexStream _clientStream;
     private readonly Hex1bTerminal _client;
@@ -27,13 +28,14 @@ internal sealed class TestAppHostTerminalViewer : IAsyncDisposable
         (_serverStream, _clientStream) = TestDuplexStream.CreatePair();
         _client = Hex1bTerminal.CreateBuilder()
             .WithHeadless()
+            .WithReflow(GhosttyReflowStrategy.Instance)
             .WithDimensions(80, 24)
             .WithHmp1Stream(_clientStream, options =>
             {
                 options.DefaultRole = Hmp1Role.Secondary;
-                options.OnConnected = (_, _) =>
+                options.OnConnected = (e, _) =>
                 {
-                    _connected.TrySetResult();
+                    _connected.TrySetResult(e.Connection);
                     return Task.CompletedTask;
                 };
             })
@@ -65,6 +67,16 @@ internal sealed class TestAppHostTerminalViewer : IAsyncDisposable
 
     public Task SendTextAsync(string text)
         => new Hex1bTerminalAutomator(_client, TimeSpan.FromSeconds(30)).TypeAsync(text);
+
+    public async Task ResizeAsync(int width, int height)
+    {
+        var connection = await _connected.Task.DefaultTimeout();
+        await connection.RequestPrimaryAsync(width, height).DefaultTimeout();
+        using var snapshot = await new Hex1bTerminalInputSequenceBuilder()
+            .WaitUntil(snapshot => snapshot.Width == width && snapshot.Height == height,
+                TimeSpan.FromSeconds(30), "The producer did not acknowledge the requested dimensions.")
+            .Build().ApplyAsync(_client, _clientCts.Token).DefaultTimeout();
+    }
 
     public async Task DisconnectPeerAsync()
     {

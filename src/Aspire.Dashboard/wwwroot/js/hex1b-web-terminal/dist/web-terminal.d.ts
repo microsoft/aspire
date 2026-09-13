@@ -1,4 +1,4 @@
-import type { CopySelectionOptions, InputActionHandler, InputBinding, TerminalActionName, TerminalGeometry, TerminalInput, TerminalInputContext, TerminalPeer, TerminalSelection, TerminalSizing, TerminalSizingState, TerminalStats, TerminalViewport, TerminalProgress, TerminalShellIntegration, WebTerminalHandle, WebTerminalOptions } from "./types.js";
+import type { CopySelectionOptions, InputActionHandler, InputBinding, TerminalActionName, TerminalGeometry, TerminalInput, TerminalInputContext, TerminalPeer, TerminalSelection, TerminalSizing, TerminalSizingState, TerminalStats, TerminalViewport, TerminalProgress, TerminalShellIntegration, TerminalWorkingDirectory, TerminalCommandMark, WebTerminalHandle, WebTerminalOptions } from "./types.js";
 export { InputRoute, TerminalAction, defaultInputBindings } from "./input-policy.js";
 /**
  * First-party HWT1 client. Owns only the element it appends, not the caller's
@@ -18,6 +18,8 @@ export declare class WebTerminal implements WebTerminalHandle {
     get title(): string;
     get progress(): TerminalProgress;
     get shellIntegration(): TerminalShellIntegration;
+    get workingDirectory(): TerminalWorkingDirectory;
+    get commandMark(): TerminalCommandMark | null;
     get stats(): TerminalStats;
     get screenText(): string;
     get sizing(): TerminalSizingState;

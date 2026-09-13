@@ -53,6 +53,8 @@ export class WebTerminal {
     #hasTitle = false;
     #progress = { state: "none", percentage: null };
     #shellIntegration = { phase: "unknown", lastExitCode: null };
+    #workingDirectory = { uri: null, host: null, path: null };
+    #commandMark = null;
     #hasActivity = false;
     #history;
     #highlights;
@@ -122,6 +124,8 @@ export class WebTerminal {
     get title() { return this.#title; }
     get progress() { return { ...this.#progress }; }
     get shellIntegration() { return { ...this.#shellIntegration }; }
+    get workingDirectory() { return { ...this.#workingDirectory }; }
+    get commandMark() { return this.#commandMark ? { ...this.#commandMark } : null; }
     get stats() { return { ...this.#stats }; }
     get screenText() { return this.#screenText; }
     get sizing() { return { ...this.#sizing }; }
@@ -356,10 +360,17 @@ export class WebTerminal {
                     this.#progress.percentage !== message.progress.percentage;
                 const shellChanged = !this.#hasActivity || this.#shellIntegration.phase !== message.shellIntegration.phase ||
                     this.#shellIntegration.lastExitCode !== message.shellIntegration.lastExitCode;
+                const workingDirectoryChanged = !this.#hasActivity ||
+                    this.#workingDirectory.uri !== message.workingDirectory.uri;
+                const commandMarkChanged = !this.#hasActivity || this.#commandMark?.phase !== message.commandMark?.phase ||
+                    this.#commandMark?.exitCode !== message.commandMark?.exitCode ||
+                    this.#commandMark?.rawParameters !== message.commandMark?.rawParameters;
                 this.#title = message.title;
                 this.#hasTitle = true;
                 this.#progress = { ...message.progress };
                 this.#shellIntegration = { ...message.shellIntegration };
+                this.#workingDirectory = { ...message.workingDirectory };
+                this.#commandMark = message.commandMark ? { ...message.commandMark } : null;
                 this.#hasActivity = true;
                 if (titleChanged)
                     this.#options.onTitleChange?.(this.#title);
@@ -367,6 +378,10 @@ export class WebTerminal {
                     this.#options.onProgressChange?.(this.progress);
                 if (!this.#disposed && shellChanged)
                     this.#options.onShellIntegrationChange?.(this.shellIntegration);
+                if (!this.#disposed && workingDirectoryChanged)
+                    this.#options.onWorkingDirectoryChange?.(this.workingDirectory);
+                if (!this.#disposed && commandMarkChanged)
+                    this.#options.onCommandMarkChange?.(this.commandMark);
             }
         }
         else if (message.type === "history") {

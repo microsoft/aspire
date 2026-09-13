@@ -20,6 +20,11 @@ function rgba(packed) {
 function glyphKey(cell) {
     return `${cell.attributes & 5}/${cell.width}/${cell.text}`;
 }
+function isKgpPlaceholder(cell) {
+    // The base scalar and following diacritics encode an image reference, not a glyph.
+    // Keep the authoritative text and colors intact even when no image is placed.
+    return cell.text.codePointAt(0) === 0x10eeee;
+}
 /** Shelf packer. Plans are computed before mutating the atlas used by a submitted frame. */
 function packGlyphs(glyphs, size, scale, initial = { x: 0, y: 0, rowHeight: 0 }) {
     let { x, y, rowHeight } = initial;
@@ -210,7 +215,7 @@ export class TerminalRenderer {
     prepareGlyphs(cells) {
         const visible = new Map();
         for (const cell of cells) {
-            if (!cell || !cell.width || !cell.text.trim() || (cell.attributes & 64))
+            if (!cell || !cell.width || !cell.text.trim() || (cell.attributes & 64) || isKgpPlaceholder(cell))
                 continue;
             visible.set(glyphKey(cell), cell);
         }
@@ -387,7 +392,7 @@ export class TerminalRenderer {
             const y = Math.floor(i / this.columns) * CELL_HEIGHT;
             const width = Math.min(cell.width * CELL_WIDTH, this.width - x);
             const foreground = rgba(cell.foreground);
-            const glyph = this.glyphs.get(glyphKey(cell));
+            const glyph = isKgpPlaceholder(cell) ? undefined : this.glyphs.get(glyphKey(cell));
             if (glyph) {
                 const tint = glyph.colored ? (cell.attributes & 2 ? [0.5, 0.5, 0.5, 1] : WHITE) : foreground;
                 this.quad(this.atlas, x, y, cell.width * CELL_WIDTH, CELL_HEIGHT, tint, glyph.colored ? 2 : 1, [glyph.u0, glyph.v0, glyph.u1, glyph.v1]);
@@ -448,7 +453,13 @@ export class TerminalRenderer {
         for (const image of this.images.values())
             image.destroy();
         this.images.clear();
+        this.textureBytes = 0;
         this.atlas?.destroy();
+        this.glyphs.clear();
+        this.glyphKeyUnits = 0;
+        this.batches = [];
+        this.quadCount = 0;
+        this.instances = new Float32Array(0);
         this.font?.dispose();
         this.fontMetrics.clear();
         this.backend.dispose();

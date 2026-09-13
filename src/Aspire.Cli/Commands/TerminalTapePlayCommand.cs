@@ -9,6 +9,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Hex1b;
 using Hex1b.Automation;
+using Hex1b.Reflow;
 using Hex1b.Tokens;
 using Microsoft.Extensions.Logging;
 
@@ -156,6 +157,7 @@ internal sealed class TerminalTapePlayCommand : BaseCommand
             // and no scrollback is enabled: VHS Wait+Screen must inspect this mirror's visible screen.
             await using var terminal = Hex1bTerminal.CreateBuilder()
                 .WithHeadless()
+                .WithReflow(GhosttyReflowStrategy.Instance)
                 .WithWorkload(adapter)
                 .WithDimensions(adapter.RemoteWidth, adapter.RemoteHeight)
                 .AddPresentationFilter(initialScreen)

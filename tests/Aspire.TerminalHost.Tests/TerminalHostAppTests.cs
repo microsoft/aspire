@@ -2,9 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using Aspire.Shared.TerminalHost;
 using Hex1b;
+using Hex1b.Automation;
+using Hex1b.Reflow;
 using Microsoft.Extensions.Logging.Abstractions;
 using StreamJsonRpc;
 
@@ -519,6 +522,76 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DownstreamResizeReflowsOutputAndRetainsProducerHistory()
+    {
+        var (args, workspace, control) = BuildArgs(80, 24);
+        using var disp = workspace;
+        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+        using var hostCts = new CancellationTokenSource();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var hostTask = app.RunAsync(hostCts.Token);
+        try
+        {
+            await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
+            await using var producer = await ConnectProducerAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(5));
+            await producer.SendHelloAsync(80, 24, timeout.Token);
+            await WaitForFileAsync(args.ConsumerUdsPath, TimeSpan.FromSeconds(5));
+            await using var consumer = new Hmp1WorkloadAdapter(new Hmp1ClientOptions
+            {
+                StreamFactory = ct => Hmp1Transports.ConnectUnixSocket(args.ConsumerUdsPath, ct),
+                DefaultRole = Hmp1Role.Secondary
+            });
+            await consumer.ConnectAsync(timeout.Token);
+            await using var mirror = Hex1bTerminal.CreateBuilder()
+                .WithHeadless()
+                .WithWorkload(consumer)
+                .WithReflow(GhosttyReflowStrategy.Instance)
+                .WithScrollback(10000)
+                .Build();
+            var lines = Enumerable.Range(0, 7).Select(i => $"{i}:" + new string('x', 63) + "-END").ToArray();
+            await producer.SendOutputAsync(Encoding.UTF8.GetBytes(string.Join("\r\n", lines) + "\r\nready"), timeout.Token);
+            await new Hex1bTerminalAutomator(mirror, TimeSpan.FromSeconds(10)).WaitUntilTextAsync("ready").WaitAsync(timeout.Token);
+
+            foreach (var (width, height) in new[] { (20, 4), (80, 24) })
+            {
+                await consumer.RequestPrimaryAsync(width, height, timeout.Token);
+                using var resized = await new Hex1bTerminalInputSequenceBuilder()
+                    .WaitUntil(snapshot => snapshot.Width == width && snapshot.Height == height,
+                        TimeSpan.FromSeconds(10), "The terminal host did not resize.")
+                    .Build().ApplyAsync(mirror, timeout.Token);
+            }
+
+            var expected = string.Join('\n', lines.Select(line => line.PadRight(80)).Append("ready"));
+            using var restored = await new Hex1bTerminalInputSequenceBuilder()
+                .WaitUntil(snapshot => snapshot.GetScreenText().TrimEnd() == expected,
+                    TimeSpan.FromSeconds(10), "The terminal host did not restore reflowed history.")
+                .Build().ApplyAsync(mirror, timeout.Token);
+            Assert.Equal(expected, restored.GetScreenText().TrimEnd());
+
+            // A fresh peer proves the producer retained the content, not just the existing mirror.
+            await using var lateConsumer = await TestHmp1Consumer.ConnectAsync(args.ConsumerUdsPath, TimeSpan.FromSeconds(5));
+            await lateConsumer.SendClientHelloAsync("late-reflow-peer", "secondary", timeout.Token);
+            await lateConsumer.ReceiveHandshakeAsync(TimeSpan.FromSeconds(5));
+            var replayWorkload = new Hex1bAppWorkloadAdapter();
+            await using var replay = Hex1bTerminal.CreateBuilder()
+                .WithHeadless().WithDimensions(80, 24).WithWorkload(replayWorkload).Build();
+            replayWorkload.Write(Encoding.UTF8.GetString(lateConsumer.InitialState) + "\r\nreplay-complete");
+            using var lateSnapshot = await new Hex1bTerminalInputSequenceBuilder()
+                .WaitUntil(snapshot => snapshot.ContainsText("replay-complete"),
+                    TimeSpan.FromSeconds(10), "The late peer did not consume its initial state.")
+                .Build().ApplyAsync(replay, timeout.Token);
+            Assert.Equal(expected + new string(' ', 80 - "ready".Length) + "\nreplay-complete",
+                lateSnapshot.GetScreenText().TrimEnd());
+        }
+        finally
+        {
+            app.RequestShutdown();
+            hostCts.Cancel();
+            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Fact]
     public async Task DownstreamPrimaryResizeIsForwardedUpstreamAsRawResizeFrame()
     {
         // Regression: the consumer-side multi-head server fires its OnResized
@@ -913,6 +986,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         private readonly NetworkStream _stream;
         private bool _disposed;
 
+        public byte[] InitialState { get; private set; } = [];
+
         private TestHmp1Consumer(Socket socket)
         {
             _socket = socket;
@@ -954,7 +1029,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         {
             using var cts = new CancellationTokenSource(timeout);
             var (helloType, helloPayload) = await ReadFrameAsync(cts.Token).ConfigureAwait(false);
-            var (stateSyncType, _) = await ReadFrameAsync(cts.Token).ConfigureAwait(false);
+            var (stateSyncType, stateSyncPayload) = await ReadFrameAsync(cts.Token).ConfigureAwait(false);
 
             if (helloType != FrameHello || stateSyncType != FrameStateSync)
             {
@@ -962,6 +1037,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
                     $"Expected Hello and StateSync frames, received 0x{helloType:X2} and 0x{stateSyncType:X2}.");
             }
 
+            InitialState = stateSyncPayload;
             return helloPayload;
         }
 

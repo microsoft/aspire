@@ -4,6 +4,7 @@
 using System.Threading.Channels;
 using Hex1b;
 using Hex1b.Automation;
+using Hex1b.Reflow;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
@@ -163,6 +164,8 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
             // domain socket.
             _terminal = _builder
                 .WithHmp1Server(_clients.Reader.ReadAllAsync)
+                .WithReflow(GhosttyReflowStrategy.Instance)
+                .WithScrollback(10000)
                 .Build();
 
             _automator = new Hex1bTerminalAutomator(_terminal, TerminalAutomation.DefaultTimeout);

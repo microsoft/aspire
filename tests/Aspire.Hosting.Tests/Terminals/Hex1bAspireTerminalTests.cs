@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.IO.Pipelines;
+using System.Text;
 using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -15,6 +16,57 @@ namespace Aspire.Hosting.Tests.Terminals;
 [Trait("Partition", "2")]
 public class Hex1bAspireTerminalTests
 {
+    [Theory]
+    [InlineData(TerminalPlacement.Dock)]
+    [InlineData(TerminalPlacement.Dialog)]
+    public async Task Resize_ReflowsMainScreenAndRetainsHistory(TerminalPlacement placement)
+    {
+        await using var service = TestTerminalService.Create();
+        var output = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        await using var terminal = service.CreateTerminal("Reflow", placement,
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)));
+        await using var viewer = await TestAppHostTerminalViewer.ConnectAsync(service, terminal.Id);
+        var lines = Enumerable.Range(0, 7).Select(i => $"{i}:" + new string('x', 63) + "-END").ToArray();
+        var expected = string.Join('\n', lines.Select(line => line.PadRight(80)).Append("ready"));
+        await outputWriter.WriteAsync(Encoding.UTF8.GetBytes(string.Join("\r\n", lines) + "\r\nready"));
+        await terminal.WaitForTextAsync("ready").DefaultTimeout();
+        Assert.Equal(expected, terminal.GetScreenText().TrimEnd());
+
+        // Narrowing pushes wrapped rows into history. Widening must restore them without new output.
+        await viewer.ResizeAsync(20, 4);
+        await viewer.ResizeAsync(80, 24);
+        Assert.Equal(expected, terminal.GetScreenText().TrimEnd());
+    }
+
+    [Fact]
+    public async Task Resize_CropsAlternateScreenAndReflowsSavedMainScreen()
+    {
+        await using var service = TestTerminalService.Create();
+        var output = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        await using var terminal = service.CreateTerminal("Alternate", TerminalPlacement.Dock,
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)));
+        await using var viewer = await TestAppHostTerminalViewer.ConnectAsync(service, terminal.Id);
+        const string main = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-END";
+        await outputWriter.WriteAsync(Encoding.UTF8.GetBytes(main + "\r\nready"));
+        await terminal.WaitForTextAsync("ready").DefaultTimeout();
+        // DECSET 1049 enters the alternate screen; CUP positions a fixed-layout row.
+        await outputWriter.WriteAsync("\u001b[?1049h\u001b[HALTERNATE-ABCDEFGHIJKLMNOPQRSTUVWXYZ\r\nalt-ready"u8.ToArray());
+        await terminal.WaitForTextAsync("alt-ready").DefaultTimeout();
+
+        await viewer.ResizeAsync(20, 24);
+        Assert.Equal("ALTERNATE-ABCDEFGHIJ\nalt-ready", terminal.GetScreenText().TrimEnd());
+        await outputWriter.WriteAsync("\u001b[?1049l"u8.ToArray());
+        await terminal.WaitForTextAsync("ABCDEFGHIJKLMNOPQRST").DefaultTimeout();
+        Assert.Equal(string.Join('\n', main.Chunk(20).Select(chunk => new string(chunk).PadRight(20)).Append("ready")),
+            terminal.GetScreenText().TrimEnd());
+        await viewer.ResizeAsync(80, 24);
+        Assert.Equal(main.PadRight(80) + "\nready", terminal.GetScreenText().TrimEnd());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

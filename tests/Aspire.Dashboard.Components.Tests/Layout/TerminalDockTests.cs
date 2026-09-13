@@ -54,8 +54,11 @@ public class TerminalDockTests : DashboardTestContext
         Assert.Equal(expectedHeight.ToString(), handle.GetAttribute("aria-valuenow"));
         Assert.Equal($"{expectedHeight} pixels high", handle.GetAttribute("aria-valuetext"));
         Assert.Equal("ArrowUp ArrowDown Shift+ArrowUp Shift+ArrowDown Home End", handle.GetAttribute("aria-keyshortcuts"));
+        Assert.Null(handle.GetAttribute("title"));
+        var resizeHelp = cut.Find($"#{handle.GetAttribute("aria-describedby")}");
+        Assert.True(resizeHelp.HasAttribute("hidden"));
         Assert.Equal("Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.",
-            cut.Find($"#{handle.GetAttribute("aria-describedby")}").TextContent);
+            resizeHelp.TextContent);
         Assert.Equal(terminals, cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray());
         Assert.Equal("first", cut.Find("[role=tab][aria-selected=true]").TextContent.Trim());
         Assert.Empty(client.ClosedTerminals);

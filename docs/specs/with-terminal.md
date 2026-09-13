@@ -69,6 +69,23 @@ The dashboard and CLI attach using `Hmp1WorkloadAdapter`. The dashboard
 adds a per-browser `Hex1bTerminal` mirror with `Hwt1PresentationAdapter`;
 the browser receives authoritative terminal state rather than parsing ANSI.
 
+### Resize and reflow
+
+AppHost-owned terminals and resource terminal hosts explicitly enable
+`GhosttyReflowStrategy.Instance` on their HMP presentation adapters. Dashboard
+HWT replicas and headless automation replicas use the same policy: HMP preserves
+soft wraps during replay but does not negotiate the reflow strategy.
+No browser-side reflow setting is required.
+
+Resizing rewraps soft continuations while preserving hard line breaks, cursor
+positions and retained history. Producers and dashboard replicas retain up to
+10,000 physical rows of scrollback, so narrowing can evict the oldest rows at
+that limit. Fresh HMP replicas receive the current screen and accumulate history
+after attachment, not the producer's entire pre-existing scrollback.
+Alternate-screen layouts still crop on resize; the saved main screen reflows
+when the application returns to it. Primary-peer resize authority is unchanged.
+See [Hex1b's reflow configuration](https://github.com/mitchdenny/hex1b/blob/093b67b/docs/web-terminal.md#shell-reflow-configuration).
+
 ## Property contract (gRPC `ResourceService` snapshots)
 
 When `WithTerminal()` is applied to a resource, every replica snapshot
@@ -149,7 +166,7 @@ it does not lock the terminal, its creator's automation, or other viewers.
 ### Browser requirements and package pairing
 
 The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
-exactly `0.166.0`. HWT1 is experimental state transfer
+exactly `0.167.0-alpha.1565.1.6eea363`. HWT1 is experimental state transfer
 between these paired packages, not a stable wire contract implemented by
 Aspire. Upgrade both together. The full npm `dist` tree is vendored, including
 module workers, relative imports, fonts and licenses.

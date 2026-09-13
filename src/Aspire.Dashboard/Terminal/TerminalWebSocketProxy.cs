@@ -8,6 +8,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Grpc.Core;
 using Hex1b;
+using Hex1b.Reflow;
 
 namespace Aspire.Dashboard.Terminal;
 
@@ -299,6 +300,10 @@ internal static class TerminalWebSocketProxy
         var terminal = Hex1bTerminal.CreateBuilder()
             .WithWorkload(workload)
             .WithPresentation(presentation)
+            // HMP preserves soft wraps but does not negotiate reflow policy. Match the
+            // AppHost/TerminalHost producer so this replica also reflows retained history.
+            // https://github.com/mitchdenny/hex1b/blob/093b67b/docs/web-terminal.md#shell-reflow-configuration
+            .WithReflow(GhosttyReflowStrategy.Instance)
             .WithScrollback(10000)
             .Build();
         await using var terminalLifetime = terminal.ConfigureAwait(false);

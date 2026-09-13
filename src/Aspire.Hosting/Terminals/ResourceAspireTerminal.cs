@@ -3,6 +3,7 @@
 
 using Hex1b;
 using Hex1b.Automation;
+using Hex1b.Reflow;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
@@ -195,6 +196,7 @@ internal sealed class ResourceAspireTerminal : ITerminalBackend
                 // The AppHost has no controlling terminal. Headless suppresses local console I/O but still
                 // maintains the replicated screen used by automation.
                 .WithHeadless()
+                .WithReflow(GhosttyReflowStrategy.Instance)
                 .WithDimensions(80, 24)
                 .WithHmp1UdsClient(_consumerUdsPath, options =>
                 {

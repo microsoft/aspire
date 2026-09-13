@@ -13,6 +13,7 @@ using Google.Protobuf;
 using Grpc.Core;
 using Hex1b;
 using Hex1b.Automation;
+using Hex1b.Reflow;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -21,7 +22,7 @@ namespace Aspire.Dashboard.Tests.Shared;
 internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisposable
 {
     private readonly DashboardWebApplication _app;
-    private readonly TerminalTestProducer _producer = new(100, 30, 100);
+    private readonly TerminalTestProducer _producer = new(100, 30, 10000);
     private readonly bool _useGrpc;
     private readonly ConcurrentBag<Task> _attachmentDisposals = [];
     private int _disposedAttachments;
@@ -228,7 +229,8 @@ internal sealed class TerminalTestProducer : IAsyncDisposable
     public TerminalTestProducer(int width, int height, int scrollback)
     {
         Workload = new Hex1bAppWorkloadAdapter();
-        Presentation = new Hmp1PresentationAdapter(width, height);
+        Presentation = new Hmp1PresentationAdapter(width, height)
+            .WithReflow(GhosttyReflowStrategy.Instance);
         _terminal = Hex1bTerminal.CreateBuilder()
             .WithWorkload(Workload)
             .WithPresentation(Presentation)

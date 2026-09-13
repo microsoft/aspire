@@ -1,4 +1,4 @@
-import type { InputModifiers, PointerButton, SelectionMode, SelectionRange, TerminalBuffer, TerminalFont, TerminalGeometry, TerminalPeer, TerminalSize, TerminalStats, TerminalRendererPreference, TerminalStatusLevel, TerminalProgress, TerminalShellIntegration, TerminalCloseDetails } from "./types.js";
+import type { InputModifiers, PointerButton, SelectionMode, SelectionRange, TerminalBuffer, TerminalFont, TerminalGeometry, TerminalPeer, TerminalSize, TerminalStats, TerminalRendererPreference, TerminalStatusLevel, TerminalProgress, TerminalShellIntegration, TerminalWorkingDirectory, TerminalCommandMark, TerminalCloseDetails } from "./types.js";
 export type SelectionText = {
     status: "valid";
     text: string;
@@ -78,6 +78,8 @@ export interface FrameMetadata extends TerminalGeometry {
     title: string;
     progress: TerminalProgress;
     shellIntegration: TerminalShellIntegration;
+    workingDirectory: TerminalWorkingDirectory;
+    commandMark: TerminalCommandMark | null;
     defaultBackground?: number;
     defaultForeground?: number;
     cursor: {
@@ -221,6 +223,8 @@ export type WorkerOutputMessage = {
     title: string;
     progress: TerminalProgress;
     shellIntegration: TerminalShellIntegration;
+    workingDirectory: TerminalWorkingDirectory;
+    commandMark: TerminalCommandMark | null;
     text: string;
     hyperlinks: HyperlinkRange[];
 } & TerminalGeometry) | {
