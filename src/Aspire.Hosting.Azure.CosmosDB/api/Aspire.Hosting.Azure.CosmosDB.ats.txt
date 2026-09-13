@@ -11,6 +11,7 @@ Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.AzureCosmosDBResource
 Aspire.Hosting.Azure.CosmosDB/addAzureCosmosDB(name: string) -> Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.AzureCosmosDBResource
 Aspire.Hosting.Azure.CosmosDB/addContainer(name: string, partitionKeyPaths: string|string[], containerName?: string) -> Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.Azure.AzureCosmosDBContainerResource
 Aspire.Hosting.Azure.CosmosDB/addCosmosDatabase(name: string, databaseName?: string) -> Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.Azure.AzureCosmosDBDatabaseResource
+Aspire.Hosting.Azure.CosmosDB/runAsClassicEmulator(configureContainer?: callback) -> Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.AzureCosmosDBResource
 Aspire.Hosting.Azure.CosmosDB/runAsEmulator(configureContainer?: callback) -> Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.AzureCosmosDBResource
 Aspire.Hosting.Azure.CosmosDB/runAsPreviewEmulator(configureContainer?: callback) -> Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.AzureCosmosDBResource
 Aspire.Hosting.Azure.CosmosDB/withAccessKeyAuthentication(keyVaultBuilder?: Aspire.Hosting.Azure/Aspire.Hosting.Azure.IAzureKeyVaultResource) -> Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.AzureCosmosDBResource
