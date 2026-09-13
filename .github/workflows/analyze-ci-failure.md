@@ -498,6 +498,13 @@ safe-outputs:
               exit 1
             fi
 
+            # The agent also sees job logs and can reproduce values that were not present in
+            # the pre-redacted TRX fields. Redact its complete output again at the publish
+            # boundary before reading, rendering, or persisting any analysis fields.
+            node .github/workflows/analyze-ci-failure.js redact "$ANALYSIS_FILE" \
+              > "${ANALYSIS_FILE}.redacted"
+            mv "${ANALYSIS_FILE}.redacted" "$ANALYSIS_FILE"
+
             # Validate cause files
             if [ -d "$CAUSES_DIR" ]; then
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do

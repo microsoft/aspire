@@ -290,8 +290,11 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("_authToken=opaque-secret", "_authToken=[REDACTED]")]
     [InlineData("Password=\"secret;tail\";Timeout=30", "Password=\"[REDACTED]\";Timeout=30")]
     [InlineData("Password='secret;tail';Timeout=30", "Password='[REDACTED]';Timeout=30")]
+    [InlineData("{\"password\":\"prefix\\\"secret-suffix\"}", "{\"password\":\"[REDACTED]\"}")]
+    [InlineData("Password=\"prefix\\\"secret-suffix\";Timeout=30", "Password=\"[REDACTED]\";Timeout=30")]
     [InlineData("dotnet tool --api-key opaque-secret --verbosity detailed", "dotnet tool --api-key [REDACTED] --verbosity detailed")]
     [InlineData("command --password \"secret;tail\" --verbose", "command --password \"[REDACTED]\" --verbose")]
+    [InlineData("command --password \"prefix\\\"secret-suffix\" --verbose", "command --password \"[REDACTED]\" --verbose")]
     [InlineData("command --client-secret 'secret;tail'", "command --client-secret '[REDACTED]'")]
     [RequiresTools(["node"])]
     public async Task RedactOperationRemovesTokenValues(string value, string expected)
