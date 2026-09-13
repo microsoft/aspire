@@ -624,7 +624,7 @@ suite('E2E launch profile', () => {
         assert.ok(debuggerPrerequisitesIndex < azureFunctionsPrerequisitesIndex);
         assert.ok(azureFunctionsPrerequisitesIndex < runStepIndex);
         assert.ok(workflow.includes('global-json-file: global.json'));
-        assert.deepStrictEqual(runnerTargetFrameworks, ['net10.0', 'net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0']);
+        assert.deepStrictEqual(runnerTargetFrameworks, ['net11.0', 'net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0']);
         assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0', 'net10.0']);
         assert.ok(debuggerPrerequisiteStep.includes('if: ${{ matrix.installDotnetDebugger || matrix.installAzureFunctions }}'));
         assert.ok(debuggerPrerequisiteStep.includes('vscode-dotnet-runtime/3.1.0/vspackage'));
@@ -682,16 +682,20 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
         const compactRunner = runner.replace(/\s+/g, ' ');
+        const globalJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, '..', 'global.json'), 'utf8'));
+        const repositoryTargetFramework = `net${globalJson.sdk.version.split('.')[0]}.0`;
 
         assert.ok(runner.includes("const enableBrowserDebuggerE2E = shardName === 'browser-debugger';"));
+        assert.ok(runner.includes(`const browserDebuggerTargetFramework = '${repositoryTargetFramework}';`));
         assert.ok(runner.includes("const e2eBrowser = process.platform === 'win32' ? 'msedge' : 'chrome';"));
         assert.ok(runner.includes('const enableDebuggerExtensions = enableAzureFunctionsE2E || enableBrowserDebuggerE2E || enableWinUiE2E;'));
-        assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazorwasm', '--name', 'StandaloneClient', '--output', standaloneDirectory, '--no-https', '--no-restore']);"));
-        assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazor', '--name', 'HostedGlobal', '--output', hostedGlobalDirectory, '--interactivity', 'WebAssembly', '--all-interactive', '--no-https', '--no-restore']);"));
-        assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazor', '--name', 'HostedPerPage', '--output', hostedPerPageDirectory, '--interactivity', 'WebAssembly', '--no-https', '--no-restore']);"));
+        assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazorwasm', '--name', 'StandaloneClient', '--output', standaloneDirectory, '--framework', browserDebuggerTargetFramework, '--no-https', '--no-restore']);"));
+        assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazor', '--name', 'HostedGlobal', '--output', hostedGlobalDirectory, '--framework', browserDebuggerTargetFramework, '--interactivity', 'WebAssembly', '--all-interactive', '--no-https', '--no-restore']);"));
+        assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazor', '--name', 'HostedPerPage', '--output', hostedPerPageDirectory, '--framework', browserDebuggerTargetFramework, '--interactivity', 'WebAssembly', '--no-https', '--no-restore']);"));
+        assert.ok(runner.includes(`<TargetFramework>${repositoryTargetFramework}</TargetFramework>`));
         assert.ok(runner.includes("process.env.ASPIRE_EXTENSION_E2E_SKIP_RESTORE_PREWARM === 'true' && !enableBrowserDebuggerE2E"));
-        assert.ok(runner.includes("targetFramework !== 'net10.0'"));
-        assert.ok(runner.includes('addNet10WebAssemblyDiscoveryTargets(projectPath);'));
+        assert.ok(runner.includes('targetFramework !== browserDebuggerTargetFramework'));
+        assert.ok(!runner.includes('addNet10WebAssemblyDiscoveryTargets'));
         assert.ok(runner.includes('currentCount = 42; // ASPIRE_E2E_MANAGED_BREAKPOINT'));
         assert.ok(runner.includes('<Routes\\s+@rendermode\\s*=\\s*["\']InteractiveWebAssembly["\']\\s*\\/>'));
         assert.ok(runner.includes('@rendermode\\s+InteractiveWebAssembly'));
@@ -859,46 +863,6 @@ builder.AddProject<Projects.HostedPerPage>("hosted-per-page")
     .ProxyBlazorTelemetry();
 builder.Build().Run();
 `);
-    });
-
-    test('generates evaluated WebAssembly discovery targets for the .NET 10 fixture', () => {
-        const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
-        const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
-        const declaration = source.statements.find(statement => ts.isFunctionDeclaration(statement)
-            && statement.name?.text === 'addNet10WebAssemblyDiscoveryTargets');
-        assert.ok(declaration, 'fixture generation must be able to call the discovery helper');
-
-        const projects = new Map([
-            ['Client.csproj', '<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">\n</Project>'],
-            ['Server.csproj', '<Project Sdk="Microsoft.NET.Sdk.Web">\n</Project>']
-        ]);
-        vm.runInNewContext(`${declaration.getText(source)}
-            addNet10WebAssemblyDiscoveryTargets('Client.csproj');
-            addNet10WebAssemblyDiscoveryTargets('Server.csproj');`, {
-            fs: {
-                readFileSync: (projectPath: string) => projects.get(projectPath),
-                writeFileSync: (projectPath: string, content: string) => projects.set(projectPath, content)
-            }
-        });
-
-        assert.strictEqual(projects.get('Client.csproj'), `<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
-  <Target Name="GetWebAssemblyProjectReference" Returns="@(_WebAssemblyProjectReference)">
-    <ItemGroup>
-      <_WebAssemblyProjectReference Include="$(MSBuildProjectFullPath)" />
-    </ItemGroup>
-  </Target>
-</Project>`);
-        assert.strictEqual(projects.get('Server.csproj'), `<Project Sdk="Microsoft.NET.Sdk.Web">
-  <Target Name="ResolveWebAssemblyProjectReferences">
-    <MSBuild Projects="@(ProjectReference)"
-             Targets="GetWebAssemblyProjectReference"
-             BuildInParallel="true"
-             SkipNonexistentTargets="true">
-      <Output TaskParameter="TargetOutputs" ItemName="WebAssemblyProjectReference" />
-    </MSBuild>
-  </Target>
-</Project>`);
     });
 
     test('does not load extension-host modules in the browser debugger ExTester process', () => {
