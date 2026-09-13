@@ -44,8 +44,8 @@
     <ManagedProjectPath>$(RepoRoot)src\Aspire.Managed\Aspire.Managed.csproj</ManagedProjectPath>
     <AppHostProjectPath>$(RepoRoot)src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj</AppHostProjectPath>
     <CreateLayoutProjectPath>$(RepoRoot)tools\CreateLayout\CreateLayout.csproj</CreateLayoutProjectPath>
-    <TrayProjectPath>$(RepoRoot)tools\Aspire.Tray.Spike\Mac\Aspire.Tray.Spike.Mac.csproj</TrayProjectPath>
-    <TrayAppPath Condition="'$(TrayAppPath)' == ''">$(ArtifactsDir)bin\Aspire.Tray\$(Configuration)\net10.0\$(TargetRid)\app\Aspire Tray.app</TrayAppPath>
+    <TrayProjectPath>$(RepoRoot)src\Aspire.Tray\Mac\Aspire.Tray.Mac.csproj</TrayProjectPath>
+    <TrayAppPath Condition="'$(TrayAppPath)' == ''">$(ArtifactsDir)bin\Aspire.Tray.Mac\$(Configuration)\net10.0\$(TargetRid)\app\Aspire Tray.app</TrayAppPath>
 
     <!-- Bundle version: use VersionSuffix from CI if provided, else dev version for local builds -->
     <!-- In GitHub Actions CI: VersionSuffix is set via /p:VersionSuffix=pr.XXXX.gSHA -->
@@ -119,13 +119,7 @@
       <_TrayBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishTray.binlog</_TrayBinlog>
     </PropertyGroup>
     <Message Importance="high" Text="Publishing native macOS tray app..." />
-    <!-- Reuse Arcade's product version calculation without importing its entire
-         build/analyzer stack into the workload-free native app project. -->
-    <Exec Command="dotnet msbuild &quot;$(ManagedProjectPath)&quot; -nologo -getProperty:Version $(_VersionSuffixArg) $(_OfficialBuildIdArg)"
-          ConsoleToMSBuild="true" StandardOutputImportance="low">
-      <Output TaskParameter="ConsoleOutput" PropertyName="_TrayProductVersion" />
-    </Exec>
-    <Exec Command="dotnet publish &quot;$(TrayProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:TrayAppPath=&quot;$(TrayAppPath)&quot; /p:Version=$(_TrayProductVersion) $(_VersionSuffixArg) $(_TrayBinlog)" />
+    <Exec Command="dotnet publish &quot;$(TrayProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:TrayAppPath=&quot;$(TrayAppPath)&quot; $(_VersionSuffixArg) $(_OfficialBuildIdArg) $(_TrayBinlog)" />
   </Target>
 
   <Target Name="_RestoreDcpPackage">

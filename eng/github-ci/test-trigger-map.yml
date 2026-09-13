@@ -385,7 +385,7 @@ path_rules:
     reason: Infrastructure.Tests WorkflowScripts/Pipelines assert on workflow & pipeline files; NpmCliPackageTests reads eng/Signing.props, and Publishing.props is AzDO-publish-only infra grouped with it (no GH-CI build/test path -> not ALL)
   - paths: [eng/Bundle.proj]
     targets: [CLI_BUNDLE]
-    reason: assembles the CLI bundle (Aspire.Managed + native CLI + DCP); consumed by CLI e2e/starter/extension, not integrations
+    reason: assembles the CLI bundle (Aspire.Managed + native CLI + macOS tray + DCP); consumed by CLI e2e/starter/extension, not integrations
 
 # Project rules: an affected PRODUCTION project (Layer 1, matched by project-NAME glob) -> targets.
 # This follows the graph's transitive closure: a change to a project's dependency marks it affected,
@@ -396,6 +396,12 @@ path_rules:
 # triggers.
 # Project Name == the .csproj base name (what Layer 1 emits).
 affected_project_rules:
+  - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
+    targets: [test:Aspire.Tray.Tests, test:Infrastructure.Tests]
+    reason: native platform changes must retain shared tray contracts and the packaging/signing invariants; tests source-link common code rather than referencing the platform executables
+  - projects: [Aspire.Tray.Mac]
+    targets: [CLI_BUNDLE]
+    reason: the macOS app is embedded in the CLI bundle; Windows remains an unvalidated scaffold and is not packaged
   - projects: [CreateLayout]
     targets: [CLI_BUNDLE]
     reason: CreateLayout assembles the CLI bundle consumed by these tests and jobs

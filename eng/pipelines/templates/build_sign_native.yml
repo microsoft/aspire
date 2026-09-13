@@ -231,7 +231,7 @@ jobs:
               - script: >-
                   $(Build.SourcesDirectory)/$(dotnetScript)
                   msbuild
-                  $(Build.SourcesDirectory)/tools/Aspire.Tray.Spike/Mac/Aspire.Tray.Spike.Mac.csproj
+                  $(Build.SourcesDirectory)/src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj
                   /t:PrepareTraySigning
                   /p:Configuration=$(_BuildConfig)
                   /p:RuntimeIdentifier=${{ targetRid }}
@@ -253,7 +253,7 @@ jobs:
             - script: >-
                 $(Build.SourcesDirectory)/$(dotnetScript)
                 msbuild
-                $(Build.SourcesDirectory)/tools/Aspire.Tray.Spike/Mac/Aspire.Tray.Spike.Mac.csproj
+                $(Build.SourcesDirectory)/src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj
                 /t:RestoreSignedTray
                 /p:Configuration=$(_BuildConfig)
                 /p:RuntimeIdentifier=${{ targetRid }}

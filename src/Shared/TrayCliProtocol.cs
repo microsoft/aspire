@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace Aspire.Shared;
 
 /// <summary>
-/// Defines the experimental, opt-in CLI protocol used by the native tray spike.
+/// Defines the experimental, opt-in CLI protocol used by the native tray companion.
 /// </summary>
 internal static class TrayCliProtocol
 {

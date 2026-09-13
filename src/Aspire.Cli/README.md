@@ -172,10 +172,14 @@ a native CLI, not a managed development build or `dotnet aspire.dll`. A missing
 bundle or tray payload fails explicitly; install a macOS bundle containing the
 companion rather than using a standalone CLI binary.
 
+Before upgrading from an older preview, quit its running companion using its
+**Quit** menu action. Preview single-instance identifiers have changed, so
+`aspire tray stop` in this version does not manage an older preview's instance.
+
 ### Experimental native tray protocol
 
 The hidden `--protocol-version 1` opt-in provides complete discovery snapshots,
-heartbeats, and typed, lifetime-guarded stop results for the native tray spike:
+heartbeats, and typed, lifetime-guarded stop results for the experimental native tray companion:
 
 ```bash
 aspire ps --protocol-version 1 --follow --format json --non-interactive --nologo

@@ -136,7 +136,7 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 
 ### Experimental native tray protocol (version 1)
 
-This hidden, opt-in protocol is for the native tray spike, not a replacement for
+This hidden, opt-in protocol is for the experimental native tray companion, not a replacement for
 the existing `ps` snapshot or delta formats. It is experimental and may change.
 Its shared DTOs, source-generated JSON context, and limits are defined in
 `src/Shared/TrayCliProtocol.cs`.

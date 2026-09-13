@@ -5,6 +5,7 @@ using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.Versioning;
 using System.Xml.Linq;
+using Aspire.SelectTests;
 using Aspire.Tools.CreateLayout;
 using Xunit;
 
@@ -137,7 +138,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     [Fact]
     public void SigningUsesWholeAppAndRestoresItWithoutPublishing()
     {
-        var project = LoadProject("tools/Aspire.Tray.Spike/Mac/Aspire.Tray.Spike.Mac.csproj");
+        var project = LoadProject("src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj");
         Assert.Equal("Publish", Target(project, "PackageTray").Attribute("AfterTargets")!.Value);
         var restore = Target(project, "RestoreSignedTray");
         Assert.Null(restore.Attribute("DependsOnTargets"));
@@ -147,7 +148,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         var signing = LoadProject("eng/Signing.props");
         var rule = Assert.Single(signing.Descendants("FileSignInfo"), element => element.Attribute("Include")?.Value == "AspireTray.app");
         Assert.Equal("MacDeveloperHardenWithNotarization", rule.Attribute("CertificateName")!.Value);
-        Assert.Contains(signing.Descendants("ItemsToSign"), element => element.Attribute("Include")?.Value == "$(ArtifactsBinDir)Aspire.Tray/**/signing/AspireTray.app");
+        Assert.Contains(signing.Descendants("ItemsToSign"), element => element.Attribute("Include")?.Value == "$(ArtifactsBinDir)Aspire.Tray.Mac/**/signing/AspireTray.app");
 
         var pipeline = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng/pipelines/templates/build_sign_native.yml"));
         var prepare = pipeline.IndexOf("/t:PrepareTraySigning", StringComparison.Ordinal);
@@ -159,7 +160,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void NativePayloadVerificationRunsAfterLayoutAndSharedTestsRunInMacCi()
+    public void NativePayloadVerificationRunsAfterLayoutAndSharedTestsUseCentralMatrix()
     {
         var project = LoadProject("eng/Bundle.proj");
         var verification = Target(project, "_VerifyNativeTrayArchive");
@@ -169,16 +170,43 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         Assert.Contains("verify-tray-payload.sh", command);
         Assert.Contains("aspire-$(BundleVersion)-$(TargetRid).tar.gz", command);
 
-        var workflow = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github/workflows/build-cli-native-archives.yml"));
-        var testStep = workflow.IndexOf("- name: Test tray shared contracts and lifecycle", StringComparison.Ordinal);
-        var payloadStep = workflow.IndexOf("- name: Build bundle payload archive", StringComparison.Ordinal);
-        Assert.True(testStep >= 0 && testStep < payloadStep);
-        var step = workflow[testStep..payloadStep];
-        Assert.Contains("if: runner.os == 'macOS'", step);
-        Assert.Contains("./dotnet.sh test", step);
-        Assert.Contains("--project tools/Aspire.Tray.Spike/Tests/Aspire.Tray.Spike.Tests.csproj", step);
-        Assert.Contains("--filter-not-trait \"quarantined=true\"", step);
-        Assert.Contains("--filter-not-trait \"outerloop=true\"", step);
+        const string testProjectPath = "tests/Aspire.Tray.Tests/Aspire.Tray.Tests.csproj";
+        var solution = LoadProject("Aspire.slnx");
+        Assert.Contains(solution.Descendants("Project"), entry => entry.Attribute("Path")?.Value == testProjectPath);
+        var testProject = LoadProject(testProjectPath);
+        Assert.Equal("true", Assert.Single(testProject.Descendants("RunOnGithubActionsMacOS")).Value);
+    }
+
+    [Theory]
+    [InlineData("Aspire.Tray.Mac", true)]
+    [InlineData("Aspire.Tray.Windows", false)]
+    public void NativeTrayChangesSelectSharedAndPackagingTests(string project, bool bundled)
+    {
+        var selector = new TestSelector(
+            Path.Combine(RepoRoot.Path, "eng/github-ci/test-trigger-map.yml"),
+            new HashSet<string>(["Aspire.Tray.Tests", "Infrastructure.Tests", "Aspire.Cli.EndToEnd.Tests"], StringComparer.Ordinal),
+            new HashSet<string>(StringComparer.Ordinal));
+
+        var result = selector.Select([], [project], new SelectorOptions());
+
+        Assert.False(result.SelectsAll);
+        Assert.Equal(bundled
+                ? ["Aspire.Cli.EndToEnd.Tests", "Aspire.Tray.Tests", "Infrastructure.Tests"]
+                : new[] { "Aspire.Tray.Tests", "Infrastructure.Tests" },
+            result.TestProjects.Order(StringComparer.Ordinal));
+        Assert.Equal(bundled
+                ? ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:winget-installer"]
+                : Array.Empty<string>(),
+            result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void BundleUsesProductTrayProjectAndOutputDirectory()
+    {
+        var project = LoadProject("eng/Bundle.proj");
+        Assert.Equal(@"$(RepoRoot)src\Aspire.Tray\Mac\Aspire.Tray.Mac.csproj", Assert.Single(project.Descendants("TrayProjectPath")).Value);
+        Assert.Equal(@"$(ArtifactsDir)bin\Aspire.Tray.Mac\$(Configuration)\net10.0\$(TargetRid)\app\Aspire Tray.app", Assert.Single(project.Descendants("TrayAppPath")).Value);
+        Assert.Contains("$(_OfficialBuildIdArg)", Assert.Single(Target(project, "_PublishNativeTray").Elements("Exec")).Attribute("Command")!.Value);
     }
 
     private static XDocument LoadProject(string path) => XDocument.Load(Path.Combine(RepoRoot.Path, path));

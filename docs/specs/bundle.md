@@ -1436,18 +1436,21 @@ in a separate directory instead of overwriting the default publish output.
 
 ### macOS Tray Packaging and Signing
 
-The native tray project remains at `tools/Aspire.Tray.Spike/Mac/`. Its `PackageTray`
+The experimental native companion is implemented in `src/Aspire.Tray/Mac/`. Its `PackageTray`
 target runs after publish and assembles
-`artifacts/bin/Aspire.Tray/{Configuration}/net10.0/{rid}/app/Aspire Tray.app`.
+`artifacts/bin/Aspire.Tray.Mac/{Configuration}/net10.0/{rid}/app/Aspire Tray.app`.
 It stamps numeric `CFBundleVersion`/`CFBundleShortVersionString` from `VersionPrefix`,
 records the full product version (including Arcade's official build suffix) in `AspireVersion`, generates `Resources/Aspire.icns`
 from the shared Aspire artwork, and ad-hoc signs the app for local/GitHub builds.
-No running spike output is reused.
+Publishing uses project-specific build output, not an installed or running app.
+Before starting this version, quit any running companion from an older preview
+using its **Quit** menu action. Preview single-instance identifiers have changed;
+the current CLI does not discover or stop instances using the older identifiers.
 
 Publish just this app (without publishing the CLI or the managed payload):
 
 ```bash
-bash tools/Aspire.Tray.Spike/Mac/publish.sh osx-arm64
+bash src/Aspire.Tray/Mac/publish.sh osx-arm64
 # Equivalent shared build target:
 ./dotnet.sh msbuild eng/Bundle.proj /t:_PublishNativeTray /p:TargetRid=osx-arm64 /p:Configuration=Release
 ```
@@ -1470,9 +1473,10 @@ without a tray. No Windows tray payload is produced.
 After layout creation, `_VerifyNativeTrayArchive` extracts the app from the actual
 tar.gz payload and checks its executable, plist, icon, signature and execute bits.
 This covers both GitHub and official signing paths before CLI embedding.
-The macOS native-archives workflow explicitly runs
-`tools/Aspire.Tray.Spike/Tests/Aspire.Tray.Spike.Tests.csproj` for shared
-contract/lifecycle coverage. Neither verification nor these tests launch the GUI;
+`tests/Aspire.Tray.Tests/Aspire.Tray.Tests.csproj` participates in the normal
+selective test matrix, including macOS, for shared contract/lifecycle coverage.
+Native platform changes select the shared suite and packaging regression tests;
+macOS app changes also select CLI bundle consumers. Neither verification nor these tests launch the GUI;
 native GUI smoke testing requires a known interactive desktop session.
 
 Local ad-hoc signing does **not** validate Developer ID signing, notarization or

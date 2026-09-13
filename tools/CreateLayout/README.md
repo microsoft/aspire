@@ -37,14 +37,14 @@ for local validation without overwriting an executable that is currently running
 ## macOS Example
 
 ```bash
-bash tools/Aspire.Tray.Spike/Mac/publish.sh osx-arm64
+bash src/Aspire.Tray/Mac/publish.sh osx-arm64
 
 ./dotnet.sh run --project tools/CreateLayout/CreateLayout.csproj -- \
   --output artifacts/bundle/osx-arm64 \
   --artifacts artifacts \
   --rid osx-arm64 \
   --bundle-version 13.6.0-dev \
-  --tray-app "artifacts/bin/Aspire.Tray/Release/net10.0/osx-arm64/app/Aspire Tray.app" \
+  --tray-app "artifacts/bin/Aspire.Tray.Mac/Release/net10.0/osx-arm64/app/Aspire Tray.app" \
   --archive
 ```
 
@@ -81,5 +81,6 @@ for signing order, discovery, installation and lease behavior.
 `artifacts/tray-payload-verification/{rid}/`, checks the executable/plist/icon/signature,
 verifies execute bits and the app seal, and never launches the GUI. This runs
 before embedding, including the official layout-only signing pipeline path.
-The macOS native-archives workflow also explicitly runs the shared tray
-contract/lifecycle test project, which is not part of the product solution.
+The shared `tests/Aspire.Tray.Tests` contract/lifecycle suite runs through the
+normal test project discovery and selective matrix, including macOS. Platform
+project changes also select the shared suite and packaging regression tests.
