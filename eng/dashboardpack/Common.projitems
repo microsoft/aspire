@@ -67,6 +67,8 @@
       DestinationFiles="@(_PublishItems->'$(_DashboardArchiveStagingDirectory)/%(RecursiveDir)%(Filename)%(Extension)')" />
 
     <MakeDir Directories="$(DashboardPublishedArtifactsOutputDir)/$(DashboardRuntime)" />
+    <!-- The native signing pipeline reruns this target with SkipDashboardPublish=true after signing.
+      Overwrite the earlier archive so the shipped ZIP contains the signed executable and restored Unix permissions. -->
     <ZipDirectory
       SourceDirectory="$(_DashboardArchiveStagingDirectory)"
       DestinationFile="$(DashboardPublishedArtifactsOutputDir)/$(DashboardRuntime)/aspire-dashboard-$(DashboardRuntime).zip"
