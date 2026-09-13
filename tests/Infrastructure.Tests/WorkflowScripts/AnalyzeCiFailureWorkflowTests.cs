@@ -264,6 +264,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var privateKeyAcrossTruncationBoundary = $"{new string('x', 3950)}-----BEGIN PRIVATE KEY-----\n{new string('k', 200)}\n-----END PRIVATE KEY-----\nExpected 42 but got 41";
         var input = new
         {
+            title = "Failure while using Password=title-secret",
             standard_output = privateKeyAcrossTruncationBoundary,
             standard_error = $"Host=db;Password=secret-value;Timeout=30\nTOKEN: colon-secret\n{credentialUri}",
             truncated_private_key = "Diagnostic prefix\n-----BEGIN RSA PRIVATE KEY-----\nsecret-key-material",
@@ -272,6 +273,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
         var output = await InvokeScriptAsync("redact", input);
         var redacted = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+        Assert.Equal("Failure while using Password=[REDACTED]", redacted.GetProperty("title").GetString());
         Assert.Equal(
             $"{new string('x', 3950)}[REDACTED]\nExpected 42 but got 41",
             redacted.GetProperty("standard_output").GetString());
@@ -303,6 +305,30 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var redacted = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
 
         Assert.Equal(expected, redacted.GetProperty("diagnostic").GetString());
+    }
+
+    [Theory]
+    [InlineData("analyze-ci-failure.md")]
+    [InlineData("analyze-ci-failure.lock.yml")]
+    public void PublishStepRedactsCauseFilesBeforeUse(string workflowName)
+    {
+        var workflow = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", workflowName));
+        var publishStepIndex = workflow.IndexOf("- name: Publish analysis data and comment on PR", StringComparison.Ordinal);
+        Assert.True(publishStepIndex >= 0, $"Could not find the publish step in {workflowName}.");
+        var publishStep = workflow[publishStepIndex..];
+        var redactionIndex = publishStep.IndexOf(
+            "node .github/workflows/analyze-ci-failure.js redact \"$CAUSE_FILE\"",
+            StringComparison.Ordinal);
+        var persistenceReadIndex = publishStep.IndexOf(
+            "CAUSE_TYPE_CHECK=$(jq -r '.type' \"$CAUSE_FILE\"",
+            StringComparison.Ordinal);
+        var issueReadIndex = publishStep.IndexOf(
+            "CAUSE_ID=$(jq -r '.id' \"$CAUSE_FILE\")",
+            StringComparison.Ordinal);
+
+        Assert.True(redactionIndex >= 0, $"{workflowName} must redact each cause file.");
+        Assert.True(persistenceReadIndex > redactionIndex, $"{workflowName} must redact causes before persistence reads.");
+        Assert.True(issueReadIndex > redactionIndex, $"{workflowName} must redact causes before issue rendering reads.");
     }
 
     [Fact]
