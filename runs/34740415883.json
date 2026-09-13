@@ -1,0 +1,55 @@
+{
+  "run_id": 34740415883,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34740415883",
+  "analyzed_at": "2026-09-13T06:24:17Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20067,
+    "title": "Fix Azure Functions E2E HTTPS endpoint readiness race",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-functions-readiness-pr",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20067"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "id": 103680284821,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34740415883/job/103680284821",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic 'Process completed with exit code 1' on the 'Run extension E2E tests' step; job logs could not be fetched and no TRX test results were produced. The PR only modifies extension/src/test-e2e/azureFunctions.e2e.test.ts, extension/src/test-e2e/helpers/assertions.ts, and extension/src/test/e2eResourceReadiness.test.ts, none of which are part of the 'browser-debugger' E2E shard, so the failure is unrelated to PR changes and matches the known unrelated-shard-failure flaky pattern.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 103680284826,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34740415883/job/103680284826",
+      "classification": "flaky-test",
+      "reason": "Same shard failing on both Linux and Windows runners with identical 'Process completed with exit code 1' and no retrievable logs or TRX data. The 'browser-debugger' shard is unrelated to the PR's Azure Functions E2E and assertion helper changes, indicating an intermittent/environmental failure rather than a PR code issue.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "VS Code extension E2E (Linux, browser-debugger)",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "error": "Process completed with exit code 1.",
+      "stack_trace": "N/A - job logs unavailable ('Failed to fetch logs for job'); no TRX test results artifact available.",
+      "classification": "flaky",
+      "reason": "Generic exit-code-1 failure with no retrievable logs or test results, on a shard unrelated to the PR's changed files (azureFunctions.e2e.test.ts, assertions.ts, e2eResourceReadiness.test.ts). Matches the previously observed 'vscode-extension-e2e-unrelated-logs-unavailable' pattern of shard failures unconnected to the PR under test."
+    },
+    {
+      "name": "VS Code extension E2E (Windows, browser-debugger)",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "error": "Process completed with exit code 1.",
+      "stack_trace": "N/A - job logs unavailable ('Failed to fetch logs for job'); no TRX test results artifact available.",
+      "classification": "flaky",
+      "reason": "Same generic exit-code-1 failure pattern as the Linux leg of the same shard, with no logs or test results available and no relation to the PR's changed files. Consistent with a known intermittent/environmental E2E shard failure."
+    }
+  ],
+  "causes": ["vscode-extension-e2e-unrelated-logs-unavailable"]
+}
