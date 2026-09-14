@@ -1969,6 +1969,7 @@ public static class AtsCapabilityScanner
                 var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
 
                 var obsoleteData = AttributeDataReader.GetObsoleteData(method);
+                var isExperimental = AttributeDataReader.HasExperimentalData(method);
 
                 // Get simple method name (without type prefix)
                 var simpleMethodName = methodNameOverride ?? customMethodName ?? ToCamelCase(method.Name);
@@ -1980,6 +1981,7 @@ public static class AtsCapabilityScanner
                     OwningTypeName = typeName,
                     Description = description,
                     Documentation = methodDocumentation,
+                    IsExperimental = isExperimental,
                     IsObsolete = obsoleteData is not null,
                     ObsoleteMessage = obsoleteData?.Message,
                     Parameters = paramInfos,
@@ -2076,6 +2078,7 @@ public static class AtsCapabilityScanner
         // Get named arguments
         var methodNameOverride = exportAttr.MethodName;
         var obsoleteData = AttributeDataReader.GetObsoleteData(method);
+        var isExperimental = AttributeDataReader.HasExperimentalData(method);
 
         var methodName = methodNameOverride ?? methodNameFromAttr;
         // New format: {AssemblyName}/{methodName}
@@ -2152,6 +2155,7 @@ public static class AtsCapabilityScanner
             MethodName = methodName,
             Description = description,
             Documentation = methodDocumentation,
+            IsExperimental = isExperimental,
             IsObsolete = obsoleteData is not null,
             ObsoleteMessage = obsoleteData?.Message,
             Parameters = paramInfos,

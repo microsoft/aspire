@@ -88,6 +88,14 @@ public class AspireProvisioningProxyGeneratorTests
             "<param name=\"bicepIdentifier\">",
             "<param name=\"resourceVersion\">",
             "<param name=\"infrastructure\">");
+
+        var exportedMethods = GetAllTypes(result.Compilation.Assembly.GlobalNamespace)
+            .SelectMany(static type => type.GetMembers().OfType<IMethodSymbol>())
+            .Where(static method => method.GetAttributes().Any(static attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "Aspire.Hosting.AspireExportAttribute"))
+            .ToArray();
+        Assert.NotEmpty(exportedMethods);
+        Assert.All(exportedMethods, AssertProvisioningExperimental);
     }
 
     [Fact]
@@ -247,14 +255,18 @@ public class AspireProvisioningProxyGeneratorTests
         Assert.NotNull(factory);
         var createModel = Assert.Single(factory.GetMembers("CreateParameterNameCollisionModel").OfType<IMethodSymbol>());
         Assert.Equal(
-            ["infrastructure", "args_", "args"],
+            ["infrastructure", "args_", "args", "infrastructure_", "instance_"],
             createModel.Parameters.Select(static parameter => parameter.Name));
         AssertDocumentationContains(
             createModel,
             "<paramref name=\"args_\"",
             "<paramref name=\"args\"",
+            "<paramref name=\"infrastructure_\"",
+            "<paramref name=\"instance_\"",
             "<param name=\"args_\"",
-            "<param name=\"args\"");
+            "<param name=\"args\"",
+            "<param name=\"infrastructure_\"",
+            "<param name=\"instance_\"");
         var factorySyntax = Assert.IsType<MethodDeclarationSyntax>(createModel.DeclaringSyntaxReferences.Single().GetSyntax());
         var factorySemanticModel = result.Compilation.GetSemanticModel(factorySyntax.SyntaxTree);
         var objectCreation = Assert.Single(
@@ -266,7 +278,9 @@ public class AspireProvisioningProxyGeneratorTests
         Assert.Collection(
             objectCreation.Arguments,
             argument => Assert.Equal("args_", Assert.IsAssignableFrom<IParameterReferenceOperation>(argument.Value).Parameter.Name),
-            argument => Assert.Equal("args", Assert.IsAssignableFrom<IParameterReferenceOperation>(argument.Value).Parameter.Name));
+            argument => Assert.Equal("args", Assert.IsAssignableFrom<IParameterReferenceOperation>(argument.Value).Parameter.Name),
+            argument => Assert.Equal("infrastructure_", Assert.IsAssignableFrom<IParameterReferenceOperation>(argument.Value).Parameter.Name),
+            argument => Assert.Equal("instance_", Assert.IsAssignableFrom<IParameterReferenceOperation>(argument.Value).Parameter.Name));
 
         var proxy = result.Compilation.GetTypeByMetadataName(
             "ProvisioningGeneratorTests.Generated.ParameterNameCollisionModelProxy");
@@ -447,6 +461,36 @@ public class AspireProvisioningProxyGeneratorTests
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
     }
 
+    private static IEnumerable<INamedTypeSymbol> GetAllTypes(INamespaceSymbol namespaceSymbol)
+    {
+        foreach (var type in namespaceSymbol.GetTypeMembers())
+        {
+            yield return type;
+        }
+
+        foreach (var childNamespace in namespaceSymbol.GetNamespaceMembers())
+        {
+            foreach (var type in GetAllTypes(childNamespace))
+            {
+                yield return type;
+            }
+        }
+    }
+
+    private static void AssertProvisioningExperimental(IMethodSymbol method)
+    {
+        var experimental = Assert.Single(method.GetAttributes(), static attribute =>
+            attribute.AttributeClass?.ToDisplayString() == "System.Diagnostics.CodeAnalysis.ExperimentalAttribute");
+        Assert.Equal("ASPIREAZUREPROVISIONING001", Assert.IsType<string>(experimental.ConstructorArguments[0].Value));
+        Assert.Contains(
+            experimental.NamedArguments,
+            static argument => argument is
+            {
+                Key: "UrlFormat",
+                Value.Value: "https://aka.ms/aspire/diagnostics/{0}"
+            });
+    }
+
     private const string SupportedSource = SupportedAttributes + CommonSource + SupportedTypes;
 
     private const string NullableProxyConstructorSource = NullableProxyConstructorAttributes + CommonSource + NullableProxyConstructorTypes;
@@ -596,10 +640,19 @@ public class AspireProvisioningProxyGeneratorTests
         {
             public sealed class ParameterNameCollisionModel
             {
-                /// <summary>Creates a model from <paramref name="arguments"/> and <paramref name="args"/>.</summary>
+                /// <summary>
+                /// Creates a model from <paramref name="arguments"/>, <paramref name="args"/>,
+                /// <paramref name="infrastructure"/>, and <paramref name="instance"/>.
+                /// </summary>
                 /// <param name="arguments">The first value.</param>
                 /// <param name="args">The second value.</param>
-                public ParameterNameCollisionModel(string arguments, string args)
+                /// <param name="infrastructure">A value that collides with the generated extension receiver.</param>
+                /// <param name="instance">A value that collides with the generated factory local.</param>
+                public ParameterNameCollisionModel(
+                    string arguments,
+                    string args,
+                    string infrastructure,
+                    string instance)
                 {
                 }
 

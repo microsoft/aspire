@@ -17,6 +17,7 @@ public static class AttributeDataReader
     private const string AspireDtoAttributeFullName = HostingTypeNames.AspireDtoAttribute;
     private const string AspireValueAttributeFullName = HostingTypeNames.AspireValueAttribute;
     private const string AspireUnionAttributeFullName = HostingTypeNames.AspireUnionAttribute;
+    private const string ExperimentalAttributeFullName = "System.Diagnostics.CodeAnalysis.ExperimentalAttribute";
     private const string ObsoleteAttributeFullName = "System.ObsoleteAttribute";
 
     // --- AspireExport lookup ---
@@ -100,6 +101,14 @@ public static class AttributeDataReader
     /// </summary>
     public static AspireUnionData? GetAspireUnionData(PropertyInfo property)
         => FindSingleAttribute<AspireUnionData>(property.GetCustomAttributesData(), AspireUnionAttributeFullName, ParseAspireUnionData);
+
+    // --- Experimental lookup ---
+
+    /// <summary>
+    /// Determines whether the specified <paramref name="method"/> has the <c>ExperimentalAttribute</c>.
+    /// </summary>
+    public static bool HasExperimentalData(MethodInfo method)
+        => HasAttribute(method.GetCustomAttributesData(), ExperimentalAttributeFullName);
 
     // --- Obsolete lookup ---
 

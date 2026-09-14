@@ -29,6 +29,8 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     private const string AzureResourceInfrastructureTypeName = "global::Aspire.Hosting.Azure.AzureResourceInfrastructure";
     private const string FactoryClassName = "AzureResourceInfrastructureProvisioningExtensions";
     private const string DiagnosticCategory = "Aspire.Hosting.Azure.Provisioning";
+    private const string ExperimentalDiagnosticId = "ASPIREAZUREPROVISIONING001";
+    private const string ExperimentalUrlFormat = "https://aka.ms/aspire/diagnostics/{0}";
 
     private static readonly DiagnosticDescriptor s_unsupportedProperty = new(
         id: "ASPIREAZUREPROVISIONING002",
@@ -1846,7 +1848,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             {
                 constructors.Add(new SelectedConstructor(
                     constructor,
-                    AllocateGeneratedParameterNames(mappedParameters)));
+                    AllocateGeneratedParameterNames(mappedParameters, "infrastructure", "instance")));
             }
         }
 
@@ -1911,24 +1913,33 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
     }
 
-    private static List<MappedParameter> AllocateGeneratedParameterNames(List<MappedParameter> parameters)
+    private static List<MappedParameter> AllocateGeneratedParameterNames(
+        List<MappedParameter> parameters,
+        params string[] reservedNames)
     {
+        var namesRequiringTranslation = new HashSet<string>(reservedNames, StringComparer.Ordinal)
+        {
+            "arguments"
+        };
         var usedNames = new HashSet<string>(
             parameters
-                .Where(static parameter => parameter.Parameter.Name != "arguments")
+                .Where(parameter => !namesRequiringTranslation.Contains(parameter.Parameter.Name))
                 .Select(static parameter => parameter.Parameter.Name),
             StringComparer.Ordinal);
+        usedNames.UnionWith(reservedNames);
         var mappedParameters = new List<MappedParameter>(parameters.Count);
 
         foreach (var parameter in parameters)
         {
             var generatedName = parameter.Parameter.Name;
-            if (generatedName == "arguments")
+            if (namesRequiringTranslation.Contains(generatedName))
             {
                 // TypeScript AppHosts are ES modules, where strict mode forbids "arguments" as a
-                // parameter name. Reserve the SDK's other parameter names first so translating it
-                // to "args" cannot collide with an existing "args" parameter in the same signature.
-                generatedName = GetUniqueGeneratedLocalName(usedNames, "args");
+                // parameter name. Factory methods also reserve their receiver and generated local
+                // names so valid Azure SDK constructors cannot produce duplicate C# declarations.
+                generatedName = GetUniqueGeneratedLocalName(
+                    usedNames,
+                    generatedName == "arguments" ? "args" : generatedName);
             }
 
             mappedParameters.Add(new MappedParameter(parameter.Parameter, parameter.Type, generatedName));
@@ -2241,6 +2252,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
     private static void AppendMethodExportAttribute(StringBuilder source, string capabilityId, string methodName)
     {
+        source.Append("        [global::System.Diagnostics.CodeAnalysis.ExperimentalAttribute(\"")
+            .Append(ExperimentalDiagnosticId)
+            .Append("\", UrlFormat = \"")
+            .Append(ExperimentalUrlFormat)
+            .AppendLine("\")]");
         source.Append("        [global::Aspire.Hosting.AspireExportAttribute(\"")
             .Append(capabilityId)
             .Append("\", MethodName = \"")

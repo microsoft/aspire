@@ -128,6 +128,21 @@ public class AttributeDataReaderTests
     }
 
     [Fact]
+    public void ExperimentalMethod_IsReflectedInCapabilityMetadata()
+    {
+        var method = typeof(OfficialAttributeExports).GetMethod("ExperimentalExportMethod")!;
+
+        Assert.True(AttributeDataReader.HasExperimentalData(method));
+
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AttributeDataReaderTests).Assembly);
+        var capability = Assert.Single(
+            result.Capabilities,
+            static capability => capability.CapabilityId.EndsWith("/experimentalMethod", StringComparison.Ordinal));
+
+        Assert.True(capability.IsExperimental);
+    }
+
+    [Fact]
     public void GetAspireExportData_ReadsAllNamedProperties()
     {
         var method = typeof(OfficialAttributeExports).GetMethod(nameof(OfficialAttributeExports.OverriddenNameMethod))!;
@@ -218,6 +233,13 @@ public class AttributeDataReaderTests
         [Obsolete("Official obsolete method")]
         [AspireExport("obsoleteMethod")]
         public static void ObsoleteExportMethod(IResource resource)
+        {
+            _ = resource;
+        }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("TESTEXPERIMENTAL001")]
+        [AspireExport("experimentalMethod")]
+        public static void ExperimentalExportMethod(IResource resource)
         {
             _ = resource;
         }
