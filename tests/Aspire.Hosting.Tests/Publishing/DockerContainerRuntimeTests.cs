@@ -176,10 +176,11 @@ public class DockerContainerRuntimeTests
     [Theory]
     [InlineData(null)]
     [InlineData(ContainerImageFormat.Docker)]
-    public async Task BuildImageAsync_LocalImageArchiveUsesDefaultBuilderThenDockerSave(ContainerImageFormat? imageFormat)
+    public async Task BuildImageAsync_LocalImageArchiveUsesActiveContextBuilderThenDockerSave(ContainerImageFormat? imageFormat)
     {
         var processRunner = new TestProcessRunner();
         processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["desktop-linux"]);
         processRunner.EnqueueResult();
         processRunner.EnqueueResult();
         var runtime = new DockerContainerRuntime(
@@ -201,13 +202,98 @@ public class DockerContainerRuntimeTests
         Assert.Collection(
             processRunner.ProcessSpecs,
             check => Assert.Equal("buildx version", check.Arguments),
+            context => Assert.Equal("context show", context.Arguments),
             build => Assert.Equal(
-                $"buildx build --file \"Dockerfile\" --tag \"myapp:latest\" --builder \"default\" " +
+                $"buildx build --file \"Dockerfile\" --tag \"myapp:latest\" --builder \"desktop-linux\" " +
                 $"--platform \"linux/amd64\" \"{GetNormalizedContextPath()}\"",
                 build.Arguments),
             save => Assert.Equal(
                 $"image save --output \"{archivePath}\" --platform \"linux/amd64\" \"myapp:latest\"",
                 save.Arguments));
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_LocalImageWithoutArchiveUsesActiveContextBuilder()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["desktop-linux"]);
+        processRunner.EnqueueResult();
+        var runtime = new DockerContainerRuntime(
+            NullLogger<DockerContainerRuntime>.Instance,
+            processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            TargetPlatform = ContainerTargetPlatform.LinuxAmd64,
+            RequiresLocalImageStore = true
+        };
+
+        await BuildImageAsync(runtime, options);
+
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            check => Assert.Equal("buildx version", check.Arguments),
+            context => Assert.Equal("context show", context.Arguments),
+            build => Assert.Equal(
+                $"buildx build --file \"Dockerfile\" --tag \"myapp:latest\" --builder \"desktop-linux\" " +
+                $"--platform \"linux/amd64\" \"{GetNormalizedContextPath()}\"",
+                build.Arguments));
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_LocalImageWithEmptyActiveContextFails()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: [" "]);
+        var runtime = new DockerContainerRuntime(
+            NullLogger<DockerContainerRuntime>.Instance,
+            processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            RequiresLocalImageStore = true
+        };
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => BuildImageAsync(runtime, options));
+
+        Assert.Equal("Docker did not report exactly one active context.", exception.Message);
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            check => Assert.Equal("buildx version", check.Arguments),
+            context => Assert.Equal("context show", context.Arguments));
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_LocalImageContextDiscoveryFailureIsReported()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(exitCode: 42, error: ["context failed"]);
+        var runtime = new DockerContainerRuntime(
+            NullLogger<DockerContainerRuntime>.Instance,
+            processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            RequiresLocalImageStore = true
+        };
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => BuildImageAsync(runtime, options));
+
+        Assert.Equal(
+            $"Docker context discovery for 'myapp:latest' failed with exit code 42.{Environment.NewLine}context failed",
+            exception.Message);
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            check => Assert.Equal("buildx version", check.Arguments),
+            context => Assert.Equal("context show", context.Arguments));
     }
 
     [Fact]

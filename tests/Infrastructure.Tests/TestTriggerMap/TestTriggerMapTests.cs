@@ -660,6 +660,7 @@ public sealed class TestTriggerMapTests
 
         Assert.False(result.SelectsAll);
         Assert.Contains("job:deployment-e2e", result.Jobs);
+        Assert.Contains(result.JobCauses["job:deployment-e2e"], cause => cause.Kind == CauseKind.AffectedProject);
     }
 
     [Theory]

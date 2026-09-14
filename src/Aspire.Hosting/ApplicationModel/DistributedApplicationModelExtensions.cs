@@ -12,7 +12,8 @@ public static class DistributedApplicationModelExtensions
 {
     /// <summary>
     /// Returns the compute resources from the <see cref="DistributedApplicationModel"/>.
-    /// Compute resources are those that are either containers or project resources, and are not marked to be ignored by the manifest publishing callback annotation.
+    /// Compute resources are containers, emulators, or resources that support .NET program publishing.
+    /// Resources excluded from publishing and build-only containers are omitted.
     /// </summary>
     /// <param name="model">The distributed application model to extract compute resources from.</param>
     /// <returns>An enumerable of compute <see cref="IResource"/> in the model.</returns>
