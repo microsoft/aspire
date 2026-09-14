@@ -136,8 +136,9 @@ builder.Build().Run();
                 "--named-value-id environment --query value -o tsv)\" = \"infra-test\" ] && " +
                 $"[ \"$(az apim product show -g \"{resourceGroupName}\" --service-name \"$SERVICE\" --subscription \"{subscriptionId}\" " +
                 "--product-id catalog-product --query state -o tsv)\" = \"published\" ] && " +
-                $"az apim product api check -g \"{resourceGroupName}\" --service-name \"$SERVICE\" --subscription \"{subscriptionId}\" " +
-                "--product-id catalog-product --api-id catalog-api --output none && " +
+                $"API_ASSOCIATED=$(az apim product api check -g \"{resourceGroupName}\" --service-name \"$SERVICE\" --subscription \"{subscriptionId}\" " +
+                "--product-id catalog-product --api-id catalog-api --output json) && " +
+                "[ \"$API_ASSOCIATED\" = \"true\" ] && " +
                 $"SERVICE_ID=$(az apim show -g \"{resourceGroupName}\" --name \"$SERVICE\" --subscription \"{subscriptionId}\" --query id -o tsv) && " +
                 "[ \"$(az rest --method get " +
                 "--url \"https://management.azure.com${SERVICE_ID}/backends/catalog-backend?api-version=2024-05-01\" " +
