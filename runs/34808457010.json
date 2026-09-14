@@ -1,0 +1,56 @@
+{
+  "run_id": 34808457010,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34808457010",
+  "analyzed_at": "2026-09-14T05:43:44Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 20084,
+    "title": "Fix dashboard disabled and row hover styles",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/dashboard-disabled-and-row-hover-styles",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20084"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)",
+      "id": 103865908551,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34808457010/job/103865908551",
+      "classification": "transient-infra",
+      "reason": "Failed at 'Download CLI archive' step with '##[error]Unable to download artifact(s): Failed to ListArtifacts: Received non-retryable error: Failed request: (403) Forbidden: Error from intermediary with HTTP status code 403 \"Forbidden\"'. This is a GitHub Actions artifact service infrastructure error unrelated to the PR, which only changes dashboard CSS and unrelated markdown files.",
+      "failed_steps": ["Download CLI archive"]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 22.x)",
+      "id": 103865908581,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34808457010/job/103865908581",
+      "classification": "transient-infra",
+      "reason": "Failed at 'Download CLI archive' step with the same '403 Forbidden' ListArtifacts error as the Node 24.x leg, an infrastructure-side artifact service issue unrelated to PR changes.",
+      "failed_steps": ["Download CLI archive"]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 103867688502,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34808457010/job/103867688502",
+      "classification": "transient-infra",
+      "reason": "This is a downstream aggregation job ('Check validation results') that fails as a direct consequence of the two TypeScript SDK Validation legs failing due to the artifact download 403 Forbidden infra error. No independent failure cause.",
+      "failed_steps": ["Check validation results"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 103866705357,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34808457010/job/103866705357",
+      "classification": "flaky-test",
+      "reason": "Job failed at 'Run extension E2E tests' with generic 'Process completed with exit code 1.' and job logs could not be fetched for detailed diagnosis. This matches the recurring 'vscode-extension-e2e-unrelated-logs-unavailable' prior cause (8 prior occurrences), and the PR only touches dashboard CSS/skill docs, unrelated to VS Code extension E2E code.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["artifact-download-403-forbidden-listartifacts", "vscode-extension-e2e-unrelated-logs-unavailable"]
+}
