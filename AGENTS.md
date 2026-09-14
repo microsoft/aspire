@@ -61,13 +61,17 @@ a reusable workflow must route changes to that workflow file to the job target
 and keep its `run_*` output wiring consistent.
 
 For runtime-only consumers that ProjectGraph cannot see, require an
-`affected_project_rules` entry for each actual non-matrix project consumer and
-a `path_rules` entry for loose inputs. Project-name patterns use globs, not
-regular expressions. For expensive or class-sharded targets, prefer exact
-project names; use a family glob only when every current and future matching
-project should run that target. When a PR changes the packages or fixtures an
-E2E scenario consumes, add or remove the corresponding trigger-map entry in the
-same PR.
+`affected_project_rules` entry for actual production/non-test project consumers,
+a `path_rules` entry for loose or runtime inputs not represented by
+ProjectGraph, or a `derived_targets` entry when selecting one test inherently
+requires another target. Because `affected_project_rules` evaluate only
+production projects and never match projects under `tests/`, a runtime-only test
+or test-support consumer must use path or derived-target routing instead.
+Project-name patterns use globs, not regular expressions. For expensive or
+class-sharded targets, prefer exact project names; use a family glob only when
+every current and future matching project should run that target. When a PR
+changes the packages or fixtures an E2E scenario consumes, add or remove the
+corresponding trigger-map entry in the same PR.
 
 For a dedicated package-input directory in `path_rules`, prefer one stable
 directory glob when enumerating individual files or RIDs would let a new input
