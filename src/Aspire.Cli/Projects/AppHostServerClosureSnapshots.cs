@@ -3,6 +3,7 @@
 
 using System.IO.Hashing;
 using System.Text;
+using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -143,6 +144,41 @@ internal sealed class AppHostServerClosureManifest
         };
     }
 
+    public IntegrationPackageProbeManifest CreatePackageProbeManifest()
+    {
+        var managedAssemblies = new List<IntegrationPackageManagedAssembly>();
+        var nativeLibraries = new List<IntegrationPackageNativeLibrary>();
+
+        foreach (var entry in Entries.Where(static entry => entry.IsPackageBacked))
+        {
+            if (string.Equals(entry.AssetType, "native", StringComparison.OrdinalIgnoreCase))
+            {
+                nativeLibraries.Add(new IntegrationPackageNativeLibrary
+                {
+                    FileName = Path.GetFileName(entry.RelativePath),
+                    Path = entry.SourcePath
+                });
+                continue;
+            }
+
+            if (!entry.SourcePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            managedAssemblies.Add(new IntegrationPackageManagedAssembly
+            {
+                Name = Path.GetFileNameWithoutExtension(entry.RelativePath),
+                Culture = TryGetSatelliteCulture(entry),
+                Path = entry.SourcePath,
+                PackageId = entry.PackageId,
+                PackageVersion = entry.PackageVersion
+            });
+        }
+
+        return IntegrationPackageProbeManifest.Create(managedAssemblies, nativeLibraries);
+    }
+
     private static string ComputeManifestFingerprint(
         IReadOnlyList<AppHostServerClosureManifestEntry> entries,
         string appSettingsContent)
@@ -161,6 +197,19 @@ internal sealed class AppHostServerClosureManifest
         var projectEntries = entries.Select(GetEntryFingerprint).ToList();
 
         return projectEntries.Count == 0 ? null : ComputeHash(projectEntries);
+    }
+
+    private static string? TryGetSatelliteCulture(AppHostServerClosureManifestEntry entry)
+    {
+        if (!string.Equals(entry.AssetType, "resources", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var directoryName = Path.GetDirectoryName(entry.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        return string.IsNullOrWhiteSpace(directoryName)
+            ? null
+            : directoryName.Replace('\\', '/').Trim('/');
     }
 
     private static AppHostServerClosureManifestEntry? TryCreatePackageBackedEntry(

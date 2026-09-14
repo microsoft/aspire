@@ -550,14 +550,14 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             Assert.Equal("staging", packagingService.LastRequestedChannelName);
             AssertRegeneratedModuleNuGetConfig(modulesDirectory, nuGetConfigPath, oldSource, currentSource);
-            Assert.Equal(nuGetConfigPath, options.MSBuildProperties["RestoreConfigFile"]);
+            Assert.DoesNotContain("RestoreConfigFile", options.MSBuildProperties);
             TestHelpers.WriteEmptyIntegrationClosureFiles(appHostFile);
             return 0;
         };
         runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
         runner.RunAsyncCallback = (_, _, _, _, _, _, _, options, _) =>
         {
-            Assert.Equal(nuGetConfigPath, options.MSBuildProperties["RestoreConfigFile"]);
+            Assert.DoesNotContain("RestoreConfigFile", options.MSBuildProperties);
             return Task.FromResult(0);
         };
 
@@ -590,7 +590,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             Assert.Equal("staging", packagingService.LastRequestedChannelName);
             AssertRegeneratedModuleNuGetConfig(modulesDirectory, nuGetConfigPath, oldSource, currentSource);
-            Assert.Equal(nuGetConfigPath, options.MSBuildProperties["RestoreConfigFile"]);
+            Assert.DoesNotContain("RestoreConfigFile", options.MSBuildProperties);
             TestHelpers.WriteEmptyIntegrationClosureFiles(appHostFile);
             return 0;
         };
@@ -5105,14 +5105,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var services = CliTestHelper.CreateServiceCollection(_workspace, outputHelper, options =>
         {
             options.DotNetCliRunnerFactory = _ => runner;
-            if (layout is not null)
+            if (layout is null)
             {
-                options.BundleServiceFactory = _ => new TestBundleService(isBundle: true)
-                {
-                    Layout = layout
-                };
+                CreateCliBundle(out layout);
             }
 
+            CliTestHelper.ConfigureCliManagedNuGet(options, _workspace, layout);
             configureServices?.Invoke(options);
         });
 
@@ -5136,8 +5134,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         var modulesDirectory = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules");
         Directory.CreateDirectory(modulesDirectory);
-        var nuGetConfigPath = Path.Combine(modulesDirectory, "nuget.config");
-        await File.WriteAllTextAsync(nuGetConfigPath, $$"""
+        var staleNuGetConfigPath = Path.Combine(modulesDirectory, "nuget.config");
+        await File.WriteAllTextAsync(staleNuGetConfigPath, $$"""
             <?xml version="1.0" encoding="utf-8"?>
             <configuration>
               <packageSources>
@@ -5174,14 +5172,17 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             }
         };
 
+        var nuGetConfigPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "NuGet.Config");
         return (packagingService, modulesDirectory, nuGetConfigPath, oldSource, currentSource);
     }
 
     private static void AssertRegeneratedModuleNuGetConfig(string modulesDirectory, string nuGetConfigPath, string oldSource, string currentSource)
     {
-        var moduleProjectPath = Path.Combine(modulesDirectory, "Aspire.csproj");
-        var moduleProject = XDocument.Load(moduleProjectPath);
-        Assert.Equal(nuGetConfigPath, moduleProject.Descendants("RestoreConfigFile").Single().Value);
+        Assert.False(File.Exists(Path.Combine(modulesDirectory, "nuget.config")));
+
+        var directoryBuildProps = XDocument.Load(Path.Combine(modulesDirectory, "Directory.Build.props"));
+        Assert.Equal(Path.GetDirectoryName(nuGetConfigPath), directoryBuildProps.Descendants("RestoreRootConfigDirectory").Single().Value);
+        Assert.Empty(directoryBuildProps.Descendants("RestoreConfigFile").Single().Value);
 
         var nuGetConfig = XDocument.Load(nuGetConfigPath);
         var packageSources = nuGetConfig.Descendants("packageSources")

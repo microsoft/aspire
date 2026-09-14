@@ -1503,6 +1503,16 @@ internal partial class DotNetAppHostProject : IAppHostProject
 
         await PrepareForRunAsync(effectiveAppHostFile, cancellationToken);
 
+        // Configure the bundle before the safety build because file-based AppHosts can resolve
+        // bundle-owned tools and packages while evaluating their build.
+        BundleLayoutLease? cliBundleLease = await ConfigureCliBundleEnvironmentForRunAsync(
+            effectiveAppHostFile,
+            env,
+            isSingleFileAppHost,
+            context,
+            cancellationToken);
+        using var cliBundleLeaseScope = cliBundleLease;
+
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
         var (preparationExitCode, builtByCli, deferBuildCompletion) = await PrepareAppHostAsync(
             context,
@@ -1517,21 +1527,6 @@ internal partial class DotNetAppHostProject : IAppHostProject
         {
             return exitCode;
         }
-
-        // Two separate bundle interactions:
-        //  - injectDcpAndDashboard: only true when the AppHost opted into AspireUseCliBundle.
-        //    Those env vars would clobber the per-RID NuGet metadata path otherwise.
-        //  - terminal host env vars: always injected when the bundle is available, because
-        //    no per-RID NuGet ships the terminal host today. Skipping ResolveAspireCliBundle
-        //    is fine for non-CliBundle AppHosts that don't use WithTerminal() — the lease
-        //    is best-effort and a missing layout just means no terminal host env vars.
-        BundleLayoutLease? cliBundleLease = await ConfigureCliBundleEnvironmentForRunAsync(
-            effectiveAppHostFile,
-            env,
-            isSingleFileAppHost,
-            context,
-            cancellationToken);
-        using var cliBundleLeaseScope = cliBundleLease;
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost

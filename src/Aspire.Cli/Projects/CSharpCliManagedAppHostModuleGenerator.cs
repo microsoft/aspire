@@ -4,6 +4,7 @@
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -12,11 +13,17 @@ namespace Aspire.Cli.Projects;
 
 internal sealed class CSharpCliManagedAppHostModuleGenerator(
     IPackagingService packagingService,
-    ILogger<CSharpCliManagedAppHostModuleGenerator> logger,
-    string? nugetServiceIndexOverride = null,
-    string? identitySdkVersion = null,
-    DirectoryInfo? aspireHomeDirectory = null)
+    BundleNuGetService nugetService,
+    CliExecutionContext executionContext,
+    ILogger<CSharpCliManagedAppHostModuleGenerator> logger)
 {
+    private readonly IntegrationRestorePlanResolver _restorePlanResolver = new(
+        packagingService,
+        nugetService,
+        executionContext,
+        logger);
+    private readonly string _identitySdkVersion = executionContext.IdentitySdkVersion;
+
     internal const string ModulesDirectoryName = "modules";
     internal const string ModuleProjectFileName = "Aspire.csproj";
     internal const string AppHostBuildPropsFileName = "AppHost.Directory.Build.props";
@@ -25,6 +32,11 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
     internal const string BuildPropertyName = "AspireCliManagedAppHostBuild";
 
     internal async Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+        => (await TryGenerateWithRestoreConfigurationAsync(appHostFile, cancellationToken).ConfigureAwait(false))?.ModuleProjectFile;
+
+    internal async Task<CliManagedAppHostModuleGenerationResult?> TryGenerateWithRestoreConfigurationAsync(
+        FileInfo appHostFile,
+        CancellationToken cancellationToken)
     {
         var appHostDirectory = appHostFile.Directory;
         if (appHostDirectory is null)
@@ -34,10 +46,26 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
 
         var configDirectory = ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
         var config = AspireConfigFile.Load(configDirectory.FullName) ?? new AspireConfigFile();
-        return await TryGenerateAsync(appHostFile, config, configDirectory, packageSourceOverride: null, cancellationToken).ConfigureAwait(false);
+        return await GenerateAsync(appHostFile, config, configDirectory, packageSourceOverride: null, cancellationToken).ConfigureAwait(false);
     }
 
     internal async Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, AspireConfigFile config, DirectoryInfo configDirectory, string? packageSourceOverride, CancellationToken cancellationToken)
+        => (await GenerateAsync(appHostFile, config, configDirectory, packageSourceOverride, cancellationToken).ConfigureAwait(false))?.ModuleProjectFile;
+
+    internal Task<CliManagedAppHostModuleGenerationResult?> TryGenerateWithRestoreConfigurationAsync(
+        FileInfo appHostFile,
+        AspireConfigFile config,
+        DirectoryInfo configDirectory,
+        string? packageSourceOverride,
+        CancellationToken cancellationToken)
+        => GenerateAsync(appHostFile, config, configDirectory, packageSourceOverride, cancellationToken);
+
+    private async Task<CliManagedAppHostModuleGenerationResult?> GenerateAsync(
+        FileInfo appHostFile,
+        AspireConfigFile config,
+        DirectoryInfo configDirectory,
+        string? packageSourceOverride,
+        CancellationToken cancellationToken)
     {
         var appHostDirectory = appHostFile.Directory;
         if (appHostDirectory is null)
@@ -55,44 +83,45 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         var legacyModuleTargetsFile = new FileInfo(Path.Combine(modulesDirectory.FullName, "Aspire.targets"));
 
         var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(appHostDirectory.FullName);
+        var sdkVersion = config.SdkVersion ?? _identitySdkVersion;
         var integrationReferences = config
-            .GetIntegrationReferences(identitySdkVersion ?? VersionHelper.GetDefaultSdkVersion(), configDirectory.FullName)
+            .GetIntegrationReferences(sdkVersion, configDirectory.FullName)
             .ToList();
-        var restoreSources = await new IntegrationRestoreSourceResolver(packagingService, logger, nugetServiceIndexOverride)
-            .ResolveAsync(config.Channel, packageSourceOverride, cancellationToken)
+        var restorePlan = await _restorePlanResolver.ResolveAsync(
+            appHostDirectory.FullName,
+            sdkVersion,
+            config.Channel,
+            packageSourceOverride,
+            packageSourceOverridePattern: null,
+            cancellationToken)
             .ConfigureAwait(false);
-        string? globalPackagesFolder = null;
-        if (restoreSources.PackageSourceMappings is not null)
+        var policyDirectory = IntegrationClosureBuilder.GetAppHostIntegrationPolicyDirectory(appHostDirectory);
+        var restoreConfiguration = await restorePlan.ApplyProjectRestoreConfigurationAsync(
+            policyDirectory,
+            cancellationToken).ConfigureAwait(false);
+        if (nuGetConfigFile.Exists)
         {
-            using var temporaryConfig = await TemporaryNuGetConfig.CreateAsync(
-                restoreSources.PackageSourceMappings,
-                restoreSources.ConfigureGlobalPackagesFolder).ConfigureAwait(false);
-            if (restoreSources.ConfigureGlobalPackagesFolder)
-            {
-                globalPackagesFolder = CliPathHelper.GetStagingNuGetPackagesFeedDirectory(
-                    aspireHomeDirectory ?? new DirectoryInfo(CliPathHelper.GetDefaultAspireHomeDirectory()),
-                    temporaryConfig.CacheIdentity);
-                await temporaryConfig.SetGlobalPackagesFolderAsync(globalPackagesFolder).ConfigureAwait(false);
-            }
-
-            var nuGetConfigContent = await File.ReadAllTextAsync(temporaryConfig.ConfigFile.FullName, cancellationToken).ConfigureAwait(false);
-            await GeneratedFileWriter.WriteIfChangedAsync(nuGetConfigFile.FullName, nuGetConfigContent, cancellationToken).ConfigureAwait(false);
-        }
-        else if (nuGetConfigFile.Exists)
-        {
-            logger.LogDebug("Preserving existing CLI-managed module NuGet.config at {NuGetConfigPath} because no explicit package source mapping was resolved.", nuGetConfigFile.FullName);
+            nuGetConfigFile.Delete();
         }
 
         var workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostDirectory);
         var integrationRestoreDir = Path.Combine(workingDirectory.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
         Directory.CreateDirectory(integrationRestoreDir);
 
-        IReadOnlyList<string> additionalSources = restoreSources.PackageSourceMappings is null
-            ? restoreSources.AdditionalSources
-            : [];
-        var restoreConfigFile = restoreSources.PackageSourceMappings is not null || nuGetConfigFile.Exists ? nuGetConfigFile : null;
-        await WriteModuleProjectFileAsync(moduleProjectFile, additionalSources, restoreConfigFile, integrationRestoreDir, integrationReferences, repoRoot, cancellationToken).ConfigureAwait(false);
-        await WriteAppHostBuildPropsFileAsync(appHostBuildPropsFile, appHostFile, additionalSources, restoreConfigFile, integrationReferences, repoRoot, cancellationToken).ConfigureAwait(false);
+        await WriteModuleProjectFileAsync(
+            moduleProjectFile,
+            restoreConfiguration.RootAdditionalSources,
+            integrationRestoreDir,
+            integrationReferences,
+            repoRoot,
+            cancellationToken).ConfigureAwait(false);
+        await WriteAppHostBuildPropsFileAsync(
+            appHostBuildPropsFile,
+            appHostFile,
+            restoreConfiguration,
+            integrationReferences,
+            repoRoot,
+            cancellationToken).ConfigureAwait(false);
         await WriteAppHostBuildTargetsFileAsync(appHostBuildTargetsFile, appHostFile, cancellationToken).ConfigureAwait(false);
         if (legacyModuleTargetsFile.Exists)
         {
@@ -107,7 +136,8 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
             IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
                 integrationRestoreDir,
                 Path.Combine(integrationRestoreDir, "obj"),
-                globalPackagesFolder).ToString(),
+                restoreConfiguration.RestoreRootConfigDirectory,
+                restoreConfiguration.GlobalPackagesFolder).ToString(),
             cancellationToken).ConfigureAwait(false);
 
         // Write sentinel targets/packages files to prevent upstream imports from overriding generated project behavior.
@@ -124,13 +154,18 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
             cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Generated CLI-managed C# AppHost module project at {ProjectPath}", moduleProjectFile.FullName);
-        return moduleProjectFile;
+        return new CliManagedAppHostModuleGenerationResult(
+            moduleProjectFile,
+            IntegrationClosureBuilder.CreateRestoreAdditionalProjectSourcesValue(
+                existingValue: null,
+                restoreConfiguration.PackageSourceHints),
+            restoreConfiguration.SensitiveSources,
+            restoreConfiguration.GlobalPackagesFolder);
     }
 
     private static async Task WriteModuleProjectFileAsync(
         FileInfo moduleProjectFile,
         IReadOnlyList<string> additionalSources,
-        FileInfo? restoreConfigFile,
         string integrationRestoreDir,
         IReadOnlyList<IntegrationReference> integrationReferences,
         string? repoRoot,
@@ -138,8 +173,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
     {
         var projectFile = IntegrationClosureBuilder.CreateClosureProjectFile(
             integrationRestoreDir,
-            additionalSources,
-            restoreConfigFile?.FullName);
+            additionalSources);
 
         projectFile.AddIntegrationReferences(
             integrationReferences,
@@ -167,8 +201,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
     private static async Task WriteAppHostBuildPropsFileAsync(
         FileInfo appHostBuildPropsFile,
         FileInfo appHostFile,
-        IReadOnlyList<string> additionalSources,
-        FileInfo? restoreConfigFile,
+        IntegrationProjectRestoreConfiguration restoreConfiguration,
         IReadOnlyList<IntegrationReference> integrationReferences,
         string? repoRoot,
         CancellationToken cancellationToken)
@@ -185,14 +218,23 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         propertyGroup.Add(new XElement("ManagePackageVersionsCentrally", "false"));
         propertyGroup.Add(new XElement("CentralPackageTransitivePinningEnabled", "false"));
 
-        if (additionalSources.Count > 0)
+        if (restoreConfiguration.RootAdditionalSources.Length > 0)
         {
-            propertyGroup.Add(new XElement("RestoreAdditionalProjectSources", string.Join(";", additionalSources)));
+            propertyGroup.Add(new XElement(
+                "RestoreAdditionalProjectSources",
+                string.Join(";", restoreConfiguration.RootAdditionalSources)));
         }
 
-        if (restoreConfigFile is not null)
+        propertyGroup.Add(new XElement(
+            "RestoreRootConfigDirectory",
+            restoreConfiguration.RestoreRootConfigDirectory));
+        propertyGroup.Add(new XElement("RestoreConfigFile", string.Empty));
+
+        if (restoreConfiguration.GlobalPackagesFolder is not null)
         {
-            propertyGroup.Add(new XElement("RestoreConfigFile", restoreConfigFile.FullName));
+            propertyGroup.Add(new XElement(
+                "RestorePackagesPath",
+                restoreConfiguration.GlobalPackagesFolder));
         }
 
         if (propertyGroup.HasElements)
@@ -264,16 +306,6 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         AddBuildProperty(options);
         options.MSBuildProperties["DirectoryBuildPropsPath"] = GetAppHostBuildPropsFile(appHostFile).FullName;
         options.MSBuildProperties["DirectoryBuildTargetsPath"] = GetAppHostBuildTargetsFile(appHostFile).FullName;
-        AddRestoreConfigFilePropertyIfExists(appHostFile, options);
-    }
-
-    internal static void AddRestoreConfigFilePropertyIfExists(FileInfo appHostFile, ProcessInvocationOptions options)
-    {
-        var nuGetConfigFile = GetModuleNuGetConfigFile(appHostFile);
-        if (nuGetConfigFile.Exists)
-        {
-            options.MSBuildProperties["RestoreConfigFile"] = nuGetConfigFile.FullName;
-        }
     }
 
     internal static FileInfo GetAppHostBuildPropsFile(FileInfo appHostFile)
@@ -287,11 +319,10 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         var appHostDirectory = appHostFile.Directory ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' does not have a containing directory.");
         return new FileInfo(Path.Combine(appHostDirectory.FullName, AspireJsonConfiguration.SettingsFolder, ModulesDirectoryName, AppHostBuildTargetsFileName));
     }
-
-    internal static FileInfo GetModuleNuGetConfigFile(FileInfo appHostFile)
-    {
-        var appHostDirectory = appHostFile.Directory ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' does not have a containing directory.");
-        return new FileInfo(Path.Combine(appHostDirectory.FullName, AspireJsonConfiguration.SettingsFolder, ModulesDirectoryName, NuGetConfigFileName));
-    }
-
 }
+
+internal sealed record CliManagedAppHostModuleGenerationResult(
+    FileInfo ModuleProjectFile,
+    string? IntegrationPackageSources,
+    string[] SensitiveSources,
+    string? GlobalPackagesFolder);
