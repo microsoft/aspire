@@ -8,6 +8,7 @@ import { CliPathResolutionTarget } from './cliPathVariables';
 import { AppHostDiscoveryService, AppHostProjectSearchResult, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from './appHostDiscovery';
 import { sendTelemetryEvent } from './telemetry';
 import { getCommonExcludeGlob } from './workspaceFileSearch';
+import { reportCliResolvedForOperation } from './cliOperationResolution';
 
 export { getCommonExcludeGlob } from './workspaceFileSearch';
 
@@ -282,6 +283,8 @@ export async function checkCliAvailableOrRedirect(
     });
 
     if (result.available) {
+        reportCliResolvedForOperation(target, result.cliPath);
+
         // Show informational message if CLI was found at default path (not on PATH)
         if (result.source === 'default-install') {
             extensionLogOutputChannel.info(`Using Aspire CLI from default install location: ${result.cliPath}`);

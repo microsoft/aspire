@@ -62,11 +62,6 @@
         <target state="translated">至少必須提供一個範本工廠。</target>
         <note />
       </trans-unit>
-      <trans-unit id="CertificateTrustError">
-        <source>An error occurred while trusting the certificates: {0}</source>
-        <target state="translated">信任憑證時發生錯誤: {0}</target>
-        <note>{0} is an exception message</note>
-      </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
         <source>Create NuGet.config for selected channels?</source>
         <target state="translated">為所選通道建立 NuGet.config?</target>

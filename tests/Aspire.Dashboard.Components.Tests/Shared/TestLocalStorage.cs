@@ -7,6 +7,7 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 public sealed class TestLocalStorage : ILocalStorage
 {
+    public Func<string, Task>? OnBeforeGetUnprotectedAsync { get; set; }
     public Func<string, (bool Success, object? Value)>? OnGetUnprotectedAsync { get; set; }
     public Action<string, object?>? OnSetUnprotectedAsync { get; set; }
     public Func<string, (bool Success, object? Value)>? OnGetAsync { get; set; }
@@ -21,14 +22,20 @@ public sealed class TestLocalStorage : ILocalStorage
         return Task.FromResult(new StorageResult<T>(success: false, value: default));
     }
 
-    public Task<StorageResult<T>> GetUnprotectedAsync<T>(string key)
+    public async Task<StorageResult<T>> GetUnprotectedAsync<T>(string key)
     {
+        if (OnBeforeGetUnprotectedAsync is { } beforeCallback)
+        {
+            await beforeCallback(key);
+        }
+
         if (OnGetUnprotectedAsync is { } callback)
         {
             var (success, value) = callback(key);
-            return Task.FromResult(new StorageResult<T>(success: success, value: (T)(value ?? default(T))!));
+            return new StorageResult<T>(success: success, value: (T)(value ?? default(T))!);
         }
-        return Task.FromResult(new StorageResult<T>(success: false, value: default));
+
+        return new StorageResult<T>(success: false, value: default);
     }
 
     public Task SetAsync<T>(string key, T value)

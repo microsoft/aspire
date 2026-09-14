@@ -7,6 +7,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
@@ -264,6 +265,76 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var redisinsight = builder.Resources.Single(r => r.Name.Equals("redisinsight"));
 
         Assert.NotNull(redisinsight);
+    }
+
+    [Fact]
+    public void WithRedisCommanderHidesTheCommanderResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddRedis("myredis").WithRedisCommander();
+
+        var commander = Assert.Single(builder.Resources.OfType<RedisCommanderResource>());
+        var hidden = Assert.Single(commander.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
+    public void WithRedisInsightHidesTheInsightResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddRedis("myredis").WithRedisInsight();
+
+        var insight = Assert.Single(builder.Resources.OfType<RedisInsightResource>());
+        var hidden = Assert.Single(insight.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
+    public async Task WithRedisInsightAddsManagementLinkToEveryRedisResourceInTheApp()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis1 = builder.AddRedis("myredis1").WithRedisInsight();
+        var redis2 = builder.AddRedis("myredis2");
+
+        using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var insight = Assert.Single(model.Resources.OfType<RedisInsightResource>());
+
+        await eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        foreach (var redis in new[] { redis1.Resource, redis2.Resource })
+        {
+            var managementUrl = Assert.Single(redis.Annotations.OfType<ResourceUrlAnnotation>(), u => u.DisplayText == "Manage (Insights)");
+            Assert.Equal(insight.Name, managementUrl.Endpoint?.Resource.Name);
+            Assert.Equal("http", managementUrl.Endpoint?.EndpointName);
+            Assert.Equal("/", managementUrl.Url);
+        }
+    }
+
+    [Fact]
+    public async Task WithRedisCommanderAddsManagementLinkToEveryRedisResourceInTheApp()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis1 = builder.AddRedis("myredis1").WithRedisCommander();
+        var redis2 = builder.AddRedis("myredis2").WithRedisCommander();
+        // redis3 never calls WithRedisCommander() itself, but Commander manages every Redis resource in the app.
+        var redis3 = builder.AddRedis("myredis3");
+
+        using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var commander = Assert.Single(model.Resources.OfType<RedisCommanderResource>());
+
+        await eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        foreach (var redis in new[] { redis1.Resource, redis2.Resource, redis3.Resource })
+        {
+            var managementUrl = Assert.Single(redis.Annotations.OfType<ResourceUrlAnnotation>(), u => u.DisplayText == "Manage (Commander)");
+            Assert.Equal(commander.Name, managementUrl.Endpoint?.Resource.Name);
+            Assert.Equal("http", managementUrl.Endpoint?.EndpointName);
+            Assert.Equal("/", managementUrl.Url);
+        }
     }
 
     [Fact]

@@ -40,7 +40,7 @@ public sealed class ResourceMenuBuilderTests : IDisposable
     }
 
     private ResourceMenuBuilder CreateResourceMenuBuilder(
-        InMemoryTelemetryRepository repository,
+        SqliteTelemetryRepository repository,
         IDashboardClient? dashboardClient = null)
     {
         dashboardClient ??= new TestDashboardClient();
@@ -85,7 +85,8 @@ public sealed class ResourceMenuBuilderTests : IDisposable
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource();
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
@@ -114,7 +115,8 @@ public sealed class ResourceMenuBuilderTests : IDisposable
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
         var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: attributes => (resource.Name, resource));
-        var repository = TelemetryTestHelpers.CreateRepository(outgoingPeerResolvers: [outgoingPeerResolver]);
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository(outgoingPeerResolvers: [outgoingPeerResolver]);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -165,7 +167,8 @@ public sealed class ResourceMenuBuilderTests : IDisposable
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -221,7 +224,8 @@ public sealed class ResourceMenuBuilderTests : IDisposable
                 new EnvironmentVariableViewModel("SPEC_VAR", "spec-value", fromSpec: true),
                 new EnvironmentVariableViewModel("RUNTIME_VAR", "runtime-value", fromSpec: false)
             ]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
@@ -254,7 +258,8 @@ public sealed class ResourceMenuBuilderTests : IDisposable
                 new EnvironmentVariableViewModel("RUNTIME_VAR1", "value1", fromSpec: false),
                 new EnvironmentVariableViewModel("RUNTIME_VAR2", "value2", fromSpec: false)
             ]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
@@ -301,7 +306,8 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             iconName: string.Empty,
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [startCommand, stopCommand]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         var menuItems = new List<MenuButtonItem>();
@@ -337,7 +343,8 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             iconName: string.Empty,
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [command]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(
             repository,
             new TestDashboardClient(isReadOnly: true));
@@ -380,7 +387,8 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             iconName: "NotARealIconName",
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [command]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         var menuItems = new List<MenuButtonItem>();
@@ -421,7 +429,8 @@ public sealed class ResourceMenuBuilderTests : IDisposable
             iconName: string.Empty,
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [command]);
-        var repository = TelemetryTestHelpers.CreateRepository();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         var menuItems = new List<MenuButtonItem>();

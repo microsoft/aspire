@@ -1,6 +1,6 @@
 .icon-checkbox {
     align-items: center;
-    border-radius: calc(var(--control-corner-radius) * 1px);
+    border-radius: var(--borderRadiusLarge);
     cursor: pointer;
     display: inline-flex;
     height: 32px;
@@ -11,14 +11,14 @@
 }
 
 .icon-checkbox:not([aria-disabled="true"]):hover {
-    background: var(--neutral-fill-stealth-hover);
+    background: var(--colorSubtleBackgroundHover);
 }
 
 .icon-checkbox:not([aria-disabled="true"]):active {
-    background: var(--neutral-fill-stealth-active);
+    background: var(--colorSubtleBackgroundPressed);
 }
 
 .icon-checkbox[aria-disabled="true"] {
     cursor: not-allowed;
-    opacity: var(--disabled-opacity);
+    opacity: 0.3;
 }

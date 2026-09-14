@@ -219,10 +219,6 @@
     <value>Project created successfully in {0}.</value>
     <comment>{0} is a path</comment>
   </data>
-  <data name="CertificateTrustError" xml:space="preserve">
-    <value>An error occurred while trusting the certificates: {0}</value>
-    <comment>{0} is an exception message</comment>
-  </data>
   <data name="SearchingForAvailableTemplateVersions" xml:space="preserve">
     <value>Searching for available project template versions...</value>
   </data>

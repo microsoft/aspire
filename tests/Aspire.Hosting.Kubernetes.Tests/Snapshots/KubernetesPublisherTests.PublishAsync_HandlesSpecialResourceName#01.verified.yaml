@@ -1,4 +1,4 @@
-parameters:
+﻿parameters:
   SpeciaL_ApP:
     SpeciaL_ApP_image: "SpeciaL-ApP:latest"
 secrets:

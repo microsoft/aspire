@@ -9,17 +9,17 @@ Companion documents:
 - [`test-trigger-map.md`](./test-trigger-map.md) — the descriptive path → target map.
 - [`eng/github-ci/test-trigger-map.yml`](../../eng/github-ci/test-trigger-map.yml) — its machine-readable form.
 
-**Status: audit.** `tests.yml`'s `setup_for_tests` runs the `select-tests` action
-*before* `enumerate-tests`. When its `enforce: 'true'` and the selection is
+**Status: enforcing.** `tests.yml`'s `setup_for_tests` runs the `select-tests`
+action *before* `enumerate-tests` with `enforce: 'true'`. When the selection is
 not ALL, the selector writes an `OverrideProjectToBuild` props file so
-`enumerate-tests` builds and enumerates only the selected projects; in audit mode
-(`enforce: 'false'`) it writes no props and `enumerate-tests` produces
-the full matrix unchanged while the summary still reports what enforcing would
-have skipped.
+`enumerate-tests` builds and enumerates only the selected PR test projects.
+Schedule/dispatch-only jobs and outerloop-only tests are reported separately
+because the PR selector cannot cause them to run. The `run-full-ci` label remains
+a kill switch that forces the regular PR matrix and all PR-gated jobs.
 
-Audit mode does not soften Layer 1 failures. If the affected-projects graph
-cannot be computed, `SelectTests` fails the step because under-selecting would
-silently skip real tests.
+Neither enforcing nor audit mode softens Layer 1 failures. If the
+affected-projects graph cannot be computed, `SelectTests` fails the step because
+under-selecting would silently skip real tests.
 
 ## Goal
 
@@ -124,7 +124,8 @@ correct affected set *and* the genuine shortest hop chain to each project.
 
 The output is the affected project base names: the `.csproj` filename without
 extension. `TestSelector.Select(...)` intersects test-project names with the
-matrix and matches production-project names against `affected_project_rules`.
+matrix, then matches production/non-test project names against
+`affected_project_rules`.
 
 #### Decision paths (traceability)
 
@@ -237,10 +238,11 @@ load-bearing at the design level:
   This is why `prefilter`, not `ignore`, is what stops a packed `README.md` from
   being attributed by the graph and fanned out: `ignore` only suppresses the
   Layer 2 run-all fallback, while Layer 1 still attributes an `ignore`d file.
-- **`affected_project_rules`** matches Layer 1's affected **production** project
-  names only; affected matrix *test* projects are filtered out first, so a
-  test-only change cannot fire production jobs (`ats-diffs`, `extension-e2e`, …)
-  through a glob like `Aspire.Hosting*`.
+- **`affected_project_rules`** matches Layer 1's affected
+  **production/non-test** project names. Every project under `tests/`, including
+  non-matrix fixtures and support projects, is filtered out first, so test-only
+  changes cannot fire jobs (`typescript-api-compat`, `extension-e2e`, …) through
+  a glob like `Aspire.Hosting*`.
 
 ## The tool (`tools/SelectTests`)
 
@@ -285,9 +287,9 @@ Flow:
    treated as Layer-1-owned, so a link-compiled `src/Shared`/`tests/Shared`
    file does not trip the run-all fallback even though it is under no project
    directory.
-4. Apply `affected_project_rules` to Layer 1 **production**-project names only
-   (affected matrix test projects are filtered out first, so a test-only change
-   does not fire production jobs through a production-name glob).
+4. Apply `affected_project_rules` to Layer 1 **production/non-test** project
+   names (every project under `tests/` is filtered out first, so a test-only
+   change does not fire jobs through a broad project-name glob).
 5. Apply `derived_targets` to a cycle-safe fixpoint.
 6. Escalate to `ALL` for a kill switch, an `ALL` path rule, or any changed file
    that survived the prefilter but is not Layer-1-owned (neither under a project
@@ -453,44 +455,49 @@ The clean wins remain large and safe:
 - Component ↔ component isolation holds: an `Aspire.Npgsql` change does not pull
   unrelated Redis / RabbitMQ / MongoDB / Milvus component tests.
 
-## Audit mode
+## Enforcement and audit mode
 
-Audit mode computes the subset and writes a `$GITHUB_STEP_SUMMARY`, but CI still
-runs the full matrix and all jobs. The summary shows:
+Enforcing mode restricts the regular PR .NET matrix and gates PR jobs to the
+computed selection. Audit mode remains available by passing `enforce: 'false'`;
+it computes the subset and writes a `$GITHUB_STEP_SUMMARY`, but CI still runs the
+regular PR matrix and PR-gated jobs. The summary shows:
 
 - the invocation mode and change source;
-- selected test projects and triggered jobs, each annotated with **why** it was
-  selected — the changed file, affected project, graph edge, or selected test
-  that pulled it in, plus the curated rule's `reason` text;
+- selected PR test projects and triggered PR jobs, each annotated with **why**
+  it was selected — the changed file, affected project, graph edge, or selected
+  test that pulled it in, plus the curated rule's `reason` text;
+- schedule/dispatch-only jobs and outerloop-only tests as advisory impact, not
+  as work the PR selector would run;
 - the would-have-been-skipped list;
 - any `ALL` or kill-switch escalation and why;
 - unattributed changed files that may need curated rules.
 
-The PR comment carries the same selection in a more scannable form. It leads
-with **what runs** — the flat list of selected test projects and the flat list
-of selected jobs (test projects first, since they are the primary review
-signal) — so a reviewer sees the full impact at a glance even when many files
-changed. It then explains **how** the selection was reached in a collapsed
-`<details>` (the heading is the `<summary>`, so the rationale stays out of the
-way until expanded), grouping the selected projects under each trigger (changed
-file, affected project, or derived test) that pulled them in: a changed file
-and its graph fan-out appear under one heading, so a single edit's whole
-closure is stated once rather than repeated per project, and large fan-outs
-collapse into a nested `<details>`. Every cause is still shown — a project
-selected by several triggers appears under each — and a per-job table names
-what triggered each job. The comment is posted **one per pushed
-commit** and links the head commit it was computed for: a re-run of the same
-commit updates that commit's comment in place (no duplicate — re-runs are
-common), a new commit posts a fresh comment at the bottom, and comments from
-superseded commits are collapsed (minimized, never deleted) so the latest
-selection surfaces at the bottom while the per-push history is preserved. In
-audit mode the comment is advisory — the
-full matrix and all jobs still run — so it is labelled "(audit mode)" and states
-that the lists are what selective CI **would** run under enforcement.
+The PR comment carries the PR-gated selection in a more scannable form. It
+leads with **what runs** — the flat list of selected PR test projects and the
+flat list of selected PR jobs (test projects first, since they are the primary
+review signal) — so a reviewer sees the regular PR impact at a glance even when
+many files changed. It then explains **how** the PR-gated selection was reached
+in a collapsed `<details>` (the heading is the `<summary>`, so the rationale
+stays out of the way until expanded), grouping selected projects under each
+trigger (changed file, affected project, or derived test) that pulled them in:
+a changed file and its graph fan-out appear under one heading, so a single
+edit's whole closure is stated once rather than repeated per project, and large
+fan-outs collapse into a nested `<details>`. Every PR-gated cause is still shown
+— a project selected by several triggers appears under each — and a per-job
+table names what triggered each PR job. The full step summary, `--explain`
+output, and JSON artifact remain the diagnostic surfaces for advisory
+schedule/outerloop impact. The comment is posted **one per pushed commit** and
+links the head commit it was computed for: a re-run of the same commit updates
+that commit's comment in place (no duplicate — re-runs are common), a new commit
+posts a fresh comment at the bottom, and comments from superseded commits are
+collapsed (minimized, never deleted) so the latest selection surfaces at the
+bottom while the per-push history is preserved. In audit mode the comment is
+advisory — the regular PR matrix and PR-gated jobs still run — so it is labelled
+"(audit mode)" and states that the PR lists are what selective CI **would** run
+under enforcement.
 
-Any audit run where a would-be-skipped test would have failed is a map bug,
-fixed before enforcing. Once audit data shows the skip set is consistently safe,
-flip to enforcing and keep the `run-full-ci` kill switch.
+Any audit run where a would-be-skipped test would have failed is a map bug. Fix
+the map before returning to enforcing mode.
 
 ## Verifier test
 
@@ -503,7 +510,6 @@ flip to enforcing and keep the `run-full-ci` kill switch.
 - **Coverage:** every test project and every `src` project is reachable by some
   rule or by `Aspire.slnx`, so a newly added, unmapped project fails loudly
   instead of silently never running.
-
 A convention-miss dir with no same-named test is intentionally not asserted.
 Its MSBuild files are owned by Layer 1, and a non-MSBuild change there safely
 hits a curated rule, the convention backstop, or the run-all fallback.
@@ -596,9 +602,10 @@ run-all fallback exists to prevent.
 
 ## Rollout
 
-1. Run `SelectTests` in audit mode.
-2. Watch the audit summaries and fix unsafe skips in the curated layer.
-3. Flip to enforcing. Keep the kill switch and hard-fail Layer 1 policy.
+1. `SelectTests` ran in audit mode while its summaries were reviewed.
+2. Unsafe skips in the curated layer were fixed.
+3. `tests.yml` now runs in enforcing mode while retaining the `run-full-ci` kill
+   switch and hard-fail Layer 1 policy.
 
 ## Future refinement
 

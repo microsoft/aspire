@@ -62,11 +62,6 @@
         <target state="translated">少なくとも 1 つのテンプレート ファクトリを指定する必要があります。</target>
         <note />
       </trans-unit>
-      <trans-unit id="CertificateTrustError">
-        <source>An error occurred while trusting the certificates: {0}</source>
-        <target state="translated">証明書の信頼処理でエラーが発生しました: {0}</target>
-        <note>{0} is an exception message</note>
-      </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
         <source>Create NuGet.config for selected channels?</source>
         <target state="translated">選択したチャネルの NuGet.config を作成しますか?</target>

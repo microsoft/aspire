@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 
@@ -44,9 +45,16 @@ internal static class AppHostConnectionHelper
         var selectedPath = auxiliaryBackchannelMonitor.SelectedAppHostPath;
         if (!string.IsNullOrEmpty(selectedPath))
         {
+            // Hoisted out of the predicate because canonicalization walks the filesystem per path
+            // segment, and every writer of SelectedAppHostPath already stores a canonical path, so
+            // this normally resolves to itself.
+            var selectedCanonicalPath = PathNormalizer.ResolveToFilesystemPath(selectedPath);
             var selectedConnection = connections.FirstOrDefault(c =>
                 c.AppHostInfo?.AppHostPath != null &&
-                string.Equals(c.AppHostInfo.AppHostPath, selectedPath, StringComparison.OrdinalIgnoreCase));
+                string.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
+                    selectedCanonicalPath,
+                    StringComparisons.FileSystemPath));
 
             if (selectedConnection != null)
             {

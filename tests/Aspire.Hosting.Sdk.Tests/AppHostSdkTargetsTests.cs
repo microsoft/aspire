@@ -8,6 +8,7 @@ using System.Security;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Tasks;
+using Aspire.TestUtilities;
 using Xunit;
 
 namespace Aspire.Hosting.Sdk.Tests;
@@ -775,6 +776,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/19517")]
     public async Task RunAspireCliCommandKillsCommandShimProcessTreeOnTimeoutInFullFrameworkMsBuild()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates the net472 task under full-framework MSBuild.");

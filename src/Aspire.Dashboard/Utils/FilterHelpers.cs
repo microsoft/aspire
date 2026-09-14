@@ -111,7 +111,7 @@ public static class FilterHelpers
             Alignment = HorizontalAlignment.Right,
             PrimaryAction = null,
             SecondaryAction = null,
-            Width = dialogService.IsDesktop ? "450px" : "100%"
+            Width = "450px"
         };
         var data = new FilterDialogViewModel
         {

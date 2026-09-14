@@ -16,6 +16,16 @@ internal sealed record TelemetryConfiguration
     public bool ReportedTelemetryEnabled { get; init; }
 
     /// <summary>
+    /// Gets whether the detector-health activity should be emitted.
+    /// </summary>
+    public bool EmitInternalMicrosoftDiagnostics { get; init; } = true;
+
+    /// <summary>
+    /// Gets the optional overall detector budget for latency-sensitive invocations.
+    /// </summary>
+    public TimeSpan? InternalMicrosoftDetectionTimeout { get; init; }
+
+    /// <summary>
     /// Gets whether profiling telemetry was requested.
     /// </summary>
     public bool ProfilingEnabled { get; init; }
@@ -40,7 +50,7 @@ internal sealed record TelemetryConfiguration
     /// </summary>
     public static TelemetryConfiguration Create(IConfiguration configuration, string[]? args = null)
     {
-        var hasOptOutArg = args?.Any(a => CommonOptionNames.InformationalOptionNames.Contains(a)) ?? false;
+        var hasOptOutArg = CommonOptionNames.IsInformationalInvocation(args);
         var telemetryOptOut = hasOptOutArg || configuration.GetBool(AspireCliTelemetry.TelemetryOptOutConfigKey, defaultValue: false);
         var profilingEnabled =
             configuration.GetBool(Aspire.Hosting.KnownConfigNames.ProfilingEnabled) ??
@@ -53,9 +63,12 @@ internal sealed record TelemetryConfiguration
         ConsoleExporterLevel? consoleExporterLevel = null;
 #endif
 
+        var isAgentTelemetryInvocation = AgentTelemetryInvocation.Matches(args ?? []);
         return new TelemetryConfiguration
         {
             ReportedTelemetryEnabled = !telemetryOptOut,
+            EmitInternalMicrosoftDiagnostics = !isAgentTelemetryInvocation,
+            InternalMicrosoftDetectionTimeout = isAgentTelemetryInvocation ? TimeSpan.FromSeconds(5) : null,
             ProfilingEnabled = profilingEnabled,
             RequestedOtlpExporter = requestedOtlpExporter,
             ConsoleExporterLevel = consoleExporterLevel

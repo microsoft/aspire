@@ -76,6 +76,79 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    [Fact]
+    public void ExplainWritesTheComputedSummaryToStandardOutput()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+            var previousOut = Console.Out;
+            using var output = new StringWriter();
+            Console.SetOut(output);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.Contains("## SelectTests", output.ToString());
+            Assert.Contains("trigger.txt", output.ToString());
+            Assert.Contains("## SelectTests", File.ReadAllText(Path.Combine(repoRoot, "summary")));
+        });
+    }
+
+    [Fact]
+    public void ExplainIncludesTransitiveDerivedJobDependencies()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "other.txt");
+            var previousOut = Console.Out;
+            using var output = new StringWriter();
+            Console.SetOut(output);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            var explanation = output.ToString();
+            Assert.Contains("job:derived-only-job", explanation);
+            Assert.Contains("derived from selected test `Aspire.Cli.Tests`", explanation);
+        });
+    }
+
+    [Fact]
+    public void ExplainDoesNotDuplicateSummaryToStandardError()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+            var previousSummary = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+            var previousError = Console.Error;
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", null);
+            using var error = new StringWriter();
+            Console.SetError(error);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetError(previousError);
+                Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", previousSummary);
+            }
+
+            Assert.Empty(error.ToString());
+        });
+    }
+
     // The --slnx option points the selector at a solution outside the default <repo-root>/Aspire.slnx.
     // Failure mode: if SlnxPath were ignored and the tool fell back to <repo-root>/Aspire.slnx, the
     // universe would be read from the wrong (here: absent) file and LoadTestProjects would throw, so a
@@ -156,16 +229,16 @@ public sealed class SelectTestsCliTests
                 var comment = File.ReadAllText(commentPath);
                 Assert.StartsWith("## Tests selector", comment);
                 Assert.DoesNotContain("audit mode", comment);
-                Assert.Contains("### Selected test projects (1 / 2)", comment);
+                Assert.Contains("### Selected PR test projects (1 / 2)", comment);
                 Assert.Contains("`Aspire.Hosting.Tests`", comment);
-                Assert.Contains("### Selected jobs (1)", comment);
+                Assert.Contains("### Selected PR jobs (1)", comment);
                 Assert.Contains("`extension-e2e`", comment);
                 // Test projects are the primary signal, so their section must come BEFORE the jobs
                 // section. Falsifies a revert to the old jobs-first ordering.
                 Assert.True(
-                    comment.IndexOf("### Selected test projects", StringComparison.Ordinal)
-                        < comment.IndexOf("### Selected jobs", StringComparison.Ordinal),
-                    "Selected test projects must be listed before Selected jobs.");
+                    comment.IndexOf("### Selected PR test projects", StringComparison.Ordinal)
+                        < comment.IndexOf("### Selected PR jobs", StringComparison.Ordinal),
+                    "Selected PR test projects must be listed before selected PR jobs.");
                 // The rationale is collapsed by default behind a <details> so the comment leads with
                 // what runs; the heading is the <summary>. Falsifies a revert to a plain "### How these
                 // were chosen" heading that is always expanded.
@@ -315,7 +388,7 @@ public sealed class SelectTestsCliTests
         }, slnx: slnx, map: map);
     }
 
-    // In audit mode the comment is advisory: the full matrix and all jobs still run, and the lists
+    // In audit mode the comment is advisory: regular PR tests and PR-gated jobs still run, and the lists
     // describe what selective CI WOULD run under enforcement. Pin the "(audit mode)" title qualifier
     // and the explanatory line so the advisory framing can't silently disappear — without it a reader
     // could mistake the selected subset for what actually ran.
@@ -337,12 +410,200 @@ public sealed class SelectTestsCliTests
                 Assert.StartsWith("## Tests selector (audit mode)", comment);
                 Assert.Contains("**would**", comment);
                 Assert.Contains("under enforcement", comment);
+                Assert.Contains("regular PR test matrix and PR-gated jobs", comment);
+                Assert.DoesNotContain("Advisory-only targets", comment);
+                Assert.DoesNotContain("do not run on PRs", comment);
             }
             finally
             {
                 Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
             }
         });
+    }
+
+    [Fact]
+    public void CommentAndSummarySeparatePrSelectionFromAdvisoryOnlyTargets()
+    {
+        const string slnx = """
+            <Solution>
+              <Project Path="tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj" />
+              <Project Path="tests/Aspire.EndToEnd.Tests/Aspire.EndToEnd.Tests.csproj" />
+            </Solution>
+            """;
+        const string map = """
+            version: 1
+            path_rules:
+              - paths: [trigger.txt]
+                targets:
+                  - test:Aspire.Hosting.Tests
+                  - test:Aspire.EndToEnd.Tests
+                  - job:extension-e2e
+                  - job:deployment-e2e
+            """;
+
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: false));
+
+                var comment = File.ReadAllText(commentPath);
+                Assert.Contains("### Selected PR test projects (1 / 1)", comment);
+                Assert.Contains("### Selected PR jobs (1)", comment);
+                Assert.DoesNotContain("Advisory workflow impact", comment);
+                Assert.DoesNotContain("deployment-e2e", comment);
+                Assert.Contains("How these were chosen", comment);
+
+                var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
+                Assert.Contains("- selected PR test projects: 1 / 1", summary);
+                Assert.Contains("- triggered PR jobs: job:extension-e2e", summary);
+                Assert.Contains("- advisory-only targets: test:Aspire.EndToEnd.Tests, job:deployment-e2e", summary);
+                Assert.Contains("<details><summary>Advisory test projects (1)</summary>", summary);
+                Assert.DoesNotContain("Advisory outerloop test projects", summary);
+                Assert.Contains(
+                    "- mode: audit (advisory: the regular test matrix + selector-gated jobs run regardless of the selection below; advisory-only targets are reported but scheduled independently)",
+                    summary);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
+            }
+        }, slnx: slnx, map: map);
+    }
+
+    [Fact]
+    public void AuditAllCommentKeepsAdvisoryTargetsOutsideRegularGates()
+    {
+        const string slnx = """
+            <Solution>
+              <Project Path="tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj" />
+              <Project Path="tests/Aspire.EndToEnd.Tests/Aspire.EndToEnd.Tests.csproj" />
+            </Solution>
+            """;
+        const string map = """
+            version: 1
+            path_rules:
+              - paths: [trigger.txt]
+                targets: [ALL]
+              - paths: [deployment.txt]
+                targets: [job:deployment-e2e]
+            """;
+
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: false));
+
+                var comment = File.ReadAllText(commentPath);
+                Assert.Contains("**Selects the full PR test matrix + all PR-gated jobs (ALL)**", comment);
+                Assert.DoesNotContain("Advisory workflow impact", comment);
+                Assert.DoesNotContain("deployment-e2e", comment);
+                Assert.DoesNotContain("do not run on PRs", comment);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
+            }
+        }, slnx: slnx, map: map);
+    }
+
+    [Fact]
+    public void AdvisoryTestClassificationMatchesProjectsExcludedFromRegularPrRunsheets()
+    {
+        var solution = File.ReadAllText(Path.Combine(RepoRoot.Path, "Aspire.slnx"));
+        var testProjectPaths = System.Text.RegularExpressions.Regex
+            .Matches(solution, "Path=\"(tests/[^\"]+\\.Tests\\.csproj)\"")
+            .Select(match => match.Groups[1].Value)
+            .ToList();
+        var expectedAdvisoryProjects = testProjectPaths
+            .Where(projectPath =>
+            {
+                var project = File.ReadAllText(Path.Combine(RepoRoot.Path, projectPath));
+                return project.Contains("<SkipTests", StringComparison.Ordinal) &&
+                    project.Contains("RunOuterloopTests", StringComparison.Ordinal) &&
+                    !project.Contains("IsGithubPullRequest", StringComparison.Ordinal);
+            })
+            .Select(Path.GetFileNameWithoutExtension)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var runsheetTargets = File.ReadAllText(Path.Combine(
+            RepoRoot.Path,
+            "eng",
+            "TestEnumerationRunsheetBuilder",
+            "TestEnumerationRunsheetBuilder.targets"));
+        var deploymentProject = System.Text.RegularExpressions.Regex.Match(
+            runsheetTargets,
+            @"OnlyDeploymentTests\)' != 'true'.*MSBuildProjectName\)' == '(?<name>[^']+)'");
+        Assert.True(deploymentProject.Success, "The deployment-only runsheet exclusion was not found.");
+        expectedAdvisoryProjects.Add(deploymentProject.Groups["name"].Value);
+
+        Assert.Contains("Aspire.EndToEnd.Tests", expectedAdvisoryProjects);
+        Assert.Contains("Aspire.Oracle.EntityFrameworkCore.Tests", expectedAdvisoryProjects);
+        Assert.Contains("Aspire.Deployment.EndToEnd.Tests", expectedAdvisoryProjects);
+        Assert.Equal(
+            expectedAdvisoryProjects.Order(StringComparer.Ordinal),
+            GetSelectionTargetKeys("s_advisoryTestTargets").Order(StringComparer.Ordinal));
+
+        var slnx = "<Solution>\n"
+            + "  <Project Path=\"tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj\" />\n"
+            + string.Join(
+                "\n",
+                expectedAdvisoryProjects.Order(StringComparer.Ordinal)
+                    .Select(name => $"  <Project Path=\"tests/{name}/{name}.csproj\" />"))
+            + "\n</Solution>";
+        var map = "version: 1\npath_rules:\n  - paths: [trigger.txt]\n    targets:\n"
+            + "      - test:Aspire.Hosting.Tests\n"
+            + string.Join(
+                "\n",
+                expectedAdvisoryProjects.Order(StringComparer.Ordinal)
+                    .Select(name => $"      - test:{name}"))
+            + "\n";
+
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: false));
+
+                var comment = File.ReadAllText(commentPath);
+                Assert.Contains("### Selected PR test projects (1 / 1)", comment);
+                foreach (var project in expectedAdvisoryProjects)
+                {
+                    Assert.DoesNotContain($"`{project}`", comment);
+                }
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
+            }
+        }, slnx: slnx, map: map);
+    }
+
+    private static IReadOnlyList<string> GetSelectionTargetKeys(string fieldName)
+    {
+        var field = typeof(Selection).GetField(
+            fieldName,
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(field);
+
+        var targets = Assert.IsAssignableFrom<IReadOnlyDictionary<string, string>>(field.GetValue(null));
+        return targets.Keys.ToList();
     }
 
     // The JSON selection artifact (SELECT_TESTS_JSON_FILE) is the durable, machine-readable record of a
@@ -682,7 +943,7 @@ public sealed class SelectTestsCliTests
             // ALL selected -> enforce writes no restriction props, so enumerate-tests runs everything.
             Assert.False(File.Exists(propsPath));
 
-            // The fallback is recorded in the run summary (the durable record the weekly audit reads),
+            // The fallback is recorded in the run summary (the durable record historical audits read),
             // naming the merge-base as the cause.
             var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
             Assert.Contains("fail-safe run-all because", summary);
@@ -696,7 +957,7 @@ public sealed class SelectTestsCliTests
     // ("fail-safe run-all because ...") rather than the run-full-ci kill switch, so a systemic
     // shallow-history regression can't hide behind a green-but-full-matrix run no matter which surface a
     // reader consults:
-    //   - the step summary (the weekly audit reads it, not the raw logs),
+    //   - the step summary (historical audits read it, not the raw logs),
     //   - the PR comment (what a contributor sees on the PR), and
     //   - the JSON artifact (the durable, machine-readable record).
     // The reason flows through SelectorOptions.ForceAllReason into SelectionResult.EscalationReason, which
@@ -724,11 +985,11 @@ public sealed class SelectTestsCliTests
                 var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
                 Assert.Contains($"force-all: True — fail-safe run-all because {reason}", summary);
                 Assert.DoesNotContain("force-all: True (kill switch)", summary);
-                Assert.Contains($"**selects ALL** — {reason}", summary);
+                Assert.Contains($"**selects ALL PR test projects + jobs** — {reason}", summary);
 
                 // The PR comment's ALL banner names the same reason, not the run-full-ci kill switch.
                 var comment = File.ReadAllText(commentPath);
-                Assert.Contains($"**Runs the full test matrix + all jobs (ALL)** — {reason}", comment);
+                Assert.Contains($"**Selects the full PR test matrix + all PR-gated jobs (ALL)** — {reason}", comment);
                 Assert.DoesNotContain("the run-full-ci label forces the full matrix", comment);
 
                 // The durable JSON artifact records the same reason under escalationReason.
@@ -995,7 +1256,8 @@ public sealed class SelectTestsCliTests
         bool forceAll = false,
         bool enforce = false,
         string? slnxPath = null,
-        string? forceAllReason = null) =>
+        string? forceAllReason = null,
+        bool explain = false) =>
         new(
             RepoRoot: repoRoot,
             MapPath: Path.Combine(repoRoot, "map.yml"),
@@ -1007,7 +1269,8 @@ public sealed class SelectTestsCliTests
             ForceAll: forceAll,
             Enforce: enforce,
             BeforeBuildProps: propsPath,
-            ForceAllReason: forceAllReason);
+            ForceAllReason: forceAllReason,
+            Explain: explain);
 
     private static string WriteChangedFiles(string repoRoot, params string[] paths)
     {

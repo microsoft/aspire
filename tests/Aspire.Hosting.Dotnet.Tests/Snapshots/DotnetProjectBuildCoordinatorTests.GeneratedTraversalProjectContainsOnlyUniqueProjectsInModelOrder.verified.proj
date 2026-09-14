@@ -1,0 +1,12 @@
+﻿<Project DefaultTargets="Build">
+  <ItemGroup>
+    <ProjectFile Include="First%27s Project/First.csproj" />
+    <ProjectFile Include="Second/Second.csproj" />
+  </ItemGroup>
+  <Target Name="Restore">
+    <MSBuild Projects="@(ProjectFile)" Targets="Restore" BuildInParallel="false" />
+  </Target>
+  <Target Name="Build">
+    <MSBuild Projects="@(ProjectFile)" Targets="Build" BuildInParallel="true" />
+  </Target>
+</Project>

@@ -21,6 +21,41 @@ namespace Aspire.Cli.Tests.Projects;
 public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public void IsAppHostProjectMatchesFilesystemAliases()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var realDirectory = workspace.CreateDirectory("real");
+        var appHostProject = new FileInfo(Path.Combine(realDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostProject.FullName, "<Project />");
+
+        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        TestSymlinkHelper.TryCreateSymlink(symlinkDirectory, realDirectory.FullName);
+        var appHostProjectViaSymlink = new FileInfo(Path.Combine(symlinkDirectory, appHostProject.Name));
+
+        Assert.True(ProjectUpdater.IsAppHostProject(appHostProjectViaSymlink, appHostProject));
+    }
+
+    [Fact]
+    public void IsAppHostProjectPreservesCaseDistinctPaths()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows filesystem paths are compared case-insensitively.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var lowerCaseProject = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.csproj"));
+        File.WriteAllText(lowerCaseProject.FullName, "<Project />");
+        var upperCaseProject = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        Assert.SkipWhen(upperCaseProject.Exists,
+            "This test requires a case-sensitive filesystem.");
+        File.WriteAllText(upperCaseProject.FullName, "<Project />");
+
+        Assert.False(ProjectUpdater.IsAppHostProject(lowerCaseProject, upperCaseProject));
+    }
+
+    [Fact]
     public async Task UpdateProjectFileAsync_DoesAttemptToUpdateIfNoUpdatesRequired()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

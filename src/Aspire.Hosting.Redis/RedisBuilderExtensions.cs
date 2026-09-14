@@ -245,6 +245,8 @@ public static class RedisBuilderExtensions
                                       .WithHttpEndpoint(targetPort: 8081, name: "http")
                                       .ExcludeFromManifest();
 
+            AddManagementLinks(resourceBuilder, "http", "Manage (Commander)");
+
             builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(resource, async (e, ct) =>
             {
                 var redisInstances = builder.ApplicationBuilder.Resources.OfType<RedisResource>();
@@ -392,10 +394,38 @@ public static class RedisBuilderExtensions
                 resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
             });
 
+            AddManagementLinks(resourceBuilder, "http", "Manage (Insights)");
+
             configureContainer?.Invoke(resourceBuilder);
 
             return builder;
         }
+    }
+
+    /// <summary>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpointName"/>
+    /// endpoint to every <see cref="RedisResource"/> in the app.
+    /// </summary>
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, string endpointName, string displayText)
+        where T : IResourceWithEndpoints
+    {
+        resourceBuilder.WithHidden();
+
+        var endpoint = resourceBuilder.GetEndpoint(endpointName);
+        resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var redisResource in @event.Model.Resources.OfType<RedisResource>())
+            {
+                redisResource.Annotations.Add(new ResourceUrlAnnotation
+                {
+                    Url = "/",
+                    DisplayText = displayText,
+                    Endpoint = endpoint
+                });
+            }
+
+            return Task.CompletedTask;
+        });
     }
 
     /// <summary>

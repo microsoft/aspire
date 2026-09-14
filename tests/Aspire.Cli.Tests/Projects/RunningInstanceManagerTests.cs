@@ -22,7 +22,7 @@ public class RunningInstanceManagerTests
         //
         // After a successful stop, the CLI must delete the auxiliary backchannel socket file. If the
         // file is left behind, a later command (e.g. 'aspire add' or 'aspire stop') rediscovers it via
-        // FindMatchingNonOrphanedSockets and tries to connect to a now-defunct process, failing with
+        // AppHostSocketManager.FindSockets and tries to connect to a now-defunct process, failing with
         // "Unable to stop one or more running Aspire AppHost instances". This is most visible on Windows
         // where the dead AppHost's PID can be reused (so the orphan-pruning heuristic believes the
         // process is still alive), which is why a unit test is the deterministic, cross-platform guard.
@@ -47,7 +47,7 @@ public class RunningInstanceManagerTests
 
             var manager = new RunningInstanceManager(NullLogger.Instance, new TestInteractionService(), TimeProvider.System, new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
-            var stopped = await manager.StopRunningInstanceAsync(socketPath, CancellationToken.None).DefaultTimeout();
+            var stopped = await manager.StopRunningInstanceAsync(new TestAppHostSocket(socketPath), CancellationToken.None).DefaultTimeout();
 
             Assert.True(stopped);
             Assert.True(server.Target.StopRequested);

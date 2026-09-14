@@ -44,6 +44,26 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_SkillInvocation_CopilotApp_ForwardsClientName()
+    {
+        var run = await RunBashHookAsync(
+            """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
+            new()
+            {
+                ["AI_AGENT"] = "github_copilot_app_agent",
+                ["COPILOT_CLI"] = "1",
+            });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--client-name", "copilot-app");
+        AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_McpTool_Claude_ForwardsToolName()
     {
         var run = await RunBashHookAsync(
@@ -178,6 +198,19 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_SkillInvocation_CopilotStringArgs_WithoutEnvironmentMarker_DetectsClient()
+    {
+        var run = await RunBashHookAsync(
+            """{"toolName":"skill","sessionId":"session-1","toolArgs":"{\"skill\":\"aspire\"}"}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--client-name", "copilot-cli");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_SkillMdRead_CopilotStringArgs_ForwardsSkillName()
     {
         // The exact real Copilot shape: a view tool whose toolArgs is a JSON string with a
@@ -221,6 +254,25 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--client-name", "copilot-cli");
         AssertArg(args, "--skill-name", "aspire");
         AssertArg(args, "--session-id", "session-1");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_SkillInvocation_CopilotApp_ForwardsClientName()
+    {
+        var run = await RunPwshHookAsync(
+            """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
+            new()
+            {
+                ["AI_AGENT"] = "github_copilot_app_agent",
+                ["COPILOT_CLI"] = "1",
+            });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--client-name", "copilot-app");
+        AssertArg(args, "--skill-name", "aspire");
     }
 
     [Fact]
@@ -493,6 +545,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         // Clear ambient values so the host environment can't change client detection or opt-out.
         psi.Environment.Remove("COPILOT_CLI");
+        psi.Environment.Remove("AI_AGENT");
         psi.Environment.Remove("ASPIRE_CLI_TELEMETRY_OPTOUT");
         foreach (var pair in environment)
         {

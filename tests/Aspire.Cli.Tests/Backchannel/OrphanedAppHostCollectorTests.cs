@@ -203,8 +203,8 @@ public class OrphanedAppHostCollectorTests
 
             var orphanSocket = CreateSocketFile(tempDir, "orphan.sock");
             var liveSocket = CreateSocketFile(tempDir, "live.sock");
-            monitor.AddConnection("orphan-hash", orphanSocket, CreateConnection(orphanSocket, appHostPid: 4242, orphaned: true));
-            monitor.AddConnection("live-hash", liveSocket, CreateConnection(liveSocket, appHostPid: 4343, orphaned: false));
+            monitor.AddConnection(orphanSocket, CreateConnection(orphanSocket, appHostPid: 4242, orphaned: true));
+            monitor.AddConnection(liveSocket, CreateConnection(liveSocket, appHostPid: 4343, orphaned: false));
 
             var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
 
@@ -233,7 +233,7 @@ public class OrphanedAppHostCollectorTests
             var stopper = new TestAppHostStopper { DefaultResult = true };
 
             var socketPath = CreateSocketFile(tempDir, "orphan.sock");
-            monitor.AddConnection("orphan-hash", socketPath, CreateConnection(socketPath, appHostPid: 4242, orphaned: true));
+            monitor.AddConnection(socketPath, CreateConnection(socketPath, appHostPid: 4242, orphaned: true));
 
             var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
 
@@ -259,7 +259,7 @@ public class OrphanedAppHostCollectorTests
             var stopper = new TestAppHostStopper { DefaultResult = false };
 
             var socketPath = CreateSocketFile(tempDir, "orphan.sock");
-            monitor.AddConnection("orphan-hash", socketPath, CreateConnection(socketPath, appHostPid: 4242, orphaned: true));
+            monitor.AddConnection(socketPath, CreateConnection(socketPath, appHostPid: 4242, orphaned: true));
 
             var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
 
@@ -285,8 +285,8 @@ public class OrphanedAppHostCollectorTests
 
             var throwingSocket = CreateSocketFile(tempDir, "throwing.sock");
             var okSocket = CreateSocketFile(tempDir, "ok.sock");
-            monitor.AddConnection("throwing-hash", throwingSocket, CreateConnection(throwingSocket, appHostPid: 1, orphaned: true));
-            monitor.AddConnection("ok-hash", okSocket, CreateConnection(okSocket, appHostPid: 2, orphaned: true));
+            monitor.AddConnection(throwingSocket, CreateConnection(throwingSocket, appHostPid: 1, orphaned: true));
+            monitor.AddConnection(okSocket, CreateConnection(okSocket, appHostPid: 2, orphaned: true));
 
             var stopper = new TestAppHostStopper
             {
@@ -315,7 +315,7 @@ public class OrphanedAppHostCollectorTests
         var stopper = new TestAppHostStopper();
 
         const string socketPath = "/tmp/aspire-orphan-tests-live.sock";
-        monitor.AddConnection("live-hash", socketPath, CreateConnection(socketPath, appHostPid: 4343, orphaned: false));
+        monitor.AddConnection(socketPath, CreateConnection(socketPath, appHostPid: 4343, orphaned: false));
 
         var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
 
@@ -338,7 +338,7 @@ public class OrphanedAppHostCollectorTests
         var stopper = new TestAppHostStopper();
 
         const string socketPath = "/tmp/aspire-orphan-tests-scan-throw.sock";
-        monitor.AddConnection("orphan-hash", socketPath, CreateConnection(socketPath, appHostPid: 4242, orphaned: true));
+        monitor.AddConnection(socketPath, CreateConnection(socketPath, appHostPid: 4242, orphaned: true));
 
         var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
 

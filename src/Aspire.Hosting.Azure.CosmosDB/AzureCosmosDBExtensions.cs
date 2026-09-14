@@ -164,6 +164,12 @@ public static class AzureCosmosExtensions
             var emulatorSurrogate = new AzureCosmosDBEmulatorResource(builder.Resource);
             var emulatorSurrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(emulatorSurrogate);
 
+            // Wire the Aspire dashboard's OTLP endpoint into the emulator and tell the emulator to use it.
+            // WithOtlpExporter injects the OTLP endpoint address; ENABLE_OTLP_EXPORTER activates the
+            // emulator's built-in exporter so it forwards its own traces and metrics to that endpoint.
+            emulatorSurrogateBuilder.WithOtlpExporter()
+                .WithEnvironment("ENABLE_OTLP_EXPORTER", "true");
+
             // The vNext image enables the Data Explorer by default (ENABLE_EXPLORER=true). That runs an
             // otherwise-unused Node process and, because the emulator's readiness probe is
             // "ready = postgres && gateway && (explorer || !ENABLE_EXPLORER)" (the vNext emulator uses

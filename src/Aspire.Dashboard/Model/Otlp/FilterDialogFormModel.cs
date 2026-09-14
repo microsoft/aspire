@@ -19,7 +19,8 @@ public class FilterDialogFormModel : IValidatableObject
 
     public bool ValueIsDate { get; set; }
 
-    public double? NumericValue { get; set; }
+    // Duration filters intentionally support only whole milliseconds. An int is large enough for typical trace durations.
+    public int? NumericValue { get; set; }
 
     /// <summary>
     /// Gets the current value formatted for an HTML datetime-local input element.
@@ -47,7 +48,7 @@ public class FilterDialogFormModel : IValidatableObject
     {
         if (ValueIsNumeric)
         {
-            if (NumericValue is not { } numericValue || !double.IsFinite(numericValue))
+            if (NumericValue is null)
             {
                 yield return new ValidationResult(Dialogs.FieldRequired, [nameof(NumericValue)]);
             }

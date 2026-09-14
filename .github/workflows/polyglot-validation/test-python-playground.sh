@@ -2,7 +2,8 @@
 # Polyglot SDK Validation - Python validation AppHosts
 # Iterates all Python validation AppHosts under tests/PolyglotAppHosts/*/Python,
 # runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
-# type-checks each AppHost against the generated SDK API surface.
+# compiles and type-checks each AppHost against the generated Python modules. The JavaScript
+# fixture also executes its Deno calls without starting an AppHost or external services.
 set -euo pipefail
 
 echo "=== Python Validation AppHost Codegen Validation ==="
@@ -163,6 +164,56 @@ INNERPY
         echo ""
         restore_channel_settings
         continue
+    fi
+
+    if [ "$integration_name" = "Aspire.Hosting.JavaScript" ]; then
+        echo "  -> generated Deno SDK execution..."
+        if ! PYTHONPATH="$PWD/.aspire/modules${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'INNERPY'
+import apphost
+import aspire_app
+
+
+# Syntax compilation does not resolve Python attributes. This client lets the fixture call the
+# generated builder and Deno resource classes while keeping every capability invocation in-process.
+class ValidationClient:
+    def __init__(self):
+        self.next_handle = 0
+
+    def create_handle(self, type_id):
+        self.next_handle += 1
+        return aspire_app.Handle({
+            "$handle": str(self.next_handle),
+            "$type": type_id,
+        })
+
+    def invoke_capability(self, capability_id, args, kwargs=None):
+        if capability_id == "Aspire.Hosting/createBuilder":
+            return self.create_handle("Aspire.Hosting/IDistributedApplicationBuilder")
+        if capability_id == "Aspire.Hosting.JavaScript/addDenoApp":
+            handle = self.create_handle("Aspire.Hosting.JavaScript/DenoAppResource")
+            return aspire_app.DenoAppResource(handle, self)
+
+        return next(
+            value for value in args.values()
+            if isinstance(value, aspire_app.Handle)
+        )
+
+    def disconnect(self):
+        pass
+
+
+client = ValidationClient()
+options = aspire_app.CreateBuilderOptions()
+with aspire_app.DistributedApplicationBuilder(client, options) as builder:
+    apphost.add_deno_app(builder)
+INNERPY
+        then
+            echo "  ERROR: generated Deno SDK execution failed for $integration_name"
+            FAILED+=("$integration_name (generated Deno SDK execution)")
+            echo ""
+            restore_channel_settings
+            continue
+        fi
     fi
 
     restore_channel_settings
