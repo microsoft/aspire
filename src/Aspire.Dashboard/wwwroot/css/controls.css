@@ -623,11 +623,11 @@ body {
     overflow: hidden;
 }
 
-.aspire-menu-container {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) {
     --colorNeutralBackground1Hover: var(--aspire-menu-item-hover-background);
 }
 
-.aspire-menu-container fluent-menu-list {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-list {
     gap: 0;
     padding: 3px 0;
     border-radius: var(--aspire-popup-radius);
@@ -635,11 +635,11 @@ body {
     box-shadow: var(--aspire-popup-shadow);
 }
 
-.aspire-menu-container fluent-menu-list:has(> fluent-menu-item:state(submenu)) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-list:has(> fluent-menu-item:state(submenu)) {
     min-width: 180px;
 }
 
-.aspire-menu-container fluent-menu-item {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item {
     gap: 0;
     grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto);
     height: 28px;
@@ -655,35 +655,48 @@ body {
     line-height: var(--lineHeightBase300);
 }
 
-.aspire-menu-container fluent-menu-item:state(submenu) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:state(submenu) {
     grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto) 24px;
     height: 32px;
     min-height: 32px;
     padding-inline-end: 8px;
 }
 
-.aspire-menu-container fluent-menu-item > [slot="start"],
-.aspire-menu-container fluent-menu-item > [slot="indicator"] {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item > [slot="start"],
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item > [slot="indicator"] {
     grid-column: 1;
     grid-row: 1;
     position: relative;
     inset-inline-start: 8px;
 }
 
-.aspire-menu-container fluent-menu-item:hover,
-.aspire-menu-container fluent-menu-item:state(active),
-.aspire-menu-container fluent-menu-item:focus-visible {
+[cell-type="columnheader"] > fluent-menu fluent-menu-item {
+    text-align: left;
+}
+
+[cell-type="columnheader"] > fluent-menu fluent-menu-item > [slot="start"] {
+    color: var(--colorBrandForeground1);
+    width: 16px !important;
+}
+
+[cell-type="columnheader"] > [col-header-ui] {
+    background: var(--aspire-popup-background);
+}
+
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:hover,
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:state(active),
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:focus-visible {
     background-color: var(--aspire-menu-item-hover-background);
 }
 
-.aspire-menu-container fluent-divider {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-divider {
     margin-block: 4px;
 }
 
 /* Fluent v5 separates the indicator and start slots. Collapse the unused indicator track so the
    icon and content align with v4's 32px start track while retaining the end slot for secondary actions. */
 
-.aspire-menu-container fluent-menu-item:not(:state(submenu))::part(content) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(submenu))::part(content) {
     grid-column: 2 / span 2;
     grid-row: 1;
     min-width: 0;
@@ -692,7 +705,7 @@ body {
     text-overflow: ellipsis;
 }
 
-.aspire-menu-container fluent-menu-item:state(submenu)::part(content) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:state(submenu)::part(content) {
     grid-column: 3;
     grid-row: 1;
     padding-inline: 0;
@@ -992,7 +1005,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
 }
 
 .fluent-data-grid > thead > tr > th,
-.fluent-data-grid > thead > tr > th fluent-button,
+.fluent-data-grid > thead > tr > th > fluent-button,
 .fluent-data-grid > thead > tr > th [col-title-text] {
     color: var(--colorNeutralForeground3);
     font-weight: 400 !important;
@@ -1005,7 +1018,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     white-space: nowrap;
 }
 
-.fluent-data-grid > thead > tr > th fluent-button::part(content) {
+.fluent-data-grid > thead > tr > th > fluent-button::part(content) {
     min-width: 0;
     overflow: hidden;
 }
@@ -1020,7 +1033,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     --aspire-data-grid-cell-border-color: var(--datagrid-border-color);
 }
 
-.property-grid-container .fluent-data-grid > thead > tr > th fluent-button {
+.property-grid-container .fluent-data-grid > thead > tr > th > fluent-button {
     --colorSubtleBackground: var(--property-grid-background-color);
 }
 
@@ -1108,7 +1121,7 @@ fluent-badge.property-details-accordion-badge {
     padding: 4px 1px 4px 8px;
 }
 
-.fluent-data-grid > thead > tr > th fluent-button {
+.fluent-data-grid > thead > tr > th > fluent-button {
     --aspire-button-foreground: var(--colorNeutralForeground3);
     --aspire-button-border-color: transparent;
     --colorSubtleBackground: var(--aspire-page-background);
