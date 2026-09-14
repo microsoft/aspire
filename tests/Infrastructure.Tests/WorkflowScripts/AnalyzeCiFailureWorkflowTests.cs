@@ -360,17 +360,124 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal(expected, redacted.GetProperty("diagnostic").GetString());
     }
 
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RedactAnalysisOperationKeepsOnlySchemaProperties()
+    {
+        var input = new
+        {
+            run_id = 12345,
+            run_attempt = 2,
+            run_url = "https://github.com/microsoft/aspire/actions/runs/12345",
+            analyzed_at = "2026-09-14T12:00:00Z",
+            verdict = "flaky-test",
+            pr = new
+            {
+                number = 18763,
+                title = "Include failure details",
+                author = "JamesNK",
+                state = "open",
+                head_branch = "feature",
+                base_branch = "main",
+                url = "https://github.com/microsoft/aspire/pull/18763",
+                password = "pr-secret"
+            },
+            failed_jobs = new[]
+            {
+                new
+                {
+                    name = "Tests / Linux",
+                    id = 67890,
+                    conclusion = "failure",
+                    url = "https://github.com/microsoft/aspire/actions/runs/12345/job/67890",
+                    classification = "flaky-test",
+                    reason = "Password=job-secret",
+                    failed_steps = new[] { "Run tests" },
+                    accessToken = "job-secret"
+                }
+            },
+            failed_tests = new[]
+            {
+                new
+                {
+                    name = "Tests.SampleTest",
+                    job = "Tests / Linux",
+                    error = "Expected true",
+                    stack_trace = "at Tests.SampleTest()",
+                    standard_output = "TOKEN=test-secret",
+                    standard_error = "",
+                    classification = "flaky",
+                    reason = "Intermittent failure",
+                    clientSecret = "test-secret"
+                }
+            },
+            causes = new[] { "sample-test" },
+            password = "top-level-secret"
+        };
+
+        var output = await InvokeScriptAsync("redact-analysis", input);
+        var redacted = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+
+        Assert.Equal(
+            ["run_id", "run_attempt", "run_url", "analyzed_at", "verdict", "pr", "failed_jobs", "failed_tests", "causes"],
+            redacted.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(
+            ["number", "title", "author", "state", "head_branch", "base_branch", "url"],
+            redacted.GetProperty("pr").EnumerateObject().Select(property => property.Name));
+        var failedJob = redacted.GetProperty("failed_jobs")[0];
+        Assert.Equal(
+            ["name", "id", "conclusion", "url", "classification", "reason", "failed_steps"],
+            failedJob.EnumerateObject().Select(property => property.Name));
+        Assert.Equal("Password=[REDACTED]", failedJob.GetProperty("reason").GetString());
+        Assert.Equal(
+            ["name", "job", "error", "stack_trace", "standard_output", "standard_error", "classification", "reason"],
+            redacted.GetProperty("failed_tests")[0].EnumerateObject().Select(property => property.Name));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RedactCauseOperationKeepsOnlySchemaProperties()
+    {
+        var input = new
+        {
+            id = "sample-test",
+            type = "flaky-test",
+            title = "Sample test failure",
+            test_name = "Tests.SampleTest",
+            job_name = "Tests / Linux",
+            error_pattern = "Expected true",
+            analysis = "Password=analysis-secret",
+            failure_details = "TOKEN=details-secret",
+            credentials = new { accessToken = "cause-secret" }
+        };
+
+        var output = await InvokeScriptAsync("redact-cause", input);
+        var redacted = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+
+        Assert.Equal(
+            ["id", "type", "title", "test_name", "job_name", "error_pattern", "analysis", "failure_details"],
+            redacted.EnumerateObject().Select(property => property.Name));
+        Assert.Equal("Password=[REDACTED]", redacted.GetProperty("analysis").GetString());
+        Assert.Equal("TOKEN=[REDACTED]", redacted.GetProperty("failure_details").GetString());
+    }
+
     [Theory]
     [InlineData("analyze-ci-failure.md")]
     [InlineData("analyze-ci-failure.lock.yml")]
-    public void PublishStepRedactsCauseFilesBeforeUse(string workflowName)
+    public void PublishStepProjectsAndRedactsModelGeneratedFilesBeforeUse(string workflowName)
     {
         var workflow = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", workflowName));
         var publishStepIndex = workflow.IndexOf("- name: Publish analysis data and comment on PR", StringComparison.Ordinal);
         Assert.True(publishStepIndex >= 0, $"Could not find the publish step in {workflowName}.");
         var publishStep = workflow[publishStepIndex..];
-        var redactionIndex = publishStep.IndexOf(
-            "node .github/workflows/analyze-ci-failure.js redact \"$CAUSE_FILE\"",
+        var analysisRedactionIndex = publishStep.IndexOf(
+            "node .github/workflows/analyze-ci-failure.js redact-analysis \"$ANALYSIS_FILE\"",
+            StringComparison.Ordinal);
+        var causeRedactionIndex = publishStep.IndexOf(
+            "node .github/workflows/analyze-ci-failure.js redact-cause \"$CAUSE_FILE\"",
+            StringComparison.Ordinal);
+        var analysisReadIndex = publishStep.IndexOf(
+            "RUN_ID=$(jq -r '.run_id' \"$ANALYSIS_FILE\")",
             StringComparison.Ordinal);
         var persistenceReadIndex = publishStep.IndexOf(
             "CAUSE_TYPE_CHECK=$(jq -r '.type' \"$CAUSE_FILE\"",
@@ -379,9 +486,11 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             "CAUSE_ID=$(jq -r '.id' \"$CAUSE_FILE\")",
             StringComparison.Ordinal);
 
-        Assert.True(redactionIndex >= 0, $"{workflowName} must redact each cause file.");
-        Assert.True(persistenceReadIndex > redactionIndex, $"{workflowName} must redact causes before persistence reads.");
-        Assert.True(issueReadIndex > redactionIndex, $"{workflowName} must redact causes before issue rendering reads.");
+        Assert.True(analysisRedactionIndex >= 0, $"{workflowName} must project and redact the analysis file.");
+        Assert.True(causeRedactionIndex >= 0, $"{workflowName} must project and redact each cause file.");
+        Assert.True(analysisReadIndex > analysisRedactionIndex, $"{workflowName} must sanitize analysis before field reads.");
+        Assert.True(persistenceReadIndex > causeRedactionIndex, $"{workflowName} must sanitize causes before persistence reads.");
+        Assert.True(issueReadIndex > causeRedactionIndex, $"{workflowName} must sanitize causes before issue rendering reads.");
     }
 
     [Fact]
