@@ -3,7 +3,10 @@
   "type": "flaky-test",
   "title": "Flaky: EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues - check completes too slowly under CI load",
   "test_name": "Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues",
+  "job_name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
   "error_pattern": "Assert.Collection() Failure: Item comparison failure\nExpected: EnvironmentCheckResult { Message = \"Completed\", ... }\nActual:   EnvironmentCheckResult { Message = \"Environment check 'test-environment' timed out aft\"..., ... }\n   at Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOut",
+  "analysis": "Reused prior cause cli-environmentchecker-timedout-flaky. The test expects a check to complete normally, but under CI load the check does not finish before the internal timeout fires, causing the timeout branch to run instead. This PR (#18763) does not modify EnvironmentChecker or its tests, so the failure is unrelated to the PR's changes and matches the previously recorded flaky pattern (3 prior occurrences).",
+  "failure_details": "Assert.Collection() Failure: Item comparison failure\n                                                                                                                                                                                   ↓ (pos 1)\nCollection: [EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Environment check 'test-environment' timed out aft\"···, ··· }, EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Environment check 'test-environment' timed out aft\"···, ··· }]\nError:      Assert.Same() Failure: Values are not the same instance\n            Expected: EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Completed\", ··· }\n            Actual:   EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Environment check 'test-environment' timed out aft\"···, ··· }\nStack Trace:\nat Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Utils/EnvironmentCheckerTests.cs:line 55\n--- End of stack trace from previous location ---",
   "occurrences": [
     {
       "run_id": 31066050322,
@@ -25,6 +28,13 @@
       "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-4, Hosting-4, tests/Aspire.Hosting.Tests) / Hosting-4 (windows-latest)",
       "pr_number": 20072,
       "observed_at": "2026-09-11T23:41:00Z"
+    },
+    {
+      "run_id": 34815567672,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34815567672",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "pr_number": 18763,
+      "observed_at": "2026-09-14T07:29:34Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19039"

@@ -1,0 +1,20 @@
+{
+  "id": "cli-apphostserversession-gracefulsignalerthrows-stillescalatestokill",
+  "type": "flaky-test",
+  "title": "Flaky: AppHostServerSessionTests.Start_StopRequested_GracefulSignalerThrows_StillEscalatesToKill fails intermittently on Windows",
+  "test_name": "Aspire.Cli.Tests.Projects.AppHostServerSessionTests.Start_StopRequested_GracefulSignalerThrows_StillEscalatesToKill",
+  "job_name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+  "error_pattern": "Assert.Single() Failure: The collection was empty\n   at Aspire.Cli.Tests.Projects.AppHostServerSessionTests.Start_StopRequested_GracefulSignalerThrows_StillEscalatesToKill() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\AppHostServerSessionTests.cs:line 337",
+  "analysis": "This is a timing-sensitive assertion about process escalation/kill behavior in AppHostServerSessionTests. The PR under test (#18763) only modifies CI-analysis workflow tooling and TestTrxBuilder.cs; it does not touch AppHostServerSession or its tests. Other tests in the same class (Start_StopRequested_GracefulIgnored_ExpireEscalatesToTreeKill, GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout) already have documented flaky-test causes tied to CI-load timing issues, indicating this test class is generally prone to intermittent failures under contention.",
+  "failure_details": "Assert.Single() Failure: The collection was empty\nStack Trace:\nat Aspire.Cli.Tests.Projects.AppHostServerSessionTests.Start_StopRequested_GracefulSignalerThrows_StillEscalatesToKill() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\AppHostServerSessionTests.cs:line 337\n   at Aspire.Cli.Tests.Projects.AppHostServerSessionTests.Start_StopRequested_GracefulSignalerThrows_StillEscalatesToKill() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\AppHostServerSessionTests.cs:line 337\n--- End of stack trace from previous location ---",
+  "occurrences": [
+    {
+      "run_id": 34815567672,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34815567672",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "pr_number": 18763,
+      "observed_at": "2026-09-14T07:29:34Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20108"
+}
