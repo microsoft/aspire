@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using System.Globalization;
 using System.IO.Pipelines;
 using System.Text;
 using Aspire.Hosting.Terminals;
@@ -16,6 +18,52 @@ namespace Aspire.Hosting.Tests.Terminals;
 [Trait("Partition", "2")]
 public class Hex1bAspireTerminalTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DisposeAsync_TerminatesPtyProcessIgnoringHangupAndTermination(bool disposeService)
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload uses POSIX signals.");
+
+        await using var service = TestTerminalService.Create();
+        await using var terminal = service.CreateTerminal(new TerminalLaunchOptions
+        {
+            Title = "Signal-resistant process",
+            Placement = TerminalPlacement.None,
+            Command = new TerminalCommand("/bin/sh")
+            {
+                // Ignored signals survive exec. The fixed sleep is a backstop if the test host is killed.
+                Arguments = ["-c", "trap '' HUP TERM; printf 'pid:%s\\nprocess-ready\\n' \"$$\"; exec sleep 300"]
+            }
+        });
+        terminal.Start();
+        await terminal.WaitForTextAsync("process-ready").DefaultTimeout();
+
+        // The workload emits "pid:12345\r\nprocess-ready\r\n"; terminal rows can have trailing spaces.
+        var pidLine = Assert.Single(
+            terminal.GetScreenText().Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
+            line => line.StartsWith("pid:", StringComparison.Ordinal));
+        var pid = int.Parse(pidLine["pid:".Length..], CultureInfo.InvariantCulture);
+        using var process = Process.GetProcessById(pid);
+        try
+        {
+            Assert.False(process.HasExited);
+            var disposal = disposeService ? service.DisposeAsync().AsTask() : terminal.DisposeAsync().AsTask();
+            await disposal.DefaultTimeout();
+
+            Assert.True(process.HasExited);
+            Assert.False(service.TryGetTerminal(terminal.Id, out _));
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync().DefaultTimeout();
+            }
+        }
+    }
+
     [Theory]
     [InlineData(TerminalPlacement.Dock)]
     [InlineData(TerminalPlacement.Dialog)]

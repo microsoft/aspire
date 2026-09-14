@@ -15,6 +15,9 @@ public sealed class TerminalLaunchOptions
     /// Gets or sets the title shown on the terminal's dock tab, and in the title bar when the terminal is
     /// detached into its own window.
     /// </summary>
+    /// <remarks>
+    /// The title must not be empty or consist only of white-space characters.
+    /// </remarks>
     public required string Title { get; set; }
 
     /// <summary>

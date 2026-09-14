@@ -204,7 +204,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private string GetPaneId(string terminalId) => $"{_elementIdPrefix}-pane-{terminalId}";
 
     private TerminalWindowLauncher WindowLauncher
-        => _windowLauncher ??= new TerminalWindowLauncher(JS, OnDetachedWindowClosedAsync);
+        => _windowLauncher ??= new TerminalWindowLauncher(JS, NavigationManager, OnDetachedWindowClosedAsync);
 
     /// <summary>
     /// Pops the active terminal out into its own window.
@@ -220,7 +220,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
         try
         {
-            var url = NavigationManager.ToAbsoluteUri($"/terminal-window/apphost/{Uri.EscapeDataString(terminalId)}").ToString();
+            var url = NavigationManager.ToAbsoluteUri($"terminal-window/apphost/{Uri.EscapeDataString(terminalId)}").AbsoluteUri;
             var fontSize = _terminalViews.TryGetValue(terminalId, out var view) ? view.FontSize : null;
             var result = await WindowLauncher.OpenAsync(terminalId, url, fontSize).ConfigureAwait(true);
 

@@ -10,6 +10,7 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Bunit;
 using Grpc.Core;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -499,15 +500,21 @@ public class TerminalDockTests : DashboardTestContext
         Assert.Empty(toasts.FindComponents<FluentToast>());
     }
 
-    [Fact]
-    public async Task DetachActiveTerminal_CarriesItsFontAndReturnResumesAutoFit()
+    [Theory]
+    [InlineData("", "second", "second")]
+    [InlineData("/aspire/nested", "second", "second")]
+    [InlineData("", "second #1/?%+", "second%20%231%2F%3F%25%2B")]
+    [InlineData("/aspire/nested", "second #1/?%+", "second%20%231%2F%3F%25%2B")]
+    public async Task DetachActiveTerminal_CarriesItsFontAndReturnResumesAutoFit(string pathBase, string terminalId, string escapedTerminalId)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = new TestDashboardClient(terminalChannelProvider: () => updates);
-        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        Services.AddSingleton<NavigationManager>(new TestNavigationManager($"http://localhost{pathBase}/"));
+        TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/first");
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
-        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", terminalId));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
         var views = cut.FindComponents<TerminalView>();
         for (var i = 0; i < views.Count; i++)
@@ -520,13 +527,18 @@ public class TerminalDockTests : DashboardTestContext
             }));
         }
         await cut.FindAll(".terminal-dock-tab-select")[1].ClickAsync(new());
-        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second", "third"));
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", terminalId, "third"));
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindComponents<TerminalView>().Count));
 
         await cut.Find(".terminal-dock-detach").ClickAsync(new());
         var open = Assert.Single(JSInterop.Invocations, i => i.Identifier == "openTerminalWindow");
-        Assert.Equal("second", open.Arguments[0]);
-        Assert.Equal("http://localhost/terminal-window/apphost/second?fontSize=19", open.Arguments[1]);
+        Assert.Equal(terminalId, open.Arguments[0]);
+        Assert.Equal($"http://localhost{pathBase}/terminal-window/apphost/{escapedTerminalId}?fontSize=19", open.Arguments[1]);
+        Assert.Equal(960, open.Arguments[2]);
+        Assert.Equal(600, open.Arguments[3]);
+        var moduleImport = Assert.Single(JSInterop.Invocations, i => i.Identifier == "import"
+            && i.Arguments[0] is string path && path.EndsWith("/js/app-terminalwindow.js", StringComparison.Ordinal));
+        Assert.Equal($"{pathBase}/js/app-terminalwindow.js", moduleImport.Arguments[0]);
         Assert.Equal(2, cut.FindComponents<TerminalView>().Count);
         Assert.Single(cut.FindAll(".terminal-dock-detached"));
 
@@ -537,7 +549,7 @@ public class TerminalDockTests : DashboardTestContext
             var returned = cut.FindComponents<TerminalView>().Select(c => c.Instance).ToArray();
             Assert.Equal(3, returned.Length);
             Assert.Equal([false, true, false], returned.Select(view => view.AutoFit));
-            Assert.Equal("dock:second", returned[1].SizeMemoryKey);
+            Assert.Equal($"dock:{terminalId}", returned[1].SizeMemoryKey);
         });
     }
 

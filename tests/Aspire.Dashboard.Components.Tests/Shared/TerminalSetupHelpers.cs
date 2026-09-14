@@ -13,20 +13,20 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class TerminalSetupHelpers
 {
-    public static void SetupTerminalComponents(TestContext context, TestDashboardClient client)
+    public static void SetupTerminalComponents(TestContext context, TestDashboardClient client, string pathBase = "")
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);
         FluentUISetupHelpers.SetupFluentUIComponents(context);
         FluentUISetupHelpers.SetupFluentButton(context);
         context.Services.AddSingleton<IDashboardClient>(client);
         context.JSInterop.Setup<string>("Blazor._internal.PageTitle.getAndRemoveExistingTitle", _ => true).SetResult(string.Empty);
-        SetupTerminalView(context);
-        SetupTerminalDock(context);
+        SetupTerminalView(context, pathBase);
+        SetupTerminalDock(context, pathBase);
     }
 
-    public static void SetupTerminalView(TestContext context)
+    public static void SetupTerminalView(TestContext context, string pathBase = "")
     {
-        var module = SetupTerminalViewModule(context, "/Components/Controls/TerminalView.razor.js");
+        var module = SetupTerminalViewModule(context, $"{pathBase}/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
         module.SetupVoid("setReadOnly", _ => true).SetVoidResult();
     }
@@ -46,7 +46,7 @@ internal static class TerminalSetupHelpers
         return module;
     }
 
-    public static void SetupTerminalDock(TestContext context)
+    public static void SetupTerminalDock(TestContext context, string pathBase = "")
     {
         var dock = context.JSInterop.SetupModule("./Components/Layout/TerminalDock.razor.js");
         dock.SetupVoid("registerResizeHandle", _ => true).SetVoidResult();
@@ -54,7 +54,7 @@ internal static class TerminalSetupHelpers
         dock.SetupVoid("registerTabNavigation", _ => true).SetVoidResult();
         dock.SetupVoid("unregisterTabNavigation", _ => true).SetVoidResult();
 
-        var windows = context.JSInterop.SetupModule("/js/app-terminalwindow.js");
+        var windows = context.JSInterop.SetupModule($"{pathBase}/js/app-terminalwindow.js");
         windows.Setup<string>("openTerminalWindow", _ => true).SetResult("opened");
         windows.Setup<bool>("focusTerminalWindow", _ => true).SetResult(true);
         windows.SetupVoid("closeTerminalWindow", _ => true).SetVoidResult();

@@ -15,7 +15,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
-/// Owns every terminal whose process is hosted by the AppHost itself.
+/// Manages terminals created and owned by the AppHost.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -28,8 +28,8 @@ namespace Aspire.Hosting.Terminals;
 /// Those are owned by the resource, reachable over a Unix domain socket, and are not tracked here.
 /// </para>
 /// <para>
-/// Resolve it from the AppHost's service provider:
-/// <c>builder.Services.GetRequiredService&lt;TerminalService&gt;()</c>. Only creation and lookup are public;
+/// Resolve it from the built AppHost's service provider:
+/// <c>app.Services.GetRequiredService&lt;TerminalService&gt;()</c>. Only creation and lookup are public;
 /// the members the dashboard uses to attach transports and watch the dock's tab list are internal, because
 /// they are transport plumbing rather than something an AppHost author calls.
 /// </para>
@@ -51,6 +51,7 @@ public sealed class TerminalService : IAsyncDisposable
     private readonly object _syncLock = new();
     private ImmutableHashSet<Channel<TerminalUpdate>> _outgoingChannels = [];
     private int _disposed;
+    private Task? _disposeTask;
 
     internal TerminalService(ILogger<TerminalService> logger, IConfiguration configuration)
     {
@@ -82,6 +83,13 @@ public sealed class TerminalService : IAsyncDisposable
     /// terminal that is meant to outlive the call that created it should be left undisposed, and is torn down
     /// when the AppHost shuts down.
     /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="options"/>, its <see cref="TerminalLaunchOptions.Command"/>, or its
+    /// <see cref="TerminalLaunchOptions.Title"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// The <see cref="TerminalLaunchOptions.Title"/> is empty or consists only of white-space characters.
+    /// </exception>
     /// <exception cref="ArgumentOutOfRangeException">
     /// The placement in <paramref name="options"/> is not <see cref="TerminalPlacement.Dock"/>,
     /// <see cref="TerminalPlacement.Dialog"/>, or <see cref="TerminalPlacement.None"/>.
@@ -132,7 +140,7 @@ public sealed class TerminalService : IAsyncDisposable
     /// </remarks>
     internal AspireTerminal CreateTerminal(string title, TerminalPlacement placement, Hex1bTerminalBuilder builder)
     {
-        ArgumentNullException.ThrowIfNull(title);
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
         ArgumentNullException.ThrowIfNull(builder);
 
         // AppHost-owned terminals have no resource view. Validate both creation paths here before registration,
@@ -342,37 +350,6 @@ public sealed class TerminalService : IAsyncDisposable
     internal void NotifyActivated(Hex1bAspireTerminal terminal)
         => Notify(terminal, TerminalChangeType.Activated);
 
-    /// <summary>
-    /// Removes a terminal from the registry and tears its workload down without waiting for it.
-    /// </summary>
-    /// <remarks>
-    /// Used on the interaction completion path, which runs under a lock held by the interaction collection and
-    /// must not block on a workload that may be ignoring cancellation. The registry entry is removed
-    /// synchronously so the terminal is unreachable the moment the dialog closes.
-    /// </remarks>
-    internal void RemoveAndDisposeInBackground(string terminalId)
-    {
-        if (!_terminals.TryGetValue(terminalId, out var terminal))
-        {
-            return;
-        }
-
-        Remove(terminal);
-        _ = DisposeQuietlyAsync(terminal);
-
-        async Task DisposeQuietlyAsync(Hex1bAspireTerminal target)
-        {
-            try
-            {
-                await target.DisposeAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Error disposing terminal {TerminalId}.", target.Id);
-            }
-        }
-    }
-
     internal void NotifyRetitled(Hex1bAspireTerminal terminal)
         => Notify(terminal, TerminalChangeType.Retitled);
 
@@ -445,20 +422,23 @@ public sealed class TerminalService : IAsyncDisposable
     }
 
     /// <summary>
-    /// Tears down every terminal this service owns.
+    /// Stops and awaits teardown of every terminal this service owns.
     /// </summary>
-    public async ValueTask DisposeAsync()
+    /// <returns>A task that completes when all terminal workloads and transports have been disposed.</returns>
+    /// <remarks>
+    /// Teardown starts concurrently for all terminals. Repeated calls await the same cleanup operation.
+    /// </remarks>
+    public ValueTask DisposeAsync()
     {
-        Hex1bAspireTerminal[] terminals;
         lock (_syncLock)
         {
-            if (_disposed != 0)
+            if (_disposeTask is not null)
             {
-                return;
+                return new ValueTask(_disposeTask);
             }
 
             _disposed = 1;
-            terminals = [.. _terminals.Values];
+            var terminals = _terminals.Values.ToArray();
             _terminals.Clear();
 
             foreach (var terminal in terminals)
@@ -473,20 +453,31 @@ public sealed class TerminalService : IAsyncDisposable
             {
                 channel.Writer.TryComplete();
             }
+
+            _disposeTask = DisposeTerminalsAsync(terminals, ResourceTerminals);
+            return new ValueTask(_disposeTask);
         }
+    }
 
-        foreach (var terminal in terminals)
+    private async Task DisposeTerminalsAsync(Hex1bAspireTerminal[] terminals, ResourceTerminalCatalog? resourceTerminals)
+    {
+        // Workload cancellation can invoke user callbacks. Do not begin teardown under the registry lock.
+        await Task.Yield();
+
+        try
         {
-            _logger.LogDebug("Removed terminal {TerminalId} ({Title}).", terminal.Id, terminal.Title);
-
-            // Don't await the workload winding down. AppHost shutdown should not be held up by a terminal
-            // whose process ignores cancellation; the process is torn down with the AppHost regardless.
-            _ = terminal.StopAsync();
+            await Task.WhenAll(terminals.Select(async terminal =>
+            {
+                _logger.LogDebug("Removed terminal {TerminalId} ({Title}).", terminal.Id, terminal.Title);
+                await terminal.StopAsync().ConfigureAwait(false);
+            })).ConfigureAwait(false);
         }
-
-        if (ResourceTerminals is { } resourceTerminals)
+        finally
         {
-            await resourceTerminals.DisposeAsync().ConfigureAwait(false);
+            if (resourceTerminals is not null)
+            {
+                await resourceTerminals.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 }

@@ -1369,7 +1369,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // Resource terminals never reattach, so the close callback has nothing to do: the inline view was live the
     // whole time the window was open.
     private TerminalWindowLauncher TerminalWindowLauncher
-        => _terminalWindowLauncher ??= new TerminalWindowLauncher(JS, _ => Task.CompletedTask);
+        => _terminalWindowLauncher ??= new TerminalWindowLauncher(JS, NavigationManager, _ => Task.CompletedTask);
 
     /// <summary>
     /// Opens the selected resource's terminal in its own resizable window.
@@ -1388,10 +1388,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         try
         {
-            var path = $"/terminal-window/resource/{Uri.EscapeDataString(resourceName)}/{_terminalReplicaIndex}";
+            var path = $"terminal-window/resource/{Uri.EscapeDataString(resourceName)}/{_terminalReplicaIndex}";
             var result = await TerminalWindowLauncher.OpenAsync(
                 key: $"resource:{resourceName}:{_terminalReplicaIndex}",
-                url: NavigationManager.ToAbsoluteUri(path).ToString(),
+                url: NavigationManager.ToAbsoluteUri(path).AbsoluteUri,
                 fontSize: _terminalViewRef?.FontSize).ConfigureAwait(true);
 
             if (result is TerminalWindowOpenResult.Blocked)

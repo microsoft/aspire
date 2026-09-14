@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.JSInterop;
 
@@ -50,6 +51,7 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
     private const int DefaultWindowHeightPx = 600;
 
     private readonly IJSRuntime _js;
+    private readonly NavigationManager _navigationManager;
     private readonly Func<string, Task> _onWindowClosed;
     private readonly HashSet<string> _tracked = [];
 
@@ -60,16 +62,19 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
     /// Initializes a new instance of the <see cref="TerminalWindowLauncher"/> class.
     /// </summary>
     /// <param name="js">The JS runtime for the owning component's circuit.</param>
+    /// <param name="navigationManager">The navigation manager providing the dashboard's base URI.</param>
     /// <param name="onWindowClosed">
     /// Invoked with the terminal key when the user closes a detached window. Not raised for windows closed through
     /// <see cref="CloseAsync"/>, because the caller already knows about those.
     /// </param>
-    public TerminalWindowLauncher(IJSRuntime js, Func<string, Task> onWindowClosed)
+    public TerminalWindowLauncher(IJSRuntime js, NavigationManager navigationManager, Func<string, Task> onWindowClosed)
     {
         ArgumentNullException.ThrowIfNull(js);
+        ArgumentNullException.ThrowIfNull(navigationManager);
         ArgumentNullException.ThrowIfNull(onWindowClosed);
 
         _js = js;
+        _navigationManager = navigationManager;
         _onWindowClosed = onWindowClosed;
     }
 
@@ -152,8 +157,9 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
         // Imported lazily: most sessions never detach a terminal, and the import is only legal once the circuit can
         // reach the browser, which rules out doing it in a constructor.
         _selfRef ??= DotNetObjectReference.Create(this);
+        var moduleUri = new Uri(new Uri(_navigationManager.BaseUri), "js/app-terminalwindow.js");
         return _module ??= await _js.InvokeAsync<IJSObjectReference>(
-            "import", "/js/app-terminalwindow.js").ConfigureAwait(false);
+            "import", moduleUri.PathAndQuery).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

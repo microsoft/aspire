@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Threading.Channels;
 using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Tests.Dcp;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Hex1b;
 using Microsoft.AspNetCore.InternalTesting;
@@ -88,6 +89,64 @@ public class TerminalServiceTests
     }
 
     [Theory]
+    [InlineData(null, false)]
+    [InlineData(null, true)]
+    [InlineData("", false)]
+    [InlineData("", true)]
+    [InlineData(" ", false)]
+    [InlineData(" ", true)]
+    [InlineData("\t\r\n", false)]
+    [InlineData("\t\r\n", true)]
+    [InlineData("\u00a0", false)]
+    [InlineData("\u00a0", true)]
+    public async Task CreateTerminal_InvalidTitle_ThrowsBeforeRegistration(string? title, bool useBuilder)
+    {
+        await using var service = TestTerminalService.Create();
+
+        void Create() => CreateTerminal(service, TerminalPlacement.Dock, useBuilder, title!);
+
+        if (title is null)
+        {
+            Assert.Throws<ArgumentNullException>(nameof(title), Create);
+        }
+        else
+        {
+            Assert.Throws<ArgumentException>(nameof(title), Create);
+        }
+
+        Assert.Empty(service.ListAll());
+        using var subscription = service.SubscribeDockTerminals();
+        Assert.Empty(subscription.InitialState);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t\r\n")]
+    [InlineData("\u00a0")]
+    public async Task Retitle_InvalidTitle_LeavesTitleUnchanged(string? title)
+    {
+        await using var service = TestTerminalService.Create();
+        var terminal = CreateDockTerminal(service, "Shell");
+        using var subscription = service.SubscribeDockTerminals();
+        var channel = Assert.Single(GetOutgoingChannels(service));
+
+        if (title is null)
+        {
+            Assert.Throws<ArgumentNullException>(nameof(title), () => terminal.Retitle(title!));
+        }
+        else
+        {
+            Assert.Throws<ArgumentException>(nameof(title), () => terminal.Retitle(title));
+        }
+
+        Assert.Equal("Shell", terminal.Handle.Title);
+        Assert.Equal("Shell", Assert.Single(service.ListAll()).Title);
+        Assert.False(channel.Reader.TryRead(out _));
+    }
+
+    [Theory]
     [InlineData(TerminalPlacement.ResourceView, false)]
     [InlineData(TerminalPlacement.ResourceView, true)]
     [InlineData((TerminalPlacement)(-1), false)]
@@ -98,7 +157,7 @@ public class TerminalServiceTests
     {
         await using var service = TestTerminalService.Create();
 
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(nameof(placement), () => CreateTerminal(service, placement, useBuilder));
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(nameof(placement), () => CreateTerminal(service, placement, useBuilder, "Shell"));
 
         Assert.Equal(placement, ex.ActualValue);
         Assert.Empty(service.ListAll());
@@ -114,8 +173,9 @@ public class TerminalServiceTests
     public async Task CreateTerminal_SupportedPlacement_RegistersTerminal(TerminalPlacement placement, bool useBuilder)
     {
         await using var service = TestTerminalService.Create();
-        await using var terminal = CreateTerminal(service, placement, useBuilder);
+        await using var terminal = CreateTerminal(service, placement, useBuilder, "Shell");
 
+        Assert.Equal("Shell", terminal.Title);
         Assert.Equal(TerminalOwner.AppHost, terminal.Owner);
         Assert.Equal(placement, terminal.Placement);
         Assert.True(service.TryGetTerminal(terminal.Id, out var registered));
@@ -219,7 +279,7 @@ public class TerminalServiceTests
 
         using var subscription = service.SubscribeDockTerminals();
 
-        // An interaction terminal lives and dies with its dialog, so it must never appear as a dock tab.
+        // Dialog terminals are surfaced by their interaction rather than the dock.
         var descriptor = Assert.Single(subscription.InitialState);
         Assert.Equal(dock.Id, descriptor.Id);
     }
@@ -510,6 +570,76 @@ public class TerminalServiceTests
     }
 
     [Fact]
+    public async Task DisposeAsync_WaitsForAllWorkloadsAndRepeatedCalls()
+    {
+        await using var service = TestTerminalService.Create();
+        GatedTerminalWorkloadAdapter[] workloads = [new(), new()];
+        var terminals = workloads.Select((workload, index) =>
+            service.CreateTerminal($"Terminal {index}", TerminalPlacement.Dock,
+                Hex1bTerminal.CreateBuilder().WithWorkload(workload))).ToArray();
+        foreach (var terminal in terminals)
+        {
+            terminal.Start();
+        }
+
+        Task disposal = Task.CompletedTask;
+        try
+        {
+            await Task.WhenAll(workloads.Select(workload => workload.ReadStarted)).DefaultTimeout();
+            disposal = service.DisposeAsync().AsTask();
+            await Task.WhenAll(workloads.Select(workload => workload.DisposeStarted)).DefaultTimeout();
+
+            Assert.False(disposal.IsCompleted);
+            Assert.Same(disposal, service.DisposeAsync().AsTask());
+            Assert.Empty(service.ListAll());
+
+            var terminalDisposal = terminals[0].DisposeAsync().AsTask();
+            Assert.False(terminalDisposal.IsCompleted);
+            workloads[0].ReleaseDispose();
+            await terminalDisposal.DefaultTimeout();
+            Assert.False(disposal.IsCompleted);
+
+            workloads[1].ReleaseDispose();
+            await disposal.DefaultTimeout();
+            Assert.All(workloads, workload => Assert.True(workload.IsDisposed));
+        }
+        finally
+        {
+            foreach (var workload in workloads)
+            {
+                workload.ReleaseDispose();
+            }
+
+            await disposal.DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ObservesWorkloadDisposalFailure()
+    {
+        var service = TestTerminalService.Create();
+        var expected = new IOException("Workload disposal failed.");
+        var workload = new GatedTerminalWorkloadAdapter { DisposalException = expected };
+        var terminal = service.CreateTerminal("Failure", TerminalPlacement.Dock,
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload));
+        terminal.Start();
+        var disposal = service.DisposeAsync().AsTask();
+        try
+        {
+            await workload.DisposeStarted.DefaultTimeout();
+            Assert.False(disposal.IsCompleted);
+        }
+        finally
+        {
+            workload.ReleaseDispose();
+        }
+
+        Assert.Same(expected, await Assert.ThrowsAsync<IOException>(() => disposal).DefaultTimeout());
+        Assert.Same(disposal, service.DisposeAsync().AsTask());
+        Assert.Same(expected, await Assert.ThrowsAsync<IOException>(() => terminal.DisposeAsync().AsTask()).DefaultTimeout());
+    }
+
+    [Fact]
     public async Task CreateTerminal_AfterDispose_Throws()
     {
         var service = TestTerminalService.Create();
@@ -693,12 +823,12 @@ public class TerminalServiceTests
         Assert.Single(service.ListAll());
     }
 
-    private static AspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement, bool useBuilder)
+    private static AspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement, bool useBuilder, string title)
         => useBuilder
-            ? service.CreateTerminal("Shell", placement, Hex1bTerminal.CreateBuilder().WithPtyProcess("bash"))
+            ? service.CreateTerminal(title, placement, Hex1bTerminal.CreateBuilder().WithPtyProcess("bash"))
             : service.CreateTerminal(new TerminalLaunchOptions
             {
-                Title = "Shell",
+                Title = title,
                 Command = new TerminalCommand("bash"),
                 Placement = placement
             });

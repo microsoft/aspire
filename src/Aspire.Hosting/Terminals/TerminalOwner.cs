@@ -6,7 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
-/// Identifies which process owns a terminal's workload, and therefore controls its lifetime.
+/// Identifies whether the AppHost or an application resource controls a terminal's workload lifetime.
 /// </summary>
 /// <remarks>
 /// This is fixed when the terminal is created and never changes. It is distinct from
@@ -17,17 +17,20 @@ namespace Aspire.Hosting.Terminals;
 public enum TerminalOwner
 {
     /// <summary>
-    /// The workload runs in the AppHost process itself, and its lifetime is controlled by whoever created it.
+    /// The terminal is created by AppHost code, and its lifetime is controlled by whoever created it.
     /// </summary>
+    /// <remarks>
+    /// Commands run as child processes of the AppHost. Ownership does not imply in-process execution.
+    /// </remarks>
     AppHost,
 
     /// <summary>
     /// The workload belongs to a resource in the application model, and its lifetime follows that resource.
     /// </summary>
     /// <remarks>
-    /// These terminals run out-of-process in a per-replica terminal host rather than in the AppHost, so
-    /// disposing the <see cref="AspireTerminal"/> releases Aspire's handle on the terminal without stopping
-    /// the underlying workload.
+    /// The resource's workload is orchestrated by DCP and exposed through a per-replica terminal host.
+    /// Disposing the <see cref="AspireTerminal"/> releases Aspire's handle on the terminal without stopping
+    /// that workload.
     /// </remarks>
     Resource
 }

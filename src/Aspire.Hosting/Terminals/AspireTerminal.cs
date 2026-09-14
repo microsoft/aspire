@@ -15,8 +15,8 @@ namespace Aspire.Hosting.Terminals;
 /// Aspire manages their registration and connection to the underlying terminal implementation.
 /// </para>
 /// <para>
-/// What disposal means depends on <see cref="Owner"/>. For <see cref="TerminalOwner.AppHost"/> the workload
-/// runs in the AppHost, so disposing cancels it and removes the terminal from the dashboard; whoever creates
+/// What disposal means depends on <see cref="Owner"/>. For <see cref="TerminalOwner.AppHost"/> the AppHost
+/// owns the workload, so disposing stops it and removes the terminal from the dashboard; whoever creates
 /// such a terminal owns it and must dispose it, and showing one in an interaction does not transfer that
 /// ownership, so the terminal survives the dialog it was displayed in. For
 /// <see cref="TerminalOwner.Resource"/> the workload belongs to the resource, so disposing only releases

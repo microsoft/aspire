@@ -91,21 +91,27 @@ public partial class ConsoleLogsTests
         await Task.CompletedTask;
     }
 
-    [Fact]
-    public async Task TerminalResource_OpenWindow_CarriesCurrentFontAndKeepsInlineView()
+    [Theory]
+    [InlineData("", "terminal-resource", "terminal-resource", 0)]
+    [InlineData("/aspire/nested", "terminal-resource", "terminal-resource", 0)]
+    [InlineData("", "terminal #1/?%+", "terminal%20%231%2F%3F%25%2B", 2)]
+    [InlineData("/aspire/nested", "terminal #1/?%+", "terminal%20%231%2F%3F%25%2B", 2)]
+    public async Task TerminalResource_OpenWindow_CarriesCurrentFontAndKeepsInlineView(
+        string pathBase, string resourceName, string escapedResourceName, int replicaIndex)
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        var resource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Running);
+        var resource = CreateTerminalResource(resourceName, replicaIndex, replicaCount: replicaIndex + 1, state: KnownResourceState.Running);
         var client = new TestDashboardClient(
             isEnabled: true,
             consoleLogsChannelProvider: _ => consoleLogsChannel,
             resourceChannelProvider: () => resourceChannel,
             initialResources: [resource]);
+        Services.AddSingleton<NavigationManager>(new TestNavigationManager($"http://localhost{pathBase}/"));
         SetupConsoleLogsServices(client);
-        SetupTerminalViewJsInterop();
-        TerminalSetupHelpers.SetupTerminalDock(this);
-        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: resource.Name));
+        TerminalSetupHelpers.SetupTerminalView(this, pathBase);
+        TerminalSetupHelpers.SetupTerminalDock(this, pathBase);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"{pathBase}{DashboardUrls.ConsoleLogsUrl(resource: resource.Name)}");
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder => builder
@@ -123,8 +129,13 @@ public partial class ConsoleLogsTests
         await cut.InvokeAsync(open.OnClick!);
 
         var invocation = Assert.Single(JSInterop.Invocations, i => i.Identifier == "openTerminalWindow");
-        Assert.Equal("resource:terminal-resource:0", invocation.Arguments[0]);
-        Assert.Equal("http://localhost/terminal-window/resource/terminal-resource/0?fontSize=17", invocation.Arguments[1]);
+        Assert.Equal($"resource:{resourceName}:{replicaIndex}", invocation.Arguments[0]);
+        Assert.Equal($"http://localhost{pathBase}/terminal-window/resource/{escapedResourceName}/{replicaIndex}?fontSize=17", invocation.Arguments[1]);
+        Assert.Equal(960, invocation.Arguments[2]);
+        Assert.Equal(600, invocation.Arguments[3]);
+        var moduleImport = Assert.Single(JSInterop.Invocations, i => i.Identifier == "import"
+            && i.Arguments[0] is string path && path.EndsWith("/js/app-terminalwindow.js", StringComparison.Ordinal));
+        Assert.Equal($"{pathBase}/js/app-terminalwindow.js", moduleImport.Arguments[0]);
         Assert.Same(terminal, cut.FindComponent<TerminalView>().Instance);
     }
 

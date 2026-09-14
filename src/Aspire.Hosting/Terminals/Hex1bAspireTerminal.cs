@@ -17,7 +17,7 @@ namespace Aspire.Hosting.Terminals;
 /// <remarks>
 /// Clients are handed to Hex1b's HMP1 server through a channel, which lets a single terminal serve several
 /// attached viewers (for example two dashboard browser tabs, or a dock tab reopened after being closed)
-/// using HMP1's multi-head support. The workload lives in the AppHost, so terminal state survives a viewer
+/// using HMP1's multi-head support. The AppHost owns the workload, so terminal state survives a viewer
 /// disconnecting entirely.
 /// </remarks>
 internal sealed class Hex1bAspireTerminal : ITerminalBackend
@@ -43,6 +43,7 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
     private Hex1bTerminal? _terminal;
     private Hex1bTerminalAutomator? _automator;
     private Task? _runTask;
+    private Task? _stopTask;
     private bool _stopped;
 
     public Hex1bAspireTerminal(TerminalService owner, string id, string title, TerminalPlacement placement, Hex1bTerminalBuilder builder, ILogger logger)
@@ -87,6 +88,8 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
 
     public void Retitle(string title)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+
         lock (_gate)
         {
             if (string.Equals(Title, title, StringComparison.Ordinal))
@@ -214,13 +217,13 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
             try
             {
                 await terminal.DisposeAsync().ConfigureAwait(false);
+                _sessionEnded.TrySetResult();
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Disposing terminal {TerminalId} ({Title}) failed.", Id, Title);
+                _logger.LogError(ex, "Disposing terminal {TerminalId} ({Title}) failed.", Id, Title);
+                _sessionEnded.TrySetException(ex);
             }
-
-            _sessionEnded.TrySetResult();
         }
     }
 
@@ -266,9 +269,9 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
     {
         lock (_gate)
         {
-            if (_stopped)
+            if (_stopTask is not null)
             {
-                return _sessionEnded.Task;
+                return _stopTask;
             }
 
             _stopped = true;
@@ -277,24 +280,31 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
             if (_runTask is null)
             {
                 // Registered but never started, so there is nothing to wind down.
-                _workloadCts.Cancel();
                 _workloadCts.Dispose();
                 _workloadEnded.TrySetResult();
                 _sessionEnded.TrySetResult();
-                return _sessionEnded.Task;
+                return _stopTask = _sessionEnded.Task;
             }
+
+            return _stopTask = StopCoreAsync();
         }
+    }
 
-        _workloadCts.Cancel();
+    private async Task StopCoreAsync()
+    {
+        // Cancellation callbacks must not run under _gate or prevent other terminals from beginning shutdown.
+        await Task.Yield();
 
-        _ = _sessionEnded.Task.ContinueWith(
-            static (_, state) => ((CancellationTokenSource)state!).Dispose(),
-            _workloadCts,
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-
-        return _sessionEnded.Task;
+        try
+        {
+            // Cancellation interrupts Hex1b's process-exit wait. Its PTY disposal forcibly terminates any
+            // remaining child, so join that disposal rather than relying on the AppHost process exiting.
+            await Task.WhenAll(_workloadCts.CancelAsync(), _sessionEnded.Task).ConfigureAwait(false);
+        }
+        finally
+        {
+            _workloadCts.Dispose();
+        }
     }
 
     public async ValueTask DisposeAsync()

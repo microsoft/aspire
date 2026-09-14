@@ -57,9 +57,8 @@
     margin-inline-end: 0;
 }
 
-/* Terminals are the only input that needs an explicit box: xterm.js measures its container, so a zero-height
-   container renders nothing at all. The container also has to opt out of the 75%/500px width cap that keeps
-   ordinary form fields from stretching across the dialog. */
+/* The Hex1b web terminal measures its container, so it needs an explicit, nonzero height. Its container also
+   opts out of the 75%/500px width cap that keeps ordinary form fields from stretching across the dialog. */
 .interaction-input-dialog .interaction-input ::deep .interaction-terminal-container {
     width: 100%;
     max-width: none;
