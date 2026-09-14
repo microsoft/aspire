@@ -1079,7 +1079,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task CreateRestoreOverlay_WithPackageSourceOverride_MapsAspireToOverrideAndAddsNuGetOrgFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packageSourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-packages");
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([])
@@ -1101,7 +1101,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task CreateRestoreOverlay_WithPackageSourceOverrideWithoutRequestedChannel_DoesNotIncludeExplicitChannelAspireMappings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packageSourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-packages");
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var explicitChannel = PackageChannel.CreateExplicitChannel(
             name: "daily",
@@ -1131,7 +1131,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task CreateRestoreOverlay_WithPackageSourceOverride_PreservesRequestedChannelMappingsAndGlobalPackagesFolder()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packageSourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-packages");
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
             name: "staging",
@@ -1181,7 +1181,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task CreateRestoreOverlay_WithPackageSourceOverride_DropsRequestedChannelAspireMappings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packageSourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-packages");
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
             name: "staging",
@@ -1210,7 +1210,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         string packageId)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/integration-packages";
+        var packageSourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "integration-packages");
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
             name: "staging",
@@ -1266,7 +1266,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task CreateRestoreOverlay_WithPackageSourceOverride_UsesChannelAllPackagesMappingAsFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packageSourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-packages");
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
             name: "staging",
@@ -1292,7 +1292,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task CreateRestoreOverlay_WithPackageSourceOverride_WhenChannelLookupFails_StillCreatesOverridePolicyWithFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packageSourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-packages");
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Channel lookup failed.")
@@ -1335,7 +1335,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // Additional sources are co-eligible with mapped sources, so the channel's Aspire feed
         // must be excluded when an explicit source owns the Aspire package mapping.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packageSourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-packages");
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
             name: "staging",
@@ -1357,7 +1357,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task ResolveAdditionalSources_WithPackageSourceOverrideAndMatchedChannelNonAspireMapping_KeepsChannelSourceAndAddsNuGetOrgFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packageSourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-packages");
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
             name: "staging",
@@ -1380,7 +1380,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task ResolveAdditionalSources_WithPackageSourceOverrideAndMatchedChannelAllPackagesMapping_OmitsNuGetOrgFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packageSourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-packages");
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
             name: "staging",
