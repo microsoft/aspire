@@ -61,7 +61,7 @@ public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, stri
         string? deploymentName = null;
 
         var configuration = HostBuilder.Configuration;
-        if (configuration.GetConnectionString(ConnectionName) is string connectionString)
+        if (configuration.TryGetConnectionString(ConnectionName, out var connectionString))
         {
             // The reason we accept either 'Deployment' or 'Model' as the key is because some hosting solutions
             // require specific named deployments (Azure Foundry AI) while others may use a generic model name (OpenAI, GitHub Models).

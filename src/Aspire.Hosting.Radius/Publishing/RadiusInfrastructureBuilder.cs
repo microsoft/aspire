@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRERADIUS004 // Experimental: ConfigureRadiusInfrastructure escape-hatch construct types are consumed internally by the publisher.
 
+#pragma warning disable ASPIRECONNECTIONSTRINGS001 // Connection-string reference metadata is experimental.
 #pragma warning disable ASPIRECOMPUTE002 // GetEndpointPropertyExpression/GetHostAddressExpression are experimental compute-environment APIs the publisher relies on.
 #pragma warning disable ASPIRERADIUS006 // Secret-store model types (RadiusSecretStoreResource, etc.) are experimental; consumed internally by the publisher.
 using System.Globalization;
@@ -1132,6 +1133,8 @@ internal sealed class RadiusInfrastructureBuilder
             }
         }
 
+        ProjectPortableConnectionStringAliases(resource, context.EnvironmentVariables);
+
         // Drop HTTPS service-discovery variables: containers in the cluster don't terminate TLS
         // (ingress/service mesh does), so an https `services__*` URL would be unreachable. This
         // matches RemoveHttpsServiceDiscoveryVariables in the Kubernetes/Docker Compose publishers.
@@ -1168,6 +1171,26 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         return result;
+    }
+
+    private static void ProjectPortableConnectionStringAliases(IResource resource, Dictionary<string, object> environmentVariables)
+    {
+        foreach (var reference in resource.Annotations.OfType<ConnectionStringReferenceAnnotation>())
+        {
+            var names = reference.EnvironmentVariableNames;
+            if (string.Equals(names.LegacyName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+                !environmentVariables.ContainsKey(names.PortableName))
+            {
+                continue;
+            }
+
+            // Radius renders these values as Kubernetes container environment variables. Deploy only
+            // the portable generated alias, preserving any later override of the exact logical alias.
+            if (environmentVariables.Remove(names.LegacyName, out var legacyValue))
+            {
+                environmentVariables[names.PortableName] = legacyValue;
+            }
+        }
     }
 
     // An ordered fragment of a container env-var value: either a literal string or a reference to

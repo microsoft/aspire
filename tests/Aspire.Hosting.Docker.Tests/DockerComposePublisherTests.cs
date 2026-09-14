@@ -107,6 +107,30 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConnectionStringNamesWithHyphens_PreserveBothAliases()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose");
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        builder.AddContainer("api", "myimage")
+            .WithReference(connection);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var compose = File.ReadAllText(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        var aliases = Regex.Matches(compose, @"(?m)^\s+(ConnectionStrings__[^:]+):")
+            .Select(static match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            ["ConnectionStrings__my-db", "ConnectionStrings__my_db"],
+            aliases);
+    }
+
+    [Fact]
     public async Task DockerComposeWithProjectResources()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

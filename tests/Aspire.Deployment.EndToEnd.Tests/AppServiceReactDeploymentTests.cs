@@ -12,6 +12,9 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// </summary>
 public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
 {
+    private const string TestConnectionStringName = "deployment-test";
+    private const string TestConnectionStringValue = "https://portable-alias-test.vault.azure.net/";
+
     // This test deploys both the initial slot-enabled site and its VNet-integration upgrade.
     // Two 30-minute provisioning operations plus bounded verification waits leave time for
     // template creation, package installation, and the commands between deployments.
@@ -104,6 +107,12 @@ public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForAspireAddCompletionAsync(counter);
 
+            // Step 6a: Add the current Key Vault client integration to the deployed server.
+            output.WriteLine("Step 6a: Adding Key Vault client package...");
+            await auto.TypeAsync($"dotnet add {projectName}.Server package Aspire.Azure.Security.KeyVault --prerelease");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
+
             // Step 7: Configure the first deployment with a staging slot but without VNet integration.
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
@@ -127,7 +136,32 @@ builder.AddAzureAppServiceEnvironment("infra")
 """;
 
             var content = File.ReadAllText(appHostFilePath);
-            var initialAppHostConfiguration = $"""
+const string serverDeclarationPattern = "var server = builder.AddProject";
+const string serverHealthCheckPattern = "    .WithHttpHealthCheck(\"/health\")";
+if (!content.Contains(serverDeclarationPattern, StringComparison.Ordinal) ||
+    !content.Contains(serverHealthCheckPattern, StringComparison.Ordinal))
+{
+    throw new InvalidOperationException("Could not find the server resource in the generated AppHost.");
+}
+
+content = content
+    .Replace(
+        serverDeclarationPattern,
+        $$"""
+        var deploymentTest = builder.AddConnectionString("{{TestConnectionStringName}}", expression => expression.AppendLiteral("{{TestConnectionStringValue}}"));
+
+        {{serverDeclarationPattern}}
+        """,
+        StringComparison.Ordinal)
+    .Replace(
+        serverHealthCheckPattern,
+        $"""
+            .WithReference(deploymentTest)
+        {serverHealthCheckPattern}
+        """,
+        StringComparison.Ordinal);
+
+var initialAppHostConfiguration = $"""
 // Add Azure App Service Environment with a staging slot for deployment.
 {initialEnvironmentConfiguration}
 
@@ -141,7 +175,36 @@ builder.AddAzureAppServiceEnvironment("infra")
             content = content.Replace(buildRunPattern, initialAppHostConfiguration, StringComparison.Ordinal);
             File.WriteAllText(appHostFilePath, content);
 
+            var serverFilePath = Path.Combine(projectDir, $"{projectName}.Server", "Program.cs");
+            content = File.ReadAllText(serverFilePath);
+            const string serviceDefaultsPattern = "builder.AddServiceDefaults();";
+            const string defaultEndpointsPattern = "app.MapDefaultEndpoints();";
+            if (!content.Contains(serviceDefaultsPattern, StringComparison.Ordinal) ||
+                !content.Contains(defaultEndpointsPattern, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Could not find the service registration or default endpoint mapping in the generated server.");
+            }
+
+            content = content
+                .Replace(
+                    serviceDefaultsPattern,
+                    $$"""
+                    {{serviceDefaultsPattern}}
+                    builder.AddAzureKeyVaultClient("{{TestConnectionStringName}}", settings => settings.DisableHealthChecks = true);
+                    """,
+                    StringComparison.Ordinal)
+                .Replace(
+                    defaultEndpointsPattern,
+                    """
+                    api.MapGet("connection-string", (Azure.Security.KeyVault.Secrets.SecretClient client) => client.VaultUri.AbsoluteUri);
+
+                    app.MapDefaultEndpoints();
+                    """,
+                    StringComparison.Ordinal);
+            File.WriteAllText(serverFilePath, content);
+
             output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
+            output.WriteLine($"Modified Program.cs at: {serverFilePath}");
 
             // Step 8: Navigate to AppHost project directory
             output.WriteLine("Step 8: Navigating to AppHost directory...");
@@ -202,12 +265,12 @@ builder.AddAzureAppServiceEnvironment("infra")
             // The workload is deployed to its staging slot, so the production site's empty
             // hostname is not a liveness target. Sites without slots, such as the dashboard,
             // are reached through their production hostname.
-            // Verify both endpoints concurrently for up to six minutes. Each attempt has a
-            // 10-second curl cap and waits 10 seconds before the next attempt.
+            // Verify both endpoints concurrently for up to six minutes, then verify the
+            // connection-string endpoint with the same bounded retry policy.
             output.WriteLine("Step 14: Verifying deployed endpoints...");
             await auto.TypeAsync(BuildEndpointVerificationCommand(resourceGroupName));
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(7));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(13));
 
             // Step 15: Verify that the production site, staging slot, and dashboard use the delegated subnet.
             output.WriteLine("Step 15: Verifying regional VNet integration...");
@@ -271,6 +334,7 @@ builder.AddAzureAppServiceEnvironment("infra")
             [ -n "$webapps" ] || fail "No App Service sites found"
 
             urls=""
+            application_url=""
             staging_endpoint_count=0
             dashboard_endpoint_count=0
             for webapp in $webapps
@@ -285,6 +349,7 @@ builder.AddAzureAppServiceEnvironment("infra")
                             fail "Failed to query hostname for staging slot $webapp/$slot"
                         [ -n "$url" ] || fail "Missing hostname for staging slot $webapp/$slot"
                         urls="$urls $url"
+                        application_url="$url"
                         staging_endpoint_count=$((staging_endpoint_count + 1))
                     done
                 else
@@ -343,6 +408,27 @@ builder.AddAzureAppServiceEnvironment("infra")
             done
 
             [ "$failed" -eq 0 ] || fail "One or more endpoint checks failed"
+
+            connection_string=""
+            for attempt in $(seq 1 18)
+            do
+                connection_string=$(curl -fsS "https://$application_url/api/connection-string" --max-time 10 2>/dev/null) ||
+                    connection_string=""
+                if [ "$connection_string" = "{{TestConnectionStringValue}}" ]
+                then
+                    echo "Verified portable connection-string alias"
+                    break
+                fi
+
+                echo "  Connection-string attempt $attempt returned '$connection_string', retrying in 10 seconds..."
+                if [ "$attempt" -lt 18 ]
+                then
+                    sleep 10
+                fi
+            done
+
+            [ "$connection_string" = "{{TestConnectionStringValue}}" ] ||
+                fail "The deployed application did not resolve the portable connection-string alias"
             """;
 
         return $"bash -c {AspireCliShellCommandHelpers.QuoteBashArg(script)}";

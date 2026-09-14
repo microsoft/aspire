@@ -58,7 +58,7 @@ public static class AspireAppConfigurationExtensions
         var settings = new AzureAppConfigurationSettings();
         configSection.Bind(settings);
 
-        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             ((IConnectionStringSettings)settings).ParseConnectionString(connectionString);
         }

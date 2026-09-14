@@ -191,7 +191,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PublishToAppService_WithDashedConnectionStringName_FailsValidationInPipeline()
+    public async Task PublishToAppService_WithDashedConnectionStringName_UsesPortableAlias()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -204,10 +204,11 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 
         var cs = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
 
-        builder.AddProject<Project>("api", launchProfileName: null)
+        var project = builder.AddProject<Project>("api", launchProfileName: null)
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints()
             .WithReference(cs)
+            .WithEnvironment("ConnectionStrings__my-db", "Host=override")
             .PublishAsAzureAppServiceWebsite(configure: (_, _) => { });
 
         using var app = builder.Build();
@@ -216,23 +217,22 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         var reporter = app.Services.GetRequiredService<IPipelineActivityReporter>() as TestPipelineActivityReporter;
         Assert.NotNull(reporter);
 
-        // Run the app - validation happens during the pipeline execution
-        // The pipeline catches exceptions and reports them via the activity reporter
         await app.RunAsync();
 
-        // Verify the step completed with error
         Assert.Contains(reporter.CompletedSteps, step =>
             step.StepTitle == "validate-appservice-config-env" &&
-            step.CompletionState == CompletionState.CompletedWithError);
+            step.CompletionState == CompletionState.Completed);
 
-        // Verify the error message was logged with details about the problematic connection string
-        Assert.Contains(reporter.LoggedMessages, log =>
-            log.Message.Contains("ConnectionStrings__my-db") &&
-            log.LogLevel == LogLevel.Error);
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(website);
+
+        await Verify(bicep, "bicep");
     }
 
     [Fact]
-    public async Task PublishToAppService_WithDashedConnectionStringName_CanBeIgnored()
+    public async Task PublishToAppService_WithUnrelatedDashedEnvironmentVariable_FailsValidation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -243,12 +243,42 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureAppServiceEnvironment("env");
 
-        var cs = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithEnvironment("INVALID-NAME", "value")
+            .PublishAsAzureAppServiceWebsite(configure: (_, _) => { });
+
+        using var app = builder.Build();
+        var reporter = app.Services.GetRequiredService<IPipelineActivityReporter>() as TestPipelineActivityReporter;
+        Assert.NotNull(reporter);
+
+        await app.RunAsync();
+
+        Assert.Contains(reporter.CompletedSteps, step =>
+            step.StepTitle == "validate-appservice-config-env" &&
+            step.CompletionState == CompletionState.CompletedWithError);
+        Assert.Contains(reporter.LoggedMessages, log =>
+            log.Message.Contains("INVALID-NAME", StringComparison.Ordinal) &&
+            log.LogLevel == LogLevel.Error);
+    }
+
+    [Fact]
+    public async Task PublishToAppService_WithDashedEnvironmentVariable_CanBeIgnored()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "validate-appservice-config-env");
+
+        builder.Services.AddSingleton(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        builder.AddAzureAppServiceEnvironment("env");
 
         builder.AddProject<Project>("api", launchProfileName: null)
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints()
-            .WithReference(cs)
+            .WithEnvironment("INVALID-NAME", "value")
             .PublishAsAzureAppServiceWebsite(configure: (_, _) => { })
             .SkipEnvironmentVariableNameChecks();
 
