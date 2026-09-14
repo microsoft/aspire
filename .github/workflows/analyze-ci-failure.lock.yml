@@ -1,5 +1,5 @@
-# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"4547f527f4be46406cbc08fd3225fe39790f8b522003eba3084328a2fbb9d8b9","body_hash":"e9f3545ccbe75e728bdac1140123f0ebea921e69ff4b3a44a28fa977bf00ba74","compiler_version":"v0.86.2","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.79"}}
-# gh-aw-manifest: {"version":1,"secrets":["GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/cache/save","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/checkout","sha":"34e114876b0b11c390a56381ad16ebd13914f8d5","version":"v4.3.1"},{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/download-artifact","sha":"d3f86a106a0bac45b974a628896c90dbdf5c8093","version":"v4.3.0"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"820762786026740c76f36085b0efc47a31fe5020","version":"v7.0.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"actions/upload-artifact","sha":"ea165f8d65b6e75b540449e92b4886f43607fa02","version":"v4.6.2"},{"repo":"github/gh-aw-actions/setup","sha":"6aab9e5b5c91c615506061f09bedd81a23babe3c","version":"v0.86.2"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.27.44","digest":"sha256:0d727725c737b58c7bdf51f640cffb928385ec46517e0917c7f1a02f1bada8b4","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.27.44@sha256:0d727725c737b58c7bdf51f640cffb928385ec46517e0917c7f1a02f1bada8b4"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.44","digest":"sha256:b50fbadba138f6e9aba94aca09711335c489bb3b15861220cb66f6092e042dc7","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.44@sha256:b50fbadba138f6e9aba94aca09711335c489bb3b15861220cb66f6092e042dc7"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.27.44","digest":"sha256:83e48bbe12c634be8c228a576832fe45f66c529ac3659db92bddbcf2eeb6d627","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.27.44@sha256:83e48bbe12c634be8c228a576832fe45f66c529ac3659db92bddbcf2eeb6d627"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.4.9","digest":"sha256:e5a1569aeaf41820fa7bdee3e94468cae448133cdbf00119ad24f5b74db1ab9f","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.4.9@sha256:e5a1569aeaf41820fa7bdee3e94468cae448133cdbf00119ad24f5b74db1ab9f"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196","pinned_image":"ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196"},{"image":"ghcr.io/github/github-mcp-server:v1.9.0","digest":"sha256:881b53d6f75f69bdbc1b5b10fc2f1361717c19054143b3a8529fb5c32061a50e","pinned_image":"ghcr.io/github/github-mcp-server:v1.9.0@sha256:881b53d6f75f69bdbc1b5b10fc2f1361717c19054143b3a8529fb5c32061a50e"}]}
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"733cf184993b49197d693048afa547331ce0f11face742924219c84637225033","body_hash":"52054e96ab7de1831f00a1ce69c5f6a9b84cab3d8f2ef2c5f63a1bd61ee6155a","compiler_version":"v0.86.2","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.79"}}
+# gh-aw-manifest: {"version":1,"secrets":["GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/cache/save","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/checkout","sha":"11d5960a326750d5838078e36cf38b85af677262","version":"v4"},{"repo":"actions/checkout","sha":"34e114876b0b11c390a56381ad16ebd13914f8d5","version":"v4.3.1"},{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/download-artifact","sha":"d3f86a106a0bac45b974a628896c90dbdf5c8093","version":"v4.3.0"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"820762786026740c76f36085b0efc47a31fe5020","version":"v7.0.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"actions/upload-artifact","sha":"ea165f8d65b6e75b540449e92b4886f43607fa02","version":"v4.6.2"},{"repo":"github/gh-aw-actions/setup","sha":"6aab9e5b5c91c615506061f09bedd81a23babe3c","version":"v0.86.2"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.27.44","digest":"sha256:0d727725c737b58c7bdf51f640cffb928385ec46517e0917c7f1a02f1bada8b4","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.27.44@sha256:0d727725c737b58c7bdf51f640cffb928385ec46517e0917c7f1a02f1bada8b4"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.44","digest":"sha256:b50fbadba138f6e9aba94aca09711335c489bb3b15861220cb66f6092e042dc7","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.44@sha256:b50fbadba138f6e9aba94aca09711335c489bb3b15861220cb66f6092e042dc7"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.27.44","digest":"sha256:83e48bbe12c634be8c228a576832fe45f66c529ac3659db92bddbcf2eeb6d627","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.27.44@sha256:83e48bbe12c634be8c228a576832fe45f66c529ac3659db92bddbcf2eeb6d627"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.4.9","digest":"sha256:e5a1569aeaf41820fa7bdee3e94468cae448133cdbf00119ad24f5b74db1ab9f","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.4.9@sha256:e5a1569aeaf41820fa7bdee3e94468cae448133cdbf00119ad24f5b74db1ab9f"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196","pinned_image":"ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196"},{"image":"ghcr.io/github/github-mcp-server:v1.9.0","digest":"sha256:881b53d6f75f69bdbc1b5b10fc2f1361717c19054143b3a8529fb5c32061a50e","pinned_image":"ghcr.io/github/github-mcp-server:v1.9.0@sha256:881b53d6f75f69bdbc1b5b10fc2f1361717c19054143b3a8529fb5c32061a50e"}]}
 # This file was automatically generated by gh-aw (v0.86.2). DO NOT EDIT. To debug this workflow, load the skill at https://github.com/github/gh-aw/blob/main/debug.md
 #
 #    ___                   _   _
@@ -41,6 +41,7 @@
 # Custom actions used:
 #   - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 #   - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+#   - actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 #   - actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 #   - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 #   - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1040,11 +1041,13 @@ jobs:
           GH_HOST="${GITHUB_SERVER_URL#https://}"
           GH_HOST="${GH_HOST#http://}"
           echo "GH_HOST=${GH_HOST}" >> "$GITHUB_ENV"
-      - name: Checkout (for retry patterns)
+      - name: Checkout analysis helpers
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
-          sparse-checkout: eng/test-retry-patterns.json
+          sparse-checkout: |
+            .github/workflows/analyze-ci-failure.js
+            eng/test-retry-patterns.json
           sparse-checkout-cone-mode: false
       - name: Collect CI failure data
         id: collect
@@ -1225,9 +1228,18 @@ jobs:
             echo "Memory branch not found (first run or not yet created)"
           fi
 
-          # Fetch test results artifact if available and extract test failure info
-          ARTIFACT_NAME=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
-            --jq '[.artifacts[] | select(.name | test("test-results|TestResults"; "i"))] | first | .name // empty' 2>/dev/null || echo "")
+          # Fetch the artifact list once so both TRX and extension E2E results can be selected.
+          if ! gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/artifacts?per_page=100" \
+              --jq '.artifacts[]' | jq -s '.' > ci-failure-data/artifacts.json; then
+            echo "::warning::Failed to list artifacts for run ${RUN_ID}"
+            echo '[]' > ci-failure-data/artifacts.json
+          fi
+          > ci-failure-data/test-failures.jsonl
+
+          # Fetch the aggregate TRX artifact if available and extract test failure info.
+          ARTIFACT_NAME=$(jq -r \
+            '[.[] | select((.expired | not) and (.name | test("test-results|TestResults"; "i")))] | first | .name // empty' \
+            ci-failure-data/artifacts.json)
           if [ -n "${ARTIFACT_NAME}" ]; then
             echo "Downloading test results artifact: ${ARTIFACT_NAME}..."
             mkdir -p ci-failure-data/test-results
@@ -1241,38 +1253,64 @@ jobs:
                 echo "  - $(basename "$f") ($(stat -c%s "$f" 2>/dev/null || echo "?") bytes)"
               done || true
 
-              # Parse TRX files for failed tests using yq (pre-installed) + jq.
-              # yq converts XML to JSON, then jq extracts failed test info.
+              # Parse TRX files for failed tests using yq (pre-installed) and the workflow helper.
+              # yq converts XML to JSON, then the helper extracts failed test info.
               # TRX uses UnitTestResult elements with outcome="Failed" containing
               # Output/ErrorInfo/Message and Output/ErrorInfo/StackTrace.
-              > ci-failure-data/test-failures.jsonl
               find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | while IFS= read -r TRX_FILE; do
                 echo "Processing: $(basename "$TRX_FILE")"
-                yq -p xml -o json '.' "$TRX_FILE" 2>/dev/null | jq -r '
-                  # Navigate to UnitTestResult — may be array or single object
-                  (.TestRun.Results.UnitTestResult // []) |
-                  (if type == "array" then . else [.] end) |
-                  map(select(.["+@outcome"] == "Failed")) |
-                  .[] |
-                  {
-                    test: (.["+@testName"] // ""),
-                    error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:1000]),
-                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:2000])
-                  }
-                ' >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
+                yq -p xml -o json '.' "$TRX_FILE" 2>/dev/null |
+                  node .github/workflows/analyze-ci-failure.js extract-test-failures - \
+                    >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
               done
-              jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
-              rm -f ci-failure-data/test-failures.jsonl
-              echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from TRX files"
-
-              # Clean up the extracted files to save space in artifact
-              rm -rf ci-failure-data/test-results
             else
               echo "Warning: Failed to download test results artifact"
             fi
           else
             echo "No test results artifact found for run ${RUN_ID}"
           fi
+
+          # VS Code E2E tests publish Mocha JSON in one diagnostic artifact per shard rather
+          # than in All-TestResults. Derive exact artifact names only for failed E2E jobs.
+          jq -r --arg attempt "${RUN_ATTEMPT}" '
+            .[].name as $job
+            | $job
+            | capture("VS Code extension E2E \\((?<os>Windows|Linux), (?<shard>[^)]+)\\)$")?
+            | select(. != null)
+            | ["extension-e2e-diagnostics-\(if .os == "Windows" then "win-x64" else "linux-x64" end)-\(.shard)-attempt\($attempt)", $job]
+            | @tsv
+          ' ci-failure-data/failed-jobs.json | sort -u | while IFS=$'\t' read -r E2E_ARTIFACT_NAME E2E_JOB_NAME; do
+            [ -n "${E2E_ARTIFACT_NAME}" ] || continue
+            if ! jq -e --arg name "${E2E_ARTIFACT_NAME}" \
+                'any(.[]; .name == $name and (.expired | not))' ci-failure-data/artifacts.json > /dev/null; then
+              echo "Warning: Extension E2E diagnostic artifact not found: ${E2E_ARTIFACT_NAME}"
+              continue
+            fi
+
+            E2E_RESULTS_DIR="ci-failure-data/extension-e2e-results/${E2E_ARTIFACT_NAME}"
+            mkdir -p "${E2E_RESULTS_DIR}"
+            if gh run download "${RUN_ID}" --repo "${REPO}" --name "${E2E_ARTIFACT_NAME}" --dir "${E2E_RESULTS_DIR}"; then
+              find "${E2E_RESULTS_DIR}" -name "mocha.json" -type f 2>/dev/null | while IFS= read -r MOCHA_FILE; do
+                echo "Processing extension E2E results: ${E2E_ARTIFACT_NAME}/$(basename "${MOCHA_FILE}")"
+                if ! node .github/workflows/analyze-ci-failure.js extract-mocha-failures "${MOCHA_FILE}" "${E2E_JOB_NAME}" \
+                    >> ci-failure-data/test-failures.jsonl; then
+                  echo "::warning::Failed to parse extension E2E results: ${E2E_ARTIFACT_NAME}/$(basename "${MOCHA_FILE}")"
+                fi
+              done
+            else
+              echo "Warning: Failed to download extension E2E diagnostics: ${E2E_ARTIFACT_NAME}"
+            fi
+          done
+
+          jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || \
+            echo "[]" > ci-failure-data/test-failures.json
+          rm -f ci-failure-data/test-failures.jsonl ci-failure-data/artifacts.json
+          rm -rf ci-failure-data/test-results ci-failure-data/extension-e2e-results
+          # Redact complete values before the script applies field limits so truncation cannot split credential patterns.
+          node .github/workflows/analyze-ci-failure.js redact ci-failure-data/test-failures.json \
+            > ci-failure-data/test-failures-redacted.json
+          mv ci-failure-data/test-failures-redacted.json ci-failure-data/test-failures.json
+          echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from result artifacts"
 
           echo "Data collection complete."
         env:
@@ -1330,14 +1368,14 @@ jobs:
               fi
             done
 
-            echo "## Test Failures (from TRX artifacts)"
+            echo "## Test Failures (from result artifacts)"
             echo ""
             if [ -f "ci-failure-data/test-failures.json" ]; then
               FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
-                jq -r '.[] | "### `\(.test)`\n\n**Error:**\n```\n\(.error)\n```\n" + (if .stack_trace != "" then "**Stack Trace:**\n```\n\(.stack_trace)\n```\n" else "" end)' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
+                node .github/workflows/analyze-ci-failure.js format-test-failures ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
               else
-                echo "No test failures extracted from TRX artifacts."
+                echo "No test failures extracted from result artifacts."
               fi
             else
               echo "No test results artifact available."
@@ -1988,6 +2026,14 @@ jobs:
         with:
           name: agent
           path: ${{ runner.temp }}/gh-aw/safe-jobs/
+      - name: Checkout issue renderer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        env:
+          GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
+          GH_TOKEN: ${{ github.token }}
+        with:
+          sparse-checkout: .github/workflows/analyze-ci-failure.js
+          sparse-checkout-cone-mode: false
       - name: Publish analysis data and comment on PR
         run: |
           set -euo pipefail
@@ -2013,13 +2059,27 @@ jobs:
             exit 1
           fi
 
-          # Validate cause files
+          # The agent also sees job logs and can reproduce values that were not present in
+          # the pre-redacted TRX fields. Redact its complete output again at the publish
+          # boundary before reading, rendering, or persisting any analysis fields.
+          node .github/workflows/analyze-ci-failure.js redact "$ANALYSIS_FILE" \
+            > "${ANALYSIS_FILE}.redacted"
+          mv "${ANALYSIS_FILE}.redacted" "$ANALYSIS_FILE"
+
+          # The agent can reproduce sensitive values from job logs in any cause field,
+          # including fields used directly in issue titles and occurrence rows. Redact
+          # every valid cause before any field is rendered or persisted.
           if [ -d "$CAUSES_DIR" ]; then
             for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
               [ -f "$CAUSE_FILE" ] || continue
               if ! jq empty "$CAUSE_FILE" 2>/dev/null; then
                 echo "::warning::Invalid JSON in cause file: $(basename "$CAUSE_FILE")"
+                rm -f "$CAUSE_FILE"
+                continue
               fi
+              node .github/workflows/analyze-ci-failure.js redact "$CAUSE_FILE" \
+                > "${CAUSE_FILE}.redacted"
+              mv "${CAUSE_FILE}.redacted" "$CAUSE_FILE"
             done
           fi
 
@@ -2064,12 +2124,6 @@ jobs:
             if [ -d "$CAUSES_DIR" ]; then
               mkdir -p "memory-repo/causes"
 
-              # Build the occurrence entry from the run summary JSON
-              ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
-              PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
-              # Find the first failed job name for context in the occurrence
-              FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
-
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
                 # Skip code-issue causes — only persist transient/flaky causes.
@@ -2080,14 +2134,9 @@ jobs:
                 CAUSE_BASENAME=$(basename "$CAUSE_FILE")
                 EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
 
-                # Add an occurrences array with this run's entry to the agent's cause file
-                CAUSE_WITH_OCC=$(jq --argjson run_id "$RUN_ID" \
-                  --arg run_url "$RUN_URL" \
-                  --arg job "$FIRST_JOB" \
-                  --argjson pr_number "$PR_NUMBER" \
-                  --arg observed_at "$ANALYZED_AT" \
-                  '. + {occurrences: [{run_id: $run_id, run_url: $run_url, job: $job, pr_number: $pr_number, observed_at: $observed_at}]}' \
-                  "$CAUSE_FILE")
+                # Add an occurrences array using the job associated with this cause.
+                CAUSE_WITH_OCC=$(node .github/workflows/analyze-ci-failure.js \
+                  add-occurrence "$ANALYSIS_FILE" "$CAUSE_FILE")
 
                 if [ -f "$EXISTING" ]; then
                   # Merge: append new occurrence, deduplicate by run_id
@@ -2111,15 +2160,6 @@ jobs:
 
           # ── 2. Create or update issues for each cause ──
           if [ -d "$CAUSES_DIR" ]; then
-            # Build occurrence info from the run summary for issue updates
-            ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
-            PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
-            FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
-
-            # Build the occurrence table row for this run
-            OCC_DATE=$(echo "$ANALYZED_AT" | cut -dT -f1)
-            NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${FIRST_JOB} | #${PR_NUMBER} |"
-
             for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
               [ -f "$CAUSE_FILE" ] || continue
               jq empty "$CAUSE_FILE" 2>/dev/null || continue
@@ -2142,6 +2182,8 @@ jobs:
                 continue
               fi
 
+              NEW_OCCURRENCE_ROW=$(node .github/workflows/analyze-ci-failure.js \
+                occurrence-row "$ANALYSIS_FILE" "$CAUSE_FILE")
               CAUSE_STORED="memory-repo/causes/${CAUSE_ID}.json"
               MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
 
@@ -2223,47 +2265,17 @@ jobs:
               else
                 # Create a new issue for this cause
                 BODY_FILE=$(mktemp)
-                TEST_NAME=$(jq -r '.test_name // empty' "$CAUSE_FILE")
-                {
-                  echo "${MARKER}"
-                  echo ""
-                  echo "## Build Information"
-                  echo ""
-                  echo "Build: ${RUN_URL}"
-                  if [ -n "$TEST_NAME" ]; then
-                    echo "Build error leg or test failing: ${FIRST_JOB} / \`${TEST_NAME}\`"
-                  else
-                    echo "Build error leg: ${FIRST_JOB}"
-                  fi
-                  echo "Pull request: #${PR_NUMBER}"
-                  echo ""
-                  echo "## Error Message"
-                  echo ""
-                  echo '```'
-                  jq -r '.error_pattern' "$CAUSE_FILE"
-                  echo '```'
-                  echo ""
-                  echo "## Description"
-                  echo ""
-                  jq -r '.title' "$CAUSE_FILE"
-                  echo ""
-                  echo "**Type**: ${CAUSE_TYPE}"
-                  echo ""
-                  echo "## Occurrences"
-                  echo ""
-                  echo "| Date | Build | Job | PR |"
-                  echo "|------|-------|-----|----|"
-                  echo "$NEW_OCCURRENCE_ROW"
-                } > "$BODY_FILE"
+                node .github/workflows/analyze-ci-failure.js \
+                  issue-body "$ANALYSIS_FILE" "$CAUSE_FILE" "$MARKER" > "$BODY_FILE"
 
                 LABELS="ci-failure-cause"
                 if [ "$CAUSE_TYPE" = "flaky-test" ]; then
                   LABELS="ci-failure-cause,test-failure"
                 fi
 
-                # Build the title via jq to avoid shell metacharacter issues
-                # with agent-generated cause titles.
-                ISSUE_TITLE=$(jq -r '"[CI Failure] " + .title' "$CAUSE_FILE")
+                # Normalize agent-generated titles before passing them to GitHub.
+                ISSUE_TITLE=$(node .github/workflows/analyze-ci-failure.js \
+                  issue-title "$ANALYSIS_FILE" "$CAUSE_FILE")
                 CREATED_ISSUE_URL=$(gh issue create --repo "$REPO" \
                   --title "$ISSUE_TITLE" \
                   --label "$LABELS" \
@@ -2309,28 +2321,7 @@ jobs:
           # Build comment body from the analysis JSON and write to a file
           # to avoid shell expansion issues and ARG_MAX limits.
           COMMENT_FILE=$(mktemp)
-          jq -r '
-            def job_list:
-              [.failed_jobs[] | "- `\(.name)` — \(.reason) (\(.classification))"]
-              | join("\n");
-            def test_list:
-              [.failed_tests[]? | select(.classification == "flaky") |
-                "- `\(.name)` in job `\(.job)`\n  - **Error**: \(.error)\n" +
-                (if (.stack_trace // "") != "" then "  - **Stack Trace** (first frames):\n    ```\n    \(.stack_trace | split("\n") | .[0:5] | join("\n    "))\n    ```\n" else "" end) +
-                "  - **Why likely flaky**: \(.reason)"]
-              | join("\n");
-
-            "<!-- analyze-ci-failure -->\n" +
-            if .verdict == "transient-infra" then
-              "🔍 **CI Failure Analysis: Transient Infrastructure Failure**\n\nThe CI build failed due to transient infrastructure issues.\n\n**Failed jobs:**\n" + job_list + "\n\nIf a rerun was not already requested automatically, visit the [workflow run page](" + .run_url + ") to rerun the failed jobs manually.\n"
-            elif .verdict == "flaky-test" then
-              "⚠️ **CI Failure Analysis: Possible Flaky Test(s)**\n\nThe CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.\n\n**Suspected flaky test(s):**\n" + test_list + "\n\n**Suggested actions:**\n- Re-run the failed CI jobs to confirm if the failure is intermittent\n- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using `/quarantine-test <test name> <issue URL>`\n- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky\n\nYou can re-run the failed jobs from the [workflow run page](" + .run_url + ").\n"
-            elif .verdict == "code-issue" then
-              "❌ **CI Failure Analysis: Code Issue Detected**\n\nThe CI build failed due to issue(s) caused by changes in this PR.\n\n**Failed jobs:**\n" + job_list + "\n\nThe CI will not be automatically rerun. Please fix the issue and push an updated commit.\n"
-            else
-              "⚠️ **CI Failure Analysis: Mixed Failures**\n\nThe CI build contains both transient and non-transient failures.\n\n**Failed jobs:**\n" + job_list + "\n\nThe CI will not be automatically rerun. Please review the failures above.\n"
-            end
-          ' "$ANALYSIS_FILE" > "$COMMENT_FILE"
+          node .github/workflows/analyze-ci-failure.js pr-comment "$ANALYSIS_FILE" > "$COMMENT_FILE"
 
           # Update an existing analysis comment if one exists (by marker),
           # otherwise create a new one. This prevents stacking duplicate

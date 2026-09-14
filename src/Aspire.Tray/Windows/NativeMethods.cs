@@ -52,6 +52,7 @@ internal static unsafe partial class NativeMethods
     internal const uint MiimId = 0x2;
     internal const uint MiimSubmenu = 0x4;
     internal const uint MfByPosition = 0x400;
+    internal const uint GwEnabledPopup = 6;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct MenuItemInfo
@@ -290,7 +291,7 @@ internal static unsafe partial class NativeMethods
     internal static partial nint SendMessage(nint window, uint message, nuint wParam, nint lParam);
 
     [LibraryImport("user32.dll")]
-    internal static partial nint GetLastActivePopup(nint window);
+    internal static partial nint GetWindow(nint window, uint command);
 
     [LibraryImport("user32.dll", SetLastError = true)]
     internal static partial int SetWindowPos(nint window, nint insertAfter, int x, int y, int width, int height, uint flags);

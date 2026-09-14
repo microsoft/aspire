@@ -42,32 +42,38 @@ public class LegacyFallbackEmissionTests
     }
 
     /// <summary>
-    /// Legacy-only publish (Redis falls back to <c>Applications.Datastores/redisCaches</c>).
+    /// Legacy-only publish (MongoDB falls back to <c>Applications.Datastores/mongoDatabases</c>).
     /// Guards: legacy parents emitted with inline legacy-schema recipes (<c>templateKind</c>/
     /// <c>templatePath</c>) and default recipe template; UDT parents and recipe pack absent; the
     /// legacy env/app take the unsuffixed <c>myenv</c>/<c>app</c> identifiers; legacy env carries
     /// <c>compute.kind: 'kubernetes'</c>.
     /// </summary>
+    /// <remarks>
+    /// Based on MongoDB rather than Redis: Redis moved onto its <c>Radius.Data/redisCaches</c> UDT
+    /// in Radius 0.60, so it no longer produces a legacy-only publish. MongoDB's UDT ships in the
+    /// 0.60 Bicep extension but has no published Kubernetes recipe, so it is still emitted as the
+    /// legacy portable type and remains a valid fixture for this scenario.
+    /// </remarks>
     [Fact]
-    public Task RedisOnly_EmitsLegacyParentsAndNoUdtResources()
+    public Task LegacyOnly_EmitsLegacyParentsAndNoUdtResources()
     {
-        var bicep = GenerateBicep(b => b.AddRedis("cache"));
+        var bicep = GenerateBicep(b => b.AddMongoDB("mongo"));
         return Verify(bicep, extension: "bicep");
     }
 
     /// <summary>
     /// Mixed legacy + UDT + container. Guards: both UDT (<c>Radius.Core/*</c>) and legacy
     /// (<c>Applications.Core/*</c>) parent pairs present; UDT recipe pack uses the new schema
-    /// (<c>recipeKind</c>/<c>recipeLocation</c>) while the legacy env uses the legacy schema
-    /// (<c>templateKind</c>/<c>templatePath</c>).
+    /// (<c>kind</c>/<c>source</c>, renamed in Radius 0.60) while the legacy env uses the legacy
+    /// schema (<c>templateKind</c>/<c>templatePath</c>).
     /// </summary>
     [Fact]
     public Task MixedLegacyAndUdt_EmitsBothParentPairs()
     {
         var bicep = GenerateBicep(b =>
         {
-            b.AddRedis("cache");     // legacy fallback -> Applications.Datastores/redisCaches
-            b.AddPostgres("db");     // UDT -> Radius.Data/postgreSQL (or similar)
+            b.AddMongoDB("mongo");   // legacy fallback -> Applications.Datastores/mongoDatabases
+            b.AddPostgres("db");     // UDT -> Radius.Data/postgreSqlDatabases
             b.AddContainer("api", "myapp/api", "latest");
         });
         return Verify(bicep, extension: "bicep");
@@ -76,7 +82,7 @@ public class LegacyFallbackEmissionTests
     /// <summary>
     /// Legacy + UDT with no container. Guards: the UDT env (<c>resource myenv</c>) and the legacy
     /// env (<c>resource myenv_legacy</c>) coexist and both emit <c>name: 'myenv'</c>; the legacy
-    /// resource (<c>cache</c>) references the legacy parents (<c>myenv_legacy.id</c>/
+    /// resource (<c>mongo</c>) references the legacy parents (<c>myenv_legacy.id</c>/
     /// <c>app_legacy.id</c>) while the UDT resource (<c>db</c>) references the UDT parents and never
     /// the legacy ones.
     /// </summary>
@@ -85,7 +91,7 @@ public class LegacyFallbackEmissionTests
     {
         var bicep = GenerateBicep(b =>
         {
-            b.AddRedis("cache");
+            b.AddMongoDB("mongo");
             b.AddPostgres("db");
         });
         return Verify(bicep, extension: "bicep");

@@ -390,13 +390,21 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
         {
             // WM_QUIT alone does not dismiss an owned MessageBox reliably. Close its popup
             // as Cancel before ending the main loop; never target another application's UI.
-            var popup = NativeMethods.GetLastActivePopup(_window);
+            var popup = GetEnabledPopup();
             if (popup != 0 && popup != _window)
             {
                 Cleanup(NativeMethods.PostMessage(popup, NativeMethods.WmClose, 0, 0) != 0, "PostMessageW(close dialog)");
             }
         }
         NativeMethods.PostQuitMessage(ExitCode);
+    }
+
+    private nint GetEnabledPopup()
+    {
+        // A dialog need not have received focus, particularly on a CI desktop.
+        // GW_ENABLEDPOPUP finds our owned popup without relying on activation history.
+        // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-getwindow
+        return NativeMethods.GetWindow(_window, NativeMethods.GwEnabledPopup);
     }
 
     private void FailRestoreRequests(Exception exception)

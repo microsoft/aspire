@@ -26,6 +26,7 @@ internal sealed class NativeSmokeHarness
     private TrayController _controller = null!;
     private TrayApplication _application = null!;
     private int _phase;
+    private int _lastLoggedPhase = -1;
     private int _dashboardCalls;
     private int _documentationCalls;
     private int _confirmations;
@@ -140,6 +141,11 @@ internal sealed class NativeSmokeHarness
 
     private void Advance()
     {
+        if (_phase != _lastLoggedPhase)
+        {
+            Program.Log($"Windows native smoke phase {_phase}.");
+            _lastLoggedPhase = _phase;
+        }
         var state = _controller.State;
         Require(_application.WaitUntilReadyAsync(_shutdown.Token).IsCompletedSuccessfully, "Native loop readiness was not acknowledged.");
         switch (_phase)
