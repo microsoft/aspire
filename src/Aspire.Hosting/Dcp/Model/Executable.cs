@@ -5,7 +5,10 @@ namespace Aspire.Hosting.Dcp.Model;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
+using Aspire.Hosting.ApplicationModel;
 using k8s.Models;
+
+#pragma warning disable ASPIREEXTENSION001 // Launch configuration types are experimental.
 
 internal sealed class ExecutableSpec
 {
@@ -75,6 +78,7 @@ internal sealed class ExecutableSpec
     /// Optional parent process identity timestamp used with <see cref="MonitorPid"/> to guard against PID reuse.
     /// </summary>
     [JsonPropertyName("monitorTimestamp")]
+    [JsonConverter(typeof(KubernetesMicroTimeJsonConverter))]
     public DateTime? MonitorTimestamp { get; set; }
 
     /// <summary>
@@ -101,6 +105,14 @@ internal sealed class ExecutableSpec
     /// </summary>
     [JsonPropertyName("pemCertificates")]
     public ExecutablePemCertificates? PemCertificates { get; set; }
+
+    /// <summary>
+    /// Terminal configuration for interactive PTY access.
+    /// When set, DCP allocates a pseudo-terminal for the process and forwards
+    /// I/O over a Unix domain socket using <see href="https://github.com/dotnet/hex1b">Hex1b</see>'s HMP v1 framing.
+    /// </summary>
+    [JsonPropertyName("terminal")]
+    public TerminalSpec? Terminal { get; set; }
 }
 
 internal sealed class AmbientEnvironment

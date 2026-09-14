@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using Aspire.Dashboard.Model;
@@ -159,6 +160,151 @@ public sealed record CustomResourceSnapshot
             : healthReports.MinBy(r => r.Status)?.Status
                 ?? Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy;
     }
+
+    /// <summary>
+    /// Determines whether this snapshot describes the same resource state as <paramref name="other"/>,
+    /// ignoring <see cref="Version"/>.
+    /// </summary>
+    /// <remarks>
+    /// The generated record equality is not usable for this. Every snapshot rebuilds its collections
+    /// from scratch (see <c>ResourceSnapshotBuilder</c>), and <see cref="ImmutableArray{T}"/> equality
+    /// compares the underlying array <em>reference</em>, so two snapshots describing an identical
+    /// resource practically never compare equal.
+    /// </remarks>
+    internal bool ContentEquals(CustomResourceSnapshot other)
+    {
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+
+        // Version counts publications rather than describing the resource. HealthStatus is derived
+        // from State and HealthReports, so neither property needs an independent comparison.
+        if (ResourceType != other.ResourceType ||
+            CreationTimeStamp != other.CreationTimeStamp ||
+            StartTimeStamp != other.StartTimeStamp ||
+            StopTimeStamp != other.StopTimeStamp ||
+            State != other.State ||
+            ExitCode != other.ExitCode ||
+            ResourceReadyEvent != other.ResourceReadyEvent ||
+            IsHidden != other.IsHidden ||
+            SupportsDetailedTelemetry != other.SupportsDetailedTelemetry ||
+            IconName != other.IconName ||
+            IconVariant != other.IconVariant)
+        {
+            return false;
+        }
+
+        return PropertiesContentEqual(Properties, other.Properties) &&
+            EnvironmentVariables.SequenceEqual(other.EnvironmentVariables) &&
+            Urls.SequenceEqual(other.Urls) &&
+            Volumes.SequenceEqual(other.Volumes) &&
+            Commands.SequenceEqual(other.Commands) &&
+            Relationships.SequenceEqual(other.Relationships) &&
+            HealthReports.SequenceEqual(other.HealthReports);
+    }
+
+    private static bool PropertiesContentEqual(ImmutableArray<ResourcePropertySnapshot> x, ImmutableArray<ResourcePropertySnapshot> y)
+    {
+        if (x.Length != y.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < x.Length; i++)
+        {
+            if (!ResourcePropertyContentEquals(x[i], y[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ResourcePropertyContentEquals(ResourcePropertySnapshot x, ResourcePropertySnapshot y)
+    {
+        return ReferenceEquals(x, y) ||
+            (x.Name == y.Name &&
+             x.DisplayName == y.DisplayName &&
+             x.IsSensitive == y.IsSensitive &&
+             x.IsHighlighted == y.IsHighlighted &&
+             x.SortOrder == y.SortOrder &&
+             PropertyValueContentEquals(x.Value, y.Value));
+    }
+
+    /// <summary>
+    /// Compares two weakly typed property values by content.
+    /// </summary>
+    /// <remarks>
+    /// Property values are frequently collections that are rebuilt for every snapshot - container
+    /// ports as an <see cref="ImmutableArray{T}"/>, container and executable arguments as a
+    /// <see cref="List{T}"/>. None of those compare by value, so they have to be compared element-wise.
+    /// </remarks>
+    private static bool PropertyValueContentEquals(object? x, object? y)
+    {
+        if (ReferenceEquals(x, y))
+        {
+            return true;
+        }
+
+        if (x is null || y is null)
+        {
+            return false;
+        }
+
+        // Arrays and ImmutableArray<T> implement IStructuralEquatable, which compares element-wise and
+        // copes with an uninitialized ImmutableArray.
+        if (x is IStructuralEquatable structuralX && y is IStructuralEquatable)
+        {
+            return structuralX.Equals(y, StructuralComparisons.StructuralEqualityComparer);
+        }
+
+        // Other collections, such as the List<string> used for effective arguments, still compare by
+        // reference. A string is excluded because it is an IEnumerable that already compares by value.
+        if (x is IEnumerable sequenceX and not string && y is IEnumerable sequenceY and not string)
+        {
+            return SequenceContentEquals(sequenceX, sequenceY);
+        }
+
+        return x.Equals(y);
+    }
+
+    private static bool SequenceContentEquals(IEnumerable x, IEnumerable y)
+    {
+        var enumeratorX = x.GetEnumerator();
+        var enumeratorY = y.GetEnumerator();
+
+        try
+        {
+            while (true)
+            {
+                var hasX = enumeratorX.MoveNext();
+                var hasY = enumeratorY.MoveNext();
+
+                if (hasX != hasY)
+                {
+                    return false;
+                }
+
+                if (!hasX)
+                {
+                    return true;
+                }
+
+                // Recurse so nested collections are compared by content too.
+                if (!PropertyValueContentEquals(enumeratorX.Current, enumeratorY.Current))
+                {
+                    return false;
+                }
+            }
+        }
+        finally
+        {
+            (enumeratorX as IDisposable)?.Dispose();
+            (enumeratorY as IDisposable)?.Dispose();
+        }
+    }
 }
 
 /// <summary>
@@ -256,12 +402,36 @@ public sealed record RelationshipSnapshot(string ResourceName, string Type);
 public sealed record ResourcePropertySnapshot(string Name, object? Value)
 {
     /// <summary>
+    /// The display name visible in UI.
+    /// </summary>
+    /// <remarks>
+    /// If not specified, clients may use the <see cref="Name"/> as the display name.
+    /// </remarks>
+    public string? DisplayName { get; init; }
+
+    /// <summary>
     /// Whether this property is considered sensitive or not.
     /// </summary>
     /// <remarks>
     /// Sensitive properties are masked when displayed in UI and require an explicit user action to reveal.
     /// </remarks>
     public bool IsSensitive { get; init; }
+
+    /// <summary>
+    /// A flag indicating whether the property is highlighted in the UI.
+    /// </summary>
+    /// <remarks>
+    /// Highlighted properties are shown by default even if the client does not otherwise recognize the property name.
+    /// </remarks>
+    public bool IsHighlighted { get; init; }
+
+    /// <summary>
+    /// Gets the optional sort order used when displaying the property in UI.
+    /// </summary>
+    /// <remarks>
+    /// Properties with lower values are displayed before properties with higher values.
+    /// </remarks>
+    public int? SortOrder { get; init; }
 
     internal void Deconstruct(out string name, out object? value, out bool isSensitive)
     {
@@ -295,12 +465,10 @@ public sealed record ResourcePropertySnapshot(string Name, object? Value)
 [DebuggerDisplay(null, Name = "{Name}")]
 public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState State, string DisplayName, string? DisplayDescription, [property: Obsolete("Use Arguments to describe invocation arguments.")] object? Parameter, string? ConfirmationMessage, string? IconName, IconVariant? IconVariant, bool IsHighlighted)
 {
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
     /// <summary>
     /// Gets the invocation arguments accepted by the command.
     /// </summary>
     public IReadOnlyList<InteractionInput> Arguments { get; init; } = [];
-#pragma warning restore ASPIREINTERACTION001
 
     /// <summary>
     /// Gets where the command is visible to users and clients.

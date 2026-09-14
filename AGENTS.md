@@ -32,6 +32,7 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 * Do not use cryptographic hashes such as SHA-256 when the hash is not security-related. Prefer `System.IO.Hashing.XxHash3` when you need a stable non-cryptographic hash.
 * When code needs a temporary directory, prefer the repository temp directory abstractions first (for example `IFileSystemService.TempDirectory` / `ITempFileSystemService`) and otherwise use `Directory.CreateTempSubdirectory()` instead of `Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())`; if you need a temporary file path, place it under a securely created temp directory.
 * Don't update files under `*/api/*.cs` (e.g. src/Aspire.Hosting/api/Aspire.Hosting.cs) as they are generated.
+* Do not make new parameters optional just to avoid updating call sites. A parameter should only be optional when it has a sensible semantic default and the API is frequently used (where call-site brevity outweighs explicitness). If a parameter is logically required, make it required and update all call sites.
 
 ## Code Review Instructions
 
@@ -264,6 +265,7 @@ kill <pid>
 * Prefer using shared test service implementations (e.g., project-level `TestServices/` or `Helpers/` directories, or the cross-project `tests/Shared/` folder) rather than creating private implementation classes within individual test files. Reusing existing test fakes and helpers keeps tests consistent, reduces duplication, and makes maintenance easier. Do not create private test classes when a shared one already exists or can be extended.
 * MTP diagnostic args (hang dump, crash dump, exit code handling) are defined in `eng/Testing.props` via `MtpBaseArgs`. Do not hardcode these args in workflow YAML. See [docs/ci/mtp-args-pipeline.md](docs/ci/mtp-args-pipeline.md) for details.
 * Use `Verify` (snapshot testing) for generated artifacts (files, serialized output, structured text). Prefer `await Verify(value, "ext")` over `Assert.Contains` / `Assert.DoesNotContain` / `Assert.Equal` on the same value. Run the test once to generate the `.received.` file, review it, then rename it to `.verified.` to accept it.
+* Avoid `Assert.DoesNotContain` as it is a weak assertion that easily goes out of date — it only proves something is absent without verifying what *is* present. Prefer `Assert.Equal` to check the entire string value, or `Assert.Collection` to verify the complete contents of a collection.
 
 ## Running tests
 
@@ -378,8 +380,8 @@ These switches can be repeated to run tests on multiple classes or methods at on
 - Such tests are not run as part of the regular tests workflow (`tests.yml`).
     - Instead they are run in the `Quarantine` workflow (`tests-quarantine.yml`).
 - A github issue url is used with the attribute
-- To **reproduce or fix** a flaky/quarantined test, use the `fix-flaky-test` skill (`.github/skills/fix-flaky-test/SKILL.md`).
-- To **quarantine or unquarantine** a test, use the `test-management` skill (`.github/skills/test-management/SKILL.md`).
+- To **reproduce or fix** a flaky/quarantined test, use the `fix-flaky-test` skill (`.agents/skills/fix-flaky-test/SKILL.md`).
+- To **quarantine or unquarantine** a test, use the `test-management` skill (`.agents/skills/test-management/SKILL.md`).
 
 Example: `[QuarantinedTest("..issue url..")]`
 
@@ -510,20 +512,24 @@ For most development tasks, following these instructions should be sufficient to
 
 ## Available Skills
 
-The following specialized skills are available in `.github/skills/`:
+The following specialized skills are available in `.agents/skills/`:
 
 - **cli-e2e-testing**: Guide for writing Aspire CLI end-to-end tests using Hex1b terminal automation
 - **ci-test-failures**: Diagnoses GitHub Actions test failures, extracts failed tests from runs, and creates or updates failing-test issues
 - **code-review**: Reviews a GitHub pull request for problems (bugs, security, correctness, convention violations). Use this when asked to review a PR or do a code review.
 - **fix-flaky-test**: Reproduces and fixes flaky/quarantined tests using the CI reproduce workflow (`reproduce-flaky-tests.yml`). Use this when investigating, reproducing, or fixing a flaky or quarantined test.
+- **cli-channel-debugging**: Emulates any Aspire CLI build identity (channel/version/commit/package source) from a locally built CLI via `ASPIRE_CLI_*` env vars or the install sidecar, to reproduce and fix channel/version-specific bugs locally. Use when asked to simulate a daily/staging/stable/PR build or decide which override knobs to set.
 - **dashboard-testing**: Guide for writing tests for the Aspire Dashboard using xUnit and bUnit
 - **test-management**: Quarantines or disables flaky/problematic tests using the QuarantineTools utility
 - **connection-properties**: Expert for creating and improving Connection Properties in Aspire resources
 - **dependency-update**: Guides dependency version updates by checking nuget.org, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs
 - **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
 - **backport-pr**: Triggers the `/backport` bot on a source PR, waits for the bot-created backport PR, and fills in the shiproom template (Customer Impact, Testing, Risk, Regression?). Use when backporting a fix to a release branch.
+- **azdo-internal**: Triggers, monitors, and validates changes to the Aspire internal Azure DevOps pipeline (`microsoft-aspire`, definition 1602) on `dnceng/internal`. Use when asked to trigger an internal/AzDO build, check build status, push to the internal mirror, or validate `eng/` pipeline changes.
 - **startup-perf**: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces
 - **reviewing-aspire-architecture**: Reviews PRs for Aspire-specific architectural patterns across 15 dimensions including API design, resource model, Azure provisioning, pattern conformance, dashboard UX, CLI behavior, and more. Complements the code-review skill with domain knowledge that generic review cannot catch.
+- **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.
+- **deprecate-integration**: Soft-sunsets a shipped hosting integration: marks its API `[Obsolete]`, adds a README warning, hides the package from `aspire add`, removes integration-specific automation, suppresses the resulting warnings in first-party consumers, and ships one final obsolete release. Use when deprecating, sunsetting, or retiring an integration.
 
 ## Pattern-Based Instructions
 

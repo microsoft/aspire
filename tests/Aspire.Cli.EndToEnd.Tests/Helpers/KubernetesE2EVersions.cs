@@ -30,4 +30,16 @@ internal static class KubernetesE2EVersions
     public static string HelmVersion => Environment.GetEnvironmentVariable("HELM_VERSION") ?? "v4.2.0";
 
     public static string KubectlVersion => Environment.GetEnvironmentVariable("KUBECTL_VERSION") ?? "v1.34.3";
+
+    /// <summary>
+    /// The Radius CLI / control-plane version installed for the KinD-based Radius
+    /// deploy E2E test. This must stay aligned with
+    /// <c>Aspire.Hosting.Radius.RadiusBicepExtension.Version</c> (currently
+    /// <c>0.59</c>): the generated <c>bicepconfig.json</c> pins the Radius Bicep
+    /// types to that version, and a mismatched <c>rad</c> CLI can fail to resolve
+    /// <c>br:biceptypes.azurecr.io/radius:&lt;version&gt;</c> during <c>rad deploy</c>.
+    /// Unlike the other versions, this default omits the leading <c>v</c> because
+    /// the Radius <c>install.sh</c> <c>--version</c> flag expects a bare number.
+    /// </summary>
+    public static string RadiusVersion => Environment.GetEnvironmentVariable("RADIUS_VERSION") ?? "0.59.0";
 }

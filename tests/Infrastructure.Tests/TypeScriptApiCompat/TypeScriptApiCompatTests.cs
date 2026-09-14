@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Infrastructure.Tests.TypeScriptApiCompat;
 
-public sealed class TypeScriptApiCompatTests
+public sealed class TypeScriptApiCompatTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void ParserReadsAtsCiSurface()
@@ -122,9 +122,9 @@ public sealed class TypeScriptApiCompatTests
     [Fact]
     public void ComparerClassifiesBreakingAndAdditiveChanges()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var baselineRoot = Path.Combine(tempDirectory.Path, "baseline");
-        var currentRoot = Path.Combine(tempDirectory.Path, "current");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var baselineRoot = Path.Combine(workspace.Path, "baseline");
+        var currentRoot = Path.Combine(workspace.Path, "current");
 
         WriteSurface(baselineRoot, "Pkg", """
             # Handle Types
@@ -193,8 +193,8 @@ public sealed class TypeScriptApiCompatTests
     [Fact]
     public void SuppressionsUseExactMatchesAndFailWhenUnused()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var suppressionPath = Path.Combine(tempDirectory.Path, "Pkg.tscompat.suppression.txt");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var suppressionPath = Path.Combine(workspace.Path, "Pkg.tscompat.suppression.txt");
         File.WriteAllText(suppressionPath, """
             # Intentional break
             BREAK capability-removed Pkg Pkg/removeMe -- https://github.com/microsoft/aspire/issues/16961 -- Intentional test break
@@ -207,7 +207,7 @@ public sealed class TypeScriptApiCompatTests
             new ApiCompatDiagnostic("enum-removed", "Pkg", "enum:Pkg.Mode", "Enum was removed.")
         };
 
-        var suppressions = ApiCompatSuppressionLoader.Load(tempDirectory.Path);
+        var suppressions = ApiCompatSuppressionLoader.Load(workspace.Path);
         var result = ApiCompatSuppressor.ApplySuppressions(diagnostics, suppressions);
 
         var suppressed = Assert.Single(result.SuppressedDiagnostics);
@@ -223,9 +223,9 @@ public sealed class TypeScriptApiCompatTests
     [Fact]
     public void SuppressionsIgnoreUnusedEntriesInheritedFromBaseline()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var currentSuppressionPath = Path.Combine(tempDirectory.Path, "current", "Pkg.tscompat.suppression.txt");
-        var baselineSuppressionPath = Path.Combine(tempDirectory.Path, "baseline", "Pkg.tscompat.suppression.txt");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var currentSuppressionPath = Path.Combine(workspace.Path, "current", "Pkg.tscompat.suppression.txt");
+        var baselineSuppressionPath = Path.Combine(workspace.Path, "baseline", "Pkg.tscompat.suppression.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(currentSuppressionPath)!);
         Directory.CreateDirectory(Path.GetDirectoryName(baselineSuppressionPath)!);
 
@@ -237,8 +237,8 @@ public sealed class TypeScriptApiCompatTests
             BREAK capability-removed Pkg Pkg/inheritedBreak -- https://github.com/microsoft/aspire/issues/16961 -- Inherited accepted break
             """);
 
-        var currentSuppressions = ApiCompatSuppressionLoader.Load(Path.Combine(tempDirectory.Path, "current"));
-        var baselineSuppressions = ApiCompatSuppressionLoader.Load(Path.Combine(tempDirectory.Path, "baseline"));
+        var currentSuppressions = ApiCompatSuppressionLoader.Load(Path.Combine(workspace.Path, "current"));
+        var baselineSuppressions = ApiCompatSuppressionLoader.Load(Path.Combine(workspace.Path, "baseline"));
 
         var result = ApiCompatSuppressor.ApplySuppressions([], currentSuppressions, baselineSuppressions);
 
@@ -249,10 +249,10 @@ public sealed class TypeScriptApiCompatTests
     [Fact]
     public void RunnerWritesReportAndReturnsFailureForUnsuppressedBreaks()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var baselineRoot = Path.Combine(tempDirectory.Path, "baseline");
-        var currentRoot = Path.Combine(tempDirectory.Path, "current");
-        var reportPath = Path.Combine(tempDirectory.Path, "report.md");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var baselineRoot = Path.Combine(workspace.Path, "baseline");
+        var currentRoot = Path.Combine(workspace.Path, "current");
+        var reportPath = Path.Combine(workspace.Path, "report.md");
 
         WriteSurface(baselineRoot, "Pkg", """
             # Handle Types
@@ -270,7 +270,7 @@ public sealed class TypeScriptApiCompatTests
         var exitCode = TypeScriptApiCompatRunner.Run(new CommandLineOptions(
             baselineRoot,
             currentRoot,
-            tempDirectory.Path,
+            workspace.Path,
             BaselineSuppressionsRoot: null,
             ExcludedPackagesFile: null,
             ReportPath: reportPath,
@@ -285,12 +285,12 @@ public sealed class TypeScriptApiCompatTests
     [Fact]
     public void RunnerIgnoresExcludedPackagesAndSuppressions()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var baselineRoot = Path.Combine(tempDirectory.Path, "baseline");
-        var currentRoot = Path.Combine(tempDirectory.Path, "current");
-        var reportPath = Path.Combine(tempDirectory.Path, "report.md");
-        var excludedPackagesPath = Path.Combine(tempDirectory.Path, "excluded-packages.txt");
-        var suppressionPath = Path.Combine(tempDirectory.Path, "Excluded.tscompat.suppression.txt");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var baselineRoot = Path.Combine(workspace.Path, "baseline");
+        var currentRoot = Path.Combine(workspace.Path, "current");
+        var reportPath = Path.Combine(workspace.Path, "report.md");
+        var excludedPackagesPath = Path.Combine(workspace.Path, "excluded-packages.txt");
+        var suppressionPath = Path.Combine(workspace.Path, "Excluded.tscompat.suppression.txt");
 
         WriteSurface(baselineRoot, "Excluded", """
             # Capabilities
@@ -309,7 +309,7 @@ public sealed class TypeScriptApiCompatTests
         var exitCode = TypeScriptApiCompatRunner.Run(new CommandLineOptions(
             baselineRoot,
             currentRoot,
-            tempDirectory.Path,
+            workspace.Path,
             BaselineSuppressionsRoot: null,
             ExcludedPackagesFile: excludedPackagesPath,
             ReportPath: reportPath,

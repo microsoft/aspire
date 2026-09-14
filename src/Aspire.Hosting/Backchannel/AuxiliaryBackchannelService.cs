@@ -4,6 +4,7 @@
 using System.Net.Sockets;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -56,7 +57,7 @@ internal sealed class AuxiliaryBackchannelService(
             }
 
             // Clean up orphaned sockets from crashed instances of this same AppHost
-            var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
+            var appHostPath = GetSocketKeyAppHostPath(configuration);
             if (!string.IsNullOrEmpty(appHostPath))
             {
                 var appHostId = BackchannelConstants.ComputeAppHostId(appHostPath);
@@ -207,9 +208,8 @@ internal sealed class AuxiliaryBackchannelService(
     {
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-        // Use AppHost:FilePath or AppHost:Path from configuration for consistent hashing
-        // This matches the logic in AuxiliaryBackchannelRpcTarget.GetAppHostInformationAsync
-        var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
+        // Use the symlink-resolved AppHost:FilePath or AppHost:Path from configuration for consistent hashing.
+        var appHostPath = GetSocketKeyAppHostPath(configuration);
 
         if (!string.IsNullOrEmpty(appHostPath))
         {
@@ -220,5 +220,14 @@ internal sealed class AuxiliaryBackchannelService(
         // Fallback: Generate socket path using process ID as the AppHost ID seed (rare edge case)
         var fallbackAppHostId = BackchannelConstants.ComputeAppHostId(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         return BackchannelConstants.ComputeSocketPathFromAppHostId(fallbackAppHostId, homeDirectory, Environment.ProcessId);
+    }
+
+    /// <summary>
+    /// Reads the AppHost path used to key this AppHost's auxiliary backchannel socket and canonicalizes it by resolving symlinks.
+    /// </summary>
+    internal static string? GetSocketKeyAppHostPath(IConfiguration configuration)
+    {
+        var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
+        return string.IsNullOrEmpty(appHostPath) ? appHostPath : PathNormalizer.ResolveSymlinks(appHostPath);
     }
 }

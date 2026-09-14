@@ -21,11 +21,7 @@ public class ApplicationNameTests : DashboardTestContext
     public void Render_DashboardClientDisabled_Success()
     {
         // Arrange
-        Services.AddSingleton<IConfiguration>(new ConfigurationManager());
-        Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
-        Services.AddSingleton<IDashboardClient, DashboardClient>();
-        Services.AddSingleton<BrowserTimeProvider>();
-        Services.AddSingleton<IKnownPropertyLookup>(new MockKnownPropertyLookup());
+        AddDashboardClientServices();
 
         // Act
         var cut = RenderComponent<ApplicationName>();
@@ -38,11 +34,7 @@ public class ApplicationNameTests : DashboardTestContext
     public void Render_With_Args()
     {
         // Arrange
-        Services.AddSingleton<IConfiguration>(new ConfigurationManager());
-        Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
-        Services.AddSingleton<IDashboardClient, DashboardClient>();
-        Services.AddSingleton<BrowserTimeProvider>();
-        Services.AddSingleton<IKnownPropertyLookup>(new MockKnownPropertyLookup());
+        AddDashboardClientServices();
 
         // Act
         var cut = RenderComponent<ApplicationName>(builder =>
@@ -69,6 +61,16 @@ public class ApplicationNameTests : DashboardTestContext
 
         // Assert
         cut.MarkupMatches("&lt;marquee&gt;An HTML title!&lt;/marquee&gt;");
+    }
+
+    private void AddDashboardClientServices()
+    {
+        Services.AddLocalization();
+        Services.AddSingleton<IConfiguration>(new ConfigurationManager());
+        Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        Services.AddSingleton<IDashboardClient, DashboardClient>();
+        Services.AddSingleton<BrowserTimeProvider>();
+        Services.AddSingleton<IKnownPropertyLookup>(new MockKnownPropertyLookup());
     }
 
     private sealed class TestStringLocalizer<T> : IStringLocalizer<T>

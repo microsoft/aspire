@@ -1,0 +1,139 @@
+<!--
+  Per-RID NativeAOT symbol-package producer for the Aspire CLI on
+  Linux/macOS. Modelled on dotnet/runtime's runtime.native.* pattern:
+  https://github.com/dotnet/runtime/blob/main/src/libraries/System.IO.Ports/pkg/runtime.native.System.IO.Ports.props
+
+  Invoked from eng/clipack/Common.projitems' _PackNativeAotSymbols
+  target, once per CliRuntime, with these properties:
+    RuntimeIdentifier        e.g. linux-x64, osx-arm64
+    SymbolFilePath           absolute path to the .dbg (Linux) or
+                             .dwarf (macOS) payload — pre-renamed by the
+                             caller so the filename's extension matches
+                             SymbolsSuffix (NuGet's allow-list routes on
+                             extension, see below)
+    SymbolsSuffix            .dbg or .dwarf
+    PackageOutputPath        scratch dir to write Pack outputs into
+    BaseIntermediateOutputPath  per-RID obj dir to avoid clobbering the
+                                outer clipack project's obj when both
+                                live under eng/clipack/
+
+  Produces, into PackageOutputPath:
+    Aspire.Cli.<rid>.<version>.symbols.nupkg
+      tools/<tfm>/<rid>/aspire.<dbg|dwarf>
+    Aspire.Cli.<rid>.<version>.nupkg  (empty companion; the caller
+                                       discards it — it would otherwise
+                                       collide with the per-RID tool
+                                       nupkg of the same id+version
+                                       produced by clipack's
+                                       _PackRidSpecificDotnetTool)
+
+  How the .dbg/.dwarf is routed into the .symbols.nupkg and not the
+  main nupkg: NuGet's TfmSpecificDebugSymbolsFile hook gates entries
+  by extension against AllowedOutputExtensionsIn{Symbols,}PackageBuildOutputFolder.
+  The default main-package allowlist (.dll;.exe;.winmd;.json;.pri;.xml)
+  excludes .dbg/.dwarf, so appending SymbolsSuffix to the symbols-package
+  allowlist below routes the native symbol file only into the symbols
+  container.
+
+  Why .symbols.nupkg and not .snupkg: arcade matches symbol packages
+  via the _ExistingSymbolPackage item — a literal EndsWith('.symbols.nupkg')
+  filter — so .snupkg is not picked up by the MSDL publishing path.
+-->
+<Project Sdk="Microsoft.Build.NoTargets">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>Aspire.Cli.$(RuntimeIdentifier)</PackageId>
+    <Authors>Microsoft</Authors>
+    <Description>Native AOT debug symbols for the Aspire CLI on $(RuntimeIdentifier).</Description>
+
+    <!-- The TfmSpecificDebugSymbolsInPackage hook chain only fires under
+         pack when IncludeBuildOutput is true (Pack.targets
+         _WalkEachTargetPerFramework gate). -->
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>symbols.nupkg</SymbolPackageFormat>
+
+    <AllowedOutputExtensionsInSymbolsPackageBuildOutputFolder>$(SymbolsSuffix)</AllowedOutputExtensionsInSymbolsPackageBuildOutputFolder>
+
+    <TargetsForTfmSpecificDebugSymbolsInPackage>
+      $(TargetsForTfmSpecificDebugSymbolsInPackage);_AddAspireCliNativeSymbol
+    </TargetsForTfmSpecificDebugSymbolsInPackage>
+
+    <!-- The companion main .nupkg has no lib/ assets by design — only
+         the .symbols.nupkg sibling is the shipping artifact. NU5128
+         warns on empty packages; the caller discards the empty companion. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+  </PropertyGroup>
+
+  <Target Name="_ValidateAspireCliNativeSymbolsInputs" BeforeTargets="Pack">
+    <Error Condition="'$(RuntimeIdentifier)' == ''"
+           Text="RuntimeIdentifier must be set when packing Aspire.Cli native symbols." />
+    <Error Condition="'$(SymbolFilePath)' == ''"
+           Text="SymbolFilePath must be set when packing Aspire.Cli native symbols." />
+    <Error Condition="'$(SymbolsSuffix)' == ''"
+           Text="SymbolsSuffix must be set when packing Aspire.Cli native symbols (.dbg or .dwarf)." />
+    <Error Condition="!Exists('$(SymbolFilePath)')"
+           Text="Symbol file not found at '$(SymbolFilePath)'." />
+  </Target>
+
+  <!--
+    Inject the native symbol file into TfmSpecificDebugSymbolsFile.
+
+    TargetPath uses a rooted ('/tools/...') value so NuGet's
+    Path.Combine("lib/$(TargetFramework)", TargetPath) collapses to the
+    rooted value (Path.Combine treats a rooted second segment as
+    absolute). NuGet strips the leading slash when emitting the zip
+    entry, producing 'tools/<tfm>/<rid>/aspire.<dbg|dwarf>' inside
+    the package — matching the layout of the per-RID Aspire.Cli.<rid>
+    tool nupkg counterpart, so triage tooling can reason about either
+    container interchangeably. See https://github.com/NuGet/Home/issues/10860
+    for the leading-slash idiom.
+  -->
+  <Target Name="_AddAspireCliNativeSymbol">
+    <ItemGroup>
+      <TfmSpecificDebugSymbolsFile Include="$(SymbolFilePath)"
+                                   TargetPath="/tools/$(TargetFramework)/$(RuntimeIdentifier)"
+                                   TargetFramework="$(TargetFramework)" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Assert the packed .symbols.nupkg actually contains the symbol payload
+    at the expected internal path. NuGet routes TfmSpecificDebugSymbolsFile
+    entries by extension via AllowedOutputExtensionsInSymbolsPackageBuildOutputFolder;
+    if any part of that chain regresses (SDK bump removes the hook, the
+    SymbolsSuffix-vs-allowlist wiring drifts, the leading-slash TargetPath
+    idiom from NuGet/Home#10860 stops collapsing), pack will succeed but
+    the symbol payload will land somewhere else — or be dropped entirely —
+    and MSDL upload will silently ship a package SymbolUploadHelper can't
+    use. Validating after Pack catches that on every clipack build, vs.
+    discovering it post-ship on the next crash-triage attempt.
+
+    Runs Linux/macOS only — this proj is never invoked on Windows
+    (Common.projitems' _PackNativeAotSymbols guards on !$(CliRuntime.StartsWith('win-'))).
+  -->
+  <Target Name="_ValidatePackedSymbols" AfterTargets="Pack">
+    <ItemGroup>
+      <_PackedSymbolsForValidation Include="$(PackageOutputPath)Aspire.Cli.$(RuntimeIdentifier).*.symbols.nupkg" />
+    </ItemGroup>
+
+    <Error Condition="@(_PackedSymbolsForValidation->Count()) != 1"
+           Text="Pack produced @(_PackedSymbolsForValidation->Count()) Aspire.Cli.$(RuntimeIdentifier).*.symbols.nupkg files in '$(PackageOutputPath)'; expected exactly one. Files: @(_PackedSymbolsForValidation, ', ')" />
+
+    <PropertyGroup>
+      <_ExpectedZipEntry>tools/$(TargetFramework)/$(RuntimeIdentifier)/aspire$(SymbolsSuffix)</_ExpectedZipEntry>
+    </PropertyGroup>
+
+    <Exec Command="unzip -l &quot;@(_PackedSymbolsForValidation)&quot;" ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_ZipListing" />
+    </Exec>
+
+    <Error Condition="!$([System.String]::Copy('$(_ZipListing)').Contains('$(_ExpectedZipEntry)'))"
+           Text="Packed Aspire.Cli.$(RuntimeIdentifier).*.symbols.nupkg is missing the expected entry '$(_ExpectedZipEntry)'. NuGet's TfmSpecificDebugSymbolsFile / AllowedOutputExtensionsInSymbolsPackageBuildOutputFolder routing may have regressed. unzip -l output:%0A$(_ZipListing)" />
+  </Target>
+
+</Project>

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -231,7 +230,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     /// aren't part of the regression and are covered by the broader integration test.
     /// </summary>
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_BundleOnlySkillsBeyondCliCatalog_AreInstallable()
+    public async Task AgentInit_NonInteractive_BundleOnlySkillsNotInCatalog()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);

@@ -78,7 +78,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -136,7 +136,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -190,7 +190,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -244,7 +244,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -314,7 +314,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -390,7 +390,7 @@ public class TraceTests
 
         var traces1 = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -431,7 +431,7 @@ public class TraceTests
 
         var traces2 = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -485,7 +485,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -553,7 +553,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -629,7 +629,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -718,7 +718,7 @@ public class TraceTests
 
         var traces1 = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -733,7 +733,7 @@ public class TraceTests
 
         var traces2 = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -800,7 +800,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -851,7 +851,7 @@ public class TraceTests
         AddTrace(repository, "1", s_testTime);
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -922,7 +922,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1028,7 +1028,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1097,7 +1097,7 @@ public class TraceTests
         var resourceKey = new ResourceKey("resource1", InstanceId: null);
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1160,7 +1160,7 @@ public class TraceTests
         // Act 1
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1178,7 +1178,7 @@ public class TraceTests
         // Act 2
         traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1196,7 +1196,7 @@ public class TraceTests
         // Act 3
         traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1248,7 +1248,7 @@ public class TraceTests
         // Act 1
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1263,7 +1263,7 @@ public class TraceTests
         // Act 2
         traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1317,7 +1317,7 @@ public class TraceTests
         // intentionally comes from all matching traces, not just the returned page.
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = new ResourceKey("resource1", InstanceId: null),
+            ResourceKeys = [new ResourceKey("resource1", InstanceId: null)],
             StartIndex = 1,
             Count = 1,
             Filters =
@@ -1376,7 +1376,7 @@ public class TraceTests
         // Duration filter "> 50ms" should match because trace duration is 100ms.
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.GreaterThan, Value = "50" }]
@@ -1388,7 +1388,7 @@ public class TraceTests
         // even though the child span is only 5ms.
         traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.LessThan, Value = "10" }]
@@ -1425,7 +1425,7 @@ public class TraceTests
         // Act - filter for key1 != "other_value" should return the trace since key1 is "value1"
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = new ResourceKey("resource1", InstanceId: null),
+            ResourceKeys = [new ResourceKey("resource1", InstanceId: null)],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1448,7 +1448,7 @@ public class TraceTests
         var repository = CreateRepository();
         var request = new GetTracesRequest
         {
-            ResourceKey = new ResourceKey("TestService", "TestId"),
+            ResourceKeys = [new ResourceKey("TestService", "TestId")],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1650,7 +1650,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resource.ResourceKey,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1767,7 +1767,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1845,7 +1845,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1950,7 +1950,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2041,7 +2041,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2113,7 +2113,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = uninstrumentedPeerApp.ResourceKey,
+            ResourceKeys = [uninstrumentedPeerApp.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2191,7 +2191,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2232,7 +2232,7 @@ public class TraceTests
 
         traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = uninstrumentedPeerApp.ResourceKey,
+            ResourceKeys = [uninstrumentedPeerApp.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2327,7 +2327,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -2368,7 +2368,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2409,7 +2409,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2450,7 +2450,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2508,7 +2508,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = serviceA.ResourceKey,
+            ResourceKeys = [serviceA.ResourceKey],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -2550,7 +2550,7 @@ public class TraceTests
         // Act - filter for spans with duration >= 100000ms (100s)
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters =
@@ -2598,7 +2598,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2640,7 +2640,7 @@ public class TraceTests
         // Act - get second page (skip 1, take 1)
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 1,
             Count = 1,
             Filters = []
@@ -2682,7 +2682,7 @@ public class TraceTests
         // Act - filter for error spans with "example.com" text
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2704,7 +2704,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -2743,7 +2743,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = ResourceKey.Create("nonexistent", "unknown"),
+            ResourceKeys = [ResourceKey.Create("nonexistent", "unknown")],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -2789,7 +2789,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2828,7 +2828,7 @@ public class TraceTests
         // Enabled filter matches span name containing "span1", disabled filter would exclude everything
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters =
@@ -2853,5 +2853,483 @@ public class TraceTests
         // The disabled filter should be ignored — only the enabled "span1" filter applies
         Assert.Equal(1, result.PagedResult.TotalItemCount);
         Assert.Contains("span1", result.PagedResult.Items[0].Name);
+    }
+
+    [Fact]
+    public void GetTraces_NotContainsFilter_ExcludesTraceWhenAnySpanMatches()
+    {
+        // Verifies that a "not contains" filter on the trace Name field excludes the trace
+        // when ANY span's name contains the filtered text, even if other spans in the same
+        // trace do not contain it. This is the fix for https://github.com/microsoft/aspire/issues/18684.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Root span whose name contains the filter text.
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5)),
+                            // Child span whose name does NOT contain "1-1".
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Filter: Name not contains "1-1" — the root span's name is "Test span. Id: 1-1" which
+        // contains "1-1", so the trace should be excluded even though the child span doesn't match.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.NameField,
+                    Condition = FilterCondition.NotContains,
+                    Value = "1-1"
+                }
+            ]
+        });
+
+        Assert.Empty(traces.PagedResult.Items);
+    }
+
+    [Fact]
+    public void GetTraces_NotContainsFilter_IncludesTraceWhenNoSpanMatches()
+    {
+        // Verifies that a "not contains" filter includes the trace when none of its spans'
+        // names contain the filtered text.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5)),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Filter: Name not contains "NONEXISTENT" — no span name contains this text,
+        // so the trace should be included.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.NameField,
+                    Condition = FilterCondition.NotContains,
+                    Value = "NONEXISTENT"
+                }
+            ]
+        });
+
+        Assert.Collection(traces.PagedResult.Items,
+            trace => AssertId("1", trace.TraceId));
+    }
+
+    [Fact]
+    public void GetTraces_NotEqualFilter_ExcludesTraceWhenAnySpanMatches()
+    {
+        // Verifies that a "not equal" filter excludes the trace when ANY span's field value
+        // equals the filtered text.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5)),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Filter: Name != "Test span. Id: 1-1" — the root span matches exactly, so the trace
+        // should be excluded even though the child span doesn't match.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.NameField,
+                    Condition = FilterCondition.NotEqual,
+                    Value = "Test span. Id: 1-1"
+                }
+            ]
+        });
+
+        Assert.Empty(traces.PagedResult.Items);
+    }
+
+    [Fact]
+    public void GetTraces_NotContainsWithPositiveFilter_CombinesCorrectly()
+    {
+        // Verifies that combining a positive filter with a negative filter works correctly:
+        // the trace must have at least one span matching the positive filter AND all spans
+        // must satisfy the negative filter.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5),
+                                attributes: [KeyValuePair.Create("env", "prod")]),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3),
+                                parentSpanId: "1-1", attributes: [KeyValuePair.Create("env", "prod")])
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMinutes(10), endTime: s_testTime.AddMinutes(15),
+                                attributes: [KeyValuePair.Create("env", "staging")])
+                        }
+                    }
+                }
+            },
+            // Trace 3: satisfies both conditions — env=prod and no span name contains "1-1".
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "3", spanId: "3-1", startTime: s_testTime.AddMinutes(20), endTime: s_testTime.AddMinutes(25),
+                                attributes: [KeyValuePair.Create("env", "prod")])
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Positive: attribute env contains "prod"
+        // Negative: name not contains "1-1" (excludes trace 1 because root span name matches)
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter { Field = "env", Condition = FilterCondition.Contains, Value = "prod" },
+                new FieldTelemetryFilter { Field = KnownTraceFields.NameField, Condition = FilterCondition.NotContains, Value = "1-1" }
+            ]
+        });
+
+        // Trace 1 is excluded (root span name contains "1-1" even though env=prod matches).
+        // Trace 2 doesn't match the positive filter (env=staging, not prod).
+        // Trace 3 satisfies both: env=prod AND no span name contains "1-1".
+        Assert.Collection(traces.PagedResult.Items,
+            trace => AssertId("3", trace.TraceId));
+    }
+
+    [Fact]
+    public void GetTraces_NotContainsFilter_AbsentAttributeDoesNotExcludeTrace()
+    {
+        // Verifies that a negative filter on an attribute field does NOT exclude a trace
+        // just because some spans lack the attribute. A span without the field trivially
+        // satisfies "not contains X" — it cannot contain the value.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Span with http.method = POST (satisfies "not contains GET").
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5),
+                                attributes: [KeyValuePair.Create("http.method", "POST")]),
+                            // Span without http.method attribute at all — should NOT cause exclusion.
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3),
+                                parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Filter: http.method not contains "GET" — span 1-1 has POST (passes), span 1-2
+        // has no http.method (trivially passes). The trace should be included.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = "http.method",
+                    Condition = FilterCondition.NotContains,
+                    Value = "GET"
+                }
+            ]
+        });
+
+        Assert.Collection(traces.PagedResult.Items,
+            trace => AssertId("1", trace.TraceId));
+    }
+
+    [Fact]
+    public void GetTraces_NotContainsFilter_AbsentAttributeWithViolatingSpanExcludes()
+    {
+        // Verifies that a trace is excluded when one span has the attribute and violates
+        // the negative condition, even though another span lacks the attribute entirely.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Span with http.method = GET (violates "not contains GET").
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5),
+                                attributes: [KeyValuePair.Create("http.method", "GET")]),
+                            // Span without http.method — trivially passes, but trace still excluded.
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3),
+                                parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = "http.method",
+                    Condition = FilterCondition.NotContains,
+                    Value = "GET"
+                }
+            ]
+        });
+
+        Assert.Empty(traces.PagedResult.Items);
+    }
+
+    [Fact]
+    public void GetSpans_NotContainsFilter_AbsentAttributeIncludesSpan()
+    {
+        // Verifies that span-level negative filtering correctly includes spans that lack the
+        // filtered attribute. A span without the field trivially satisfies "not contains X".
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5),
+                                attributes: [KeyValuePair.Create("http.method", "GET")]),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3),
+                                parentSpanId: "1-1", attributes: [KeyValuePair.Create("http.method", "POST")]),
+                            // Span without http.method attribute — should still be included.
+                            CreateSpan(traceId: "1", spanId: "1-3", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(4),
+                                parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        // Filter: http.method not contains "GET"
+        // Span 1-1 has GET → excluded
+        // Span 1-2 has POST → included (POST doesn't contain GET)
+        // Span 1-3 has no http.method → included (absent field trivially satisfies "not contains")
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = "http.method",
+                    Condition = FilterCondition.NotContains,
+                    Value = "GET"
+                }
+            ]
+        });
+
+        Assert.Equal(2, result.PagedResult.TotalItemCount);
+        Assert.Contains(result.PagedResult.Items, s => GetStringId(s.SpanId) == "1-2");
+        Assert.Contains(result.PagedResult.Items, s => GetStringId(s.SpanId) == "1-3");
+    }
+
+    [Fact]
+    public void GetTraces_NotEqualTimestampFilter_ExcludesTraceViaUnoptimizedPath()
+    {
+        // Verifies that the non-optimized MatchesFilters path (used for date/numeric fields)
+        // correctly applies ALL-span semantics for negative filters. A timestamp NotEqual
+        // filter excludes a trace when any span's timestamp matches the filter value.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Span 1: starts at s_testTime (violates "timestamp != s_testTime")
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5)),
+                            // Span 2: starts later (satisfies "timestamp != s_testTime")
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3),
+                                parentSpanId: "1-1")
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Trace 2: starts at a different time (satisfies the filter)
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMinutes(10), endTime: s_testTime.AddMinutes(15))
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Timestamp is a date field, so StringFilter.TryCreate returns false and
+        // CreateOptimizedTraceFilters falls through to the non-optimized path.
+        // Filter: Timestamp != "1970-01-01T00:00:00Z" — span 1-1 violates this (its timestamp
+        // equals the filter value), so trace 1 is excluded. Trace 2 passes.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.TimestampField,
+                    Condition = FilterCondition.NotEqual,
+                    Value = "1970-01-01T00:00:00Z"
+                }
+            ]
+        });
+
+        Assert.Collection(traces.PagedResult.Items,
+            trace => AssertId("2", trace.TraceId));
     }
 }

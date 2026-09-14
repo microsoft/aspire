@@ -6,11 +6,15 @@ import { AspireCommandType } from '../dcp/types';
 import { AppHostDiscoveryService, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { AppHostLaunchService } from '../services/AppHostLaunchService';
 
 export class AspireEditorCommandProvider implements vscode.Disposable {
     private _disposables: vscode.Disposable[] = [];
 
-    constructor(private readonly _appHostDiscoveryService: AppHostDiscoveryService) {
+    constructor(
+        private readonly _appHostDiscoveryService: AppHostDiscoveryService,
+        private readonly _launchService: AppHostLaunchService,
+    ) {
         this._disposables.push(vscode.workspace.onDidChangeWorkspaceFolders(event => {
             void this.updateWorkspaceAppHostContext();
         }));
@@ -137,20 +141,7 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
             return;
         }
 
-        const config: vscode.DebugConfiguration = {
-            type: 'aspire',
-            name: `Aspire ${aspireCommand}: ${vscode.workspace.asRelativePath(appHostToRun)}`,
-            request: 'launch',
-            program: appHostToRun,
-            command: aspireCommand,
-            noDebug: noDebug
-        };
-
-        if (doStep) {
-            config.step = doStep;
-        }
-
-        await vscode.debug.startDebugging(undefined, config);
+        await this._launchService.launch(appHostToRun, aspireCommand, noDebug, doStep);
     }
 
     dispose() {

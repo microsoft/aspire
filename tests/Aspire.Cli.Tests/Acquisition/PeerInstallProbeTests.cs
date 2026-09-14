@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Acquisition;
-using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text;
@@ -65,7 +64,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
     public async Task ProbeAsync_BinaryNotFound_ReturnsFailed()
     {
         var probe = CreateProbeWithGenerousTimeout();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var missing = Path.Combine(workspace.WorkspaceRoot.FullName, "does-not-exist");
 
         var result = await probe.ProbeAsync(missing, TestContext.Current.CancellationToken);
@@ -389,7 +388,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.SkipWhen(OperatingSystem.IsWindows(),
             "This regression test records the shell process id using POSIX $$; Windows process-tree cancellation is covered by production code.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pidFile = Path.Combine(workspace.WorkspaceRoot.FullName, "peer.pid");
         using var fakePeer = FakePeerScript.BuildSleeperWithPidFile(outputHelper, pidFile, sleepSeconds: 30);
 
@@ -517,7 +516,7 @@ internal static class FakePeerScript
     /// </summary>
     internal static FakeScriptResult BuildArgvRecorder(ITestOutputHelper outputHelper)
     {
-        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var argvFile = Path.Combine(workspace.WorkspaceRoot.FullName, "argv.txt");
         var path = OperatingSystem.IsWindows()
             ? Path.Combine(workspace.WorkspaceRoot.FullName, "peer.cmd")
@@ -541,7 +540,7 @@ internal static class FakePeerScript
 
     private static FakeScriptResult BuildInternal(ITestOutputHelper outputHelper, ScriptBody body)
     {
-        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = OperatingSystem.IsWindows()
             ? Path.Combine(workspace.WorkspaceRoot.FullName, "peer.cmd")
             : Path.Combine(workspace.WorkspaceRoot.FullName, "peer");
@@ -621,7 +620,7 @@ internal abstract record ScriptBody
             var lines = Stdout.Split('\n');
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if not \"%~1\" == \"doctor\" exit /b 127");
+            AppendBatchContainsArgGuard(sb, "doctor");
             foreach (var line in lines)
             {
                 sb.Append("echo ").AppendLine(line.TrimEnd('\r'));
@@ -648,7 +647,7 @@ internal abstract record ScriptBody
         {
             var sb = new StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if not \"%~1\" == \"doctor\" exit /b 127");
+            AppendBatchContainsArgGuard(sb, "doctor");
             sb.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"[Console]::Error.Write(('x' * {ByteCount}))\"");
             sb.AppendLine($"exit /b {ExitCode}");
             return sb.ToString();
@@ -711,8 +710,10 @@ internal abstract record ScriptBody
         {
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if \"%~1\" == \"doctor\" goto :doctor");
-            sb.AppendLine("if \"%~1\" == \"--version\" goto :version");
+            sb.AppendLine("echo %* | findstr /C:\"doctor\" > nul");
+            sb.AppendLine("if not errorlevel 1 goto :doctor");
+            sb.AppendLine("echo %* | findstr /C:\"--version\" > nul");
+            sb.AppendLine("if not errorlevel 1 goto :version");
             sb.AppendLine("exit /b 127");
             sb.AppendLine(":doctor");
             foreach (var line in DoctorStdout.Split('\n'))
@@ -803,5 +804,11 @@ internal abstract record ScriptBody
 
         var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(stderr));
         sb.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"$bytes=[Convert]::FromBase64String('{encoded}'); [Console]::Error.Write([Text.Encoding]::UTF8.GetString($bytes))\"");
+    }
+
+    private static void AppendBatchContainsArgGuard(StringBuilder sb, string arg)
+    {
+        sb.AppendLine($"echo %* | findstr /C:\"{arg}\" > nul");
+        sb.AppendLine("if errorlevel 1 exit /b 127");
     }
 }

@@ -76,6 +76,7 @@ public static class KafkaBuilderExtensions
             .WithEndpoint(targetPort: KafkaInternalBrokerPort, name: KafkaServerResource.InternalEndpointName)
             .WithImage(KafkaContainerImageTags.Image, KafkaContainerImageTags.Tag)
             .WithImageRegistry(KafkaContainerImageTags.Registry)
+            .WithIconName("MailMultiple")
             .WithEnvironment(context => ConfigureKafkaContainer(context, kafka))
             .WithHealthCheck(healthCheckKey);
     }
@@ -110,6 +111,7 @@ public static class KafkaBuilderExtensions
             var kafkaUiBuilder = builder.ApplicationBuilder.AddResource(kafkaUi)
                 .WithImage(KafkaContainerImageTags.KafkaUiImage, KafkaContainerImageTags.KafkaUiTag)
                 .WithImageRegistry(KafkaContainerImageTags.Registry)
+                .WithIconName("WindowDatabase")
                 .WithHttpEndpoint(targetPort: KafkaUIPort)
                 .ExcludeFromManifest();
 

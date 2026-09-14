@@ -1,0 +1,91 @@
+# CI skip-entirely patterns -- files whose changes skip the ENTIRE CI workflow.
+#
+# This is the top-level skip gate, NOT the selective-test router. It lists glob
+# patterns for files whose changes do NOT require any CI to run (e.g. documentation,
+# non-build pipeline scripts, or specific workflow files unrelated to the build and
+# test process). For path -> specific test/job routing, see test-trigger-map.yml.
+#
+# When EVERY file changed in a pull request matches at least one pattern here, the
+# entire CI workflow is skipped (no build, no tests).
+#
+# Pattern syntax:
+#   **   matches any path including directory separators (recursive)
+#   *    matches any characters except a directory separator
+#   .    is treated as a literal dot (no escaping needed)
+#   All other characters are treated as literals.
+#
+# Lines starting with '#' and blank lines are ignored.
+
+# This file itself - changing CI-skip patterns doesn't require a CI run.
+# Note: this also means a syntax error introduced here won't be caught by CI,
+# so take care when editing. Pattern conversion is validated by the
+# check-changed-files action at runtime.
+#
+# Interaction with selective CI: eng/github-ci/test-trigger-map.yml routes a change to this
+# file to Infrastructure.Tests (its TestTriggerMap suite reads this file as the
+# selector's prefilter source). That route only fires when this file changes
+# ALONGSIDE other non-skippable work, because the entry below makes a PR that
+# touches ONLY this file match the skip gate and skip the whole tests workflow
+# before the selector runs. That is intentional - editing the skip list alone
+# doesn't warrant a full CI run - but it means the Infrastructure.Tests route is
+# best-effort for this one file, not guaranteed.
+eng/github-ci/ci-skip-entirely-patterns.txt
+
+# Documentation
+**.md
+
+# Engineering pipeline scripts (Azure DevOps, not used in the GitHub CI build)
+eng/pipelines/**
+eng/test-configuration.json
+
+Aspire-Core.slnf
+
+.github/instructions/**
+.agents/skills/**
+
+# GitHub workflow files that do not affect the CI build or test process
+.github/workflows/apply-test-attributes.yml
+.github/workflows/backmerge-release.yml
+.github/workflows/backport.yml
+.github/workflows/dogfood-comment.yml
+.github/workflows/generate-api-diffs.yml
+.github/workflows/generate-ats-diffs.yml
+.github/workflows/labeler-*.yml
+.github/workflows/markdownlint*.yml
+.github/workflows/pr-review-needed.yml
+.github/workflows/refresh-manifests.yml
+.github/workflows/release-github-tasks.yml
+.github/workflows/release-notes-generate.*
+.github/workflows/reproduce-flaky-tests.yml
+.github/workflows/specialized-test-runner.yml
+.github/workflows/tests-outerloop.yml
+.github/workflows/tests-quarantine.yml
+.github/workflows/update-*.yml
+.github/workflows/auto-rerun-transient-ci-failures.*
+
+# GitHub Agentic Workflows (gh-aw): shared action locks (.github/aw/**), compiled
+# *.lock.yml workflows, and the agentics-maintenance workflows. The .md source files
+# are already covered by **.md above. None of these affect the CI build or test process.
+.github/aw/**
+.github/workflows/*.lock.yml
+.github/workflows/agentics-maintenance*.yml
+
+# Scripts not used on CI
+start-code.sh
+localhive.*
+dogfood.sh
+
+# Repository metadata with no build or test impact. Without these, a PR touching only one of them
+# would fall through the selective-CI run-all fallback and force the FULL test matrix (the fallback
+# escalates any file it cannot attribute -- see tools/SelectTests/TestSelector.cs). Issue forms,
+# CODEOWNERS, and the repo-root .gitignore cannot change what builds or how a test behaves.
+#
+# Deliberately NOT listed (each can change build/test outcomes, so they must still run CI):
+#   .editorconfig    -- analyzer severities feed TreatWarningsAsErrors
+#   .gitattributes   -- checkout normalization (line endings) can affect fixture-sensitive tests
+# The pattern below is the repo-ROOT .gitignore only (anchored, no '**'): nested .gitignore files
+# under src/Aspire.Cli/Templating/Templates/** and tests/** are shipped/owned assets that Layer 1 and
+# the conventions route to their projects -- they must not skip CI.
+.gitignore
+.github/CODEOWNERS
+.github/ISSUE_TEMPLATE/**

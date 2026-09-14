@@ -10,7 +10,7 @@ The published package is `@microsoft/aspire-cli`. It supports global installatio
 
 This design follows the native npm package pattern used by established packages rather than introducing a custom installer.
 
-- npm's package metadata defines the primitives this package uses: `bin` exposes a command on PATH, `optionalDependencies` allow platform-specific packages to be skipped when they do not apply, `files` limits packed content, and `os`/`cpu` select packages by `process.platform` and `process.arch`. See the npm package.json documentation for [`bin`](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#bin), [`optionalDependencies`](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#optionaldependencies), [`files`](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#files), [`os`](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#os), and [`cpu`](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#cpu).
+- npm's package metadata defines the primitives this package uses: `bin` exposes a command on PATH, `optionalDependencies` allow platform-specific packages to be skipped when they do not apply, `files` limits packed content, and `os`/`cpu` select packages by `process.platform` and `process.arch`.
 - [esbuild](https://github.com/evanw/esbuild/blob/main/npm/esbuild/package.json) uses a top-level package with a `bin` entry and platform-specific packages such as [`@esbuild/linux-x64`](https://github.com/evanw/esbuild/blob/main/npm/@esbuild/linux-x64/package.json) listed as optional dependencies. Its platform resolver maps the current Node platform to an optional package and resolves the binary through Node package resolution rather than hardcoded `node_modules` paths.
 - [@vscode/ripgrep](https://github.com/microsoft/vscode-ripgrep/blob/main/packages/ripgrep/package.json) uses the same top-level package plus optional platform package shape for an external CLI binary. A platform package such as [`@vscode/ripgrep-linux-x64`](https://github.com/microsoft/vscode-ripgrep/blob/main/packages/ripgrep-linux-x64/package.json) contains a `bin/` payload and declares `os`/`cpu` metadata.
 - Rollup, SWC, and sharp show the modern `libc` split for Linux native packages. Examples include [`@rollup/rollup-linux-x64-gnu`](https://github.com/rollup/rollup/blob/master/npm/linux-x64-gnu/package.json), [`@swc/core-linux-x64-gnu`](https://github.com/swc-project/swc/blob/main/packages/core/scripts/npm/linux-x64-gnu/package.json), and [`@img/sharp-linux-x64`](https://github.com/lovell/sharp/blob/main/npm/linux-x64/package.json). Their runtime loaders also distinguish glibc from musl before selecting a native package.
@@ -51,9 +51,12 @@ bin/aspire.js
 bin/aspire-package-map.json
 ```
 
+The generated top-level README identifies the packaged CLI version and links to the matching notes on GitHub Releases. npmjs.com renders this README on the package page, making the release-notes link discoverable before users update.
+
 The top-level `package.json` declares:
 
 - `bin.aspire = "bin/aspire.js"`
+- `scripts.postinstall = "node bin/aspire.js --npm-postinstall-check"`
 - `optionalDependencies` for every supported RID package at the same version
 - `files = ["bin", "README.md"]`
 
@@ -105,6 +108,8 @@ The launcher:
 5. Copies the native binary to an Aspire-owned writable cache.
 6. Spawns the cached binary with inherited stdio and forwards all command-line arguments.
 
+During npm `postinstall`, the same launcher runs in `--npm-postinstall-check` mode. That mode stops after RID detection and native package resolution, so `npm install -g @microsoft/aspire-cli --omit=optional` fails immediately on supported platforms instead of leaving an installed `aspire` shim that can only fail later at first launch. Unsupported platforms continue to install the shim successfully and report the unsupported-platform diagnostic at first `aspire` launch, preserving the optional-dependency package behavior for transitive and exploratory installs. Package managers can still skip lifecycle scripts with `--ignore-scripts`, so the normal runtime launcher keeps the same missing-native-package diagnostic.
+
 The default cache path is:
 
 ```text
@@ -155,7 +160,7 @@ The launcher's cache-freshness check compares both file size and `mtime`. A cach
 3. Extracting both tarballs.
 4. Extracting the native CLI archive.
 5. Comparing the RID tarball binary byte-for-byte with the archive binary.
-6. Verifying pointer package metadata, `bin/aspire.js`, `aspire-package-map.json`, and optional dependency version alignment.
+6. Verifying pointer package metadata, the version-stamped README and release-notes link, `bin/aspire.js`, `aspire-package-map.json`, and optional dependency version alignment.
 
 `eng/pipelines/templates/prepare-npm-cli-packages.yml` runs after the byte-for-byte verification and performs real end-to-end installation tests on Windows, Linux, and the native macOS build-pool RID:
 
@@ -208,5 +213,4 @@ MicroBuild's npm publish template documentation does not currently expose an npm
 ## Open follow-ups
 
 - Add Sigstore provenance once ESRP/MicroBuild's npm publish path supports it.
-- Add `npm install --no-optional` guidance and a clearer error message in the launcher when no RID package is installed.
 - Extract the large release-job PowerShell validation scripts once `releaseJob` can safely consume repository scripts. They remain inline today because `eng/pipelines/release-publish-nuget.yml` runs the ESRP-backed release job with `checkout: none`; extracting them now would require adding a trusted script artifact or changing release-job checkout behavior.

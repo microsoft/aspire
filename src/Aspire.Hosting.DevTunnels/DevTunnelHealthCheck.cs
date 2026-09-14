@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.DevTunnels;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 internal sealed class DevTunnelHealthCheck(
     IDevTunnelClient devTunnelClient,
     LoggedOutNotificationManager loggedOutNotificationManager,
@@ -24,7 +23,7 @@ internal sealed class DevTunnelHealthCheck(
     {
         try
         {
-            var tunnelStatus = await _devTunnelClient.GetTunnelAsync(_tunnelResource.TunnelId, logger, cancellationToken).ConfigureAwait(false);
+            var tunnelStatus = await _devTunnelClient.GetTunnelAsync(_tunnelResource.ResolvedTunnelId, logger, cancellationToken).ConfigureAwait(false);
             tunnelResource.LastKnownStatus = tunnelStatus;
             if (tunnelStatus.HostConnections == 0)
             {
@@ -44,14 +43,14 @@ internal sealed class DevTunnelHealthCheck(
             }
 
             // Get tunnel and port access status
-            var tunnelAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.TunnelId, portNumber: null, logger, cancellationToken).ConfigureAwait(false);
+            var tunnelAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.ResolvedTunnelId, portNumber: null, logger, cancellationToken).ConfigureAwait(false);
             _tunnelResource.LastKnownAccessStatus = tunnelAccessStatus;
 
             // Get access status for each port
             foreach (var portResource in _tunnelResource.Ports)
             {
                 var tunnelPort = await portResource.GetTunnelPortAsync(cancellationToken).ConfigureAwait(false);
-                var portAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.TunnelId, tunnelPort, logger, cancellationToken).ConfigureAwait(false);
+                var portAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.ResolvedTunnelId, tunnelPort, logger, cancellationToken).ConfigureAwait(false);
                 portResource.LastKnownAccessStatus = portAccessStatus;
             }
 
@@ -76,4 +75,3 @@ internal sealed class DevTunnelHealthCheck(
         }
     }
 }
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

@@ -19,18 +19,21 @@ body:
         - label: I have searched the existing issues
           required: true
   - type: textarea
+    id: description
     attributes:
       label: Describe the bug
       description: A clear and concise description of what the bug is.
     validations:
       required: true
   - type: textarea
+    id: expected-behavior
     attributes:
       label: Expected Behavior
       description: A clear and concise description of what you expected to happen.
     validations:
       required: false
   - type: textarea
+    id: repro-steps
     attributes:
       label: Steps To Reproduce
       description: |
@@ -44,6 +47,7 @@ body:
     validations:
       required: false
   - type: textarea
+    id: exceptions
     attributes:
       label: Exceptions (if any)
       description: Include the exception you get when facing this issue.
@@ -51,6 +55,7 @@ body:
     validations:
       required: false
   - type: textarea
+    id: aspire-doctor-output
     attributes:
       label: Aspire doctor output
       description: |
@@ -58,6 +63,7 @@ body:
     validations:
       required: false
   - type: textarea
+    id: additional-context
     attributes:
       label: Anything else?
       description: |

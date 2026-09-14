@@ -16,7 +16,7 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
     private const string BackendImage = "mcr.microsoft.com/dotnet/samples:aspnetapp-8.0";
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/17020")]
     public async Task VerifyYarpResourceExtensionsConfig()
     {

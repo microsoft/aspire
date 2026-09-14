@@ -115,7 +115,7 @@ public class StructuredLogsViewModel
 
             logs = _telemetryRepository.GetLogs(new GetLogsContext
             {
-                ResourceKey = ResourceKey,
+                ResourceKeys = ResourceKey is { } key ? [key] : [],
                 StartIndex = StartIndex,
                 Count = Count,
                 Filters = filters
@@ -127,17 +127,23 @@ public class StructuredLogsViewModel
         return logs;
     }
 
-    public List<TelemetryFilter> GetFilters()
+    public List<TelemetryFilter> GetFilters() => BuildFilters(Filters, FilterText, _logLevel);
+
+    /// <summary>
+    /// Builds the complete filter list from field filters, text filter, and log level.
+    /// This is the single source of truth for structured log filtering logic.
+    /// </summary>
+    internal static List<TelemetryFilter> BuildFilters(IReadOnlyList<FieldTelemetryFilter> fieldFilters, string? filterText, LogLevel? logLevel)
     {
-        var filters = Filters.Cast<TelemetryFilter>().ToList();
-        if (!string.IsNullOrWhiteSpace(FilterText))
+        var filters = fieldFilters.Cast<TelemetryFilter>().ToList();
+        if (!string.IsNullOrWhiteSpace(filterText))
         {
-            filters.Add(new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Message), Condition = FilterCondition.Contains, Value = FilterText });
+            filters.Add(new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Message), Condition = FilterCondition.Contains, Value = filterText });
         }
         // If the log level is set and it is not the bottom level, which has no effect, then add a filter.
-        if (_logLevel != null && _logLevel != Microsoft.Extensions.Logging.LogLevel.Trace)
+        if (logLevel != null && logLevel != Microsoft.Extensions.Logging.LogLevel.Trace)
         {
-            filters.Add(new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = _logLevel.Value.ToString() });
+            filters.Add(new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = logLevel.Value.ToString() });
         }
 
         return filters;
@@ -154,7 +160,7 @@ public class StructuredLogsViewModel
 
         var errorLogs = _telemetryRepository.GetLogs(new GetLogsContext
         {
-            ResourceKey = ResourceKey,
+            ResourceKeys = ResourceKey is { } key ? [key] : [],
             StartIndex = 0,
             Count = count,
             Filters = filters

@@ -5,14 +5,13 @@ namespace Aspire.Hosting;
 
 internal static class DashboardConfigNames
 {
-    public static readonly ConfigName DashboardFrontendUrlName = new(KnownConfigNames.AspNetCoreUrls);
+    public static readonly ConfigName DashboardFrontendUrlName = new(KnownAspNetCoreConfigNames.Urls);
 
     public static readonly ConfigName DashboardOtlpGrpcUrlName = new(KnownConfigNames.DashboardOtlpGrpcEndpointUrl);
     public static readonly ConfigName DashboardOtlpHttpUrlName = new(KnownConfigNames.DashboardOtlpHttpEndpointUrl);
     public static readonly ConfigName DashboardUnsecuredAllowAnonymousName = new(KnownConfigNames.DashboardUnsecuredAllowAnonymous);
     public static readonly ConfigName DashboardConfigFilePathName = new(KnownConfigNames.DashboardConfigFilePath);
     public static readonly ConfigName DashboardFileConfigDirectoryName = new(KnownConfigNames.DashboardFileConfigDirectory);
-    public static readonly ConfigName DashboardAIDisabledName = new(KnownConfigNames.DashboardAIDisabled);
     public static readonly ConfigName DashboardAspireApiEnabledName = new(KnownConfigNames.DashboardApiEnabled);
     public static readonly ConfigName DashboardAspireApiDisabledName = new(KnownConfigNames.DashboardApiDisabled);
     public static readonly ConfigName ResourceServiceUrlName = new(KnownConfigNames.ResourceServiceEndpointUrl);
@@ -45,6 +44,7 @@ internal static class DashboardConfigNames
     public static readonly ConfigName DebugSessionPortName = new("Dashboard:DebugSession:Port", "DASHBOARD__DEBUGSESSION__PORT");
     public static readonly ConfigName DebugSessionServerCertificateName = new("Dashboard:DebugSession:ServerCertificate", "DASHBOARD__DEBUGSESSION__SERVERCERTIFICATE");
     public static readonly ConfigName DebugSessionTokenName = new("Dashboard:DebugSession:Token", "DASHBOARD__DEBUGSESSION__TOKEN");
+    public static readonly ConfigName DebugSessionDcpInstanceIdName = new("Dashboard:DebugSession:DcpInstanceId", "DASHBOARD__DEBUGSESSION__DCPINSTANCEID");
     public static readonly ConfigName DebugSessionTelemetryOptOutName = new("Dashboard:DebugSession:TelemetryOptOut", "DASHBOARD__DEBUGSESSION__TELEMETRYOPTOUT");
     public static readonly ConfigName UIDisableResourceGraphName = new("Dashboard:UI:DisableResourceGraph", "DASHBOARD__UI__DISABLERESOURCEGRAPH");
     public static readonly ConfigName UIDisableImportName = new("Dashboard:UI:DisableImport", "DASHBOARD__UI__DISABLEIMPORT");

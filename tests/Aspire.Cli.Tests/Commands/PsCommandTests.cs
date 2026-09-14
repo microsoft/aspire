@@ -7,9 +7,11 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using StreamJsonRpc;
@@ -21,7 +23,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -36,7 +38,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -55,7 +57,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [InlineData("JSON")]
     public async Task PsCommand_FormatOption_IsCaseInsensitive(string format)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -73,7 +75,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [InlineData("TABLE")]
     public async Task PsCommand_FormatOption_AcceptsTable(string format)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -88,7 +90,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_FormatOption_RejectsInvalidValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -103,7 +105,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_JsonFormat_ReturnsValidJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -178,7 +180,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [InlineData("13.2.4-preview.1", "13.2.4-preview.1")]
     public async Task PsCommand_JsonFormat_DisplaysSdkVersionFromV2AppHostInfo(string sdkVersion, string expectedSdkVersion)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
         using var server = TestAppHostBackchannelServer.Start(appHostPath, processId: 1234, sdkVersion: sdkVersion);
@@ -210,7 +212,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_JsonFormat_UsesNullSdkVersionWhenUnknown()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -249,7 +251,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_JsonFormat_DoesNotFetchSdkVersionFromV1Connection()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -294,7 +296,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_JsonFormat_ReturnsAnonymousDashboardUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -338,7 +340,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_TableFormat_IncludesDashboardLoginTokenInDisplayedUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -382,7 +384,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_TableFormat_IncludesSdkVersionFromV2AppHostInfo()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
         using var server = TestAppHostBackchannelServer.Start(appHostPath, processId: 1234, sdkVersion: "13.2.4.0");
@@ -415,7 +417,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_TableFormat_DisplaysDashWhenSdkVersionIsUnavailable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
 
@@ -455,7 +457,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_JsonFormat_NoResults_WritesEmptyArrayToStdout()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -479,7 +481,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_JsonFormat_DoesNotShowScanningStatus()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash1", "socket.hash1", new TestAppHostAuxiliaryBackchannel
@@ -515,7 +517,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_FollowJsonFormat_ReturnsSuccessWhenOutputCloses()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var interactionService = new TestInteractionService
         {
@@ -551,7 +553,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_FollowWithoutJsonFormat_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -567,7 +569,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_FollowJsonFormat_StreamsStoppedAppHostWhenConnectionIsRemoved()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cancellationTokenSource = new CancellationTokenSource();
         var outputLines = new List<string>();
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -625,7 +627,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_JsonFormat_IncludesLogFilePath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -665,7 +667,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_JsonFormat_IncludesLogFilePath_FromV2Override()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -712,7 +714,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PsCommand_JsonFormat_OmitsLogFilePath_WhenNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -781,7 +783,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             _disposables.Add(messageHandler);
             _disposables.Add(serverStream);
 
-            return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, NullLogger.Instance, clientSocket).DefaultTimeout();
+            return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, NullLogger.Instance, new ProfilingTelemetry(new ConfigurationBuilder().Build()), clientSocket, CancellationToken.None).DefaultTimeout();
         }
 
         public void Dispose()

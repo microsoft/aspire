@@ -332,6 +332,14 @@ namespace Aspire.Hosting.Azure
         public AzureProvisioningResource TargetAzureResource { get { throw null; } }
     }
 
+    public static partial class AzureSubnetServiceDelegations
+    {
+        public const string ApplicationGatewayForContainers = "Microsoft.ServiceNetworking/trafficControllers";
+        public const string AppServiceEnvironments = "Microsoft.Web/serverFarms";
+        public const string ContainerAppEnvironments = "Microsoft.App/environments";
+        public const string ContainerInstances = "Microsoft.ContainerInstance/containerGroups";
+    }
+
     public static partial class AzureUserAssignedIdentityExtensions
     {
         [AspireExport]

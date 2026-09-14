@@ -1,0 +1,166 @@
+# Update Nix CLI Flake Workflow
+#
+# This workflow updates eng/nix/versions.json after the AzDO release pipeline
+# uploads the stable aspire-cli-* archives and their .sha512 sidecars to the
+# GitHub release. It is dispatched by release-publish-nuget.yml after
+# PublishReleaseAssetsJob, so the release asset URLs it pins are already live.
+# The changes are committed to the update-baseline-<version> branch created by
+# release-github-tasks.yml, then the workflow creates or updates the PR from
+# that branch so the post-release stable-version updates land together.
+
+name: Update Nix CLI Flake
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Stable release version (e.g., 13.4.6)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run mode - validate and log actions without making changes'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: update-nix-cli-flake-${{ inputs.release_version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-nix-flake:
+    name: Update Nix flake manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authorize
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ACTOR="${{ github.actor }}"
+          ACTOR_ID="${{ github.actor_id }}"
+          echo "Checking if $ACTOR (id=$ACTOR_ID) is authorized to update the Nix flake..."
+
+          if [[ "$ACTOR" == "aspire-repo-bot[bot]" ]]; then
+            ACTOR_INFO=$(gh api "users/$ACTOR" 2>/dev/null || echo '')
+            ACTOR_TYPE=$(echo "$ACTOR_INFO" | jq -r '.type // empty')
+            ACTOR_API_ID=$(echo "$ACTOR_INFO" | jq -r '.id // empty')
+
+            if [[ "$ACTOR_TYPE" != "Bot" ]]; then
+              echo "ERROR: $ACTOR resolves to account type '$ACTOR_TYPE', expected 'Bot'."
+              exit 1
+            fi
+
+            if [[ -z "$ACTOR_ID" || -z "$ACTOR_API_ID" || "$ACTOR_ID" != "$ACTOR_API_ID" ]]; then
+              echo "ERROR: actor_id mismatch (context=$ACTOR_ID, api=$ACTOR_API_ID)."
+              exit 1
+            fi
+
+            echo "Verified dispatcher is aspire-repo-bot GitHub App (type=Bot, id=$ACTOR_API_ID); skipping human permission check."
+            exit 0
+          fi
+
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/$ACTOR/permission --jq '.permission')
+          echo "User permission level: $PERMISSION"
+
+          if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" ]]; then
+            echo "ERROR: User $ACTOR does not have sufficient permissions."
+            echo "Required: 'admin' or 'maintain' permission level."
+            echo "Current: '$PERMISSION'"
+            exit 1
+          fi
+
+          echo "User $ACTOR is authorized (permission: $PERMISSION)"
+
+      - name: Validate release version
+        run: |
+          VERSION="${{ inputs.release_version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid stable release version: $VERSION"
+            echo "Expected format: major.minor.patch"
+            exit 1
+          fi
+
+          echo "Stable release version is valid: $VERSION"
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Checkout main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Dry Run - Show Nix update details
+        if: inputs.dry_run == true
+        run: |
+          VERSION="${{ inputs.release_version }}"
+          echo "[DRY RUN] Would update the Nix flake manifest:"
+          echo "   Version: $VERSION"
+          echo "   Manifest: eng/nix/versions.json"
+          echo "   Release assets: https://github.com/${{ github.repository }}/releases/download/v$VERSION/aspire-cli-<rid>-$VERSION.tar.gz"
+          echo "   Branch: update-baseline-$VERSION"
+          echo "   Base: main"
+          echo "   Labels: area-engineering-systems"
+          echo ""
+          echo "Dry-run does not fetch release assets because the AzDO dry-run path does not create or upload a live GitHub release."
+
+      - name: Checkout baseline update branch
+        if: inputs.dry_run != true
+        run: |
+          VERSION="${{ inputs.release_version }}"
+          BRANCH_NAME="update-baseline-$VERSION"
+
+          if ! git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null; then
+            echo "Expected the existing post-release baseline branch '$BRANCH_NAME' to exist."
+            echo "release-github-tasks.yml creates that branch before release-publish-nuget.yml uploads CLI assets and dispatches this workflow."
+            exit 1
+          fi
+
+          git fetch origin "$BRANCH_NAME:$BRANCH_NAME"
+          git checkout "$BRANCH_NAME"
+
+      - name: Update Nix release manifest
+        if: inputs.dry_run != true
+        run: |
+          eng/nix/update-versions.sh --version "${{ inputs.release_version }}"
+
+      - name: Show Nix manifest diff
+        if: inputs.dry_run != true
+        run: |
+          if git diff --quiet -- eng/nix/versions.json; then
+            echo "No Nix manifest changes are needed; eng/nix/versions.json already points at v${{ inputs.release_version }}."
+          else
+            git diff -- eng/nix/versions.json
+          fi
+
+      - name: Create Nix manifest PR
+        if: inputs.dry_run != true
+        uses: ./.github/actions/create-pull-request
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          title: "Update PackageValidationBaselineVersion to ${{ inputs.release_version }}"
+          body: |
+            This PR updates the stable release baseline and first-party Nix flake manifest to Aspire CLI `${{ inputs.release_version }}` after the release assets were uploaded to GitHub.
+
+            ## Changes
+            - Updated `src/Directory.Build.props` with the new package validation baseline version.
+            - Updated `eng/nix/versions.json` to point at the versioned GitHub release archives.
+            - Pinned the official `.sha512` checksum assets as Nix SRI hashes.
+
+            ---
+            *Created automatically by the release pipeline.*
+          branch: update-baseline-${{ inputs.release_version }}
+          base: main
+          commit-message: "Update Nix flake to v${{ inputs.release_version }}"
+          labels: |
+            area-engineering-systems

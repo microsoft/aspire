@@ -9,9 +9,13 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
 {
+    internal const string YarnClassicCheckName = "typescript-apphost-yarn-classic";
+    internal const string ToolsCheckName = "typescript-apphost-tools";
+
     private readonly IProjectLocator _projectLocator;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
     private readonly ILogger<TypeScriptAppHostToolingCheck> _logger;
     private readonly Func<string, string?> _commandResolver;
 
@@ -19,8 +23,9 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         IProjectLocator projectLocator,
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<TypeScriptAppHostToolingCheck> logger)
-        : this(projectLocator, languageDiscovery, executionContext, logger, PathLookupHelper.FindFullPathFromPath)
+        : this(projectLocator, languageDiscovery, executionContext, environment, logger, PathLookupHelper.FindFullPathFromPath)
     {
     }
 
@@ -28,12 +33,14 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         IProjectLocator projectLocator,
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<TypeScriptAppHostToolingCheck> logger,
         Func<string, string?> commandResolver)
     {
         _projectLocator = projectLocator;
         _languageDiscovery = languageDiscovery;
         _executionContext = executionContext;
+        _environment = environment;
         _logger = logger;
         _commandResolver = commandResolver;
     }
@@ -51,7 +58,7 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         TypeScriptAppHostToolchain toolchain;
         try
         {
-            toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _logger);
+            toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _environment, _logger);
         }
         catch (YarnClassicNotSupportedException ex)
         {
@@ -59,8 +66,8 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
             [
                 new EnvironmentCheckResult
                 {
-                    Category = "environment",
-                    Name = "typescript-apphost-yarn-classic",
+                    Category = EnvironmentCheckCategories.Environment,
+                    Name = YarnClassicCheckName,
                     Status = EnvironmentCheckStatus.Fail,
                     Message = "TypeScript AppHost does not support Yarn Classic.",
                     Details = ex.Message,
@@ -86,8 +93,8 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
 
             missingResults.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = $"typescript-apphost-{command}",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = GetMissingCommandCheckName(command),
                 Status = EnvironmentCheckStatus.Fail,
                 Message = $"TypeScript AppHost requires '{command}'.",
                 Details = errorMessage,
@@ -111,8 +118,8 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         [
             new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "typescript-apphost-tools",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = ToolsCheckName,
                 Status = EnvironmentCheckStatus.Pass,
                 Message = $"TypeScript AppHost tooling found ({string.Join(", ", TypeScriptAppHostToolchainResolver.GetRequiredCommands(toolchain))}).",
                 Metadata = new JsonObject
@@ -125,40 +132,15 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         ];
     }
 
-    private async Task<FileInfo?> ResolveTypeScriptAppHostAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var configuredAppHost = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
-            if (configuredAppHost is not null &&
-                TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_languageDiscovery.GetLanguageByFile(configuredAppHost)))
-            {
-                return configuredAppHost;
-            }
+    // Delegates to the shared resolver so the doctor tooling check and `aspire update --migrate` stay in
+    // lockstep on how the TypeScript AppHost entry point is located.
+    private Task<FileInfo?> ResolveTypeScriptAppHostAsync(CancellationToken cancellationToken)
+        => LegacyTypeScriptAppHost.ResolveTypeScriptAppHostAsync(
+            _projectLocator,
+            _languageDiscovery,
+            _executionContext.WorkingDirectory,
+            _logger,
+            cancellationToken);
 
-            var detectedLanguageId = await _languageDiscovery.DetectLanguageRecursiveAsync(_executionContext.WorkingDirectory, cancellationToken);
-            if (detectedLanguageId is null)
-            {
-                return null;
-            }
-
-            var detectedLanguage = _languageDiscovery.GetLanguageById(detectedLanguageId.Value);
-            if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(detectedLanguage))
-            {
-                return null;
-            }
-
-            var discoveredPath = detectedLanguage?.FindInDirectory(_executionContext.WorkingDirectory.FullName);
-            return discoveredPath is not null ? new FileInfo(discoveredPath) : null;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Failed to resolve TypeScript AppHost for environment check");
-            return null;
-        }
-    }
+    internal static string GetMissingCommandCheckName(string command) => $"typescript-apphost-{command}";
 }

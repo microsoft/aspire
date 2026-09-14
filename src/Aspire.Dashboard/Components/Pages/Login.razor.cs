@@ -85,7 +85,7 @@ public partial class Login : IAsyncDisposable, IComponentWithTelemetry
         // Invoke a JS function to validate the token. This is required because a cookie can't be set from a SignalR connection.
         // The JS function calls an API back on the server to validate the token and that API call sets the cookie.
         // Because the browser made the API call the cookie is set in the browser.
-        var result = await _jsModule.InvokeAsync<string>("validateToken", _formModel.Token);
+        var result = await _jsModule.InvokeAsync<string>("validateToken", _formModel.Token?.Trim());
 
         if (bool.TryParse(result, out var success))
         {

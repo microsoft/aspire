@@ -2,14 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
@@ -26,6 +23,7 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionAndUrlState<StructuredLogs.StructuredLogsPageViewModel, StructuredLogs.StructuredLogsPageState>
 {
+    private const string ScrollContainerId = "structuredLogsScrollContainer";
     private const string ResourceColumn = nameof(ResourceColumn);
     private const string LogLevelColumn = nameof(LogLevelColumn);
     private const string TimestampColumn = nameof(TimestampColumn);
@@ -36,7 +34,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private SelectViewModel<ResourceTypeDetails> _allResource = default!;
 
     private TotalItemsFooter _totalItemsFooter = default!;
-    private ExplainErrorsButton? _explainErrorsButton;
     private int _totalItemsCount;
     private List<OtlpResource> _resources = default!;
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
@@ -46,6 +43,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Subscription? _logsSubscription;
     private bool _resourceChanged;
     private string? _elementIdBeforeDetailsViewOpened;
+    private string? _pendingFocusElementId;
     private AspirePageContentLayout? _contentLayout;
     private string _filter = string.Empty;
     private FluentDataGrid<OtlpLogEntry>? _dataGrid;
@@ -54,7 +52,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
-    private AIContext? _aiContext;
 
     public string BasePath => DashboardUrls.StructuredLogsBasePath;
     public string SessionStorageKey => BrowserStorageKeys.StructuredLogsPageState;
@@ -97,9 +94,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public required PauseManager PauseManager { get; init; }
 
     [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
-
-    [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
 
     [CascadingParameter]
@@ -127,8 +121,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     [Parameter]
     [SupplyParameterFromQuery]
     public long? LogEntryId { get; set; }
-
-    public StructureLogsDetailsViewModel? SelectedLogEntry { get; set; }
 
     private async ValueTask<GridItemsProviderResult<OtlpLogEntry>> GetData(GridItemsProviderRequest<OtlpLogEntry> request)
     {
@@ -158,9 +150,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _totalItemsCount = logs.TotalItemCount;
         _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount);
 
-        _explainErrorsButton?.UpdateHasErrors(ViewModel.HasErrors());
-        _aiContext?.ContextHasChanged();
-
         TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
 
         return GridItemsProviderResult.From(logs.Items, logs.TotalItemCount);
@@ -169,7 +158,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-        _aiContext = CreateAIContext();
 
         (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlsStringsLoc);
 
@@ -200,19 +188,19 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _allResource = new()
         {
             Id = null,
-            Name = ControlsStringsLoc[nameof(Dashboard.Resources.ControlsStrings.LabelAll)]
+            Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)]
         };
 
-        _logLevels = new List<SelectViewModel<LogLevel?>>
-        {
-            new SelectViewModel<LogLevel?> { Id = null, Name = ControlsStringsLoc[nameof(Dashboard.Resources.ControlsStrings.LabelAll)] },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Trace, Name = "Trace" },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Debug, Name = "Debug" },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Information, Name = "Information" },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Warning, Name = "Warning" },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Error, Name = "Error" },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Critical, Name = "Critical" },
-        };
+        _logLevels =
+        [
+            new() { Id = null, Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)] },
+            new() { Id = LogLevel.Trace, Name = "Trace" },
+            new() { Id = LogLevel.Debug, Name = "Debug" },
+            new() { Id = LogLevel.Information, Name = "Information" },
+            new() { Id = LogLevel.Warning, Name = "Warning" },
+            new() { Id = LogLevel.Error, Name = "Error" },
+            new() { Id = LogLevel.Critical, Name = "Critical" },
+        ];
 
         PageViewModel = new StructuredLogsPageViewModel
         {
@@ -228,25 +216,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }));
     }
 
-    private AIContext CreateAIContext()
-    {
-        return AIContextProvider.AddNew(nameof(StructuredLogs), c =>
-        {
-            c.BuildIceBreakers = (builder, context) =>
-            {
-                var application = _resources?.SingleOrDefault(a => a.ResourceKey == PageViewModel.SelectedResource.Id?.GetResourceKey());
-                if (application != null)
-                {
-                    builder.StructuredLogs(context, application, ViewModel.GetLogs, ViewModel.HasErrors(), () => ViewModel.GetErrorLogs(int.MaxValue));
-                }
-                else
-                {
-                    builder.StructuredLogs(context, ViewModel.GetLogs, ViewModel.HasErrors(), () => ViewModel.GetErrorLogs(int.MaxValue));
-                }
-            };
-        });
-    }
-
     protected override async Task OnParametersSetAsync()
     {
         if (await this.InitializeViewModelAsync())
@@ -257,14 +226,12 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         UpdateSubscription();
         UpdateTelemetryProperties();
 
-        _aiContext?.ContextHasChanged();
-
         if (LogEntryId is not null)
         {
             var logEntryId = TelemetryRepository.GetLog(LogEntryId.Value);
             if (logEntryId != null)
             {
-                await OnShowPropertiesAsync(logEntryId, buttonId: null);
+                await OnShowPropertiesAsync(logEntryId, focusElementId: null);
             }
 
             // Navigate to remove ?logEntryId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
@@ -292,7 +259,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         _resourceChanged = true;
 
-        await ClearSelectedLogEntryAsync();
+        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
+        {
+            await ClearSelectedLogEntryAsync();
+        }
+
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
 
@@ -310,11 +281,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }
     }
 
-    private async Task OnShowPropertiesAsync(OtlpLogEntry entry, string? buttonId)
+    private async Task OnShowPropertiesAsync(OtlpLogEntry entry, string? focusElementId)
     {
-        _elementIdBeforeDetailsViewOpened = buttonId;
+        _elementIdBeforeDetailsViewOpened = focusElementId;
 
-        if (SelectedLogEntry?.LogEntry.InternalId == entry.InternalId)
+        if (PageViewModel.SelectedLogEntry?.LogEntry.InternalId == entry.InternalId)
         {
             await ClearSelectedLogEntryAsync();
         }
@@ -325,29 +296,22 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
                 LogEntry = entry
             };
 
-            SelectedLogEntry = logEntryViewModel;
+            PageViewModel.SelectedLogEntry = logEntryViewModel;
         }
     }
 
-    private async Task ClearSelectedLogEntryAsync(bool causedByUserAction = false)
+    private Task ClearSelectedLogEntryAsync(bool causedByUserAction = false)
     {
-        SelectedLogEntry = null;
+        PageViewModel.SelectedLogEntry = null;
 
         if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
         {
-            await JS.InvokeVoidAsync("focusElement", _elementIdBeforeDetailsViewOpened);
+            _pendingFocusElementId = _elementIdBeforeDetailsViewOpened;
         }
 
         _elementIdBeforeDetailsViewOpened = null;
-    }
 
-    private async Task ExplainErrorsAsync()
-    {
-        await AIContextProvider.LaunchAssistantSidebarAsync(
-            promptContext => PromptContextsBuilder.ErrorStructuredLogs(
-                promptContext,
-                AIPromptsLoc[nameof(AIPrompts.PromptErrorsStructuredLogs)],
-                () => ViewModel.GetErrorLogs(count: int.MaxValue)));
+        return Task.CompletedTask;
     }
 
     private async Task OpenFilterAsync(FieldTelemetryFilter? entry)
@@ -378,7 +342,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             else if (filterResult.Add)
             {
                 ViewModel.AddFilter(filter);
-                await ClearSelectedLogEntryAsync();
             }
             else if (filterResult.Enable)
             {
@@ -390,6 +353,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             }
         }
 
+        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
+        {
+            await ClearSelectedLogEntryAsync();
+        }
+
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
     }
 
@@ -398,19 +366,17 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         ViewModel.FilterText = _filter;
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
 
-        if (string.IsNullOrEmpty(_filter))
+        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
         {
-            return;
+            await ClearSelectedLogEntryAsync();
         }
-
-        await ClearSelectedLogEntryAsync();
     }
 
     private string GetResourceName(OtlpResourceView app) => OtlpHelpers.GetResourceName(app.Resource, _resources);
 
     private string GetRowClass(OtlpLogEntry entry)
     {
-        if (entry.InternalId == SelectedLogEntry?.LogEntry.InternalId)
+        if (entry.InternalId == PageViewModel.SelectedLogEntry?.LogEntry.InternalId)
         {
             return "selected-row";
         }
@@ -448,7 +414,16 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         if (firstRender)
         {
             await JS.InvokeVoidAsync("initializeContinuousScroll");
+            // Focus the scroll container without showing the focus ring. The container is a large
+            // content area where a visible focus indicator would be visually noisy on initial load.
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
+        }
+
+        if (_pendingFocusElementId is { } pendingFocusElementId)
+        {
+            _pendingFocusElementId = null;
+            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
     }
 
@@ -471,7 +446,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public void Dispose()
     {
         _cts.Cancel();
-        _aiContext?.Dispose();
         _resourcesSubscription?.Dispose();
         _logsSubscription?.Dispose();
         DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
@@ -603,6 +577,34 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         public required SelectViewModel<ResourceTypeDetails> SelectedResource { get; set; }
         public SelectViewModel<LogLevel?> SelectedLogLevel { get; set; } = default!;
+        public StructureLogsDetailsViewModel? SelectedLogEntry { get; set; }
+
+        /// <summary>
+        /// Returns true when the selected log entry is excluded by any of the active filters
+        /// (log level, text filter, or field filters).
+        /// Delegates to <see cref="StructuredLogsViewModel.BuildFilters"/> to ensure consistent
+        /// behavior with the grid query.
+        /// </summary>
+        public bool IsSelectedLogEntryExcludedByFilters(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
+        {
+            if (SelectedLogEntry is null)
+            {
+                return false;
+            }
+
+            var entry = SelectedLogEntry.LogEntry;
+            var filters = StructuredLogsViewModel.BuildFilters(fieldFilters, textFilter, SelectedLogLevel.Id);
+
+            foreach (var filter in filters.GetEnabledFilters())
+            {
+                if (!filter.Apply([entry]).Any())
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     public class StructuredLogsPageState

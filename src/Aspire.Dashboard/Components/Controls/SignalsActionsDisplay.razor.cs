@@ -19,7 +19,7 @@ public partial class SignalsActionsDisplay
     public required bool IsPaused { get; set; }
 
     [Parameter, EditorRequired]
-    public required Action<bool> OnPausedChanged { get; set; }
+    public required EventCallback<bool> OnPausedChanged { get; set; }
 
     [Parameter, EditorRequired]
     public required Func<ResourceKey?, Task> HandleClearSignal { get; set; }

@@ -146,6 +146,152 @@ public class AspireExportAnalyzerTests
     }
 
     [Fact]
+    public async Task ExtensionBlockMember_NoDiagnostics()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17604:
+        // a C# 14 extension block instance member must not be flagged as non-static (ASPIREEXPORT001).
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEnvironment
+                {
+                    [AspireExport]
+                    public IResourceBuilder<T> WithLikeC4Reference(string value) => builder;
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task StaticMemberInExtensionBlock_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEnvironment
+                {
+                    [AspireExport]
+                    public static string Describe() => "test";
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task DuplicateExportIdAcrossExtensionBlockMembers_ReportsASPIREEXPORT007()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicateExportId;
+        var capabilityDiagnostic = AspireExportAnalyzer.Diagnostics.s_duplicatePolyglotCapabilityId;
+
+        // Two extension block members targeting the same receiver type with the same export id must still
+        // be detected as duplicates, proving the receiver is normalized from the extension container.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                extension<T>(IResourceBuilder<T> builder) where T : IResource
+                {
+                    [AspireExport]
+                    public void AddThing(string name) { }
+
+                    [AspireExport("addThing")]
+                    public void AddThingWithPort(string name, int port) { }
+                }
+            }
+            """,
+            [
+                new DiagnosticResult(diagnostic).WithLocation(10, 10).WithArguments("addThing", "Aspire.Hosting.ApplicationModel.IResourceBuilder<T>"),
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(10, 10),
+                new DiagnosticResult(diagnostic).WithLocation(13, 10).WithArguments("addThing", "Aspire.Hosting.ApplicationModel.IResourceBuilder<T>"),
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(13, 10)
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportNameMatchesMethodName_WithConcreteTarget_ExtensionBlockMember_ReportsASPIREEXPORT009()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_exportNameShouldBeUnique;
+
+        // An extension block member must surface the same name-uniqueness guidance as a classic static
+        // extension method: the receiver normalized from the extension container is the open generic
+        // IResourceBuilder<T>, and a concrete IResourceBuilder<MyResource> target makes the convention id
+        // ambiguous across resource types.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public class MyResource : IResource
+            {
+                public string Name => "test";
+                public ResourceAnnotationCollection Annotations { get; } = new();
+            }
+
+            public static class TestExports
+            {
+                extension<T>(IResourceBuilder<T> builder) where T : IResource
+                {
+                    [AspireExport("withRoleAssignments")]
+                    public IResourceBuilder<T> WithRoleAssignments(IResourceBuilder<MyResource> target, params string[] roles) => builder;
+                }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(17, 10).WithArguments("withRoleAssignments", "WithRoleAssignments", "MyResource", "withMyRoleAssignments")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task RedundantExportId_MatchesConvention_ExtensionBlockMember_ReportsASPIREEXPORT011()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_redundantExportId;
+
+        // An extension block member is treated like a classic extension method, so its convention-derived
+        // id is the camelCased method name with no type prefix. An explicit id matching that convention is
+        // redundant and must report ASPIREEXPORT011, just as it does for a static extension method.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                extension<T>(IResourceBuilder<T> builder) where T : IResource
+                {
+                    [AspireExport("addRedis")]
+                    public string AddRedis() => "test";
+                }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(10, 10).WithArguments("addRedis", "AddRedis")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task InvalidIdFormat_WithSlash_ReportsASPIREEXPORT002()
     {
         var diagnostic = AspireExportAnalyzer.Diagnostics.s_invalidExportIdFormat;
@@ -2452,6 +2598,122 @@ public class AspireExportAnalyzerTests
                 public string GetValue() => "test";
             }
             """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportsWithoutMarker_NoDiagnostics()
+    {
+        // Has [AspireExport] coverage and no marker: polyglot-compatible by default, so ASPIREEXPORT017
+        // must not fire (the 'polyglot' tag is added at pack time).
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static string TestMethod() => "test";
+            }
+            """,
+            [],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: null);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportsWithMarkerFalse_NoDiagnostics()
+    {
+        // Has [AspireExport] coverage but explicitly opts out: allowed (the project just won't get the
+        // 'polyglot' tag), so ASPIREEXPORT017 must not fire.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static string TestMethod() => "test";
+            }
+            """,
+            [],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: "false");
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task NoExportsWithoutMarker_ReportsASPIREEXPORT017()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_missingPolyglotCompatibleMarker;
+
+        // No [AspireExport] coverage and no opt-out: the project is treated as a polyglot integration but
+        // has nothing to export, so the build fails until exports are added or the project opts out.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestHelpers
+            {
+                public static string TestMethod() => "test";
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithArguments("TestProject")],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: null);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task NoExportsWithMarkerTrue_ReportsASPIREEXPORT017()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_missingPolyglotCompatibleMarker;
+
+        // Setting the marker to 'true' does not satisfy the rule: only an explicit 'false' opts out, so a
+        // project that claims polyglot compatibility but has no [AspireExport] surface still fails.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestHelpers
+            {
+                public static string TestMethod() => "test";
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithArguments("TestProject")],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: "true");
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task NoExportsWithMarkerFalse_NoDiagnostics()
+    {
+        // No [AspireExport] coverage but the project acknowledges it is not a polyglot integration, so
+        // ASPIREEXPORT017 must not fire.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestHelpers
+            {
+                public static string TestMethod() => "test";
+            }
+            """,
+            [],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: "false");
 
         await test.RunAsync();
     }

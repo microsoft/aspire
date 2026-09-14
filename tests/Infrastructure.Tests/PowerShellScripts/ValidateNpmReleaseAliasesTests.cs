@@ -23,7 +23,7 @@ public sealed class ValidateNpmReleaseAliasesTests
     public ValidateNpmReleaseAliasesTests(ITestOutputHelper output)
     {
         _output = output;
-        _scriptPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "validate-npm-release-aliases.ps1");
+        _scriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "validate-npm-release-aliases.ps1");
     }
 
     [Fact]
@@ -196,17 +196,4 @@ public sealed class ValidateNpmReleaseAliasesTests
         return Regex.Replace(withoutAnsi.Replace("|", " "), @"\s+", " ");
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root");
-    }
 }

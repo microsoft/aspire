@@ -32,7 +32,7 @@
             <FluentDivider slot="end" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
             <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
                               Icon="@(new Icons.Regular.Size20.Options())"
-                              Items="@_spanActionsMenuItems"
+                              ItemsProvider="@(() => _spanActionsMenuItems)"
                               Title="@Loc[nameof(ControlsStrings.ActionsButtonText)]"
                               slot="end" />
         </FluentToolbar>

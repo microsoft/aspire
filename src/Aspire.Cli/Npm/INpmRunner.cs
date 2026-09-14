@@ -16,11 +16,6 @@ internal sealed class NpmPackageInfo
     public required SemVersion Version { get; init; }
 
     /// <summary>
-    /// Gets the SRI integrity hash (e.g., "sha512-...") for the package tarball.
-    /// </summary>
-    public required string Integrity { get; init; }
-
-    /// <summary>
     /// Formats a full npm package specifier (e.g., "@playwright/cli@0.1.1").
     /// </summary>
     public static string FormatPackageSpecifier(string packageName, string version) => $"{packageName}@{version}";
@@ -42,7 +37,7 @@ internal interface INpmRunner
     bool IsAvailable { get; }
 
     /// <summary>
-    /// Resolves a package version and integrity hash from the npm registry.
+    /// Resolves a package version from the internal npm registry.
     /// </summary>
     /// <param name="packageName">The npm package name (e.g., "@playwright/cli").</param>
     /// <param name="versionRange">The version range to resolve (e.g., "0.1").</param>
@@ -59,18 +54,6 @@ internal interface INpmRunner
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>The full path to the downloaded .tgz file, or null if the operation failed.</returns>
     Task<string?> PackAsync(string packageName, string version, string outputDirectory, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Verifies Sigstore attestation signatures for a package by installing it into a temporary
-    /// project and running npm audit signatures. This is necessary because npm audit signatures
-    /// requires a project context (node_modules + package-lock.json) that doesn't exist for
-    /// global tool installations.
-    /// </summary>
-    /// <param name="packageName">The npm package name to verify (e.g., "@playwright/cli").</param>
-    /// <param name="version">The exact version to verify.</param>
-    /// <param name="cancellationToken">A token to cancel the operation.</param>
-    /// <returns>True if the audit passed, false otherwise.</returns>
-    Task<bool> AuditSignaturesAsync(string packageName, string version, CancellationToken cancellationToken);
 
     /// <summary>
     /// Installs a package globally from a local tarball file.

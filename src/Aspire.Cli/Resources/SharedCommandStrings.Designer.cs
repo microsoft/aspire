@@ -171,6 +171,15 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        /// <summary>
+        ///   Looks up a localized string similar to Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use..
+        /// </summary>
+        internal static string MultipleAppHostsNonInteractive {
+            get {
+                return ResourceManager.GetString("MultipleAppHostsNonInteractive", resourceCulture);
+            }
+        }
+
         internal static string PromptRunAgentInit {
             get {
                 return ResourceManager.GetString("PromptRunAgentInit", resourceCulture);
@@ -216,6 +225,12 @@ namespace Aspire.Cli.Resources {
         internal static string NonInteractiveRequiresYesFormat {
             get {
                 return ResourceManager.GetString("NonInteractiveRequiresYesFormat", resourceCulture);
+            }
+        }
+
+        internal static string UnrecognizedOptionDidYouMeanFormat {
+            get {
+                return ResourceManager.GetString("UnrecognizedOptionDidYouMeanFormat", resourceCulture);
             }
         }
     }

@@ -9,6 +9,12 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents a base class for file system entries in a container.
 /// </summary>
+/// <remarks>
+/// Exported to ATS as an opaque handle type. Polyglot app hosts never construct or inspect these
+/// directly; they create concrete entries through the factory methods on
+/// <see cref="ContainerFileSystemCallbackContext"/> and pass the resulting handles back via the callback.
+/// </remarks>
+[AspireExport]
 public abstract class ContainerFileSystemItem
 {
     private string? _name;
@@ -266,23 +272,175 @@ public sealed class ContainerFileSystemCallbackAnnotation : IResourceAnnotation
 /// <summary>
 /// Represents the context for a <see cref="ContainerFileSystemCallbackAnnotation"/> callback.
 /// </summary>
+[AspireExport]
 public sealed class ContainerFileSystemCallbackContext
 {
     /// <summary>
     /// A <see cref="IServiceProvider"/> that can be used to resolve services in the callback.
     /// </summary>
-    public required IServiceProvider ServiceProvider { get; init; }
+    [Obsolete("Use Services instead.")]
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// A <see cref="IServiceProvider"/> that can be used to resolve services in the callback.
+    /// </summary>
+    [AspireExport]
+    public required IServiceProvider Services { get; init; }
 
     /// <summary>
     /// The app model resource the callback is associated with.
     /// </summary>
+    [AspireExport]
     public required IResource Model { get; init; }
 
     /// <summary>
     /// The path to the server authentication certificate file inside the container.
     /// </summary>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "HttpsCertificateContext is an experimental certificate-specific type that is not yet part of the ATS surface.")]
     public ContainerFileSystemCallbackHttpsCertificateContext? HttpsCertificateContext { get; set; }
+}
+
+// The CreateFile/CreateCertificateFile/CreateDirectory shims below exist ONLY so that polyglot app hosts can
+// construct ContainerFileSystemItem entries to return from the callback. In C# the callback creates the
+// concrete entry types (ContainerFile/ContainerOpenSSLCertificateFile/ContainerDirectory) directly via object
+// initializers, so there is no reason to surface these as public C# API. They are therefore kept as internal
+// static extension methods on the (exported) context — the same shim pattern used for the builder exports —
+// which keeps them out of the public C# surface while still being picked up by the ATS exporter. ATS cannot
+// represent the abstract, recursive, polymorphic entry hierarchy as DTOs, so each shim returns the abstract
+// base type as an opaque handle, which keeps entries assignable to the directory `entries` parameter and the
+// callback result across all guest languages.
+internal static class ContainerFileSystemCallbackContextExtensions
+{
+    /// <summary>
+    /// Creates a file entry to return from the callback.
+    /// </summary>
+    /// <param name="context">The callback context.</param>
+    /// <param name="name">The simple file name (no path separators).</param>
+    /// <param name="contents">The inline UTF-8 contents of the file. Mutually exclusive with <paramref name="sourcePath"/>.</param>
+    /// <param name="sourcePath">An absolute path to a file on the host to copy. Mutually exclusive with <paramref name="contents"/>.</param>
+    /// <param name="owner">The owner UID, or <see langword="null"/> to inherit.</param>
+    /// <param name="group">The group GID, or <see langword="null"/> to inherit.</param>
+    /// <param name="mode">The Unix file mode as an integer (for example <c>0o644</c>), or <see langword="null"/> to inherit.</param>
+    /// <param name="continueOnError">Whether to ignore errors creating this file.</param>
+    /// <returns>The created file entry.</returns>
+    /// <ats-summary>Creates a container file entry with inline contents or a host source path.</ats-summary>
+    /// <ats-returns>The created file entry.</ats-returns>
+    [AspireExport]
+    internal static ContainerFileSystemItem CreateFile(this ContainerFileSystemCallbackContext context, string name, string? contents = null, string? sourcePath = null, int? owner = null, int? group = null, int? mode = null, bool? continueOnError = null)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ThrowIfContentsAndSourcePathBothProvided(contents, sourcePath);
+
+        return new ContainerFile
+        {
+            Name = name,
+            Contents = contents,
+            SourcePath = sourcePath,
+            Owner = owner,
+            Group = group,
+            Mode = ConvertMode(mode),
+            ContinueOnError = continueOnError,
+        };
+    }
+
+    /// <summary>
+    /// Creates an OpenSSL public certificate file entry to return from the callback. An OpenSSL-compatible
+    /// subject-hash symlink is created alongside it in the container.
+    /// </summary>
+    /// <param name="context">The callback context.</param>
+    /// <param name="name">The simple file name (no path separators).</param>
+    /// <param name="contents">The inline PEM-encoded contents of the certificate. Mutually exclusive with <paramref name="sourcePath"/>.</param>
+    /// <param name="sourcePath">An absolute path to a PEM file on the host to copy. Mutually exclusive with <paramref name="contents"/>.</param>
+    /// <param name="owner">The owner UID, or <see langword="null"/> to inherit.</param>
+    /// <param name="group">The group GID, or <see langword="null"/> to inherit.</param>
+    /// <param name="mode">The Unix file mode as an integer (for example <c>0o644</c>), or <see langword="null"/> to inherit.</param>
+    /// <param name="continueOnError">Whether to ignore errors creating this file.</param>
+    /// <returns>The created certificate file entry.</returns>
+    /// <ats-summary>Creates a PEM container certificate file entry with the OpenSSL subject-hash symlink.</ats-summary>
+    /// <ats-returns>The created certificate file entry.</ats-returns>
+    [AspireExport]
+    internal static ContainerFileSystemItem CreateCertificateFile(this ContainerFileSystemCallbackContext context, string name, string? contents = null, string? sourcePath = null, int? owner = null, int? group = null, int? mode = null, bool? continueOnError = null)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ThrowIfContentsAndSourcePathBothProvided(contents, sourcePath);
+
+        return new ContainerOpenSSLCertificateFile
+        {
+            Name = name,
+            Contents = contents,
+            SourcePath = sourcePath,
+            Owner = owner,
+            Group = group,
+            Mode = ConvertMode(mode),
+            ContinueOnError = continueOnError,
+        };
+    }
+
+    /// <summary>
+    /// Creates a directory entry containing the specified child entries, to return from the callback.
+    /// </summary>
+    /// <param name="context">The callback context.</param>
+    /// <param name="name">The simple directory name (no path separators).</param>
+    /// <param name="entries">The child entries (files and/or directories) created via this context.</param>
+    /// <param name="owner">The owner UID, or <see langword="null"/> to inherit.</param>
+    /// <param name="group">The group GID, or <see langword="null"/> to inherit.</param>
+    /// <param name="mode">The Unix file mode as an integer (for example <c>0o755</c>), or <see langword="null"/> to inherit.</param>
+    /// <returns>The created directory entry.</returns>
+    /// <ats-summary>Creates a container directory entry containing the specified child entries.</ats-summary>
+    /// <ats-returns>The created directory entry.</ats-returns>
+    [AspireExport]
+    internal static ContainerFileSystemItem CreateDirectory(this ContainerFileSystemCallbackContext context, string name, IEnumerable<ContainerFileSystemItem> entries, int? owner = null, int? group = null, int? mode = null)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(entries);
+
+        return new ContainerDirectory
+        {
+            Name = name,
+            // Materialize so the caller-provided (possibly lazily-resolved handle) sequence is captured eagerly.
+            Entries = entries.ToList(),
+            Owner = owner,
+            Group = group,
+            Mode = ConvertMode(mode),
+        };
+    }
+
+    // Mode is supplied as an integer because ATS has no UnixFileMode type. A value of 0 (the default for
+    // ContainerFileSystemItem.Mode) means "inherit from the parent directory or defaults". Valid values use
+    // the low 12 bits (rwx for owner/group/other plus setuid/setgid/sticky), i.e. 0..0o7777.
+    private static UnixFileMode ConvertMode(int? mode)
+    {
+        if (mode is null)
+        {
+            return (UnixFileMode)0;
+        }
+
+        if (mode.Value is < 0 or > 0xFFF)
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode.Value, "File mode must be between 0 and 0o7777.");
+        }
+
+        return (UnixFileMode)mode.Value;
+    }
+
+    // contents and sourcePath are mutually exclusive: a file entry is sourced either from inline contents or
+    // from a host path, never both. Validate here so polyglot callers get a clear error at construction time
+    // instead of a harder-to-diagnose failure later during DCP conversion.
+    private static void ThrowIfContentsAndSourcePathBothProvided(string? contents, string? sourcePath)
+    {
+        if (contents is not null && sourcePath is not null)
+        {
+            throw new ArgumentException($"Only one of '{nameof(contents)}' or '{nameof(sourcePath)}' can be specified, not both.");
+        }
+    }
 }
 
 /// <summary>
@@ -302,6 +460,12 @@ public sealed class ContainerFileSystemCallbackHttpsCertificateContext
     /// Use GetValueAsync to resolve the path.
     /// </summary>
     public ReferenceExpression KeyPath { get; init; } = null!;
+
+    /// <summary>
+    /// A reference expression that resolves to the path to the server authentication certificate and key combined in a single PEM file inside the container.
+    /// Use GetValueAsync to resolve the path.
+    /// </summary>
+    public ReferenceExpression CertificateWithKeyPath { get; init; } = null!;
 
     /// <summary>
     /// A reference expression that resolves to the path to the server authentication PFX file inside the container.

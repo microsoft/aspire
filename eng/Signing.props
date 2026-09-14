@@ -22,12 +22,14 @@
 
   <ItemGroup>
     <FileSignInfo Include="Fractions.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="Hex1b.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="IdentityModel.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="IdentityModel.OidcClient.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="KubernetesClient.Basic.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="KubernetesClient.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="KubernetesClient.Models.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Prometheus.NetStandard.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="QRCoder.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="YamlDotNet.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Grpc.AspNetCore.Server.ClientFactory.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Grpc.AspNetCore.Server.dll" CertificateName="3PartySHA2" />

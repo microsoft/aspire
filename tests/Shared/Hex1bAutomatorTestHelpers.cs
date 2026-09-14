@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Aspire.Cli.Resources;
 using Hex1b.Automation;
 using Hex1b.Input;
+using Xunit;
 
 namespace Aspire.Tests.Shared;
 
@@ -568,9 +569,15 @@ internal static class Hex1bAutomatorTestHelpers
             default:
                 throw new ArgumentOutOfRangeException(nameof(template), template, $"Unsupported template: {template}");
         }
+        // Step 3: Enter the project name. The CLI resolves the selected template's version against
+        // the active channel's feed somewhere in this window, and slow feeds (staging/daily darc
+        // feeds) can take well over 10s — far longer than nuget.org. Use templateTimeout here (and
+        // for the output-path prompt below) so emulated staging/daily runs don't time out waiting
+        // for the prompt; otherwise the wait throws while `aspire new` is still open and the
+        // teardown `exit` gets consumed by the live prompt, hanging the whole run.
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
+            timeout: templateTimeout,
             description: "project name prompt");
         await auto.TypeAsync(projectName);
         await auto.EnterAsync();
@@ -578,7 +585,7 @@ internal static class Hex1bAutomatorTestHelpers
         // Step 4: Accept default output path
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Enter the output path").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
+            timeout: templateTimeout,
             description: "output path prompt");
         await auto.EnterAsync();
 
@@ -743,7 +750,49 @@ internal static class Hex1bAutomatorTestHelpers
 
         if (!pipelineSucceeded)
         {
+            // Azure sometimes reports that a region's shared compute capacity is temporarily
+            // exhausted while provisioning, e.g.:
+            //   ManagedEnvironmentCapacityHeavyUsageError / "code": "AKSCapacityHeavyUsage"
+            //   "AKS is experiencing heavy usage in region westus3. We are working on adding
+            //    new capacity. In the meantime, please consider creating new AKS clusters in a
+            //    different region."
+            // That is an Azure-side infrastructure condition, not a product or deployment defect:
+            // it is the quota-bearing region being oversubscribed, and it does not clear on a short
+            // retry (and cannot be moved to another region because quota is allocated per-region).
+            // Treat it as an environmental skip — consistent with how these deployment tests already
+            // Assert.Skip when an Azure subscription or login is unavailable — so transient regional
+            // capacity weather does not turn the nightly red.
+            if (terminalOutput is not null && ContainsTransientAzureCapacityError(terminalOutput))
+            {
+                Assert.Skip(
+                    "Skipped: Azure reported transient regional capacity exhaustion during provisioning " +
+                    $"(not a product failure). Terminal output:{Environment.NewLine}{terminalOutput}");
+            }
+
             throw new InvalidOperationException($"Pipeline failed unexpectedly. Terminal output:{Environment.NewLine}{terminalOutput}");
         }
+    }
+
+    // Azure error codes that indicate a region's shared capacity is temporarily exhausted. These
+    // are infrastructure-side conditions (not product defects) that do not clear on a same-region
+    // retry, so the deployment tests treat them as skips rather than failures. Matched
+    // case-insensitively against the deploy pipeline's terminal output.
+    private static readonly string[] s_transientAzureCapacityErrorMarkers =
+    [
+        "AKSCapacityHeavyUsage",
+        "ManagedEnvironmentCapacityHeavyUsageError",
+    ];
+
+    private static bool ContainsTransientAzureCapacityError(string terminalOutput)
+    {
+        foreach (var marker in s_transientAzureCapacityErrorMarkers)
+        {
+            if (terminalOutput.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

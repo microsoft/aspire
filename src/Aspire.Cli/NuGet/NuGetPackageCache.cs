@@ -1,14 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.DotNet;
-using Aspire.Cli.Resources;
 using System.Collections.Frozen;
 using System.Globalization;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Caching.Memory;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
-using Aspire.Cli.Configuration;
 
 namespace Aspire.Cli.NuGet;
 
@@ -29,10 +29,42 @@ internal static class DeprecatedPackages
     private static readonly FrozenSet<string> s_all = new[]
     {
         "Aspire.Hosting.Dapr",
+        "Aspire.Hosting.GitHub.Models",
         "Aspire.Hosting.NodeJs"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     public static bool IsDeprecated(string packageId) => s_all.Contains(packageId);
+}
+
+internal static class PackageIdFilters
+{
+    public static bool IsOfficialOrCommunityToolkitPackage(string packageId)
+    {
+        var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.OrdinalIgnoreCase) ||
+            packageId.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase) ||
+            packageId.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase);
+
+        return isHostingOrCommunityToolkitNamespaced && !IsExcludedHostingPackage(packageId);
+    }
+
+    public static bool IsIntegrationPackageId(string packageId)
+    {
+        var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.OrdinalIgnoreCase);
+
+        return isHostingOrCommunityToolkitNamespaced && !IsExcludedHostingPackage(packageId);
+    }
+
+    private static bool IsExcludedHostingPackage(string packageId)
+    {
+        return packageId.StartsWith("Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Sdk", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Orchestration", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Testing", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Msi", StringComparison.OrdinalIgnoreCase) ||
+            packageId.Equals("Aspire.Hosting.Integration.Analyzers", StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache memoryCache, AspireCliTelemetry telemetry, IFeatures features) : INuGetPackageCache
@@ -133,15 +165,15 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
         // If no specific filter is specified we use the fallback filter which is useful in most circumstances
         // other that aspire update which really needs to see all the packages to work effectively.
         var showDeprecatedPackages = features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
-        var effectiveFilter = (NuGetPackage p) => 
+        var effectiveFilter = (NuGetPackage p) =>
         {
             if (filter is not null)
             {
                 return filter(p.Id);
             }
 
-            var isOfficialPackage = IsOfficialOrCommunityToolkitPackage(p.Id);
-            
+            var isOfficialPackage = PackageIdFilters.IsOfficialOrCommunityToolkitPackage(p.Id);
+
             // Apply deprecated package filter unless the user wants to show deprecated packages
             if (isOfficialPackage && !showDeprecatedPackages)
             {
@@ -150,24 +182,8 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
 
             return isOfficialPackage;
         };
-        
+
         return collectedPackages.Where(effectiveFilter);
-
-        static bool IsOfficialOrCommunityToolkitPackage(string packageName)
-        {
-            var isHostingOrCommunityToolkitNamespaced = packageName.StartsWith("Aspire.Hosting.", StringComparison.Ordinal) ||
-                   packageName.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.Ordinal) ||
-                   packageName.Equals("Aspire.ProjectTemplates", StringComparison.Ordinal) ||
-                   packageName.Equals("Aspire.Cli", StringComparison.Ordinal);
-
-            var isExcluded = packageName.StartsWith("Aspire.Hosting.AppHost") ||
-                             packageName.StartsWith("Aspire.Hosting.Sdk") ||
-                             packageName.StartsWith("Aspire.Hosting.Orchestration") ||
-                             packageName.StartsWith("Aspire.Hosting.Testing") ||
-                             packageName.StartsWith("Aspire.Hosting.Msi");
-
-            return isHostingOrCommunityToolkitNamespaced && !isExcluded;
-        }
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)

@@ -177,7 +177,7 @@ public partial class AspireProject : IAsyncDisposable
         AppExited = new();
         AppHostProcess = new Process();
 
-        var processArguments = $"run {(noBuild ? "--no-build" : "")}";
+        var processArguments = $"run {(noBuild ? "--no-build" : "")} {_buildEnv.DefaultBuildArgs}";
         processArguments += extraArgs is not null ? " " + string.Join(" ", extraArgs) : "";
         AppHostProcess.StartInfo = new ProcessStartInfo(_buildEnv.DotNet, processArguments)
         {

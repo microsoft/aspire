@@ -1,15 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES001
 
 using System.Reflection;
+using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
+using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -82,6 +84,78 @@ public class ProvisioningContextProviderTests
         var exception = await Assert.ThrowsAsync<MissingConfigurationException>(
             () => provider.CreateProvisioningContextAsync(CancellationToken.None));
         Assert.Contains("Azure subscription id is required", exception.Message);
+    }
+
+    [Fact]
+    public async Task CreateProvisioningContextAsync_DoesNotReuseStaleInMemoryOptionsAfterReset()
+    {
+        // Arrange
+        var optionValues = new AzureProvisionerOptions();
+        var options = Options.Create(optionValues);
+        var environment = ProvisioningTestHelpers.CreateEnvironment();
+        var logger = ProvisioningTestHelpers.CreateLogger();
+        var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
+        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
+        var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
+
+        var provider = new RunModeProvisioningContextProvider(
+            _defaultInteractionService,
+            options,
+            environment,
+            logger,
+            armClientProvider,
+            userPrincipalProvider,
+            tokenCredentialProvider,
+            deploymentStateManager,
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+
+        // Simulate previously prompted values still hanging around in memory after reset.
+        optionValues.SubscriptionId = "12345678-1234-1234-1234-123456789012";
+        optionValues.Location = "westus2";
+        optionValues.ResourceGroup = "stale-rg";
+        optionValues.AllowResourceGroupCreation = true;
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<MissingConfigurationException>(
+            () => provider.CreateProvisioningContextAsync(CancellationToken.None));
+        Assert.Contains("Azure subscription id is required", exception.Message);
+    }
+
+    [Fact]
+    public async Task CreateProvisioningContextAsync_RehydratesStringBooleanAllowResourceGroupCreation()
+    {
+        var optionValues = new AzureProvisionerOptions();
+        var options = Options.Create(optionValues);
+        var environment = ProvisioningTestHelpers.CreateEnvironment();
+        var logger = ProvisioningTestHelpers.CreateLogger();
+        var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
+        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
+        var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
+        var azureSection = await deploymentStateManager.AcquireSectionAsync("Azure", CancellationToken.None);
+        azureSection.Data["SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        azureSection.Data["Location"] = "westus3";
+        azureSection.Data["ResourceGroup"] = "rehydrated-rg";
+        azureSection.Data["AllowResourceGroupCreation"] = "true";
+        await deploymentStateManager.SaveSectionAsync(azureSection, CancellationToken.None);
+
+        var provider = new RunModeProvisioningContextProvider(
+            _defaultInteractionService,
+            options,
+            environment,
+            logger,
+            armClientProvider,
+            userPrincipalProvider,
+            tokenCredentialProvider,
+            deploymentStateManager,
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+
+        var context = await provider.CreateProvisioningContextAsync(CancellationToken.None);
+
+        Assert.Equal("westus3", context.Location.Name);
+        Assert.Equal("rehydrated-rg", context.ResourceGroup.Name);
+        Assert.True(optionValues.AllowResourceGroupCreation);
     }
 
     [Fact]
@@ -241,7 +315,7 @@ public class ProvisioningContextProviderTests
     }
 
     [Fact]
-    public async Task CreateProvisioningContextAsync_PromptsIfNoOptions()
+    public async Task EnsureProvisioningOptionsAsync_PromptsIfNoOptions()
     {
         // Arrange
         var testInteractionService = new TestInteractionService();
@@ -264,19 +338,15 @@ public class ProvisioningContextProviderTests
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
         // Act
-        var createTask = provider.CreateProvisioningContextAsync(CancellationToken.None);
-
-        // Assert - Wait for the first interaction (message bar)
-        var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
-        Assert.Equal("Azure provisioning", messageBarInteraction.Title);
-
-        // Complete the message bar interaction to proceed to inputs dialog
-        messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));// Data = true (user clicked Enter Values)
+        var ensureTask = provider.EnsureProvisioningOptionsAsync(forcePrompt: true, CancellationToken.None);
 
         // Wait for the inputs interaction
         var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
-        Assert.Equal("Azure provisioning", inputsInteraction.Title);
-        Assert.True(inputsInteraction.Options!.EnableMessageMarkdown);
+        Assert.Equal(AzureProvisioningStrings.InputsTitle, inputsInteraction.Title);
+        var interactionOptions = Assert.IsType<InputsDialogInteractionOptions>(inputsInteraction.Options);
+        Assert.True(interactionOptions.EnableMessageMarkdown);
+        Assert.Equal(AzureProvisioningStrings.InputsPrimaryButtonText, interactionOptions.PrimaryButtonText);
+        Assert.Equal(AzureProvisioningStrings.InputsSecondaryButtonText, interactionOptions.SecondaryButtonText);
 
         Assert.Collection(inputsInteraction.Inputs,
             input =>
@@ -297,7 +367,7 @@ public class ProvisioningContextProviderTests
             {
                 Assert.Equal(BaseProvisioningContextProvider.ResourceGroupName, input.Name);
                 Assert.Equal("Resource group", input.Label);
-                Assert.Equal(InputType.Choice, input.InputType);
+                Assert.Equal(InputType.Text, input.InputType);
                 Assert.False(input.Required);
             },
             input =>
@@ -309,15 +379,6 @@ public class ProvisioningContextProviderTests
             });
 
         inputsInteraction.Inputs[BaseProvisioningContextProvider.SubscriptionIdName].Value = "12345678-1234-1234-1234-123456789012";
-
-        // Trigger dynamic update of resource groups based on subscription.
-        await inputsInteraction.Inputs[BaseProvisioningContextProvider.ResourceGroupName].DynamicLoading!.LoadCallback(new LoadInputContext
-        {
-            AllInputs = inputsInteraction.Inputs,
-            CancellationToken = CancellationToken.None,
-            Input = inputsInteraction.Inputs[BaseProvisioningContextProvider.ResourceGroupName],
-            Services = new ServiceCollection().BuildServiceProvider()
-        });
 
         // Set a custom resource group name (new resource group)
         inputsInteraction.Inputs[BaseProvisioningContextProvider.ResourceGroupName].Value = "test-new-rg";
@@ -335,8 +396,10 @@ public class ProvisioningContextProviderTests
 
         inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
 
-        // Wait for the create task to complete
-        var context = await createTask;
+        Assert.True(await ensureTask);
+        await provider.PersistProvisioningOptionsAsync(CancellationToken.None);
+
+        var context = await provider.CreateProvisioningContextAsync(CancellationToken.None);
 
         // Assert
         Assert.NotNull(context.Tenant);
@@ -348,7 +411,7 @@ public class ProvisioningContextProviderTests
     }
 
     [Fact]
-    public async Task CreateProvisioningContextAsync_Prompt_ValidatesSubAndResourceGroup()
+    public async Task EnsureProvisioningOptionsAsync_Prompt_ValidatesSubAndResourceGroup()
     {
         var testInteractionService = new TestInteractionService();
         var options = ProvisioningTestHelpers.CreateOptions(null, null, null);
@@ -370,12 +433,7 @@ public class ProvisioningContextProviderTests
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
 
-        var createTask = provider.CreateProvisioningContextAsync(CancellationToken.None);
-
-        // Wait for the first interaction (message bar)
-        var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
-        // Complete the message bar interaction to proceed to inputs dialog
-        messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));// Data = true (user clicked Enter Values)
+        var ensureTask = provider.EnsureProvisioningOptionsAsync(forcePrompt: true, CancellationToken.None);
 
         // Wait for the inputs interaction
         var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
@@ -405,10 +463,13 @@ public class ProvisioningContextProviderTests
         await inputOptions.ValidationCallback(context);
 
         Assert.True((bool)context.GetType().GetProperty("HasErrors", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(context, null)!);
+
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInputCollection>());
+        Assert.False(await ensureTask);
     }
 
     [Fact]
-    public async Task CreateProvisioningContextAsync_DoesNotPromptForTenantWhenSubscriptionIdProvided()
+    public async Task EnsureProvisioningOptionsAsync_IncludesTenantWhenSubscriptionIdProvided()
     {
         // Arrange
         var testInteractionService = new TestInteractionService();
@@ -433,27 +494,26 @@ public class ProvisioningContextProviderTests
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
 
         // Act
-        var createTask = provider.CreateProvisioningContextAsync(CancellationToken.None);
-
-        // Assert - Wait for the first interaction (message bar)
-        var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
-        Assert.Equal("Azure provisioning", messageBarInteraction.Title);
-
-        // Complete the message bar interaction to proceed to inputs dialog
-        messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true)); // Data = true (user clicked Enter Values)
+        var ensureTask = provider.EnsureProvisioningOptionsAsync(forcePrompt: true, CancellationToken.None);
 
         // Wait for the inputs interaction
         var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
-        Assert.Equal("Azure provisioning", inputsInteraction.Title);
+        Assert.Equal(AzureProvisioningStrings.InputsTitle, inputsInteraction.Title);
         Assert.True(inputsInteraction.Options!.EnableMessageMarkdown);
 
-        // Assert that only 3 inputs are present (no tenant input since subscription is provided)
         Assert.Collection(inputsInteraction.Inputs,
+            input =>
+            {
+                Assert.Equal(BaseProvisioningContextProvider.TenantName, input.Name);
+                Assert.Equal("Tenant ID", input.Label);
+                Assert.Equal(InputType.Choice, input.InputType);
+                Assert.True(input.Required);
+            },
             input =>
             {
                 Assert.Equal(BaseProvisioningContextProvider.SubscriptionIdName, input.Name);
                 Assert.Equal("Subscription ID", input.Label);
-                Assert.Equal(InputType.Text, input.InputType);
+                Assert.Equal(InputType.Choice, input.InputType);
                 Assert.True(input.Disabled);
                 Assert.True(input.Required);
             },
@@ -461,7 +521,7 @@ public class ProvisioningContextProviderTests
             {
                 Assert.Equal(BaseProvisioningContextProvider.ResourceGroupName, input.Name);
                 Assert.Equal("Resource group", input.Label);
-                Assert.Equal(InputType.Choice, input.InputType);
+                Assert.Equal(InputType.Text, input.InputType);
                 Assert.False(input.Required);
             },
             input =>
@@ -471,15 +531,6 @@ public class ProvisioningContextProviderTests
                 Assert.Equal(InputType.Choice, input.InputType);
                 Assert.True(input.Required);
             });
-
-        // Trigger dynamic update of resource groups based on subscription.
-        await inputsInteraction.Inputs[BaseProvisioningContextProvider.ResourceGroupName].DynamicLoading!.LoadCallback(new LoadInputContext
-        {
-            AllInputs = inputsInteraction.Inputs,
-            CancellationToken = CancellationToken.None,
-            Input = inputsInteraction.Inputs[BaseProvisioningContextProvider.ResourceGroupName],
-            Services = new ServiceCollection().BuildServiceProvider()
-        });
 
         // Set a custom resource group name
         inputsInteraction.Inputs[BaseProvisioningContextProvider.ResourceGroupName].Value = "test-new-rg";
@@ -506,8 +557,10 @@ public class ProvisioningContextProviderTests
 
         inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
 
-        // Wait for the create task to complete
-        var context = await createTask;
+        Assert.True(await ensureTask);
+        await provider.PersistProvisioningOptionsAsync(CancellationToken.None);
+
+        var context = await provider.CreateProvisioningContextAsync(CancellationToken.None);
 
         // Assert
         Assert.NotNull(context.Tenant);
@@ -582,11 +635,7 @@ public class ProvisioningContextProviderTests
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
 
         // Act
-        _ = provider.CreateProvisioningContextAsync(CancellationToken.None);
-
-        // Assert - Wait for the first interaction (message bar)
-        var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
-        messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+        var ensureTask = provider.EnsureProvisioningOptionsAsync(forcePrompt: true, CancellationToken.None);
 
         // Wait for the inputs interaction
         var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
@@ -599,9 +648,12 @@ public class ProvisioningContextProviderTests
         Assert.NotNull(subscriptionInput.DynamicLoading);
         Assert.Equal(InputType.Choice, subscriptionInput.InputType);
 
-        // Assert Resource Group input has no default value initially
+        // Assert Resource Group input starts with the generated default used by the configure dialog.
         var resourceGroupInput = inputsInteraction.Inputs[BaseProvisioningContextProvider.ResourceGroupName];
-        Assert.Null(resourceGroupInput.Value);
+        Assert.StartsWith("rg-aspire-testapp-", resourceGroupInput.Value, StringComparison.Ordinal);
+
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInputCollection>());
+        Assert.False(await ensureTask);
     }
 
     [Fact]
@@ -629,11 +681,7 @@ public class ProvisioningContextProviderTests
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
 
         // Act
-        _ = provider.CreateProvisioningContextAsync(CancellationToken.None);
-
-        // Assert - Wait for the first interaction (message bar)
-        var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
-        messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+        var ensureTask = provider.EnsureProvisioningOptionsAsync(forcePrompt: true, CancellationToken.None);
 
         // Wait for the inputs interaction
         var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
@@ -646,6 +694,9 @@ public class ProvisioningContextProviderTests
         Assert.NotNull(subscriptionInput.DynamicLoading.DependsOnInputs);
         var dependsOnInputs = Assert.Single(subscriptionInput.DynamicLoading.DependsOnInputs);
         Assert.Equal(BaseProvisioningContextProvider.TenantName, dependsOnInputs);
+
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInputCollection>());
+        Assert.False(await ensureTask);
     }
 
     [Fact]
@@ -673,11 +724,7 @@ public class ProvisioningContextProviderTests
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
 
         // Act
-        var createTask = provider.CreateProvisioningContextAsync(CancellationToken.None);
-
-        // Assert - Wait for the first interaction (message bar)
-        var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
-        messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+        var ensureTask = provider.EnsureProvisioningOptionsAsync(forcePrompt: true, CancellationToken.None);
 
         // Wait for the inputs interaction
         var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
@@ -704,6 +751,9 @@ public class ProvisioningContextProviderTests
         Assert.False(subscriptionInput.Disabled, "Subscription ID input should be enabled after tenant selection");
         Assert.NotNull(subscriptionInput.Options);
         Assert.NotEmpty(subscriptionInput.Options);
+
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInputCollection>());
+        Assert.False(await ensureTask);
     }
 
     [Fact]
@@ -732,11 +782,7 @@ public class ProvisioningContextProviderTests
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
 
         // Act
-        _ = provider.CreateProvisioningContextAsync(CancellationToken.None);
-
-        // Assert - Wait for the first interaction (message bar)
-        var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
-        messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+        var ensureTask = provider.EnsureProvisioningOptionsAsync(forcePrompt: true, CancellationToken.None);
 
         // Wait for the inputs interaction
         var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
@@ -744,11 +790,14 @@ public class ProvisioningContextProviderTests
         // Find the subscription input
         var subscriptionInput = inputsInteraction.Inputs[BaseProvisioningContextProvider.SubscriptionIdName];
 
-        // Assert that subscription ID has no dynamic loading when pre-configured
-        Assert.Null(subscriptionInput.DynamicLoading);
-        Assert.True(subscriptionInput.Disabled, "Subscription ID input should remain disabled when pre-configured");
-        Assert.Equal(InputType.Text, subscriptionInput.InputType);
+        // Forced configuration lets users change the subscription, but it stays disabled until tenant selection.
+        Assert.NotNull(subscriptionInput.DynamicLoading);
+        Assert.True(subscriptionInput.Disabled, "Subscription ID input should start disabled until tenant selection");
+        Assert.Equal(InputType.Choice, subscriptionInput.InputType);
         Assert.Equal(subscriptionId, subscriptionInput.Value);
+
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInputCollection>());
+        Assert.False(await ensureTask);
     }
 
     [Fact]
@@ -776,11 +825,7 @@ public class ProvisioningContextProviderTests
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
 
         // Act
-        _ = provider.CreateProvisioningContextAsync(CancellationToken.None);
-
-        // Assert - Wait for the first interaction (message bar)
-        var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
-        messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+        var ensureTask = provider.EnsureProvisioningOptionsAsync(forcePrompt: true, CancellationToken.None);
 
         // Wait for the inputs interaction
         var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
@@ -788,24 +833,15 @@ public class ProvisioningContextProviderTests
         // Find the resource group input
         var resourceGroupInput = inputsInteraction.Inputs[BaseProvisioningContextProvider.ResourceGroupName];
 
-        // Resource group should have no default value initially (PR #13065 change)
-        Assert.Null(resourceGroupInput.Value);
+        Assert.StartsWith("rg-aspire-testapp-", resourceGroupInput.Value, StringComparison.Ordinal);
 
         // Set subscription ID to trigger resource group loading
         inputsInteraction.Inputs[BaseProvisioningContextProvider.SubscriptionIdName].Value = "12345678-1234-1234-1234-123456789012";
 
-        // Trigger dynamic loading callback for resource group
-        await resourceGroupInput.DynamicLoading!.LoadCallback(new LoadInputContext
-        {
-            AllInputs = inputsInteraction.Inputs,
-            CancellationToken = CancellationToken.None,
-            Input = resourceGroupInput,
-            Services = new ServiceCollection().BuildServiceProvider()
-        });
+        Assert.Null(resourceGroupInput.DynamicLoading);
+        Assert.Equal(InputType.Text, resourceGroupInput.InputType);
 
-        // After dynamic loading with existing resource groups found, value should still be null
-        // Default value is only set when NO existing resource groups are found
-        Assert.Null(resourceGroupInput.Value);
-        Assert.NotEmpty(resourceGroupInput.Options!);
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInputCollection>());
+        Assert.False(await ensureTask);
     }
 }

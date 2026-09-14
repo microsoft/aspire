@@ -19,7 +19,7 @@ internal sealed class ContainerAppEnvironmentContext(
 
     public AzureContainerAppEnvironmentResource Environment => environment;
 
-    public IServiceProvider ServiceProvider => serviceProvider;
+    public IServiceProvider Services => serviceProvider;
 
     private readonly Dictionary<IResource, BaseContainerAppContext> _containerApps = new(new ResourceNameComparer());
     private readonly List<(string ResourceName, string[] EndpointNames)> _upgradedEndpoints = [];

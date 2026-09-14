@@ -6,6 +6,7 @@
 
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -66,9 +67,16 @@ internal sealed partial class FileDeploymentStateManager(
             throw new ArgumentException($"The environment name '{environment}' contains invalid characters. Environment names must only contain alphanumeric characters, underscores, and hyphens ([a-zA-Z0-9_-]+).", "EnvironmentName");
         }
 
+        var aspireHome = configuration[KnownConfigNames.AspireHome];
+        if (string.IsNullOrWhiteSpace(aspireHome))
+        {
+            aspireHome = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".aspire");
+        }
+
         var aspireDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".aspire",
+            aspireHome,
             "deployments",
             appHostSha
         );
@@ -127,7 +135,7 @@ internal sealed partial class FileDeploymentStateManager(
             }
             await File.WriteAllTextAsync(
                 deploymentStatePath,
-                flattenedSecrets.ToJsonString(s_jsonSerializerOptions),
+                flattenedSecrets.ToJsonString(UserSecretsJsonOptions.s_instance),
                 cancellationToken).ConfigureAwait(false);
 
             logger.LogDebug("Deployment state saved to {Path}", deploymentStatePath);

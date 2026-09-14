@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Model;
 
@@ -13,6 +14,12 @@ public sealed class IconResolver
     private static readonly List<IconSize> s_iconSizes = [IconSize.Size16, IconSize.Size20, IconSize.Size24];
     private readonly ConcurrentDictionary<IconKey, Icon?> _iconCache = new();
     private readonly ILogger<IconResolver> _logger;
+
+    // Fallback icon when a command specifies an icon name that can't be resolved to a FluentUI icon.
+    private static readonly Icon s_unknownCommandIcon = new Icons.Regular.Size16.QuestionCircle();
+
+    // Default icon for highlighted commands that don't specify any icon name.
+    private static readonly Icon s_defaultHighlightedCommandIcon = new Icons.Regular.Size16.Flash();
 
     public IconResolver(ILogger<IconResolver> logger)
     {
@@ -89,5 +96,28 @@ public sealed class IconResolver
         };
 
         return iconInfo.TryGetInstance(out icon);
+    }
+
+    /// <summary>
+    /// Resolves the icon for a command. Returns the resolved icon, a QuestionCircle fallback
+    /// for unrecognized names, or <see langword="null"/> if no icon name is specified.
+    /// </summary>
+    public Icon? ResolveCommandIcon(string? iconName, IconVariant? iconVariant)
+    {
+        if (!string.IsNullOrEmpty(iconName))
+        {
+            return ResolveIconName(iconName, IconSize.Size16, iconVariant) ?? s_unknownCommandIcon;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves the icon for a highlighted command button. Always returns a non-null icon so
+    /// highlighted commands render as compact icon buttons and never as text labels.
+    /// </summary>
+    public Icon ResolveHighlightedCommandIcon(string? iconName, IconVariant? iconVariant)
+    {
+        return ResolveCommandIcon(iconName, iconVariant) ?? s_defaultHighlightedCommandIcon;
     }
 }

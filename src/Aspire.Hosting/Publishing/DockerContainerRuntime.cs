@@ -5,6 +5,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -12,7 +13,7 @@ namespace Aspire.Hosting.Publishing;
 
 internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContainerRuntime>
 {
-    public DockerContainerRuntime(ILogger<DockerContainerRuntime> logger) : base(logger)
+    public DockerContainerRuntime(ILogger<DockerContainerRuntime> logger, IProcessRunner processRunner) : base(logger, processRunner)
     {
     }
 
@@ -25,7 +26,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             : options?.ImageName ?? throw new ArgumentException("ImageName must be provided in options.", nameof(options));
 
         string? builderName = null;
-        var resourceName = imageName.Replace('/', '-').Replace(':', '-');
+        var resourceName = ResourceExtensions.FlattenContainerImageName(imageName);
 
         // Docker requires a custom buildkit instance for the image when
         // targeting the OCI format so we construct it and remove it here.
@@ -69,7 +70,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
                 if (!string.IsNullOrEmpty(options?.OutputPath))
                 {
-                    var archivePath = ResourceExtensions.GetContainerImageArchivePath(options.OutputPath, resourceName, imageTag: null);
+                    var archivePath = ResourceExtensions.GetContainerImageArchivePath(options.OutputPath, imageName);
                     outputType += $",dest={archivePath}";
                 }
 
@@ -162,7 +163,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
                 "Docker daemon is running.",
                 cancellationToken,
                 Array.Empty<object>()).ConfigureAwait(false);
-            
+
             return exitCode == 0;
         }
         catch

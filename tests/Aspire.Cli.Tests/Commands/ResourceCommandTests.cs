@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -21,7 +22,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -36,7 +37,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_HelpShowsAvailableResourceCommandsMatchesSnapshot()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -69,7 +70,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_HelpDoesNotPromptForOutOfScopeAppHostsMatchesSnapshot()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -100,7 +101,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_HelpFallsBackToDefaultHelpWhenAvailableCommandsScanFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var monitor = new TestAuxiliaryBackchannelMonitor
@@ -127,7 +128,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_HelpFallsBackToDefaultHelpWhenAvailableCommandsSnapshotFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -150,7 +151,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_HelpWithAppHostDirectoryDoesNotPromptWhenMultipleAppHostsFound()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("Apps");
         var prompted = false;
@@ -192,7 +193,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_HelpWithAppHostDoesNotPromptWhenMultipleRunningAppHostsMatch()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
         var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         File.WriteAllText(appHostProjectFile.FullName, "<Project />");
@@ -241,7 +242,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_HelpIncludesHiddenResourceCommandsWhenRequestedMatchesSnapshot()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -268,7 +269,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_RequiresResourceArgument()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -287,7 +288,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--message=hi")]
     public async Task ResourceCommand_RequiresResourceArgumentWhenCommandOptionsAreProvidedWithoutResource(string arguments)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -304,7 +305,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_RequiresCommandArgument()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -324,7 +325,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("-- --message hi")]
     public async Task ResourceCommand_RequiresCommandArgumentWhenCommandOptionsAreProvidedWithoutCommand(string arguments)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -341,7 +342,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_AcceptsBothArguments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -355,7 +356,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_AcceptsProjectOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -377,7 +378,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("parameter-delete")]
     public async Task ResourceCommand_AcceptsWellKnownCommandNames(string commandName)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -400,7 +401,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("parameter-delete", "Deleting parameter for resource 'myresource'...", "Resource 'myresource' deleted successfully.")]
     public async Task ResourceCommand_UsesWellKnownCommandDisplayMetadata(string commandName, string statusMessage, string successMessage)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var statuses = new List<string>();
         var interactionService = new TestInteractionService
         {
@@ -428,9 +429,52 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_RoutesStatusToStderrAndResultToStdout()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var consoleOutputPerStatus = new List<(string Message, ConsoleOutput Console)>();
+        TestInteractionService? interactionService = null;
+        interactionService = new TestInteractionService
+        {
+            ShowStatusCallback = msg => consoleOutputPerStatus.Add((msg, interactionService!.Console))
+        };
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = true,
+                Value = new ExecuteResourceCommandResult
+                {
+                    Value = "{\"key\": \"value\"}",
+                    Format = CommandResultFormat.Json
+                }
+            }
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource myresource my-command");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // The "Scanning for running AppHosts..." message must be routed to stderr,
+        // not stdout, so that piped JSON output remains valid (see #18102).
+        var scanningStatus = Assert.Single(consoleOutputPerStatus, s => s.Message == SharedCommandStrings.ScanningForRunningAppHosts);
+        Assert.Equal(ConsoleOutput.Error, scanningStatus.Console);
+
+        // The JSON result must be written to stdout so it can be piped to tools like jq.
+        var (rawText, consoleOverride) = Assert.Single(interactionService.DisplayedRawText);
+        Assert.Equal("{\"key\": \"value\"}", rawText);
+        Assert.Equal(ConsoleOutput.Standard, consoleOverride);
+    }
+
+    [Fact]
     public async Task ResourceCommand_AcceptsProjectOptionWithStart()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -444,7 +488,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotUseWellKnownCommandMatchingWithDifferentCase()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var statuses = new List<string>();
         var interactionService = new TestInteractionService
         {
@@ -470,7 +514,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotBindPositionalArgumentsByName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -506,7 +550,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotSendArgumentsWhenNoneProvided()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -534,7 +578,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ForwardsOptionEqualsArgumentsByName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -568,9 +612,47 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_ForwardsArgumentAfterDoubleDashThatCollidesWithCliOption()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "mydb",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("AppHost")))
+            ]
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // "--AppHost" collides case-insensitively with the CLI's --apphost option, so it
+        // must be placed after "--" to bypass the miscased-option check and reach the
+        // resource command's second-pass parser.
+        var result = command.Parse("resource mydb configure -- --AppHost primary");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("AppHost", "primary"));
+    }
+
+    [Fact]
     public async Task ResourceCommand_LegacyParameterCommandName_UsesCurrentCommandMetadata()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -605,7 +687,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotBindJsonLookingPositionalArgumentByName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -638,7 +720,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotForwardPositionalArgumentContainingEqualsAsArray()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -665,7 +747,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotForwardExtraArgumentsAsArray()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -692,7 +774,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotInferOptionLookingArgumentsWithoutMetadata()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -719,7 +801,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotInferBareOptionWithoutMetadata()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -746,7 +828,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_RemovesDelimiterWithoutMetadata()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -766,7 +848,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ForwardsOptionalArgumentsByName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -802,7 +884,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotMatchCommandMetadataUsingDifferentCase()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -830,7 +912,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ForwardsKebabCaseEqualsAndBareBooleanArgumentsByName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -869,7 +951,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--proxy=false", "false")]
     public async Task ResourceCommand_ForwardsExplicitBooleanCommandOptionValues(string arguments, string expectedValue)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -897,7 +979,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ForwardsValidChoiceCommandOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -932,7 +1014,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ReturnsInvalidCommandForInvalidChoiceCommandOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -971,7 +1053,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ReturnsInvalidCommandForUnknownCommandOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1000,7 +1082,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_GroupsUnknownCommandOptionValueWhenCommandMetadataIsMissing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1024,7 +1106,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ReturnsInvalidCommandForInvalidBooleanCommandOptionValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1053,7 +1135,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ReturnsInvalidCommandForDisabledCommandOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1081,7 +1163,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DisplaysValidationErrorArgumentNamesAsCliOptions()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1124,7 +1206,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_FailedExecution_DisplaysAppHostCliLogFilePath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1162,7 +1244,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_FailsWhenCommandUsesInteractionService()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1188,7 +1270,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ForwardsCustomChoiceCommandOptionWhenAllowed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1224,7 +1306,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotSerializeOmittedCommandOptionDefaults()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1257,7 +1339,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("-- --message", "--message")]
     public async Task ResourceCommand_ReturnsInvalidCommandForMissingCommandOptionValue(string arguments, string expectedOptionName)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1289,7 +1371,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ReturnsInvalidCommandForDuplicateCommandOptionUsingExactAndKebabAliases()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1319,7 +1401,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ReturnsInvalidCommandForDuplicateCommandOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1345,7 +1427,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ReturnsInvalidCommandForMissingRequiredCommandOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1377,7 +1459,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ReturnsInvalidCommandForMultipleMissingRequiredCommandOptions()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1410,7 +1492,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ReturnsInvalidCommandForInvalidNumberCommandOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1445,7 +1527,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotBindMixedNamedAndPositionalArgumentsByName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1481,7 +1563,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ForwardsCommandOptionAfterDelimiterWhenNameCollidesWithCliOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1516,7 +1598,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ForwardsCommandOptionsAfterDelimiter()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1545,7 +1627,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_IncludeHiddenExecutesHiddenResourceCommandWithMetadata()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1575,7 +1657,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotForwardCommandOptionWithoutDelimiterWhenNameCollidesWithCliOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1603,7 +1685,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ForwardsExactArgumentNameThatStartsWithNo()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1638,7 +1720,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_LoadArgumentsWritesLoadedArgumentInputsAsJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1692,7 +1774,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_LoadArgumentsDoesNotWriteJsonWhenArgumentInputsAreMissing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1729,7 +1811,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_LoadArgumentsReportsFallbackErrorWhenArgumentInputsAndMessageAreMissing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1762,7 +1844,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_LoadArgumentsAllowsPartialDynamicArguments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1804,7 +1886,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ExecuteAllowsDynamicallyEnabledArguments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1840,7 +1922,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_DoesNotSynthesizeNegatedBooleanArgument()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -1875,7 +1957,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_ResourceOnlyHelpUsesDefaultHelp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -1894,7 +1976,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_CommandSpecificHelpShowsArgumentInputs()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1936,7 +2018,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_CommandSpecificHelpBeforeDelimiterShowsHelp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1968,7 +2050,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_HelpAfterDelimiterIsForwardedToResourceCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -1997,7 +2079,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_CommandSpecificHelpShowsDelimiterForArgumentNamesThatCollideWithCliOptions()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -2037,7 +2119,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_CommandSpecificHelpShowsVisibleCliOptions()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -2071,7 +2153,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_CommandSpecificHelpDoesNotMarkDefaultedRequiredArgumentsAsRequired()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -2103,7 +2185,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_CommandSpecificHelpFallsBackToDefaultHelpWhenAppHostIsNotRunning()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
@@ -2123,7 +2205,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_CommandSpecificHelpFallsBackToDefaultHelpWhenCommandMetadataIsMissing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -2149,7 +2231,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceCommand_CommandSpecificHelpForAllArgumentTypesMatchesSnapshot()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var helpWriter = new StringWriter();
 
         var backchannel = new TestAppHostAuxiliaryBackchannel

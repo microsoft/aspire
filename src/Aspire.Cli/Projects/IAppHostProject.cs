@@ -215,7 +215,6 @@ internal interface IAppHostProject
 
     /// <summary>
     /// Validates that a candidate file is a valid AppHost for this project type.
-    /// This does deeper validation beyond just file pattern matching.
     /// </summary>
     /// <param name="appHostFile">The candidate AppHost file to validate.</param>
     /// <param name="cancellationToken">A cancellation token.</param>

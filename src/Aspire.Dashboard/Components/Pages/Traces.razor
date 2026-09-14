@@ -8,7 +8,6 @@
 @inject IStringLocalizer<Dashboard.Resources.Traces> Loc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
-@inject IStringLocalizer<AIPrompts> AIPromptsLoc
 @inject IStringLocalizer<Dialogs> DialogsLoc
 
 @implements IDisposable
@@ -38,7 +37,6 @@
                                   OnPausedChanged="@PauseManager.SetTracesPaused"
                                   SelectedResource="@PageViewModel.SelectedResource" />
 
-            <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@TracesViewModel.HasErrors()" />
             <FluentSearch @bind-Value="_filter"
                           @bind-Value:after="HandleAfterFilterBindAsync"
                           Name="traces-search"
@@ -68,7 +66,7 @@
             {
                 <div slot="end">
                     <FluentCounterBadge HorizontalPosition="70" Count="@(TracesViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
-                        <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
+                        <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
                     </FluentCounterBadge>
                 </div>
             }
@@ -87,7 +85,7 @@
             }
         </ToolbarSection>
         <MainSection>
-            <div class="datagrid-overflow-area continuous-scroll-overflow" tabindex="-1">
+            <div id="@ScrollContainerId" class="datagrid-overflow-area continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.Traces.TracesHeader)]">
                 <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                     <FluentDataGrid @ref="_dataGrid"
                                     ColumnResizeLabels="@_resizeLabels"

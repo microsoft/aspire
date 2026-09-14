@@ -79,7 +79,7 @@ public class ResourceStateViewModelTests
         var propertiesDictionary = new Dictionary<string, ResourcePropertyViewModel>();
         if (exitCode is not null)
         {
-            propertiesDictionary.TryAdd(KnownProperties.Resource.ExitCode, new ResourcePropertyViewModel(KnownProperties.Resource.ExitCode, Value.ForNumber((double)exitCode), false, null, 0));
+            propertiesDictionary.TryAdd(KnownProperties.Resource.ExitCode, new ResourcePropertyViewModel(KnownProperties.Resource.ExitCode, Value.ForNumber((double)exitCode), false, null, 0, displayName: null, isHighlighted: false));
         }
 
         var resource = ModelTestHelpers.CreateResource(
@@ -92,7 +92,7 @@ public class ResourceStateViewModelTests
 
         if (exitCode is not null)
         {
-            resource.Properties.TryAdd(KnownProperties.Resource.ExitCode, new ResourcePropertyViewModel(KnownProperties.Resource.ExitCode, Value.ForNumber((double)exitCode), false, null, 0));
+            resource.Properties.TryAdd(KnownProperties.Resource.ExitCode, new ResourcePropertyViewModel(KnownProperties.Resource.ExitCode, Value.ForNumber((double)exitCode), false, null, 0, displayName: null, isHighlighted: false));
         }
 
         var localizer = new TestStringLocalizer<Columns>();
@@ -121,7 +121,9 @@ public class ResourceStateViewModelTests
                     Value.ForList(Value.ForString("nginx"), Value.ForString("redis")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         var localizer = new TestStringLocalizer<Columns>();
@@ -147,7 +149,9 @@ public class ResourceStateViewModelTests
                     Value.ForList(Value.ForString("messaging-abcxyz")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         var localizer = new TestStringLocalizer<Columns>();
@@ -176,7 +180,9 @@ public class ResourceStateViewModelTests
                     Value.ForList(Value.ForString("messaging-abcxyz")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         var localizer = new TestStringLocalizer<Columns>();
@@ -202,7 +208,9 @@ public class ResourceStateViewModelTests
                     Value.ForList(Value.ForString("messaging-abcxyz")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         var resources = new CopyToThrowingResourceCollection(resource, dependency);

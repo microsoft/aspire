@@ -596,7 +596,7 @@ public sealed class GenAIVisualizerDialogViewModel
     {
         var logsContext = new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             Count = int.MaxValue,
             StartIndex = 0,
             Filters = [

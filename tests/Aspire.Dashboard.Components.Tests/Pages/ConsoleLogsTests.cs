@@ -25,6 +25,7 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class ConsoleLogsTests : DashboardTestContext
 {
     private readonly ITestOutputHelper _testOutputHelper;
+    private IRenderedComponent<FluentMenuProvider>? _menuProvider;
 
     public ConsoleLogsTests(ITestOutputHelper testOutputHelper)
     {
@@ -168,7 +169,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ToggleHiddenResources_HiddenResourceVisibilityAndSelection_WorksCorrectly()
+    public async Task ToggleHiddenResources_HiddenResourceVisibilityAndSelection_WorksCorrectly()
     {
         // Arrange
         var regularResource1 = ModelTestHelpers.CreateResource(resourceName: "regular-resource1", state: KnownResourceState.Running);
@@ -226,17 +227,18 @@ public partial class ConsoleLogsTests : DashboardTestContext
         settingsMenuButton.Click();
 
         // Find and click the "Show hidden resources" menu item
-        cut.WaitForAssertion(() =>
-        {
-            var showHiddenMenuItem = cut.Find("fluent-menu-item:contains('" + Resources.ControlsStrings.ShowHiddenResources + "')");
-            Assert.NotNull(showHiddenMenuItem);
-            showHiddenMenuItem.Click();
-        });
+        var settingsMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ControlsStrings.ShowHiddenResources));
+        var showHiddenMenuItem = settingsMenu.Instance.Items.Single(i => i.Text == Resources.ControlsStrings.ShowHiddenResources);
+        Assert.NotNull(showHiddenMenuItem.OnClick);
+        await cut.InvokeAsync(() => settingsMenu.Instance.OpenChanged.InvokeAsync(false));
+        await cut.InvokeAsync(showHiddenMenuItem.OnClick);
+        cut.Render();
 
         // Wait for UI to update
         cut.WaitForAssertion(() =>
         {
-            var updatedOptions = selectElement.QuerySelectorAll("fluent-option");
+            var updatedSelectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
+            var updatedOptions = updatedSelectElement.QuerySelectorAll("fluent-option");
             // Should now have "All" + all three resources
             Assert.Equal(4, updatedOptions.Length);
             var updatedOptionValues = updatedOptions.Select(opt => opt.GetAttribute("value")).ToList();
@@ -245,21 +247,22 @@ public partial class ConsoleLogsTests : DashboardTestContext
             Assert.Contains("hidden-resource", updatedOptionValues);
         });
 
-        // Act & Assert 3: Click the settings menu button again and click "Hide hidden resources" to hide them again
+        // Act & Assert 3: Click "Hide hidden resources" to hide them again
         // Note: We stay on "All" view to test the hide functionality
+        cut.WaitForAssertion(() => Assert.False(settingsMenu.Instance.Open));
         settingsMenuButton.Click();
-
-        cut.WaitForAssertion(() =>
-        {
-            var hideHiddenMenuItem = cut.Find("fluent-menu-item:contains('" + Resources.ControlsStrings.HideHiddenResources + "')");
-            Assert.NotNull(hideHiddenMenuItem);
-            hideHiddenMenuItem.Click();
-        });
+        settingsMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ControlsStrings.HideHiddenResources));
+        var hideHiddenMenuItem = settingsMenu.Instance.Items.Single(i => i.Text == Resources.ControlsStrings.HideHiddenResources);
+        Assert.NotNull(hideHiddenMenuItem.OnClick);
+        await cut.InvokeAsync(() => settingsMenu.Instance.OpenChanged.InvokeAsync(false));
+        await cut.InvokeAsync(hideHiddenMenuItem.OnClick);
+        cut.Render();
 
         // Wait for UI to update - hidden resource should be filtered out
         cut.WaitForAssertion(() =>
         {
-            var finalOptions = selectElement.QuerySelectorAll("fluent-option");
+            var finalSelectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
+            var finalOptions = finalSelectElement.QuerySelectorAll("fluent-option");
             // Should be back to "All" + 2 regular resources only
             Assert.Equal(3, finalOptions.Length);
             var finalOptionValues = finalOptions.Select(opt => opt.GetAttribute("value")).ToList();
@@ -310,7 +313,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Assert: The "Show hidden resources" / "Hide hidden resources" menu item should NOT be present
         cut.WaitForAssertion(() =>
         {
-            var menuItems = cut.FindAll("fluent-menu-item");
+            var menuItems = _menuProvider!.FindAll("fluent-menu-item");
             var hiddenResourcesMenuItems = menuItems.Where(item =>
             {
                 var text = item.TextContent;
@@ -368,6 +371,73 @@ public partial class ConsoleLogsTests : DashboardTestContext
         logger.LogInformation("Log results are added to log viewer.");
         consoleLogsChannel.Writer.TryWrite([new ResourceLogLine(1, "Hello world", IsErrorMessage: false)]);
         cut.WaitForState(() => instance._logEntries.EntriesCount > 0);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SearchFilter_UpdatesLogViewerFilterAndVisibleLogs(bool isDesktop)
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        var viewport = CreateViewport(isDesktop);
+        SetupConsoleLogsServices(dashboardClient);
+        var dialogProvider = isDesktop ? null : RenderDialogProvider(viewport);
+
+        var cut = RenderConsoleLogsPage(viewport, resourceName: "test-resource");
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        consoleLogsChannel.Writer.TryWrite([
+            new ResourceLogLine(1, "apple log", IsErrorMessage: false),
+            new ResourceLogLine(2, "banana log", IsErrorMessage: false)
+        ]);
+
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".log-content").Count));
+
+        var search = isDesktop
+            ? Assert.Single(cut.FindComponents<FluentSearch>())
+            : OpenMobileToolbarAndFindSearch(cut, dialogProvider!);
+        await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("banana"));
+
+        cut.WaitForAssertion(() =>
+        {
+            var logViewer = Assert.Single(cut.FindComponents<LogViewer>());
+            Assert.Equal("banana", logViewer.Instance.FilterText);
+
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("banana log", content.TextContent);
+        });
+    }
+
+    [Fact]
+    public void SearchFilter_MobileHasVisibleLabel()
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        var viewport = CreateViewport(isDesktop: false);
+        SetupConsoleLogsServices(dashboardClient);
+        var dialogProvider = RenderDialogProvider(viewport);
+
+        var cut = RenderConsoleLogsPage(viewport, resourceName: "test-resource");
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        var loc = Services.GetRequiredService<IStringLocalizer<Resources.ControlsStrings>>();
+        var search = OpenMobileToolbarAndFindSearch(cut, dialogProvider);
+
+        Assert.Equal(loc[nameof(Resources.ControlsStrings.FilterPlaceholder)].Value, search.Instance.Label);
     }
 
     [Fact]
@@ -471,7 +541,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ClearLogEntries_AllResources_LogsFilteredOut()
+    public async Task ClearLogEntries_AllResources_LogsFilteredOut()
     {
         // Arrange
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
@@ -517,8 +587,12 @@ public partial class ConsoleLogsTests : DashboardTestContext
         logger.LogInformation("Clear current entries.");
         cut.Find(".clear-button").Click();
 
-        cut.WaitForElement("#clear-menu-all");
-        cut.Find("#clear-menu-all").Click();
+        _menuProvider!.WaitForElement("#clear-menu-all");
+        var clearMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Id == "clear-menu-all"));
+        var clearAllMenuItem = clearMenu.Instance.Items.Single(i => i.Id == "clear-menu-all");
+        Assert.NotNull(clearAllMenuItem.OnClick);
+        await cut.InvokeAsync(clearAllMenuItem.OnClick);
+        cut.Render();
 
         cut.WaitForState(() => instance._logEntries.EntriesCount == 0);
 
@@ -832,6 +906,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
     private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null)
     {
+        FluentUISetupHelpers.SetupFluentDialogProvider(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentList(this);
@@ -842,8 +917,9 @@ public partial class ConsoleLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentToolbar(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll");
-        JSInterop.SetupVoid("resetContinuousScrollPosition");
+        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
+        JSInterop.SetupVoid("resetContinuousScrollPosition").SetVoidResult();
+        JSInterop.SetupVoid("focusElement", _ => true);
 
         FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
 
@@ -855,5 +931,49 @@ public partial class ConsoleLogsTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
         Services.AddScoped<DashboardCommandExecutor>();
         Services.AddSingleton<ConsoleLogsManager>();
+
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        _menuProvider = RenderComponent<FluentMenuProvider>();
+    }
+
+    private IRenderedComponent<Components.Pages.ConsoleLogs> RenderConsoleLogsPage(ViewportInformation viewport, string resourceName)
+    {
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        return RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, resourceName);
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+    }
+
+    private static ViewportInformation CreateViewport(bool isDesktop)
+    {
+        return new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+    }
+
+    private static IRenderedComponent<FluentSearch> OpenMobileToolbarAndFindSearch(IRenderedComponent<Components.Pages.ConsoleLogs> cut, IRenderedFragment dialogProvider)
+    {
+        cut.Find(".mobile-toolbar").Click();
+
+        dialogProvider.WaitForAssertion(() => Assert.Single(dialogProvider.FindComponents<FluentSearch>()));
+
+        return Assert.Single(dialogProvider.FindComponents<FluentSearch>());
+    }
+
+    private IRenderedFragment RenderDialogProvider(ViewportInformation viewport)
+    {
+        return Render(builder =>
+        {
+            builder.OpenComponent<CascadingValue<ViewportInformation>>(0);
+            builder.AddAttribute(1, nameof(CascadingValue<ViewportInformation>.Value), viewport);
+            builder.AddAttribute(2, nameof(CascadingValue<ViewportInformation>.ChildContent), (RenderFragment)(childBuilder =>
+            {
+                childBuilder.OpenComponent<FluentDialogProvider>(0);
+                childBuilder.CloseComponent();
+            }));
+            builder.CloseComponent();
+        });
     }
 }

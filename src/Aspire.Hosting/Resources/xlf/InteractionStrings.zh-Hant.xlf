@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../InteractionStrings.resx">
     <body>
+      <trans-unit id="CommandProgressCancelButtonText">
+        <source>Cancel</source>
+        <target state="new">Cancel</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ContainerRuntimeDockerAdvice">
         <source>Ensure that Docker is running and that the Docker daemon is accessible. If Resource Saver mode is enabled, containers may not run.</source>
         <target state="translated">確定 Docker 正在執行，且 Docker Daemon 可供存取。如果啟用資源節省模式，容器可能無法執行。</target>

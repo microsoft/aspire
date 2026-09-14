@@ -24,18 +24,21 @@ portable installs, the Aspire home used for hives and local state.
 | `script`       | `get-aspire-cli.{sh,ps1}`                              |
 | `pr`           | `get-aspire-cli-pr.{sh,ps1}`                           |
 | `localhive`    | `localhive.{sh,ps1}` (locally-built dev install)       |
+| `nix`          | Nix package / flake                                    |
 
 `BundleService.ComputeDefaultExtractDir` maps `source` to extract-dir shape:
 
 - `winget` / `brew` / `dotnet-tool` → `binaryDir` (flat: bundle extracts beside the binary).
 - `script` / `pr` / `localhive` → `Path.GetDirectoryName(binaryDir)` (bin layout: bundle extracts as a sibling of `bin/`).
+- `nix` → default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`) because package outputs live under the read-only Nix store.
 - missing, unreadable, malformed, or unknown `source` sidecar → default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`).
 
 `CliPathHelper.GetAspireHomeDirectory` maps sidecar-owned portable installs to
 their install prefix so hives, caches, logs, and SDK state stay with the
 install. `script` and `localhive` use the parent of `bin`; `pr` uses the parent
-of `dogfood/pr-<N>/bin`. Package-manager installs and sidecar-less binaries keep
-the default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`).
+of `dogfood/pr-<N>/bin`. Package-manager installs, including Nix, and sidecar-less
+binaries keep the default Aspire home (`ASPIRE_HOME` when set, otherwise
+`$HOME/.aspire`).
 
 ## Per-route authorship
 
@@ -49,6 +52,7 @@ the default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`).
 | PR script   | shared per-RID archive                 | `eng/scripts/get-aspire-cli-pr.{sh,ps1}` (post-extraction)          |
 | dotnet-tool | route-exclusive nupkg                  | payload-embedded (staged by `Aspire.Cli.csproj` `_PreparePreBuiltCliBinaryForPackTool`) |
 | localhive   | local-only (no shared archive)         | `localhive.{sh,ps1}` writes the sidecar after copying the CLI binary into `<prefix>/bin/`. When `--output PATH` is used, the sidecar is written inside the output dir, which is appropriate because localhive archives are route-exclusive (only consumed as localhive installs). |
+| nix         | shared per-RID archive                 | Nix derivation writes the sidecar next to the packaged native binary under `$out/lib/aspire-cli` |
 
 The dotnet-tool nupkg is the one exception that payload-embeds the sidecar: the nupkg is route-exclusive (only `dotnet tool install` consumes it), so the embedded sidecar cannot leak into another route's prefix.
 
@@ -67,7 +71,7 @@ Two mechanical checks guard the contract:
 
 ## Reader-side invariants (runtime)
 
-`BundleService.ComputeDefaultExtractDir` is the single point of truth for layout selection. It performs no path-shape detection: layout is a pure function of the sidecar `source` value (or the fallback when the sidecar is absent, unreadable, malformed, or has an unknown `source`). Unknown `source` values fall back to the default Aspire home so unrecognized installs do not try to write next to the CLI binary. Coverage lives in `tests/Aspire.Cli.Tests/Bundles/BundleServiceCrossRouteExtractionTests.cs` as a theory over (source × prefix-shape) rows, including the cross-route case where a `brew` sidecar lands under a script-style prefix.
+`BundleService.ComputeDefaultExtractDir` is the single point of truth for layout selection. It performs no path-shape detection: layout is a pure function of the sidecar `source` value (or the fallback when the sidecar is absent, unreadable, malformed, or has an unknown `source`). Unknown `source` values and known read-only package routes such as `nix` fall back to the default Aspire home so unrecognized installs do not try to write next to the CLI binary. Coverage lives in `tests/Aspire.Cli.Tests/Bundles/BundleServiceCrossRouteExtractionTests.cs` as a theory over (source × prefix-shape) rows, including the cross-route case where a `brew` sidecar lands under a script-style prefix.
 
 `CliPathHelper.GetAspireHomeDirectory` is the single point of truth for Aspire-home selection. It reads the same sidecar but only changes home for Aspire-owned portable routes (`script`, `pr`, and `localhive`); package-manager routes use the user-profile home because their install roots are package-manager-owned. Coverage lives in `tests/Aspire.Cli.Tests/Utils/CliPathHelperTests.cs`.
 

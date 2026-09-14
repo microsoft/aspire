@@ -4,8 +4,9 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.TypeSystem;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.RemoteHost.Ats;
+using Aspire.TypeSystem;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
@@ -322,6 +323,24 @@ public class AtsMarshallerTests
         var result = AtsMarshaller.ConvertPrimitive(value!, typeof(int?));
 
         Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_DeserializesContainerFilesOptionsFromDecimalFormNumbers()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["DefaultOwner"] = 1000.0,
+            ["DefaultGroup"] = 18.0,
+            ["Umask"] = 18.0
+        };
+
+        var result = Assert.IsType<ContainerFilesOptions>(marshaller.UnmarshalFromJson(json, typeof(ContainerFilesOptions), context));
+
+        Assert.Equal(1000.0, result.DefaultOwner);
+        Assert.Equal(18.0, result.DefaultGroup);
+        Assert.Equal(18.0, result.Umask);
     }
 
     [Fact]

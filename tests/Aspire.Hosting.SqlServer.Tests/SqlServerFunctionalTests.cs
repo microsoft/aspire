@@ -6,6 +6,7 @@
 using System.Data;
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +21,7 @@ namespace Aspire.Hosting.SqlServer.Tests;
 public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnSqlServerBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -58,7 +59,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifySqlServerResource()
     {
         const string databaseName = "newdb";
@@ -121,7 +122,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         const string databaseName = "db";
@@ -334,7 +335,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesDatabaseWithCustomScript()
     {
         const string databaseName = "newdb";
@@ -380,6 +381,13 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
 
         await app.ResourceNotifications.WaitForResourceHealthyAsync(newDb.Resource.Name, cts.Token);
 
+        // Verify that the resource logger emitted feedback about the custom creation script.
+        // Logs are attributed to the parent server resource, not the database resource.
+        await app.WaitForAllTextAsync(
+            ["Executing custom creation script for database", "Completed custom creation script for database"],
+            resourceName: sqlserver.Resource.Name,
+            cts.Token);
+
         // Test SqlConnection
         await pipeline.ExecuteAsync(async token =>
         {
@@ -400,7 +408,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesDatabaseWithSpecialNames()
     {
         const string databaseName = "!'][\"";
@@ -450,7 +458,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesDatabaseResiliently()
     {
         // Creating the database multiple times should not fail
@@ -534,7 +542,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesMultipleDatabases()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -581,7 +589,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
         }
     }
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public Task SqlServer_WithPersistentLifetime_ReusesContainer()
     {
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(

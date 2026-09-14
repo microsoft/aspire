@@ -71,9 +71,6 @@ internal static class ResourceCommandHelper
     {
         logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
 
-        // Route status messages to stderr so command results in stdout remain pipeable (e.g., | jq)
-        interactionService.Console = ConsoleOutput.Error;
-
         var response = await interactionService.ShowStatusAsync(
             $"Validating and executing command '{commandName}' on resource '{resourceName}'...",
             async () => await connection.ExecuteResourceCommandAsync(

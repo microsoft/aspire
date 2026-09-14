@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -41,7 +40,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task UpdateProjectChannelToStable_TypeScript_PreviewsStablePackagesAndPreservesChannel()
+    public async Task UpdateToStable_TypeScript_PreviewsStablePkgsAndKeepsChannel()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -227,7 +226,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task UpdateProjectChannelToStable_CSharpSingleFileInit_PreservesAspireConfigChannel()
+    public async Task UpdateToStable_CSharpSingleFileInit_KeepsConfigChannel()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -270,7 +269,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task UpdateProjectChannelToStable_CSharpEmptyAppHost_PreservesAspireConfigChannel()
+    public async Task UpdateToStable_CSharpEmptyAppHost_KeepsConfigChannel()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -310,7 +309,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task UpdateProjectChannelToStable_TypeScriptSingleFileInit_PreservesAspireConfigChannel()
+    public async Task UpdateToStable_TypeScriptSingleFileInit_KeepsConfigChannel()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -469,7 +468,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             // returns from its line-reader on the "n" keystroke and tears down before the Enter
             // is dequeued, bash receives the Enter and executes a phantom blank command,
             // advancing CMDCOUNT and desyncing the test counter from the shell counter.
-            // See .github/skills/cli-e2e-testing/troubleshooting.md for the full failure pattern.
+            // See .agents/skills/cli-e2e-testing/troubleshooting.md for the full failure pattern.
             await auto.TypeAsync("n");
         }
 

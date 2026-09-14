@@ -4,7 +4,6 @@
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -157,7 +156,7 @@ internal sealed partial class CliTemplateFactory
     private async Task WriteCSharpEmptyAppHostAsync(string? templateVersion, string outputPath, string projectName, bool useLocalhostTld, CancellationToken cancellationToken)
     {
         var aspireVersion = string.IsNullOrWhiteSpace(templateVersion)
-            ? VersionHelper.GetDefaultTemplateVersion()
+            ? _executionContext.IdentitySdkVersion
             : templateVersion;
         var projectNameLower = projectName.ToLowerInvariant();
         var ports = GenerateRandomPorts();

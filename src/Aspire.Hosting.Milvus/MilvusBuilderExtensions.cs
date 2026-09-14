@@ -56,6 +56,7 @@ public static class MilvusBuilderExtensions
         return builder.AddResource(milvus)
             .WithImage(MilvusContainerImageTags.Image, MilvusContainerImageTags.Tag)
             .WithImageRegistry(MilvusContainerImageTags.Registry)
+            .WithIconName("DatabaseMultiple")
             .WithHttpEndpoint(port: grpcPort, targetPort: MilvusPortGrpc, name: MilvusServerResource.PrimaryEndpointName)
             .WithEndpoint(MilvusServerResource.PrimaryEndpointName, endpoint =>
             {
@@ -108,7 +109,8 @@ public static class MilvusBuilderExtensions
 
         builder.Resource.AddDatabase(name, databaseName);
         var milvusDatabaseResource = new MilvusDatabaseResource(name, databaseName, builder.Resource);
-        return builder.ApplicationBuilder.AddResource(milvusDatabaseResource);
+        return builder.ApplicationBuilder.AddResource(milvusDatabaseResource)
+            .WithIconName("Database");
     }
 
     /// <summary>
@@ -147,6 +149,7 @@ public static class MilvusBuilderExtensions
         var resourceBuilder = builder.ApplicationBuilder.AddResource(attuContainer)
                                                         .WithImage(MilvusContainerImageTags.AttuImage, MilvusContainerImageTags.AttuTag)
                                                         .WithImageRegistry(MilvusContainerImageTags.Registry)
+                                                        .WithIconName("WindowDatabase")
                                                         .WithHttpEndpoint(targetPort: 3000, name: "http")
                                                         .WithEnvironment(context => ConfigureAttuContainer(context, builder.Resource))
                                                         .ExcludeFromManifest();

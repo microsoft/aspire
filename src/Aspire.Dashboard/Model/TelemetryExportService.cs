@@ -802,6 +802,17 @@ public sealed class TelemetryExportService
             return JsonValue.Create(value.BoolValue);
         }
 
+        if (value.StructValue is not null)
+        {
+            var jsonObject = new JsonObject();
+            foreach (var field in value.StructValue.Fields)
+            {
+                jsonObject[field.Key] = ConvertPropertyValueToJsonNode(field.Value);
+            }
+
+            return jsonObject;
+        }
+
         if (value.ListValue is not null)
         {
             var array = new JsonArray();

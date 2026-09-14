@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Certificates;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Certificates.Generation;
@@ -35,7 +36,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
     // Well-known location where Aspire.Hosting caches dev-cert key material to avoid
     // triggering macOS Keychain access prompts at app-host startup time.
-    private static readonly string s_aspireDevCertsCacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dev-certs", "https");
+    private static readonly string s_aspireDevCertsCacheDirectory = CertificateHelpers.AspireDevCertsHttpsCacheDirectory;
 
     // Verify the certificate {0} for the SSL and X.509 Basic Policy.
     private const string MacOSVerifyCertificateCommandLine = "security";
@@ -334,7 +335,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
             ExportCertificate(certificate, GetCertificateFilePath(certificate), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
 
-            var aspireLookup = GetAspireCertificateHash(certificate);
+            var aspireLookup = CertificateHelpers.GetAspireCertificateHash(certificate);
             ExportCertificate(certificate, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
         }
         catch (Exception ex)
@@ -410,7 +411,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
             }
 
             using var diskCert = X509CertificateLoader.LoadPkcs12FromFile(onDiskPfxPath, password: null, X509KeyStorageFlags.Exportable);
-            var aspireLookup = GetAspireCertificateHash(certificate);
+            var aspireLookup = CertificateHelpers.GetAspireCertificateHash(certificate);
 
             CreateDirectoryWithPermissions(s_aspireDevCertsCacheDirectory);
 
@@ -434,13 +435,6 @@ internal sealed class MacOSCertificateManager : CertificateManager
             // Best effort — the app host will fall back to accessing the keychain directly.
         }
     }
-
-    /// <summary>
-    /// Computes the Aspire hosting cache key for a certificate, matching the convention
-    /// used by <c>DeveloperCertificateService</c>: SHA256(thumbprint) as hex.
-    /// </summary>
-    private static string GetAspireCertificateHash(X509Certificate2 certificate) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Thumbprint)));
 
     protected override IList<X509Certificate2> GetCertificatesToRemove(StoreName storeName, StoreLocation storeLocation)
     {

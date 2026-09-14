@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREDOTNETTOOL
-#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
@@ -42,7 +41,7 @@ public static class EFResourceBuilderExtensions
     /// Multiple calls to this method with different context types are supported, allowing you to manage
     /// migrations for multiple DbContexts in the same project.
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,
@@ -89,7 +88,7 @@ public static class EFResourceBuilderExtensions
     /// <param name="name">The name of the migration resource.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
     /// <exception cref="InvalidOperationException">Thrown if migrations have already been added for any DbContext type on this project.</exception>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name)
@@ -408,7 +407,7 @@ public static class EFResourceBuilderExtensions
 
     private static async Task<ExecuteCommandResult> StartEfToolResourceAsync(ExecuteCommandContext context, DotnetToolResource toolResource)
     {
-        var notificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
+        var notificationService = context.Services.GetRequiredService<ResourceNotificationService>();
         var resourceStarted = false;
         Process? process = null;
 
@@ -424,7 +423,7 @@ public static class EFResourceBuilderExtensions
                 };
             }
 
-            var executionContext = context.ServiceProvider.GetService<DistributedApplicationExecutionContext>()
+            var executionContext = context.Services.GetService<DistributedApplicationExecutionContext>()
                 ?? new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
 
             var executionConfiguration = await ExecutionConfigurationBuilder.Create(toolResource)
@@ -454,34 +453,17 @@ public static class EFResourceBuilderExtensions
                 CreateNoWindow = true
             };
 
-            // Build command-line arguments by directly invoking each annotation's Callback.
-            // We intentionally bypass ExecutionConfigurationBuilder.WithArgumentsConfig() here
-            // because it uses EvaluateOnceAsync which caches callback results. When the tool
-            // resource is reused across sequential EF commands (e.g., script then bundle),
-            // the cached BuildToolExecArguments callback does not re-populate the shared
-            // callbackContext.Args list, so later annotations (the per-command EF args) run
-            // against an empty list.
-            if (toolResource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var cmdLineAnnotations))
+            var toolArguments = await GatherToolArgumentsAsync(
+                toolResource,
+                executionContext,
+                context.Logger,
+                context.CancellationToken).ConfigureAwait(false);
+            foreach (var argument in toolArguments)
             {
-                IList<object> args = [];
-                var callbackContext = new CommandLineArgsCallbackContext(args, toolResource, context.CancellationToken)
-                {
-                    Logger = context.Logger,
-                    ExecutionContext = executionContext
-                };
-
-                foreach (var ann in cmdLineAnnotations)
-                {
-                    await ann.Callback(callbackContext).ConfigureAwait(false);
-                }
-
-                foreach (var arg in callbackContext.Args)
-                {
-                    startInfo.ArgumentList.Add(arg.ToString()!);
-                }
+                startInfo.ArgumentList.Add(argument.ToString()!);
             }
 
-            foreach (var kvp in executionConfiguration.EnvironmentVariables)
+            foreach (var kvp in GetToolEnvironmentVariables(executionConfiguration, executionContext.IsPublishMode))
             {
                 startInfo.Environment[kvp.Key] = kvp.Value;
             }
@@ -515,7 +497,7 @@ public static class EFResourceBuilderExtensions
                 State = KnownResourceStates.Running
             }).ConfigureAwait(false);
 
-            var resourceLoggerService = context.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+            var resourceLoggerService = context.Services.GetRequiredService<ResourceLoggerService>();
             var resourceLogger = resourceLoggerService.GetLogger(toolResource);
 
             var stderrBuilder = new StringBuilder();
@@ -609,6 +591,42 @@ public static class EFResourceBuilderExtensions
         }
     }
 
+    /// <summary>
+    /// Composes the EF tool arguments without cached callback results so sequential commands remain independent.
+    /// </summary>
+    internal static ValueTask<List<object>> GatherToolArgumentsAsync(
+        DotnetToolResource toolResource,
+        DistributedApplicationExecutionContext executionContext,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        return toolResource.GatherArgumentValuesWithoutCachingAsync(
+            executionContext,
+            logger,
+            cancellationToken);
+    }
+
+    // Selects the environment variables to apply to the EF tool process. In publish mode connection
+    // string references resolve to manifest placeholder expressions (e.g. "{postgres.connectionString}")
+    // rather than real values because the target resources aren't provisioned yet. Passing such a
+    // placeholder to the EF tool makes design-time DbContext creation fail with "Format of the
+    // initialization string does not conform to specification". Generating the migration script/bundle
+    // doesn't require a live database, so omit connection strings entirely in publish mode and let the
+    // bundle receive the real connection string at deploy time.
+    internal static IEnumerable<KeyValuePair<string, string>> GetToolEnvironmentVariables(
+        IExecutionConfigurationResult executionConfiguration, bool isPublishMode)
+    {
+        foreach (var kvp in executionConfiguration.EnvironmentVariablesWithUnprocessed)
+        {
+            if (isPublishMode && kvp.Value.Unprocessed is ConnectionStringReference)
+            {
+                continue;
+            }
+
+            yield return new KeyValuePair<string, string>(kvp.Key, kvp.Value.Processed);
+        }
+    }
+
     private const string EFToolPackageId = "dotnet-ef";
 
     private static void AddEFMigrationCommands(
@@ -650,6 +668,23 @@ public static class EFResourceBuilderExtensions
                 toolBuilder.WithAnnotation(callback);
             }
         }
+
+        // Forward the migration resource's own environment to the tool resource at start time.
+        // The connection string the user declares via `.WithReference(<db>)` lands on the migration
+        // resource as an EnvironmentCallbackAnnotation *after* this method runs, so the annotations
+        // cannot be copied eagerly like the project ones above. Evaluating them lazily here ensures the
+        // dotnet-ef process receives `ConnectionStrings__<db>`; without it the design-time DbContext
+        // has no connection string and fails with "The ConnectionString property has not been initialized."
+        toolBuilder.WithEnvironment(async context =>
+        {
+            if (migrationResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var migrationEnvCallbacks))
+            {
+                foreach (var callback in migrationEnvCallbacks)
+                {
+                    await callback.Callback(context).ConfigureAwait(false);
+                }
+            }
+        });
 
         migrationResource.ToolResource = toolBuilder.Resource;
 
@@ -785,7 +820,6 @@ public static class EFResourceBuilderExtensions
                 return CommandResults.Failure(result.ErrorMessage);
             });
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only
     /// <summary>
     /// Common wrapper that handles state management and exception handling for EF commands.
     /// </summary>
@@ -796,9 +830,9 @@ public static class EFResourceBuilderExtensions
         bool waitForDependencies,
         Func<EFCoreOperationExecutor, ILogger, IInteractionService?, Task<ExecuteCommandResult>> executeOperation)
     {
-        var resourceLoggerService = context.ServiceProvider.GetRequiredService<ResourceLoggerService>();
-        var resourceNotificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
-        var interactionService = context.ServiceProvider.GetService<IInteractionService>();
+        var resourceLoggerService = context.Services.GetRequiredService<ResourceLoggerService>();
+        var resourceNotificationService = context.Services.GetRequiredService<ResourceNotificationService>();
+        var interactionService = context.Services.GetService<IInteractionService>();
         var logger = resourceLoggerService.GetLogger(migrationResource);
 
         if (migrationResource.IsExecutingCommand)
@@ -826,7 +860,7 @@ public static class EFResourceBuilderExtensions
                 migrationResource.DbContextTypeName,
                 logger,
                 context.CancellationToken,
-                context.ServiceProvider,
+                context.Services,
                 migrationResource.ToolResource);
 
             var result = await executeOperation(executor, logger, interactionService).ConfigureAwait(false);
@@ -996,5 +1030,4 @@ public static class EFResourceBuilderExtensions
                 logger.LogError("Get Database Status command failed: {Error}", result.ErrorMessage);
                 return CommandResults.Failure(result.ErrorMessage);
             });
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only
 }

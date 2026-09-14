@@ -1,0 +1,14 @@
+﻿---
+apiVersion: "v1"
+kind: "PersistentVolumeClaim"
+metadata:
+  name: "data"
+  annotations:
+    volume.beta.kubernetes.io/storage-provisioner: "disk.csi.azure.com"
+spec:
+  storageClassName: "managed-csi"
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: "20Gi"

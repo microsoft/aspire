@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace Aspire.Shared.Model.Serialization;
 
@@ -237,10 +237,32 @@ internal sealed class ResourceCommandJson
     public string? Visibility { get; set; }
 
     /// <summary>
+    /// The state of the command (e.g., "Enabled", "Disabled", "Hidden").
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? State { get; set; }
+
+    /// <summary>
+    /// The sort order of the command for display purposes.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? SortOrder { get; set; }
+
+    /// <summary>
     /// The ordered inputs that describe the invocation arguments accepted by the command.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ResourceCommandArgumentJson[]? ArgumentInputs { get; set; }
+}
+
+/// <summary>
+/// Constants for resource command state values in serialized resource JSON.
+/// </summary>
+internal static class KnownCommandState
+{
+    public const string Enabled = "Enabled";
+    public const string Disabled = "Disabled";
+    public const string Hidden = "Hidden";
 }
 
 /// <summary>

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -116,8 +115,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 #pragma warning disable ASPIREAZURE003
 
 // AKS environment provisioned by Aspire (Azure Kubernetes Service).
-// Pin both the system and workload pools to DASv5 SKUs; the default workload pool
-// uses DSv5 SKUs which routinely hit vCPU quota in westus3.
+// Pin both the system and workload pools to a Standard_D2as_v5 SKU; the default pool SKUs
+// routinely hit vCPU quota, so we standardize on StandardDASv5Family, where we hold quota.
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSystemNodePool("Standard_D2as_v5");
 aks.AddNodePool("workload", "Standard_D2as_v5", 1, 3);
@@ -144,7 +143,9 @@ aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1"
             await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 8: Set env vars for deployment
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

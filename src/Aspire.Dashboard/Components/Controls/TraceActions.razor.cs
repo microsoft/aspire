@@ -22,12 +22,10 @@ public partial class TraceActions : ComponentBase
     [Parameter]
     public required OtlpTrace Trace { get; set; }
 
-    private readonly List<MenuButtonItem> _menuItems = new();
-
-    protected override void OnParametersSet()
+    private IList<MenuButtonItem> GetMenuItems()
     {
-        _menuItems.Clear();
-
-        TraceMenuBuilder.AddMenuItems(_menuItems, Trace);
+        var menuItems = new List<MenuButtonItem>();
+        TraceMenuBuilder.AddMenuItems(menuItems, Trace);
+        return menuItems;
     }
 }

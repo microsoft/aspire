@@ -13,9 +13,133 @@ namespace Aspire.Cli.Tests.Commands;
 public class RootCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task RootCommandVersionOption_PrintsIdentityVersion_WhenIdentityOverridden()
+    {
+        // Emulates `ASPIRE_CLI_VERSION=13.4.2` so `--version` must report the identity version,
+        // not the assembly's build-time stamp.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityVersion: "13.4.2",
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--version");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("13.4.2", output.ToString().Trim());
+    }
+
+    [Fact]
+    public async Task RootCommandVersionShortAlias_PrintsIdentityVersion_WhenIdentityOverridden()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityVersion: "13.4.2",
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("-v");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("13.4.2", output.ToString().Trim());
+    }
+
+    [Fact]
+    public async Task RootCommandVersionOption_IncludesCommitSha_WhenCommitProvided()
+    {
+        // When a commit SHA is provided, it should be included in the version output as "+<sha>".
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityVersion: "13.4.2",
+                identityCommit: "abcdef01",
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--version");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("13.4.2+abcdef01", output.ToString().Trim());
+    }
+
+    /// <summary>
+    /// Theory test validating version output across all build stages/channels:
+    /// PR builds, daily builds, staging builds, and stable builds.
+    /// Tests various override combinations (env vars, sidecar) to ensure the output
+    /// matches the legacy behavior (version + optional +sha).
+    /// </summary>
+    [Theory]
+    [InlineData("pr-18087", "13.5.0-preview.1.26318.5", "abc123def456", "13.5.0-preview.1.26318.5+abc123def456")]
+    [InlineData("pr-18087", "13.5.0-preview.1.26318.5", null, "13.5.0-preview.1.26318.5")]
+    [InlineData("daily", "13.5.0-preview.1.26318.1", "95f0d296", "13.5.0-preview.1.26318.1+95f0d296")]
+    [InlineData("daily", "13.5.0-preview.1.26318.1", null, "13.5.0-preview.1.26318.1")]
+    [InlineData("staging", "13.4.0-preview.1.26280.6", "abcdef01", "13.4.0-preview.1.26280.6+abcdef01")]
+    [InlineData("staging", "13.4.0", "abcdef01", "13.4.0+abcdef01")]
+    [InlineData("stable", "13.4.5", "73114e86c64aeb9f3f3c7da8e37df1ae4281b27e", "13.4.5+73114e86c64aeb9f3f3c7da8e37df1ae4281b27e")]
+    [InlineData("local", "13.5.0-dev", "localcommit123", "13.5.0-dev+localcommit123")]
+    [InlineData("local", "13.5.0-dev", null, "13.5.0-dev")]
+    // IdentityVersion may already carry a "+<sha>" build-metadata suffix (e.g. ASPIRE_CLI_VERSION
+    // set to a full informational version). The output must keep a single "+" and never double it.
+    [InlineData("stable", "13.4.5+73114e86", "73114e86", "13.4.5+73114e86")]
+    [InlineData("stable", "13.4.5+73114e86", null, "13.4.5+73114e86")]
+    // When the version carries an embedded "+<sha>" AND an explicit commit is provided, the
+    // explicit commit must win and the embedded sha must be discarded (single "+", explicit value).
+    [InlineData("stable", "13.4.5+aaaaaaaa", "bbbbbbbb", "13.4.5+bbbbbbbb")]
+    public async Task RootCommandVersion_ProducesCorrectOutput_AcrossBuildStages(
+        string channel,
+        string version,
+        string? commit,
+        string expectedOutput)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityChannel: channel,
+                identityVersion: version,
+                identityCommit: commit,
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--version");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(expectedOutput, output.ToString().Trim());
+    }
+
+    [Fact]
     public async Task RootCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -29,7 +153,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RootCommandWithNoLogoArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -43,7 +167,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CaptureProfileOptions_AreHiddenFromHelp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -67,7 +191,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CaptureProfileOptions_ParseOnSubcommands()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -84,7 +208,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void StartDebugSessionOption_IsOnlyAddedInExtensionContext()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var normalServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var normalProvider = normalServices.BuildServiceProvider();
@@ -114,7 +238,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [InlineData(null, false)]
     public async Task NoLogoEnvironmentVariable_ParsedCorrectly(string? value, bool expectedNoLogo)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ConfigurationCallback = config =>
@@ -139,7 +263,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FirstTimeUseNotice_BannerDisplayedWhenSentinelDoesNotExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var errorWriter = new StringWriter();
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
         var bannerService = new TestBannerService();
@@ -162,7 +286,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FirstTimeUseNotice_BannerNotDisplayedWhenSentinelExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var errorWriter = new StringWriter();
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = true };
         var bannerService = new TestBannerService();
@@ -184,7 +308,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FirstTimeUseNotice_BannerNotDisplayedWithNoLogoArgument()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var errorWriter = new StringWriter();
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
         var bannerService = new TestBannerService();
@@ -206,7 +330,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FirstTimeUseNotice_BannerNotDisplayedWithNoLogoEnvironmentVariable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var errorWriter = new StringWriter();
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
         var bannerService = new TestBannerService();
@@ -236,7 +360,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     public async Task Banner_DisplayedWhenExplicitlyRequested()
     {
         // When --banner is passed, banner should show even if not first run
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var errorWriter = new StringWriter();
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = true }; // Not first run
         var bannerService = new TestBannerService();
@@ -261,7 +385,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task Banner_CanBeInvokedMultipleTimes()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var bannerService = new TestBannerService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -292,7 +416,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     {
         // When it's a first run AND user explicitly requests --banner,
         // the banner should be shown (only once via the explicit request logic)
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var errorWriter = new StringWriter();
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
         var bannerService = new TestBannerService();
@@ -318,7 +442,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task Banner_TelemetryNoticeShownOnFirstRun()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var errorWriter = new StringWriter();
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
         var bannerService = new TestBannerService();
@@ -341,7 +465,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task Banner_TelemetryNoticeNotShownOnSubsequentRuns()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var errorWriter = new StringWriter();
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = true }; // Not first run
         var bannerService = new TestBannerService();
@@ -367,7 +491,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [InlineData("-?")]
     public async Task InformationalFlag_SuppressesBannerAndDoesNotCreateSentinel(string flag)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
         var bannerService = new TestBannerService();
 
@@ -391,7 +515,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     {
         // Verifies that running --version on first run doesn't mark first-run as complete,
         // so a subsequent normal invocation still shows the first-run experience.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
         var bannerService = new TestBannerService();
 
@@ -413,10 +537,81 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.True(sentinel.WasCreated);
     }
 
+    [Theory]
+    [InlineData("ps", "--format", "json")]
+    [InlineData("ps", "--format=json")]
+    [InlineData("config", "info", "--json")]
+    [InlineData("resource", "database", "reset-password", "--load-arguments")]
+    [InlineData("extension", "get-apphosts")]
+    public async Task MachineReadableCommand_SuppressesBannerAndDoesNotCreateSentinel(params string[] args)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
+        var bannerService = new TestBannerService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
+            options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, args);
+
+        Assert.False(bannerService.WasBannerDisplayed);
+        Assert.False(sentinel.WasCreated);
+    }
+
+    [Theory]
+    [InlineData("--json")]
+    [InlineData("--nologo")]
+    [InlineData("--help")]
+    public async Task ArgumentsAfterDelimiter_DoNotSuppressFirstRunNotice(string appArg)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
+        var bannerService = new TestBannerService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
+            options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, ["run", "--", appArg]);
+
+        Assert.True(bannerService.WasBannerDisplayed);
+        Assert.True(sentinel.WasCreated);
+    }
+
+    [Fact]
+    public async Task BannerArgumentAfterDelimiter_DoesNotForceBanner()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = true };
+        var bannerService = new TestBannerService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
+            options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, ["run", "--", "--banner"]);
+
+        Assert.False(bannerService.WasBannerDisplayed);
+        Assert.False(sentinel.WasCreated);
+    }
+
     [Fact]
     public async Task FirstTimeUseNotice_BannerNotDisplayedInNonInteractiveEnvironment()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
         var bannerService = new TestBannerService();
 
@@ -440,7 +635,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         // Even when --banner is explicitly passed, the banner should NOT display in a
         // non-interactive environment because Spectre.Console's Live display requires
         // valid console handles (e.g., stdout must not be redirected).
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = true }; // Not first run
         var bannerService = new TestBannerService();
 
@@ -460,7 +655,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void SetupCommand_NotAvailable_WhenBundleIsNotAvailable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -473,7 +668,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void SetupCommand_Available_WhenBundleIsAvailable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.BundleServiceFactory = _ => new TestBundleService(isBundle: true);
@@ -489,7 +684,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void AllVisibleCommands_HaveHelpGroup()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.BundleServiceFactory = _ => new TestBundleService(isBundle: true);
@@ -513,7 +708,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GroupedHelp_ContainsAllVisibleCommands()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.BundleServiceFactory = _ => new TestBundleService(isBundle: true);
@@ -536,7 +731,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RootCommand_DoesNotExposeRemovedExecSubcommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 

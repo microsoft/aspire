@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Packaging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.TestServices;
 
@@ -28,7 +29,7 @@ internal sealed class TestPackagingService : IPackagingService
         }
 
         // Default: Return a fake channel with template packages
-        var testChannel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
+        var testChannel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
         return Task.FromResult<IEnumerable<PackageChannel>>(new[] { testChannel });
     }
 

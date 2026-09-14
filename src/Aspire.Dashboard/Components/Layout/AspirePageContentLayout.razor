@@ -7,23 +7,33 @@
     <!-- Toolbar -->
     @if (ViewportInformation.IsDesktop)
     {
-        <header class="content-header" style="@HeaderStyle" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
-            @if (AddNewlineOnToolbar)
-            {
-                @PageTitleSection
+        @* Teleport the page title (<h1 class="page-header">) up into the top header, where it
+           renders as a suffix after the app/brand name. This keeps the page title in a single,
+           consistent place (the header IA) instead of a large banner above each page's toolbar. *@
+        <SectionContent SectionName="@DashboardUIHelpers.PageTitleTopBarSection">
+            @PageTitleSection
+        </SectionContent>
 
-                <FluentToolbar Class="main-toolbar" Orientation="Orientation.Horizontal">
-                    @ToolbarSection
-                </FluentToolbar>
-            }
-            else
-            {
-                <FluentToolbar Class="title-toolbar-inline" Orientation="Orientation.Horizontal">
-                    @PageTitleSection
-                    @ToolbarSection
-                </FluentToolbar>
-            }
-        </header>
+        @* A page can opt out of the desktop toolbar row (HideDesktopToolbar) when it renders its toolbar
+           controls somewhere else - e.g. Resources moves them onto the tabs row. Skipping the <header>
+           entirely lets the "page-header" grid row collapse instead of leaving an empty toolbar band. *@
+        @if (!HideDesktopToolbar)
+        {
+            <header class="content-header" style="@HeaderStyle" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
+                @if (AddNewlineOnToolbar)
+                {
+                    <FluentToolbar Class="main-toolbar" Orientation="Orientation.Horizontal">
+                        @ToolbarSection
+                    </FluentToolbar>
+                }
+                else
+                {
+                    <FluentToolbar Class="title-toolbar-inline" Orientation="Orientation.Horizontal">
+                        @ToolbarSection
+                    </FluentToolbar>
+                }
+            </header>
+        }
     }
     else if (!IsSummaryDetailsViewOpen)
     {

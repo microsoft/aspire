@@ -10,6 +10,11 @@ namespace Aspire.Dashboard.Components;
 
 public partial class UrlsColumnDisplay
 {
+    internal static string GetTooltipText(DisplayedUrl displayedUrl)
+    {
+        return displayedUrl.Url ?? displayedUrl.OriginalUrlString;
+    }
+
     [Parameter, EditorRequired]
     public required ResourceViewModel Resource { get; set; }
 

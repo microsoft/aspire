@@ -36,6 +36,18 @@ internal static class StringComparers
     public static StringComparer NuGetPackageId => StringComparer.OrdinalIgnoreCase;
     public static StringComparer FullTextSearch => StringComparer.OrdinalIgnoreCase;
     public static StringComparer ChannelName => StringComparer.OrdinalIgnoreCase;
+
+    // Azure control-plane values are protocol identifiers rather than user text. ARM treats these
+    // values case-insensitively, and ordinal comparisons keep diagnostics deterministic across UI cultures.
+    public static StringComparer AzureLocation => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer AzureProvisioningErrorCode => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer AzureProvisioningOperation => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer AzureProvisioningState => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer AzureResourceGroupName => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer AzureResourceId => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer AzureResourceName => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer AzureResourceType => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer AzureTenantId => StringComparer.OrdinalIgnoreCase;
 }
 
 internal static class StringComparisons
@@ -69,4 +81,16 @@ internal static class StringComparisons
     public static StringComparison NuGetPackageId => StringComparison.OrdinalIgnoreCase;
     public static StringComparison FullTextSearch => StringComparison.OrdinalIgnoreCase;
     public static StringComparison ChannelName => StringComparison.OrdinalIgnoreCase;
+
+    // Azure control-plane values are protocol identifiers rather than user text. ARM treats these
+    // values case-insensitively, and ordinal comparisons keep diagnostics deterministic across UI cultures.
+    public static StringComparison AzureLocation => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison AzureProvisioningErrorCode => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison AzureProvisioningOperation => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison AzureProvisioningState => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison AzureResourceGroupName => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison AzureResourceId => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison AzureResourceName => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison AzureResourceType => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison AzureTenantId => StringComparison.OrdinalIgnoreCase;
 }

@@ -21,6 +21,8 @@ internal sealed class DotNetSdkCheck(
     CliExecutionContext executionContext,
     ILogger<DotNetSdkCheck> logger) : IEnvironmentCheck
 {
+    internal const string CheckName = "dotnet-sdk";
+
     public int Order => 30; // File system check - slightly more expensive
 
     public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
@@ -46,8 +48,8 @@ internal sealed class DotNetSdkCheck(
 
                 return [new EnvironmentCheckResult
                 {
-                    Category = "sdk",
-                    Name = "dotnet-sdk",
+                    Category = EnvironmentCheckCategories.Sdk,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Fail,
                     Message = highestVersion is null
                         ? ".NET SDK not found"
@@ -61,8 +63,8 @@ internal sealed class DotNetSdkCheck(
 
             return [new EnvironmentCheckResult
             {
-                Category = "sdk",
-                Name = "dotnet-sdk",
+                Category = EnvironmentCheckCategories.Sdk,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Pass,
                 Message = $".NET {highestVersion} installed ({architecture})"
             }];
@@ -72,8 +74,8 @@ internal sealed class DotNetSdkCheck(
             logger.LogDebug(ex, "Error checking .NET SDK");
             return [new EnvironmentCheckResult
             {
-                Category = "sdk",
-                Name = "dotnet-sdk",
+                Category = EnvironmentCheckCategories.Sdk,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Fail,
                 Message = "Error checking .NET SDK",
                 Details = ex.Message

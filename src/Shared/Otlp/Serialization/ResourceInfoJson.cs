@@ -47,17 +47,4 @@ internal sealed class ResourceInfoJson
     [JsonPropertyName("hasMetrics")]
     public bool HasMetrics { get; set; }
 
-    /// <summary>
-    /// Gets the composite name by combining Name and InstanceId.
-    /// </summary>
-    /// <returns>The composite name (e.g., "catalogservice-abc123" or "catalogservice").</returns>
-    public string GetCompositeName()
-    {
-        if (InstanceId is null)
-        {
-            return Name;
-        }
-
-        return $"{Name}-{InstanceId}";
-    }
 }

@@ -8,11 +8,14 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Components.Tooltip;
+using Microsoft.JSInterop;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
@@ -42,6 +45,8 @@ public partial class MainLayoutTests : DashboardTestContext
         {
             switch (key)
             {
+                case BrowserStorageKeys.NavMenuExpanded:
+                    return (true, false);
                 case BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey:
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
                     return (false, false);
@@ -102,6 +107,8 @@ public partial class MainLayoutTests : DashboardTestContext
         {
             switch (key)
             {
+                case BrowserStorageKeys.NavMenuExpanded:
+                    return (true, false);
                 case BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey:
                     return (unsecuredTelemetryMessageDismissedKey, unsecuredTelemetryMessageDismissedKey);
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
@@ -152,6 +159,8 @@ public partial class MainLayoutTests : DashboardTestContext
         {
             switch (key)
             {
+                case BrowserStorageKeys.NavMenuExpanded:
+                    return (true, false);
                 case BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey:
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
                     return (false, false); // Message not dismissed, but should be suppressed by config if suppressUnsecuredMessage is true
@@ -184,9 +193,206 @@ public partial class MainLayoutTests : DashboardTestContext
         }
     }
 
-    private void SetupMainLayoutServices(TestLocalStorage? localStorage = null, MessageService? messageService = null, Action<DashboardOptions>? configureOptions = null)
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task NavMenuExpanded_RestoresAndPersistsToggledState(bool storedExpanded)
+    {
+        object? persistedValue = null;
+        var localStorage = new TestLocalStorage
+        {
+            OnGetUnprotectedAsync = key => key switch
+            {
+                BrowserStorageKeys.NavMenuExpanded => (true, storedExpanded),
+                BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey => (false, false),
+                BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey => (false, false),
+                _ => throw new InvalidOperationException("Unexpected key.")
+            },
+            OnSetUnprotectedAsync = (key, value) =>
+            {
+                Assert.Equal(BrowserStorageKeys.NavMenuExpanded, key);
+                persistedValue = value;
+            }
+        };
+
+        SetupMainLayoutServices(localStorage: localStorage);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        cut.WaitForAssertion(() => Assert.Contains(storedExpanded ? "nav-expanded" : "nav-collapsed", cut.Find(".layout").ClassList));
+
+        await cut.InvokeAsync(() => cut.Find(".nav-toggle-button").Click());
+
+        cut.WaitForAssertion(() => Assert.Contains(storedExpanded ? "nav-collapsed" : "nav-expanded", cut.Find(".layout").ClassList));
+        Assert.Equal(!storedExpanded, Assert.IsType<bool>(persistedValue));
+    }
+
+    [Theory]
+    [InlineData(true, "dashboard-help-button", "HelpDialog", "dashboard-help-button")]
+    [InlineData(true, "dashboard-settings-button", "SettingsDialog", "dashboard-settings-button")]
+    [InlineData(false, "dashboard-navigation-button", "HelpDialog", "dashboard-navigation-button")]
+    [InlineData(false, "dashboard-navigation-button", "SettingsDialog", "dashboard-navigation-button")]
+    public async Task HeaderDialogClose_RestoresFocusToLaunchButton(bool isDesktop, string launchButtonId, string expectedDialogId, string expectedFocusId)
+    {
+        DialogParameters? capturedParameters = null;
+        TestDialogService? dialogService = null;
+        dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
+        {
+            capturedParameters = parameters;
+            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+        });
+
+        SetupMainLayoutServices(dialogService: dialogService);
+        JSInterop.SetupVoid("focusElement", _ => true);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        if (isDesktop)
+        {
+            await cut.InvokeAsync(() => cut.Find($"#{launchButtonId}").Click());
+        }
+        else
+        {
+            var menuItemName = expectedDialogId == "HelpDialog"
+                ? "Help"
+                : "Settings";
+
+            await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
+            await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
+        }
+
+        Assert.NotNull(capturedParameters);
+        Assert.Equal(expectedDialogId, capturedParameters.Id);
+
+        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(null!));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 1 &&
+                string.Equals((string?)invocation.Arguments[0], expectedFocusId, StringComparison.Ordinal));
+        });
+    }
+
+    [Theory]
+    [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-navigation-button")]
+    [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-navigation-button")]
+    [InlineData(false, true, "dashboard-navigation-button", "HelpDialog", "dashboard-help-button")]
+    [InlineData(false, true, "dashboard-navigation-button", "SettingsDialog", "dashboard-settings-button")]
+    public async Task HeaderDialogClose_AfterViewportChange_RestoresFocusToVisibleLaunchButton(
+        bool initialIsDesktop,
+        bool closingIsDesktop,
+        string launchButtonId,
+        string expectedDialogId,
+        string expectedFocusId)
+    {
+        DialogParameters? capturedParameters = null;
+        TestDialogService? dialogService = null;
+        dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
+        {
+            capturedParameters = parameters;
+            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+        });
+
+        SetupMainLayoutServices(dialogService: dialogService);
+        JSInterop.SetupVoid("focusElement", _ => true);
+
+        var cut = RenderComponent<CascadingValue<ViewportInformation>>(builder =>
+        {
+            builder.Add(p => p.Value, new ViewportInformation(IsDesktop: initialIsDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
+            builder.AddChildContent<MainLayout>();
+        });
+
+        if (initialIsDesktop)
+        {
+            await cut.InvokeAsync(() => cut.Find($"#{launchButtonId}").Click());
+        }
+        else
+        {
+            var menuItemName = expectedDialogId == "HelpDialog"
+                ? "Help"
+                : "Settings";
+
+            await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
+            await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
+        }
+
+        Assert.NotNull(capturedParameters);
+        Assert.Equal(expectedDialogId, capturedParameters.Id);
+
+        cut.SetParametersAndRender(parameters =>
+        {
+            parameters.Add(p => p.Value, new ViewportInformation(IsDesktop: closingIsDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
+            parameters.AddChildContent<MainLayout>();
+        });
+
+        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(null!));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 1 &&
+                string.Equals((string?)invocation.Arguments[0], expectedFocusId, StringComparison.Ordinal));
+        });
+    }
+
+    [Theory]
+    [InlineData(AspireKeyboardShortcut.Help, "dashboard-help-button", "HelpDialog")]
+    [InlineData(AspireKeyboardShortcut.Settings, "dashboard-settings-button", "SettingsDialog")]
+    public async Task HeaderDialogShortcutClose_RestoresFocusToLaunchButton(AspireKeyboardShortcut shortcut, string launchButtonId, string expectedDialogId)
+    {
+        DialogParameters? capturedParameters = null;
+        TestDialogService? dialogService = null;
+        dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
+        {
+            capturedParameters = parameters;
+            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+        });
+
+        SetupMainLayoutServices(dialogService: dialogService);
+        JSInterop.SetupVoid("focusElement", _ => true);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        await cut.InvokeAsync(() => cut.Instance.OnPageKeyDownAsync(shortcut));
+
+        Assert.NotNull(capturedParameters);
+        Assert.Equal(expectedDialogId, capturedParameters.Id);
+
+        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(null!));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 1 &&
+                string.Equals((string?)invocation.Arguments[0], launchButtonId, StringComparison.Ordinal));
+        });
+    }
+
+    private void SetupMainLayoutServices(
+        TestLocalStorage? localStorage = null,
+        MessageService? messageService = null,
+        Action<DashboardOptions>? configureOptions = null,
+        IDialogService? dialogService = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage, messageService: messageService);
+
+        if (dialogService is not null)
+        {
+            Services.AddSingleton(dialogService);
+        }
 
         Services.AddOptions();
         Services.AddSingleton<IThemeResolver, TestThemeResolver>();
@@ -206,12 +412,36 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentDialogProvider(this);
         FluentUISetupHelpers.SetupFluentOverflow(this);
         FluentUISetupHelpers.SetupFluentAnchor(this);
+        FluentUISetupHelpers.SetupFluentButton(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentDivider(this);
 
         var themeModule = JSInterop.SetupModule("/js/app-theme.js");
 
         JSInterop.SetupModule("window.registerGlobalKeydownListener", _ => true);
         JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);
+        LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
 
         JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });
+    }
+
+    private sealed class RecordingJSRuntime : IJSRuntime
+    {
+        public List<Invocation> Invocations { get; } = [];
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+        {
+            Invocations.Add(new Invocation(identifier, args ?? []));
+            return ValueTask.FromResult(default(TValue)!);
+        }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
+        {
+            Invocations.Add(new Invocation(identifier, args ?? []));
+            return ValueTask.FromResult(default(TValue)!);
+        }
+
+        public sealed record Invocation(string Identifier, object?[] Arguments);
     }
 }

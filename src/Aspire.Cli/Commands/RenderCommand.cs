@@ -11,7 +11,6 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Microsoft.Extensions.Configuration;
@@ -50,6 +49,7 @@ internal sealed class RenderCommand : BaseCommand
         ["markdown-plain"] = "Render markdown as plain text with DisplayRawText (non-interactive)",
         ["markdown-renderable"] = "Render markdown via ConvertToRenderable with ANSI disabled",
         ["links"] = "Render terminal links with SafeLink and SafeFileLink",
+        ["incompatible-version-error"] = "Display incompatible version error (borderless table)",
         ["debug-activities"] = "Debug pipeline activities (calls ProcessPublishingActivitiesDebugAsync)",
         ["pipeline-activities"] = "Pipeline activities with spinner (calls ProcessAndDisplayPublishingActivitiesAsync)",
         ["publish-summary-all"] = "Publish summary timeline (stress scenarios)",
@@ -90,15 +90,11 @@ internal sealed class RenderCommand : BaseCommand
     private readonly IServiceProvider _serviceProvider;
 
     public RenderCommand(
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
-        AspireCliTelemetry telemetry,
         IAnsiConsole ansiConsole,
         ICliHostEnvironment hostEnvironment,
-        IServiceProvider serviceProvider)
-        : base("render", "Smoke test CLI rendering", features, updateNotifier, executionContext, interactionService, telemetry)
+        IServiceProvider serviceProvider,
+        CommonCommandServices services)
+        : base("render", "Smoke test CLI rendering", services)
     {
         _ansiConsole = ansiConsole;
         _hostEnvironment = hostEnvironment;
@@ -188,6 +184,8 @@ internal sealed class RenderCommand : BaseCommand
                     return TestMarkdownRenderRenderable();
                 case "links":
                     return await TestLinksAsync(cancellationToken);
+                case "incompatible-version-error":
+                    return TestIncompatibleVersionError();
                 case "debug-activities":
                     return await RenderDebugActivitiesAsync(cancellationToken);
                 case "pipeline-activities":
@@ -455,6 +453,15 @@ internal sealed class RenderCommand : BaseCommand
         return CliExitCodes.Success;
     }
 
+    private int TestIncompatibleVersionError()
+    {
+        var ex = new AppHostIncompatibleException(
+            "The AppHost is not compatible with this version of the Aspire CLI.",
+            requiredCapability: "baseline.v2",
+            aspireHostingVersion: "9.2.0");
+        return InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability);
+    }
+
     private int RenderPublishSummaryScenarios(IEnumerable<string> scenarioKeys)
     {
         foreach (var scenarioKey in scenarioKeys)
@@ -552,17 +559,14 @@ internal sealed class RenderCommand : BaseCommand
 
     private TestPipelineCommand CreateTestPipelineCommand() => new(
         _serviceProvider.GetRequiredService<IDotNetCliRunner>(),
-        InteractionService,
         _serviceProvider.GetRequiredService<IProjectLocator>(),
-        Telemetry,
         _serviceProvider.GetRequiredService<IFeatures>(),
-        _serviceProvider.GetRequiredService<ICliUpdateNotifier>(),
-        ExecutionContext,
         _hostEnvironment,
         _serviceProvider.GetRequiredService<IAppHostProjectFactory>(),
         _serviceProvider.GetRequiredService<IConfiguration>(),
         _serviceProvider.GetRequiredService<ILogger<RenderCommand>>(),
-        _ansiConsole);
+        _ansiConsole,
+        _serviceProvider.GetRequiredService<CommonCommandServices>());
 
     private async Task<int> RenderDebugActivitiesAsync(CancellationToken cancellationToken)
     {
@@ -803,18 +807,15 @@ internal sealed class RenderCommand : BaseCommand
     /// </summary>
     private sealed class TestPipelineCommand(
         IDotNetCliRunner runner,
-        IInteractionService interactionService,
         IProjectLocator projectLocator,
-        AspireCliTelemetry telemetry,
         IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         ICliHostEnvironment hostEnvironment,
         IAppHostProjectFactory projectFactory,
         IConfiguration configuration,
         ILogger logger,
-        IAnsiConsole ansiConsole)
-        : PipelineCommandBase("test-render", "Test rendering", runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
+        IAnsiConsole ansiConsole,
+        CommonCommandServices services)
+        : PipelineCommandBase("test-render", "Test rendering", runner, projectLocator, features, hostEnvironment, projectFactory, configuration, logger, ansiConsole, services)
     {
         protected override string OperationCompletedPrefix => "Publish";
         protected override string OperationFailedPrefix => "Publish failed";

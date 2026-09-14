@@ -16,7 +16,7 @@ public class AspireMilvusExtensionTests : IClassFixture<MilvusContainerFixture>
     internal const string DefaultKeyName = "milvus";
     internal const string DefaultApiKey = "root:Milvus";
 
-    private string ConnectionString => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker)
+    private string ConnectionString => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers)
                                         ? _containerFixture.GetConnectionString()
                                         : $"Endpoint=http://localhost:19530/;Key={DefaultApiKey}";
 

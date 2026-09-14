@@ -1,0 +1,32 @@
+.resource-actions {
+    display: flex;
+    align-items: center;
+    /* Small, even spacing between action controls. Alignment across rows comes from the fixed-width
+       slots below, not from this gap. */
+    gap: var(--aspire-space-3xs, 2px);
+}
+
+/* Every action position (a command button, the console-logs button, an empty command spacer, or the
+   overflow menu) occupies an identical-width, center-aligned slot. This guarantees the console-logs,
+   divider, and overflow-menu controls land in the exact same column on every row regardless of how many
+   highlighted commands a resource exposes. The slot is a hair wider than the ~28px Fluent lightweight
+   icon button so buttons sit centered with a little breathing room. */
+.resource-action-slot {
+    flex: 0 0 auto;
+    width: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Neutralize Fluent's intrinsic button margins so the button is truly centered within its slot. */
+.resource-action-slot ::deep .fluent-button,
+.resource-action-slot ::deep fluent-button {
+    margin: 0;
+}
+
+/* Give the vertical separator a consistent height inside the flex row (it would otherwise collapse). */
+.resource-actions ::deep .action-divider {
+    height: 20px;
+    margin-inline: var(--aspire-space-3xs, 2px);
+}

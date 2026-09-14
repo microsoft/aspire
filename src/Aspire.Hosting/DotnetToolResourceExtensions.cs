@@ -42,6 +42,7 @@ public static class DotnetToolResourceExtensions
     public static IResourceBuilder<T> AddDotnetTool<T>(this IDistributedApplicationBuilder builder, T resource)
         where T : DotnetToolResource
     {
+#pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental.
         return builder.AddResource(resource)
             .WithInitialState(new CustomResourceSnapshot
             {
@@ -50,9 +51,10 @@ public static class DotnetToolResourceExtensions
             })
             .WithIconName("Toolbox")
             .WithCommand("dotnet")
-            .WithArgs(BuildToolExecArguments)
+            .WithLaunchToolArgs(BuildToolExecArguments, showInCommandLine: false)
             .WithRequiredCommand("dotnet", context => ValidateDotnetSdkVersionAsync(context, resource.WorkingDirectory))
             .OnBeforeResourceStarted(BeforeResourceStarted);
+#pragma warning restore ASPIREEXTENSION001
 
         void BuildToolExecArguments(CommandLineArgsCallbackContext x)
         {
@@ -98,19 +100,15 @@ public static class DotnetToolResourceExtensions
         async Task BeforeResourceStarted(T resource, BeforeResourceStartedEvent evt, CancellationToken ct)
         {
             var rns = evt.Services.GetRequiredService<ResourceNotificationService>();
-            var toolConfig = resource.ToolConfiguration;
-            if (toolConfig == null)
+            var properties = resource.CreateSnapshotProperties().ToArray();
+            if (properties.Length == 0)
             {
                 return;
             }
 
             await rns.PublishUpdateAsync(resource, x => x with
             {
-                Properties = x.Properties.SetResourcePropertyRange([
-                    new (KnownProperties.Tool.Package, toolConfig.PackageId),
-                    new (KnownProperties.Tool.Version, toolConfig.Version),
-                    new (KnownProperties.Resource.Source, resource.ToolConfiguration?.PackageId)
-                    ])
+                Properties = x.Properties.SetResourcePropertyRange(properties)
             }).ConfigureAwait(false);
         }
 

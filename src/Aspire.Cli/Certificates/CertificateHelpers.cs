@@ -3,6 +3,9 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Certificates.Generation;
 
@@ -14,9 +17,23 @@ namespace Aspire.Cli.Certificates;
 internal static partial class CertificateHelpers
 {
     /// <summary>
+    /// The command used to query and update NSS certificate databases.
+    /// </summary>
+    internal const string CertUtilCommand = "certutil";
+
+    /// <summary>
     /// The environment variable name for overriding the dev-certs OpenSSL certificate directory.
     /// </summary>
     internal const string DevCertsOpenSslCertDirEnvVar = "DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY";
+
+    /// <summary>
+    /// The Aspire HTTPS development certificate key-material cache directory.
+    /// </summary>
+    internal static string AspireDevCertsHttpsCacheDirectory { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".aspire",
+        "dev-certs",
+        "https");
 
     private static readonly string s_defaultDevCertsTrustPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -27,11 +44,17 @@ internal static partial class CertificateHelpers
     /// <summary>
     /// Gets the dev-certs trust path, respecting the <c>DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY</c> override.
     /// </summary>
-    internal static string GetDevCertsTrustPath()
+    internal static string GetDevCertsTrustPath(IEnvironment environment)
     {
-        var overridePath = Environment.GetEnvironmentVariable(DevCertsOpenSslCertDirEnvVar);
+        var overridePath = environment.GetEnvironmentVariable(DevCertsOpenSslCertDirEnvVar);
         return !string.IsNullOrEmpty(overridePath) ? overridePath : s_defaultDevCertsTrustPath;
     }
+
+    /// <summary>
+    /// Computes the Aspire HTTPS development certificate cache key.
+    /// </summary>
+    internal static string GetAspireCertificateHash(X509Certificate2 certificate) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Thumbprint)));
 
     /// <summary>
     /// Gets the system certificate directories by querying OpenSSL. Falls back to well-known

@@ -19,6 +19,8 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
     private readonly ActivitySource _activitySource = new(ActivitySourceName);
 
+    internal ActivitySource ActivitySource => _activitySource;
+
     /// <summary>
     /// Environment variable names used to propagate profiling state between CLI processes.
     /// </summary>

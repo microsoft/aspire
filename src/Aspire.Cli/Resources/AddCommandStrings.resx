@@ -147,6 +147,20 @@
   <data name="SourceArgumentDescription" xml:space="preserve">
     <value>The NuGet source to use for the integration</value>
   </data>
+  <data name="AllArgumentDescription" xml:space="preserve">
+    <value>Include all integrations, even those not marked compatible with the AppHost language</value>
+  </data>
+  <data name="IntegrationNotPolyglotCompatible" xml:space="preserve">
+    <value>The '{0}' integration is not available for {1} AppHosts because it does not expose a compatible API surface. Use --all to add it anyway.</value>
+    <comment>{0} is the integration name, {1} is the AppHost language identifier.</comment>
+  </data>
+  <data name="NoPolyglotCompatibleIntegrationsFound" xml:space="preserve">
+    <value>No integrations compatible with this AppHost language were found. Use --all to list all integrations.</value>
+  </data>
+  <data name="PolyglotIntegrationsHidden" xml:space="preserve">
+    <value>{0} integration(s) not compatible with this AppHost language were hidden. Use --all to show them.</value>
+    <comment>{0} is the number of hidden integrations.</comment>
+  </data>
   <data name="FormatOptionDescription" xml:space="preserve">
     <value>Output format (Table or Json)</value>
   </data>

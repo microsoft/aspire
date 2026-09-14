@@ -14,12 +14,13 @@ namespace Aspire.Dashboard.Components.Dialogs;
 public partial class TextVisualizerDialog : ComponentBase
 {
     private readonly string _copyButtonId = $"copy-{Guid.NewGuid():N}";
-    private readonly string _openSelectFormatButtonId = $"select-format-{Guid.NewGuid():N}";
+    private readonly string _selectFormatId = $"select-format-{Guid.NewGuid():N}";
 
     private List<SelectViewModel<string>> _options = null!;
-    private string? _selectedFormat;
+    private SelectViewModel<string> _selectedFormat = null!;
     private bool _isLoading = true;
     private MarkdownProcessor? _markdownProcessor;
+    private TextVisualizerDialogViewModel? _previousContent;
     internal TextVisualizerViewModel TextVisualizerViewModel { get; set; } = default!;
 
     public HashSet<string?> EnabledOptions { get; } = [];
@@ -57,16 +58,21 @@ public partial class TextVisualizerDialog : ComponentBase
 
     protected override void OnParametersSet()
     {
-        EnabledOptions.Clear();
-        EnabledOptions.Add(DashboardUIHelpers.PlaintextFormat);
-        EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
-
         _options = [
             new SelectViewModel<string> { Id = DashboardUIHelpers.PlaintextFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogPlaintextFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.MarkdownFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogMarkdownFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.JsonFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogJsonFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.XmlFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogXmlFormat)] }
         ];
+
+        if (_previousContent == Content)
+        {
+            _selectedFormat = GetSelectedFormatOption(TextVisualizerViewModel.FormatKind);
+            return;
+        }
+
+        EnabledOptions.Clear();
+        EnabledOptions.Add(DashboardUIHelpers.PlaintextFormat);
 
         // If a fixed format is specified, use it directly without auto-detection.
         if (Content.FixedFormat is not null)
@@ -85,7 +91,16 @@ public partial class TextVisualizerDialog : ComponentBase
             {
                 EnabledOptions.Add(DashboardUIHelpers.XmlFormat);
             }
+            else
+            {
+                // Markdown can't be reliably detected from content, so enable it when the format is
+                // unknown to let users switch to markdown rendering if they want.
+                EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
+            }
         }
+
+        _previousContent = Content;
+        _selectedFormat = GetSelectedFormatOption(TextVisualizerViewModel.FormatKind);
     }
 
     private bool IsTextContentDisplayed
@@ -101,13 +116,15 @@ public partial class TextVisualizerDialog : ComponentBase
         }
     }
 
-    private void OnFormatOptionChanged(MenuChangeEventArgs args) => ChangeFormat(args.Id, args.Value);
+    private void OnSelectedFormatChanged() => ChangeFormat(_selectedFormat.Id);
 
-    public void ChangeFormat(string? newFormat, string? text)
+    internal void ChangeFormat(string? newFormat)
     {
-        _selectedFormat = text;
-        TextVisualizerViewModel.UpdateFormat(newFormat ?? DashboardUIHelpers.PlaintextFormat);
+        _selectedFormat = GetSelectedFormatOption(newFormat);
+        TextVisualizerViewModel.UpdateFormat(_selectedFormat.Id ?? DashboardUIHelpers.PlaintextFormat);
     }
+
+    private SelectViewModel<string> GetSelectedFormatOption(string? format) => _options.SingleOrDefault(o => o.Id == format) ?? _options[0];
 
     internal MarkdownProcessor GetMarkdownProcessor()
     {
@@ -146,4 +163,3 @@ public partial class TextVisualizerDialog : ComponentBase
         ShowSecretsWarning = false;
     }
 }
-

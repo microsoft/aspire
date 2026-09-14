@@ -25,7 +25,8 @@ import {
     ReferenceExpression,
     refExpr,
     AspireDict,
-    AspireList
+    AspireList,
+    InteractionInputCollectionPromiseImpl
 } from './base.mjs';
 
 export {
@@ -35,13 +36,15 @@ export {
 
 export type {
     InteractionInput,
-    InteractionInputOption
+    InteractionInputOption,
+    InteractionInputCollectionPromise
 } from './base.mjs';
 
 import type {
     Awaitable,
     InteractionInput,
     InteractionInputCollection,
+    InteractionInputCollectionPromise,
     InputType
 } from './base.mjs';
 

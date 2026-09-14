@@ -427,6 +427,18 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 {
   "checks": [
     {
+      "category": "environment",
+      "name": "operating-system",
+      "status": "pass",
+      "message": "Operating system: Linux Ubuntu 24.04",
+      "metadata": {
+        "osType": "Linux",
+        "displayName": "Linux Ubuntu",
+        "version": "24.04",
+        "description": "Ubuntu 24.04.2 LTS"
+      }
+    },
+    {
       "category": "sdk",
       "name": "dotnet-sdk",
       "status": "pass",
@@ -439,17 +451,32 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
       "message": "Container runtime is not running.",
       "fix": "Start Docker Desktop.",
       "link": "https://learn.microsoft.com/dotnet/aspire/"
+    },
+    {
+      "category": "devtools",
+      "name": "vscode-extension",
+      "status": "warning",
+      "message": "VS Code is installed, but the Aspire extension is not installed",
+      "fix": "Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.",
+      "link": "https://aka.ms/aspire/vscode-extension",
+      "metadata": {
+        "vsCodeInstalled": true,
+        "extensionInstalled": false,
+        "extensionId": "microsoft-aspire.aspire-vscode"
+      }
     }
   ],
   "summary": {
-    "passed": 1,
-    "warnings": 1,
+    "passed": 2,
+    "warnings": 2,
     "failed": 0
   }
 }
 ```
 
 `status` is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
+
+The `devtools` category surfaces development-tooling recommendations. The `vscode-extension` check only appears when VS Code is detected: it reports `warning` when the [Aspire VS Code extension](https://aka.ms/aspire/vscode-extension) is missing and `pass` when it is installed. Its `metadata` exposes `vsCodeInstalled` (bool), `extensionInstalled` (bool), and `extensionId` (string).
 
 ### `aspire config info`
 

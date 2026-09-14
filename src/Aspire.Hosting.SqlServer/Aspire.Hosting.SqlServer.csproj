@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.SqlServer.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Tests" />
   </ItemGroup>
 
 </Project>

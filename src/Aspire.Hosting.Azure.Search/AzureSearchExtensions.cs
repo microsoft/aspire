@@ -42,6 +42,7 @@ public static class AzureSearchExtensions
 
         AzureSearchResource resource = new(name, ConfigureSearch);
         return builder.AddResource(resource)
+            .WithIconName("Search")
             .WithDefaultRoleAssignments(SearchBuiltInRole.GetBuiltInRoleName,
                 SearchBuiltInRole.SearchIndexDataContributor,
                 SearchBuiltInRole.SearchServiceContributor);

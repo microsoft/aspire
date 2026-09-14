@@ -100,6 +100,8 @@
       <Replacements Include="$(MicrosoftAspNetCoreOpenApiVersion)" />
       <Replacements Include="!!REPLACE_WITH_ASPNETCORE_OPENAPI_10_VERSION!!" />
       <Replacements Include="$(MicrosoftAspNetCoreOpenApiPreviewVersion)" />
+      <Replacements Include="!!REPLACE_WITH_ASPNETCORE_OPENAPI_11_VERSION!!" />
+      <Replacements Include="$(MicrosoftAspNetCoreOpenApiNet11Version)" />
       <Replacements Include="!!REPLACE_WITH_DOTNET_EXTENSIONS_VERSION!!" />
       <Replacements Include="$(MicrosoftExtensionsHttpResilienceVersion)" />
       <Replacements Include="!!REPLACE_WITH_SERVICE_DISCOVERY_VERSION!!" />

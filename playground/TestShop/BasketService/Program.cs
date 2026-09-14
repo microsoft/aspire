@@ -8,7 +8,7 @@ builder.Services.AddGrpc();
 builder.AddRedisClient("basketcache");
 builder.Services.AddTransient<IBasketRepository, RedisBasketRepository>();
 
-builder.AddRabbitMQClient("messaging");
+builder.AddRabbitMQClient("messaging", configureSettings: settings => settings.DisableAutoActivation = false);
 
 var app = builder.Build();
 

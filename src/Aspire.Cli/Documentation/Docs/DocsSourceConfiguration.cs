@@ -12,7 +12,7 @@ namespace Aspire.Cli.Documentation.Docs;
 internal static partial class DocsSourceConfiguration
 {
     private const string IndexCacheKeyPrefix = "index:";
-    
+
     /// <summary>
     /// Configuration path for overriding the llms.txt source URL.
     /// </summary>

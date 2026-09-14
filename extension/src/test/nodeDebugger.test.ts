@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { nodeDebuggerExtension } from '../debugger/languages/node';
+import { launchMethodDirect, launchMethodPackageManager } from '../debugger/languages/javascriptRuntime';
 import { AspireResourceExtendedDebugConfiguration, NodeLaunchConfiguration } from '../dcp/types';
 
 suite('Node Debugger Tests', () => {
@@ -37,6 +38,41 @@ suite('Node Debugger Tests', () => {
         assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', 'dev']);
         assert.strictEqual(debugConfig.program, undefined);
         assert.strictEqual(debugConfig.args, undefined);
+    });
+
+    test('uses a realistic package-manager launch with an explicit launch_method', async () => {
+        const launchConfig: NodeLaunchConfiguration = {
+            type: 'node',
+            runtime_executable: 'npm',
+            working_directory: '/workspace/app',
+            launch_method: launchMethodPackageManager
+        };
+        const debugConfig = createDebugConfig();
+
+        await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(launchConfig, ['run', 'dev'], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        assert.strictEqual(debugConfig.runtimeExecutable, 'npm');
+        assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', 'dev']);
+        assert.strictEqual(debugConfig.program, undefined);
+        assert.strictEqual(debugConfig.args, undefined);
+    });
+
+    test('uses a realistic direct launch with an explicit launch_method', async () => {
+        const launchConfig: NodeLaunchConfiguration = {
+            type: 'node',
+            runtime_executable: 'node',
+            script_path: '/workspace/app/server.js',
+            working_directory: '/workspace/app',
+            launch_method: launchMethodDirect
+        };
+        const debugConfig = createDebugConfig();
+
+        await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        assert.strictEqual(debugConfig.runtimeExecutable, 'node');
+        assert.strictEqual(debugConfig.runtimeArgs, undefined);
+        assert.strictEqual(debugConfig.program, '/workspace/app/server.js');
+        assert.deepStrictEqual(debugConfig.args, []);
     });
 });
 

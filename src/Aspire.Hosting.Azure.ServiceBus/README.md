@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.ServiceBus library
+# Azure Service Bus hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Azure Service Bus.
+Use this integration to model, configure, and orchestrate Azure Service Bus in an Aspire solution.
 
 ## Getting started
 
@@ -8,29 +8,24 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 - Azure subscription - [create one for free](https://azure.microsoft.com/free/)
 
-### Install the package
+### Add the integration
 
-Install the Aspire Azure Service Bus Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.ServiceBus` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.ServiceBus
+```bash
+aspire add Aspire.Hosting.Azure.ServiceBus
 ```
 
 ## Configure Azure Provisioning for local development
 
-Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
+Adding Azure resources to the AppHost model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
-to be available via .NET configuration. Set these values in user secrets in order to allow resources to be configured
-automatically.
+to be available via AppHost configuration. From your AppHost directory, set these values with `aspire secret set`:
 
-```json
-{
-    "Azure": {
-      "SubscriptionId": "<your subscription id>",
-      "ResourceGroupPrefix": "<prefix for the resource group>",
-      "Location": "<azure location>"
-    }
-}
+```bash
+aspire secret set Azure:SubscriptionId "<your subscription id>"
+aspire secret set Azure:ResourceGroupPrefix "<prefix for the resource group>"
+aspire secret set Azure:Location "<azure location>"
 ```
 
 > NOTE: Developers must have Owner access to the target subscription so that role assignments
@@ -38,7 +33,9 @@ automatically.
 
 ## Usage example
 
-In the _AppHost.cs_ file of `AppHost`, add a Service Bus connection and consume the connection using the following methods:
+In the AppHost, add a Service Bus connection and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var serviceBus = builder.AddAzureServiceBus("sb");
@@ -47,10 +44,13 @@ var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(serviceBus);
 ```
 
-The `WithReference` method passes that connection information into a connection string named `sb` in the `MyService` project. In the _Program.cs_ file of `MyService`, the connection can be consumed using the client library [Aspire.Azure.Messaging.ServiceBus](https://www.nuget.org/packages/Aspire.Azure.Messaging.ServiceBus):
+**TypeScript**
 
-```csharp
-builder.AddAzureServiceBusClient("sb");
+```typescript
+const serviceBus = await builder.addAzureServiceBus("sb");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(serviceBus);
 ```
 
 ## Connection Properties
@@ -97,8 +97,9 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/servicebus/Azure.Messaging.ServiceBus/README.md
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-service-bus/azure-service-bus-host/
+* https://learn.microsoft.com/azure/service-bus-messaging/service-bus-messaging-overview
 
 ## Feedback & contributing
 

@@ -46,11 +46,4 @@ public static class TelemetryPropertyKeys
 
     // Command properties
     public const string CommandName = AspireDashboardPropertyPrefix + "Command.Name";
-
-    // AIAssistant properties
-    public const string AIAssistantEnabled = AspireDashboardPropertyPrefix + "AIAssistant.Enabled";
-    public const string AIAssistantChatMessageCount = AspireDashboardPropertyPrefix + "AIAssistant.ChatMessageCount";
-    public const string AIAssistantSelectedModel = AspireDashboardPropertyPrefix + "AIAssistant.SelectedModel";
-    public const string AIAssistantToolCalls = AspireDashboardPropertyPrefix + "AIAssistant.ToolCalls";
-    public const string AIAssistantFeedbackType = AspireDashboardPropertyPrefix + "AIAssistant.FeedbackType";
 }

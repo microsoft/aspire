@@ -1,0 +1,11 @@
+<Project>
+
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+    <PropertyGroup>
+        <!-- AddDotnetProject and DotnetProjectResource are experimental. Suppress the diagnostic across
+             the whole sample so the app host can call them without per-call pragmas. -->
+        <NoWarn>$(NoWarn);ASPIREDOTNETPROJECT001</NoWarn>
+    </PropertyGroup>
+
+</Project>

@@ -102,7 +102,8 @@ public static class KubernetesEnvironmentExtensions
 
         }
 
-        var resourceBuilder = builder.AddResource(resource);
+        var resourceBuilder = builder.AddResource(resource)
+            .WithIconName("ServerMultiple");
 
         // Default to Helm deployment engine if not already configured
         EnsureDefaultHelmEngine(resourceBuilder);
@@ -254,6 +255,7 @@ public static class KubernetesEnvironmentExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(nodePool)
+            .WithIconName("ServerMultiple")
             .ExcludeFromManifest();
     }
 

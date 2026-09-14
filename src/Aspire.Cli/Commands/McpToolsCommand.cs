@@ -5,13 +5,8 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
-using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -23,7 +18,6 @@ internal sealed class McpToolsCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
-    private readonly IInteractionService _interactionService;
     private readonly AppHostConnectionResolver _connectionResolver;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
@@ -33,18 +27,11 @@ internal sealed class McpToolsCommand : BaseCommand
     };
 
     public McpToolsCommand(
-        IInteractionService interactionService,
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IProjectLocator projectLocator,
-        AspireCliTelemetry telemetry,
-        ILogger<McpToolsCommand> logger)
-        : base("tools", McpCommandStrings.ToolsCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        AppHostConnectionResolver connectionResolver,
+        CommonCommandServices services)
+        : base("tools", McpCommandStrings.ToolsCommand_Description, services)
     {
-        _interactionService = interactionService;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
+        _connectionResolver = connectionResolver;
 
         Options.Add(s_appHostOption);
         Options.Add(s_formatOption);
@@ -64,7 +51,7 @@ internal sealed class McpToolsCommand : BaseCommand
 
         if (!result.Success)
         {
-            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService));
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, InteractionService));
         }
 
         var connection = result.Connection!;
@@ -73,7 +60,7 @@ internal sealed class McpToolsCommand : BaseCommand
 
         if (resourcesWithTools.Count == 0)
         {
-            _interactionService.DisplayMessage(KnownEmojis.Information, "No resources with MCP tools found.");
+            InteractionService.DisplayMessage(KnownEmojis.Information, "No resources with MCP tools found.");
             return CommandResult.Success();
         }
 
@@ -102,7 +89,7 @@ internal sealed class McpToolsCommand : BaseCommand
                 writer.WriteEndArray();
             }
 
-            _interactionService.DisplayRawText(System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+            InteractionService.DisplayRawText(System.Text.Encoding.UTF8.GetString(stream.ToArray()));
         }
         else
         {
@@ -123,7 +110,7 @@ internal sealed class McpToolsCommand : BaseCommand
                 }
             }
 
-            _interactionService.DisplayRenderable(table);
+            InteractionService.DisplayRenderable(table);
         }
 
         return CommandResult.Success();

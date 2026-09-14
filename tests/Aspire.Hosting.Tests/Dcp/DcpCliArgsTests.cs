@@ -134,6 +134,53 @@ public class DcpCliArgsTests
         Assert.Contains("The path to the Aspire Dashboard binaries is missing.", result.FailureMessage);
     }
 
+    [Fact]
+    public void DcpOptionsValidationFailsForInvalidProxylessEndpointPortRange()
+    {
+        var validator = new ValidateDcpOptions();
+        var result = validator.Validate(null, new DcpOptions
+        {
+            CliPath = "dcp",
+            DashboardPath = "dashboard",
+            ProxylessEndpointPortRangeStart = 32767,
+            ProxylessEndpointPortRangeEnd = 10000,
+        });
+
+        Assert.True(result.Failed);
+        Assert.Contains("The proxyless endpoint port range start must be less than or equal to the range end.", result.FailureMessage);
+    }
+
+    [Fact]
+    public void KnownConfigProxylessEndpointPortRangeOverridesDcpPublisherConfiguration()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["DcpPublisher:ProxylessEndpointPortRangeStart"] = "10000",
+            ["DcpPublisher:ProxylessEndpointPortRangeEnd"] = "10001",
+            [KnownConfigNames.ProxylessEndpointPortRange] = "20000-20001",
+        });
+
+        using var app = builder.Build();
+        var dcpOptions = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
+
+        Assert.Equal(20000, dcpOptions.ProxylessEndpointPortRangeStart);
+        Assert.Equal(20001, dcpOptions.ProxylessEndpointPortRangeEnd);
+    }
+
+    [Fact]
+    public void KnownConfigProxylessEndpointPortRangeRequiresStartEndFormat()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.Configuration[KnownConfigNames.ProxylessEndpointPortRange] = "20000";
+        using var app = builder.Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => app.Services.GetRequiredService<IOptions<DcpOptions>>().Value);
+
+        Assert.Contains(KnownConfigNames.ProxylessEndpointPortRange, exception.Message);
+        Assert.Contains("start-end", exception.Message);
+    }
+
     private static void AddDcpPublisherPathConfigurationOverride(ConfigurationManager configuration, string cliPath, string dashboardPath)
     {
         configuration.AddInMemoryCollection(new Dictionary<string, string?>

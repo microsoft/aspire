@@ -17,7 +17,17 @@ public sealed class ProcessCommandResultContext
     /// <summary>
     /// Gets the service provider.
     /// </summary>
-    public required IServiceProvider ServiceProvider { get; init; }
+    [Obsolete("Use Services instead.")]
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// Gets the service provider.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
 
     /// <summary>
     /// Gets the name of the resource the command was configured on.
@@ -33,6 +43,25 @@ public sealed class ProcessCommandResultContext
     /// Gets the cancellation token.
     /// </summary>
     public required CancellationToken CancellationToken { get; init; }
+
+    /// <summary>
+    /// Gets the invocation arguments supplied by the client when the command is executed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The collection contains the arguments described by the command's <see cref="CommandOptions.Arguments"/> with their
+    /// submitted values populated. CLI positional arguments are mapped by declaration order. Dashboard, MCP, and other
+    /// named-payload clients are mapped by <see cref="InteractionInput.Name"/>.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// Read a declared command argument when producing a custom result:
+    /// <code>
+    /// GetCommandResult = context =>
+    ///     Task.FromResult(CommandResults.Success("received", context.Arguments.GetString("message")!));
+    /// </code>
+    /// </example>
+    public InteractionInputCollection Arguments { get; init; } = new([]);
 
     /// <summary>
     /// Gets the process command specification used for the command invocation.
@@ -65,3 +94,4 @@ public sealed class ProcessCommandResultContext
         return ProcessOutputCapture.FormatOutput(Output, TotalOutputLineCount, maxLines, outputDescription);
     }
 }
+

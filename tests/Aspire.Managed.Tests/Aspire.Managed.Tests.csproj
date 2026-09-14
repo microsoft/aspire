@@ -1,11 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
   </ItemGroup>
 
   <ItemGroup>

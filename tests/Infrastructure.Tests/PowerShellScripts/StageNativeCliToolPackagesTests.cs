@@ -22,17 +22,18 @@ public sealed class StageNativeCliToolPackagesTests : IDisposable
         "win-arm64"
     ];
 
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _scriptPath;
     private readonly ITestOutputHelper _output;
 
     public StageNativeCliToolPackagesTests(ITestOutputHelper output)
     {
         _output = output;
-        _scriptPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "stage-native-cli-tool-packages.ps1");
+        _workspace = TemporaryWorkspace.Create(output);
+        _scriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "stage-native-cli-tool-packages.ps1");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["pwsh"])]
@@ -299,14 +300,14 @@ public sealed class StageNativeCliToolPackagesTests : IDisposable
 
     private string CreateDownloadRoot()
     {
-        var path = Path.Combine(_tempDir.Path, Path.GetRandomFileName(), "download");
+        var path = Path.Combine(_workspace.Path, Path.GetRandomFileName(), "download");
         Directory.CreateDirectory(path);
         return path;
     }
 
     private string CreateShippingDir()
     {
-        return Path.Combine(_tempDir.Path, Path.GetRandomFileName(), "shipping");
+        return Path.Combine(_workspace.Path, Path.GetRandomFileName(), "shipping");
     }
 
     private static void CreateNativeArchivePackages(string downloadRoot, string rid)
@@ -339,19 +340,5 @@ public sealed class StageNativeCliToolPackagesTests : IDisposable
             .Select(Path.GetFileName)
             .Order(StringComparer.Ordinal)
             .ToArray()!;
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root");
     }
 }

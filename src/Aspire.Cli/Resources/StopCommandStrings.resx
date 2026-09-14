@@ -150,10 +150,40 @@
   <data name="AllOptionDescription" xml:space="preserve">
     <value>Stop all running AppHosts</value>
   </data>
+  <data name="ForceOptionDescription" xml:space="preserve">
+    <value>Stop the AppHost and clean up its persistent resources</value>
+  </data>
+  <data name="CouldNotDetermineAppHostPath" xml:space="preserve">
+    <value>Could not determine the AppHost project path.</value>
+  </data>
+  <data name="CleaningPersistentResources" xml:space="preserve">
+    <value>Cleaning up persistent resources for {0}...</value>
+  </data>
+  <data name="PersistentResourcesCleaned" xml:space="preserve">
+    <value>Persistent resources for {0} cleaned up.</value>
+  </data>
+  <data name="DcpCleanupUnavailable" xml:space="preserve">
+    <value>Could not find the DCP executable needed to clean up persistent resources.</value>
+  </data>
+  <data name="DcpCleanupCompatibilityCheckFailed" xml:space="preserve">
+    <value>Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</value>
+  </data>
+  <data name="DcpCleanupUnsupportedAppHostVersion" xml:space="preserve">
+    <value>This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</value>
+  </data>
+  <data name="DcpCleanupFailed" xml:space="preserve">
+    <value>Failed to clean up persistent resources for {0}. {1}</value>
+  </data>
+  <data name="DcpCleanupExitCode" xml:space="preserve">
+    <value>DCP cleanup exited with code {0}.</value>
+  </data>
   <data name="MultipleAppHostsNonInteractive" xml:space="preserve">
     <value>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</value>
   </data>
   <data name="AllAndProjectMutuallyExclusive" xml:space="preserve">
     <value>The {0} and {1} options cannot be used together.</value>
+  </data>
+  <data name="UnknownAspireHostingVersion" xml:space="preserve">
+    <value>an unknown version</value>
   </data>
 </root>

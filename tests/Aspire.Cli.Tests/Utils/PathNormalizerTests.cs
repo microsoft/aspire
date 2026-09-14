@@ -13,7 +13,7 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
         // The input itself may sit under a symlinked root (for example /var -> /private/var
         // on macOS), so we cannot assert the result equals the input. We can assert
         // idempotence: a path with no remaining symlinks must resolve to itself.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var subdir = workspace.WorkspaceRoot.CreateSubdirectory("App");
         var file = new FileInfo(Path.Combine(subdir.FullName, "app.csproj"));
@@ -34,7 +34,7 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveSymlinks_ResolvesFinalFileSymlink()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var target = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "target.csproj"));
         File.WriteAllText(target.FullName, "<Project />");
@@ -57,7 +57,7 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
         // /tmp -> /private/tmp, and the apphost lives at /tmp/L5/x.cs. A single call to
         // Directory.ResolveLinkTarget on the full path would not unwrap /tmp, so the
         // implementation must walk segments.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
         var nested = realDirectory.CreateSubdirectory("nested");
@@ -80,7 +80,7 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveSymlinks_PreservesPath_WhenLinkIsBroken()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var missingTarget = Path.Combine(workspace.WorkspaceRoot.FullName, "missing.csproj");
         var linkPath = Path.Combine(workspace.WorkspaceRoot.FullName, "broken-link.csproj");

@@ -17,8 +17,12 @@ internal sealed class CliOrphanDetector(IConfiguration configuration, IHostAppli
 
     internal Func<int, long, bool> IsProcessRunningWithStartTime { get; set; } = (int pid, long expectedStartTimeUnix) =>
     {
-        using var process = ProcessSignaler.TryGetRunningProcess(pid, DateTimeOffset.FromUnixTimeSeconds(expectedStartTimeUnix), logger);
-        return process is not null;
+        return ProcessStartTimeHelper.IsProcessRunning(pid, expectedStartTimeUnix);
+    };
+
+    internal Func<int, long, bool> IsProcessRunningWithLegacyStartTime { get; set; } = (int pid, long expectedStartTimeUnix) =>
+    {
+        return ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(pid, expectedStartTimeUnix, ProcessStartTimeHelper.LegacyStartTimeMatchTolerance);
     };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -33,13 +37,21 @@ internal sealed class CliOrphanDetector(IConfiguration configuration, IHostAppli
 
         logger.LogDebug("Starting orphan detection for CLI process {Pid}.", pid);
 
-        // Try to get the CLI process start time for robust orphan detection
+        // Try to get the CLI process start time for robust orphan detection.
         long? expectedStartTimeUnix = null;
-        if (configuration[KnownConfigNames.CliProcessStarted] is { } startTimeString &&
+        var useLegacyStartTime = false;
+        if (configuration[KnownConfigNames.CliProcessStartedStable] is { } stableStartTimeString &&
+            long.TryParse(stableStartTimeString, out var stableStartTimeUnix))
+        {
+            expectedStartTimeUnix = stableStartTimeUnix;
+            logger.LogDebug("Using stable start time verification. Expected start time: {StartTime}.", expectedStartTimeUnix);
+        }
+        else if (configuration[KnownConfigNames.CliProcessStarted] is { } startTimeString &&
             long.TryParse(startTimeString, out var startTimeUnix))
         {
             expectedStartTimeUnix = startTimeUnix;
-            logger.LogDebug("Using start time verification. Expected start time: {StartTime}.", expectedStartTimeUnix);
+            useLegacyStartTime = true;
+            logger.LogDebug("Using legacy start time verification. Expected start time: {StartTime}.", expectedStartTimeUnix);
         }
         else
         {
@@ -57,8 +69,9 @@ internal sealed class CliOrphanDetector(IConfiguration configuration, IHostAppli
 
                 if (expectedStartTimeUnix.HasValue)
                 {
-                    // Use robust process checking with start time verification
-                    isProcessStillRunning = IsProcessRunningWithStartTime(pid, expectedStartTimeUnix.Value);
+                    isProcessStillRunning = useLegacyStartTime
+                        ? IsProcessRunningWithLegacyStartTime(pid, expectedStartTimeUnix.Value)
+                        : IsProcessRunningWithStartTime(pid, expectedStartTimeUnix.Value);
                 }
                 else
                 {

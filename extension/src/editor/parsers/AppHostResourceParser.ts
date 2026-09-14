@@ -72,7 +72,7 @@ export function getSupportedLanguageIds(): string[] {
     return [...ids];
 }
 
-function getFileExtension(filePath: string): string {
+export function getFileExtension(filePath: string): string {
     const lastDot = filePath.lastIndexOf('.');
     return lastDot >= 0 ? filePath.substring(lastDot).toLowerCase() : '';
 }
@@ -80,7 +80,11 @@ function getFileExtension(filePath: string): string {
 function extensionToLanguageId(ext: string): string | undefined {
     switch (ext) {
         case '.cs': return 'csharp';
+        case '.mts':
+        case '.cts':
         case '.ts': return 'typescript';
+        case '.mjs':
+        case '.cjs':
         case '.js': return 'javascript';
         default: return undefined;
     }

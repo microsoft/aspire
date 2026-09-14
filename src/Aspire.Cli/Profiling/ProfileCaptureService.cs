@@ -11,7 +11,6 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
-using AspireCliProfilingTelemetry = Aspire.Cli.Telemetry.ProfilingTelemetry;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Aspire.Otlp.Serialization;
@@ -19,6 +18,7 @@ using Aspire.Shared;
 using Aspire.Shared.Export;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using AspireCliProfilingTelemetry = Aspire.Cli.Telemetry.ProfilingTelemetry;
 
 namespace Aspire.Cli.Profiling;
 
@@ -83,7 +83,7 @@ internal sealed class ProfileCaptureService(
         var dashboardArgs = new[]
         {
             "dashboard",
-            $"--{KnownConfigNames.AspNetCoreUrls}={options.DashboardUrl}",
+            $"--{KnownAspNetCoreConfigNames.Urls}={options.DashboardUrl}",
             $"--{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}={options.OtlpGrpcUrl}",
             $"--{KnownConfigNames.DashboardOtlpHttpEndpointUrl}={options.OtlpHttpUrl}",
             $"--{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true",
@@ -105,11 +105,14 @@ internal sealed class ProfileCaptureService(
             // Launch aspire-managed directly instead of calling `aspire dashboard run`. Calling
             // back through the CLI being profiled would recursively apply --capture-profile and
             // make the collector part of the measurement.
-            dashboardProcess = layoutProcessRunner.Start(
+            // Bind the collector dashboard to the Windows kill-on-close job so it cannot outlive a
+            // hard-killed CLI (OS-level backstop on top of the cross-platform watchdog). No-op off Windows.
+            dashboardProcess = await layoutProcessRunner.StartAsync(
                 managedPath,
                 dashboardArgs,
                 environmentVariables: environmentVariables,
-                options: processOptions);
+                options: processOptions,
+                killOnParentExit: true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -377,7 +380,7 @@ internal sealed class ProfileCaptureService(
             }
             finally
             {
-                _dashboardProcess.Dispose();
+                await _dashboardProcess.DisposeAsync().ConfigureAwait(false);
                 _layoutLease?.Dispose();
             }
         }

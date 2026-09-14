@@ -7,7 +7,7 @@ namespace Infrastructure.Tests;
 
 public sealed class ReleasePublishNugetPipelineTests
 {
-    private readonly string _repoRoot = FindRepoRoot();
+    private readonly string _repoRoot = RepoRoot.Path;
 
     [Fact]
     public async Task ValidatesNpmPublishPreconditionsBeforeNuGetPublish()
@@ -80,7 +80,7 @@ public sealed class ReleasePublishNugetPipelineTests
         //   2) templateContext.mb.publish.feedSource: <dnceng mirror>  (for the publishing job)
         // Both must be present in this pipeline:
         //   - non-publishing jobs (PrepareJob, WinGetJob, DispatchGitHubTasksJob,
-        //     PublishReleaseAssetsJob, HomebrewValidateJob) -> enabled: false
+        //     PublishReleaseAssetsJob, UpdateNixPackageJob, HomebrewValidateJob) -> enabled: false
         //   - ReleaseJob (the only job that actually publishes) -> feedSource = dnceng mirror
         Assert.Contains("enabled: false", pipeline);
         Assert.Contains(
@@ -137,12 +137,19 @@ public sealed class ReleasePublishNugetPipelineTests
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
 
         Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_OWNERS", commonVariables);
-        Assert.Contains("- name: NPM_PUBLISH_REQUIRED_OWNERS", pipeline);
-        Assert.Contains("value: joperezr,ankj", pipeline);
         Assert.DoesNotContain("NPM_PUBLISH_DEFAULT_APPROVER", commonVariables);
         Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_APPROVERS", commonVariables);
+        Assert.Contains("- name: NPM_PUBLISH_REQUIRED_OWNERS", pipeline);
+        Assert.Equal("joperezr,ankj", FindYamlVariableValue(pipeline, "NPM_PUBLISH_REQUIRED_OWNERS"));
         Assert.Contains("displayName: '[Advanced] npm ESRP owner (single Microsoft alias or email; must be joperezr or ankj)'", pipeline);
         Assert.Contains("displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owner)'", pipeline);
+
+        AssertOwnerDefaultIsSingleRequiredAlias(
+            FindYamlVariableValue(pipeline, "NPM_PUBLISH_REQUIRED_OWNERS"),
+            FindYamlParameterDefault(pipeline, "NpmPublishOwners"),
+            "NpmPublishOwners");
+        Assert.Equal("adamratzman", FindYamlParameterDefault(pipeline, "NpmPublishApprovers"));
+
         Assert.Contains("$requiredNpmOwnersValue = $env:NPM_PUBLISH_REQUIRED_OWNERS", pipeline);
         Assert.DoesNotContain("NPM_PUBLISH_DEFAULT_APPROVER", pipeline);
         Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_APPROVERS", pipeline);
@@ -469,30 +476,27 @@ public sealed class ReleasePublishNugetPipelineTests
     [Fact]
     public async Task NpmSignatureSidecarsAreContentSanityChecked()
     {
+        // release-publish-nuget.yml inlines a content sanity check on every
+        // microsoft-aspire-cli*.tgz.sig sidecar. The check exists to catch
+        // the most likely silent failure mode in Arcade/ESRP signing: the
+        // sidecar file gets emitted (so a file-existence check passes) but
+        // the content is empty or garbage. A real PGP signature is hundreds
+        // of bytes and starts with either the ASCII-armored header
+        // `-----BEGIN PGP SIGNATURE-----` (RFC 9580 §6) or an OpenPGP binary
+        // signature packet (tag 2: old-format 0x88..0x8B or new-format 0xC2,
+        // RFC 9580 §4.3 / §5.2).
+        //
+        // Behavioral coverage of the same logic in eng/scripts/validate-npm-package-signatures.ps1
+        // lives in ValidateNpmPackageSignaturesTests; if release-publish-nuget.yml
+        // is ever refactored to call that script instead of inlining the
+        // bytes, assert the script invocation here and drop these literal
+        // marker assertions.
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-        var buildAndTest = await ReadRepoFileAsync("eng/pipelines/templates/BuildAndTest.yml");
 
-        // The earlier validation only checked that the `.tgz.sig` files
-        // EXIST. If Arcade SignTool silently produced an empty or garbage
-        // sidecar (signing service hiccup, plugin misconfiguration), the
-        // release would publish a tarball whose sidecar is unverifiable
-        // and nothing in CI would catch it. Full PGP verification would
-        // require importing the LinuxSign500180PGP public key and running
-        // gpg on every agent. As a low-risk middle ground, both source
-        // build (BuildAndTest.yml) and release pipeline assert each
-        // `.sig` is non-empty AND contains an OpenPGP signature marker
-        // (ASCII-armored "-----BEGIN PGP SIGNATURE-----" per RFC 9580 §6,
-        // OR a binary OpenPGP signature packet — tag 2, RFC 9580 §4.3
-        // / §5.2 — starting with 0x88-0x8B (old format) or 0xC2 (new
-        // format)).
         Assert.Contains("'-----BEGIN PGP SIGNATURE-----'", pipeline);
-        Assert.Contains("'-----BEGIN PGP SIGNATURE-----'", buildAndTest);
         Assert.Contains("0x8B", pipeline);
-        Assert.Contains("0x8B", buildAndTest);
         Assert.Contains("0xC2", pipeline);
-        Assert.Contains("0xC2", buildAndTest);
         Assert.Contains("content sanity check", pipeline);
-        Assert.Contains("content sanity check", buildAndTest);
     }
 
     [Fact]
@@ -541,6 +545,88 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.Contains("npm view $spec version --registry=https://registry.npmjs.org/", pipeline);
     }
 
+    [Fact]
+    public async Task VSCodeExtensionPublishUsesAzureCredential()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var job = ExtractSection(
+            pipeline,
+            "# ===== VS CODE EXTENSION PUBLISHING =====",
+            "# ===== WINGET PUBLISHING =====");
+
+        Assert.Contains("task: AzureCLI@2", job);
+        // The service connection name must match the connection whose identity is authorized on
+        // the microsoft-aspire Marketplace publisher. A mismatch fails only at publish time,
+        // which is the last step of a release.
+        Assert.Contains("azureSubscription: 'AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity'", job);
+        Assert.Contains("vsce verify-pat --azure-credential $publisher", job);
+        Assert.Contains("""$publishArgs = @("publish", "--azure-credential", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)""", job);
+        Assert.Contains("vsce @publishArgs", job);
+
+        var secretReferenceMatches = System.Text.RegularExpressions.Regex.Matches(job, @"\b(VSCE_PAT|VscePublishToken)\b");
+        Assert.Empty(secretReferenceMatches);
+    }
+
+    [Fact]
+    public async Task ExtensionReleaseInstructionsSkipNonExtensionReleaseLegs()
+    {
+        var workflow = await ReadRepoFileAsync(".github/workflows/extension-release.yml");
+        var instructions = ExtractSection(
+            workflow,
+            "For an extension-only release, use these parameters:",
+            "For a full Aspire release");
+
+        Assert.Contains("| \\`SkipNuGetPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNpmRidPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNpmPointerPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipChannelPromotion\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipWinGetPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipHomebrewValidation\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipGitHubTasks\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipReleaseAssets\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNixPackageUpdate\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipVSCodeExtensionPublish\\` | \\`false\\` |", instructions);
+    }
+
+    [Fact]
+    public async Task ExtensionReleaseDryRunInstructionsDoNotOverstatePublisherRoleValidation()
+    {
+        var workflow = await ReadRepoFileAsync(".github/workflows/extension-release.yml");
+
+        Assert.Contains("can acquire an Azure credential and read publisher role assignments", workflow);
+        Assert.Contains("Separately confirm the service connection identity is a Contributor", workflow);
+    }
+
+    [Fact]
+    public async Task MarketplacePublishingDocumentationKeepsIdentityDetailsInternalAndRetiresPat()
+    {
+        var documentation = await ReadRepoFileAsync("docs/release-process.md");
+        var identitySection = ExtractSection(
+            documentation,
+            "#### Marketplace publishing identity",
+            "### Approved GitHub Actions");
+
+        Assert.Contains(
+            "[Azure DevOps service connections](https://dev.azure.com/dnceng/internal/_settings/adminservices)",
+            identitySection);
+        Assert.DoesNotMatch(
+            @"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+            documentation);
+        Assert.Contains(
+            "If the variable is still present in `Aspire-Release-Secrets`, revoke the PAT and delete the variable.",
+            documentation);
+    }
+
+    private static string ExtractSection(string contents, string begin, string end)
+    {
+        var beginIndex = FindRequiredText(contents, begin);
+        var endIndex = FindRequiredText(contents, end);
+
+        Assert.True(endIndex > beginIndex, $"Expected '{end}' after '{begin}'.");
+
+        return contents[beginIndex..endIndex];
+    }
+
     private static void AssertBefore(string contents, string text, int boundaryIndex)
     {
         var textIndex = FindRequiredText(contents, text);
@@ -559,23 +645,100 @@ public sealed class ReleasePublishNugetPipelineTests
         return index;
     }
 
-    private Task<string> ReadRepoFileAsync(string relativePath)
-        => File.ReadAllTextAsync(Path.Combine(_repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
-
-    private static string FindRepoRoot()
+    private static void AssertOwnerDefaultIsSingleRequiredAlias(string requiredAliasesValue, string actualAliasesValue, string parameterName)
     {
-        string? current = AppContext.BaseDirectory;
+        // The single-owner rule means the default must normalize to exactly one alias, and that
+        // alias must be one of the required ESRP owner aliases so unattended runs pass validation.
+        var actualAliases = ParseNpmReleaseAliasSet(actualAliasesValue);
+        Assert.True(
+            actualAliases.Count == 1,
+            $"{parameterName} default must be a single alias, but was '{actualAliasesValue}'.");
 
-        while (current is not null)
+        var requiredAliases = ParseNpmReleaseAliasSet(requiredAliasesValue);
+        Assert.True(
+            actualAliases.All(requiredAliases.Contains),
+            $"{parameterName} default '{actualAliasesValue}' must be one of the required ESRP owner aliases: {requiredAliasesValue}.");
+    }
+
+    private static HashSet<string> ParseNpmReleaseAliasSet(string value)
+    {
+        var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            if (File.Exists(Path.Combine(current, "Aspire.slnx")))
+            var alias = entry;
+            if (alias.EndsWith("@microsoft.com", StringComparison.OrdinalIgnoreCase))
             {
-                return current;
+                alias = alias[..^"@microsoft.com".Length];
             }
 
-            current = Directory.GetParent(current)?.FullName;
+            aliases.Add(alias.ToLowerInvariant());
         }
 
-        throw new DirectoryNotFoundException("Could not find repository root containing Aspire.slnx");
+        return aliases;
     }
+
+    private static string FindYamlVariableValue(string contents, string variableName)
+        => FindYamlValueAfterMarker(contents, $"- name: {variableName}", "value:");
+
+    private static string FindYamlParameterDefault(string contents, string parameterName)
+        => FindYamlValueAfterMarker(contents, $"- name: {parameterName}", "default:");
+
+    private static string FindYamlValueAfterMarker(string contents, string marker, string valueKey)
+    {
+        var lines = contents.Split('\n');
+        var markerLineIndex = Array.FindIndex(lines, line => line.TrimEnd('\r').Trim() == marker);
+
+        Assert.True(markerLineIndex >= 0, $"Expected to find '{marker}'.");
+
+        var markerIndent = CountLeadingWhitespace(lines[markerLineIndex]);
+        for (var i = markerLineIndex + 1; i < lines.Length; i++)
+        {
+            var rawLine = lines[i].TrimEnd('\r');
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var indent = CountLeadingWhitespace(rawLine);
+            if (indent == markerIndent && line.StartsWith("- ", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            if (indent > markerIndent && line.StartsWith(valueKey, StringComparison.Ordinal))
+            {
+                return TrimYamlQuotes(line[valueKey.Length..].Trim());
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"Expected to find '{valueKey}' after '{marker}'.");
+    }
+
+    private static int CountLeadingWhitespace(string value)
+    {
+        var count = 0;
+        while (count < value.Length && char.IsWhiteSpace(value[count]))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    private static string TrimYamlQuotes(string value)
+    {
+        if (value.Length >= 2 &&
+            ((value[0] == '\'' && value[^1] == '\'') ||
+             (value[0] == '"' && value[^1] == '"')))
+        {
+            return value[1..^1];
+        }
+
+        return value;
+    }
+
+    private Task<string> ReadRepoFileAsync(string relativePath)
+        => File.ReadAllTextAsync(Path.Combine(_repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
 }

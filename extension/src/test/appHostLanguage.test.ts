@@ -1,0 +1,201 @@
+import * as assert from 'assert';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { summarizeAppHostLanguages, classifyAppHostPath, classifyAppHostDirectory } from '../utils/appHostLanguage';
+import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
+
+function c(language: string | null): CandidateAppHostDisplayInfo {
+    return { path: '/x', language, status: 'buildable' };
+}
+
+suite('appHostLanguage.summarizeAppHostLanguages', () => {
+    test('returns none for empty candidate list', () => {
+        assert.strictEqual(summarizeAppHostLanguages([]), 'none');
+    });
+
+    test('returns csharp when every candidate is C#', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c('C#')]), 'csharp');
+    });
+
+    test('returns csharp for .NET language variants', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('fsharp'), c('visualbasic')]), 'csharp');
+        assert.strictEqual(summarizeAppHostLanguages([c('F#'), c('Visual Basic'), c('vb')]), 'csharp');
+    });
+
+    test('returns typescript for typescript variants', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('typescript'), c('typescript/nodejs')]), 'typescript');
+        assert.strictEqual(summarizeAppHostLanguages([c('javascript')]), 'typescript');
+    });
+
+    test('returns polyglot for a mix of csharp and typescript', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c('typescript')]), 'polyglot');
+    });
+
+    test('returns polyglot when an unknown language is mixed with a known one', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c('python')]), 'polyglot');
+    });
+
+    test('returns polyglot when a missing language is mixed with a known one', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c(null)]), 'polyglot');
+        assert.strictEqual(summarizeAppHostLanguages([c('typescript'), c(null)]), 'polyglot');
+    });
+
+    test('returns unknown when no candidate has a recognizable language', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c(null), c(null)]), 'unknown');
+    });
+
+    test('treats only-other as unknown rather than polyglot', () => {
+        // A single non-csharp / non-typescript family with no known sibling
+        // should collapse to "unknown" to avoid polluting the polyglot bucket
+        // with single-language workspaces we just don't classify yet.
+        const result = summarizeAppHostLanguages([c('rust'), c('rust')]);
+        // Behavior: rust collapses to 'other', sawOther = true; sawAny = true;
+        // distinctFamilies = 1 (just other); falls through to final 'unknown'.
+        assert.strictEqual(result, 'unknown');
+    });
+});
+
+suite('appHostLanguage.classifyAppHostPath', () => {
+    test('returns unknown for undefined / empty path', () => {
+        assert.strictEqual(classifyAppHostPath(undefined), 'unknown');
+        assert.strictEqual(classifyAppHostPath(''), 'unknown');
+    });
+
+    test('classifies .csproj and .cs as csharp', () => {
+        assert.strictEqual(classifyAppHostPath('/abs/path/AppHost.csproj'), 'csharp');
+        assert.strictEqual(classifyAppHostPath('/abs/path/AppHost.fsproj'), 'csharp');
+        assert.strictEqual(classifyAppHostPath('/abs/path/AppHost.vbproj'), 'csharp');
+        assert.strictEqual(classifyAppHostPath('AppHost.cs'), 'csharp');
+        assert.strictEqual(classifyAppHostPath('C:\\repos\\My.AppHost.csproj'), 'csharp');
+    });
+
+    test('classifies typescript / javascript module variants', () => {
+        assert.strictEqual(classifyAppHostPath('apphost.ts'), 'typescript');
+        assert.strictEqual(classifyAppHostPath('apphost.mts'), 'typescript');
+        assert.strictEqual(classifyAppHostPath('apphost.cts'), 'typescript');
+        assert.strictEqual(classifyAppHostPath('apphost.js'), 'typescript');
+        assert.strictEqual(classifyAppHostPath('apphost.mjs'), 'typescript');
+        assert.strictEqual(classifyAppHostPath('apphost.cjs'), 'typescript');
+    });
+
+    test('returns unknown for unrecognized file extensions and directories', () => {
+        assert.strictEqual(classifyAppHostPath('/repo/apphost.py'), 'unknown');
+        assert.strictEqual(classifyAppHostPath('/repo/apphost'), 'unknown');
+    });
+
+    test('classification is case-insensitive', () => {
+        assert.strictEqual(classifyAppHostPath('APPHOST.CSPROJ'), 'csharp');
+        assert.strictEqual(classifyAppHostPath('AppHost.TS'), 'typescript');
+    });
+});
+
+suite('appHostLanguage.classifyAppHostDirectory', () => {
+    // Each test creates a unique temp directory under the extension workspace and
+    // tears it down after. We rely on real fs because classifyAppHostDirectory
+    // needs to inspect actual directory entries; mocking would defeat the purpose.
+    const tempDirs: string[] = [];
+    const tempParent = join(process.cwd(), '.test-tmp');
+
+    function makeTempDir(): string {
+        mkdirSync(tempParent, { recursive: true });
+        const dir = mkdtempSync(join(tempParent, 'aspire-classify-'));
+        tempDirs.push(dir);
+        return dir;
+    }
+
+    teardown(() => {
+        for (const dir of tempDirs) {
+            if (existsSync(dir)) {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        }
+        tempDirs.length = 0;
+    });
+
+    suiteTeardown(() => {
+        if (existsSync(tempParent)) {
+            rmSync(tempParent, { recursive: true, force: true });
+        }
+    });
+
+    test('returns unknown for undefined or missing directory', async () => {
+        assert.strictEqual(await classifyAppHostDirectory(undefined), 'unknown');
+        assert.strictEqual(await classifyAppHostDirectory(''), 'unknown');
+        assert.strictEqual(await classifyAppHostDirectory('/path/that/definitely/does/not/exist/aspire-test'), 'unknown');
+    });
+
+    test('classifies directory containing a .csproj as csharp', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'AppHost.csproj'), '');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'csharp');
+    });
+
+    test('classifies directory containing a .cs AppHost as csharp', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'AppHost.cs'), '');
+        writeFileSync(join(dir, 'README.md'), '');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'csharp');
+    });
+
+    test('classifies directory containing an apphost.ts as typescript', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.ts'), '');
+        writeFileSync(join(dir, 'package.json'), '{}');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
+    });
+
+    test('classifies directory containing an apphost.cjs as typescript', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.cjs'), '');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
+    });
+
+    test('returns unknown for a directory with no recognized AppHost markers', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'README.md'), '');
+        writeFileSync(join(dir, 'main.py'), '');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'unknown');
+    });
+
+    test('ignores non-AppHost C# files when classifying a TypeScript AppHost directory', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.ts'), '');
+        writeFileSync(join(dir, 'helper.cs'), '');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
+    });
+
+    test('ignores non-AppHost C# projects when classifying a TypeScript AppHost directory', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.ts'), '');
+        writeFileSync(join(dir, 'Helper.csproj'), '<Project Sdk="Microsoft.NET.Sdk" />');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
+    });
+
+    test('ignores AppHost-named non-Aspire C# projects when classifying a TypeScript AppHost directory', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.ts'), '');
+        writeFileSync(join(dir, 'AppHost.Helper.csproj'), '<Project Sdk="Microsoft.NET.Sdk" />');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
+    });
+
+    test('classifies non-standard C# project names that reference Aspire Hosting as csharp', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'Orchestration.csproj'), `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.1" />
+  </ItemGroup>
+</Project>
+`);
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'csharp');
+    });
+
+    test('returns csharp when both csharp and typescript markers exist (deterministic fallback)', async () => {
+        // Highly unusual but plausible during polyglot migration. The
+        // classifier prefers csharp so the dimension stays deterministic
+        // rather than depending on directory-listing order.
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'AppHost.csproj'), '');
+        writeFileSync(join(dir, 'apphost.ts'), '');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'csharp');
+    });
+});
