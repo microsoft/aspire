@@ -1,7 +1,7 @@
-# Telemetry tracking hook for Aspire Skills.
+# Telemetry tracking hook for Aspire skills and extensions.
 #
 # Runs on every agent PostToolUse event. Reads the hook JSON from stdin, detects when an
-# Aspire skill, Aspire MCP tool, or Aspire skill reference file was used, and forwards a
+# Aspire skill, extension, MCP tool, or skill reference file was used, and forwards a
 # low-cardinality usage event to `aspire agent telemetry`. The Aspire CLI command owns the
 # actual opt-out + publishing logic; this script only classifies the event and shells out.
 #
@@ -55,7 +55,7 @@ if ([string]::IsNullOrWhiteSpace($rawInput)) {
 }
 
 # Fast path: most PostToolUse events are not Aspire-related. Everything we track carries
-# "skill"/"aspire" in the payload (the skill tool name, an aspire-/mcp__aspire__ tool name, or a
+# "skill"/"aspire" in the payload (a skill/tool name, Aspire extension canvas ID, or a
 # .../skills/<aspire-skill>/ path), so skip JSON parsing entirely when neither appears.
 if ($rawInput -notmatch 'skill|aspire') {
     Write-Success
@@ -174,10 +174,32 @@ if ($toolName -eq 'view' -or $toolName -eq 'Read' -or $toolName -eq 'read_file')
     }
 }
 
-# --- tool_invocation via an Aspire MCP tool prefix ---
+# --- tool_invocation via an Aspire extension canvas ---
+# The extensions at https://github.com/microsoft/aspire-skills/tree/main/extensions register
+# open_aspire_doctor / open_aspireify and the canvas IDs below. The generic open_canvas tool uses:
+# {"canvasId":"aspire-doctor","instanceId":"caller-chosen","extensionId":"user:aspire-doctor"}
+# extensionId is optional when the canvas ID is unique. Never forward instanceId or canvas input,
+# or infer ownership for invoke_canvas_action, which only identifies the caller-chosen instance.
+if ($toolName -ceq 'open_canvas') {
+    $extensionName = switch -CaseSensitive (Get-PayloadField 'canvasId') {
+        'aspire-doctor' { 'aspire-doctor' }
+        'aspireify-graph' { 'aspireify' }
+    }
+    $extensionId = Get-PayloadField 'extensionId'
+    if ($extensionName -and (-not $extensionId -or @(
+        "user:$extensionName", "project:$extensionName", "session:$extensionName", "plugin:aspire:$extensionName"
+    ) -ccontains $extensionId)) {
+        $mcpToolName = $toolName
+        $eventType = 'tool_invocation'
+        $shouldTrack = $true
+    }
+}
+
+# --- tool_invocation via an Aspire MCP prefix or an allowlisted extension tool ---
 # Conservative exact prefixes:
 #   Copilot: aspire-<tool>   Claude: mcp__aspire__<tool>   VS Code: mcp_aspire_<tool>
-if ($toolName.StartsWith('aspire-') -or $toolName.StartsWith('mcp__aspire__') -or $toolName.StartsWith('mcp_aspire_')) {
+if ($toolName.StartsWith('aspire-') -or $toolName.StartsWith('mcp__aspire__') -or $toolName.StartsWith('mcp_aspire_') -or
+    $toolName -ceq 'open_aspire_doctor' -or $toolName -ceq 'open_aspireify') {
     $mcpToolName = $toolName
     $eventType = 'tool_invocation'
     $shouldTrack = $true

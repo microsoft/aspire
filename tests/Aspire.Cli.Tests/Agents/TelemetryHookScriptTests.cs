@@ -61,6 +61,74 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--skill-name", "aspire");
     }
 
+    [Theory]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    [InlineData("""{"toolName":"open_aspire_doctor","sessionId":"session-1","toolArgs":"{\"instanceId\":\"doctor-workspace\"}","toolResult":{"resultType":"success","textResultForLlm":"Opened the Aspire Doctor canvas (instance 'doctor-workspace')."}}""", "open_aspire_doctor")]
+    [InlineData("""{"hook_event_name":"PostToolUse","tool_name":"open_aspire_doctor","session_id":"session-1","tool_input":{"instanceId":"doctor-workspace"}}""", "open_aspire_doctor")]
+    [InlineData("""{"toolName":"open_aspireify","sessionId":"session-1","toolArgs":"{\"instanceId\":\"review\",\"appHostPath\":\"C:\\\\private\\\\apphost.cs\"}"}""", "open_aspireify")]
+    [InlineData("""{"toolName":"open_canvas","sessionId":"session-1","toolArgs":"{\"canvasId\":\"aspire-doctor\",\"extensionId\":\"user:aspire-doctor\",\"instanceId\":\"doctor-workspace\",\"input\":{}}"}""", "open_canvas")]
+    [InlineData("""{"hook_event_name":"PostToolUse","tool_name":"open_canvas","session_id":"session-1","tool_input":{"canvasId":"aspire-doctor","instanceId":"doctor-workspace","input":{}}}""", "open_canvas")]
+    [InlineData("""{"toolName":"open_canvas","sessionId":"session-1","toolArgs":{"canvasId":"aspire-doctor","extensionId":"plugin:aspire:aspire-doctor","instanceId":"doctor-workspace","input":{}}}""", "open_canvas")]
+    [InlineData("""{"toolName":"open_canvas","sessionId":"session-1","toolArgs":{"canvasId":"aspire-doctor","extensionId":"session:aspire-doctor","instanceId":"doctor-workspace","input":{}}}""", "open_canvas")]
+    [InlineData("""{"toolName":"open_canvas","sessionId":"session-1","toolArgs":"{\"canvasId\":\"aspireify-graph\",\"instanceId\":\"review\",\"input\":{}}"}""", "open_canvas")]
+    [InlineData("""{"toolName":"open_canvas","sessionId":"session-1","toolArgs":{"canvasId":"aspireify-graph","extensionId":"project:aspireify","instanceId":"review","input":{"appHostPath":"C:\\private\\apphost.cs"}}}""", "open_canvas")]
+    public async Task Bash_ExtensionTool_CopilotApp_ForwardsToolName(string payload, string toolName)
+    {
+        var run = await RunBashHookAsync(payload, new()
+        {
+            ["AI_AGENT"] = "github_copilot_app_agent",
+            ["COPILOT_CLI"] = "1",
+        });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        Assert.Equal(
+            ["agent", "telemetry", "--event-type", "tool_invocation", "--client-name", "copilot-app",
+             "--timestamp", args[7], "--session-id", "session-1", "--tool-name", toolName],
+            args);
+    }
+
+    [Theory]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    [InlineData("""{"toolName":"open_aspire_other","toolArgs":{"instanceId":"aspire-doctor"}}""")]
+    [InlineData("""{"toolName":"open_aspire_doctor_custom","toolArgs":{}}""")]
+    [InlineData("""{"toolName":"Open_Aspire_Doctor","toolArgs":{}}""")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":{"canvasId":"other-canvas","instanceId":"aspire-doctor"}}""")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":"{\"canvasId\":\"aspire-doctor\",\"extensionId\":\"user:other-extension\",\"instanceId\":\"doctor-workspace\"}"}""")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":{"canvasId":"aspire-doctor","extensionId":"user:aspireify","instanceId":"doctor-workspace"}}""")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":{"canvasId":"aspireify-graph","extensionId":"plugin:other-plugin:aspireify","instanceId":"review"}}""")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":{"extensionId":"user:aspire-doctor","instanceId":"doctor-workspace"}}""")]
+    [InlineData("""{"toolName":"invoke_canvas_action","toolArgs":{"instanceId":"aspire-doctor","actionName":"run_diagnostics","input":{}}}""")]
+    [InlineData("""{"toolName":"list_canvas_capabilities","toolArgs":{"canvasId":"aspire-doctor"}}""")]
+    [InlineData("""{"toolName":"extensions_manage","toolArgs":{"operation":"inspect","name":"aspire-doctor"}}""")]
+    [InlineData("""{"toolName":"view","toolArgs":{"path":"C:\\private\\.copilot\\extensions\\aspire-doctor\\extension.mjs"}}""")]
+    public async Task Bash_NonAspireExtensionTool_DoesNotInvokeCli(string payload)
+    {
+        var run = await RunBashHookAsync(payload, new() { ["AI_AGENT"] = "github_copilot_app_agent" });
+
+        AssertContinue(run);
+        AssertNotInvoked(run);
+    }
+
+    [Theory]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    [InlineData("""{"toolName":"open_aspire_doctor","toolArgs":"{\"instanceId\":\"doctor-workspace\"}"}""", "1")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":{"canvasId":"aspire-doctor","instanceId":"doctor-workspace"}}""", "TrUe")]
+    public async Task Bash_ExtensionTool_OptedOut_DoesNotInvokeCli(string payload, string optOut)
+    {
+        var run = await RunBashHookAsync(payload, new()
+        {
+            ["AI_AGENT"] = "github_copilot_app_agent",
+            ["ASPIRE_CLI_TELEMETRY_OPTOUT"] = optOut,
+        });
+
+        AssertContinue(run);
+        AssertNotInvoked(run);
+    }
+
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
@@ -273,6 +341,71 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--event-type", "skill_invocation");
         AssertArg(args, "--client-name", "copilot-app");
         AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Theory]
+    [RequiresTools(["pwsh"])]
+    [InlineData("""{"toolName":"open_aspire_doctor","sessionId":"session-1","toolArgs":"{\"instanceId\":\"doctor-workspace\"}","toolResult":{"resultType":"success","textResultForLlm":"Opened the Aspire Doctor canvas (instance 'doctor-workspace')."}}""", "open_aspire_doctor")]
+    [InlineData("""{"hook_event_name":"PostToolUse","tool_name":"open_aspire_doctor","session_id":"session-1","tool_input":{"instanceId":"doctor-workspace"}}""", "open_aspire_doctor")]
+    [InlineData("""{"toolName":"open_aspireify","sessionId":"session-1","toolArgs":"{\"instanceId\":\"review\",\"appHostPath\":\"C:\\\\private\\\\apphost.cs\"}"}""", "open_aspireify")]
+    [InlineData("""{"toolName":"open_canvas","sessionId":"session-1","toolArgs":"{\"canvasId\":\"aspire-doctor\",\"extensionId\":\"user:aspire-doctor\",\"instanceId\":\"doctor-workspace\",\"input\":{}}"}""", "open_canvas")]
+    [InlineData("""{"hook_event_name":"PostToolUse","tool_name":"open_canvas","session_id":"session-1","tool_input":{"canvasId":"aspire-doctor","instanceId":"doctor-workspace","input":{}}}""", "open_canvas")]
+    [InlineData("""{"toolName":"open_canvas","sessionId":"session-1","toolArgs":{"canvasId":"aspire-doctor","extensionId":"plugin:aspire:aspire-doctor","instanceId":"doctor-workspace","input":{}}}""", "open_canvas")]
+    [InlineData("""{"toolName":"open_canvas","sessionId":"session-1","toolArgs":{"canvasId":"aspire-doctor","extensionId":"session:aspire-doctor","instanceId":"doctor-workspace","input":{}}}""", "open_canvas")]
+    [InlineData("""{"toolName":"open_canvas","sessionId":"session-1","toolArgs":"{\"canvasId\":\"aspireify-graph\",\"instanceId\":\"review\",\"input\":{}}"}""", "open_canvas")]
+    [InlineData("""{"toolName":"open_canvas","sessionId":"session-1","toolArgs":{"canvasId":"aspireify-graph","extensionId":"project:aspireify","instanceId":"review","input":{"appHostPath":"C:\\private\\apphost.cs"}}}""", "open_canvas")]
+    public async Task Pwsh_ExtensionTool_CopilotApp_ForwardsToolName(string payload, string toolName)
+    {
+        var run = await RunPwshHookAsync(payload, new()
+        {
+            ["AI_AGENT"] = "github_copilot_app_agent",
+            ["COPILOT_CLI"] = "1",
+        });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        Assert.Equal(
+            ["agent", "telemetry", "--event-type", "tool_invocation", "--client-name", "copilot-app",
+             "--timestamp", args[7], "--session-id", "session-1", "--tool-name", toolName],
+            args);
+    }
+
+    [Theory]
+    [RequiresTools(["pwsh"])]
+    [InlineData("""{"toolName":"open_aspire_other","toolArgs":{"instanceId":"aspire-doctor"}}""")]
+    [InlineData("""{"toolName":"open_aspire_doctor_custom","toolArgs":{}}""")]
+    [InlineData("""{"toolName":"Open_Aspire_Doctor","toolArgs":{}}""")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":{"canvasId":"other-canvas","instanceId":"aspire-doctor"}}""")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":"{\"canvasId\":\"aspire-doctor\",\"extensionId\":\"user:other-extension\",\"instanceId\":\"doctor-workspace\"}"}""")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":{"canvasId":"aspire-doctor","extensionId":"user:aspireify","instanceId":"doctor-workspace"}}""")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":{"canvasId":"aspireify-graph","extensionId":"plugin:other-plugin:aspireify","instanceId":"review"}}""")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":{"extensionId":"user:aspire-doctor","instanceId":"doctor-workspace"}}""")]
+    [InlineData("""{"toolName":"invoke_canvas_action","toolArgs":{"instanceId":"aspire-doctor","actionName":"run_diagnostics","input":{}}}""")]
+    [InlineData("""{"toolName":"list_canvas_capabilities","toolArgs":{"canvasId":"aspire-doctor"}}""")]
+    [InlineData("""{"toolName":"extensions_manage","toolArgs":{"operation":"inspect","name":"aspire-doctor"}}""")]
+    [InlineData("""{"toolName":"view","toolArgs":{"path":"C:\\private\\.copilot\\extensions\\aspire-doctor\\extension.mjs"}}""")]
+    public async Task Pwsh_NonAspireExtensionTool_DoesNotInvokeCli(string payload)
+    {
+        var run = await RunPwshHookAsync(payload, new() { ["AI_AGENT"] = "github_copilot_app_agent" });
+
+        AssertContinue(run);
+        AssertNotInvoked(run);
+    }
+
+    [Theory]
+    [RequiresTools(["pwsh"])]
+    [InlineData("""{"toolName":"open_aspire_doctor","toolArgs":"{\"instanceId\":\"doctor-workspace\"}"}""", "1")]
+    [InlineData("""{"toolName":"open_canvas","toolArgs":{"canvasId":"aspire-doctor","instanceId":"doctor-workspace"}}""", "TrUe")]
+    public async Task Pwsh_ExtensionTool_OptedOut_DoesNotInvokeCli(string payload, string optOut)
+    {
+        var run = await RunPwshHookAsync(payload, new()
+        {
+            ["AI_AGENT"] = "github_copilot_app_agent",
+            ["ASPIRE_CLI_TELEMETRY_OPTOUT"] = optOut,
+        });
+
+        AssertContinue(run);
+        AssertNotInvoked(run);
     }
 
     [Fact]
