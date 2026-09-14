@@ -65,4 +65,4 @@ src/Components/**/ConfigurationSchema.json text eol=lf
 .github/workflows/*.lock.yml linguist-generated=true
 
 # Verify 32 rejects CRLF in text baselines, including on Windows.
-*.verified.* text eol=lf
+*.verified.* text=auto eol=lf
