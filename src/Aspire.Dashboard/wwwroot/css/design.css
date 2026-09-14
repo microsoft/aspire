@@ -48,6 +48,7 @@
     --aspire-control-height: 28px;
     --aspire-control-radius: 6px;
     --aspire-popup-radius: 10px;
+    --disabled-opacity: 0.3;
 
     --aspire-page-background: #f7f7f7;
     --aspire-shell-background: #e5e5e5;
@@ -106,7 +107,7 @@
     --layout-left-padding: 12px;
     --layout-right-padding: 12px;
     --layout-top-padding: 12px;
-    --datagrid-hover-color: #f3f3f3;
+    --datagrid-hover-color: #efefef;
     --datagrid-selected-color: var(--colorNeutralBackground3);
     --datagrid-border-color: #e5e5e5;
     --fluent-multi-splitter-background-color: var(--colorNeutralStroke1);

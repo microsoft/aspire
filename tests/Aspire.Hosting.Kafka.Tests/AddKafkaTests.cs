@@ -6,12 +6,73 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using HealthChecks.Kafka;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Kafka.Tests;
 
 public class AddKafkaTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task HealthCheckIsCreatedAfterConnectionStringIsAvailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var kafka = builder.AddKafka("kafka")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017));
+
+        using var app = builder.Build();
+        var registration = Assert.Single(app.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => registration.Factory(app.Services));
+        Assert.Equal("Connection string is unavailable", exception.Message);
+
+        await builder.Eventing.PublishAsync(new ConnectionStringAvailableEvent(kafka.Resource, app.Services));
+
+        var check = Assert.IsType<KafkaHealthCheck>(registration.Factory(app.Services));
+        Assert.Same(check, app.Services.GetRequiredKeyedService<KafkaHealthCheck>(registration.Name));
+    }
+
+    [Fact]
+    public async Task HealthChecksAreOwnedSingletonsPerResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var kafka1 = builder.AddKafka("kafka1")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 9092));
+        var kafka2 = builder.AddKafka("kafka2")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 9093));
+
+        using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new ConnectionStringAvailableEvent(kafka1.Resource, app.Services));
+        await builder.Eventing.PublishAsync(new ConnectionStringAvailableEvent(kafka2.Resource, app.Services));
+
+        var registrations = app.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
+        Assert.Collection(registrations,
+            registration => Assert.Equal("kafka1_check", registration.Name),
+            registration => Assert.Equal("kafka2_check", registration.Name));
+
+        var checks = new List<KafkaHealthCheck>();
+        foreach (var registration in registrations)
+        {
+            var descriptor = Assert.Single(builder.Services, service =>
+                service.ServiceType == typeof(KafkaHealthCheck) && Equals(service.ServiceKey, registration.Name));
+            Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+            // A factory registration makes DI responsible for disposal, unlike an externally created instance.
+            Assert.NotNull(descriptor.KeyedImplementationFactory);
+
+            var check = app.Services.GetRequiredKeyedService<KafkaHealthCheck>(registration.Name);
+            checks.Add(check);
+            for (var i = 0; i < 4; i++)
+            {
+                using var scope = app.Services.CreateScope();
+                Assert.Same(check, registration.Factory(scope.ServiceProvider));
+            }
+        }
+
+        Assert.NotSame(checks[0], checks[1]);
+    }
+
     [Fact]
     public void AddKafkaContainerWithDefaultsAddsAnnotationMetadata()
     {
