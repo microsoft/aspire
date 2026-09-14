@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Updates the create-pr agent skill documentation for image/video uploads; internal agentic-workflow tooling, not user-facing product behavior",
+  "mergedAt": "2026-09-13T23:45:13Z",
+  "number": 20085,
+  "runDate": "2026-09-14T00:08:09Z",
+  "status": "excluded",
+  "title": "Document PR image uploads"
+}

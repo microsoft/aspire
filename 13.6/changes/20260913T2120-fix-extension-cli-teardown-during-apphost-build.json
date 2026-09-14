@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Stopping a dynamic debug session no longer force-exits the Aspire CLI while a cold single-file AppHost build is still running. Extension stop requests now route through the CLI's normal cancellation and process-tree cleanup, preventing orphaned build processes from locking their working directory.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛑",
+  "firstMergedAt": "2026-09-13T21:20:05Z",
+  "lastMergedAt": "2026-09-13T21:20:05Z",
+  "name": "Fixed extension CLI teardown during AppHost build",
+  "owner": "ellahathaway",
+  "prs": [
+    20021
+  ]
+}

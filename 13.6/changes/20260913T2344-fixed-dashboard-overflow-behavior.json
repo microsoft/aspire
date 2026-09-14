@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Resizing the dashboard no longer lets secondary resource URLs or metric dimension values displace the primary value before it is truncated. Filter popups on the Metrics and Resources pages now cap their width and ellipsize long checkbox labels instead of overflowing.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📐",
+  "firstMergedAt": "2026-09-13T23:44:44Z",
+  "lastMergedAt": "2026-09-13T23:44:44Z",
+  "name": "Fixed dashboard overflow behavior",
+  "owner": "JamesNK",
+  "prs": [
+    20079
+  ]
+}

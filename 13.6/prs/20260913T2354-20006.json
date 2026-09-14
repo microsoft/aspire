@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Flattened dashboard persistence directory layout to a shared runs/resumes structure",
+  "mergedAt": "2026-09-13T23:54:13Z",
+  "number": 20006,
+  "runDate": "2026-09-14T00:08:09Z",
+  "status": "included",
+  "title": "Flatten dashboard persistence directory layout"
+}

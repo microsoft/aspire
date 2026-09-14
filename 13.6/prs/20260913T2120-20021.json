@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Fixed extension CLI teardown hang/orphaned build process during dynamic debug sessions",
+  "mergedAt": "2026-09-13T21:20:05Z",
+  "number": 20021,
+  "runDate": "2026-09-14T00:08:09Z",
+  "status": "included",
+  "title": "Fix extension CLI teardown during AppHost build"
+}

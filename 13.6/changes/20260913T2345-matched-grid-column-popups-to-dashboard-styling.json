@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Grid column menus and column-width popups now match the dashboard's standard popup styling, with left-aligned labels, accent-colored icons, and consistent background instead of the previous mismatched Fluent UI v5 defaults.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-09-13T23:45:40Z",
+  "lastMergedAt": "2026-09-13T23:45:40Z",
+  "name": "Matched grid column popups to dashboard styling",
+  "owner": "JamesNK",
+  "prs": [
+    20080
+  ]
+}
