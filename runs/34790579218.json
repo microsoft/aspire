@@ -1,0 +1,70 @@
+{
+  "run_id": 34790579218,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34790579218",
+  "analyzed_at": "2026-09-14T00:20:15Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20079,
+    "title": "Fix dashboard overflow behavior",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/dashboard-overflow-priority",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20079"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 103814204114,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34790579218/job/103814204114",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic exit code 2 and no TRX test failures extracted; job logs unavailable. The PR only modifies src/Aspire.Dashboard files and matching test files, which are unrelated to Aspire.Cli.Tests. Matches known recurring pattern of unrelated Aspire.Cli.Tests job failures (previously seen on ubuntu-latest as cause `cli-ubuntu-tests-unrelated-exit-code-2`); same pattern reused here for macos-latest.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-LocalhostTldHostnameTests, Temp... / Templates-LocalhostTldHostnameTests (windows-latest)",
+      "id": 103815589260,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34790579218/job/103815589260",
+      "classification": "transient-infra",
+      "reason": "The 'Set up .NET Core' step failed with a 'read ECONNRESET' network error, an annotation explicitly reported for this job. This is a transient network failure while downloading the .NET SDK, unrelated to PR content which only touches Aspire.Dashboard files. Matches prior cause `setup-dotnet-core-econnreset`.",
+      "failed_steps": ["Set up .NET Core"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 103815652312,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34790579218/job/103815652312",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic exit code 1, job logs unavailable, no TRX failures extracted. PR only modifies Aspire.Dashboard Razor components, unrelated to VS Code extension E2E tests. Matches prior recurring cause `vscode-e2e-windows-dynamic-debug-configuration-flaky` (17 prior occurrences).",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 103815652404,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34790579218/job/103815652404",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic exit code 1, job logs unavailable, no TRX failures extracted. Occurs on the 'browser-debugger' shard, matching prior recurring cause `vscode-extension-e2e-unrelated-logs-unavailable` which is unrelated to PR changes touching Aspire.Dashboard files.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "id": 103815652442,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34790579218/job/103815652442",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic exit code 1, job logs unavailable, no TRX failures extracted. Occurs on the 'browser-debugger' shard (Linux), matching prior recurring cause `vscode-extension-e2e-unrelated-logs-unavailable` which is unrelated to PR changes touching Aspire.Dashboard files.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "cli-macos-tests-unrelated-exit-code-2",
+    "setup-dotnet-core-econnreset",
+    "vscode-e2e-windows-dynamic-debug-configuration-flaky",
+    "vscode-extension-e2e-unrelated-logs-unavailable"
+  ]
+}
