@@ -3,7 +3,10 @@
   "type": "flaky-test",
   "title": "Flaky: VS Code extension E2E (Linux, azure-functions) shard fails with generic exit code 1, unrelated to PR changes",
   "test_name": "VS Code extension E2E (Linux, azure-functions)",
+  "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
   "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'VS Code extension E2E (Linux, azure-functions)' shard.",
+  "analysis": "The 'Azure Functions E2E prerequisites' step failed with exit code 22 (annotation), and job logs could not be fetched for detailed diagnosis. This matches the previously identified recurring flaky pattern for this exact shard (issue #19639, 7 prior occurrences, most recently seen 2026-08-27). The PR only modifies VS Code extension interaction service and CLI backchannel code, unrelated to Azure Functions E2E prerequisites setup.",
+  "failure_details": "**failure**: Process completed with exit code 22.\nFailed step: Azure Functions E2E prerequisites\nLogs: 1:(Failed to fetch logs for job 104028115131)\nNo TRX test failures were extracted for this job.",
   "occurrences": [
     {
       "run_id": 32781735084,
@@ -53,6 +56,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
       "pr_number": 19710,
       "observed_at": "2026-08-27T18:31:19Z"
+    },
+    {
+      "run_id": 34858055930,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34858055930",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "pr_number": 19996,
+      "observed_at": "2026-09-14T15:27:45Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19639"

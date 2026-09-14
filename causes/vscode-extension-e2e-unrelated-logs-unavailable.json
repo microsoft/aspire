@@ -5,8 +5,8 @@
   "test_name": "VS Code extension E2E (matrix shards, e.g. browser-debugger / workspace-target-proof / edge-cases)",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
   "error_pattern": "Failed to apply E2E control revision ...: Error: Timed out after 288488ms waiting for pwa-msedge child session for Blazor WASM root '...'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"...\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\", ...}]}",
-  "analysis": "Reused prior cause vscode-extension-e2e-unrelated-logs-unavailable (9 prior occurrences on the browser-debugger shard). This run provided detailed error output (unlike previous generic 'Process completed with exit code 1' occurrences): the E2E harness timed out after ~288s waiting for the pwa-msedge child debug session to attach to the Blazor WASM managed debugger. This is a timing/environment issue in the browser debugger E2E harness, not caused by the PR, which only modifies analyze-ci-failure workflow tooling and a CLI test project (unrelated to VS Code extension debugger code).",
-  "failure_details": "Failed to apply E2E control revision 1789370000986: Error: Timed out after 288488ms waiting for pwa-msedge child session for Blazor WASM root 'e20a980d-84af-4b16-a0d0-622ff844330d'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"229ffd08-5214-4240-8ca6-bd9ef8e973b4\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-MLPLVi\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":55662,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-MLPLVi\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\;...\"},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true,\"logging\":{...},\"suppressJITOptimizations\":false,\"symbolOptions\":{...},\"expressionEvaluationOptions\":{...}}}]} (job annotation: 'Process completed with exit code 1.')",
+  "analysis": "The test 'hits a managed breakpoint for standalone' times out after ~288 seconds waiting for the pwa-msedge child debug session to attach to a Blazor WASM root. This matches the previously identified recurring flaky pattern for this shard (issue #19618, 10 prior occurrences, most recently seen 2026-09-14). The PR under test only modifies interaction service and CLI backchannel code, unrelated to Blazor WASM browser debugging.",
+  "failure_details": "Test: Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone\nError:\nFailed to apply E2E control revision 1789398549646: Error: Timed out after 288412ms waiting for pwa-msedge child session for Blazor WASM root 'ad39feac-7f9a-49fa-a9ef-1f0a863ac6f8'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"cbb05917-ecd9-4da6-b907-00ffa68dd602\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-BMPcod\\\\workspace\",\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":64517,\"platform\":\"browser\",\"isServer\":true}}}]}",
   "occurrences": [
     {
       "run_id": 32704259463,
@@ -77,6 +77,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
       "pr_number": 18763,
       "observed_at": "2026-09-14T07:29:34Z"
+    },
+    {
+      "run_id": 34858055930,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34858055930",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "pr_number": 19996,
+      "observed_at": "2026-09-14T15:27:45Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19618"

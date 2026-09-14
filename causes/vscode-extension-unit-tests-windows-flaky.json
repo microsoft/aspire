@@ -2,7 +2,10 @@
   "id": "vscode-extension-unit-tests-windows-flaky",
   "type": "flaky-test",
   "title": "Flaky: VS Code extension unit tests job fails intermittently on Windows with generic exit code 1 and no retrievable logs",
-  "error_pattern": "Process completed with exit code 1. (Job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs unrelated to PR changes touching only Aspire.Hosting.Azure.Kubernetes tests.",
+  "job_name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+  "error_pattern": "Process completed with exit code 1. (Job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted.",
+  "analysis": "Job fails with a generic 'Process completed with exit code 1' annotation and job logs could not be fetched. This matches a previously identified recurring flaky pattern for this job (issue #19270) that has occurred on unrelated PRs. The current PR only modifies extension/src/server/interactionService.ts and related CLI backchannel/interaction service code, not the extension unit test harness or infrastructure.",
+  "failure_details": "**failure**: Process completed with exit code 1.\nLogs: 1:(Failed to fetch logs for job 104023633787)\nNo TRX test failures were extracted for this job.",
   "occurrences": [
     {
       "run_id": 31556011348,
@@ -17,6 +20,13 @@
       "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
       "pr_number": 20057,
       "observed_at": "2026-09-11T05:40:00Z"
+    },
+    {
+      "run_id": 34858055930,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34858055930",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "pr_number": 19996,
+      "observed_at": "2026-09-14T15:27:45Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19270"

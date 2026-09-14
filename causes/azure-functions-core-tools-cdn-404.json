@@ -2,7 +2,10 @@
   "id": "azure-functions-core-tools-cdn-404",
   "type": "infra-failure",
   "title": "Azure Functions Core Tools install fails with HTTP 404 from cdn.functions.azure.com",
+  "job_name": "Tests / No-package tests (regular, Aspire.Playground.Tests, Playground, Playground, tests/Aspire.Playgrou... / Playground (ubuntu-latest)",
   "error_pattern": "npm error attempting to GET \"https://cdn.functions.azure.com/public/.../Azure.Functions.Cli.linux-x64....zip\"\nnpm error Error downloading zip file from https://cdn.functions.azure.com/...\nnpm error Expected: 200, Actual: 404",
+  "analysis": "The job failed at the 'Install Azure Functions Core Tools' step with exit code 22. Job logs could not be fetched directly for this run, but the failed step name matches a previously identified recurring infrastructure issue (issue #19166) where npm fails to download the Azure Functions Core Tools zip package from cdn.functions.azure.com with HTTP 404. This is an external CDN/package availability issue unrelated to the PR, which only changes VS Code extension interaction service and CLI backchannel code.",
+  "failure_details": "**warning**: No files were found with the provided path: **/*.binlog\ntestresults/**\nartifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**\nartifacts/log/test-logs/**. No artifacts will be uploaded.\n**failure**: Process completed with exit code 22.\nFailed step: Install Azure Functions Core Tools",
   "occurrences": [
     {
       "run_id": 31269165475,
@@ -17,6 +20,13 @@
       "job": "Tests / Playground / Playground (ubuntu-latest)",
       "pr_number": 19010,
       "observed_at": "2026-08-10T07:03:21Z"
+    },
+    {
+      "run_id": 34858055930,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34858055930",
+      "job": "Tests / No-package tests (regular, Aspire.Playground.Tests, Playground, Playground, tests/Aspire.Playgrou... / Playground (ubuntu-latest)",
+      "pr_number": 19996,
+      "observed_at": "2026-09-14T15:27:45Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19166"

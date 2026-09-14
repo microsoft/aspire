@@ -5,8 +5,8 @@
   "test_name": "VS Code extension E2E (Windows, dynamic-debug-configuration)",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
   "error_pattern": "Process completed with exit code 1. Dynamic debug configuration E2E teardown failed with EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-*\\workspace\\.e2e-dynamic-debug\\ambiguous' at runE2eTeardown (fixtures.js:217:15).",
-  "analysis": "The failure is an EBUSY filesystem lock error during test teardown when removing a temp workspace directory on Windows, which is a well-known transient Windows filesystem race condition (antivirus/indexer holding a handle). The PR only modifies Aspire.Cli SDK dump restore code, entirely unrelated to the VS Code extension or its E2E test harness, and this shard has 21 prior recorded flaky occurrences.",
-  "failure_details": "Dynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-l8RYF5\\workspace\\.e2e-dynamic-debug\\ambiguous'\n\nAggregateError: Dynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-l8RYF5\\workspace\\.e2e-dynamic-debug\\ambiguous'\n    at runE2eTeardown (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:217:15)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\dynamicDebugConfiguration.e2e.test.js:62:9)",
+  "analysis": "The 'after each' teardown hook for the 'duplicate-alias workspaces' dynamic debug configuration test fails with EBUSY (resource busy or locked) while attempting to rmdir a temp workspace directory on Windows. This is a Windows file-locking race condition during cleanup, consistent with the previously identified recurring flaky pattern for this shard (issue #19576, 21 prior occurrences, most recently seen 2026-09-14). The PR only modifies interactionService.ts, ExtensionBackchannel.cs, and ExtensionInteractionService.cs, unrelated to dynamic debug configuration E2E code.",
+  "failure_details": "Test: Aspire dynamic debug configuration E2E \"after each\" hook for \"re-resolves the selected AppHost by dynamic configuration name in duplicate-alias workspaces\"\nError:\nDynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-ko70An\\workspace\\.e2e-dynamic-debug\\first'\nStack Trace:\nAggregateError: Dynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-ko70An\\workspace\\.e2e-dynamic-debug\\first'\n    at runE2eTeardown (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:217:15)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\dynamicDebugConfiguration.e2e.test.js:62:9)",
   "occurrences": [
     {
       "run_id": 32505042756,
@@ -154,6 +154,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
       "pr_number": 19882,
       "observed_at": "2026-09-14T05:10:25Z"
+    },
+    {
+      "run_id": 34858055930,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34858055930",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 19996,
+      "observed_at": "2026-09-14T15:27:45Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19576"
