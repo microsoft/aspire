@@ -12,7 +12,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// </summary>
 public sealed class ApiManagementDeploymentTests(ITestOutputHelper output)
 {
-    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(60);
+    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(90);
 
     [Fact]
     public async Task DeployStarterTemplateWithApiManagement()
@@ -77,10 +77,13 @@ public sealed class ApiManagementDeploymentTests(ITestOutputHelper output)
                 $"{projectName}.AppHost",
                 "AppHost.cs");
             var content = File.ReadAllText(appHostFilePath);
+            Assert.Contains("builder.Build().Run();", content);
             content = "using Aspire.Hosting.Azure;\nusing Azure.Provisioning.Network;\n" + content;
             content = content.Replace(
                 "builder.Build().Run();",
                 """
+#pragma warning disable ASPIREAZURE003, ASPIREAPIM001
+
 var vnet = builder.AddAzureVirtualNetwork("vnet");
 var containerAppsSubnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
 var apiManagementSubnet = vnet.AddSubnet("apim-subnet", "10.0.2.0/24")
@@ -110,6 +113,8 @@ apim.AddApi(
     path: "api",
     subscriptionRequired: false);
 
+#pragma warning restore ASPIREAZURE003, ASPIREAPIM001
+
 builder.Build().Run();
 """);
             File.WriteAllText(appHostFilePath, content);
@@ -123,22 +128,28 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            await auto.TypeAsync("aspire deploy --clear-cache");
-            await auto.EnterAsync();
-            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(50));
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+            // Fail promptly on AppHost build errors, which occur before the pipeline starts.
+            // Classic VNet-injected APIM provisioning can take over an hour.
+            await auto.RunCommandAsync("aspire deploy --clear-cache", counter, TimeSpan.FromMinutes(70));
 
+            // DNS resolution alone does not prove public reachability. Verify that the backend's
+            // environment has an internal load balancer. Azure API versions expose its ID as
+            // either "environmentId" or the older "managedEnvironmentId".
             await auto.TypeAsync(
                 $"GATEWAY=$(az apim list -g \"{resourceGroupName}\" --subscription \"{subscriptionId}\" --query \"[0].gatewayUrl\" -o tsv) && " +
                 "[ -n \"$GATEWAY\" ] && " +
-                $"BACKEND=$(az containerapp show -g \"{resourceGroupName}\" -n apiservice --subscription \"{subscriptionId}\" --query \"properties.configuration.ingress.fqdn\" -o tsv) && " +
-                "[ -n \"$BACKEND\" ] && " +
-                "{ if getent hosts \"$BACKEND\" >/dev/null; then BACKEND_PRIVATE=0; else BACKEND_PRIVATE=1; fi; " +
-                "OK=0; for i in $(seq 1 24); do " +
+                $"ENVIRONMENT_ID=$(az containerapp show -g \"{resourceGroupName}\" -n apiservice --subscription \"{subscriptionId}\" " +
+                "--query \"properties.environmentId || properties.managedEnvironmentId\" -o tsv) && " +
+                "[ -n \"$ENVIRONMENT_ID\" ] && " +
+                $"INTERNAL=$(az containerapp env show --ids \"$ENVIRONMENT_ID\" --subscription \"{subscriptionId}\" " +
+                "--query properties.vnetConfiguration.internal -o json) && " +
+                "[ \"$INTERNAL\" = \"true\" ] && " +
+                "{ OK=0; for i in $(seq 1 24); do " +
                 "STATUS=$(curl -s -o .aspire-apim-response.json -w \"%{http_code}\" \"$GATEWAY/api/weatherforecast\" --max-time 30); " +
-                "if [ \"$STATUS\" = \"200\" ]; then cat .aspire-apim-response.json; OK=1; break; fi; " +
+                "if [ \"$STATUS\" = \"200\" ]; then " +
+                "if jq -e 'type == \"array\" and length == 5 and all(.[]; has(\"date\") and has(\"temperatureC\") and has(\"summary\"))' .aspire-apim-response.json; then OK=1; fi; break; fi; " +
                 "echo \"Attempt $i returned $STATUS; retrying in 10s\"; sleep 10; " +
-                "done; [ \"$BACKEND_PRIVATE\" = \"1\" ] && [ \"$OK\" = \"1\" ]; }");
+                "done; [ \"$OK\" = \"1\" ]; }");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(12));
 
@@ -204,6 +215,14 @@ builder.Build().Run();
         if (process.ExitCode != 0)
         {
             var error = string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError;
+            // A failure before provisioning leaves no group to delete. Azure CLI reports:
+            // "ERROR: (ResourceGroupNotFound) Resource group '...' could not be found."
+            if (error.Contains("ERROR: (ResourceGroupNotFound)", StringComparison.Ordinal))
+            {
+                DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Resource group was already absent");
+                return;
+            }
+
             DeploymentReporter.ReportCleanupStatus(
                 resourceGroupName,
                 success: false,

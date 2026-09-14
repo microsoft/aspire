@@ -72,6 +72,7 @@ public sealed class ApiManagementInfraDeploymentTests(ITestOutputHelper output)
 
             var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
             var content = File.ReadAllText(appHostFilePath);
+            Assert.Contains("builder.Build().Run();", content);
             content = content.Replace(
                 "builder.Build().Run();",
                 """
