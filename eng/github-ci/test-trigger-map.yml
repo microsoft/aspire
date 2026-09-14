@@ -221,8 +221,6 @@ path_rules:
   - paths:
       - extension/**
       - src/Aspire.Cli/**
-      - src/Aspire.Hosting*/**
-      - src/Aspire.Dashboard*/**
       - tests/Aspire.Cli.Tests/**
       - tests/Aspire.Cli.EndToEnd.Tests/**
       - tests/Aspire.Hosting.Tests/Cli/**
@@ -234,10 +232,9 @@ path_rules:
       - .github/workflows/build-cli-native-archives.yml
     targets: [job:extension-e2e]
     reason: >-
-      verbatim mirror of the tests.yml extension_e2e_changes regex. extension-e2e is
-      intentionally double-routed: its production triggers also live in affected_project_rules
-      (transitive coverage when Layer 1 runs), but these path globs keep the gate working without
-      Layer 1 -- a src/Aspire.Cli|Hosting*|Dashboard* change still fires it via pure path match.
+      extension and CLI source, tests, and workflow inputs exercised by extension-e2e; Aspire.Cli
+      is intentionally double-routed through affected_project_rules for transitive Layer 1 coverage,
+      while these path globs keep direct and --skip-layer1 selection working
   - paths:
       - tests/Aspire.Deployment.EndToEnd.Tests/**
       - src/Aspire.ProjectTemplates/**
@@ -429,9 +426,9 @@ affected_project_rules:
   - projects: [Aspire.Hosting*, Aspire.Cli]
     targets: [job:typescript-api-compat]
     reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`
-  - projects: [Aspire.Cli, Aspire.Hosting*, Aspire.Dashboard*]
+  - projects: [Aspire.Cli]
     targets: [job:extension-e2e]
-    reason: mirrors the production-project half of tests.yml extension_e2e_changes
+    reason: extension-e2e installs and exercises the CLI; matching the affected Aspire.Cli project follows its transitive dependencies without firing for unrelated Hosting or Dashboard projects
   - projects: [Aspire.Hosting.Azure*, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
