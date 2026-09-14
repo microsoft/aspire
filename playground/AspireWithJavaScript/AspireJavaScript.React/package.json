@@ -26,7 +26,7 @@
     "style-loader": "^4.0.0",
     "webpack": "^5.110.3",
     "webpack-cli": "^7.2.3",
-    "webpack-dev-server": "^6.0.0"
+    "webpack-dev-server": "^5.2.6"
   },
   "overrides": {
     "postcss": "8.5.28",
