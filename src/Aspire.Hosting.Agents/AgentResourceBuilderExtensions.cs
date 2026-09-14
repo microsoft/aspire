@@ -123,6 +123,8 @@ public static class AgentResourceBuilderExtensions
     /// <param name="protocol">The protocol supported by the agent.</param>
     /// <param name="agentName">The registered agent name for Responses or ACP. When omitted, the dashboard command prompts for it.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="agentCustomPath"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="agentCustomPath"/> is empty or whitespace.</exception>
     /// <remarks>
     /// Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
     /// <code>
@@ -137,11 +139,13 @@ public static class AgentResourceBuilderExtensions
     [AspireExport("asAgentWithPath")]
     public static IResourceBuilder<T> AsAgent<T>(
         this IResourceBuilder<T> builder,
-        string? agentCustomPath,
+        string agentCustomPath,
         AgentProtocol protocol,
         string? agentName = null)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(agentCustomPath);
+
         return AsAgentCore(builder, agentCustomPath, protocol, A2AInvocationMode.NonStreaming, agentName);
     }
 
@@ -154,7 +158,8 @@ public static class AgentResourceBuilderExtensions
     /// <param name="protocol">The protocol supported by the agent.</param>
     /// <param name="invocationMode">The invocation mode used by dashboard commands.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="invocationMode"/> is used with a protocol other than A2A.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="agentCustomPath"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="agentCustomPath"/> is empty or whitespace, or <paramref name="invocationMode"/> is used with a protocol other than A2A.</exception>
     /// <remarks>
     /// Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
     /// <code>
@@ -168,11 +173,13 @@ public static class AgentResourceBuilderExtensions
     [AspireExport("asAgentWithPathAndInvocationMode")]
     public static IResourceBuilder<T> AsAgent<T>(
         this IResourceBuilder<T> builder,
-        string? agentCustomPath,
+        string agentCustomPath,
         AgentProtocol protocol,
         A2AInvocationMode invocationMode)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(agentCustomPath);
+
         return AsAgentCore(builder, agentCustomPath, protocol, invocationMode, agentName: null);
     }
 
@@ -830,6 +837,8 @@ public static class AgentResourceBuilderExtensions
                 CommandResultFormat.Text);
         }
 
+        string? lastTaskState = null;
+        var hasMessageResult = false;
         foreach (var responseJson in GetSseJsonPayloads(responseBody))
         {
             if (responseJson["error"] is { } error)
@@ -844,6 +853,25 @@ public static class AgentResourceBuilderExtensions
             {
                 return CreateA2ATaskFailure(responseJson, taskState);
             }
+
+            var result = responseJson["result"] as JsonObject ?? responseJson;
+            lastTaskState = GetA2ATaskState(result) ?? lastTaskState;
+            hasMessageResult |= result["message"] is JsonObject
+                || GetJsonString(result["kind"]) is "message";
+        }
+
+        // Closing the connection (or a final progress update) is not evidence that the task completed.
+        // Artifact events must not clear the last task state, and a message must not mask an unfinished task.
+        // Continue inspecting all events above so a later error still takes precedence over a result.
+        var hasSuccessfulResult = lastTaskState is null
+            ? hasMessageResult
+            : lastTaskState is "completed" or "TASK_STATE_COMPLETED";
+        if (!hasSuccessfulResult)
+        {
+            return CommandResults.Failure(
+                "Agent stream ended without a completed task or message response.",
+                responseBody,
+                CommandResultFormat.Text);
         }
 
         return CommandResults.Success(
@@ -917,7 +945,7 @@ public static class AgentResourceBuilderExtensions
     private static bool TryGetA2ATerminalFailureState(JsonObject responseJson, [NotNullWhen(true)] out string? taskState)
     {
         var result = responseJson["result"] as JsonObject ?? responseJson;
-        taskState = result["status"] is JsonObject status ? GetJsonString(status["state"]) : null;
+        taskState = GetA2ATaskState(result);
         if (taskState is null)
         {
             return false;
@@ -931,6 +959,20 @@ public static class AgentResourceBuilderExtensions
             || normalizedState.Equals("rejected", StringComparison.OrdinalIgnoreCase)
             || normalizedState.Equals("canceled", StringComparison.OrdinalIgnoreCase)
             || normalizedState.Equals("cancelled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetA2ATaskState(JsonObject result)
+    {
+        // JSON-RPC wraps its payload in "result"; HTTP+JSON sends the payload directly.
+        // v1 uses {"task":{"status":{"state":"TASK_STATE_COMPLETED"}}} or {"statusUpdate":{...}}.
+        // v0.3 JSON-RPC uses {"kind":"task","status":{"state":"completed"}} or "status-update";
+        // its HTTP+JSON binding also uses the named wrappers.
+        // See https://a2a-protocol.org/v1.0.0/specification/ and https://a2a-protocol.org/v0.3.0/specification/.
+        var task = result["task"] as JsonObject
+            ?? result["statusUpdate"] as JsonObject
+            ?? (GetJsonString(result["kind"]) is "task" or "status-update" ? result : null);
+
+        return task?["status"] is JsonObject status ? GetJsonString(status["state"]) : null;
     }
 
     private static string? GetJsonString(JsonNode? node)

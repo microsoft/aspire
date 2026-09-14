@@ -3,6 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -175,19 +176,18 @@ public static class McpServerResourceBuilderExtensions
             return;
         }
 
-        builder.WithHttpCommand(
-            path ?? string.Empty,
+        builder.ApplicationBuilder.Services.AddHttpClient();
+
+        builder.WithCommand(
+            interactiveCommandName,
             "Invoke MCP",
-            endpointSelector: () => GetMcpEndpoint(builder.Resource, endpointName),
-            commandName: interactiveCommandName,
-            commandOptions: new HttpCommandOptions
+            context => ExecuteMcpToolCallAsync(context, GetMcpEndpoint(builder.Resource, endpointName), path),
+            new CommandOptions
             {
-                Method = HttpMethod.Post,
                 IconName = "ChatSparkle",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = isHighlighted,
-                PrepareRequest = PrepareMcpToolCallRequestAsync,
-                GetCommandResult = GetMcpCommandResultAsync,
+                UpdateState = GetMcpCommandState,
                 Visibility = ResourceCommandVisibility.UI
             });
 
@@ -197,34 +197,132 @@ public static class McpServerResourceBuilderExtensions
             return;
         }
 
-        builder.WithHttpCommand(
-            path ?? string.Empty,
+        builder.WithCommand(
+            commandWithArgumentsName,
             "Invoke MCP",
-            endpointSelector: () => GetMcpEndpoint(builder.Resource, endpointName),
-            commandName: commandWithArgumentsName,
-            commandOptions: new HttpCommandOptions
+            context => ExecuteMcpToolCallAsync(context, GetMcpEndpoint(builder.Resource, endpointName), path),
+            new CommandOptions
             {
-                Method = HttpMethod.Post,
                 Description = "Invoke an MCP tool by name with JSON arguments.",
                 IconName = "ChatSparkle",
                 IconVariant = IconVariant.Regular,
                 Arguments = [CreateMcpToolArgument(), CreateMcpArgumentsArgument()],
-                PrepareRequest = PrepareMcpToolCallRequestAsync,
-                GetCommandResult = GetMcpCommandResultAsync,
+                UpdateState = GetMcpCommandState,
                 Visibility = ResourceCommandVisibility.Api
             });
     }
 
-    private static async Task PrepareMcpToolCallRequestAsync(HttpCommandRequestContext ctx)
+    private static ResourceCommandState GetMcpCommandState(UpdateCommandStateContext context)
     {
-        var initializeResponse = await SendMcpJsonRpcRequestAsync(
-            ctx,
-            CreateMcpInitializeRequest(),
-            sessionId: null,
-            protocolVersion: null).ConfigureAwait(true);
-        using var initializeHttpResponse = initializeResponse.Response;
-        var sessionId = initializeResponse.Response.Headers.TryGetValues("Mcp-Session-Id", out var sessionIds) ? sessionIds.FirstOrDefault() : null;
-        var protocolVersion = initializeResponse.Payload["result"]?["protocolVersion"]?.GetValue<string>()
+        var state = context.ResourceSnapshot.State?.Text;
+        return state == KnownResourceStates.Running || state == KnownResourceStates.RuntimeUnhealthy
+            ? ResourceCommandState.Enabled
+            : ResourceCommandState.Disabled;
+    }
+
+    private static async Task<ExecuteCommandResult> ExecuteMcpToolCallAsync(ExecuteCommandContext context, EndpointReference endpoint, string? path)
+    {
+        if (endpoint.Scheme is not ("http" or "https"))
+        {
+            throw new DistributedApplicationException($"Could not create HTTP command for resource '{endpoint.Resource.Name}' as the endpoint with name '{endpoint.EndpointName}' and scheme '{endpoint.Scheme}' is not an HTTP endpoint.");
+        }
+
+        if (!endpoint.IsAllocated)
+        {
+            return CommandResults.Failure("Endpoints are not yet allocated.");
+        }
+
+        using var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient(string.Empty);
+        httpClient.Timeout = Timeout.InfiniteTimeSpan;
+        using var request = new HttpRequestMessage(HttpMethod.Post, new UriBuilder(endpoint.Url) { Path = path ?? string.Empty }.Uri);
+        var requestContext = new HttpCommandRequestContext
+        {
+            Services = context.Services,
+            ResourceName = context.ResourceName,
+            Endpoint = endpoint,
+            CancellationToken = context.CancellationToken,
+            HttpClient = httpClient,
+            Arguments = context.Arguments,
+            Request = request
+        };
+        var session = new McpSession();
+
+        // WithHttpCommand's result callback is skipped for preparation and transport failures.
+        // Own the entire invocation here so every initialized session reaches the same cleanup.
+        try
+        {
+            await PrepareMcpToolCallRequestAsync(requestContext, session).ConfigureAwait(true);
+            using var response = await httpClient.SendAsync(request, context.CancellationToken).ConfigureAwait(true);
+            return await GetMcpCommandResultAsync(new HttpCommandResultContext
+            {
+                Services = context.Services,
+                ResourceName = context.ResourceName,
+                Endpoint = endpoint,
+                CancellationToken = context.CancellationToken,
+                HttpClient = httpClient,
+                Arguments = context.Arguments,
+                Response = response
+            }).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        {
+            return CommandResults.Canceled();
+        }
+        catch (Exception ex)
+        {
+            return CommandResults.Failure(ex);
+        }
+        finally
+        {
+            await TerminateMcpSessionAsync(requestContext, session).ConfigureAwait(true);
+        }
+    }
+
+    private static async Task TerminateMcpSessionAsync(HttpCommandRequestContext ctx, McpSession session)
+    {
+        if (string.IsNullOrWhiteSpace(session.Id))
+        {
+            return;
+        }
+
+        try
+        {
+            // Cleanup must still run after a canceled command, but must not hang shutdown.
+            using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var request = new HttpRequestMessage(HttpMethod.Delete, ctx.Request.RequestUri);
+            request.Headers.Add("Mcp-Session-Id", session.Id);
+            if (!string.IsNullOrWhiteSpace(session.ProtocolVersion))
+            {
+                request.Headers.Add("MCP-Protocol-Version", session.ProtocolVersion);
+            }
+
+            using var response = await ctx.HttpClient.SendAsync(request, cancellation.Token).ConfigureAwait(true);
+            // Servers may decline explicit session termination with 405.
+            // https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#session-management
+            if (response.StatusCode != HttpStatusCode.MethodNotAllowed)
+            {
+                response.EnsureSuccessStatusCode();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            // Preserve the tool/preparation result; cleanup errors belong in the resource log.
+            ctx.Services.GetRequiredService<ResourceLoggerService>().GetLogger(ctx.ResourceName)
+                .LogWarning(ex, "Could not terminate the MCP session.");
+        }
+    }
+
+    private static async Task PrepareMcpToolCallRequestAsync(HttpCommandRequestContext ctx, McpSession session)
+    {
+        var initializeRequest = CreateMcpInitializeRequest();
+        using var initializeMessage = new HttpRequestMessage(HttpMethod.Post, ctx.Request.RequestUri);
+        ConfigureMcpRequest(initializeMessage, initializeRequest, sessionId: null, protocolVersion: null);
+        using var initializeHttpResponse = await ctx.HttpClient.SendAsync(initializeMessage, ctx.CancellationToken).ConfigureAwait(true);
+        // Capture the assigned session before parsing so even an invalid initialize payload is cleaned up.
+        session.Id = initializeHttpResponse.Headers.TryGetValues("Mcp-Session-Id", out var sessionIds) ? sessionIds.FirstOrDefault() : null;
+        var initializePayload = await ReadMcpJsonRpcPayloadAsync(initializeHttpResponse, initializeRequest["id"], ctx.CancellationToken).ConfigureAwait(true);
+        var sessionId = session.Id;
+        var protocolVersion = session.ProtocolVersion = initializePayload["result"]?["protocolVersion"]?.GetValue<string>()
             ?? throw new InvalidOperationException("MCP server did not return a negotiated protocol version.");
 
         await SendMcpJsonRpcNotificationAsync(ctx, "notifications/initialized", sessionId, protocolVersion).ConfigureAwait(true);
@@ -416,8 +514,16 @@ public static class McpServerResourceBuilderExtensions
         ConfigureMcpRequest(requestMessage, request, sessionId, protocolVersion);
 
         var response = await ctx.HttpClient.SendAsync(requestMessage, ctx.CancellationToken).ConfigureAwait(true);
-        var payload = await ReadMcpJsonRpcPayloadAsync(response, request["id"], ctx.CancellationToken).ConfigureAwait(true);
-        return (response, payload);
+        try
+        {
+            var payload = await ReadMcpJsonRpcPayloadAsync(response, request["id"], ctx.CancellationToken).ConfigureAwait(true);
+            return (response, payload);
+        }
+        catch
+        {
+            response.Dispose();
+            throw;
+        }
     }
 
     private static async Task SendMcpJsonRpcNotificationAsync(
@@ -1062,6 +1168,13 @@ public static class McpServerResourceBuilderExtensions
         {
             return false;
         }
+    }
+
+    private sealed class McpSession
+    {
+        public string? Id { get; set; }
+
+        public string? ProtocolVersion { get; set; }
     }
 
     private sealed record McpTool(string Name, string? Description, JsonObject? InputSchema);

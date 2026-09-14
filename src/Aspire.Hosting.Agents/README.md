@@ -1,6 +1,6 @@
 # AI agents hosting integration
 
-Use this integration to model and configure endpoint-backed agent resources in an Aspire solution.
+Use this integration to model, configure, and orchestrate endpoint-backed agent resources in an Aspire solution.
 
 ## Getting started
 

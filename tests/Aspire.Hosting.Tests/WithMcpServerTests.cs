@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREMCP001
+#pragma warning disable EXTEXP0001 // Disable HTTP retries to test individual MCP failure responses deterministically.
 
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -343,6 +344,35 @@ public class WithMcpServerTests
         Assert.Equal("celsius", handler.ToolCallRequest?["params"]?["arguments"]?["units"]?.GetValue<string>());
         Assert.Equal("session-1", handler.ToolCallSessionId);
         Assert.All(handler.ProtocolVersions, version => Assert.Equal("2025-06-18", version));
+        Assert.Equal(["initialize", "notifications/initialized", "tools/list", "tools/call", "DELETE"], handler.Methods);
+        Assert.Equal(["session-1"], handler.TerminatedSessions);
+    }
+
+    [Theory]
+    [InlineData("app-mcp-call-tool")]
+    [InlineData("app-mcp-call-tool-interactive")]
+    public async Task WithMcpServer_InvokeCommandRejectsNonHttpEndpoint(string commandName)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        var handler = new McpCommandHandler();
+        appBuilder.Services.AddHttpClient(string.Empty).ConfigurePrimaryHttpMessageHandler(() => handler);
+        var container = appBuilder.AddContainer("app", "image")
+            .WithEndpoint(targetPort: 8080, scheme: "tcp", name: "custom")
+            .WithEndpoint("custom", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithMcpServer(endpointName: "custom");
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var arguments = commandName == "app-mcp-call-tool"
+            ? CreateMcpArguments("get_weather", "{}")
+            : new InteractionInputCollection([]);
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource, commandName, arguments).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal("Could not create HTTP command for resource 'app' as the endpoint with name 'custom' and scheme 'tcp' is not an HTTP endpoint.", result.Message);
+        Assert.Empty(handler.Methods);
     }
 
     [Fact]
@@ -393,6 +423,7 @@ public class WithMcpServerTests
 
         Assert.False(result.Success);
         Assert.Equal(expectedMessage, result.Message);
+        Assert.Equal(["session-1"], handler.TerminatedSessions);
     }
 
     [Fact]
@@ -582,10 +613,211 @@ public class WithMcpServerTests
         Assert.False(result.Success);
         Assert.Equal("MCP tool arguments must be a valid JSON object.", result.Message);
         Assert.Null(handler.ToolCallRequest);
+        Assert.Equal(["session-1"], handler.TerminatedSessions);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.MethodNotAllowed, McpToolCallResponse.Success)]
+    [InlineData(HttpStatusCode.InternalServerError, McpToolCallResponse.Success)]
+    [InlineData(HttpStatusCode.MethodNotAllowed, McpToolCallResponse.ToolError)]
+    [InlineData(HttpStatusCode.InternalServerError, McpToolCallResponse.ToolError)]
+    public async Task WithMcpServer_SessionTerminationPreservesToolResult(HttpStatusCode statusCode, McpToolCallResponse toolCallResponse)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        var handler = new McpCommandHandler(toolCallResponse: toolCallResponse)
+        {
+            OverrideResponse = (method, _) => Task.FromResult<HttpResponseMessage?>(
+                method == "DELETE" ? new HttpResponseMessage(statusCode) : null)
+        };
+        appBuilder.Services.AddHttpClient(string.Empty).ConfigurePrimaryHttpMessageHandler(() => handler);
+        var container = AddMcpContainer(appBuilder);
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource, "app-mcp-call-tool", CreateMcpArguments("get_weather", "{}")).DefaultTimeout();
+
+        Assert.Equal(toolCallResponse == McpToolCallResponse.Success, result.Success);
+        Assert.Equal(toolCallResponse == McpToolCallResponse.Success ? "MCP tool response received." : "MCP tool reported an error.", result.Message);
+        Assert.Equal(["session-1"], handler.TerminatedSessions);
+
+        // Cleanup warnings are in-memory AppHost logs in the first batch. Subsequent batches
+        // query DCP container logs, which are not available from this test's simulated resource.
+        await using var logs = app.Services.GetRequiredService<ResourceLoggerService>().GetAllAsync(container.Resource).GetAsyncEnumerator();
+        Assert.True(await logs.MoveNextAsync().AsTask().DefaultTimeout());
+        var cleanupWarnings = logs.Current.Count(line => line.Content.Contains("Could not terminate the MCP session.", StringComparison.Ordinal));
+        Assert.Equal(statusCode == HttpStatusCode.MethodNotAllowed ? 0 : 1, cleanupWarnings);
+    }
+
+    [Theory]
+    [InlineData("notifications/initialized")]
+    [InlineData("tools/list")]
+    [InlineData("tools/call")]
+    public async Task WithMcpServer_TerminatesSessionAfterTransportFailure(string failingMethod)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        var handler = new McpCommandHandler
+        {
+            OverrideResponse = (method, _) => method == failingMethod
+                ? Task.FromException<HttpResponseMessage?>(new HttpRequestException("Transport failed."))
+                : Task.FromResult<HttpResponseMessage?>(null)
+        };
+        appBuilder.Services.AddHttpClient(string.Empty).ConfigurePrimaryHttpMessageHandler(() => handler);
+        var container = AddMcpContainer(appBuilder);
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource, "app-mcp-call-tool", CreateMcpArguments("get_weather", "{}")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal("Transport failed.", result.Message);
+        Assert.Equal(["session-1"], handler.TerminatedSessions);
+    }
+
+    [Theory]
+    [InlineData("tools/list")]
+    [InlineData("tools/call")]
+    public async Task WithMcpServer_TerminatesSessionAfterCancellation(string canceledMethod)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        using var cancellation = new CancellationTokenSource();
+        var cleanupCanBeCanceled = false;
+        var cleanupWasCanceled = true;
+        var handler = new McpCommandHandler
+        {
+            OverrideResponse = (method, token) =>
+            {
+                if (method == canceledMethod)
+                {
+                    cancellation.Cancel();
+                    token.ThrowIfCancellationRequested();
+                }
+                else if (method == "DELETE")
+                {
+                    cleanupCanBeCanceled = token.CanBeCanceled;
+                    cleanupWasCanceled = token.IsCancellationRequested;
+                }
+
+                return Task.FromResult<HttpResponseMessage?>(null);
+            }
+        };
+        appBuilder.Services.AddHttpClient(string.Empty).ConfigurePrimaryHttpMessageHandler(() => handler);
+        var container = AddMcpContainer(appBuilder);
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource, "app-mcp-call-tool", CreateMcpArguments("get_weather", "{}"), cancellation.Token).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal(CommandResults.Canceled().Message, result.Message);
+        Assert.Equal(["session-1"], handler.TerminatedSessions);
+        Assert.True(cleanupCanBeCanceled);
+        Assert.False(cleanupWasCanceled);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithMcpServer_SessionTerminationFailureDoesNotReplacePreparationFailure(bool timeout)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        var handler = new McpCommandHandler
+        {
+            OverrideResponse = async (method, token) =>
+            {
+                if (method == "DELETE")
+                {
+                    if (timeout)
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                    }
+
+                    throw new HttpRequestException("Session termination failed.");
+                }
+
+                return null;
+            }
+        };
+        appBuilder.Services.AddHttpClient(string.Empty).ConfigurePrimaryHttpMessageHandler(() => handler);
+        var container = AddMcpContainer(appBuilder);
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource, "app-mcp-call-tool", CreateMcpArguments("get_weather", "invalid-json")).DefaultTimeout(TimeSpan.FromSeconds(15));
+
+        Assert.False(result.Success);
+        Assert.Equal("MCP tool arguments must be a valid JSON object.", result.Message);
+        Assert.Equal(["session-1"], handler.TerminatedSessions);
+    }
+
+    [Theory]
+    [InlineData("initialize", "invalid-json")]
+    [InlineData("tools/list", "invalid-json")]
+    [InlineData("tools/list", """{"jsonrpc":"2.0","id":"wrong-id","result":{}}""")]
+    [InlineData("tools/list", "http-error")]
+    public async Task WithMcpServer_DisposesInvalidResponseAndTerminatesSession(string failingMethod, string responseBody)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        var invalidResponse = new HttpResponseMessage(
+            responseBody == "http-error" ? HttpStatusCode.InternalServerError : HttpStatusCode.OK)
+        {
+            Content = new StringContent(responseBody)
+        };
+        if (failingMethod == "initialize")
+        {
+            invalidResponse.Headers.Add("Mcp-Session-Id", "session-1");
+        }
+
+        var handler = new McpCommandHandler
+        {
+            OverrideResponse = (method, _) => Task.FromResult(method == failingMethod ? invalidResponse : null)
+        };
+        appBuilder.Services.AddHttpClient(string.Empty).ConfigurePrimaryHttpMessageHandler(() => handler);
+        var container = AddMcpContainer(appBuilder);
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource, "app-mcp-call-tool", CreateMcpArguments("get_weather", "{}")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal(["session-1"], handler.TerminatedSessions);
+        await Assert.ThrowsAsync<ObjectDisposedException>(invalidResponse.Content.ReadAsStringAsync);
+    }
+
+    [Fact]
+    public async Task WithMcpServer_DoesNotTerminateStatelessSession()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        var handler = new McpCommandHandler { SessionId = null };
+        appBuilder.Services.AddHttpClient(string.Empty).ConfigurePrimaryHttpMessageHandler(() => handler);
+        var container = AddMcpContainer(appBuilder);
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource, "app-mcp-call-tool", CreateMcpArguments("get_weather", "{}")).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Empty(handler.TerminatedSessions);
+        Assert.Equal(["initialize", "notifications/initialized", "tools/list", "tools/call"], handler.Methods);
     }
 
     private static IResourceBuilder<ContainerResource> AddMcpContainer(IDistributedApplicationBuilder appBuilder)
     {
+        // Remove every default resilience handler so injected transport/HTTP failures exercise
+        // one request, even when multiple defaults have registered nested retry pipelines.
+        appBuilder.Services.AddHttpClient(string.Empty).RemoveAllResilienceHandlers();
+
         return appBuilder.AddContainer("app", "image")
             .WithHttpEndpoint(name: "http", targetPort: 8080)
             .WithEndpoint("http", e =>
@@ -648,19 +880,35 @@ public class WithMcpServerTests
 
         public List<string?> ToolListCursors { get; } = [];
 
+        public List<string?> Methods { get; } = [];
+
+        public List<string?> TerminatedSessions { get; } = [];
+
+        public string? SessionId { get; init; } = "session-1";
+
+        public Func<string?, CancellationToken, Task<HttpResponseMessage?>>? OverrideResponse { get; init; }
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var body = request.Content is null
                 ? string.Empty
                 : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(true);
             var payload = string.IsNullOrEmpty(body) ? null : JsonNode.Parse(body) as JsonObject;
-            var method = payload?["method"]?.GetValue<string>();
+            var method = request.Method == HttpMethod.Delete ? "DELETE" : payload?["method"]?.GetValue<string>();
+            Methods.Add(method);
+            if (method == "DELETE")
+            {
+                TerminatedSessions.Add(request.Headers.TryGetValues("Mcp-Session-Id", out var values) ? values.Single() : null);
+                Assert.Equal("http://localhost:8080/mcp", request.RequestUri?.ToString());
+            }
+
             if (method is not "initialize")
             {
                 ProtocolVersions.Add(request.Headers.TryGetValues("MCP-Protocol-Version", out var versions) ? versions.Single() : null);
             }
 
-            return method switch
+            var overriddenResponse = OverrideResponse is null ? null : await OverrideResponse(method, cancellationToken);
+            return overriddenResponse ?? (method switch
             {
                 "initialize" => CreateJsonRpcResponse(
                     payload?["id"],
@@ -669,7 +917,8 @@ public class WithMcpServerTests
                         ["protocolVersion"] = "2025-06-18",
                         ["capabilities"] = new JsonObject()
                     },
-                    sessionId: "session-1"),
+                    sessionId: SessionId),
+                "DELETE" => new HttpResponseMessage(HttpStatusCode.NoContent),
                 "notifications/initialized" => new HttpResponseMessage(HttpStatusCode.Accepted),
                 "tools/list" => HandleToolsList(payload!),
                 "tools/call" => HandleToolCall(payload!, request),
@@ -677,7 +926,7 @@ public class WithMcpServerTests
                 {
                     Content = new StringContent($$"""{"error":"Unexpected method '{{method}}'."}""", Encoding.UTF8, "application/json")
                 }
-            };
+            });
         }
 
         private HttpResponseMessage HandleToolsList(JsonObject payload)

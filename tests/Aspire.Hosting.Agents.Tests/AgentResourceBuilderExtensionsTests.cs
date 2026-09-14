@@ -30,6 +30,7 @@ public class AgentResourceBuilderExtensionsTests
         var annotation = Assert.Single(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
         Assert.Equal(AgentProtocol.A2A, annotation.Protocol);
         Assert.Equal(A2AInvocationMode.NonStreaming, annotation.InvocationMode);
+        Assert.Null(annotation.CustomPath);
         Assert.Null(annotation.AgentName);
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
@@ -185,6 +186,42 @@ public class AgentResourceBuilderExtensionsTests
         var ex = Assert.Throws<ArgumentException>(() => agent.AsAgent(AgentProtocol.Responses, A2AInvocationMode.Streaming));
 
         Assert.Equal("invocationMode", ex.ParamName);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t\r\n")]
+    public void AsAgent_RejectsInvalidCustomPath(string? path)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var agent = builder.AddContainer("agent", "image");
+
+        var exception = Assert.ThrowsAny<ArgumentException>(() => agent.AsAgent(path!, AgentProtocol.A2A));
+        var invocationModeException = Assert.ThrowsAny<ArgumentException>(() => agent.AsAgent(path!, AgentProtocol.A2A, A2AInvocationMode.Streaming));
+
+        Assert.Equal("agentCustomPath", exception.ParamName);
+        Assert.Equal("agentCustomPath", invocationModeException.ParamName);
+        if (path is null)
+        {
+            Assert.IsType<ArgumentNullException>(exception);
+            Assert.IsType<ArgumentNullException>(invocationModeException);
+        }
+        Assert.Empty(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
+        Assert.Empty(agent.Resource.Annotations.OfType<ResourceCommandAnnotation>());
+    }
+
+    [Fact]
+    public void AsAgent_CustomPathWithInvocationModePreservesConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var agent = builder.AddContainer("agent", "image")
+            .AsAgent("agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+
+        var annotation = Assert.Single(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
+        Assert.Equal("/agent-card.json", annotation.CustomPath);
+        Assert.Equal(A2AInvocationMode.Streaming, annotation.InvocationMode);
     }
 
     [Fact]
@@ -369,29 +406,15 @@ public class AgentResourceBuilderExtensionsTests
     }
 
     [Theory]
-    [InlineData("failed", false)]
-    [InlineData("TASK_STATE_REJECTED", false)]
-    [InlineData("canceled", true)]
-    public async Task InvokeA2AReportsTerminalTaskFailure(string taskState, bool streaming)
+    [MemberData(nameof(A2ATaskResponseCases))]
+    public async Task InvokeA2ARecognizesTaskStates(string protocolBinding, string protocolVersion, bool streaming, bool statusUpdate, string taskState, bool success)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var invocationResponse = new JsonObject
-        {
-            ["jsonrpc"] = "2.0",
-            ["id"] = "request-id",
-            ["result"] = new JsonObject
-            {
-                ["id"] = "task-id",
-                ["status"] = new JsonObject
-                {
-                    ["state"] = taskState
-                }
-            }
-        }.ToJsonString();
+        var invocationResponse = CreateA2ATaskResponse(protocolBinding, protocolVersion, statusUpdate, taskState);
         var handler = new A2ACommandHandler(
-            "JSONRPC",
-            "1.0",
+            protocolBinding,
+            protocolVersion,
             supportsStreaming: streaming,
             "http://localhost:8080/a2a",
             invocationResponse);
@@ -408,8 +431,168 @@ public class AgentResourceBuilderExtensionsTests
         await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-a2a-send-message");
         var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-a2a-send-message", CreateMessageArgument("hello")).DefaultTimeout();
 
+        Assert.Equal(success, result.Success);
+        var failureState = taskState is "failed" or "rejected" or "canceled" or "TASK_STATE_FAILED" or "TASK_STATE_REJECTED" or "TASK_STATE_CANCELED";
+        Assert.Equal(success
+            ? "Agent response received."
+            : failureState
+                ? $"Agent task ended in the '{taskState}' state."
+                : "Agent stream ended without a completed task or message response.", result.Message);
+    }
+
+    public static IEnumerable<object[]> A2ATaskResponseCases()
+    {
+        foreach (var protocolBinding in new[] { "JSONRPC", "HTTP+JSON" })
+        {
+            foreach (var protocolVersion in new[] { "0.3", "1.0" })
+            {
+                foreach (var statusUpdate in new[] { false, true })
+                {
+                    foreach (var state in new[] { "completed", "failed", "rejected", "canceled", "submitted", "working", "input-required", "auth-required", "unknown" })
+                    {
+                        var taskState = protocolVersion is "1.0" ? $"TASK_STATE_{state.Replace('-', '_').ToUpperInvariant()}" : state;
+                        yield return [protocolBinding, protocolVersion, true, statusUpdate, taskState, state is "completed"];
+                        if (!statusUpdate)
+                        {
+                            yield return [protocolBinding, protocolVersion, false, false, taskState, state is not ("failed" or "rejected" or "canceled")];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("JSONRPC", "0.3")]
+    [InlineData("JSONRPC", "1.0")]
+    [InlineData("HTTP+JSON", "0.3")]
+    [InlineData("HTTP+JSON", "1.0")]
+    public async Task InvokeStreamingA2AAcceptsDirectMessage(string protocolBinding, string protocolVersion)
+    {
+        var message = new JsonObject
+        {
+            ["messageId"] = "message-id",
+            ["role"] = protocolVersion is "0.3" ? "agent" : "ROLE_AGENT",
+            ["parts"] = new JsonArray(new JsonObject { ["text"] = "Hello" })
+        };
+        if (protocolVersion is "0.3")
+        {
+            message["kind"] = "message";
+            message["parts"]![0]!["kind"] = "text";
+        }
+        var payload = protocolBinding is "JSONRPC" && protocolVersion is "0.3"
+            ? message
+            : new JsonObject { ["message"] = message };
+        var response = WrapA2AResponse(protocolBinding, payload);
+
+        var result = await InvokeA2AStreamAsync(protocolBinding, protocolVersion, $"data: {response}\n\n");
+
+        Assert.True(result.Success);
+        Assert.Equal("Agent response received.", result.Message);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(": keepalive\n\n")]
+    [InlineData("data: [DONE]\n\n")]
+    [InlineData("data: {}\n\n")]
+    [InlineData("data: {\"message\":\"not a Message object\"}\n\n")]
+    [InlineData("data: {\"status\":{\"state\":\"completed\"}}\n\n")]
+    [InlineData("data: {\"result\":{\"kind\":\"artifact-update\",\"taskId\":\"task-id\",\"artifact\":{\"artifactId\":\"artifact-id\",\"parts\":[{\"kind\":\"text\",\"text\":\"hello\"}]},\"lastChunk\":true}}\n\n")]
+    [InlineData("data: {\"result\":{\"artifactUpdate\":{\"taskId\":\"task-id\",\"artifact\":{\"artifactId\":\"artifact-id\",\"parts\":[{\"text\":\"hello\"}]},\"lastChunk\":true}}}\n\n")]
+    [InlineData("data: {\"result\":{\"kind\":\"status-update\",\"taskId\":\"task-id\",\"status\":{\"state\":\"working\",\"message\":{\"kind\":\"message\",\"role\":\"agent\",\"messageId\":\"message-id\",\"parts\":[]}},\"final\":true}}\n\n")]
+    [InlineData("data: {\"result\":{\"statusUpdate\":{\"taskId\":\"task-id\",\"status\":{\"state\":\"TASK_STATE_WORKING\",\"message\":{\"role\":\"ROLE_AGENT\",\"messageId\":\"message-id\",\"parts\":[]}}}}}\n\n")]
+    [InlineData("data: {\"result\":{\"task\":{\"id\":\"task-id\",\"status\":{\"state\":\"TASK_STATE_WORKING\"}}}}\n\ndata: {\"result\":{\"message\":{\"role\":\"ROLE_AGENT\",\"messageId\":\"message-id\",\"parts\":[{\"text\":\"hello\"}]}}}\n\n")]
+    public async Task InvokeStreamingA2ARejectsStreamsWithoutResult(string response)
+    {
+        var result = await InvokeA2AStreamAsync("JSONRPC", "1.0", response);
+
         Assert.False(result.Success);
-        Assert.Equal($"Agent task ended in the '{taskState}' state.", result.Message);
+        Assert.Equal("Agent stream ended without a completed task or message response.", result.Message);
+    }
+
+    [Theory]
+    [InlineData("JSONRPC", "0.3", "completed")]
+    [InlineData("JSONRPC", "1.0", "completed")]
+    [InlineData("HTTP+JSON", "0.3", "completed")]
+    [InlineData("HTTP+JSON", "1.0", "completed")]
+    [InlineData("JSONRPC", "0.3", "failed")]
+    [InlineData("JSONRPC", "1.0", "failed")]
+    [InlineData("JSONRPC", "0.3", "error")]
+    [InlineData("JSONRPC", "1.0", "error")]
+    [InlineData("JSONRPC", "0.3", "working")]
+    [InlineData("JSONRPC", "1.0", "working")]
+    [InlineData("HTTP+JSON", "0.3", "working")]
+    [InlineData("HTTP+JSON", "1.0", "working")]
+    [InlineData("JSONRPC", "0.3", "submitted")]
+    [InlineData("JSONRPC", "1.0", "submitted")]
+    [InlineData("HTTP+JSON", "0.3", "submitted")]
+    [InlineData("HTTP+JSON", "1.0", "submitted")]
+    [InlineData("JSONRPC", "0.3", "artifact")]
+    [InlineData("JSONRPC", "1.0", "artifact")]
+    [InlineData("HTTP+JSON", "0.3", "artifact")]
+    [InlineData("HTTP+JSON", "1.0", "artifact")]
+    public async Task InvokeStreamingA2AProcessesAllEvents(string protocolBinding, string protocolVersion, string ending)
+    {
+        var workingState = protocolVersion is "0.3" ? "working" : "TASK_STATE_WORKING";
+        var completedState = protocolVersion is "0.3" ? "completed" : "TASK_STATE_COMPLETED";
+        var failedState = protocolVersion is "0.3" ? "failed" : "TASK_STATE_FAILED";
+        var working = CreateA2ATaskResponse(protocolBinding, protocolVersion, statusUpdate: false, workingState);
+        var completed = CreateA2ATaskResponse(protocolBinding, protocolVersion, statusUpdate: true, completedState);
+        var response = $"data: {working}\n\ndata: {completed}\n\n";
+        if (ending is "failed")
+        {
+            response += $"data: {CreateA2ATaskResponse(protocolBinding, protocolVersion, statusUpdate: true, failedState)}\n\n";
+        }
+        else if (ending is "error")
+        {
+            response += "data: {\"jsonrpc\":\"2.0\",\"id\":\"request-id\",\"error\":{\"code\":-32603,\"message\":\"Agent failed.\"}}\n\n";
+        }
+        else if (ending is "working" or "submitted")
+        {
+            var state = protocolVersion is "0.3" ? ending : $"TASK_STATE_{ending.ToUpperInvariant()}";
+            response += $"data: {CreateA2ATaskResponse(protocolBinding, protocolVersion, statusUpdate: true, state)}\n\n";
+        }
+        else if (ending is "artifact")
+        {
+            var update = new JsonObject
+            {
+                ["taskId"] = "task-id",
+                ["contextId"] = "context-id",
+                ["artifact"] = new JsonObject
+                {
+                    ["artifactId"] = "artifact-id",
+                    ["parts"] = new JsonArray(new JsonObject { ["text"] = "hello" })
+                },
+                ["lastChunk"] = true
+            };
+            if (protocolVersion is "0.3")
+            {
+                update["artifact"]!["parts"]![0]!["kind"] = "text";
+            }
+            JsonObject payload;
+            if (protocolBinding is "JSONRPC" && protocolVersion is "0.3")
+            {
+                update["kind"] = "artifact-update";
+                payload = update;
+            }
+            else
+            {
+                payload = new JsonObject { ["artifactUpdate"] = update };
+            }
+            response += $"data: {WrapA2AResponse(protocolBinding, payload)}\n\n";
+        }
+
+        var result = await InvokeA2AStreamAsync(protocolBinding, protocolVersion, response);
+
+        Assert.Equal(ending is "completed" or "artifact", result.Success);
+        Assert.Equal(ending switch
+        {
+            "completed" or "artifact" => "Agent response received.",
+            "failed" => $"Agent task ended in the '{failedState}' state.",
+            "working" or "submitted" => "Agent stream ended without a completed task or message response.",
+            _ => "Agent request returned a JSON-RPC error."
+        }, result.Message);
     }
 
     [Fact]
@@ -767,12 +950,62 @@ public class AgentResourceBuilderExtensionsTests
         Assert.False(string.IsNullOrWhiteSpace(argument.Placeholder));
     }
 
+    private static string CreateA2ATaskResponse(string protocolBinding, string protocolVersion, bool statusUpdate, string taskState)
+    {
+        var task = new JsonObject
+        {
+            [statusUpdate ? "taskId" : "id"] = "task-id",
+            ["contextId"] = "context-id",
+            ["status"] = new JsonObject { ["state"] = taskState }
+        };
+        JsonObject payload;
+        if (protocolBinding is "JSONRPC" && protocolVersion is "0.3")
+        {
+            task["kind"] = statusUpdate ? "status-update" : "task";
+            if (statusUpdate)
+            {
+                task["final"] = taskState is not ("submitted" or "working");
+            }
+            payload = task;
+        }
+        else
+        {
+            payload = new JsonObject { [statusUpdate ? "statusUpdate" : "task"] = task };
+        }
+
+        return WrapA2AResponse(protocolBinding, payload);
+    }
+
+    private static string WrapA2AResponse(string protocolBinding, JsonObject payload)
+    {
+        return (protocolBinding is "JSONRPC"
+            ? new JsonObject { ["jsonrpc"] = "2.0", ["id"] = "request-id", ["result"] = payload }
+            : payload).ToJsonString();
+    }
+
+    private static async Task<ExecuteCommandResult> InvokeA2AStreamAsync(string protocolBinding, string protocolVersion, string response)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var handler = new A2ACommandHandler(protocolBinding, protocolVersion, supportsStreaming: true, "http://localhost:8080/a2a", streamingResponse: response);
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-a2a-send-message");
+
+        return await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-a2a-send-message", CreateMessageArgument("hello")).DefaultTimeout();
+    }
+
     private sealed class A2ACommandHandler(
         string protocolBinding,
         string protocolVersion,
         bool supportsStreaming,
         string interfaceUrl,
-        string invocationResponse = """{"ok":true}""") : HttpMessageHandler
+        string? invocationResponse = null,
+        string? streamingResponse = null) : HttpMessageHandler
     {
         public HttpRequestMessage? InvocationRequest { get; private set; }
 
@@ -809,11 +1042,16 @@ public class AgentResourceBuilderExtensionsTests
                 ? null
                 : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(true);
 
+            var response = invocationResponse ?? CreateA2ATaskResponse(
+                protocolBinding,
+                protocolVersion,
+                statusUpdate: false,
+                protocolVersion is "0.3" ? "completed" : "TASK_STATE_COMPLETED");
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = request.Headers.Accept.Any(h => h.MediaType == "text/event-stream")
-                    ? new StringContent($"event: message\ndata: {invocationResponse}\n\n", Encoding.UTF8, "text/event-stream")
-                    : new StringContent(invocationResponse, Encoding.UTF8, "application/json")
+                    ? new StringContent(streamingResponse ?? $"event: message\ndata: {response}\n\n", Encoding.UTF8, "text/event-stream")
+                    : new StringContent(response, Encoding.UTF8, "application/json")
             };
         }
     }

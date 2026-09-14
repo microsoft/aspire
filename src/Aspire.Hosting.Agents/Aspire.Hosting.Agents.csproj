@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
+    <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
     <PackageTags>aspire integration hosting agents a2a responses ai</PackageTags>
     <Description>Agent resource configuration for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Aspire_icon_256.png</PackageIconFullPath>
