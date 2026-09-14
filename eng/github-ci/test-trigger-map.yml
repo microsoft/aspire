@@ -320,7 +320,7 @@ path_rules:
       - eng/scripts/verify-aspire-skills-bundle.ps1
       - eng/test-retry-patterns.json
     targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests/AspireSkillsBundleHashTests executes the shared Aspire skills bundle helpers, updater, and verifier; Infrastructure.Tests also validates transient retry-pattern configuration
+    reason: Infrastructure.Tests covers shared hashing helpers in AspireSkillsBundleHashTests and two-bundle updater/verifier behavior in AspireAgentBundleScriptTests; it also validates transient retry-pattern configuration
   - paths:
       - eng/scripts/verify-cli-archive.ps1
     targets: [test:Aspire.Acquisition.Tests]
