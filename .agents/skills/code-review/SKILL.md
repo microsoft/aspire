@@ -129,14 +129,53 @@ Flag concrete selection gaps:
 - Route Layer 2 inputs to their precise consumer, to `ALL` for broad impact, or
   explicitly outside the selector. Do not allow `ignore` or prefilter entries
   to hide a real PR-CI consumer.
+- Inspect runtime-only package and fixture consumption in E2E tests, including
+  `aspire add`, generated AppHost package sets, package filters, templates, and
+  workspace copies. If a PR adds or removes one of these consumers, require the
+  corresponding exact `affected_project_rules` or `path_rules` entry to change
+  in the same PR.
+- Inspect changes to `QuarantinedTest`, `ActiveIssue`, and `OuterloopTest` on
+  runtime-consuming E2E scenarios. Regular-PR targets must include only
+  consumers eligible for regular PR CI; require the exact map edge and focused
+  regression coverage to change when eligibility changes.
+- Project-name patterns are globs, not regular expressions. For expensive or
+  class-sharded selector-gated targets, flag family globs that include projects
+  the target does not exercise. Use a family glob only when every current and
+  future matching project should select the target; otherwise keep an audited
+  exact consumer list. For smaller unsharded jobs, accept safe broad routing
+  when an exhaustive consumer list would add fragility for little CI savings.
+  Do not expand or refine advisory targets that gate no PR jobs in an unrelated
+  PR focused on PR-gated work; audit them when their workflow or routing is
+  intentionally in scope.
+- For a dedicated package-input directory in `path_rules`, prefer one stable
+  directory glob when enumerating individual files or RIDs would let a new
+  input silently miss its consumers. Accept cross-RID over-selection when that
+  is the explicit resilience tradeoff, and do not flag that over-selection as a
+  routing defect. Require focused exclusions only when a split has material
+  savings and can be maintained safely.
+- Keep each trigger-map `reason` concise: it should state what the rule covers
+  or why the target consumes the input. Request more detail only for a
+  non-obvious relationship or constraint. Do not turn `reason` into PR prose,
+  repeat the full rule, or preserve investigation history there. The `targets`
+  field owns the target list, so do not request those names again in `reason`.
+  Accept a category-level description; do not require the reason to explain
+  every target or make the rule self-contained. Selection-design rationale,
+  such as why paths are split or broadened, belongs in the PR or maintenance
+  documentation.
 - Require `run_*` wiring for gated `job:` targets, advisory classification for
   targets outside the regular PR matrix or job gates, and routing from reusable
   workflow implementations to the jobs they implement.
 
 Selector behavior changes must keep the action, workflow gates, tool, map,
 tests, and canonical documentation synchronized. Require real-map tests for
-curated routing changes and focused synthetic-map tests for engine or CLI
-behavior. See `docs/ci/test-trigger-map.md` for the complete contract.
+curated routing changes: a representative positive per distinct routing
+boundary, focused negatives for deliberately excluded consumers, and a
+structural assertion for consumer lists duplicated across rule types. Do not
+request an acceptance case per consumer; instead audit the complete curated
+list against the consuming workflow. Treat a widened or relaxed negative
+expectation as a finding until the workflow's artifacts and execution lane
+justify it. Require focused synthetic-map tests for engine or CLI behavior.
+See `docs/ci/test-trigger-map.md` for the complete contract.
 
 ### Test Coverage Review
 
