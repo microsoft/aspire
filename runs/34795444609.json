@@ -1,0 +1,38 @@
+{
+  "run_id": 34795444609,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34795444609",
+  "analyzed_at": "2026-09-14T01:48:41Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20062,
+    "title": "Use repository NuGet configuration for SDK dump restores",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix-sdk-dump-nuget-config",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20062"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 103829216024,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34795444609/job/103829216024",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic 'Process completed with exit code 1' and no fetchable logs or TRX test failures. PR only touches Aspire.Cli SDK dump/NuGet config code, unrelated to the VS Code extension. Matches known recurring flaky pattern 'vscode-e2e-windows-dynamic-debug-configuration-flaky' (18 prior occurrences).",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 103829216057,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34795444609/job/103829216057",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic 'Process completed with exit code 1' and no fetchable logs or TRX test failures. PR only touches Aspire.Cli SDK dump/NuGet config code, unrelated to the VS Code extension. Matches the same recurring pattern of unrelated VS Code E2E shard flakiness seen across other shards/platforms (e.g. Linux tree-actions, Windows apphost-tree/edge-cases/winui-debug).",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky", "vscode-e2e-windows-tree-actions-flaky"]
+}

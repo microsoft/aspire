@@ -130,6 +130,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
       "pr_number": 20079,
       "observed_at": "2026-09-14T00:20:15Z"
+    },
+    {
+      "run_id": 34795444609,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34795444609",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 20062,
+      "observed_at": "2026-09-14T01:48:41Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19576"
