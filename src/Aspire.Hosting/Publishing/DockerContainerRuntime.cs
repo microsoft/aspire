@@ -31,7 +31,8 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             ? $"{options.ImageName}:{options.Tag}"
             : options?.ImageName ?? throw new ArgumentException("ImageName must be provided in options.", nameof(options));
 
-        string? builderName = null;
+        string? selectedBuilderName = null;
+        string? isolatedBuilderName = null;
         var exportsArchive = !string.IsNullOrEmpty(options?.OutputPath);
         var requiresLocalImageStore = options?.RequiresLocalImageStore == true;
         var exportsLocalImageArchive = exportsArchive && requiresLocalImageStore;
@@ -44,28 +45,30 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             }
         }
 
-        if (exportsArchive && !requiresLocalImageStore)
+        if (requiresLocalImageStore)
+        {
+            // Container-file layering refers to images tagged only in the active daemon's image store.
+            // A Docker context name selects that context's daemon-backed Buildx builder, avoiding an
+            // ambient custom builder that cannot resolve the local-only image.
+            selectedBuilderName = await GetActiveDockerContextAsync(imageName, cancellationToken).ConfigureAwait(false);
+        }
+        else if (exportsArchive)
         {
             // Docker's in-daemon builder cannot reliably write Docker or OCI archive exporters.
             // Use an isolated BuildKit container for archive output and remove it after the build.
             // https://docs.docker.com/build/exporters/
-            builderName = $"aspire-{Guid.NewGuid():N}";
-            await CreateBuildkitInstanceAsync(builderName, cancellationToken).ConfigureAwait(false);
+            isolatedBuilderName = $"aspire-{Guid.NewGuid():N}";
+            await CreateBuildkitInstanceAsync(isolatedBuilderName, cancellationToken).ConfigureAwait(false);
+            selectedBuilderName = isolatedBuilderName;
         }
 
         try
         {
             var arguments = $"buildx build --file \"{dockerfilePath}\" --tag \"{imageName}\"";
 
-            if (requiresLocalImageStore)
+            if (!string.IsNullOrEmpty(selectedBuilderName))
             {
-                // Container-file layering refers to images tagged only in the daemon's image store.
-                // Pin the build to the daemon-backed builder instead of honoring an ambient Buildx selection.
-                arguments += " --builder \"default\"";
-            }
-            else if (!string.IsNullOrEmpty(builderName))
-            {
-                arguments += $" --builder \"{builderName}\"";
+                arguments += $" --builder \"{selectedBuilderName}\"";
             }
 
             // Add platform support if specified
@@ -141,9 +144,9 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
         }
         finally
         {
-            if (!string.IsNullOrEmpty(builderName))
+            if (!string.IsNullOrEmpty(isolatedBuilderName))
             {
-                await RemoveBuildkitInstanceBestEffortAsync(builderName).ConfigureAwait(false);
+                await RemoveBuildkitInstanceBestEffortAsync(isolatedBuilderName).ConfigureAwait(false);
             }
         }
     }
@@ -186,6 +189,27 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             buildSecrets,
             stage,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> GetActiveDockerContextAsync(string imageName, CancellationToken cancellationToken)
+    {
+        var output = await ExecuteContainerCommandForOutputAsync(
+            "context show",
+            "context discovery",
+            imageName,
+            cancellationToken).ConfigureAwait(false);
+
+        // `docker context show` emits exactly one context name, for example:
+        //   desktop-linux
+        var contextNames = output.Split(
+            Environment.NewLine,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (contextNames is not [var contextName])
+        {
+            throw new DistributedApplicationException("Docker did not report exactly one active context.");
+        }
+
+        return contextName;
     }
 
     private async Task RunDockerSaveAsync(
