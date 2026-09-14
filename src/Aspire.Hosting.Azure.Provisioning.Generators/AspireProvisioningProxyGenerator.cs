@@ -868,6 +868,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 "        ",
                 $"{accessor} the {property.Name} provisioning property.");
         }
+        AppendExperimentalAttribute(source);
         source.AppendLine("        [global::Aspire.Hosting.AspireExportAttribute]");
         if (mappedType is { Kind: MappedTypeKind.BicepValue, LiteralTypeName: not null })
         {
@@ -1253,12 +1254,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         source.AppendLine();
         source.Append("        internal ").Append(underlyingTypeName).AppendLine(" Inner { get; }");
         source.AppendLine();
+        AppendExperimentalAttribute(source);
         source.AppendLine("        [global::Aspire.Hosting.AspireExportAttribute]");
         source.AppendLine("        internal int Count => Inner.Count;");
 
         if (collection.Kind == CollectionKind.Dictionary)
         {
             source.AppendLine();
+            AppendExperimentalAttribute(source);
             source.AppendLine("        [global::Aspire.Hosting.AspireExportAttribute]");
             source.AppendLine("        internal string[] Keys => new global::System.Collections.Generic.List<string>(Inner.Keys).ToArray();");
         }
@@ -2252,15 +2255,20 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
     private static void AppendMethodExportAttribute(StringBuilder source, string capabilityId, string methodName)
     {
-        source.Append("        [global::System.Diagnostics.CodeAnalysis.ExperimentalAttribute(\"")
-            .Append(ExperimentalDiagnosticId)
-            .Append("\", UrlFormat = \"")
-            .Append(ExperimentalUrlFormat)
-            .AppendLine("\")]");
+        AppendExperimentalAttribute(source);
         source.Append("        [global::Aspire.Hosting.AspireExportAttribute(\"")
             .Append(capabilityId)
             .Append("\", MethodName = \"")
             .Append(ToCamelCase(methodName))
+            .AppendLine("\")]");
+    }
+
+    private static void AppendExperimentalAttribute(StringBuilder source)
+    {
+        source.Append("        [global::System.Diagnostics.CodeAnalysis.ExperimentalAttribute(\"")
+            .Append(ExperimentalDiagnosticId)
+            .Append("\", UrlFormat = \"")
+            .Append(ExperimentalUrlFormat)
             .AppendLine("\")]");
     }
 

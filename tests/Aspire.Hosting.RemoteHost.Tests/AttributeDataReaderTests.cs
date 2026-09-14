@@ -142,6 +142,31 @@ public class AttributeDataReaderTests
         Assert.True(capability.IsExperimental);
     }
 
+    [Theory]
+    [InlineData(null, false, false)]
+    [InlineData(null, true, false)]
+    [InlineData(AttributeTargets.Method, false, true)]
+    [InlineData(AttributeTargets.Method, true, true)]
+    [InlineData(AttributeTargets.Class, false, true)]
+    [InlineData(AttributeTargets.Class, true, true)]
+    [InlineData(AttributeTargets.Module, false, true)]
+    [InlineData(AttributeTargets.Assembly, false, true)]
+    [InlineData(AttributeTargets.Assembly, true, true)]
+    public void ExperimentalScope_IsReflectedInCapabilityMetadata(
+        AttributeTargets? experimentalTarget, bool nestedType, bool expected)
+    {
+        var assembly = CreateCompatibleAssembly(experimentalTarget, nestedType);
+        var method = Assert.Single(assembly.GetTypes().SelectMany(
+            static type => type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)));
+
+        Assert.Equal(expected, AttributeDataReader.HasExperimentalData(method));
+
+        var result = AtsCapabilityScanner.ScanAssembly(assembly);
+        var capability = Assert.Single(result.Capabilities);
+
+        Assert.Equal(expected, capability.IsExperimental);
+    }
+
     [Fact]
     public void GetAspireExportData_ReadsAllNamedProperties()
     {
@@ -177,7 +202,7 @@ public class AttributeDataReaderTests
     [Fact]
     public void ScanAssembly_FindsCompatibleAttribute_WhenNamespaceMatches()
     {
-        var compatibleAssembly = CreateCompatibleAssembly();
+        var compatibleAssembly = CreateCompatibleAssembly(experimentalTarget: null, nestedType: false);
         var hostingAssembly = typeof(DistributedApplication).Assembly;
 
         var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, compatibleAssembly]);
@@ -308,16 +333,21 @@ public class AttributeDataReaderTests
 
     #endregion
 
-    private static Assembly CreateCompatibleAssembly()
+    private static Assembly CreateCompatibleAssembly(AttributeTargets? experimentalTarget, bool nestedType)
     {
         var assemblyName = new AssemblyName($"CompatibleAtsAttributes_{Guid.NewGuid():N}");
         var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.RunAndCollect);
         var moduleBuilder = assemblyBuilder.DefineDynamicModule(assemblyName.Name!);
         var exportAttributeType = DefineCompatibleExportAttribute(moduleBuilder);
 
-        var exportsTypeBuilder = moduleBuilder.DefineType(
+        var declaringTypeBuilder = moduleBuilder.DefineType(
             "Generated.CompatibleExports",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
+        var exportsTypeBuilder = nestedType
+            ? declaringTypeBuilder.DefineNestedType(
+                "NestedExports",
+                TypeAttributes.NestedPublic | TypeAttributes.Abstract | TypeAttributes.Sealed)
+            : declaringTypeBuilder;
         var methodBuilder = exportsTypeBuilder.DefineMethod(
             "CompatibleMethod",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -327,6 +357,35 @@ public class AttributeDataReaderTests
         methodBuilder.SetCustomAttribute(CreateCompatibleExportAttributeBuilder(exportAttributeType));
         methodBuilder.GetILGenerator().Emit(OpCodes.Ret);
 
+        if (experimentalTarget is not null)
+        {
+            var experimentalAttribute = new CustomAttributeBuilder(
+                typeof(System.Diagnostics.CodeAnalysis.ExperimentalAttribute).GetConstructor([typeof(string)])!,
+                ["TESTEXPERIMENTAL001"]);
+
+            switch (experimentalTarget)
+            {
+                case AttributeTargets.Method:
+                    methodBuilder.SetCustomAttribute(experimentalAttribute);
+                    break;
+                case AttributeTargets.Class:
+                    declaringTypeBuilder.SetCustomAttribute(experimentalAttribute);
+                    break;
+                case AttributeTargets.Module:
+                    moduleBuilder.SetCustomAttribute(experimentalAttribute);
+                    break;
+                case AttributeTargets.Assembly:
+                    assemblyBuilder.SetCustomAttribute(experimentalAttribute);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(experimentalTarget));
+            }
+        }
+
+        if (nestedType)
+        {
+            _ = declaringTypeBuilder.CreateType();
+        }
         _ = exportsTypeBuilder.CreateType();
 
         return assemblyBuilder;
@@ -334,7 +393,7 @@ public class AttributeDataReaderTests
 
     private static MethodInfo CreateCompatibleExportMethod()
     {
-        var compatibleAssembly = CreateCompatibleAssembly();
+        var compatibleAssembly = CreateCompatibleAssembly(experimentalTarget: null, nestedType: false);
 
         return compatibleAssembly.GetType("Generated.CompatibleExports")!
             .GetMethod("CompatibleMethod")!;

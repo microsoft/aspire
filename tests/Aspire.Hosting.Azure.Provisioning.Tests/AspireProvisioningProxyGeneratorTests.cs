@@ -96,6 +96,14 @@ public class AspireProvisioningProxyGeneratorTests
             .ToArray();
         Assert.NotEmpty(exportedMethods);
         Assert.All(exportedMethods, AssertProvisioningExperimental);
+
+        var exportedProperties = GetAllTypes(result.Compilation.Assembly.GlobalNamespace)
+            .SelectMany(static type => type.GetMembers().OfType<IPropertySymbol>())
+            .Where(static property => property.GetAttributes().Any(static attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "Aspire.Hosting.AspireExportAttribute"))
+            .ToArray();
+        Assert.NotEmpty(exportedProperties);
+        Assert.All(exportedProperties, AssertProvisioningExperimental);
     }
 
     [Fact]
@@ -477,9 +485,9 @@ public class AspireProvisioningProxyGeneratorTests
         }
     }
 
-    private static void AssertProvisioningExperimental(IMethodSymbol method)
+    private static void AssertProvisioningExperimental(ISymbol symbol)
     {
-        var experimental = Assert.Single(method.GetAttributes(), static attribute =>
+        var experimental = Assert.Single(symbol.GetAttributes(), static attribute =>
             attribute.AttributeClass?.ToDisplayString() == "System.Diagnostics.CodeAnalysis.ExperimentalAttribute");
         Assert.Equal("ASPIREAZUREPROVISIONING001", Assert.IsType<string>(experimental.ConstructorArguments[0].Value));
         Assert.Contains(

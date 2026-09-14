@@ -1742,6 +1742,7 @@ public static class AtsCapabilityScanner
                 var methodNameOverride = memberExportAttr?.MethodName;
                 var propertyDocumentation = GetXmlDocumentation(property, memberExportAttr?.Description);
                 var propertyDescription = memberExportAttr?.Description ?? propertyDocumentation?.Summary ?? $"Gets the {property.Name} property";
+                var isExperimental = AttributeDataReader.HasExperimentalData(property);
 
                 // Generate getter capability if property is readable
                 // Naming: {TypeName}.{propertyName} (camelCase, no "get" prefix)
@@ -1759,6 +1760,7 @@ public static class AtsCapabilityScanner
                         OwningTypeName = typeName,
                         Description = propertyDescription,
                         Documentation = propertyDocumentation,
+                        IsExperimental = isExperimental,
                         Parameters = [
                             new AtsParameterInfo
                             {
@@ -1801,6 +1803,7 @@ public static class AtsCapabilityScanner
                         OwningTypeName = typeName,
                         Description = $"Sets the {property.Name} property",
                         Documentation = propertyDocumentation,
+                        IsExperimental = isExperimental,
                         Parameters = [
                             new AtsParameterInfo
                             {
