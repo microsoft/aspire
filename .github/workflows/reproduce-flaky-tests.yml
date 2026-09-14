@@ -168,6 +168,10 @@ jobs:
             cliBinary: aspire.exe
             useXvfb: false
     env:
+      # Each invocation refreshes the shard's NuGet cache. Reusable MSBuild workers
+      # otherwise retain Aspire.Hosting.Tasks.dll and block the next Windows run.
+      MSBUILDDISABLENODEREUSE: '1'
+      DOTNET_CLI_USE_MSBUILD_SERVER: 'false'
       REPRO_RESULTS_ROOT: ${{ github.workspace }}/repro-results/${{ matrix.rid }}-runner-${{ matrix.index }}
       REPRO_RID: ${{ matrix.rid }}
       REPRO_RUNNER_INDEX: ${{ matrix.index }}
