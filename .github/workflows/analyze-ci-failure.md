@@ -145,8 +145,7 @@ jobs:
             # doesn't include the pull_requests array.
             if [ -n "${ANALYZED_COMMIT_SHA}" ]; then
               PR_NUMBERS=$(gh api "repos/${REPO}/commits/${ANALYZED_COMMIT_SHA}/pulls" \
-                2>/dev/null | jq -r --arg sha "${ANALYZED_COMMIT_SHA}" \
-                  '[.[] | select(.head.sha == $sha) | .number] | join(",")' || echo "")
+                --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
             fi
           fi
           echo "pr_numbers=${PR_NUMBERS}" >> "$GITHUB_OUTPUT"
@@ -328,7 +327,6 @@ jobs:
             if gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" > ci-failure-data/test-results.zip \
                 && timeout 30s python3 - ci-failure-data/test-results.zip ci-failure-data/test-results "${EVIDENCE_GAPS_FILE}" <<'PY'
           import pathlib
-          import shutil
           import stat
           import sys
           import zipfile
@@ -336,6 +334,9 @@ jobs:
           archive_path, destination_path, evidence_gaps_path = sys.argv[1:]
           destination = pathlib.Path(destination_path).resolve()
           destination.mkdir(parents=True, exist_ok=True)
+          max_file_bytes = 50 * 1024 * 1024
+          max_total_bytes = 500 * 1024 * 1024
+          total_bytes = 0
 
           with zipfile.ZipFile(archive_path) as archive:
               trx_entries = sorted(
@@ -351,9 +352,12 @@ jobs:
                       if relative_path.is_absolute() or '..' in relative_path.parts or '\\' in entry.filename or stat.S_ISLNK(unix_mode):
                           evidence_gaps.write(f'Skipped unsafe test result path: {entry.filename}\n')
                           continue
-                      if entry.file_size > 50 * 1024 * 1024:
+                      if entry.file_size > max_file_bytes:
                           evidence_gaps.write(f'Skipped test result larger than 50 MB: {relative_path.name}\n')
                           continue
+                      if total_bytes + entry.file_size > max_total_bytes:
+                          evidence_gaps.write('Stopped extracting test results after reaching the 500 MB aggregate limit\n')
+                          break
 
                       target = (destination / pathlib.Path(*relative_path.parts)).resolve()
                       if destination not in target.parents:
@@ -361,8 +365,19 @@ jobs:
                           continue
 
                       target.parent.mkdir(parents=True, exist_ok=True)
-                      with archive.open(entry) as source, open(target, 'wb') as output:
-                          shutil.copyfileobj(source, output)
+                      written_for_file = 0
+                      try:
+                          with archive.open(entry) as source, open(target, 'wb') as output:
+                              while chunk := source.read(1024 * 1024):
+                                  written_for_file += len(chunk)
+                                  if written_for_file > max_file_bytes or total_bytes + written_for_file > max_total_bytes:
+                                      raise ValueError('Test result extraction limit exceeded')
+                                  output.write(chunk)
+                      except ValueError:
+                          target.unlink(missing_ok=True)
+                          evidence_gaps.write('Stopped extracting test results after reaching an extraction size limit\n')
+                          break
+                      total_bytes += written_for_file
           PY
             then
               echo "Download complete."
@@ -1005,7 +1020,7 @@ safe-outputs:
         Emit exactly one `rerun_failed_jobs` item with the run_id and pr_numbers
         when the result's rerun decision is eligible.
       runs-on: ubuntu-latest
-      needs: [safe_outputs]
+      needs: [safe_outputs, publish-data]
       permissions:
         actions: write
         contents: read

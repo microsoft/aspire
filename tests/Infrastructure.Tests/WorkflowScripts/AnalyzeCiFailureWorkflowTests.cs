@@ -480,7 +480,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     {
         var artifacts = new Dictionary<string, object>[]
         {
-            new() { ["id"] = 1, ["name"] = "All-TestResults", ["size_in_bytes"] = 1000, ["expired"] = false, ["created_at"] = "2026-01-01T00:00:00Z" },
+            new() { ["id"] = 1, ["name"] = "All-TestResults", ["size_in_bytes"] = 1000, ["expired"] = false, ["created_at"] = "2026-01-02T00:00:00Z" },
             new() { ["id"] = 2, ["name"] = "All-TestResults", ["size_in_bytes"] = 2000, ["expired"] = false, ["created_at"] = "2026-01-02T00:00:00Z" },
             new() { ["id"] = 3, ["name"] = "other-test-results", ["size_in_bytes"] = 500, ["expired"] = false, ["created_at"] = "2026-01-03T00:00:00Z" }
         };

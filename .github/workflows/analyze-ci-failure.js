@@ -111,7 +111,8 @@ function selectTestResultsArtifact(artifacts) {
     const candidates = Array.isArray(artifacts)
         ? artifacts
             .filter(artifact => artifact?.name === 'All-TestResults' && artifact.expired !== true)
-            .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+            .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)
+                || Number(right.id) - Number(left.id))
         : [];
     const selected = candidates[0];
 

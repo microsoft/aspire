@@ -57,7 +57,7 @@ The rerun safe-output job treats the analysis as a decision, not as trusted exec
 
 If any check fails, no rerun is requested. Publication applies the same verdict-to-decision consistency rule before posting the result.
 
-The aggregate `All-TestResults` artifact is selected by exact name, newest creation time, and artifact ID. Collection rejects artifacts larger than 100 MB, processes at most 200 TRX files, skips TRX files larger than 50 MB, ignores links or paths outside the extraction root, and applies time limits to archive extraction and TRX parsing. Skipped evidence is recorded as an evidence gap for the analysis.
+The aggregate `All-TestResults` artifact is selected by exact name, newest creation time, and artifact ID. Collection rejects artifacts larger than 100 MB, processes at most 200 TRX files and 500 MB of aggregate extracted data, skips TRX files larger than 50 MB, ignores links or paths outside the extraction root, and applies time limits to archive extraction and TRX parsing. Skipped evidence is recorded as an evidence gap for the analysis.
 
 ## Known transient patterns
 

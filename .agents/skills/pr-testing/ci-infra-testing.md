@@ -263,7 +263,7 @@ dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
 
 | Changed file | Test class |
 |--------------|-----------|
-| `.github/workflows/analyze-ci-failure.js`, `.github/workflows/analyze-ci-failure.md` | `AnalyzeCiFailureWorkflowTests` |
+| `.github/workflows/analyze-ci-failure.js` | `AnalyzeCiFailureWorkflowTests` |
 | `.github/workflows/create-failing-test-issue.js`, `workflow-command-helpers.js` | `CreateFailingTestIssueWorkflowTests`, `CreateFailingTestIssueToolTests` |
 | `eng/scripts/build-test-matrix.ps1` | `BuildTestMatrixTests` |
 | `eng/scripts/split-test-projects-for-ci.ps1` | `SplitTestProjectsTests` |
@@ -281,11 +281,10 @@ or e.g. the `check-changed-files` action's bash glob→regex logic (none). Say s
 the report — "no automated coverage" is a finding, a candidate for a new test, and
 a prompt to validate that logic by hand here.
 
-Some of these classes also include **YAML-contract assertions** — they read the
-workflow `.yml` text and assert key trigger / safety-rail lines are present
-(e.g. `WorkflowOwnsAndValidatesAutomaticRerunDecision` in `AnalyzeCiFailureWorkflowTests`).
-If you changed a workflow's `on:`, `if:`, permissions, or job gating, a contract
-test may need updating — a red contract test here is signal, not noise.
+Workflow Markdown and generated lock files do not have text-contract coverage in
+`AnalyzeCiFailureWorkflowTests`. When changing a workflow's `on:`, `if:`,
+permissions, job dependencies, or gating, compile it and inspect the generated
+workflow as part of manual validation.
 
 ## Step I-3: Validate by category
 
