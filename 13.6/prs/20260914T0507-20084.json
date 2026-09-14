@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixed Dashboard disabled-control and row hover style regressions from the Fluent UI v5 upgrade",
+  "mergedAt": "2026-09-14T05:07:14Z",
+  "number": 20084,
+  "runDate": "2026-09-14T06:07:28Z",
+  "status": "included",
+  "title": "Fix dashboard disabled and row hover styles"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed visual regressions from the Fluent UI v5 upgrade: disabled dropdown options and menu items now share consistent opacity without hover/active/focus backgrounds, and resource and structured log grid rows use the correct light-mode hover color again.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-09-14T05:07:14Z",
+  "lastMergedAt": "2026-09-14T05:07:14Z",
+  "name": "Fixed dashboard disabled and row hover styles",
+  "owner": "JamesNK",
+  "prs": [
+    20084
+  ]
+}

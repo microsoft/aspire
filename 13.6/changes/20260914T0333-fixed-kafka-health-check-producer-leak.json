@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Kafka AppHost health checks now reuse a DI-owned, keyed singleton producer per resource instead of creating a new producer on every check. This stops polling threads from accumulating over time and releases them when the AppHost is disposed.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩹",
+  "firstMergedAt": "2026-09-14T03:33:51Z",
+  "lastMergedAt": "2026-09-14T03:33:51Z",
+  "name": "Fixed Kafka health-check producer leak",
+  "owner": "davidfowl",
+  "prs": [
+    20092
+  ]
+}

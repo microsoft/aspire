@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI test-selector engineering change to skip class-sharded CLI/extension E2E suites; no user-facing effect",
+  "mergedAt": "2026-09-14T04:32:10Z",
+  "number": 19882,
+  "runDate": "2026-09-14T06:07:28Z",
+  "status": "excluded",
+  "title": "ci: Run extension and CLI E2E only for actual consumers"
+}

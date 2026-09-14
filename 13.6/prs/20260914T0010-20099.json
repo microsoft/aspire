@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Bot-authored CI/test fixture fix (VS Code E2E .NET 11 framework mismatch); not user-facing",
+  "mergedAt": "2026-09-14T00:10:06Z",
+  "number": 20099,
+  "runDate": "2026-09-14T06:07:28Z",
+  "status": "excluded",
+  "title": "Fix VS Code browser E2E framework mismatch"
+}

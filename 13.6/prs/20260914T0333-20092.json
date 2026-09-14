@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Fixed Kafka AppHost health check leaking producer/polling threads on repeated executions",
+  "mergedAt": "2026-09-14T03:33:51Z",
+  "number": 20092,
+  "runDate": "2026-09-14T06:07:28Z",
+  "status": "included",
+  "title": "Fix Kafka AppHost health-check producer lifetime"
+}

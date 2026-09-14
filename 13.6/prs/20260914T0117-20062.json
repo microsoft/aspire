@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes NuGet config resolution for the hidden internal `aspire sdk dump` diagnostic command; not user-facing",
+  "mergedAt": "2026-09-14T01:17:24Z",
+  "number": 20062,
+  "runDate": "2026-09-14T06:07:28Z",
+  "status": "excluded",
+  "title": "Use repository NuGet configuration for SDK dump restores"
+}
