@@ -10,7 +10,7 @@ internal sealed class AgentClient
 {
     public static AgentClient CopilotCli { get; } = new(nameof(CopilotCli), "GitHub Copilot CLI", AgentAssetKind.Skill);
 
-    public static AgentClient CopilotApp { get; } = new(nameof(CopilotApp), "GitHub Copilot App", AgentAssetKind.All);
+    public static AgentClient CopilotApp { get; } = new(nameof(CopilotApp), "GitHub Copilot App", AgentAssetKind.Skill | AgentAssetKind.Extension);
 
     public static AgentClient ClaudeCode { get; } = new(nameof(ClaudeCode), "Claude Code", AgentAssetKind.Skill);
 

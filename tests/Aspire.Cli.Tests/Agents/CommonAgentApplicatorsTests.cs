@@ -13,15 +13,14 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void AgentAssetKind_ContainsSkillsAndExtensionsWithoutZero()
     {
-        Assert.Equal([AgentAssetKind.Skill, AgentAssetKind.Extension, AgentAssetKind.All], Enum.GetValues<AgentAssetKind>());
+        Assert.Equal([AgentAssetKind.Skill, AgentAssetKind.Extension], Enum.GetValues<AgentAssetKind>());
         Assert.False(Enum.IsDefined((AgentAssetKind)0));
-        Assert.Equal(AgentAssetKind.Skill | AgentAssetKind.Extension, AgentAssetKind.All);
     }
 
     [Fact]
     public void CopilotApp_SupportsAllAssetKinds()
     {
-        Assert.Equal(AgentAssetKind.All, AgentClient.CopilotApp.SupportedAssetKinds);
+        Assert.Equal(AgentAssetKind.Skill | AgentAssetKind.Extension, AgentClient.CopilotApp.SupportedAssetKinds);
     }
 
     [Theory]

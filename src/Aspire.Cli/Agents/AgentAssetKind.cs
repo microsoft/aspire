@@ -18,9 +18,4 @@ internal enum AgentAssetKind
     /// Agent extensions.
     /// </summary>
     Extension = 2,
-
-    /// <summary>
-    /// All supported agent asset kinds.
-    /// </summary>
-    All = Skill | Extension,
 }
