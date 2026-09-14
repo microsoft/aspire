@@ -121,8 +121,8 @@ public sealed class TestSelector
     /// fallback. May be empty (then no file is treated as owned).
     /// </param>
     /// <param name="allTestProjectNames">
-    /// All project names under <c>tests/</c>, including shared fixtures that are not part of the CI
-    /// matrix. These names are excluded from affected production-project rules.
+    /// Affected test project names from the current Layer 1 graph result (graph projects under <c>tests/</c>).
+    /// These names are excluded from affected production-project rules.
     /// </param>
     public TestSelector(
         string mapPath,

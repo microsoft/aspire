@@ -27,7 +27,7 @@ namespace Aspire.SelectTests;
 /// seeded that chain — the data the selector turns into a "why this test ran" path in the summary.
 /// </param>
 /// <param name="AffectedTestProjects">
-/// Affected project base names that live under <c>tests/</c> — includes test-support projects omitted from the solution graph.
+/// Affected project base names for graph projects under <c>tests/</c>, including projects omitted from <c>Aspire.slnx</c> but brought into the graph through ProjectReference.
 /// </param>
 internal sealed record AffectedResult(
     IReadOnlyCollection<string> AffectedProjects,
