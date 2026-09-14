@@ -1,0 +1,61 @@
+{
+  "run_id": 34791816809,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34791816809",
+  "analyzed_at": "2026-09-14T00:51:58Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20099,
+    "title": "Fix VS Code browser E2E framework mismatch",
+    "author": "Copilot",
+    "state": "closed",
+    "head_branch": "copilot/fix-browser-e2e-framework",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20099"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 103818616444,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34791816809/job/103818616444",
+      "classification": "flaky-test",
+      "reason": "Job fails with a generic 'Process completed with exit code 2' on the 'Run tests (Linux/macOS)' step. Job logs were unavailable to fetch and no TRX test failures were extracted. The PR only modifies extension/scripts/run-e2e.js and extension/src/test/e2eLaunchProfile.test.ts, which are unrelated to Aspire.Cli.Tests. Matches the previously recorded recurring pattern 'cli-macos-tests-unrelated-exit-code-2'.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 103818617020,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34791816809/job/103818617020",
+      "classification": "flaky-test",
+      "reason": "Job fails with a generic 'Process completed with exit code 2' on the 'Run tests (Linux/macOS)' step. Job logs were unavailable to fetch and no TRX test failures were extracted. The PR only modifies extension/ files, unrelated to Aspire.Cli.Tests. Matches the previously recorded recurring pattern 'cli-ubuntu-tests-unrelated-exit-code-2'.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
+      "id": 103819948762,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34791816809/job/103819948762",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic 'Process completed with exit code 1' on the 'Run extension E2E tests' step. Job logs were unavailable and no TRX test failures were extracted. The PR does not touch WinUI-related E2E code paths; matches the previously recorded recurring pattern 'vscode-e2e-windows-winui-debug-flaky'.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "id": 103819948763,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34791816809/job/103819948763",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic 'Process completed with exit code 1' on the 'Run extension E2E tests' step. Job logs were unavailable and no TRX test failures were extracted, so there is no direct evidence tying this failure to the PR's run-e2e.js/e2eLaunchProfile.test.ts changes (which specifically target this shard). The identical generic-exit-code/logs-unavailable signature matches the previously recorded recurring pattern 'vscode-extension-e2e-unrelated-logs-unavailable', which has affected this same 'browser-debugger' shard across 6 prior unrelated PRs, indicating a broader environment/infra flakiness rather than a code defect introduced by this PR.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "cli-macos-tests-unrelated-exit-code-2",
+    "cli-ubuntu-tests-unrelated-exit-code-2",
+    "vscode-e2e-windows-winui-debug-flaky",
+    "vscode-extension-e2e-unrelated-logs-unavailable"
+  ]
+}

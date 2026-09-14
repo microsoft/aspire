@@ -2,8 +2,7 @@
   "id": "cli-macos-tests-unrelated-exit-code-2",
   "type": "flaky-test",
   "title": "Aspire.Cli.Tests (macos-latest) job fails with generic exit code 2, unrelated to PR changes",
-  "test_name": "N/A",
-  "error_pattern": "Process completed with exit code 2. (Run tests (Linux/macOS) step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. PR only modifies src/Aspire.Dashboard files, unrelated to Aspire.Cli.Tests.",
+  "error_pattern": "Process completed with exit code 2. (Run tests (Linux/macOS) step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. PR only modifies extension/ files, unrelated to Aspire.Cli.Tests.",
   "occurrences": [
     {
       "run_id": 34790579218,
@@ -11,6 +10,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
       "pr_number": 20079,
       "observed_at": "2026-09-14T00:20:15Z"
+    },
+    {
+      "run_id": 34791816809,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34791816809",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "pr_number": 20099,
+      "observed_at": "2026-09-14T00:51:58Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20101"

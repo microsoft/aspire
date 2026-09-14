@@ -10,6 +10,13 @@
       "job": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
       "pr_number": 20020,
       "observed_at": "2026-09-13T07:18:14Z"
+    },
+    {
+      "run_id": 34791816809,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34791816809",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "pr_number": 20099,
+      "observed_at": "2026-09-14T00:51:58Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20089"
