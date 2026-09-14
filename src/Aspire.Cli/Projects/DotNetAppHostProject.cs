@@ -1501,7 +1501,23 @@ internal partial class DotNetAppHostProject : IAppHostProject
 
         await EnsureDevCertificatesTrustedAsync(context, env, cancellationToken);
 
-        await PrepareForRunAsync(effectiveAppHostFile, cancellationToken);
+        try
+        {
+            if (!await PrepareForRunAsync(effectiveAppHostFile, buildOutputCollector, cancellationToken))
+            {
+                context.OutputCollector = buildOutputCollector;
+                context.BuildCompletionSource?.TrySetResult(false);
+                return CliExitCodes.FailedToBuildArtifacts;
+            }
+        }
+        catch
+        {
+            // RunCommand waits for build completion before observing the run task. Preserve any
+            // preparation diagnostics and unblock that wait before propagating unexpected failures.
+            context.OutputCollector = buildOutputCollector;
+            context.BuildCompletionSource?.TrySetResult(false);
+            throw;
+        }
 
         // Configure the bundle before the safety build because file-based AppHosts can resolve
         // bundle-owned tools and packages while evaluating their build.
@@ -1691,11 +1707,17 @@ internal partial class DotNetAppHostProject : IAppHostProject
     protected virtual bool IsSingleFileAppHost(FileInfo appHostFile)
         => !IsProjectFile(appHostFile);
 
-    protected virtual Task PrepareForRunAsync(FileInfo appHostFile, CancellationToken cancellationToken)
-        => Task.CompletedTask;
+    protected virtual Task<bool> PrepareForRunAsync(
+        FileInfo appHostFile,
+        OutputCollector buildOutputCollector,
+        CancellationToken cancellationToken)
+        => Task.FromResult(true);
 
-    protected virtual Task PrepareForPublishAsync(FileInfo appHostFile, CancellationToken cancellationToken)
-        => Task.CompletedTask;
+    protected virtual Task<bool> PrepareForPublishAsync(
+        FileInfo appHostFile,
+        OutputCollector buildOutputCollector,
+        CancellationToken cancellationToken)
+        => Task.FromResult(true);
 
     protected virtual void ConfigureAppHostInvocationOptions(FileInfo appHostFile, ProcessInvocationOptions options)
     {
@@ -2488,15 +2510,32 @@ internal partial class DotNetAppHostProject : IAppHostProject
             }
         }
 
-        // See RunAsync for the rationale: terminal host env vars are injected even when
-        // the AppHost did not opt into AspireUseCliBundle, but DCP/Dashboard env vars are
-        // not (they would clobber per-RID NuGet metadata).
-        using var cliBundleLease = await ConfigureCliBundleEnvironmentForPublishAsync(effectiveAppHostFile, env, cancellationToken);
-
+        var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
         if (isSingleFileAppHost)
         {
-            await PrepareForPublishAsync(effectiveAppHostFile, cancellationToken);
+            try
+            {
+                if (!await PrepareForPublishAsync(effectiveAppHostFile, buildOutputCollector, cancellationToken))
+                {
+                    context.OutputCollector = buildOutputCollector;
+                    context.BackchannelCompletionSource?.TrySetException(
+                        new InvalidOperationException("The app host preparation failed."));
+                    return CliExitCodes.FailedToBuildArtifacts;
+                }
+            }
+            catch (Exception ex)
+            {
+                context.OutputCollector = buildOutputCollector;
+                context.BackchannelCompletionSource?.TrySetException(ex);
+                throw;
+            }
         }
+
+        // See RunAsync for the rationale: terminal host env vars are injected even when
+        // the AppHost did not opt into AspireUseCliBundle, but DCP/Dashboard env vars are
+        // not (they would clobber per-RID NuGet metadata). Configure this after preparation
+        // because CLI-managed AppHosts materialize their integration closure during that step.
+        using var cliBundleLease = await ConfigureCliBundleEnvironmentForPublishAsync(effectiveAppHostFile, env, cancellationToken);
 
         var builtByCli = false;
 
@@ -2504,7 +2543,6 @@ internal partial class DotNetAppHostProject : IAppHostProject
         // build before local or extension launch so run-api metadata cannot be missing or stale.
         if (!context.NoBuild || isSingleFileAppHost)
         {
-            var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
             var buildOptions = new ProcessInvocationOptions
             {
                 StandardOutputCallback = buildOutputCollector.AppendOutput,

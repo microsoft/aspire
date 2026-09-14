@@ -44,7 +44,11 @@ public sealed class CliManagedCSharpAppHostTests(ITestOutputHelper output)
 
         await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.RunCommandAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
-        await auto.RunCommandAsync("test -f .aspire/modules/Aspire.csproj && test -f .aspire/modules/Aspire.targets", counter);
+        await auto.RunCommandAsync(
+            "test -f .aspire/modules/Aspire.csproj && " +
+            "test -f .aspire/modules/AppHost.Directory.Build.props && " +
+            "test -f .aspire/modules/AppHost.Directory.Build.targets",
+            counter);
 
         await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
         await auto.EnterAsync();
