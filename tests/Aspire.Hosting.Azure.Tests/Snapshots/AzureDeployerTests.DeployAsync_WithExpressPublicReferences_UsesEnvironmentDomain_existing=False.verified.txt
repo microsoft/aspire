@@ -1,12 +1,12 @@
 ﻿[
   {
     Key: api,
-    Value: [https://actual-api.express.example](https://actual-api.express.example) ([Azure Portal](https://portal.azure.com/#/resource/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.App/containerApps/api/overview)),
+    Value: [https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io](https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io) ([Azure Portal](https://portal.azure.com/#/resource/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.App/containerApps/api/overview)),
     EnableMarkdown: true
   },
   {
     Key: web,
-    Value: [https://actual-web.express.example](https://actual-web.express.example) ([Azure Portal](https://portal.azure.com/#/resource/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.App/containerApps/web/overview)),
+    Value: [https://web.salmonisland-e9e6a567.westus3.azurecontainerapps.io](https://web.salmonisland-e9e6a567.westus3.azurecontainerapps.io) ([Azure Portal](https://portal.azure.com/#/resource/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.App/containerApps/web/overview)),
     EnableMarkdown: true
   },
   {

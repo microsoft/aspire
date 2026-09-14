@@ -1,9 +1,11 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
+param consumer_outputs_azure_container_apps_environment_default_domain string
+
 param consumer_outputs_azure_container_apps_environment_id string
 
-param api_containerapp_outputs_azure_container_app_ingress_fqdn string
+param producer_outputs_azure_container_apps_environment_default_domain string
 
 resource web 'Microsoft.App/containerApps@2026-03-02-preview' = {
   name: 'web'
@@ -26,19 +28,19 @@ resource web 'Microsoft.App/containerApps@2026-03-02-preview' = {
           env: [
             {
               name: 'API_HTTP'
-              value: 'https://${api_containerapp_outputs_azure_container_app_ingress_fqdn}'
+              value: 'https://api.${producer_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'services__api__http__0'
-              value: 'https://${api_containerapp_outputs_azure_container_app_ingress_fqdn}'
+              value: 'https://api.${producer_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'HOST'
-              value: api_containerapp_outputs_azure_container_app_ingress_fqdn
+              value: 'api.${producer_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'EARLY_HOST'
-              value: api_containerapp_outputs_azure_container_app_ingress_fqdn
+              value: 'api.${producer_outputs_azure_container_apps_environment_default_domain}'
             }
           ]
         }
@@ -49,5 +51,3 @@ resource web 'Microsoft.App/containerApps@2026-03-02-preview' = {
     }
   }
 }
-
-output AZURE_CONTAINER_APP_INGRESS_FQDN string = web.properties.configuration.ingress.fqdn

@@ -410,13 +410,10 @@ public sealed class AzurePublishingContext(
 
         // Capture any bicep outputs referenced from resources outside of the MainInfrastructure.
         // These include DeploymentTarget resources and any other resources that have parameters that reference bicep outputs.
-        var deploymentTargets = new HashSet<AzureBicepResource>();
         foreach (var resource in model.Resources)
         {
             if (resource.GetDeploymentTargetAnnotation() is { } annotation && annotation.DeploymentTarget is AzureBicepResource br)
             {
-                deploymentTargets.Add(br);
-
                 // Materialize Dockerfile factory if present
                 if (resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) &&
                     dockerfileBuildAnnotation.DockerfileFactory is not null)
@@ -474,16 +471,6 @@ public sealed class AzurePublishingContext(
 
         foreach (var (_, output) in outputs)
         {
-            // The root template cannot bind outputs from standalone deployment targets. Native
-            // deployment resolves these references, but publishing would lose the producer binding.
-            if (deploymentTargets.Contains(output.Resource) && !moduleMap.ContainsKey(output.Resource))
-            {
-                throw new InvalidOperationException(
-                    $"Publishing output '{output.Name}' from standalone deployment target '{output.Resource.Name}' is not supported. " +
-                    "The generated infrastructure template cannot bind outputs between separately deployed applications. " +
-                    "Use native 'aspire deploy' to resolve these dependencies, or remove the application-output reference before publishing.");
-            }
-
             var module = moduleMap[output.Resource];
 
             var identifier = Infrastructure.NormalizeBicepIdentifier($"{output.Resource.Name}_{output.Name}");

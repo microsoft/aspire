@@ -1,6 +1,8 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
+param express_outputs_azure_container_apps_environment_default_domain string
+
 param express_outputs_azure_container_apps_environment_id string
 
 param standard_outputs_azure_container_apps_environment_default_domain string
@@ -49,5 +51,3 @@ resource web 'Microsoft.App/containerApps@2026-03-02-preview' = {
     }
   }
 }
-
-output AZURE_CONTAINER_APP_INGRESS_FQDN string = web.properties.configuration.ingress.fqdn
