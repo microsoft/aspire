@@ -20,7 +20,7 @@ on:
 env:
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  TEST_PROJECT: "Infrastructure"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,11 +28,11 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-method "*.NormalBuildSucceedsWhileDesignTimeXamlInputIsLocked" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "windows-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
@@ -40,6 +40,9 @@ env:
 
   # Number of test iterations each runner executes
   ITERATIONS_PER_RUNNER: "3"
+
+  # Investigation only: change this immutable generator source, not the probe, between phases.
+  WINUI_PROBE_SOURCE_REF: "e4799ef9c44d5203f58cd193e41c4516fe433c83"
 
 jobs:
 
@@ -146,6 +149,7 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      WINUI_PROBE_RESULTS_DIRECTORY: ${{ github.workspace }}\winui-probe-results
 
     steps:
       - name: Setup vars (Linux/macOS)
@@ -164,6 +168,43 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js for the actual WinUI generator
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22.x'
+
+      - name: Prepare investigation-only generator dependencies
+        shell: pwsh
+        working-directory: extension
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git cat-file -e "$($env:WINUI_PROBE_SOURCE_REF)^{commit}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "Tested generator source: $env:WINUI_PROBE_SOURCE_REF"
+          Write-Host "Workflow head: $(git rev-parse HEAD)"
+          node -e "if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Windows x64 is required'); console.log(process.version, process.arch);"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $tools = Join-Path $env:GITHUB_WORKSPACE 'artifacts\winui-probe-tools'
+          $env:COREPACK_HOME = Join-Path $env:GITHUB_WORKSPACE 'extension\.corepack-cache'
+          $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+          $env:npm_config_cache = Join-Path $tools 'npm-cache'
+          $env:YARN_CACHE_FOLDER = Join-Path $tools 'yarn-cache'
+          $env:NPM_REGISTRY = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/'
+          $prefix = Join-Path $tools 'npm-prefix'
+          $version = (Get-Content -Raw 'scripts\corepack-version.txt').Trim()
+          npm install --global --prefix $prefix --registry $env:NPM_REGISTRY "corepack@$version"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $corepack = Join-Path $prefix 'node_modules\corepack\dist\corepack.js'
+          node scripts\prepareCorepackYarn.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node $corepack yarn install --frozen-lockfile --non-interactive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node -e "console.log('TypeScript', require('typescript').version)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -378,6 +419,14 @@ jobs:
           Write-Host "========================================"
 
           if ($fail -gt 0) { exit 1 }
+
+      - name: Upload WinUI contention evidence
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: winui-probe-${{ matrix.os }}-${{ matrix.index }}
+          path: winui-probe-results
+          if-no-files-found: warn
 
       - name: Upload failure logs
         if: failure()
