@@ -1,0 +1,19 @@
+{
+  "id": "sqlservercontainerfixture-ryuk-registry-connection-refused",
+  "type": "infra-failure",
+  "title": "SqlServerContainerFixture InitializeAsync fails because Ryuk image pull from netaspireci.azurecr.io is refused (connection refused)",
+  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+  "error_pattern": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"Head \\\"https://netaspireci.azurecr.io/v2/testcontainers/ryuk/manifests/0.14.0\\\": dial tcp 20.150.241.5:443: connect: connection refused\"}",
+  "analysis": "All 7 failing tests in this job fail identically in class fixture InitializeAsync while trying to pull the Testcontainers Ryuk image from the internal container registry netaspireci.azurecr.io. The error is a raw TCP connection refusal to the registry's IP address, which is an external network/infrastructure dependency completely outside the PR's control. The PR only modifies CI skip-pattern configuration and test-trigger-map files, none of which touch Aspire.Hosting.Azure.Tests or SqlServerContainerFixture.",
+  "failure_details": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"Head \\\"https://netaspireci.azurecr.io/v2/testcontainers/ryuk/manifests/0.14.0\\\": dial tcp 20.150.241.5:443: connect: connection refused\"}\n----- Inner Stack Trace -----\n   at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(HttpStatusCode statusCode, HttpResponseMessage response) in /_/src/Docker.DotNet/DockerClient.cs:line 516\n   at Docker.DotNet.DockerClient.MakeRequestForRawResponseAsync(HttpMethod method, String path, IQueryString queryString, IRequestContent body, IDictionary`2 headers, CancellationToken token) in /_/src/Docker.DotNet/DockerClient.cs:line 331\n   at Docker.DotNet.Models.StreamUtil.MonitorResponseForMessagesAsync[T](Task`1 responseTask, DockerClient client, CancellationToken cancel, IProgress`1 progress) in /_/src/Docker.DotNet/Endpoints/StreamUtil.cs:line 80\n   at DotNet.Testcontainers.Clients.DockerImageOperations.CreateAsync(IImage image, IDockerRegistryAuthenticationConfiguration dockerRegistryAuthConfig, CancellationToken ct) in /_/src/Testcontainers/Clients/DockerImageOperations.cs:line 73\n   at DotNet.Testcontainers.Clients.TestcontainersClient.PullImageAsync(IImage image, CancellationToken ct) in /_/src/Testcontainers/Clients/TestcontainersClient.cs:line 430\n   at DotNet.Testcontainers.Clients.TestcontainersClient.RunAsync(IContainerConfiguration configuration, CancellationToken ct) in /_/src/Testcontainers/Clients/TestcontainersClient.cs:line 337\n   at DotNet.Testcontainers.Containers.DockerContainer.UnsafeCreateAsync(CancellationToken ct) in /_/src/Testcontainers/Containers/DockerContainer.cs:line 493\n   at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(CancellationToken ct) in /_/src/Testcontainers/Containers/DockerContainer.cs:line 337\n   at DotNet.Testcontainers.Containers.ResourceReaper.GetAndStartNewAsync(...) in /_/src/Testcontainers/Containers/ResourceReaper.cs:line 231",
+  "occurrences": [
+    {
+      "run_id": 34882504789,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34882504789",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "pr_number": 19939,
+      "observed_at": "2026-09-14T19:56:01Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20128"
+}

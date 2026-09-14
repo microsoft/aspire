@@ -2,7 +2,10 @@
   "id": "build-test-project-widespread-exit1-unrelated",
   "type": "infra-failure",
   "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard) fail with generic exit code 1",
+  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
   "error_pattern": "Process completed with exit code 1. (Build test project step failed across multiple unrelated jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job').",
+  "analysis": "The 'Build test project' step failed with a generic exit code 1 and no retrievable job logs, matching a previously observed recurring pattern of widespread unrelated build failures across many test projects at once. PR #19939 does not touch Aspire.Hosting.RemoteHost or its tests, and this failure mode (log fetch failure, generic exit code, co-occurring across unrelated shards) is consistent with a shared build/runner infrastructure issue rather than a code regression from this PR.",
+  "failure_details": "Job: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)\nFailed Steps: Build test project\nAnnotation: failure - Process completed with exit code 1.\nLogs: (Failed to fetch logs for job 104105954155)\nNo TRX test failures were extracted for this job, and the PR's changed files (CI skip-pattern config, test-trigger-map.yml, and TestTriggerMap acceptance/workflow tests) are unrelated to Aspire.Hosting.RemoteHost.Tests.",
   "occurrences": [
     {
       "run_id": 33494022725,
@@ -52,6 +55,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Dashboard.Tests, Dashboard, Dashboard, tests/Aspire.Dashboard.T... / Dashboard (windows-latest)",
       "pr_number": 19965,
       "observed_at": "2026-09-11T07:14:59Z"
+    },
+    {
+      "run_id": 34882504789,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34882504789",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "pr_number": 19939,
+      "observed_at": "2026-09-14T19:56:01Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"
