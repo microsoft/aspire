@@ -66,6 +66,28 @@ internal sealed class AgentAssetLocation
     /// </summary>
     public AgentAssetLocationScope Scopes { get; }
 
+    /// <summary>
+    /// Resolves workspace- and home-relative targets in workspace-then-user order.
+    /// </summary>
+    public IEnumerable<AgentAssetInstallTarget> ResolveInstallTargets(
+        DirectoryInfo workspaceDirectory,
+        DirectoryInfo homeDirectory)
+    {
+        var displayDirectory = RelativeAssetDirectory
+            .Replace(Path.DirectorySeparatorChar, '/')
+            .Replace(Path.AltDirectorySeparatorChar, '/');
+
+        if (Scopes.HasFlag(AgentAssetLocationScope.Workspace))
+        {
+            yield return new(workspaceDirectory, RelativeAssetDirectory, displayDirectory);
+        }
+
+        if (Scopes.HasFlag(AgentAssetLocationScope.User))
+        {
+            yield return new(homeDirectory, RelativeAssetDirectory, $"~/{displayDirectory}");
+        }
+    }
+
     /// <inheritdoc />
     public override string ToString() => Id;
 }

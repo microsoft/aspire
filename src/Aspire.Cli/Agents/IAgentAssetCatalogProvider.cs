@@ -11,12 +11,12 @@ namespace Aspire.Cli.Agents;
 internal interface IAgentAssetCatalogProvider
 {
     /// <summary>
-    /// Gets a registered catalog without acquiring its assets or resolving installation paths.
+    /// Gets registered catalogs without acquiring their assets or resolving installation paths.
     /// </summary>
-    IAgentAssetCatalog GetCatalog(AgentAssetKind assetKind);
+    IEnumerable<IAgentAssetCatalog> GetCatalogs();
 
     Task<AgentAssetCatalogResult> ResolveAsync(
-        AgentAssetKind assetKind,
+        IAgentAssetCatalog catalog,
         string? requestedAssets,
         LanguageId? detectedLanguage,
         CancellationToken cancellationToken);

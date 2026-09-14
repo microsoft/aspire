@@ -43,8 +43,6 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
         }
     }
 
-    public IReadOnlyList<AgentAssetKind> RequestedAssetKinds => RequestedProviders.Select(provider => provider.Descriptor.AssetKind).ToArray();
-
     public AspireSkillsInstallResult? ExtensionResult { get; init; }
 
     public async Task<AspireSkillsInstallResult> InstallAsync(
@@ -56,19 +54,15 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             _requestedProviders.Add(provider);
         }
 
-        var assetKind = provider.Descriptor.AssetKind;
-        var configuredResult = assetKind switch
-        {
-            AgentAssetKind.Skill => _skillResult,
-            AgentAssetKind.Extension => ExtensionResult,
-            _ => AspireSkillsInstallResult.Unavailable,
-        };
+        var configuredResult = provider.Descriptor == AspireSkillsBundleDescriptor.Extensions
+            ? ExtensionResult
+            : _skillResult;
         if (configuredResult is not null)
         {
             return configuredResult;
         }
 
-        var bundleDirectory = new DirectoryInfo(Path.Combine(_bundleDirectory.FullName, provider.Descriptor.AssetKindName));
+        var bundleDirectory = new DirectoryInfo(Path.Combine(_bundleDirectory.FullName, provider.Descriptor.ContentRootDirectoryName));
         await EnsureBundleAsync(Assert.IsAssignableFrom<AspireSkillsBundleProvider>(provider), bundleDirectory, cancellationToken);
         var bundle = await provider.LoadAsync(bundleDirectory, cancellationToken);
         return AspireSkillsInstallResult.Installed(bundle);
@@ -84,7 +78,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             return;
         }
 
-        if (provider.Descriptor.AssetKind is AgentAssetKind.Extension)
+        if (provider.Descriptor == AspireSkillsBundleDescriptor.Extensions)
         {
             const string extensionName = "aspire-doctor";
             const string extensionContent = "export default {};";

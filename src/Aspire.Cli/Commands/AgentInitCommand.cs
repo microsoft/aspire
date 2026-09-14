@@ -248,7 +248,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         // --- Phases 1 and 2: Skill location and asset selection ---
         var skillSelection = await SelectAssetsAsync(
-            AgentAssetKind.Skill,
+            _assetCatalogProvider.GetCatalogs().First(static catalog => catalog.Name == "skills"),
             skillLocationsBinding,
             skillsBinding,
             detectedLanguage,
@@ -423,7 +423,7 @@ internal sealed class AgentInitCommand : BaseCommand
     }
 
     private async Task<AgentAssetSelection> SelectAssetsAsync(
-        AgentAssetKind assetKind,
+        IAgentAssetCatalog catalog,
         PromptBinding<string?> locationsBinding,
         PromptBinding<string?> assetsBinding,
         LanguageId? detectedLanguage,
@@ -431,7 +431,6 @@ internal sealed class AgentInitCommand : BaseCommand
         string assetsPrompt,
         CancellationToken cancellationToken)
     {
-        var catalog = _assetCatalogProvider.GetCatalog(assetKind);
         var defaultLocations = catalog.Locations.Where(static location => location.IsDefault).ToList();
         var selectedLocations = await InteractionService.PromptForSelectionsAsync(
             locationsPrompt,
@@ -449,7 +448,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         var (wasProvided, requestedAssets, _) = PromptBinding.Resolve(assetsBinding);
         var result = await _assetCatalogProvider.ResolveAsync(
-            assetKind, wasProvided ? requestedAssets : null, detectedLanguage, cancellationToken);
+            catalog, wasProvided ? requestedAssets : null, detectedLanguage, cancellationToken);
         if (result.DiagnosticMessage is { } message)
         {
             InteractionService.DisplayError(message);
@@ -632,8 +631,8 @@ internal sealed class AgentInitCommand : BaseCommand
 
         // Explicit options allow provisioning a workspace for another machine without
         // requiring a compatible client locally.
-        var catalog = _assetCatalogProvider.GetCatalog(AgentAssetKind.Extension);
-        if (!context.DetectedClients.Any(client => client.SupportedAssetKinds.HasFlag(catalog.AssetKind)))
+        var catalog = _assetCatalogProvider.GetCatalogs().First(static catalog => catalog.Name == "extensions");
+        if (!context.DetectedClients.Any(catalog.SupportedClients.Contains))
         {
             if (!locationsProvided && !extensionsProvided)
             {
@@ -644,7 +643,7 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         var selection = await SelectAssetsAsync(
-            AgentAssetKind.Extension,
+            catalog,
             locationsBinding,
             extensionsBinding,
             detectedLanguage,

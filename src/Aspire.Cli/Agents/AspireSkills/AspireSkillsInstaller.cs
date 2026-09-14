@@ -75,7 +75,7 @@ internal sealed class AspireSkillsInstaller(
             effectiveVersion = Version;
         }
 
-        activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.version", effectiveVersion);
+        activity?.SetTag($"aspire.{provider.Descriptor.TelemetryName}.version", effectiveVersion);
 
         var cacheRoot = GetCacheRoot(provider);
         Directory.CreateDirectory(cacheRoot);
@@ -101,7 +101,7 @@ internal sealed class AspireSkillsInstaller(
         var remoteFetchEnabled = features.IsFeatureEnabled(
             KnownFeatures.AspireSkillsRemoteFetchEnabled,
             KnownFeatures.GetFeatureMetadata(KnownFeatures.AspireSkillsRemoteFetchEnabled)!.DefaultValue);
-        activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.remote_fetch_enabled", remoteFetchEnabled);
+        activity?.SetTag($"aspire.{provider.Descriptor.TelemetryName}.remote_fetch_enabled", remoteFetchEnabled);
 
         AcquisitionResult? githubResult = null;
         if (remoteFetchEnabled)
@@ -269,8 +269,8 @@ internal sealed class AspireSkillsInstaller(
                     githubArchiveSha256,
                     validationDisabled ? BundleArchiveSource.UnverifiedGitHub : BundleArchiveSource.VerifiedGitHub,
                     cancellationToken).ConfigureAwait(false);
-                activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.source", "github");
-                activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.cache_hit", false);
+                activity?.SetTag($"aspire.{provider.Descriptor.TelemetryName}.source", "github");
+                activity?.SetTag($"aspire.{provider.Descriptor.TelemetryName}.cache_hit", false);
                 return AcquisitionResult.Installed(bundle, archiveSha512, githubArchiveSha256);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
@@ -376,8 +376,8 @@ internal sealed class AspireSkillsInstaller(
                 version: version,
                 source: BundleArchiveSource.Embedded,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
-            activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.source", "embedded");
-            activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.cache_hit", false);
+            activity?.SetTag($"aspire.{provider.Descriptor.TelemetryName}.source", "embedded");
+            activity?.SetTag($"aspire.{provider.Descriptor.TelemetryName}.cache_hit", false);
             return AcquisitionResult.Installed(bundle, expectedArchiveSha512);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
@@ -604,7 +604,7 @@ internal sealed class AspireSkillsInstaller(
         Activity? activity,
         CancellationToken cancellationToken)
     {
-        activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.cache_hit", false);
+        activity?.SetTag($"aspire.{provider.Descriptor.TelemetryName}.cache_hit", false);
         if (expectedArchiveSha512 is null &&
             expectedGitHubArchiveSha256 is null &&
             !requireVerifiedGitHubSource)
@@ -762,7 +762,7 @@ internal sealed class AspireSkillsInstaller(
                 skipCompatibilityCheck).ConfigureAwait(false);
             ValidateBundleVersion(provider, bundle, version);
             TouchLastUsed(provider, cacheDirectory);
-            activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.cache_hit", true);
+            activity?.SetTag($"aspire.{provider.Descriptor.TelemetryName}.cache_hit", true);
             logger.LogDebug("Using cached {BundleDisplayName} bundle from {CacheDirectory}.", provider.Descriptor.DisplayName, cacheDirectory);
             return AcquisitionResult.Installed(bundle, cachedArchiveSha512, cachedGitHubArchiveSha256);
         }

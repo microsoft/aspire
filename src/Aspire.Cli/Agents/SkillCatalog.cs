@@ -83,7 +83,9 @@ internal sealed class SkillCatalog : IAgentAssetCatalog
         _assetSource = assetSource;
     }
 
-    public AgentAssetKind AssetKind => AgentAssetKind.Skill;
+    public string Name => "skills";
+
+    public IReadOnlyList<AgentClient> SupportedClients => AgentClient.All;
 
     public IReadOnlyList<AgentAssetLocation> Locations => KnownLocations;
 
@@ -99,7 +101,7 @@ internal sealed class SkillCatalog : IAgentAssetCatalog
             return new(CliDefined, DiagnosticMessage: null, IsFailure: false);
         }
 
-        var result = await _assetSource.GetAssetsAsync(AssetKind, cancellationToken);
+        var result = await _assetSource.GetAssetsAsync(cancellationToken);
         if (result.IsAvailable)
         {
             return new(
@@ -121,7 +123,7 @@ internal sealed class SkillCatalog : IAgentAssetCatalog
         DirectoryInfo workspaceDirectory,
         DirectoryInfo homeDirectory,
         IEnvironment environment)
-        => AgentAssetPathHelper.CreateDefaultTargets(location, workspaceDirectory, homeDirectory);
+        => location.ResolveInstallTargets(workspaceDirectory, homeDirectory);
 
     private static bool IsCliDefinedSkillName(string name)
         => CliDefined.Any(skill => skill.HasName(name, StringComparison.OrdinalIgnoreCase));

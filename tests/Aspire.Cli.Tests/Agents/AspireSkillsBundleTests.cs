@@ -26,8 +26,7 @@ public class AspireSkillsBundleTests
     {
         var descriptor = s_extensionBundleProvider.Descriptor;
 
-        Assert.Equal(AgentAssetKind.Extension, descriptor.AssetKind);
-        Assert.Equal("extensions", descriptor.AssetKindName);
+        Assert.Equal("extensions", descriptor.TelemetryName);
         Assert.Equal("aspire-extensions", descriptor.AssetPrefix);
         Assert.Equal("aspire-extensions", descriptor.CacheDirectoryName);
         Assert.Equal("Aspire extensions", descriptor.DisplayName);
@@ -44,8 +43,7 @@ public class AspireSkillsBundleTests
     {
         var descriptor = s_bundleProvider.Descriptor;
 
-        Assert.Equal(AgentAssetKind.Skill, descriptor.AssetKind);
-        Assert.Equal("skills", descriptor.AssetKindName);
+        Assert.Equal("skills", descriptor.TelemetryName);
         Assert.Equal("aspire-skills", descriptor.AssetPrefix);
         Assert.Equal("aspire-skills", descriptor.CacheDirectoryName);
         Assert.Equal("Aspire skills", descriptor.DisplayName);
@@ -58,7 +56,7 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
-    public async Task LoadAsync_ExtensionProvider_UsesExtensionEnvelopeRootAndSourceKind()
+    public async Task LoadAsync_ExtensionProvider_UsesExtensionEnvelopeAndRoot()
     {
         var bundleDirectory = CreateTempDirectory();
 
@@ -74,7 +72,6 @@ public class AspireSkillsBundleTests
             var extension = Assert.Single(bundle.Assets);
             var file = Assert.Single(extension.Files);
 
-            Assert.Equal(AgentAssetKind.Extension, bundle.AssetKind);
             Assert.True(extension.IsDefault);
             Assert.Equal("aspire-doctor", extension.Name);
             Assert.Equal("extension.mjs", file.RelativePath);
@@ -429,7 +426,7 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
-    public void Assets_KeepPayloadsSeparateForDifferentKindsWithTheSameName()
+    public void Assets_KeepPayloadsSeparateForBundlesWithTheSameAssetName()
     {
         var skillFile = new AgentAssetFile("SKILL.md", CreateSkillFileContent());
         var extensionFile = new AgentAssetFile("extension.mjs", "export default {};");
@@ -437,8 +434,8 @@ public class AspireSkillsBundleTests
             "aspire", AspireSkillDescription, [skillFile], installExcludedRelativePaths: [], isDefault: true);
         var extension = new AgentAssetDefinition(
             "aspire", "Aspire extension", [extensionFile], installExcludedRelativePaths: [], isDefault: true);
-        var skillBundle = new AspireSkillsBundle(AspireSkillsInstaller.Version, AgentAssetKind.Skill, [skill]);
-        var extensionBundle = new AspireSkillsBundle(AspireSkillsInstaller.Version, AgentAssetKind.Extension, [extension]);
+        var skillBundle = new AspireSkillsBundle(AspireSkillsInstaller.Version, [skill]);
+        var extensionBundle = new AspireSkillsBundle(AspireSkillsInstaller.Version, [extension]);
 
         Assert.Same(skillFile, Assert.Single(Assert.Single(skillBundle.Assets).Files));
         Assert.Same(extensionFile, Assert.Single(Assert.Single(extensionBundle.Assets).Files));

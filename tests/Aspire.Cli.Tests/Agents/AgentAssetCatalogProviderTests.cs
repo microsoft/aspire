@@ -2,11 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -18,75 +18,56 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
     public void Registration_AssociatesEachCatalogWithItsLocationsAndPolicy()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var source = CreateUnavailableSource();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        services.Replace(ServiceDescriptor.Singleton<IAgentAssetSource>(source));
         using var serviceProvider = services.BuildServiceProvider();
         var provider = serviceProvider.GetRequiredService<IAgentAssetCatalogProvider>();
+        var catalogs = provider.GetCatalogs().ToArray();
+        Assert.Equal(["skills", "extensions"], catalogs.Select(catalog => catalog.Name));
+        Assert.Equal(catalogs, provider.GetCatalogs());
 
-        var skills = provider.GetCatalog(AgentAssetKind.Skill);
-        Assert.Same(skills, provider.GetCatalog(AgentAssetKind.Skill));
-        Assert.IsType<SkillCatalog>(skills);
-        Assert.Equal(AgentAssetKind.Skill, skills.AssetKind);
+        var skills = Assert.IsType<SkillCatalog>(catalogs[0]);
         Assert.Equal(SkillCatalog.KnownLocations, skills.Locations);
         Assert.Same(AgentAssetFileInstaller.Additive, skills.FileInstaller);
 
-        var extensions = provider.GetCatalog(AgentAssetKind.Extension);
-        Assert.Same(extensions, provider.GetCatalog(AgentAssetKind.Extension));
-        Assert.IsType<ExtensionCatalog>(extensions);
-        Assert.Equal(AgentAssetKind.Extension, extensions.AssetKind);
+        var extensions = Assert.IsType<ExtensionCatalog>(catalogs[1]);
         Assert.Equal(ExtensionCatalog.KnownLocations, extensions.Locations);
         Assert.Same(AgentAssetFileInstaller.ManagedDirectory, extensions.FileInstaller);
-        Assert.Empty(source.RequestedKinds);
+        Assert.Empty(Assert.IsType<FakeAspireSkillsInstaller>(serviceProvider.GetRequiredService<IAspireSkillsInstaller>()).RequestedProviders);
     }
 
     [Fact]
-    public void CatalogContractsExposeOnlyNeutralTypes()
+    public async Task Registration_AllowsMultipleCatalogsWithIndependentSources()
     {
-        foreach (var catalogType in new[] { typeof(SkillCatalog), typeof(ExtensionCatalog) })
+        var firstAsset = CreateAsset("first", []);
+        var secondAsset = CreateAsset("second", []);
+        var firstSource = new FakeAgentAssetSource
         {
-            Assert.Equal(
-                [typeof(IAgentAssetSource)],
-                Assert.Single(catalogType.GetConstructors()).GetParameters().Select(parameter => parameter.ParameterType));
-        }
+            Result = AgentAssetSourceResult.Available([firstAsset])
+        };
+        var secondSource = new FakeAgentAssetSource
+        {
+            Result = AgentAssetSourceResult.Available([secondAsset])
+        };
+        var firstCatalog = new ExtensionCatalog(firstSource);
+        var secondCatalog = new ExtensionCatalog(secondSource);
+        var provider = new AgentAssetCatalogProvider([firstCatalog, secondCatalog]);
 
-        Assert.Equal(
-            [typeof(AgentAssetKind), typeof(AgentAssetFileInstaller), typeof(IReadOnlyList<AgentAssetLocation>)],
-            typeof(IAgentAssetCatalog).GetProperties().OrderBy(property => property.Name, StringComparer.Ordinal).Select(property => property.PropertyType));
-    }
-
-    [Fact]
-    public void Registration_RejectsDuplicateKinds()
-    {
-        var catalog = new SkillCatalog(CreateUnavailableSource());
-
-        var exception = Assert.Throws<InvalidOperationException>(() => new AgentAssetCatalogProvider([catalog, catalog]));
-
-        Assert.Equal("Multiple agent asset catalogs are registered for asset kind 'Skill'.", exception.Message);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(int.MaxValue)]
-    public async Task Registration_RejectsUnknownKindsWithoutAcquisition(int kind)
-    {
-        var source = CreateUnavailableSource();
-        var provider = CreateProvider(source);
-        var unknownKind = (AgentAssetKind)kind;
-        Assert.Throws<InvalidOperationException>(() => provider.GetCatalog(unknownKind));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.ResolveAsync(
-            unknownKind, requestedAssets: null, detectedLanguage: null, TestContext.Current.CancellationToken));
-        Assert.Empty(source.RequestedKinds);
+        Assert.Equal([firstCatalog, secondCatalog], provider.GetCatalogs());
+        var first = await provider.ResolveAsync(firstCatalog, "all", detectedLanguage: null, TestContext.Current.CancellationToken);
+        var second = await provider.ResolveAsync(secondCatalog, "all", detectedLanguage: null, TestContext.Current.CancellationToken);
+        Assert.Equal([firstAsset], first.Assets);
+        Assert.Equal([secondAsset], second.Assets);
+        Assert.Equal(1, firstSource.RequestCount);
+        Assert.Equal(1, secondSource.RequestCount);
     }
 
     [Theory]
-    [InlineData(nameof(AgentAssetKind.Skill))]
-    [InlineData(nameof(AgentAssetKind.Extension))]
-    public void InstallTargets_AcceptKindIndependentLocations(string kindName)
+    [InlineData("skills")]
+    [InlineData("extensions")]
+    public void InstallTargets_AcceptCatalogIndependentLocations(string catalogName)
     {
-        var assetKind = Enum.Parse<AgentAssetKind>(kindName);
         var source = CreateUnavailableSource();
-        var catalog = CreateProvider(source).GetCatalog(assetKind);
+        var catalog = CreateProvider(source).GetCatalogs().First(catalog => catalog.Name == catalogName);
         var location = new AgentAssetLocation(
             "custom",
             "Custom",
@@ -99,7 +80,6 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
 
         var targets = catalog.ResolveInstallTargets(location, workspace, home, new TestEnvironment());
 
-        Assert.Equal(assetKind, catalog.AssetKind);
         Assert.Equal(
             [
                 (Path.Combine(workspace.FullName, ".custom", "assets"), ".custom/assets"),
@@ -107,23 +87,22 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
             ],
             targets.Select(target =>
                 (Path.Combine(target.RootDirectory.FullName, target.RelativeAssetDirectory), target.DisplayDirectory)));
-        Assert.Empty(source.RequestedKinds);
+        Assert.Equal(0, source.RequestCount);
     }
 
     [Theory]
-    [InlineData(nameof(AgentAssetKind.Skill), "standard", ".agents/skills", true, true)]
-    [InlineData(nameof(AgentAssetKind.Skill), "claudecode", ".claude/skills", true, false)]
-    [InlineData(nameof(AgentAssetKind.Skill), "github", ".github/skills", true, false)]
-    [InlineData(nameof(AgentAssetKind.Skill), "opencode", ".opencode/skill", true, false)]
-    [InlineData(nameof(AgentAssetKind.Extension), "project", ".github/extensions", true, false)]
-    [InlineData(nameof(AgentAssetKind.Extension), "user", ".copilot/extensions", false, true)]
+    [InlineData("skills", "standard", ".agents/skills", true, true)]
+    [InlineData("skills", "claudecode", ".claude/skills", true, false)]
+    [InlineData("skills", "github", ".github/skills", true, false)]
+    [InlineData("skills", "opencode", ".opencode/skill", true, false)]
+    [InlineData("extensions", "project", ".github/extensions", true, false)]
+    [InlineData("extensions", "user", ".copilot/extensions", false, true)]
     public void InstallTargets_ResolveOnlySelectedLocationsAndSupportedScopes(
-        string kindName, string locationId, string displayDirectory, bool workspaceScope, bool userScope)
+        string catalogName, string locationId, string displayDirectory, bool workspaceScope, bool userScope)
     {
         var source = CreateUnavailableSource();
         var provider = CreateProvider(source);
-        var assetKind = Enum.Parse<AgentAssetKind>(kindName);
-        var catalog = provider.GetCatalog(assetKind);
+        var catalog = provider.GetCatalogs().First(catalog => catalog.Name == catalogName);
         var location = Assert.Single(catalog.Locations, location => location.Id == locationId);
         var workspace = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "workspace"));
         var home = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "home"));
@@ -146,7 +125,7 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(expected, targets.Select(target =>
             (Path.Combine(target.RootDirectory.FullName, target.RelativeAssetDirectory), target.DisplayDirectory)));
-        Assert.Empty(source.RequestedKinds);
+        Assert.Equal(0, source.RequestCount);
     }
 
     [Theory]
@@ -163,7 +142,7 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         var configuredHome = string.IsNullOrEmpty(directoryName) ? directoryName : Path.Combine(home.FullName, directoryName);
         var environment = new TestEnvironment(new Dictionary<string, string?> { ["COPILOT_HOME"] = configuredHome });
 
-        var target = Assert.Single(provider.GetCatalog(AgentAssetKind.Extension).ResolveInstallTargets(
+        var target = Assert.Single(provider.GetCatalogs().First(catalog => catalog.Name == "extensions").ResolveInstallTargets(
             ExtensionCatalog.UserExtensions, workspace, home, environment));
 
         var expectedDirectory = string.IsNullOrEmpty(configuredHome) ? Path.Combine(home.FullName, ".copilot") : configuredHome;
@@ -173,7 +152,7 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             (expectedDirectory, "extensions", expectedDisplay),
             (target.RootDirectory.FullName, target.RelativeAssetDirectory, target.DisplayDirectory));
-        Assert.Empty(source.RequestedKinds);
+        Assert.Equal(0, source.RequestCount);
     }
 
     [Fact]
@@ -187,7 +166,7 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         var variables = new Dictionary<string, string?> { ["COPILOT_HOME"] = "\0" };
         var environment = new TestEnvironment(variables);
 
-        var targets = provider.GetCatalog(AgentAssetKind.Extension).ResolveInstallTargets(
+        var targets = provider.GetCatalogs().First(catalog => catalog.Name == "extensions").ResolveInstallTargets(
             ExtensionCatalog.UserExtensions, workspace, home, environment);
         variables["COPILOT_HOME"] = configuredHome;
 
@@ -202,7 +181,7 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             (Path.Combine(home.FullName, ".copilot"), "extensions", "~/.copilot/extensions"),
             (defaultTarget.RootDirectory.FullName, defaultTarget.RelativeAssetDirectory, defaultTarget.DisplayDirectory));
-        Assert.Empty(source.RequestedKinds);
+        Assert.Equal(0, source.RequestCount);
     }
 
     [Theory]
@@ -214,7 +193,7 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
     {
         var source = new FakeAgentAssetSource
         {
-            Skills = AgentAssetSourceResult.Available(
+            Result = AgentAssetSourceResult.Available(
             [
                 CreateAsset("zeta", []),
                 CreateAsset("PLAYWRIGHT-CLI", []),
@@ -225,14 +204,14 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         var provider = CreateProvider(source);
 
         var result = await provider.ResolveAsync(
-            AgentAssetKind.Skill, "all", language is null ? default(LanguageId?) : new LanguageId(language), TestContext.Current.CancellationToken);
+            new SkillCatalog(source), "all", language is null ? default(LanguageId?) : new LanguageId(language), TestContext.Current.CancellationToken);
 
         Assert.False(result.IsFailure);
         Assert.Null(result.DiagnosticMessage);
         Assert.Equal(expectedNames.Split(','), result.Assets.Select(asset => asset.Name));
         Assert.Equal(expectedDefaults.Split(','), result.Assets.Where(asset => asset.IsDefault).Select(asset => asset.Name));
         Assert.Same(SkillCatalog.PlaywrightCli, Assert.Single(result.Assets, asset => asset.HasName("playwright-cli")));
-        Assert.Equal([AgentAssetKind.Skill], source.RequestedKinds);
+        Assert.Equal(1, source.RequestCount);
     }
 
     [Theory]
@@ -247,12 +226,12 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         var provider = CreateProvider(source);
 
         var result = await provider.ResolveAsync(
-            AgentAssetKind.Skill, requestedAssets, new LanguageId(KnownLanguageId.CSharp), TestContext.Current.CancellationToken);
+            new SkillCatalog(source), requestedAssets, new LanguageId(KnownLanguageId.CSharp), TestContext.Current.CancellationToken);
 
         Assert.False(result.IsFailure);
         Assert.Null(result.DiagnosticMessage);
         Assert.Equal([SkillCatalog.DotnetInspect, SkillCatalog.PlaywrightCli], result.Assets);
-        Assert.Empty(source.RequestedKinds);
+        Assert.Equal(0, source.RequestCount);
     }
 
     [Theory]
@@ -270,12 +249,12 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         var provider = CreateProvider(source);
 
         var result = await provider.ResolveAsync(
-            AgentAssetKind.Skill, requestedAssets, detectedLanguage: null, TestContext.Current.CancellationToken);
+            new SkillCatalog(source), requestedAssets, detectedLanguage: null, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsFailure);
         Assert.Equal(expectDiagnostic ? FailureMessage : null, result.DiagnosticMessage);
         Assert.Equal([SkillCatalog.PlaywrightCli], result.Assets);
-        Assert.Equal([AgentAssetKind.Skill], source.RequestedKinds);
+        Assert.Equal(1, source.RequestCount);
     }
 
     [Fact]
@@ -285,12 +264,12 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         var provider = CreateProvider(source);
 
         var result = await provider.ResolveAsync(
-            AgentAssetKind.Extension, requestedAssets: null, detectedLanguage: null, TestContext.Current.CancellationToken);
+            new ExtensionCatalog(source), requestedAssets: null, detectedLanguage: null, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsFailure);
         Assert.Empty(result.Assets);
         Assert.Equal(FailureMessage, result.DiagnosticMessage);
-        Assert.Equal([AgentAssetKind.Extension], source.RequestedKinds);
+        Assert.Equal(1, source.RequestCount);
     }
 
     [Fact]
@@ -299,39 +278,45 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         var source = CreateUnavailableSource();
 
         var result = await CreateProvider(source).ResolveAsync(
-            AgentAssetKind.Extension, "none", detectedLanguage: null, TestContext.Current.CancellationToken);
+            new ExtensionCatalog(source), "none", detectedLanguage: null, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsFailure);
         Assert.Null(result.DiagnosticMessage);
         Assert.Empty(result.Assets);
-        Assert.Empty(source.RequestedKinds);
+        Assert.Equal(0, source.RequestCount);
     }
 
     [Fact]
-    public async Task Resolution_UsesEachRequestsKindLanguageAndSelection()
+    public async Task Resolution_UsesEachRequestsCatalogLanguageAndSelection()
     {
         var skill = CreateAsset("bundled-skill", []);
         var alpha = CreateAsset("alpha", []);
         var zeta = CreateAsset("zeta", []);
         var restricted = CreateAsset("restricted", [KnownLanguageId.CSharp]);
-        var source = new FakeAgentAssetSource
+        var skillSource = new FakeAgentAssetSource
         {
-            Skills = AgentAssetSourceResult.Available([skill]),
-            Extensions = AgentAssetSourceResult.Available([zeta, restricted, alpha])
+            Result = AgentAssetSourceResult.Available([skill])
         };
-        var provider = CreateProvider(source);
+        var extensionSource = new FakeAgentAssetSource
+        {
+            Result = AgentAssetSourceResult.Available([zeta, restricted, alpha])
+        };
+        var skillCatalog = new SkillCatalog(skillSource);
+        var extensionCatalog = new ExtensionCatalog(extensionSource);
+        var provider = new AgentAssetCatalogProvider([skillCatalog, extensionCatalog]);
 
         var skills = await provider.ResolveAsync(
-            AgentAssetKind.Skill, "all", new LanguageId(KnownLanguageId.CSharp), TestContext.Current.CancellationToken);
+            skillCatalog, "all", new LanguageId(KnownLanguageId.CSharp), TestContext.Current.CancellationToken);
         var cliOnly = await provider.ResolveAsync(
-            AgentAssetKind.Skill, "playwright-cli", detectedLanguage: null, TestContext.Current.CancellationToken);
+            skillCatalog, "playwright-cli", detectedLanguage: null, TestContext.Current.CancellationToken);
         var extensions = await provider.ResolveAsync(
-            AgentAssetKind.Extension, "all", detectedLanguage: null, TestContext.Current.CancellationToken);
+            extensionCatalog, "all", detectedLanguage: null, TestContext.Current.CancellationToken);
 
         Assert.Equal([skill, SkillCatalog.DotnetInspect, SkillCatalog.PlaywrightCli], skills.Assets);
         Assert.Equal([SkillCatalog.PlaywrightCli], cliOnly.Assets);
         Assert.Equal([alpha, zeta], extensions.Assets);
-        Assert.Equal([AgentAssetKind.Skill, AgentAssetKind.Extension], source.RequestedKinds);
+        Assert.Equal(1, skillSource.RequestCount);
+        Assert.Equal(1, extensionSource.RequestCount);
     }
 
     [Fact]
@@ -343,8 +328,8 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.ResolveAsync(
-            AgentAssetKind.Skill, "all", detectedLanguage: null, cancellation.Token));
-        Assert.Empty(source.RequestedKinds);
+            new SkillCatalog(source), "all", detectedLanguage: null, cancellation.Token));
+        Assert.Equal(0, source.RequestCount);
     }
 
     [Fact]
@@ -374,8 +359,7 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
     private static FakeAgentAssetSource CreateUnavailableSource()
         => new()
         {
-            Skills = AgentAssetSourceResult.Unavailable(FailureMessage),
-            Extensions = AgentAssetSourceResult.Unavailable(FailureMessage)
+            Result = AgentAssetSourceResult.Unavailable(FailureMessage)
         };
 
     private static AgentAssetDefinition CreateAsset(string name, IReadOnlyList<string> languages)

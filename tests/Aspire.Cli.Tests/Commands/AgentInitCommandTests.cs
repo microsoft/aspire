@@ -14,6 +14,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -104,7 +105,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         const string deploymentContent = "# Deployment";
         var source = new FakeAgentAssetSource
         {
-            Skills = AgentAssetSourceResult.Available(
+            Result = AgentAssetSourceResult.Available(
             [
                 new AgentAssetDefinition("aspire", "Aspire", [new AgentAssetFile("SKILL.md", aspireContent)], installExcludedRelativePaths: [], isDefault: true),
                 new AgentAssetDefinition("aspire-deployment", "Deployment", [new AgentAssetFile("SKILL.md", deploymentContent)], installExcludedRelativePaths: [], isDefault: true)
@@ -120,7 +121,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interaction;
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, home);
         });
-        services.AddSingleton<IAgentAssetSource>(source);
+        services.RemoveAll<IAgentAssetCatalog>();
+        services.AddSingleton<IAgentAssetCatalog>(new SkillCatalog(source));
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
@@ -570,12 +572,11 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
-        // Prime the source and read the skills it actually surfaces without reaching through
-        // the catalog into bundle implementation details.
-        var source = provider.GetRequiredService<IAgentAssetSource>();
-        var sourceResult = await source.GetAssetsAsync(AgentAssetKind.Skill, TestContext.Current.CancellationToken).DefaultTimeout();
-        Assert.True(sourceResult.IsAvailable);
-        var bundleSkillNames = sourceResult.Assets.Select(static s => s.Name).ToList();
+        // Read the catalog's default assets without reaching into bundle implementation details.
+        var catalog = provider.GetRequiredService<IAgentAssetCatalogProvider>().GetCatalogs().First(catalog => catalog.Name == "skills");
+        var catalogResult = await catalog.ResolveAsync("all", TestContext.Current.CancellationToken).DefaultTimeout();
+        Assert.False(catalogResult.IsFailure);
+        var bundleSkillNames = catalogResult.Assets.Where(static asset => asset.IsDefault).Select(static asset => asset.Name).ToList();
         Assert.NotEmpty(bundleSkillNames);
 
         // Explicit names instead of `all` keeps the assertion focused on bundle skills and

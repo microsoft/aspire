@@ -44,7 +44,9 @@ internal sealed class ExtensionCatalog : IAgentAssetCatalog
         _assetSource = assetSource;
     }
 
-    public AgentAssetKind AssetKind => AgentAssetKind.Extension;
+    public string Name => "extensions";
+
+    public IReadOnlyList<AgentClient> SupportedClients { get; } = [AgentClient.CopilotApp];
 
     public IReadOnlyList<AgentAssetLocation> Locations => KnownLocations;
 
@@ -58,7 +60,7 @@ internal sealed class ExtensionCatalog : IAgentAssetCatalog
             return new([], DiagnosticMessage: null, IsFailure: false);
         }
 
-        var result = await _assetSource.GetAssetsAsync(AssetKind, cancellationToken);
+        var result = await _assetSource.GetAssetsAsync(cancellationToken);
         if (!result.IsAvailable)
         {
             return new(
@@ -82,7 +84,7 @@ internal sealed class ExtensionCatalog : IAgentAssetCatalog
             yield break;
         }
 
-        foreach (var target in AgentAssetPathHelper.CreateDefaultTargets(location, workspaceDirectory, homeDirectory))
+        foreach (var target in location.ResolveInstallTargets(workspaceDirectory, homeDirectory))
         {
             yield return target;
         }

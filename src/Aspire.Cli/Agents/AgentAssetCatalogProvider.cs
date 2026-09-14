@@ -10,33 +10,23 @@ namespace Aspire.Cli.Agents;
 /// </summary>
 internal sealed class AgentAssetCatalogProvider : IAgentAssetCatalogProvider
 {
-    private readonly Dictionary<AgentAssetKind, IAgentAssetCatalog> _catalogs = [];
+    private readonly IEnumerable<IAgentAssetCatalog> _catalogs;
 
     public AgentAssetCatalogProvider(IEnumerable<IAgentAssetCatalog> catalogs)
     {
-        foreach (var catalog in catalogs)
-        {
-            if (!_catalogs.TryAdd(catalog.AssetKind, catalog))
-            {
-                throw new InvalidOperationException(
-                    $"Multiple agent asset catalogs are registered for asset kind '{catalog.AssetKind}'.");
-            }
-        }
+        _catalogs = catalogs;
     }
 
-    public IAgentAssetCatalog GetCatalog(AgentAssetKind assetKind)
-        => _catalogs.TryGetValue(assetKind, out var catalog)
-            ? catalog
-            : throw new InvalidOperationException($"No agent asset catalog is registered for asset kind '{assetKind}'.");
+    public IEnumerable<IAgentAssetCatalog> GetCatalogs() => _catalogs;
 
     public async Task<AgentAssetCatalogResult> ResolveAsync(
-        AgentAssetKind assetKind,
+        IAgentAssetCatalog catalog,
         string? requestedAssets,
         LanguageId? detectedLanguage,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var result = await GetCatalog(assetKind).ResolveAsync(requestedAssets, cancellationToken);
+        var result = await catalog.ResolveAsync(requestedAssets, cancellationToken);
         // Keep prompts stable regardless of source order, using the same case-insensitive
         // names accepted by command-line selection.
         return result with

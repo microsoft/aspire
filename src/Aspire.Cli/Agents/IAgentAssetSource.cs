@@ -8,7 +8,7 @@ namespace Aspire.Cli.Agents;
 /// </summary>
 internal interface IAgentAssetSource
 {
-    Task<AgentAssetSourceResult> GetAssetsAsync(AgentAssetKind assetKind, CancellationToken cancellationToken);
+    Task<AgentAssetSourceResult> GetAssetsAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>

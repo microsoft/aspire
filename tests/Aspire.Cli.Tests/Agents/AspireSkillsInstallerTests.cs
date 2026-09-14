@@ -209,8 +209,6 @@ public class AspireSkillsInstallerTests
             ];
 
             Assert.All(results, static result => Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status));
-            Assert.Equal(AgentAssetKind.Skill, results[0].Bundle!.AssetKind);
-            Assert.Equal(AgentAssetKind.Extension, results[1].Bundle!.AssetKind);
             Assert.Equal("aspire", Assert.Single(results[0].Bundle!.Assets).Name);
             Assert.Equal("aspire-doctor", Assert.Single(results[1].Bundle!.Assets).Name);
             Assert.True(File.Exists(Path.Combine(
@@ -1648,7 +1646,6 @@ public class AspireSkillsInstallerTests
             var bundle = await bundleProvider.CreateEmbeddedBundleAsync(bundleDirectory, CancellationToken.None);
 
             Assert.NotNull(bundle);
-            Assert.Equal(AgentAssetKind.Extension, bundle.AssetKind);
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
             Assert.Equal(AspireSkillsInstaller.Version, metadata.Version);
             Assert.Equal(AspireSkillsInstaller.GitHubRepository, metadata.Repository);
@@ -2229,10 +2226,10 @@ public class AspireSkillsInstallerTests
         ILogger<AspireSkillsInstaller>? logger = null)
     {
         var skillProvider = new TestBundleProvider(
-            AspireSkillsAssetSource.CreateBundleProvider(AgentAssetKind.Skill, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance),
+            new AspireSkillsBundleProvider(AspireSkillsBundleDescriptor.Skills, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance),
             embeddedBundleProvider ?? new TestEmbeddedBundleProvider());
         var extensionProvider = new TestBundleProvider(
-            AspireSkillsAssetSource.CreateBundleProvider(AgentAssetKind.Extension, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance),
+            new AspireSkillsBundleProvider(AspireSkillsBundleDescriptor.Extensions, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance),
             embeddedExtensionBundleProvider ?? new TestEmbeddedBundleProvider(TestBundleProviderFactory.CreateExtensions()));
 
         var installer = new AspireSkillsInstaller(

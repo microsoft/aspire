@@ -25,19 +25,19 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
             PromptForSelectionsCallback = (prompt, choices, _, _) =>
             {
                 prompts.Add(prompt);
-                var expectedKind = prompt == AgentCommandStrings.InitCommand_SelectSkillLocations ||
-                    prompt == AgentCommandStrings.InitCommand_SelectSkills ? AgentAssetKind.Skill : AgentAssetKind.Extension;
+                var selectingSkills = prompt == AgentCommandStrings.InitCommand_SelectSkillLocations ||
+                    prompt == AgentCommandStrings.InitCommand_SelectSkills;
                 return choices.Cast<object>().Where(choice =>
                 {
                     switch (choice)
                     {
                         case AgentAssetLocation location:
-                            Assert.Contains(location, expectedKind is AgentAssetKind.Skill ? SkillCatalog.KnownLocations : ExtensionCatalog.KnownLocations);
+                            Assert.Contains(location, selectingSkills ? SkillCatalog.KnownLocations : ExtensionCatalog.KnownLocations);
                             return location.IsDefault;
                         case AgentAssetDefinition asset:
                             if (asset.HasInstallableFiles)
                             {
-                                var requiredFile = expectedKind is AgentAssetKind.Skill ? "SKILL.md" : "extension.mjs";
+                                var requiredFile = selectingSkills ? "SKILL.md" : "extension.mjs";
                                 Assert.Contains(asset.Files, file => file.RelativePath == requiredFile);
                             }
                             return asset.IsDefault;
@@ -98,7 +98,8 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
             Assert.Equal("export default {};", await File.ReadAllTextAsync(Path.Combine(directory, "extension.mjs")));
             Assert.Equal(new byte[] { 0x00, 0xff, 0x80, 0x0a }, await File.ReadAllBytesAsync(Path.Combine(directory, "ui", "icon.bin")));
         }
-        Assert.Equal([AgentAssetKind.Extension], Assert.IsType<FakeAspireSkillsInstaller>(provider.GetRequiredService<IAspireSkillsInstaller>()).RequestedAssetKinds);
+        var bundleProvider = Assert.Single(Assert.IsType<FakeAspireSkillsInstaller>(provider.GetRequiredService<IAspireSkillsInstaller>()).RequestedProviders);
+        Assert.Same(AspireSkillsBundleDescriptor.Extensions, bundleProvider.Descriptor);
     }
 
     [Theory]
@@ -128,7 +129,8 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(installed, File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "extensions", "aspire-doctor", "extension.mjs")));
         Assert.False(Directory.Exists(Path.Combine(home.FullName, ".copilot", "extensions")));
-        Assert.Equal(installed ? [AgentAssetKind.Extension] : [], Assert.IsType<FakeAspireSkillsInstaller>(provider.GetRequiredService<IAspireSkillsInstaller>()).RequestedAssetKinds);
+        Assert.Equal(installed ? [AspireSkillsBundleDescriptor.Extensions] : [],
+            Assert.IsType<FakeAspireSkillsInstaller>(provider.GetRequiredService<IAspireSkillsInstaller>()).RequestedProviders.Select(provider => provider.Descriptor));
     }
 
     [Theory]
@@ -253,7 +255,7 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
         var exitCode = await command.Parse($"agent init --skill-locations none {arguments}").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Empty(Assert.IsType<FakeAspireSkillsInstaller>(provider.GetRequiredService<IAspireSkillsInstaller>()).RequestedAssetKinds);
+        Assert.Empty(Assert.IsType<FakeAspireSkillsInstaller>(provider.GetRequiredService<IAspireSkillsInstaller>()).RequestedProviders);
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "extensions")));
     }
 

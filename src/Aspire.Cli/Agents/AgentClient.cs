@@ -4,34 +4,31 @@
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Describes an agent client and the asset kinds it supports.
+/// Describes an agent client that Aspire can configure.
 /// </summary>
 internal sealed class AgentClient
 {
-    public static AgentClient CopilotCli { get; } = new(nameof(CopilotCli), "GitHub Copilot CLI", AgentAssetKind.Skill);
+    public static AgentClient CopilotCli { get; } = new(nameof(CopilotCli), "GitHub Copilot CLI");
 
-    public static AgentClient CopilotApp { get; } = new(nameof(CopilotApp), "GitHub Copilot App", AgentAssetKind.Skill | AgentAssetKind.Extension);
+    public static AgentClient CopilotApp { get; } = new(nameof(CopilotApp), "GitHub Copilot App");
 
-    public static AgentClient ClaudeCode { get; } = new(nameof(ClaudeCode), "Claude Code", AgentAssetKind.Skill);
+    public static AgentClient ClaudeCode { get; } = new(nameof(ClaudeCode), "Claude Code");
 
-    public static AgentClient VsCode { get; } = new(nameof(VsCode), "VS Code", AgentAssetKind.Skill);
+    public static AgentClient VsCode { get; } = new(nameof(VsCode), "VS Code");
 
-    public static AgentClient OpenCode { get; } = new(nameof(OpenCode), "OpenCode", AgentAssetKind.Skill);
+    public static AgentClient OpenCode { get; } = new(nameof(OpenCode), "OpenCode");
 
     public static IReadOnlyList<AgentClient> All { get; } = [CopilotCli, CopilotApp, ClaudeCode, VsCode, OpenCode];
 
-    private AgentClient(string name, string displayName, AgentAssetKind supportedAssetKinds)
+    private AgentClient(string name, string displayName)
     {
         Name = name;
         DisplayName = displayName;
-        SupportedAssetKinds = supportedAssetKinds;
     }
 
     public string Name { get; }
 
     public string DisplayName { get; }
-
-    public AgentAssetKind SupportedAssetKinds { get; }
 
     public override string ToString() => Name;
 }

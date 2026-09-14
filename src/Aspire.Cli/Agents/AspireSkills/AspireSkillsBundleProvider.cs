@@ -425,7 +425,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 asset.ApplicableLanguages ?? []));
         }
 
-        return new AspireSkillsBundle(version, Descriptor.AssetKind, validatedAssets);
+        return new AspireSkillsBundle(version, validatedAssets);
     }
 
     private void ValidateAssetName(string assetName)
@@ -501,7 +501,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             Descriptor.ValidateRequiredFile(assetName, bytes);
         }
 
-        if (Descriptor.AssetKind is AgentAssetKind.Skill)
+        if (Descriptor.DecodeFilesAsText)
         {
             // All skill files were decoded as text and written as UTF-8, regardless of
             // filename extension. Keep that behavior for scripts such as helper.py too.
@@ -553,7 +553,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         // Executable extension bundles additionally reject Windows aliases on all platforms.
         // Device names remain reserved with extensions, for example "NUL.txt". Do not apply
         // this new portability policy to previously accepted skill names and exclusions.
-        return Descriptor.AssetKind is not AgentAssetKind.Extension ||
+        return !Descriptor.RequirePortablePaths ||
             (!segment.EndsWith('.') &&
              !segment.EndsWith(' ') &&
              !IsWindowsDeviceName(segment.Split('.')[0]));

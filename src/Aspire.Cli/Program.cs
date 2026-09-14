@@ -545,9 +545,10 @@ public class Program
         builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
-        builder.Services.AddSingleton<IAgentAssetSource, AspireSkillsAssetSource>();
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentAssetCatalog, SkillCatalog>());
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentAssetCatalog, ExtensionCatalog>());
+        builder.Services.AddSingleton<IAgentAssetCatalog>(sp => new SkillCatalog(
+            ActivatorUtilities.CreateInstance<AspireSkillsAssetSource>(sp, AspireSkillsBundleDescriptor.Skills)));
+        builder.Services.AddSingleton<IAgentAssetCatalog>(sp => new ExtensionCatalog(
+            ActivatorUtilities.CreateInstance<AspireSkillsAssetSource>(sp, AspireSkillsBundleDescriptor.Extensions)));
         builder.Services.AddSingleton<IAgentAssetCatalogProvider, AgentAssetCatalogProvider>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
         builder.Services.AddSingleton<PlaywrightCliInstaller>();

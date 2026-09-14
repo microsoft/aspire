@@ -10,17 +10,13 @@ internal sealed class AspireSkillsBundle
 {
     internal AspireSkillsBundle(
         string version,
-        AgentAssetKind assetKind,
         IReadOnlyList<AgentAssetDefinition> assets)
     {
         Version = version;
-        AssetKind = assetKind;
         Assets = [.. assets];
     }
 
     public string Version { get; }
-
-    public AgentAssetKind AssetKind { get; }
 
     /// <summary>
     /// Gets the validated assets and their resolved installable files.

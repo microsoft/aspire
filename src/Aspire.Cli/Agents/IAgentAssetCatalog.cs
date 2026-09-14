@@ -4,11 +4,13 @@
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Resolves one kind's available assets and installation targets.
+/// Resolves a catalog's available assets and installation targets.
 /// </summary>
 internal interface IAgentAssetCatalog
 {
-    AgentAssetKind AssetKind { get; }
+    string Name { get; }
+
+    IReadOnlyList<AgentClient> SupportedClients { get; }
 
     IReadOnlyList<AgentAssetLocation> Locations { get; }
 

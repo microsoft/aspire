@@ -5,33 +5,18 @@ using System.Text;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Agents;
 
 public class CommonAgentApplicatorsTests
 {
     [Fact]
-    public void AgentAssetKind_ContainsSkillsAndExtensionsWithoutZero()
+    public void Catalogs_DeclareTheirSupportedClients()
     {
-        Assert.Equal([AgentAssetKind.Skill, AgentAssetKind.Extension], Enum.GetValues<AgentAssetKind>());
-        Assert.False(Enum.IsDefined((AgentAssetKind)0));
-    }
-
-    [Fact]
-    public void CopilotApp_SupportsAllAssetKinds()
-    {
-        Assert.Equal(AgentAssetKind.Skill | AgentAssetKind.Extension, AgentClient.CopilotApp.SupportedAssetKinds);
-    }
-
-    [Theory]
-    [InlineData(nameof(AgentClient.CopilotCli))]
-    [InlineData(nameof(AgentClient.ClaudeCode))]
-    [InlineData(nameof(AgentClient.VsCode))]
-    [InlineData(nameof(AgentClient.OpenCode))]
-    public void OtherClients_SupportOnlySkills(string clientName)
-    {
-        var client = AgentClient.All.Single(client => client.Name == clientName);
-        Assert.Equal(AgentAssetKind.Skill, client.SupportedAssetKinds);
+        var source = new FakeAgentAssetSource();
+        Assert.Equal(AgentClient.All, new SkillCatalog(source).SupportedClients);
+        Assert.Equal([AgentClient.CopilotApp], new ExtensionCatalog(source).SupportedClients);
     }
 
     [Fact]
