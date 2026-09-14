@@ -78,6 +78,22 @@ function extractTestFailures(trx) {
         }));
 }
 
+function extractMochaFailures(report, jobName) {
+    const failures = Array.isArray(report?.failures) ? report.failures : [];
+
+    // Mocha's JSON reporter emits failures as:
+    //   { "fullTitle": "suite test", "err": { "message": "...", "stack": "..." } }
+    // Hook failures use the same shape, with the hook description included in fullTitle.
+    return failures.map(failure => ({
+        test: String(failure.fullTitle ?? failure.title ?? ''),
+        error: String(failure.err?.message ?? ''),
+        stack_trace: String(failure.err?.stack ?? ''),
+        standard_output: '',
+        standard_error: '',
+        ...(jobName ? { job: jobName } : {}),
+    }));
+}
+
 // TRX display names can contain backticks and line breaks. Collapse line breaks
 // and use a fence longer than any backtick run so the name cannot inject Markdown.
 function toInlineCode(value) {
@@ -101,10 +117,13 @@ function formatTestFailures(failures) {
     const output = failures.map(failure => {
         const sections = [
             `### ${toInlineCode(failure.test)}`,
-            '',
-            '**Error:**',
-            toCodeBlock(failure.error),
         ];
+
+        if (failure.job) {
+            sections.push('', `**Job:** ${toInlineCode(failure.job)}`);
+        }
+
+        sections.push('', '**Error:**', toCodeBlock(failure.error));
 
         for (const [label, value] of [
             ['Stack Trace', failure.stack_trace],
@@ -162,6 +181,58 @@ function buildOccurrenceRow(analysis, cause) {
 
 function normalizeIssueTitle(value) {
     return redactSensitiveData(value).replace(/\r\n?|\n/g, ' ').trim();
+}
+
+function buildJobList(analysis, classification) {
+    return (analysis.failed_jobs ?? [])
+        .filter(job => !classification || job.classification === classification)
+        .map(job => {
+            if (!classification) {
+                return `- ${toInlineCode(job.name)} — ${job.reason ?? ''} (${job.classification ?? ''})`;
+            }
+
+            const jobLink = job.url ? ` ([job](${job.url}))` : '';
+            return `- ${toInlineCode(job.name)}${jobLink}\n  - **Why likely flaky**: ${job.reason ?? ''}`;
+        })
+        .join('\n');
+}
+
+function buildFlakyTestList(analysis) {
+    return (analysis.failed_tests ?? [])
+        .filter(test => test.classification === 'flaky')
+        .map(test => {
+            const stackTrace = test.stack_trace
+                ? `\n  - **Stack Trace** (first frames):\n${toCodeBlock(test.stack_trace.split('\n').slice(0, 5).join('\n'))}`
+                : '';
+
+            return `- ${toInlineCode(test.name)} in job ${toInlineCode(test.job)}\n  - **Error**: ${test.error ?? ''}${stackTrace}\n  - **Why likely flaky**: ${test.reason ?? ''}`;
+        })
+        .join('\n');
+}
+
+function buildPrComment(analysis) {
+    const marker = '<!-- analyze-ci-failure -->';
+    const runUrl = analysis.run_url ?? '';
+    const allJobs = buildJobList(analysis);
+
+    if (analysis.verdict === 'transient-infra') {
+        return `${marker}\n🔍 **CI Failure Analysis: Transient Infrastructure Failure**\n\nThe CI build failed due to transient infrastructure issues.\n\n**Failed jobs:**\n${allJobs}\n\nIf a rerun was not already requested automatically, visit the [workflow run page](${runUrl}) to rerun the failed jobs manually.\n`;
+    }
+
+    if (analysis.verdict === 'flaky-test') {
+        const flakyTests = buildFlakyTestList(analysis);
+        const hasFlakyTests = flakyTests.length > 0;
+        const heading = hasFlakyTests ? 'Suspected flaky test(s)' : 'Suspected flaky failure(s)';
+        const failures = hasFlakyTests ? flakyTests : buildJobList(analysis, 'flaky-test');
+
+        return `${marker}\n⚠️ **CI Failure Analysis: Possible Flaky Test(s)**\n\nThe CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.\n\n**${heading}:**\n${failures}\n\n**Suggested actions:**\n- Re-run the failed CI jobs to confirm if the failure is intermittent\n- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using \`/quarantine-test <test name> <issue URL>\`\n- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky\n\nYou can re-run the failed jobs from the [workflow run page](${runUrl}).\n`;
+    }
+
+    if (analysis.verdict === 'code-issue') {
+        return `${marker}\n❌ **CI Failure Analysis: Code Issue Detected**\n\nThe CI build failed due to issue(s) caused by changes in this PR.\n\n**Failed jobs:**\n${allJobs}\n\nThe CI will not be automatically rerun. Please fix the issue and push an updated commit.\n`;
+    }
+
+    return `${marker}\n⚠️ **CI Failure Analysis: Mixed Failures**\n\nThe CI build contains both transient and non-transient failures.\n\n**Failed jobs:**\n${allJobs}\n\nThe CI will not be automatically rerun. Please review the failures above.\n`;
 }
 
 function getFailureInformation(analysis, cause) {
@@ -265,8 +336,18 @@ function main(args) {
             }
             break;
         }
+        case 'extract-mocha-failures': {
+            const failures = extractMochaFailures(analysis, causePath);
+            if (failures.length > 0) {
+                process.stdout.write(`${failures.map(failure => JSON.stringify(failure)).join('\n')}\n`);
+            }
+            break;
+        }
         case 'format-test-failures':
             process.stdout.write(formatTestFailures(analysis));
+            break;
+        case 'pr-comment':
+            process.stdout.write(buildPrComment(analysis));
             break;
         case 'job-name':
             process.stdout.write(getCauseJobName(analysis, getCause()));
@@ -295,9 +376,11 @@ if (require.main === module) {
 module.exports = {
     addOccurrence,
     buildIssueBody,
+    buildPrComment,
     buildOccurrence,
     buildOccurrenceRow,
     escapeHtml,
+    extractMochaFailures,
     extractTestFailures,
     formatTestFailures,
     getCauseJobName,

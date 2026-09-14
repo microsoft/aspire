@@ -305,6 +305,28 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal(expected, output);
     }
 
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task FormatTestFailuresIncludesSourceJob()
+    {
+        var failures = new[]
+        {
+            new
+            {
+                test = "Aspire tree action E2E routes commands",
+                job = "VS Code extension E2E (Windows, tree-actions)",
+                error = "Timed out waiting for E2E control revision",
+                stack_trace = "",
+                standard_output = "",
+                standard_error = ""
+            }
+        };
+
+        var output = await InvokeScriptAsync("format-test-failures", failures);
+
+        Assert.Contains("**Job:** `VS Code extension E2E (Windows, tree-actions)`", output);
+    }
+
     [Theory]
     [InlineData("https://opaque-credential@example.com/path", "https://[REDACTED]@example.com/path")]
     [InlineData("https://user:pass@example.com/path", "https://[REDACTED]:[REDACTED]@example.com/path")]
@@ -384,12 +406,27 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var issueReadIndex = publishStep.IndexOf(
             "CAUSE_ID=$(jq -r '.id' \"$CAUSE_FILE\")",
             StringComparison.Ordinal);
+        var commentRenderIndex = publishStep.IndexOf(
+            "node .github/workflows/analyze-ci-failure.js pr-comment \"$ANALYSIS_FILE\"",
+            StringComparison.Ordinal);
 
         Assert.True(analysisRedactionIndex >= 0, $"{workflowName} must redact the analysis file.");
         Assert.True(causeRedactionIndex >= 0, $"{workflowName} must redact each cause file.");
         Assert.True(analysisReadIndex > analysisRedactionIndex, $"{workflowName} must sanitize analysis before field reads.");
         Assert.True(persistenceReadIndex > causeRedactionIndex, $"{workflowName} must sanitize causes before persistence reads.");
         Assert.True(issueReadIndex > causeRedactionIndex, $"{workflowName} must sanitize causes before issue rendering reads.");
+        Assert.True(commentRenderIndex > analysisRedactionIndex, $"{workflowName} must render the PR comment from sanitized analysis.");
+    }
+
+    [Theory]
+    [InlineData("analyze-ci-failure.md")]
+    [InlineData("analyze-ci-failure.lock.yml")]
+    public void CollectStepExtractsFailedExtensionE2eMochaResults(string workflowName)
+    {
+        var workflow = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", workflowName));
+
+        Assert.Contains("extension-e2e-diagnostics-", workflow);
+        Assert.Contains("extract-mocha-failures \"${MOCHA_FILE}\" \"${E2E_JOB_NAME}\"", workflow);
     }
 
     [Fact]
@@ -418,6 +455,122 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal("at Tests.Type.Failing() in Tests.cs:line 10", failure.GetProperty("stack_trace").GetString());
         Assert.Equal("standard output text", failure.GetProperty("standard_output").GetString());
         Assert.Equal("standard error text", failure.GetProperty("standard_error").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ExtractMochaFailuresReadsTestAndHookFailures()
+    {
+        var report = new
+        {
+            failures = new[]
+            {
+                new
+                {
+                    title = "test title",
+                    fullTitle = "Suite test title",
+                    err = new
+                    {
+                        message = "Timed out waiting for state",
+                        stack = "Error: Timed out waiting for state\n    at test.js:42:1"
+                    }
+                },
+                new
+                {
+                    title = "after each hook",
+                    fullTitle = "Suite after each hook",
+                    err = new
+                    {
+                        message = "EBUSY: resource busy or locked",
+                        stack = "Error: EBUSY: resource busy or locked\n    at fixtures.js:217:15"
+                    }
+                }
+            }
+        };
+
+        const string jobName = "VS Code extension E2E (Windows, tree-actions)";
+        var output = await InvokeScriptAsync("extract-mocha-failures", report, jobName);
+        var failures = output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => JsonSerializer.Deserialize<JsonElement>(line, s_jsonOptions))
+            .ToArray();
+
+        Assert.Collection(
+            failures,
+            failure =>
+            {
+                Assert.Equal("Suite test title", failure.GetProperty("test").GetString());
+                Assert.Equal("Timed out waiting for state", failure.GetProperty("error").GetString());
+                Assert.Equal("Error: Timed out waiting for state\n    at test.js:42:1", failure.GetProperty("stack_trace").GetString());
+                Assert.Equal("", failure.GetProperty("standard_output").GetString());
+                Assert.Equal("", failure.GetProperty("standard_error").GetString());
+                Assert.Equal(jobName, failure.GetProperty("job").GetString());
+            },
+            failure =>
+            {
+                Assert.Equal("Suite after each hook", failure.GetProperty("test").GetString());
+                Assert.Equal("EBUSY: resource busy or locked", failure.GetProperty("error").GetString());
+            });
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PrCommentListsFlakyJobsWhenNoIndividualTestsWereExtracted()
+    {
+        var analysis = new
+        {
+            verdict = "flaky-test",
+            run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
+            failed_jobs = new[]
+            {
+                new
+                {
+                    name = "VS Code extension E2E (Windows, tree-actions)",
+                    url = "https://github.com/microsoft/aspire/actions/runs/34795444609/job/103829216057",
+                    classification = "flaky-test",
+                    reason = "The unrelated E2E shard timed out."
+                }
+            },
+            failed_tests = Array.Empty<object>()
+        };
+
+        var comment = await InvokeScriptAsync("pr-comment", analysis);
+
+        Assert.Contains("**Suspected flaky failure(s):**", comment);
+        Assert.Contains("`VS Code extension E2E (Windows, tree-actions)`", comment);
+        Assert.Contains("[job](https://github.com/microsoft/aspire/actions/runs/34795444609/job/103829216057)", comment);
+        Assert.Contains("**Why likely flaky**: The unrelated E2E shard timed out.", comment);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PrCommentListsExtractedFlakyTests()
+    {
+        var analysis = new
+        {
+            verdict = "flaky-test",
+            run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
+            failed_jobs = Array.Empty<object>(),
+            failed_tests = new[]
+            {
+                new
+                {
+                    name = "Aspire tree action E2E routes commands",
+                    job = "VS Code extension E2E (Windows, tree-actions)",
+                    error = "Timed out waiting for E2E control revision",
+                    stack_trace = "Error: Timed out\n    at treeActions.e2e.test.js:42:1",
+                    classification = "flaky",
+                    reason = "The test is unrelated to the PR changes."
+                }
+            }
+        };
+
+        var comment = await InvokeScriptAsync("pr-comment", analysis);
+
+        Assert.Contains("**Suspected flaky test(s):**", comment);
+        Assert.Contains("`Aspire tree action E2E routes commands`", comment);
+        Assert.Contains("**Error**: Timed out waiting for E2E control revision", comment);
+        Assert.Contains("at treeActions.e2e.test.js:42:1", comment);
+        Assert.Contains("**Why likely flaky**: The test is unrelated to the PR changes.", comment);
     }
 
     private static object CreateAnalysis(object[]? failedTests = null)
@@ -456,7 +609,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         return result.Output.ReplaceLineEndings("\n");
     }
 
-    private async Task<string> InvokeScriptAsync(string operation, object input)
+    private async Task<string> InvokeScriptAsync(string operation, object input, string? context = null)
     {
         var inputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-input.json");
         await File.WriteAllTextAsync(inputPath, JsonSerializer.Serialize(input, s_jsonOptions));
@@ -464,7 +617,8 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         using var command = new NodeCommand(_output, $"analyze-ci-failure-{operation}");
         command.WithWorkingDirectory(_repoRoot);
 
-        var result = await command.ExecuteScriptAsync(_scriptPath, operation, inputPath);
+        var arguments = context is null ? new[] { operation, inputPath } : new[] { operation, inputPath, context };
+        var result = await command.ExecuteScriptAsync(_scriptPath, arguments);
         Assert.Equal(0, result.ExitCode);
 
         return result.Output.ReplaceLineEndings("\n");
