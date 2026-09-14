@@ -4,7 +4,6 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.AppContainers;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Expressions;
@@ -222,17 +221,9 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             return;
         }
 
+        // Express constrains this app's own ingress, not the URLs it calls. A reference to an
+        // http:// producer is left alone; only an unreachable private hostname is rejected.
         environment.ValidatePublicEndpointReference(endpoint);
-
-        if (endpoint.EndpointAnnotation.UriScheme is "http" &&
-            ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(endpoint.Resource, out var producer) &&
-            producer is AzureContainerAppEnvironmentResource { IsExpress: false, PreserveHttpEndpoints: true } standard)
-        {
-            throw new InvalidOperationException(
-                $"Azure Container Apps Express environment '{environment.Name}' cannot reference endpoint '{endpoint.EndpointName}' " +
-                $"on resource '{endpoint.Resource.Name}' using HTTP. Environment '{standard.Name}' preserves HTTP endpoints. " +
-                "Enable HTTPS upgrade with WithHttpsUpgrade(true), reference an HTTPS endpoint, or use a standard Azure Container Apps environment.");
-        }
     }
 
     private (object, SecretType) ProcessValue(object value, SecretType secretType = SecretType.None, object? parent = null)

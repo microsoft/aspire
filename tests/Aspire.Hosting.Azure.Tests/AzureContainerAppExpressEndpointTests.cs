@@ -303,7 +303,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task OnlyExpressConsumersRejectPreservedHttpFromStandardEndpoints(bool expressConsumer)
+    public async Task ConsumersAcceptPreservedHttpFromStandardEndpoints(bool expressConsumer)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var producer = builder.AddAzureContainerAppEnvironment("producer").WithHttpsUpgrade(false);
@@ -325,20 +325,13 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
         var target = GetTarget(web.Resource);
-        if (expressConsumer)
-        {
-            var exception = Assert.Throws<InvalidOperationException>(target.GetBicepTemplateString);
-            Assert.Equal(
-                "Azure Container Apps Express environment 'consumer' cannot reference endpoint 'http' on resource 'api' using HTTP. " +
-                "Environment 'producer' preserves HTTP endpoints. Enable HTTPS upgrade with WithHttpsUpgrade(true), " +
-                "reference an HTTPS endpoint, or use a standard Azure Container Apps environment.",
-                exception.Message);
-        }
-        else
-        {
-            var (manifest, bicep) = await GetManifestWithBicep(target, skipPreparer: true);
-            await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
-        }
+        var (manifest, bicep) = await GetManifestWithBicep(target, skipPreparer: true);
+
+        // Express restricts this app's own ingress, not the schemes it calls outbound, so an
+        // http:// reference to another environment's endpoint is passed through unchanged.
+        Assert.Contains("http://api.${producer_outputs_azure_container_apps_environment_default_domain}", bicep, StringComparison.Ordinal);
+
+        await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
     }
 
     [Theory]

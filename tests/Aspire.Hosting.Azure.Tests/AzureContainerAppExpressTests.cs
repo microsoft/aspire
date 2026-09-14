@@ -211,7 +211,9 @@ public class AzureContainerAppExpressTests
             {
                 app.Template.Volumes.Add(new ContainerAppVolume { Name = "scratch", StorageType = ContainerAppStorageType.EmptyDir });
                 var container = app.Template.Containers[0].Value!;
-                container.VolumeMounts.Add(new ContainerAppVolumeMount { VolumeName = "scratch", MountPath = "/tmp/scratch" });
+                // Avoid the OS temp directory: Verify scrubs it to {TempPath}, which would make
+                // this snapshot platform dependent.
+                container.VolumeMounts.Add(new ContainerAppVolumeMount { VolumeName = "scratch", MountPath = "/scratch" });
                 container.Probes.Add(new ContainerAppProbe
                 {
                     ProbeType = ContainerAppProbeType.Liveness,
