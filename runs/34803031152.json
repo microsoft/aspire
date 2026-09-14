@@ -1,0 +1,29 @@
+{
+  "run_id": 34803031152,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34803031152",
+  "analyzed_at": "2026-09-14T04:05:02Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 20092,
+    "title": "Fix Kafka AppHost health-check producer lifetime",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "davidfowl-kafka-health-check-lifetime",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20092"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 103851195543,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34803031152/job/103851195543",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic exit code 1 on the 'dynamic-debug-configuration' E2E shard, with job logs unavailable ('Failed to fetch logs for job') and no TRX test results. The PR only modifies src/Aspire.Hosting.Kafka/KafkaBuilderExtensions.cs and its test project, unrelated to the VS Code extension. This matches the known recurring flaky pattern 'vscode-e2e-windows-dynamic-debug-configuration-flaky' with 19 prior occurrences, most recently just hours before this run.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky"]
+}
