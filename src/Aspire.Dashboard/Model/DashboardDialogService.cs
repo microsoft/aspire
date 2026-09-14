@@ -5,6 +5,7 @@ using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Model;
 
@@ -36,11 +37,10 @@ public sealed class DashboardDialogService(
     /// <param name="content">The content to pass to the dialog.</param>
     /// <param name="parameters">The dialog parameters.</param>
     /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowDialogAsync<TDialog>(object content, DialogParameters parameters)
-        where TDialog : IDialogContentComponent
+    public Task<DashboardDialogReference> ShowDialogAsync<TDialog>(object content, DialogParameters parameters)
+        where TDialog : ComponentBase
     {
-        SetDefaultDismissTitle(parameters);
-        return await dialogService.ShowDialogAsync<TDialog>(content, parameters).ConfigureAwait(false);
+        return ShowAsync<TDialog>(content, parameters, drawer: false);
     }
 
     /// <summary>
@@ -50,11 +50,10 @@ public sealed class DashboardDialogService(
     /// <typeparam name="TDialog">The type of dialog component to show.</typeparam>
     /// <param name="parameters">The dialog parameters.</param>
     /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowDialogAsync<TDialog>(DialogParameters parameters)
-        where TDialog : IDialogContentComponent
+    public Task<DashboardDialogReference> ShowDialogAsync<TDialog>(DialogParameters parameters)
+        where TDialog : ComponentBase
     {
-        SetDefaultDismissTitle(parameters);
-        return await dialogService.ShowDialogAsync<TDialog>(parameters).ConfigureAwait(false);
+        return ShowAsync<TDialog>(content: null, parameters, drawer: false);
     }
 
     /// <summary>
@@ -65,11 +64,10 @@ public sealed class DashboardDialogService(
     /// <param name="content">The content to pass to the dialog.</param>
     /// <param name="parameters">The dialog parameters.</param>
     /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowPanelAsync<TDialog>(object content, DialogParameters parameters)
-        where TDialog : IDialogContentComponent
+    public Task<DashboardDialogReference> ShowPanelAsync<TDialog>(object content, DialogParameters parameters)
+        where TDialog : ComponentBase
     {
-        SetDefaultDismissTitle(parameters);
-        return await dialogService.ShowPanelAsync<TDialog>(content, parameters).ConfigureAwait(false);
+        return ShowAsync<TDialog>(content, parameters, drawer: true);
     }
 
     /// <summary>
@@ -79,33 +77,20 @@ public sealed class DashboardDialogService(
     /// <typeparam name="TDialog">The type of dialog component to show.</typeparam>
     /// <param name="parameters">The dialog parameters.</param>
     /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowPanelAsync<TDialog>(DialogParameters parameters)
-        where TDialog : IDialogContentComponent
+    public Task<DashboardDialogReference> ShowPanelAsync<TDialog>(DialogParameters parameters)
+        where TDialog : ComponentBase
     {
-        SetDefaultDismissTitle(parameters);
-        return await dialogService.ShowPanelAsync<TDialog>(parameters).ConfigureAwait(false);
+        return ShowAsync<TDialog>(content: null, parameters, drawer: true);
     }
 
     /// <summary>
     /// Shows a confirmation dialog with the specified message.
     /// </summary>
     /// <param name="message">The confirmation message to display.</param>
-    /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowConfirmationAsync(string message)
+    /// <returns>The dialog result.</returns>
+    public async Task<DialogResult> ShowConfirmationAsync(string message)
     {
         return await dialogService.ShowConfirmationAsync(message).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Shows a message box dialog with the specified content and parameters.
-    /// Automatically sets the dismiss title to the localized close button text if not specified.
-    /// </summary>
-    /// <param name="parameters">The message box parameters.</param>
-    /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowMessageBoxAsync(DialogParameters<MessageBoxContent> parameters)
-    {
-        SetDefaultDismissTitle(parameters);
-        return await dialogService.ShowMessageBoxAsync(parameters).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -116,11 +101,120 @@ public sealed class DashboardDialogService(
     /// <returns>An event callback for the dialog result.</returns>
     public EventCallback<DialogResult> CreateDialogCallback(object receiver, Func<DialogResult, Task> callback)
     {
-        return dialogService.CreateDialogCallback(receiver, callback);
+        return EventCallback.Factory.Create(receiver, callback);
     }
 
-    private void SetDefaultDismissTitle(DialogParameters parameters)
+    private async Task<DashboardDialogReference> ShowAsync<TDialog>(object? content, DialogParameters parameters, bool drawer)
+        where TDialog : ComponentBase
     {
-        parameters.DismissTitle ??= CloseButtonText;
+        var opened = new TaskCompletionSource<IDialogInstance>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<DialogResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var options = CreateOptions(content, parameters, opened, drawer);
+        var reference = new DashboardDialogReference(parameters.Id, completion.Task);
+
+        var resultTask = drawer
+            ? dialogService.ShowDrawerAsync<TDialog>(options)
+            : dialogService.ShowDialogAsync<TDialog>(options);
+
+        _ = CompleteAsync(resultTask, parameters, reference, completion);
+
+        var firstCompleted = await Task.WhenAny(opened.Task, resultTask).ConfigureAwait(false);
+        if (firstCompleted == opened.Task)
+        {
+            reference.SetInstance(await opened.Task.ConfigureAwait(false));
+        }
+        else
+        {
+            await resultTask.ConfigureAwait(false);
+        }
+
+        return reference;
+    }
+
+    private DialogOptions CreateOptions(object? content, DialogParameters parameters, TaskCompletionSource<IDialogInstance> opened, bool drawer)
+    {
+        var options = new DialogOptions
+        {
+            Id = parameters.Id,
+            Width = parameters.Width,
+            Height = parameters.Height,
+            Data = parameters,
+            // Fluent UI v5 uses "modal" for light-dismiss dialogs and "alert" for dialogs that
+            // ignore overlay clicks. Drawers retain the conventional modal/non-modal behavior.
+            Modal = drawer ? parameters.Modal : parameters.PreventDismissOnOverlayClick,
+            Alignment = parameters.Alignment switch
+            {
+                HorizontalAlignment.Left => DialogAlignment.Start,
+                HorizontalAlignment.Right => DialogAlignment.End,
+                _ => DialogAlignment.Default
+            },
+            OnStateChange = args =>
+            {
+                if (args.Instance is { } instance && args.State is DialogState.Opening or DialogState.Open)
+                {
+                    opened.TrySetResult(instance);
+                }
+            }
+        };
+
+        if (content is not null)
+        {
+            options.Parameters["Content"] = content;
+        }
+
+        options.Header.Title = parameters.Title;
+        options.Header.CloseAction.Visible = parameters.ShowDismiss;
+        options.Header.CloseAction.Title = parameters.DismissTitle ?? CloseButtonText;
+        options.Header.CloseAction.Tooltip = parameters.DismissTitle ?? CloseButtonText;
+        options.Header.CloseAction.Icon = new Icons.Regular.Size20.Dismiss();
+        options.Header.CloseAction.Label = null;
+
+        options.Footer.PrimaryAction.Label = parameters.PrimaryAction;
+        options.Footer.PrimaryAction.Visible = !parameters.UseCustomFooter && !string.IsNullOrEmpty(parameters.PrimaryAction);
+        options.Footer.PrimaryAction.Disabled = !parameters.PrimaryActionEnabled;
+        options.Footer.PrimaryAction.OnClickAsync = instance => instance.CloseAsync(DialogResult.Ok());
+
+        options.Footer.SecondaryAction.Label = parameters.SecondaryAction;
+        options.Footer.SecondaryAction.Visible = !parameters.UseCustomFooter && !string.IsNullOrEmpty(parameters.SecondaryAction);
+        options.Footer.SecondaryAction.OnClickAsync = instance => instance.CloseAsync(DialogResult.Cancel(true));
+
+        return options;
+    }
+
+    private static async Task CompleteAsync(
+        Task<DialogResult> resultTask,
+        DialogParameters parameters,
+        DashboardDialogReference reference,
+        TaskCompletionSource<DialogResult> completion)
+    {
+        try
+        {
+            var result = await resultTask.ConfigureAwait(true);
+
+            if (parameters.OnDialogClosing.HasDelegate)
+            {
+                var instance = await GetInstanceAsync(reference).ConfigureAwait(true);
+                if (instance is not null)
+                {
+                    await parameters.OnDialogClosing.InvokeAsync(instance).ConfigureAwait(true);
+                }
+            }
+
+            if (parameters.OnDialogResult.HasDelegate)
+            {
+                await parameters.OnDialogResult.InvokeAsync(result).ConfigureAwait(true);
+            }
+
+            completion.TrySetResult(result);
+        }
+        catch (Exception ex)
+        {
+            completion.TrySetException(ex);
+        }
+
+        static Task<IDialogInstance?> GetInstanceAsync(DashboardDialogReference reference)
+        {
+            return Task.FromResult(reference.Instance);
+        }
     }
 }

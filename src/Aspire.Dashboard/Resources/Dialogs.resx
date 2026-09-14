@@ -391,6 +391,9 @@
   <data name="GenAILLMBadgeText" xml:space="preserve">
     <value>LLM</value>
   </data>
+  <data name="GenAIMessageTreeLabel" xml:space="preserve">
+    <value>Generative AI messages</value>
+  </data>
   <data name="GenAIMessageCategoryToolCalls" xml:space="preserve">
     <value>Tool calls</value>
   </data>

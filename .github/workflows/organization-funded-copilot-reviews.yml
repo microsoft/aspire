@@ -1,4 +1,4 @@
-# Bot-requested reviews are billed to the organization, unlike ruleset reviews.
+# Request reviews through the Aspire App; organization billing still needs verification.
 # See docs/ci/organization-funded-copilot-reviews.md before enabling writes.
 name: Organization-funded Copilot reviews
 
@@ -28,15 +28,30 @@ concurrency:
 
 jobs:
   request-reviews:
+    # Dependabot PR events can lack Actions secrets. Skip before token creation;
+    # scheduled/manual runs still reconcile those PRs using their own credentials.
+    # https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-on-actions#restrictions-when-dependabot-triggers-events
     if: >-
       github.repository == 'microsoft/aspire' &&
       vars.COPILOT_REVIEW_MODE != 'disabled' &&
+      (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') &&
       (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      pull-requests: write
+    permissions: {}
     steps:
+      # Explicit scope avoids inheriting the App's broader installation permissions.
+      # Dry-run gets read access only; the action revokes the token during job cleanup.
+      - name: Create Aspire App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire
+          permission-pull-requests: ${{ vars.COPILOT_REVIEW_MODE == 'enabled' && 'write' || 'read' }}
+          skip-token-revoke: false
       # Intentionally inline: this privileged workflow never checks out code.
       - name: Reconcile Copilot reviews
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -44,7 +59,7 @@ jobs:
           COPILOT_REVIEW_MODE: ${{ vars.COPILOT_REVIEW_MODE }}
           COPILOT_REVIEW_PR_NUMBER: ${{ vars.COPILOT_REVIEW_PR_NUMBER }}
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ steps.app-token.outputs.token }}
           # A timed-out POST may already have started a billable review.
           retries: 0
           script: |
@@ -83,6 +98,29 @@ jobs:
             }
             function isCopilot(user) {
               return user?.type === 'Bot' && user.login === reviewer;
+            }
+            async function authorCanWrite(pull) {
+              if (typeof pull.user?.login !== 'string' || pull.user.login.length === 0) {
+                throw new Error(`Missing author login for PR #${pull.number}.`);
+              }
+              // GitHub represents coding-agent PR authors as { login: "Copilot", type: "Bot" },
+              // but the collaborator endpoint rejects this identity with 404 "Copilot is not a user".
+              // It cannot satisfy the author-write gate; skip it without hiding other lookup failures.
+              // https://github.com/microsoft/aspire/actions/runs/34510935899
+              if (pull.user.type === 'Bot' && pull.user.login === 'Copilot') {
+                return false;
+              }
+              // Check the author, not the triggering actor or author_association:
+              // a maintainer pushing to an external PR must not opt its author in.
+              // The API maps maintain to write and triage to read, including custom roles.
+              // https://docs.github.com/en/rest/collaborators/collaborators#get-repository-permissions-for-a-user
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner, repo, username: pull.user.login
+              });
+              if (!['admin', 'write', 'read', 'none'].includes(data.permission)) {
+                throw new Error(`Unexpected author permission for PR #${pull.number}.`);
+              }
+              return data.permission === 'admin' || data.permission === 'write';
             }
             function validatePull(pull, number) {
               if (pull.number !== number || pull.base?.repo?.full_name !== `${owner}/${repo}` ||
@@ -131,6 +169,10 @@ jobs:
                 record(number, sha, reason);
                 return;
               }
+              if (!await authorCanWrite(pull)) {
+                record(number, sha, 'Skipped: PR author does not have repository write access.');
+                return;
+              }
               if (pull.requested_reviewers.some(isCopilot)) {
                 record(number, sha, 'Deferred: Copilot review is pending.');
                 return;
@@ -152,12 +194,17 @@ jobs:
                 record(number, sha, 'Deferred: PR changed during reconciliation.');
                 return;
               }
+              // Do not reuse an earlier permission result across the review-history lookup.
+              if (!await authorCanWrite(current)) {
+                record(number, sha, 'Skipped: PR author does not have repository write access.');
+                return;
+              }
               if (mode === 'dry-run') {
                 record(number, sha, 'Dry run: would request Copilot review.');
                 return;
               }
               await github.rest.pulls.requestReviewers({ ...args, reviewers: [reviewer] });
-              record(number, sha, 'Requested Copilot review as the Actions bot.');
+              record(number, sha, 'Requested Copilot review as the Aspire App.');
             }
 
             if (context.eventName === 'pull_request_target') {

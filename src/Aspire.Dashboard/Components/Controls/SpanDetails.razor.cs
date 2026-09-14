@@ -10,7 +10,6 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -80,9 +79,6 @@ public partial class SpanDetails : IDisposable
     private SpanDetailsViewModel? _viewModel;
     private Dictionary<string, ComponentMetadata>? _valueComponents;
 
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
-
     private readonly CancellationTokenSource _cts = new();
 
     private bool ApplyFilter(TelemetryPropertyViewModel vm)
@@ -94,7 +90,6 @@ public partial class SpanDetails : IDisposable
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(Loc);
     }
 
     private void UpdateSpanActionsMenu()

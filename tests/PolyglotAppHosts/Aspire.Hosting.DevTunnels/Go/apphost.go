@@ -65,6 +65,13 @@ func main() {
 
 	builder.AddDevTunnel("chained-tunnel").WithAnonymousAccess()
 
+	expiringTunnel := builder.AddDevTunnel("expiring-tunnel").
+		WithExpiration(24).
+		WithTunnelReferenceAll(web, false)
+	if err = expiringTunnel.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
 	app, err := builder.Build()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))

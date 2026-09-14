@@ -23,6 +23,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private readonly CancellationTokenSource _disposeCts = new();
     private Task? _tickTask;
     private IDisposable? _themeChangedSubscription;
+    private bool _isDisposing;
     private readonly InstrumentViewModel _instrumentViewModel = new InstrumentViewModel();
     private (ResourceKey ResourceKey, string MeterName, string InstrumentName)? _dataEndTimeKey;
     private (ResourceKey ResourceKey, string MeterName, string InstrumentName, TimeSpan Duration)? _instrumentRequestKey;
@@ -30,6 +31,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private long _lastDataFetchTimestamp = -1;
     private long _instrumentUpdateVersion;
     private int _disposed;
+    private Pages.Metrics.MetricViewKind _activeView;
 
     [Parameter, EditorRequired]
     public required ResourceKey ResourceKey { get; set; }
@@ -100,6 +102,8 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         {
             return;
         }
+
+        _isDisposing = true;
 
         lock (_instrumentUpdateLock)
         {
@@ -201,6 +205,8 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     protected override async Task OnParametersSetAsync()
     {
+        _activeView = ActiveView;
+
         var requestKey = (ResourceKey, MeterName, InstrumentName, Duration);
         if (_instrumentRequestKey != requestKey)
         {
@@ -490,17 +496,24 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         return true;
     }
 
-    private Task OnTabChangeAsync(FluentTab newTab)
+    private Task OnTabChangeAsync(FluentTab? newTab)
     {
-        var id = newTab.Id?.Substring("tab-".Length);
-
-        if (id is null
-            || !Enum.TryParse(typeof(Pages.Metrics.MetricViewKind), id, out var o)
-            || o is not Pages.Metrics.MetricViewKind viewKind)
+        if (_isDisposing)
         {
             return Task.CompletedTask;
         }
 
+        var id = newTab?.Id?.Substring("tab-".Length);
+
+        if (id is null
+            || !Enum.TryParse(typeof(Pages.Metrics.MetricViewKind), id, out var o)
+            || o is not Pages.Metrics.MetricViewKind viewKind
+            || _activeView == viewKind)
+        {
+            return Task.CompletedTask;
+        }
+
+        _activeView = viewKind;
         return OnViewChangedAsync(viewKind);
     }
 }

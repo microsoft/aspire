@@ -1,13 +1,8 @@
-::deep.resource-details-layout {
-    display: grid;
-    grid-template-rows: auto 1fr;
-    grid-template-areas:
-        "toolbar"
-        "main";
-    overflow: auto;
-    gap: calc(var(--design-unit) * 1px);
+::deep.resource-details-layout > .details-toolbar {
+    height: 36px;
+    min-height: 36px;
 }
 
-::deep.resource-details-layout > fluent-toolbar {
-    grid-area: toolbar;
+::deep.resource-details-layout > .details-toolbar fluent-field::part(message) {
+    display: none;
 }

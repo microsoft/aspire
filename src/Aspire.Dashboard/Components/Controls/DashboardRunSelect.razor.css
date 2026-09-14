@@ -1,8 +1,25 @@
 .application-run-select ::deep .application-run-select-button {
+    --colorNeutralBackground1: var(--aspire-page-background);
+    --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
+    --colorNeutralBackground1Pressed: var(--colorNeutralBackground3);
     margin-right: 8px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0 8px;
+    font-weight: var(--fontWeightRegular);
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+
+.application-run-select ::deep .application-run-status {
+    margin-inline-end: 11px;
 }
 
 .application-run-select ::deep .application-run-select-button::part(control) {
+    height: 28px;
+    min-height: 28px;
     padding-left: 8px;
     padding-right: 8px;
+    border: 1px solid transparent;
+    border-radius: 6px;
 }
