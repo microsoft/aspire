@@ -103,6 +103,7 @@ path_rules:
   - paths:
       - src/Aspire.Dashboard/Components/Controls/TerminalView.razor.js
       - src/Aspire.Dashboard/wwwroot/js/app.js
+      - src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js
       - src/Aspire.Dashboard/package.json
       - src/Aspire.Dashboard/package-lock.json
       - src/Aspire.Dashboard/wwwroot/js/hex1b-web-terminal/**

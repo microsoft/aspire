@@ -22,6 +22,13 @@ public class DashboardTerminalScriptTests(ITestOutputHelper output)
         await RunScriptAsync("KeyboardShortcuts.test.mjs");
     }
 
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DetachedTerminalWindowsKeepDistinctNames()
+    {
+        await RunScriptAsync("TerminalWindow.test.mjs");
+    }
+
     private async Task RunScriptAsync(string script)
     {
         using var command = new NodeCommand(output)

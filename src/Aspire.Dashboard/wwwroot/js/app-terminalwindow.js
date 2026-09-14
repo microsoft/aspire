@@ -85,7 +85,9 @@ export function isTerminalWindowOpen(key) {
 }
 
 function windowNameFor(key) {
-    return `aspire-terminal-${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    // Named targets reuse browsing contexts, so preserve distinctions such as "a.b" versus "a_b".
+    // https://developer.mozilla.org/en-US/docs/Web/API/Window/open#target
+    return `aspire-terminal-${encodeURIComponent(key)}`;
 }
 
 function ensurePolling() {
