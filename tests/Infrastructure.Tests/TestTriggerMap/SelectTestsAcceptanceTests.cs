@@ -1127,6 +1127,23 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
             $"polyglot fixture consumers missing job:polyglot routing: {string.Join(", ", missing)}");
     }
 
+    [Theory]
+    [InlineData("Aspire.Hosting.Analyzers")]
+    [InlineData("Aspire.Hosting.Tasks")]
+    public void RealMapFixturelessHostingProjectsDoNotRunPolyglotValidation(string project)
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(
+            mapPath,
+            EnumerateMatrixTestProjects(),
+            LoadProjectDirectories(),
+            new HashSet<string>(StringComparer.Ordinal));
+
+        var result = selector.Select([], [project], new SelectorOptions());
+
+        Assert.Equal(["job:typescript-api-compat"], result.Jobs.Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public void RealMapBlazorRuntimeAssetChangeRunsPackageExtensionAndPolyglotRegressions()
     {
