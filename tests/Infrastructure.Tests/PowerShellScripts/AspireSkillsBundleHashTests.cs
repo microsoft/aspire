@@ -199,10 +199,9 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
     [RequiresTools(["pwsh"])]
     [InlineData("0.0.1", true)]
     [InlineData("0.0.2", false)]
-    public async Task VerificationChecksSiblingVersionsWithoutRequiringInstallerSource(string extensionVersion, bool versionsMatch)
+    public async Task VerificationRequiresMatchingSiblingVersions(string extensionVersion, bool versionsMatch)
     {
         var root = CreateBundleScriptFixture("0.0.1", extensionVersion);
-        File.Delete(Path.Combine(root, "src", "Aspire.Cli", "Agents", "AspireSkills", "AspireSkillsInstaller.cs"));
         var driverPath = WriteDriver(
             "verify-driver.ps1",
             """
@@ -238,8 +237,7 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
     [InlineData("success")]
     [InlineData("missing-sibling")]
     [InlineData("attestation-failure")]
-    [InlineData("hook-failure")]
-    public async Task UpdatePreservesSiblingPreparationAndExistingHookFailureOrder(string scenario)
+    public async Task UpdateRequiresBothVerifiedBundles(string scenario)
     {
         var root = CreateBundleScriptFixture("0.0.1", "0.0.1");
         var embeddedDirectory = Path.Combine(root, "src", "Aspire.Cli", "Agents", "AspireSkills", "Embedded");
@@ -274,9 +272,6 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
                     return
                 }
                 if ($args[0] -eq 'api') {
-                    if ($Scenario -eq 'hook-failure') {
-                        throw 'HTTP 401: Unauthorized'
-                    }
                     throw 'HTTP 404: Not Found'
                 }
                 throw "Unexpected gh arguments: $args"
@@ -294,9 +289,6 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
                     'attestation-failure' {
                         if ($message -notlike 'gh attestation verify *failed with exit code 1.') { throw }
                     }
-                    'hook-failure' {
-                        if ($message -notlike '*HTTP 401*') { throw }
-                    }
                     default { throw }
                 }
                 Write-Output 'UPDATE=rejected'
@@ -305,11 +297,11 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
 
         var result = await RunDriverAsync(driverPath, "-Root", $"\"{root}\"", "-Scenario", scenario);
 
+        var updated = scenario == "success";
         Assert.Equal(
-            scenario == "success" ? "UPDATE=completed" : "UPDATE=rejected",
+            updated ? "UPDATE=completed" : "UPDATE=rejected",
             Assert.Single(ReadLines(result.Output), static line => line.StartsWith("UPDATE=", StringComparison.Ordinal)));
-        var archivesUpdated = scenario is "success" or "hook-failure";
-        var archiveSuffix = archivesUpdated ? "v2.0.0" : "legacy";
+        var archiveSuffix = updated ? "v2.0.0" : "v0.0.1";
         Assert.Equal(
             [$"aspire-extensions-{archiveSuffix}.tgz", $"aspire-skills-{archiveSuffix}.tgz"],
             Directory.GetFiles(embeddedDirectory, "*.tgz").Select(Path.GetFileName).Order(StringComparer.Ordinal));
@@ -318,20 +310,18 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
         {
             var archiveName = $"{prefix}-{archiveSuffix}.tgz";
             Assert.Equal(
-                archivesUpdated ? $"updated {archiveName}" : $"original {prefix}",
+                updated ? $"updated {archiveName}" : $"original {prefix}",
                 File.ReadAllText(Path.Combine(embeddedDirectory, archiveName)));
             using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(embeddedDirectory, $"{prefix}.metadata.json")));
-            Assert.Equal(scenario == "success" ? "2.0.0" : "0.0.1", metadata.RootElement.GetProperty("version").GetString());
-            Assert.Equal(
-                scenario == "success" ? $"{prefix}-v2.0.0.tgz" : $"{prefix}-legacy.tgz",
-                metadata.RootElement.GetProperty("assetName").GetString());
+            Assert.Equal(updated ? "2.0.0" : "0.0.1", metadata.RootElement.GetProperty("version").GetString());
+            Assert.Equal(archiveName, metadata.RootElement.GetProperty("assetName").GetString());
         }
 
         Assert.Equal(
-            scenario == "success" ? originalInstaller.Replace("0.0.1", "2.0.0", StringComparison.Ordinal) : originalInstaller,
+            updated ? originalInstaller.Replace("0.0.1", "2.0.0", StringComparison.Ordinal) : originalInstaller,
             File.ReadAllText(installerPath).Trim());
         Assert.Equal(
-            scenario == "success" ? originalProject.Replace("legacy", "v2.0.0", StringComparison.Ordinal) : originalProject,
+            updated ? originalProject.Replace("0.0.1", "2.0.0", StringComparison.Ordinal) : originalProject,
             File.ReadAllText(projectPath).Trim());
     }
 
@@ -349,9 +339,8 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
 
         foreach (var (prefix, version) in new[] { ("aspire-skills", skillsVersion), ("aspire-extensions", extensionVersion) })
         {
-            // Maintenance scripts hash archives rather than parsing them. Legacy names also
-            // ensure sibling identity checks do not introduce metadata-to-filename version checks.
-            var assetName = $"{prefix}-legacy.tgz";
+            // Maintenance scripts hash archives rather than parsing them.
+            var assetName = $"{prefix}-v{version}.tgz";
             var bytes = Encoding.UTF8.GetBytes($"original {prefix}");
             File.WriteAllBytes(Path.Combine(embeddedDirectory, assetName), bytes);
             File.WriteAllText(
@@ -368,10 +357,10 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
 
         File.WriteAllText(
             Path.Combine(root, "src", "Aspire.Cli", "Agents", "AspireSkills", "AspireSkillsInstaller.cs"),
-            """internal const string Version = "0.0.1";""");
+            $"""internal const string Version = "{skillsVersion}";""");
         File.WriteAllText(
             Path.Combine(root, "src", "Aspire.Cli", "Aspire.Cli.csproj"),
-            """<Project><ItemGroup><EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills-legacy.tgz" /><EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-extensions-legacy.tgz" /></ItemGroup></Project>""");
+            $"""<Project><ItemGroup><EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills-v{skillsVersion}.tgz" /><EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-extensions-v{extensionVersion}.tgz" /></ItemGroup></Project>""");
 
         return root;
     }

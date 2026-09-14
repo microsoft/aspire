@@ -575,7 +575,7 @@ internal sealed class AgentInitCommand : BaseCommand
                             installedAssets.Add(new(asset.Name, target.DisplayDirectory));
                         }
                     }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or AggregateException)
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
                     {
                         InteractionService.DisplayError(
                             string.Format(CultureInfo.CurrentCulture, messages.FailureFormat, asset.Name,

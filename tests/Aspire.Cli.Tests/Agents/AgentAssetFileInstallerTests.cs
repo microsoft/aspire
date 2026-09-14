@@ -95,7 +95,6 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal(equivalentTextBytes, await File.ReadAllBytesAsync(textPath, cancellationToken));
         Assert.Equal(textWriteTime, File.GetLastWriteTimeUtc(textPath));
         Assert.Equal(scriptWriteTime, File.GetLastWriteTimeUtc(scriptPath));
-        AssertTransactionDirectoriesRemoved(root);
     }
 
     [Theory]
@@ -129,7 +128,6 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("other asset", await File.ReadAllTextAsync(Path.Combine(otherAsset.FullName, "keep.txt"), cancellationToken));
         Assert.False(await installer.InstallAsync(root, "assets", AssetName, files, cancellationToken));
-        AssertTransactionDirectoriesRemoved(root);
     }
 
     [Fact]
@@ -146,7 +144,61 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
         Assert.True(await AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellationToken));
         Assert.Equal(["index.js"], assetPath.GetFiles().Select(file => file.Name));
         Assert.False(await AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellationToken));
-        AssertTransactionDirectoriesRemoved(root);
+    }
+
+    [Theory]
+    [InlineData("nested/file.js")]
+    [InlineData(@"nested\file.js")]
+    public async Task InstallAsync_ManagedDirectoryNormalizesFileSeparators(string relativePath)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var assetPath = Path.Combine(root.FullName, "assets", AssetName);
+        AgentAssetFile[] files = [new(relativePath, "content")];
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        Assert.True(await AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellationToken));
+
+        Assert.Equal(
+            [Path.Combine("nested", "file.js")],
+            Directory.GetFiles(assetPath, "*", SearchOption.AllDirectories).Select(path => Path.GetRelativePath(assetPath, path)));
+        Assert.Equal("content", await File.ReadAllTextAsync(Path.Combine(assetPath, "nested", "file.js"), cancellationToken));
+        Assert.False(await AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellationToken));
+    }
+
+    [Theory]
+    [InlineData("Index.js", "index.js")]
+    [InlineData("UI/Widget.js", "ui/widget.js")]
+    public async Task InstallAsync_ManagedDirectoryPreservesExistingFileCasing(string existingRelativePath, string expectedRelativePath)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var assetPath = root.CreateSubdirectory(Path.Combine("assets", AssetName));
+        existingRelativePath = existingRelativePath.Replace('/', Path.DirectorySeparatorChar);
+        expectedRelativePath = expectedRelativePath.Replace('/', Path.DirectorySeparatorChar);
+        var existingPath = Path.Combine(assetPath.FullName, existingRelativePath);
+        var expectedPath = Path.Combine(assetPath.FullName, expectedRelativePath);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        Directory.CreateDirectory(Path.GetDirectoryName(existingPath)!);
+        await File.WriteAllTextAsync(existingPath, "current", cancellationToken);
+        var timestamp = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(existingPath, timestamp);
+        var sameFile = File.Exists(expectedPath);
+        AgentAssetFile[] files = [new(expectedRelativePath, "current")];
+
+        Assert.Equal(!sameFile, await AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellationToken));
+
+        Assert.Equal("current", await File.ReadAllTextAsync(expectedPath, cancellationToken));
+        Assert.Equal(
+            [sameFile ? existingRelativePath : expectedRelativePath],
+            Directory.GetFiles(assetPath.FullName, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(assetPath.FullName, path)));
+        if (sameFile)
+        {
+            Assert.Equal(timestamp, File.GetLastWriteTimeUtc(expectedPath));
+        }
+
+        Assert.False(await AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellationToken));
     }
 
     [Fact]
@@ -167,11 +219,12 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("replacement", await File.ReadAllTextAsync(originalPath, cancellationToken));
         Assert.Equal("user file", await File.ReadAllTextAsync(blockedPath, cancellationToken));
-        AssertTransactionDirectoriesRemoved(root);
     }
 
-    [Fact]
-    public async Task InstallAsync_SkillsUpdateWithoutDeleteSharing()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallAsync_UpdatesFilesWithoutDeleteSharing(bool managedDirectory)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates Windows delete-sharing behavior.");
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -181,14 +234,14 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
         var cancellationToken = TestContext.Current.CancellationToken;
         await File.WriteAllTextAsync(originalPath, "original", cancellationToken);
         AgentAssetFile[] files = [new("SKILL.md", "replacement")];
+        var installer = managedDirectory ? AgentAssetFileInstaller.ManagedDirectory : AgentAssetFileInstaller.Additive;
 
         using (File.Open(originalPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
         {
-            Assert.True(await AgentAssetFileInstaller.Additive.InstallAsync(root, "assets", AssetName, files, cancellationToken));
+            Assert.True(await installer.InstallAsync(root, "assets", AssetName, files, cancellationToken));
         }
 
         Assert.Equal("replacement", await File.ReadAllTextAsync(originalPath, cancellationToken));
-        AssertTransactionDirectoriesRemoved(root);
     }
 
     [Fact]
@@ -243,7 +296,6 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal("original", await File.ReadAllTextAsync(originalPath, cancellationToken));
         Assert.Equal("outside", await File.ReadAllTextAsync(outsidePath, cancellationToken));
         Assert.Equal(["index.js"], assetPath.GetFiles().Select(file => file.Name));
-        AssertTransactionDirectoriesRemoved(root);
     }
 
     [Theory]
@@ -297,14 +349,12 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
         {
             Assert.Equal("blocking file", await File.ReadAllTextAsync(Path.Combine(assetPath.FullName, "blocked"), cancellationToken));
         }
-
-        AssertTransactionDirectoriesRemoved(root);
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task InstallAsync_PublicationFailureRestoresReplacedAndNewFiles(bool staleLockedFile)
+    public async Task InstallAsync_FailedManagedUpdateCanBeRetried(bool staleLockedFile)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates Windows delete-sharing behavior.");
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -323,20 +373,23 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
         if (!staleLockedFile)
         {
             files.Add(new("locked.js", "replacement"));
+            await File.WriteAllTextAsync(Path.Combine(assetPath.FullName, "obsolete.js"), "obsolete", cancellationToken);
         }
 
-        // Reads during staging succeed, but the final rename fails after earlier files
-        // have been published. This exercises rollback rather than preflight validation.
+        // A later write or stale-file deletion fails, leaving earlier writes in place.
+        // Failed payload writes must not start stale cleanup; either failure must be retryable.
         using (File.Open(lockedPath, FileMode.Open, FileAccess.Read, FileShare.Read))
         {
             await Assert.ThrowsAsync<IOException>(() =>
                 AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellationToken));
         }
 
-        Assert.Equal("original", await File.ReadAllTextAsync(originalPath, cancellationToken));
+        Assert.Equal("replacement", await File.ReadAllTextAsync(originalPath, cancellationToken));
         Assert.Equal("locked", await File.ReadAllTextAsync(lockedPath, cancellationToken));
-        Assert.Equal(["index.js", "locked.js"], assetPath.GetFiles().Select(file => file.Name).Order(StringComparer.Ordinal));
-        AssertTransactionDirectoriesRemoved(root);
+        Assert.Equal("new file", await File.ReadAllTextAsync(Path.Combine(assetPath.FullName, "new.js"), cancellationToken));
+        Assert.Equal(
+            staleLockedFile ? ["index.js", "locked.js", "new.js"] : new[] { "index.js", "locked.js", "new.js", "obsolete.js" },
+            assetPath.GetFiles().Select(file => file.Name).Order(StringComparer.Ordinal));
 
         Assert.True(await AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellationToken));
         Assert.Equal("replacement", await File.ReadAllTextAsync(originalPath, cancellationToken));
@@ -350,7 +403,26 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
         }
 
         Assert.False(await AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, cancellationToken));
-        AssertTransactionDirectoriesRemoved(root);
+    }
+
+    [Fact]
+    public async Task InstallAsync_CanceledManagedUpdatePreservesFiles()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var assetPath = root.CreateSubdirectory(Path.Combine("assets", AssetName));
+        var originalPath = Path.Combine(assetPath.FullName, "index.js");
+        var stalePath = Path.Combine(assetPath.FullName, "stale.js");
+        await File.WriteAllTextAsync(originalPath, "original", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(stalePath, "stale", TestContext.Current.CancellationToken);
+        AgentAssetFile[] files = [new("index.js", "replacement")];
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            AgentAssetFileInstaller.ManagedDirectory.InstallAsync(root, "assets", AssetName, files, new CancellationToken(canceled: true)));
+
+        Assert.Equal("original", await File.ReadAllTextAsync(originalPath, TestContext.Current.CancellationToken));
+        Assert.Equal("stale", await File.ReadAllTextAsync(stalePath, TestContext.Current.CancellationToken));
+        Assert.Equal(["index.js", "stale.js"], assetPath.GetFiles().Select(file => file.Name).Order(StringComparer.Ordinal));
     }
 
     [Theory]
@@ -404,7 +476,6 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
             Assert.Equal("outside", await File.ReadAllTextAsync(outsidePath, cancellationToken));
             Assert.Equal("original", await File.ReadAllTextAsync(originalPath, cancellationToken));
             Assert.Equal(["index.js"], outside.GetFiles().Select(file => file.Name));
-            AssertTransactionDirectoriesRemoved(root);
         }
         finally
         {
@@ -444,14 +515,10 @@ public class AgentAssetFileInstallerTests(ITestOutputHelper outputHelper)
 
             Assert.Equal("original", await File.ReadAllTextAsync(originalPath, cancellationToken));
             Assert.Equal("outside", await File.ReadAllTextAsync(outsidePath, cancellationToken));
-            AssertTransactionDirectoriesRemoved(root);
         }
         finally
         {
             File.Delete(linkPath);
         }
     }
-
-    private static void AssertTransactionDirectoriesRemoved(DirectoryInfo root)
-        => Assert.Empty(Directory.GetDirectories(Path.Combine(root.FullName, "assets"), $".{AssetName}.*"));
 }

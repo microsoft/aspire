@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Agents;
 
@@ -10,26 +10,22 @@ namespace Aspire.Cli.Agents;
 /// </summary>
 internal sealed class AgentAssetFileInstaller
 {
-    private static readonly StringComparer s_pathComparer = OperatingSystem.IsWindows()
-        ? StringComparer.OrdinalIgnoreCase
-        : StringComparer.Ordinal;
+    private readonly bool _manageDirectory;
 
-    private readonly Func<DirectoryInfo, string, string, IReadOnlyList<AgentAssetFile>, CancellationToken, Task<bool>> _install;
-
-    private AgentAssetFileInstaller(Func<DirectoryInfo, string, string, IReadOnlyList<AgentAssetFile>, CancellationToken, Task<bool>> install)
+    private AgentAssetFileInstaller(bool manageDirectory)
     {
-        _install = install;
+        _manageDirectory = manageDirectory;
     }
 
     /// <summary>
     /// Adds or updates supplied files in place without removing user-authored files.
     /// </summary>
-    public static AgentAssetFileInstaller Additive { get; } = new(InstallFilesAsync);
+    public static AgentAssetFileInstaller Additive { get; } = new(manageDirectory: false);
 
     /// <summary>
-    /// Synchronizes package-owned files, including stale-file removals in the same transaction.
+    /// Updates package-owned files and removes stale files after successful writes.
     /// </summary>
-    public static AgentAssetFileInstaller ManagedDirectory { get; } = new(SynchronizeFilesAsync);
+    public static AgentAssetFileInstaller ManagedDirectory { get; } = new(manageDirectory: true);
 
     /// <summary>
     /// Installs an asset's files, returning whether any files were updated or removed.
@@ -40,28 +36,40 @@ internal sealed class AgentAssetFileInstaller
         string assetName,
         IReadOnlyList<AgentAssetFile> files,
         CancellationToken cancellationToken)
-        => _install(rootDirectory, relativeAssetDirectory, assetName, files, cancellationToken);
+        => _manageDirectory
+            ? SynchronizeFilesAsync(rootDirectory, relativeAssetDirectory, assetName, files, cancellationToken)
+            : WriteFilesAsync(
+                files.Select(file => (Path.Combine(rootDirectory.FullName, relativeAssetDirectory, assetName, file.RelativePath), file)),
+                managedRoot: null,
+                cancellationToken);
 
-    private static async Task<bool> InstallFilesAsync(
-        DirectoryInfo rootDirectory,
-        string relativeAssetDirectory,
-        string assetName,
-        IReadOnlyList<AgentAssetFile> files,
+    private static async Task<bool> WriteFilesAsync(
+        IEnumerable<(string DestinationPath, AgentAssetFile File)> files,
+        string? managedRoot,
         CancellationToken cancellationToken)
     {
-        // Preserve existing skill behavior: write each changed file in place, allowing links
-        // and retaining earlier writes if a later file fails. Transactional updates are only
-        // used for managed extensions, where stale executable files must also be removed.
         var hasChanges = false;
-        foreach (var file in files)
+        foreach (var (destinationPath, file) in files)
         {
-            var destinationPath = Path.Combine(rootDirectory.FullName, relativeAssetDirectory, assetName, file.RelativePath);
             var directory = GetParentDirectory(destinationPath);
-            if (!Directory.Exists(directory))
+            bool exists;
+            if (managedRoot is not null)
             {
-                Directory.CreateDirectory(directory);
+                ValidateOrCreateDirectory(managedRoot, directory, createMissing: true);
+                exists = ValidateDestinationFile(destinationPath);
             }
-            if (File.Exists(destinationPath))
+            else
+            {
+                // Skills retain their existing in-place behavior, including following links.
+                if (!Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                exists = File.Exists(destinationPath);
+            }
+
+            if (exists)
             {
                 var existingContent = await File.ReadAllBytesAsync(destinationPath, cancellationToken);
                 if (file.ContentEquals(existingContent))
@@ -93,65 +101,51 @@ internal sealed class AgentAssetFileInstaller
 
         relativeAssetDirectory = NormalizeRelativePath(relativeAssetDirectory);
         var rootPath = rootDirectory.FullName;
-        var parentPath = Path.Combine(rootPath, relativeAssetDirectory);
-        var assetPath = Path.Combine(parentPath, assetName);
+        var assetPath = Path.Combine(rootPath, relativeAssetDirectory, assetName);
         ValidateOrCreateDirectory(rootPath, assetPath, createMissing: false);
 
-        var expectedPaths = new HashSet<string>(s_pathComparer);
-        var stagedFiles = new List<StagedFile>();
-        string? stagingPath = null;
-
-        try
+        var destinations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var filesToInstall = new List<(string DestinationPath, AgentAssetFile File)>();
+        foreach (var file in files)
         {
-            foreach (var file in files)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var relativePath = NormalizeRelativePath(file.RelativePath);
-                var destinationPath = Path.Combine(assetPath, relativePath);
-                if (!expectedPaths.Add(destinationPath))
-                {
-                    throw new InvalidOperationException($"Agent asset file '{file.RelativePath}' has a duplicate destination.");
-                }
-
-                ValidateOrCreateDirectory(rootPath, GetParentDirectory(destinationPath), createMissing: false);
-                if (ValidateDestinationFile(destinationPath))
-                {
-                    var existingContent = await File.ReadAllBytesAsync(destinationPath, cancellationToken);
-                    if (file.ContentEquals(existingContent))
-                    {
-                        continue;
-                    }
-                }
-
-                stagingPath ??= CreateTransactionDirectory(rootPath, parentPath, assetName, "staging");
-                var stagedPath = Path.Combine(stagingPath, relativePath);
-                ValidateOrCreateDirectory(stagingPath, GetParentDirectory(stagedPath), createMissing: true);
-                await WriteStagedFileAsync(stagedPath, file.Bytes, cancellationToken);
-                stagedFiles.Add(new(destinationPath, stagedPath));
-            }
-
-            if (Directory.Exists(assetPath))
-            {
-                ValidateOrCreateDirectory(rootPath, assetPath, createMissing: false);
-                CollectStaleFiles(assetPath, expectedPaths, stagedFiles);
-            }
-
-            if (stagedFiles.Count == 0)
-            {
-                return false;
-            }
-
-            // Cancellation is honored before publication, not between its synchronous renames.
-            // Once publication starts, either finish or restore the previous files.
             cancellationToken.ThrowIfCancellationRequested();
-            var backupPath = CreateTransactionDirectory(rootPath, parentPath, assetName, "rollback");
-            PublishFiles(rootPath, stagedFiles, backupPath);
-            return true;
+            var destinationPath = Path.Combine(assetPath, NormalizeRelativePath(file.RelativePath));
+            if (!destinations.Add(destinationPath))
+            {
+                throw new InvalidOperationException($"Agent asset file '{file.RelativePath}' has a duplicate destination.");
+            }
+
+            ValidateOrCreateDirectory(rootPath, GetParentDirectory(destinationPath), createMissing: false);
+            ValidateDestinationFile(destinationPath);
+            filesToInstall.Add((destinationPath, file));
         }
-        finally
+
+        // Inspect the owned tree before writing so an existing link cannot redirect writes
+        // or cleanup outside this asset. Do not prune old files if a payload write fails.
+        var existingFiles = Directory.Exists(assetPath) ? EnumerateManagedFiles(assetPath).ToArray() : [];
+        var hasChanges = await WriteFilesAsync(filesToInstall, rootPath, cancellationToken);
+
+        foreach (var path in existingFiles)
         {
-            DeleteTransactionDirectory(stagingPath);
+            cancellationToken.ThrowIfCancellationRequested();
+            // Resolve only differently cased matches, after writes ensure the expected file
+            // exists. An OS-wide case comparer cannot distinguish case-sensitive macOS volumes.
+            if (destinations.TryGetValue(path, out var expectedPath) &&
+                (string.Equals(path, expectedPath, StringComparison.Ordinal) ||
+                 string.Equals(PathNormalizer.ResolvePathCasing(path), PathNormalizer.ResolvePathCasing(expectedPath), StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            ValidateOrCreateDirectory(rootPath, GetParentDirectory(path), createMissing: false);
+            if (ValidateDestinationFile(path))
+            {
+                File.Delete(path);
+                hasChanges = true;
+            }
         }
+
+        return hasChanges;
     }
 
     private static string NormalizeRelativePath(string path)
@@ -244,113 +238,7 @@ internal sealed class AgentAssetFileInstaller
         return true;
     }
 
-    private static string CreateTransactionDirectory(string rootPath, string parentPath, string assetName, string purpose)
-    {
-        ValidateOrCreateDirectory(rootPath, parentPath, createMissing: true);
-
-        // Sibling directories keep staged files and backups on the destination volume, allowing
-        // atomic renames. A system temporary directory could require non-atomic cross-volume copies.
-        var path = Path.Combine(parentPath, $".{assetName}.{purpose}.{Guid.NewGuid():N}");
-        if (TryGetAttributes(path, out _))
-        {
-            throw new IOException($"Agent asset transaction directory '{path}' already exists.");
-        }
-
-        ValidateDirectory(path, createMissing: true);
-        return path;
-    }
-
-    private static async Task WriteStagedFileAsync(string path, ReadOnlyMemory<byte> content, CancellationToken cancellationToken)
-    {
-        // CreateNew rejects existing files and pre-planted final-component symbolic links.
-        await using var stream = new FileStream(
-            path, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 4096, useAsync: true);
-        await stream.WriteAsync(content, cancellationToken);
-        await stream.FlushAsync(cancellationToken);
-    }
-
-    private static void PublishFiles(string rootPath, IReadOnlyList<StagedFile> stagedFiles, string backupPath)
-    {
-        var publishedFiles = new List<PublishedFile>();
-        try
-        {
-            for (var i = 0; i < stagedFiles.Count; i++)
-            {
-                var file = stagedFiles[i];
-                ValidateOrCreateDirectory(rootPath, GetParentDirectory(file.DestinationPath), createMissing: true);
-                var destinationExists = ValidateDestinationFile(file.DestinationPath);
-                if (destinationExists)
-                {
-                    var originalPath = Path.Combine(backupPath, i.ToString(CultureInfo.InvariantCulture));
-                    File.Move(file.DestinationPath, originalPath);
-                    publishedFiles.Add(new(file.DestinationPath, originalPath));
-                }
-
-                // A null staged path removes a stale file by moving it into the rollback directory.
-                if (file.StagedPath is not null)
-                {
-                    File.Move(file.StagedPath, file.DestinationPath);
-                    if (!destinationExists)
-                    {
-                        publishedFiles.Add(new(file.DestinationPath, BackupPath: null));
-                    }
-                }
-            }
-        }
-        catch (Exception publishException) when (publishException is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            var rollbackExceptions = RollbackFiles(rootPath, publishedFiles);
-            if (rollbackExceptions.Count > 0)
-            {
-                // Never clean up the backup directory if rollback failed: it contains the
-                // original files the user needs to recover from the incomplete installation.
-                throw new AggregateException(
-                    $"Agent asset publication failed and rollback was incomplete. Original files were preserved under '{backupPath}'.",
-                    [publishException, .. rollbackExceptions]);
-            }
-
-            DeleteTransactionDirectory(backupPath);
-            throw;
-        }
-
-        DeleteTransactionDirectory(backupPath);
-    }
-
-    private static List<Exception> RollbackFiles(string rootPath, List<PublishedFile> publishedFiles)
-    {
-        var exceptions = new List<Exception>();
-        for (var i = publishedFiles.Count - 1; i >= 0; i--)
-        {
-            var file = publishedFiles[i];
-            try
-            {
-                ValidateOrCreateDirectory(rootPath, GetParentDirectory(file.DestinationPath), createMissing: true);
-                if (TryGetAttributes(file.DestinationPath, out var attributes))
-                {
-                    if (attributes.HasFlag(FileAttributes.Directory))
-                    {
-                        throw new IOException($"Agent asset rollback destination '{file.DestinationPath}' is a directory.");
-                    }
-
-                    // Deleting a final-component symlink removes the link, not its target.
-                    File.Delete(file.DestinationPath);
-                }
-
-                if (file.BackupPath is not null)
-                {
-                    File.Move(file.BackupPath, file.DestinationPath);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-            {
-                exceptions.Add(ex);
-            }
-        }
-
-        return exceptions;
-    }
-
-    private static void CollectStaleFiles(string directoryPath, HashSet<string> expectedPaths, List<StagedFile> stagedFiles)
+    private static IEnumerable<string> EnumerateManagedFiles(string directoryPath)
     {
         foreach (var entryPath in Directory.EnumerateFileSystemEntries(directoryPath))
         {
@@ -362,28 +250,16 @@ internal sealed class AgentAssetFileInstaller
 
             if (attributes.HasFlag(FileAttributes.Directory))
             {
-                CollectStaleFiles(entryPath, expectedPaths, stagedFiles);
+                foreach (var path in EnumerateManagedFiles(entryPath))
+                {
+                    yield return path;
+                }
             }
-            else if (!expectedPaths.Contains(entryPath))
+            else
             {
-                stagedFiles.Add(new(entryPath, StagedPath: null));
+                yield return entryPath;
             }
         }
-    }
-
-    private static void DeleteTransactionDirectory(string? path)
-    {
-        if (path is null || !TryGetAttributes(path, out var attributes))
-        {
-            return;
-        }
-
-        if (attributes.HasFlag(FileAttributes.ReparsePoint) || !attributes.HasFlag(FileAttributes.Directory))
-        {
-            throw new InvalidOperationException($"Agent asset transaction directory '{path}' changed unexpectedly.");
-        }
-
-        Directory.Delete(path, recursive: true);
     }
 
     private static bool TryGetAttributes(string path, out FileAttributes attributes)
@@ -404,8 +280,4 @@ internal sealed class AgentAssetFileInstaller
             return false;
         }
     }
-
-    private sealed record StagedFile(string DestinationPath, string? StagedPath);
-
-    private sealed record PublishedFile(string DestinationPath, string? BackupPath);
 }
