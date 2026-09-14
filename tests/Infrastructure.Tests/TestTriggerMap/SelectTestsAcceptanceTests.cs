@@ -903,6 +903,44 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     }
 
     [Fact]
+    public void RealMapCliChangesSelectExtensionE2eWithAndWithoutLayer1()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var pathResult = selector.Select(
+            ["src/Aspire.Cli/Commands/RunCommand.cs"],
+            [],
+            new SelectorOptions());
+        var layer1Result = selector.Select(
+            [],
+            ["Aspire.Cli"],
+            new SelectorOptions());
+
+        Assert.False(pathResult.SelectsAll);
+        Assert.Contains("job:extension-e2e", pathResult.Jobs);
+        Assert.False(layer1Result.SelectsAll);
+        Assert.Contains("job:extension-e2e", layer1Result.Jobs);
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.Kafka/KafkaBuilderExtensions.cs", "Aspire.Hosting.Kafka")]
+    [InlineData("src/Aspire.Dashboard/Program.cs", "Aspire.Dashboard")]
+    public void RealMapUnrelatedHostingAndDashboardChangesDoNotSelectExtensionE2e(string path, string affectedProject)
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var r = selector.Select(
+            [path],
+            [affectedProject],
+            new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.DoesNotContain("job:extension-e2e", r.Jobs);
+    }
+
+    [Fact]
     public void RealMapManualMacPlatformSsoValidationDoesNotSelectCi()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
