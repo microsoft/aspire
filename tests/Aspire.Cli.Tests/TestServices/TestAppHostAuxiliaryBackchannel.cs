@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
+using Aspire.Hosting.Backchannel;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -17,8 +18,18 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     private int _getResourceSnapshotsCallCount;
     private int _lastGetResourceSnapshotsIncludeHidden = -1;
 
-    public string Hash { get; set; } = "test-hash";
-    public string SocketPath { get; set; } = "/tmp/test.sock";
+    private IAppHostSocket _socket = new TestAppHostSocket("/tmp/test.sock");
+
+    public IAppHostSocket Socket
+    {
+        get => _socket;
+        set => _socket = value;
+    }
+    public string SocketPath
+    {
+        get => Socket.SocketPath;
+        set => Socket = new TestAppHostSocket(value);
+    }
     public AppHostInformation? AppHostInfo { get; set; }
     public bool IsInScope { get; set; } = true;
     public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;

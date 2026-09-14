@@ -37,10 +37,10 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             var grid = page.Locator(".main-grid").First;
             await Assertions.Expect(grid).ToBeVisibleAsync();
 
-            // Guard against a Fluent UI Blazor rename of the resize handle class: the auto-fit
-            // double-click handler keys off exactly these selectors, so if neither is present the
+            // Guard against a Fluent UI Blazor rename of the resize handle marker: the auto-fit
+            // double-click handler keys off exactly these selectors, so if none is present the
             // feature is silently dead and this count assertion surfaces it.
-            var handles = page.Locator(".main-grid .resize-handle, .main-grid .col-width-draghandle");
+            var handles = page.Locator(".main-grid [actual-resize-handle], .main-grid .resize-handle, .main-grid .col-width-draghandle");
             Assert.True(await handles.CountAsync() > 0, "Expected at least one grid resize handle to be rendered.");
 
             // Fluent writes the resolved template from GetGridTemplateColumns() to the table's *inline*

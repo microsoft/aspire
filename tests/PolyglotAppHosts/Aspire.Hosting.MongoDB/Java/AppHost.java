@@ -34,6 +34,24 @@ void main() throws Exception {
         // Test 10: Add multiple databases to same server
         mongoChained.addDatabase("app-db");
         mongoChained.addDatabase("analytics-db", "analytics");
+        // Test 11: Test withBindIpAll
+        builder.addMongoDB("mongo-bind-all")
+            .withBindIpAll();
+        // Test 12: Test withReplicaSet with withKeyFile, withTlsMode and withTlsAllowInvalidCertificates
+        var keyFileParam = builder.addParameter("rs-keyfile", new AddParameterOptions().secret(true).value("my-secret-key"));
+        builder.addMongoDB("mongo-rs-member")
+            .withReplicaSet("rs0")
+            .withKeyFile(keyFileParam, "/etc/rs.key")
+            .withTlsMode()
+            .withTlsAllowInvalidCertificates();
+        // Test 13: Test addMongoDBReplicaSet with withMember
+        // NOTE: The members are not given a key file of their own here. withMember gives them the replica set's shared one,
+        // and a member carrying a different key file is rejected.
+        var mongo1 = builder.addMongoDB("mongo-rs-1");
+        var mongo2 = builder.addMongoDB("mongo-rs-2");
+        var replicaSet = builder.addMongoDBReplicaSet("rs0")
+            .withMember(mongo1)
+            .withMember(mongo2);
         // ---- Property access on MongoDBServerResource ----
         var _endpoint = mongo.primaryEndpoint();
         var _host = mongo.host();

@@ -48,10 +48,12 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout (for retry patterns)
+      - name: Checkout analysis helpers
         uses: actions/checkout@v4.3.1
         with:
-          sparse-checkout: eng/test-retry-patterns.json
+          sparse-checkout: |
+            .github/workflows/analyze-ci-failure.js
+            eng/test-retry-patterns.json
           sparse-checkout-cone-mode: false
       - name: Collect CI failure data
         id: collect
@@ -237,9 +239,18 @@ jobs:
             echo "Memory branch not found (first run or not yet created)"
           fi
 
-          # Fetch test results artifact if available and extract test failure info
-          ARTIFACT_NAME=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
-            --jq '[.artifacts[] | select(.name | test("test-results|TestResults"; "i"))] | first | .name // empty' 2>/dev/null || echo "")
+          # Fetch the artifact list once so both TRX and extension E2E results can be selected.
+          if ! gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/artifacts?per_page=100" \
+              --jq '.artifacts[]' | jq -s '.' > ci-failure-data/artifacts.json; then
+            echo "::warning::Failed to list artifacts for run ${RUN_ID}"
+            echo '[]' > ci-failure-data/artifacts.json
+          fi
+          > ci-failure-data/test-failures.jsonl
+
+          # Fetch the aggregate TRX artifact if available and extract test failure info.
+          ARTIFACT_NAME=$(jq -r \
+            '[.[] | select((.expired | not) and (.name | test("test-results|TestResults"; "i")))] | first | .name // empty' \
+            ci-failure-data/artifacts.json)
           if [ -n "${ARTIFACT_NAME}" ]; then
             echo "Downloading test results artifact: ${ARTIFACT_NAME}..."
             mkdir -p ci-failure-data/test-results
@@ -253,38 +264,64 @@ jobs:
                 echo "  - $(basename "$f") ($(stat -c%s "$f" 2>/dev/null || echo "?") bytes)"
               done || true
 
-              # Parse TRX files for failed tests using yq (pre-installed) + jq.
-              # yq converts XML to JSON, then jq extracts failed test info.
+              # Parse TRX files for failed tests using yq (pre-installed) and the workflow helper.
+              # yq converts XML to JSON, then the helper extracts failed test info.
               # TRX uses UnitTestResult elements with outcome="Failed" containing
               # Output/ErrorInfo/Message and Output/ErrorInfo/StackTrace.
-              > ci-failure-data/test-failures.jsonl
               find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | while IFS= read -r TRX_FILE; do
                 echo "Processing: $(basename "$TRX_FILE")"
-                yq -p xml -o json '.' "$TRX_FILE" 2>/dev/null | jq -r '
-                  # Navigate to UnitTestResult — may be array or single object
-                  (.TestRun.Results.UnitTestResult // []) |
-                  (if type == "array" then . else [.] end) |
-                  map(select(.["+@outcome"] == "Failed")) |
-                  .[] |
-                  {
-                    test: (.["+@testName"] // ""),
-                    error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:1000]),
-                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:2000])
-                  }
-                ' >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
+                yq -p xml -o json '.' "$TRX_FILE" 2>/dev/null |
+                  node .github/workflows/analyze-ci-failure.js extract-test-failures - \
+                    >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
               done
-              jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
-              rm -f ci-failure-data/test-failures.jsonl
-              echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from TRX files"
-
-              # Clean up the extracted files to save space in artifact
-              rm -rf ci-failure-data/test-results
             else
               echo "Warning: Failed to download test results artifact"
             fi
           else
             echo "No test results artifact found for run ${RUN_ID}"
           fi
+
+          # VS Code E2E tests publish Mocha JSON in one diagnostic artifact per shard rather
+          # than in All-TestResults. Derive exact artifact names only for failed E2E jobs.
+          jq -r --arg attempt "${RUN_ATTEMPT}" '
+            .[].name as $job
+            | $job
+            | capture("VS Code extension E2E \\((?<os>Windows|Linux), (?<shard>[^)]+)\\)$")?
+            | select(. != null)
+            | ["extension-e2e-diagnostics-\(if .os == "Windows" then "win-x64" else "linux-x64" end)-\(.shard)-attempt\($attempt)", $job]
+            | @tsv
+          ' ci-failure-data/failed-jobs.json | sort -u | while IFS=$'\t' read -r E2E_ARTIFACT_NAME E2E_JOB_NAME; do
+            [ -n "${E2E_ARTIFACT_NAME}" ] || continue
+            if ! jq -e --arg name "${E2E_ARTIFACT_NAME}" \
+                'any(.[]; .name == $name and (.expired | not))' ci-failure-data/artifacts.json > /dev/null; then
+              echo "Warning: Extension E2E diagnostic artifact not found: ${E2E_ARTIFACT_NAME}"
+              continue
+            fi
+
+            E2E_RESULTS_DIR="ci-failure-data/extension-e2e-results/${E2E_ARTIFACT_NAME}"
+            mkdir -p "${E2E_RESULTS_DIR}"
+            if gh run download "${RUN_ID}" --repo "${REPO}" --name "${E2E_ARTIFACT_NAME}" --dir "${E2E_RESULTS_DIR}"; then
+              find "${E2E_RESULTS_DIR}" -name "mocha.json" -type f 2>/dev/null | while IFS= read -r MOCHA_FILE; do
+                echo "Processing extension E2E results: ${E2E_ARTIFACT_NAME}/$(basename "${MOCHA_FILE}")"
+                if ! node .github/workflows/analyze-ci-failure.js extract-mocha-failures "${MOCHA_FILE}" "${E2E_JOB_NAME}" \
+                    >> ci-failure-data/test-failures.jsonl; then
+                  echo "::warning::Failed to parse extension E2E results: ${E2E_ARTIFACT_NAME}/$(basename "${MOCHA_FILE}")"
+                fi
+              done
+            else
+              echo "Warning: Failed to download extension E2E diagnostics: ${E2E_ARTIFACT_NAME}"
+            fi
+          done
+
+          jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || \
+            echo "[]" > ci-failure-data/test-failures.json
+          rm -f ci-failure-data/test-failures.jsonl ci-failure-data/artifacts.json
+          rm -rf ci-failure-data/test-results ci-failure-data/extension-e2e-results
+          # Redact complete values before the script applies field limits so truncation cannot split credential patterns.
+          node .github/workflows/analyze-ci-failure.js redact ci-failure-data/test-failures.json \
+            > ci-failure-data/test-failures-redacted.json
+          mv ci-failure-data/test-failures-redacted.json ci-failure-data/test-failures.json
+          echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from result artifacts"
 
           echo "Data collection complete."
 
@@ -343,14 +380,14 @@ jobs:
               fi
             done
 
-            echo "## Test Failures (from TRX artifacts)"
+            echo "## Test Failures (from result artifacts)"
             echo ""
             if [ -f "ci-failure-data/test-failures.json" ]; then
               FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
-                jq -r '.[] | "### `\(.test)`\n\n**Error:**\n```\n\(.error)\n```\n" + (if .stack_trace != "" then "**Stack Trace:**\n```\n\(.stack_trace)\n```\n" else "" end)' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
+                node .github/workflows/analyze-ci-failure.js format-test-failures ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
               else
-                echo "No test failures extracted from TRX artifacts."
+                echo "No test failures extracted from result artifacts."
               fi
             else
               echo "No test results artifact available."
@@ -471,6 +508,11 @@ safe-outputs:
       env:
         GH_TOKEN: ${{ github.token }}
       steps:
+        - name: Checkout issue renderer
+          uses: actions/checkout@v4
+          with:
+            sparse-checkout: .github/workflows/analyze-ci-failure.js
+            sparse-checkout-cone-mode: false
         - name: Publish analysis data and comment on PR
           run: |
             set -euo pipefail
@@ -496,13 +538,27 @@ safe-outputs:
               exit 1
             fi
 
-            # Validate cause files
+            # The agent also sees job logs and can reproduce values that were not present in
+            # the pre-redacted TRX fields. Redact its complete output again at the publish
+            # boundary before reading, rendering, or persisting any analysis fields.
+            node .github/workflows/analyze-ci-failure.js redact "$ANALYSIS_FILE" \
+              > "${ANALYSIS_FILE}.redacted"
+            mv "${ANALYSIS_FILE}.redacted" "$ANALYSIS_FILE"
+
+            # The agent can reproduce sensitive values from job logs in any cause field,
+            # including fields used directly in issue titles and occurrence rows. Redact
+            # every valid cause before any field is rendered or persisted.
             if [ -d "$CAUSES_DIR" ]; then
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
                 if ! jq empty "$CAUSE_FILE" 2>/dev/null; then
                   echo "::warning::Invalid JSON in cause file: $(basename "$CAUSE_FILE")"
+                  rm -f "$CAUSE_FILE"
+                  continue
                 fi
+                node .github/workflows/analyze-ci-failure.js redact "$CAUSE_FILE" \
+                  > "${CAUSE_FILE}.redacted"
+                mv "${CAUSE_FILE}.redacted" "$CAUSE_FILE"
               done
             fi
 
@@ -547,12 +603,6 @@ safe-outputs:
               if [ -d "$CAUSES_DIR" ]; then
                 mkdir -p "memory-repo/causes"
 
-                # Build the occurrence entry from the run summary JSON
-                ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
-                PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
-                # Find the first failed job name for context in the occurrence
-                FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
-
                 for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                   [ -f "$CAUSE_FILE" ] || continue
                   # Skip code-issue causes — only persist transient/flaky causes.
@@ -563,14 +613,9 @@ safe-outputs:
                   CAUSE_BASENAME=$(basename "$CAUSE_FILE")
                   EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
 
-                  # Add an occurrences array with this run's entry to the agent's cause file
-                  CAUSE_WITH_OCC=$(jq --argjson run_id "$RUN_ID" \
-                    --arg run_url "$RUN_URL" \
-                    --arg job "$FIRST_JOB" \
-                    --argjson pr_number "$PR_NUMBER" \
-                    --arg observed_at "$ANALYZED_AT" \
-                    '. + {occurrences: [{run_id: $run_id, run_url: $run_url, job: $job, pr_number: $pr_number, observed_at: $observed_at}]}' \
-                    "$CAUSE_FILE")
+                  # Add an occurrences array using the job associated with this cause.
+                  CAUSE_WITH_OCC=$(node .github/workflows/analyze-ci-failure.js \
+                    add-occurrence "$ANALYSIS_FILE" "$CAUSE_FILE")
 
                   if [ -f "$EXISTING" ]; then
                     # Merge: append new occurrence, deduplicate by run_id
@@ -594,15 +639,6 @@ safe-outputs:
 
             # ── 2. Create or update issues for each cause ──
             if [ -d "$CAUSES_DIR" ]; then
-              # Build occurrence info from the run summary for issue updates
-              ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
-              PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
-              FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
-
-              # Build the occurrence table row for this run
-              OCC_DATE=$(echo "$ANALYZED_AT" | cut -dT -f1)
-              NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${FIRST_JOB} | #${PR_NUMBER} |"
-
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
                 jq empty "$CAUSE_FILE" 2>/dev/null || continue
@@ -625,6 +661,8 @@ safe-outputs:
                   continue
                 fi
 
+                NEW_OCCURRENCE_ROW=$(node .github/workflows/analyze-ci-failure.js \
+                  occurrence-row "$ANALYSIS_FILE" "$CAUSE_FILE")
                 CAUSE_STORED="memory-repo/causes/${CAUSE_ID}.json"
                 MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
 
@@ -706,47 +744,17 @@ safe-outputs:
                 else
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
-                  TEST_NAME=$(jq -r '.test_name // empty' "$CAUSE_FILE")
-                  {
-                    echo "${MARKER}"
-                    echo ""
-                    echo "## Build Information"
-                    echo ""
-                    echo "Build: ${RUN_URL}"
-                    if [ -n "$TEST_NAME" ]; then
-                      echo "Build error leg or test failing: ${FIRST_JOB} / \`${TEST_NAME}\`"
-                    else
-                      echo "Build error leg: ${FIRST_JOB}"
-                    fi
-                    echo "Pull request: #${PR_NUMBER}"
-                    echo ""
-                    echo "## Error Message"
-                    echo ""
-                    echo '```'
-                    jq -r '.error_pattern' "$CAUSE_FILE"
-                    echo '```'
-                    echo ""
-                    echo "## Description"
-                    echo ""
-                    jq -r '.title' "$CAUSE_FILE"
-                    echo ""
-                    echo "**Type**: ${CAUSE_TYPE}"
-                    echo ""
-                    echo "## Occurrences"
-                    echo ""
-                    echo "| Date | Build | Job | PR |"
-                    echo "|------|-------|-----|----|"
-                    echo "$NEW_OCCURRENCE_ROW"
-                  } > "$BODY_FILE"
+                  node .github/workflows/analyze-ci-failure.js \
+                    issue-body "$ANALYSIS_FILE" "$CAUSE_FILE" "$MARKER" > "$BODY_FILE"
 
                   LABELS="ci-failure-cause"
                   if [ "$CAUSE_TYPE" = "flaky-test" ]; then
                     LABELS="ci-failure-cause,test-failure"
                   fi
 
-                  # Build the title via jq to avoid shell metacharacter issues
-                  # with agent-generated cause titles.
-                  ISSUE_TITLE=$(jq -r '"[CI Failure] " + .title' "$CAUSE_FILE")
+                  # Normalize agent-generated titles before passing them to GitHub.
+                  ISSUE_TITLE=$(node .github/workflows/analyze-ci-failure.js \
+                    issue-title "$ANALYSIS_FILE" "$CAUSE_FILE")
                   CREATED_ISSUE_URL=$(gh issue create --repo "$REPO" \
                     --title "$ISSUE_TITLE" \
                     --label "$LABELS" \
@@ -792,28 +800,7 @@ safe-outputs:
             # Build comment body from the analysis JSON and write to a file
             # to avoid shell expansion issues and ARG_MAX limits.
             COMMENT_FILE=$(mktemp)
-            jq -r '
-              def job_list:
-                [.failed_jobs[] | "- `\(.name)` — \(.reason) (\(.classification))"]
-                | join("\n");
-              def test_list:
-                [.failed_tests[]? | select(.classification == "flaky") |
-                  "- `\(.name)` in job `\(.job)`\n  - **Error**: \(.error)\n" +
-                  (if (.stack_trace // "") != "" then "  - **Stack Trace** (first frames):\n    ```\n    \(.stack_trace | split("\n") | .[0:5] | join("\n    "))\n    ```\n" else "" end) +
-                  "  - **Why likely flaky**: \(.reason)"]
-                | join("\n");
-
-              "<!-- analyze-ci-failure -->\n" +
-              if .verdict == "transient-infra" then
-                "🔍 **CI Failure Analysis: Transient Infrastructure Failure**\n\nThe CI build failed due to transient infrastructure issues.\n\n**Failed jobs:**\n" + job_list + "\n\nIf a rerun was not already requested automatically, visit the [workflow run page](" + .run_url + ") to rerun the failed jobs manually.\n"
-              elif .verdict == "flaky-test" then
-                "⚠️ **CI Failure Analysis: Possible Flaky Test(s)**\n\nThe CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.\n\n**Suspected flaky test(s):**\n" + test_list + "\n\n**Suggested actions:**\n- Re-run the failed CI jobs to confirm if the failure is intermittent\n- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using `/quarantine-test <test name> <issue URL>`\n- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky\n\nYou can re-run the failed jobs from the [workflow run page](" + .run_url + ").\n"
-              elif .verdict == "code-issue" then
-                "❌ **CI Failure Analysis: Code Issue Detected**\n\nThe CI build failed due to issue(s) caused by changes in this PR.\n\n**Failed jobs:**\n" + job_list + "\n\nThe CI will not be automatically rerun. Please fix the issue and push an updated commit.\n"
-              else
-                "⚠️ **CI Failure Analysis: Mixed Failures**\n\nThe CI build contains both transient and non-transient failures.\n\n**Failed jobs:**\n" + job_list + "\n\nThe CI will not be automatically rerun. Please review the failures above.\n"
-              end
-            ' "$ANALYSIS_FILE" > "$COMMENT_FILE"
+            node .github/workflows/analyze-ci-failure.js pr-comment "$ANALYSIS_FILE" > "$COMMENT_FILE"
 
             # Update an existing analysis comment if one exists (by marker),
             # otherwise create a new one. This prevents stacking duplicate
@@ -999,6 +986,8 @@ Write the run summary to `/tmp/gh-aw/agent/analysis-result.json`. The JSON must 
       "job": "job-name",
       "error": "the error message from the test failure",
       "stack_trace": "the stack trace from the test failure (first few frames)",
+      "standard_output": "standard output captured in the TRX file with sensitive values redacted, when available",
+      "standard_error": "standard error captured in the TRX file with sensitive values redacted, when available",
       "classification": "flaky | code-issue",
       "reason": "Why this test is classified this way"
     }
@@ -1011,8 +1000,10 @@ Field details:
 - `verdict`: The overall classification. Use `"transient-infra"` if ALL failures are infrastructure issues, `"flaky-test"` if ANY failures are flaky tests (and none are code issues), `"code-issue"` if ANY failures are caused by PR changes, or `"mixed"` if there are both transient and non-transient failures.
 - `failed_jobs[].classification`: Per-job classification — one of `"transient-infra"`, `"flaky-test"`, or `"code-issue"`.
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.
-- `failed_tests[].error`: The full error message from the TRX test failure data.
-- `failed_tests[].stack_trace`: The stack trace from the TRX test failure data (include the first few relevant frames).
+- `failed_tests[].error`: The full error message from the test result data.
+- `failed_tests[].stack_trace`: The stack trace from the test result data (include the first few relevant frames).
+- `failed_tests[].standard_output`: The test's standard output with recognizable sensitive values replaced by `[REDACTED]`, when available.
+- `failed_tests[].standard_error`: The test's standard error with recognizable sensitive values replaced by `[REDACTED]`, when available.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
 - `causes`: An array of cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts.
 
@@ -1028,7 +1019,10 @@ Each cause file must follow this schema:
   "type": "flaky-test | infra-failure",
   "title": "Human-readable short description of the cause",
   "test_name": "Fully.Qualified.TestName (only for flaky-test with a specific test)",
-  "error_pattern": "The key error message or pattern that identifies this cause"
+  "job_name": "Name of the failed job containing this cause",
+  "error_pattern": "The key error message or pattern that identifies this cause",
+  "analysis": "Why the evidence indicates this failure category",
+  "failure_details": "Test output from TRX or a relevant job log snippet"
 }
 ```
 
@@ -1037,7 +1031,10 @@ Field details:
 - `type`: One of `"flaky-test"` or `"infra-failure"`. Do NOT create cause files for code-issue classifications.
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
+- `job_name`: The exact name of the failed job containing this cause.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
+- `analysis`: Explain why the evidence supports the selected `type`. Use the same rationale represented in the corresponding `failed_tests[].reason` or `failed_jobs[].reason` entry.
+- `failure_details`: For flaky tests, copy the error, stack trace, and redacted standard output and standard error from the test result data (up to ~8000 characters). The supplied output has already had recognizable sensitive values replaced by `[REDACTED]`; do not reconstruct or infer redacted values. For infrastructure failures, copy the relevant error-focused job log excerpt (up to ~4000 characters). Do not summarize or invent output in this field.
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON.
 
@@ -1055,7 +1052,7 @@ The file `ci-failure-data/analysis-summary.md` contains the full failure data:
 - Failed jobs and their failed steps
 - Job logs (error-focused extracts)
 - Job annotations
-- Test failures extracted from TRX artifacts (test name and error message)
+- Test failures extracted from result artifacts (test name, job, error message, and stack trace when available)
 - PR changed files
 - Known transient failure patterns from `eng/test-retry-patterns.json`
 - **Prior causes** from the memory branch (previously identified recurring failures with their IDs and occurrence history)

@@ -20,6 +20,27 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     private bool _keyboardNavigationInitializing;
     private bool _disposed;
 
+    [Parameter, EditorRequired]
+    public required bool IsNavMenuOpen { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Action CloseNavMenu { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<Task> LaunchHelpAsync { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<Task> LaunchAIAgentsAsync { get; set; }
+
+    [Parameter, EditorRequired]
+    public required bool IsAgentHelpEnabled { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<Task> LaunchNotificationsAsync { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<Task> LaunchSettingsAsync { get; set; }
+
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 

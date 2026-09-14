@@ -150,7 +150,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
             }
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        monitor.AddConnection("/tmp/test.sock", backchannel);
         var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -191,7 +191,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
             return Task.FromResult(new WaitForResourceResponse { Success = true, State = "Running" });
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        monitor.AddConnection("/tmp/test.sock", backchannel);
         var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -230,7 +230,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
             WaitForResourceResult = new WaitForResourceResponse { Success = true, State = "Running", HealthStatus = "Healthy" }
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        monitor.AddConnection("/tmp/test.sock", backchannel);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -260,7 +260,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
             }
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        monitor.AddConnection("/tmp/test.sock", backchannel);
         var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -298,7 +298,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
             WaitForResourceResult = new WaitForResourceResponse { Success = true, State = "Exited" }
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        monitor.AddConnection("/tmp/test.sock", backchannel);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -328,7 +328,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
             }
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        monitor.AddConnection("/tmp/test.sock", backchannel);
         var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -370,7 +370,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
             }
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        monitor.AddConnection("/tmp/test.sock", backchannel);
         var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>

@@ -948,7 +948,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
 
         // Assert
         response.EnsureSuccessStatusCode();
-        Assert.NotEmpty(response.Headers.GetValues(HeaderNames.ContentSecurityPolicy).Single());
+        Assert.All(response.Headers.GetValues(HeaderNames.ContentSecurityPolicy), Assert.NotEmpty);
     }
 
     [Fact]
@@ -1069,9 +1069,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         const string applicationName = "Failed startup";
-        var runsDirectory = Path.Combine(
-            DashboardRunStore.GetApplicationDirectory(workspace.Path, applicationName),
-            "runs");
+        var runsDirectory = DashboardRunStore.GetRunsDirectory(workspace.Path);
 
         int exitCode;
         await using (var app = new DashboardWebApplication(preConfigureBuilder: builder =>

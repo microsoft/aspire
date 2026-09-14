@@ -18,6 +18,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
@@ -126,7 +127,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal(appHostProjectFile.FullName, updatedProjectFile?.FullName);
+        Assert.NotNull(updatedProjectFile);
+        Assert.Equal(
+            PathNormalizer.ResolveToFilesystemPath(appHostProjectFile.FullName),
+            PathNormalizer.ResolveToFilesystemPath(updatedProjectFile.FullName));
     }
 
     [Fact]

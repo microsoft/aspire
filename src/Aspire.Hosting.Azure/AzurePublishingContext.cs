@@ -47,6 +47,26 @@ public sealed class AzurePublishingContext(
     };
 
     /// <summary>
+    /// Gets or sets a value indicating whether the root main.bicep file is excluded from the published output.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Callers of this class might not need main.bicep. A publisher that deploys each resource module
+    /// directly from its own deployment manifest never consumes the root template. Although Azure.Provisioning
+    /// can emit that template, a later Bicep compilation can fail for models the individual modules handle
+    /// correctly. For example, the generated root always passes <c>location</c> to each module, but a
+    /// tenant-scoped module does not declare a <c>location</c> parameter, resulting in <c>BCP037</c>.
+    /// </para>
+    /// <para>
+    /// When set to <see langword="true"/>, <see cref="WriteModelAsync"/> still writes every per-resource
+    /// Bicep module and populates <see cref="ParameterLookup"/> and <see cref="OutputLookup"/> against
+    /// <see cref="MainInfrastructure"/>. <see cref="MainInfrastructure"/> remains available in memory, but
+    /// it is never built, compiled, or written to disk. The default is <see langword="false"/>.
+    /// </para>
+    /// </remarks>
+    public bool ExcludeMainBicepFile { get; set; }
+
+    /// <summary>
     /// Gets a dictionary that maps parameter resources to provisioning parameters.
     /// </summary>
     /// <remarks>
@@ -539,6 +559,15 @@ public sealed class AzurePublishingContext(
     /// <returns>A task that represents the asynchronous save operation.</returns>
     private async Task SaveToDiskAsync(string outputDirectoryPath)
     {
+        if (ExcludeMainBicepFile)
+        {
+            // The root is not even built, rather than compiled and then discarded, because a model that
+            // only the individual modules support (such as a tenant-scoped module without a location parameter)
+            // makes compiling the root throw.
+            logger.LogDebug("Excluding {BicepName}.bicep from the output because {PropertyName} is set.", MainInfrastructure.BicepName, nameof(ExcludeMainBicepFile));
+            return;
+        }
+
         var plan = MainInfrastructure.Build(provisioningOptions.ProvisioningBuildOptions);
         var compiledBicep = plan.Compile().First();
 

@@ -355,10 +355,17 @@ def _register_handle_wrapper(type_id: str, factory: _HandleWrapperFactory) -> No
     _handle_wrapper_registry[type_id] = factory
 
 
-def _wrap_if_handle(value: typing.Any, client: AspireClient | None = None, kwargs: typing.Mapping[str, typing.Any] | None = None) -> typing.Any:
+def _wrap_if_handle(
+    value: typing.Any,
+    client: AspireClient | None = None,
+    kwargs: typing.Mapping[str, typing.Any] | None = None,
+    fallback_type_id: str | None = None
+) -> typing.Any:
     '''
     Checks if a value is a marshalled handle and wraps it appropriately.
-    Uses the wrapper registry to create typed wrapper instances when available.
+    Uses the wrapper registry to create typed wrapper instances when available. The fallback
+    type ID lets callbacks use their generated parameter type when .NET marshals a handle
+    using its declared generic builder type.
     '''
     if isinstance(value, dict) and _is_marshalled_handle(value):
         handle = Handle(value)
@@ -367,6 +374,8 @@ def _wrap_if_handle(value: typing.Any, client: AspireClient | None = None, kwarg
         # Try to find a registered wrapper factory for this type
         if type_id and client:
             factory = _handle_wrapper_registry.get(type_id)
+            if factory is None and fallback_type_id:
+                factory = _handle_wrapper_registry.get(fallback_type_id)
             if factory:
                 if kwargs:
                     return factory(handle, client, **kwargs)
@@ -1007,13 +1016,19 @@ class AspireClient:
             if thread.is_alive():
                 thread.join(timeout=1.0)
 
-    def register_callback(self, callback: typing.Callable[..., typing.Any] | None) -> str | None:
+    def register_callback(
+        self,
+        callback: typing.Callable[..., typing.Any] | None,
+        parameter_type_ids: typing.Sequence[str | None] | None = None
+    ) -> str | None:
         '''
         Register a callback function that can be invoked from the .NET side.
         Returns a callback ID that should be passed to methods accepting callbacks.
 
         .NET passes arguments as an object with positional keys: { p0: value0, p1: value1, ... }
-        This function automatically extracts positional parameters and wraps handles.
+        This function automatically extracts positional parameters and wraps handles. Generated
+        callback parameter type IDs provide a fallback when the marshalled handle uses a declared
+        generic type ID instead of the concrete type registered by the Python SDK.
         '''
         if callback is None:
             return None
@@ -1030,7 +1045,14 @@ class AspireClient:
                 while True:
                     key = f"p{i}"
                     if key in args:
-                        arg_array.append(_wrap_if_handle(args[key], client))
+                        fallback_type_id = (
+                            parameter_type_ids[i]
+                            if parameter_type_ids is not None and i < len(parameter_type_ids)
+                            else None
+                        )
+                        arg_array.append(
+                            _wrap_if_handle(args[key], client, fallback_type_id=fallback_type_id)
+                        )
                         i += 1
                     else:
                         break
@@ -2193,7 +2215,7 @@ class _BaseResource(AbstractResource):
         """Configures with optional callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if callback is not None:
-            rpc_args['callback'] = self._client.register_callback(callback)
+            rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalCallback',
             rpc_args,
@@ -2226,7 +2248,7 @@ class _BaseResource(AbstractResource):
     def with_validator(self, validator: typing.Callable[[TestResourceContext], bool]) -> typing.Self:
         """Adds validation callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['validator'] = self._client.register_callback(validator)
+        rpc_args['validator'] = self._client.register_callback(validator, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withValidator',
             rpc_args,
@@ -2396,7 +2418,7 @@ class _BaseResource(AbstractResource):
         if _optional_callback := kwargs.pop("optional_callback", None):
             if _validate_type(_optional_callback, typing.Callable[[TestCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestCallbackContext], None], _optional_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestCallbackContext], None], _optional_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalCallback', rpc_args))
             elif _optional_callback is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -2420,7 +2442,7 @@ class _BaseResource(AbstractResource):
         if _validator := kwargs.pop("validator", None):
             if _validate_type(_validator, typing.Callable[[TestResourceContext], bool]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["validator"] = client.register_callback(typing.cast(typing.Callable[[TestResourceContext], bool], _validator))
+                rpc_args["validator"] = client.register_callback(typing.cast(typing.Callable[[TestResourceContext], bool], _validator), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withValidator', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'validator'. Expected: Callable[[TestResourceContext], bool]")
@@ -2534,7 +2556,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def test_with_env_callback(self, callback: typing.Callable[[TestEnvironmentContext], None]) -> typing.Self:
         """Configures environment with callback (test version)"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/testWithEnvironmentCallback',
             rpc_args,
@@ -2557,7 +2579,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         if _test_with_env_callback := kwargs.pop("test_with_env_callback", None):
             if _validate_type(_test_with_env_callback, typing.Callable[[TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestEnvironmentContext], None], _test_with_env_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestEnvironmentContext], None], _test_with_env_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/testWithEnvironmentCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'test_with_env_callback'. Expected: Callable[[TestEnvironmentContext], None]")
@@ -2620,6 +2642,7 @@ class TestRedisResourceKwargs(ContainerResourceKwargs, total=False):
     multi_param_handle_callback: typing.Callable[[TestCallbackContext, TestEnvironmentContext], None]
     data_volume: DataVolumeParameters | typing.Literal[True]
     concrete_vault_resource: TestVaultResource
+    python_builder_callback: typing.Callable[[TestRedisResource], None]
 
 class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString):
     """TestRedisResource resource."""
@@ -2760,7 +2783,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
     def with_multi_param_handle_callback(self, callback: typing.Callable[[TestCallbackContext, TestEnvironmentContext], None]) -> typing.Self:
         """Tests multi-param callback destructuring"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext"))
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withMultiParamHandleCallback',
             rpc_args,
@@ -2788,6 +2811,17 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         rpc_args['resource'] = resource
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withConcreteVaultResource',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_python_builder_callback(self, configure: typing.Callable[[TestRedisResource], None]) -> typing.Self:
+        """Configures a test resource through a resource builder callback."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['configure'] = self._client.register_callback(configure, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",))
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withPythonBuilderCallback',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -2844,7 +2878,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         if _multi_param_handle_callback := kwargs.pop("multi_param_handle_callback", None):
             if _validate_type(_multi_param_handle_callback, typing.Callable[[TestCallbackContext, TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestCallbackContext, TestEnvironmentContext], None], _multi_param_handle_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestCallbackContext, TestEnvironmentContext], None], _multi_param_handle_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext"))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withMultiParamHandleCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'multi_param_handle_callback'. Expected: Callable[[TestCallbackContext, TestEnvironmentContext], None]")
@@ -2866,6 +2900,13 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withConcreteVaultResource', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'concrete_vault_resource'. Expected: TestVaultResource")
+        if _python_builder_callback := kwargs.pop("python_builder_callback", None):
+            if _validate_type(_python_builder_callback, typing.Callable[[TestRedisResource], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["configure"] = client.register_callback(typing.cast(typing.Callable[[TestRedisResource], None], _python_builder_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withPythonBuilderCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'python_builder_callback'. Expected: Callable[[TestRedisResource], None]")
         super().__init__(handle, client, **kwargs)
 
 

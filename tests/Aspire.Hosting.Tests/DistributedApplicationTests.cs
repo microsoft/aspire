@@ -289,6 +289,10 @@ public class DistributedApplicationTests
             Assert.Equal("http", u.Name);
         });
 
+        await startTask.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        using var serviceAClient = app.CreateHttpClientWithResilience(notStartedResourceName, "http");
+        Assert.Equal("Hello World!", await serviceAClient.GetStringAsync("/", token));
+
         logger.LogInformation("Stop resource.");
         await orchestrator.StopResourceAsync(notStartedResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Finished, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
@@ -296,8 +300,8 @@ public class DistributedApplicationTests
         logger.LogInformation("Start resource again");
         await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        Assert.Equal("Hello World!", await serviceAClient.GetStringAsync("/", token));
 
-        await startTask.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
@@ -1264,6 +1268,8 @@ public class DistributedApplicationTests
         var executablePattern = $"{testName}-servicea-{ReplicaIdRegex}-{suffix}";
         var serviceA = await KubernetesHelper.GetResourceByNameMatchAsync<Executable>(kubernetes, executablePattern, r => r.Status?.State == ExecutableState.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
         Assert.NotNull(serviceA);
+        using var serviceAClient = app.CreateHttpClientWithResilience(testProgram.ServiceABuilder.Resource.Name, "http");
+        Assert.Equal("Hello World!", await serviceAClient.GetStringAsync("/", token));
 
         await orchestrator.StopResourceAsync(serviceA.Metadata.Name, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
 
@@ -1274,6 +1280,7 @@ public class DistributedApplicationTests
 
         serviceA = await KubernetesHelper.GetResourceByNameMatchAsync<Executable>(kubernetes, executablePattern, r => r.Status?.State == ExecutableState.Running, token).DefaultTimeout(TestConstants.LongTimeoutDuration);
         Assert.NotNull(serviceA);
+        Assert.Equal("Hello World!", await serviceAClient.GetStringAsync("/", token));
 
         await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }

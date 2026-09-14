@@ -15,12 +15,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureKubernetesEnvironmentExtensionsTests
+public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AddAzureKubernetesEnvironment_BasicConfiguration()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -36,7 +40,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddNodePool_ReturnsNodePoolResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var gpuPool = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
@@ -56,7 +64,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddAzureKubernetesEnvironment_DefaultNodePool()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -72,7 +84,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddAzureKubernetesEnvironment_DefaultConfiguration()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -87,7 +103,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddAzureKubernetesEnvironment_HasInternalKubernetesEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -99,8 +119,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddAzureKubernetesEnvironment_AddsOnlyAksComputeEnvironmentToModel()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -116,8 +136,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public async Task AddAzureKubernetesEnvironment_AllowsKubernetesServiceCustomizationWithoutVisibleKubernetesEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         builder.AddAzureKubernetesEnvironment("aks");
         builder.AddContainer("api", "myimage")
@@ -140,7 +160,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddAzureKubernetesEnvironment_ThrowsOnEmptyName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         Assert.Throws<ArgumentException>(() =>
             builder.AddAzureKubernetesEnvironment(""));
@@ -149,7 +173,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithWorkloadIdentity_EnablesOidcAndWorkloadIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks")
             .WithWorkloadIdentity();
@@ -161,7 +189,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithAzureUserAssignedIdentity_WorksWithAks()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var identity = builder.AddAzureUserAssignedIdentity("myIdentity");
@@ -176,7 +208,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AzureKubernetesEnvironment_ImplementsIAzureComputeEnvironmentResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         Assert.IsAssignableFrom<IAzureComputeEnvironmentResource>(aks.Resource);
     }
@@ -184,7 +220,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AzureKubernetesEnvironment_ImplementsIAzureNspAssociationTarget()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         Assert.IsAssignableFrom<IAzureNspAssociationTarget>(aks.Resource);
     }
@@ -192,7 +232,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AsExisting_WorksOnAksResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var nameParam = builder.AddParameter("aks-name");
         var rgParam = builder.AddParameter("aks-rg");
@@ -206,8 +250,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithSubnet_OnNodePool_StoresPerPoolSubnet()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var defaultSubnet = vnet.AddSubnet("default-subnet", "10.0.0.0/22");
@@ -233,8 +277,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithSubnet_OnNodePool_WithoutEnvironmentSubnet()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var gpuSubnet = vnet.AddSubnet("gpu-subnet", "10.0.4.0/24");
@@ -256,7 +300,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithNodePool_AddsAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var gpuPool = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
@@ -272,7 +320,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddNodePool_MultiplePoolsSupported()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var pool1 = aks.AddNodePool("cpu", "Standard_D2s_v5", 1, 10);
@@ -287,8 +339,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddAzureKubernetesEnvironment_AutoCreatesDefaultRegistry()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -299,8 +351,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithContainerRegistry_ReplacesDefault()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var explicitAcr = builder.AddAzureContainerRegistry("my-acr");
@@ -318,8 +370,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public async Task ContainerRegistry_FlowsToInnerKubernetesEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var container = builder.AddContainer("myapi", "myimage");
@@ -338,7 +390,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithSystemNodePool_CustomVmSize()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks")
             .WithSystemNodePool("Standard_B2s");
@@ -354,7 +410,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithSystemNodePool_CustomVmSizeAndScaling()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks")
             .WithSystemNodePool("Standard_B4ms", minCount: 2, maxCount: 5);
@@ -368,7 +428,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithSystemNodePool_ReplacesDefaultSystemPool()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -386,7 +450,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithSystemNodePool_CalledMultipleTimesUsesLastValue()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks")
             .WithSystemNodePool("Standard_B2s")
@@ -402,7 +470,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithSystemNodePool_ChainsWithAddNodePool()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks")
             .WithSystemNodePool("Standard_B2s");
@@ -418,7 +490,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void WithSystemNodePool_RejectsZeroMinCount()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         Assert.Throws<ArgumentOutOfRangeException>(() => aks.WithSystemNodePool("Standard_B2s", minCount: 0));
@@ -427,7 +503,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public async Task WithSystemNodePool_BicepReflectsCustomVmSize()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks")
             .WithSystemNodePool("Standard_B2s");
@@ -442,7 +522,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public async Task AddLoadBalancer_BicepEnablesIngressProfileAndUsesPreviewApi()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var aksSubnet = vnet.AddSubnet("aksnodes", "10.0.0.0/22");
@@ -458,7 +539,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddLoadBalancer_AppliesSubnetDelegation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
@@ -478,7 +560,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddLoadBalancer_RegistersPerLBPipelineStep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
@@ -495,7 +578,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddLoadBalancer_MultipleLBs_AllStepsRegistered()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var alb1 = vnet.AddSubnet("alb1", "10.0.4.0/24");
@@ -524,7 +608,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddLoadBalancer_OnUserDelegatedSubnet_ReplacesDelegationAndRecordsDisplaced()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
 
@@ -547,7 +632,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddLoadBalancer_SharedSubnet_KeepsSingleDelegationWithNoDisplacement()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
@@ -568,7 +654,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddLoadBalancer_EquivalentDelegationWithDifferentCasing_DoesNotRecordDisplacement()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24")
@@ -585,7 +672,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
     [Fact]
     public void AddLoadBalancer_OnSubnetWithMultipleDirectDelegations_CollapsesToSingle()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
 

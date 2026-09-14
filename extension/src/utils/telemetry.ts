@@ -36,6 +36,9 @@ let reporter: TelemetryReporter | undefined;
 let telemetryLogger: vscode.TelemetryLogger | undefined;
 let telemetryReporterFactory: TelemetryReporterFactory = defaultTelemetryReporterFactory;
 let telemetryLoggerFactory: TelemetryLoggerFactory = defaultTelemetryLoggerFactory;
+let telemetryEnrichmentTask: Promise<void> | undefined;
+let usageTelemetryEnrichmentGeneration = 0;
+let errorTelemetryEnrichmentGeneration = 0;
 const commonProperties: Partial<Record<CommonTelemetryProperty, string>> = {};
 let commandInvocationListener: (() => void) | undefined;
 const telemetryClientVersion = (require('@vscode/extension-telemetry/package.json') as { version: string }).version;
@@ -141,10 +144,19 @@ export function isExtensionTelemetryEnabled(): boolean {
     return telemetryLogger?.isUsageEnabled === true || telemetryLogger?.isErrorsEnabled === true;
 }
 
+export function isExtensionUsageTelemetryEnabled(): boolean {
+    return telemetryLogger?.isUsageEnabled === true;
+}
+
+export function onDidChangeExtensionUsageTelemetryEnabled(listener: (enabled: boolean) => void): vscode.Disposable {
+    return telemetryLogger?.onDidChangeEnableStates(() => listener(isExtensionUsageTelemetryEnabled())) ??
+        { dispose() { } };
+}
+
 /**
  * Replace the current set of common properties. Passing `undefined` for a
- * property removes it. Values should already be bounded, non-PII summaries
- * (e.g. `csharp;typescript`, not project paths).
+ * property removes it. Values must conform to the telemetry registry's data-classification
+ * contract and should be normalized before they reach this shared property bag.
  */
 export function setCommonTelemetryProperties(properties: CommonTelemetryProperties): void {
     for (const [key, value] of Object.entries(properties) as [CommonTelemetryProperty, string | undefined][]) {
@@ -159,6 +171,27 @@ export function setCommonTelemetryProperties(properties: CommonTelemetryProperti
 
 export function getCommonTelemetryProperties(): Readonly<Partial<Record<CommonTelemetryProperty, string>>> {
     return commonProperties;
+}
+
+export function setTelemetryEnrichmentTask(task: Promise<void>): void {
+    usageTelemetryEnrichmentGeneration++;
+    const readyTask = task.catch(() => { });
+    telemetryEnrichmentTask = readyTask;
+    void readyTask.finally(() => {
+        if (telemetryEnrichmentTask === readyTask) {
+            telemetryEnrichmentTask = undefined;
+        }
+    });
+}
+
+export function clearTelemetryEnrichmentTask(): void {
+    // Identity enrichment is usage-only. Preserve queued error events when the
+    // user changes from all telemetry to error-only telemetry.
+    usageTelemetryEnrichmentGeneration++;
+    if (telemetryLogger?.isErrorsEnabled !== true) {
+        errorTelemetryEnrichmentGeneration++;
+    }
+    telemetryEnrichmentTask = undefined;
 }
 
 function mergeProperties<E extends KnownTelemetryEventName>(
@@ -181,9 +214,15 @@ export function sendTelemetryEvent<E extends KnownTelemetryEventName>(
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    telemetryLogger?.logUsage(eventName, {
-        properties: mergeProperties(properties),
-        measurements,
+    if (telemetryLogger?.isUsageEnabled !== true) {
+        return;
+    }
+
+    emitWhenEnriched('usage', () => {
+        telemetryLogger?.logUsage(eventName, {
+            properties: mergeProperties(properties),
+            measurements,
+        });
     });
 }
 
@@ -196,10 +235,36 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    telemetryLogger?.logError(eventName, {
-        properties: mergeProperties(properties),
-        measurements,
+    if (telemetryLogger?.isErrorsEnabled !== true) {
+        return;
+    }
+
+    emitWhenEnriched('error', () => {
+        telemetryLogger?.logError(eventName, {
+            properties: mergeProperties(properties),
+            measurements,
+        });
     });
+}
+
+function emitWhenEnriched(channel: 'usage' | 'error', emit: () => void): void {
+    const enrichmentTask = telemetryEnrichmentTask;
+    if (enrichmentTask) {
+        const enrichmentGeneration = channel === 'usage'
+            ? usageTelemetryEnrichmentGeneration
+            : errorTelemetryEnrichmentGeneration;
+        void enrichmentTask.then(() => {
+            const currentGeneration = channel === 'usage'
+                ? usageTelemetryEnrichmentGeneration
+                : errorTelemetryEnrichmentGeneration;
+            if (currentGeneration === enrichmentGeneration) {
+                emit();
+            }
+        });
+        return;
+    }
+
+    emit();
 }
 
 /**
@@ -518,6 +583,9 @@ export function __resetTelemetryLoggerFactoryForTests(): void {
 
 /** Test seam: clear common properties so tests don't bleed into each other. */
 export function __resetCommonPropertiesForTests(): void {
+    usageTelemetryEnrichmentGeneration++;
+    errorTelemetryEnrichmentGeneration++;
+    telemetryEnrichmentTask = undefined;
     for (const key of Object.keys(commonProperties) as CommonTelemetryProperty[]) {
         delete commonProperties[key];
     }

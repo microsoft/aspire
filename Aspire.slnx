@@ -96,6 +96,7 @@
     <Project Path="src/Aspire.Hosting.Azure.ApplicationInsights/Aspire.Hosting.Azure.ApplicationInsights.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.AppService/Aspire.Hosting.Azure.AppService.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.CognitiveServices/Aspire.Hosting.Azure.CognitiveServices.csproj" />
+    <Project Path="src/Aspire.Hosting.Azure.ConnectorNamespace/Aspire.Hosting.Azure.ConnectorNamespace.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.ContainerRegistry/Aspire.Hosting.Azure.ContainerRegistry.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.Azure.CosmosDB.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.EventHubs.csproj" />
@@ -605,6 +606,7 @@
     <Project Path="tools/CreateFailingTestIssue/CreateFailingTestIssue.csproj" />
     <Project Path="tools/CreateLayout/CreateLayout.csproj" />
     <Project Path="tools/GenerateTestSummary/GenerateTestSummary.csproj" />
+    <Project Path="tools/SelectTests/SelectTests.csproj" />
     <Project Path="tools/TypeScriptApiCompat/TypeScriptApiCompat.csproj" />
   </Folder>
   <Folder Name="/Tools/QuarantineTools/">

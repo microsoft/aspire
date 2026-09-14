@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREAZURE003, ASPIRECOMPUTE002
 
-using Aspire.Hosting.Utils;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Tests.Utils;
@@ -16,7 +15,8 @@ public class AzureKubernetesPersistentVolumeTests(ITestOutputHelper outputHelper
     [Fact]
     public void AksAddPersistentVolume_HasCorrectParent()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         var volume = aks.AddPersistentVolume("data");
@@ -28,7 +28,7 @@ public class AzureKubernetesPersistentVolumeTests(ITestOutputHelper outputHelper
     public async Task AksAddPersistentVolume_GeneratesClaimUsingClusterDefaults()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         aks.AddPersistentVolume("data")
@@ -47,7 +47,11 @@ public class AzureKubernetesPersistentVolumeTests(ITestOutputHelper outputHelper
     [Fact]
     public async Task AksPersistentVolumeEnvironmentUsesAspireStoreInRunMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            outputHelper,
+            workspace,
+            operation: DistributedApplicationOperation.Run);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var volume = aks.AddPersistentVolume("data");
         var executable = builder.AddExecutable("executable", "test-command", ".")
@@ -74,7 +78,7 @@ public class AzureKubernetesPersistentVolumeTests(ITestOutputHelper outputHelper
         // the AKS resource rather than null. This mirrors the AKS deployment E2E AppHost, which
         // binds a persistent volume without calling WithComputeEnvironment.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var volume = aks.AddPersistentVolume("data").WithCapacity("5Gi");

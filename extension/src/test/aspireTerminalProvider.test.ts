@@ -11,6 +11,7 @@ import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 import { EnvironmentVariables } from '../utils/environment';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
+import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 
 suite('AspireTerminalProvider tests', () => {
     let terminalProvider: AspireTerminalProvider;
@@ -303,6 +304,8 @@ suite('AspireTerminalProvider tests', () => {
                 show: () => { },
                 dispose: () => { },
             } as unknown as vscode.Terminal);
+            const resolutions: string[] = [];
+            const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution.cliPath));
 
             try {
                 await terminalProvider.sendAspireCommandToAspireTerminal('logs', false, undefined, { target });
@@ -313,8 +316,10 @@ suite('AspireTerminalProvider tests', () => {
                 assert.ok(executedCommand?.includes(cliPath), executedCommand);
                 assert.ok(executedCommand?.endsWith(' logs'), executedCommand);
                 assert.ok(createEnvironmentStub.calledOnceWith(undefined, undefined, undefined, cliPath));
+                assert.deepStrictEqual(resolutions, [cliPath]);
             }
             finally {
+                subscription.dispose();
                 createTerminalStub.restore();
                 createEnvironmentStub.restore();
             }
@@ -336,6 +341,8 @@ suite('AspireTerminalProvider tests', () => {
                 show: () => { },
                 dispose: () => { },
             } as unknown as vscode.Terminal);
+            const resolutions: string[] = [];
+            const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution.cliPath));
 
             try {
                 await terminalProvider.sendAspireCommandToAspireTerminal('new', false, undefined, { target, cliPath });
@@ -343,8 +350,10 @@ suite('AspireTerminalProvider tests', () => {
                 assert.strictEqual(resolveCliPathStub.called, false);
                 assert.ok(executedCommand?.includes(cliPath), executedCommand);
                 assert.strictEqual(createEnvironmentStub.firstCall.args[3], cliPath);
+                assert.deepStrictEqual(resolutions, []);
             }
             finally {
+                subscription.dispose();
                 createTerminalStub.restore();
                 createEnvironmentStub.restore();
             }

@@ -17,6 +17,7 @@ using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
+using Aspire.Hosting.Utils;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
@@ -525,6 +526,44 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
                     lowerCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"],
                     upperCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"]);
             }
+        }
+        finally
+        {
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PolyglotAppHostDeploymentStateIdentityDoesNotResolveSymlinks()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
+
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-deployment-path-");
+        try
+        {
+            var realDirectory = projectDirectory.CreateSubdirectory("real");
+            var appHostPath = Path.Combine(realDirectory.FullName, "apphost.ts");
+            File.WriteAllText(appHostPath, string.Empty);
+
+            var symlinkDirectory = Path.Combine(projectDirectory.FullName, "link");
+            Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+            var appHostPathViaSymlink = Path.Combine(symlinkDirectory, "apphost.ts");
+
+            var options = new DistributedApplicationOptions
+            {
+                ProjectDirectory = projectDirectory.FullName,
+                ProjectName = "Aspire.Hosting.RemoteHost",
+                AppHostFilePath = appHostPathViaSymlink,
+                Args = []
+            };
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+            var previousIdentityPath = PathNormalizer.ResolvePathCasing(Path.GetFullPath(appHostPathViaSymlink));
+            var expectedSha = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(previousIdentityPath)));
+
+            Assert.NotEqual(PathNormalizer.ResolveToFilesystemPath(appHostPathViaSymlink), previousIdentityPath);
+            Assert.Equal(expectedSha, builder.Configuration["AppHost:DeploymentStatePathSha256"]);
         }
         finally
         {

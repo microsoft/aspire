@@ -17,7 +17,8 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
 {
     private readonly AzureSandboxContainerResource _resource;
     private readonly EndpointReferenceExpression _endpointReferenceExpression;
-    private readonly AzureSandboxContainerDeployment.SandboxEndpoint _sandboxEndpoint;
+    private readonly AzureSandboxContainerDeployment.SandboxEndpoint? _sandboxEndpoint;
+    private readonly int _targetPort;
 
     public AzureSandboxEndpointPropertyValueProvider(
         AzureSandboxContainerResource resource,
@@ -26,15 +27,19 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
 
-        var endpoint = endpointReferenceExpression.Endpoint.EndpointAnnotation;
-        if (!endpoint.IsExternal)
-        {
-            throw new InvalidOperationException($"Endpoint '{endpoint.Name}' on resource '{resource.TargetResource.Name}' is not external. Azure sandbox endpoint references are only supported for external HTTP endpoints because ADC only assigns public URLs to exposed ports.");
-        }
-
         _resource = resource;
         _endpointReferenceExpression = endpointReferenceExpression;
-        _sandboxEndpoint = ResolveSandboxEndpoint(resource, endpointReferenceExpression.Endpoint);
+        if (endpointReferenceExpression.Property == EndpointProperty.TargetPort)
+        {
+            _targetPort = ResolveEndpointTargetPort(resource, endpointReferenceExpression.Endpoint.EndpointName) ??
+                throw new InvalidOperationException($"Endpoint '{endpointReferenceExpression.Endpoint.EndpointName}' on resource '{resource.TargetResource.Name}' does not have a target port.");
+        }
+        else
+        {
+            var sandboxEndpoint = ResolveSandboxEndpoint(resource, endpointReferenceExpression.Endpoint);
+            _sandboxEndpoint = sandboxEndpoint;
+            _targetPort = sandboxEndpoint.TargetPort;
+        }
     }
 
     public string ValueExpression =>
@@ -80,7 +85,7 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
     {
         return _endpointReferenceExpression.Property switch
         {
-            EndpointProperty.TargetPort => _sandboxEndpoint.TargetPort.ToString(CultureInfo.InvariantCulture),
+            EndpointProperty.TargetPort => _targetPort.ToString(CultureInfo.InvariantCulture),
             EndpointProperty.Scheme => Uri.UriSchemeHttps,
             EndpointProperty.Port => "443",
             EndpointProperty.TlsEnabled => bool.TrueString,
@@ -101,7 +106,7 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
             EndpointProperty.Url => url,
             EndpointProperty.Host or EndpointProperty.IPV4Host => uri.Host,
             EndpointProperty.Port => uri.Port.ToString(CultureInfo.InvariantCulture),
-            EndpointProperty.TargetPort => _sandboxEndpoint.TargetPort.ToString(CultureInfo.InvariantCulture),
+            EndpointProperty.TargetPort => _targetPort.ToString(CultureInfo.InvariantCulture),
             EndpointProperty.Scheme => uri.Scheme,
             EndpointProperty.HostAndPort => uri.IsDefaultPort ? uri.Host : uri.Authority,
             EndpointProperty.TlsEnabled => string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ? bool.TrueString : bool.FalseString,
@@ -115,6 +120,8 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
     private bool TryGetUrl(DeploymentStateSection stateSection, [NotNullWhen(true)] out string? url)
     {
         url = null;
+        var sandboxEndpoint = _sandboxEndpoint ??
+            throw new InvalidOperationException($"Endpoint '{_endpointReferenceExpression.Endpoint.EndpointName}' on resource '{_resource.TargetResource.Name}' is not exposed by the Azure sandbox deployment target.");
 
         // Sandbox deployment state stores exposed ADC ports as:
         //   { "Ports": [{ "Name": "http", "Port": 8080, "Url": "https://<sandbox-id>--8080.<region>.adcproxy.io/" }] }
@@ -128,12 +135,12 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
         JsonObject? fallbackPort = null;
         foreach (var port in ports.OfType<JsonObject>())
         {
-            if (port["Port"]?.GetValue<int>() == _sandboxEndpoint.TargetPort)
+            if (port["Port"]?.GetValue<int>() == sandboxEndpoint.TargetPort)
             {
                 fallbackPort ??= port;
             }
 
-            if (string.Equals(port["Name"]?.GetValue<string>(), _sandboxEndpoint.Name, StringComparison.Ordinal))
+            if (string.Equals(port["Name"]?.GetValue<string>(), sandboxEndpoint.Name, StringComparison.Ordinal))
             {
                 return TryGetUrl(port, out url);
             }
@@ -181,10 +188,9 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
     {
         foreach (var resolvedEndpoint in resource.TargetResource.ResolveEndpoints())
         {
-            if (string.Equals(resolvedEndpoint.Endpoint.Name, endpointName, StringComparison.Ordinal) &&
-                resolvedEndpoint.TargetPort.Value is int targetPort)
+            if (string.Equals(resolvedEndpoint.Endpoint.Name, endpointName, StringComparison.Ordinal))
             {
-                return targetPort;
+                return AzureSandboxContainerDeployment.ResolveSandboxTargetPort(resource.TargetResource, resolvedEndpoint);
             }
         }
 

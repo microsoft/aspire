@@ -3,11 +3,15 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREAZURE001
 
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Kubernetes;
 
@@ -38,6 +42,8 @@ public partial class AzureKubernetesEnvironmentResource :
         //     can observe the annotations.
         //   - aks-get-credentials-{name}: fetches AKS credentials into an isolated
         //     kubeconfig file after AKS is provisioned, before Helm prepare runs.
+        //   - aks-get-credentials-for-destroy-{name}: fetches credentials from saved
+        //     deployment state before cluster-scoped destroy steps run.
         Annotations.Add(new PipelineStepAnnotation(_ =>
         {
             var k8sEnv = KubernetesEnvironment;
@@ -69,8 +75,136 @@ public partial class AzureKubernetesEnvironmentResource :
                 RequiredBySteps = [$"prepare-{k8sEnv.Name}"]
             };
 
-            return Task.FromResult<IEnumerable<PipelineStep>>([prepareStep, getCredentialsStep]);
+            var getDestroyCredentialsStep = new PipelineStep
+            {
+                Name = $"aks-get-credentials-for-destroy-{Name}",
+                Description = $"Fetches AKS credentials for destroying {Name}",
+                Action = ctx => GetAksCredentialsForDestroyAsync(ctx),
+                // Keep this separate from the deploy credential step: depending on Azure
+                // provisioning here would pull provisioning into the destroy graph.
+                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+            };
+
+            return Task.FromResult<IEnumerable<PipelineStep>>([prepareStep, getCredentialsStep, getDestroyCredentialsStep]);
         }));
+
+        Annotations.Add(new PipelineConfigurationAnnotation(async context =>
+        {
+            var k8sEnv = KubernetesEnvironment;
+            var getDestroyCredentialsStep = context.GetSteps(this)
+                .Single(step => step.Name == $"aks-get-credentials-for-destroy-{Name}");
+            var kubernetesDestroySteps = context
+                .GetSteps(HelmDeploymentEngine.GetKubernetesDestroyTag(k8sEnv.Name))
+                .ToList();
+
+            var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+            var deploymentStateSection = await deploymentStateManager
+                .AcquireSectionAsync($"Azure:Deployments:{Name}")
+                .ConfigureAwait(false);
+
+            var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault()
+                ?? throw new InvalidOperationException(
+                    $"Azure environment resource required by AKS environment '{Name}' was not found.");
+            var destroyAzureStep = context.GetSteps(azureEnvironment)
+                .SingleOrDefault(step => step.Name == $"destroy-azure-{azureEnvironment.Name}")
+                ?? throw new InvalidOperationException(
+                    $"Azure destroy step for environment '{azureEnvironment.Name}' was not found.");
+
+            // A never-deployed AKS environment has no isolated kubeconfig to acquire. Likewise, a
+            // partially deployed environment can persist the cluster ID before any Helm release saves
+            // destroy state. In either case, aggregate Azure cleanup must skip cluster-scoped destroy
+            // steps rather than block on reacquiring credentials when there is nothing known to clean
+            // up. Explicitly targeting one of those Kubernetes cleanup steps still runs through the
+            // credential prerequisite and fails rather than allowing the command to fall back to the
+            // caller's ambient Kubernetes context.
+            var targetStep = context.Services.GetRequiredService<IOptions<PipelineOptions>>().Value.Step;
+            var hasPersistedAksIdentity = HasPersistedAksIdentity(deploymentStateSection.Data);
+            var hasPersistedKubernetesCleanupState = hasPersistedAksIdentity &&
+                await HasPersistedKubernetesCleanupStateAsync(
+                    deploymentStateManager,
+                    context.Model,
+                    k8sEnv).ConfigureAwait(false);
+
+            if (!hasPersistedAksIdentity || !hasPersistedKubernetesCleanupState)
+            {
+                if (string.Equals(targetStep, WellKnownPipelineSteps.Destroy, StringComparison.Ordinal))
+                {
+                    foreach (var kubernetesDestroyStep in kubernetesDestroySteps)
+                    {
+                        kubernetesDestroyStep.RequiredBySteps.RemoveAll(
+                            static stepName => string.Equals(stepName, WellKnownPipelineSteps.Destroy, StringComparison.Ordinal));
+                    }
+
+                    return;
+                }
+
+                if (string.Equals(targetStep, destroyAzureStep.Name, StringComparison.Ordinal))
+                {
+                    return;
+                }
+            }
+
+            foreach (var kubernetesDestroyStep in kubernetesDestroySteps)
+            {
+                kubernetesDestroyStep.DependsOn(getDestroyCredentialsStep);
+
+                // The direct Helm uninstall step is an explicit, no-confirmation alternative to the
+                // aggregate destroy step. It needs isolated credentials when targeted directly, but
+                // Azure cleanup must not schedule both alternatives and uninstall the release twice.
+                if (!string.Equals(
+                    kubernetesDestroyStep.Name,
+                    HelmDeploymentEngine.GetHelmUninstallStepName(k8sEnv.Name),
+                    StringComparison.Ordinal))
+                {
+                    destroyAzureStep.DependsOn(kubernetesDestroyStep);
+                }
+            }
+        }));
+    }
+
+    private static async Task<bool> HasPersistedKubernetesCleanupStateAsync(
+        IDeploymentStateManager deploymentStateManager,
+        DistributedApplicationModel model,
+        KubernetesEnvironmentResource environment)
+    {
+        var environmentState = await deploymentStateManager
+            .AcquireSectionAsync($"Helm:{environment.Name}")
+            .ConfigureAwait(false);
+        if (HasPersistedHelmReleaseState(environmentState.Data))
+        {
+            return true;
+        }
+
+        foreach (var chart in model.Resources.OfType<KubernetesHelmChartResource>())
+        {
+            if (!chart.DestroyOnUninstall ||
+                !string.Equals(chart.Parent.Name, environment.Name, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var chartState = await deploymentStateManager
+                .AcquireSectionAsync($"HelmChart:{environment.Name}:{chart.Name}")
+                .ConfigureAwait(false);
+            if (HasPersistedHelmReleaseState(chartState.Data))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasPersistedHelmReleaseState(JsonObject deploymentState)
+    {
+        try
+        {
+            return !string.IsNullOrEmpty(deploymentState["ReleaseName"]?.GetValue<string>());
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

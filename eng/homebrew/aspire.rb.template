@@ -5,8 +5,7 @@ cask "aspire" do
   sha256 arm:   "${SHA256_OSX_ARM64}",
          intel: "${SHA256_OSX_X64}"
 
-  url "https://github.com/microsoft/aspire/releases/download/v#{version}/aspire-cli-osx-#{arch}-#{version}.tar.gz",
-      verified: "github.com/microsoft/aspire/"
+  url "https://github.com/microsoft/aspire/releases/download/v#{version}/aspire-cli-osx-#{arch}-#{version}.tar.gz"
   name "Aspire CLI"
   desc "CLI for building observable, production-ready distributed applications"
   homepage "https://aspire.dev/"
@@ -31,8 +30,8 @@ cask "aspire" do
   # The sidecar tells the CLI which install channel placed this binary, so
   # behaviors like self-update can route through `brew` instead of overwriting
   # the cask payload. See docs/specs/install-routes.md.
-  postflight do
-    File.write("#{staged_path}/.aspire-install.json", %Q({"source":"brew"}\n))
+  postflight_steps do
+    write_file ".aspire-install.json", "{\"source\":\"brew\"}\n", base: :staged_path
   end
 
   # Empty by design. `~/.aspire/` is shared user state across all Aspire CLI

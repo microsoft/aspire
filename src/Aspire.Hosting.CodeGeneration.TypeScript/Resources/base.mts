@@ -538,6 +538,145 @@ export class ResourceBuilderBase<THandle extends Handle = Handle> implements Han
 }
 
 // ============================================================================
+// FluentPromise<T> - Generated fluent promise implementation
+// ============================================================================
+
+/** @internal */
+export type FluentPromiseConstructor = new (
+    promise: Promise<any>,
+    client: AspireClientRpc,
+    track?: boolean
+) => PromiseLike<any>;
+
+/** @internal */
+export type FluentPromiseConstructorProvider = () => FluentPromiseConstructor;
+
+/** @internal */
+export type FluentPromiseTransition =
+    | null
+    | FluentPromiseConstructorProvider
+    | readonly [
+        FluentPromiseConstructorProvider,
+        track: boolean,
+        trackTransitions?: boolean
+    ];
+
+/** @internal */
+export type FluentPromiseTransitions = Readonly<Record<string, FluentPromiseTransition>>;
+
+/**
+ * Shared implementation for generated thenable wrappers.
+ *
+ * Generated promise interfaces retain their full typed method surface. At runtime, missing
+ * methods are forwarded through the resolved object and only results that support further
+ * fluent chaining are rewrapped according to the generated transition table.
+ *
+ * @internal
+ */
+export class FluentPromise<T> implements PromiseLike<T> {
+    constructor(
+        private readonly _promise: Promise<T>,
+        private readonly _client: AspireClientRpc,
+        track = true,
+        private readonly _trackTransitions = true
+    ) {
+        if (track) {
+            _client.trackPromise(_promise);
+        }
+
+        return new Proxy(this, {
+            has: (target, property) =>
+                Reflect.has(target, property) ||
+                (typeof property === 'string' &&
+                    Object.prototype.hasOwnProperty.call(target.transitions, property)),
+            get: (target, property, receiver) => {
+                const isForwardedMember = typeof property === 'string' &&
+                    Object.prototype.hasOwnProperty.call(target.transitions, property);
+                if (!isForwardedMember) {
+                    if (Reflect.has(target, property)) {
+                        const value = Reflect.get(target, property, receiver);
+                        return typeof value === 'function' ? value.bind(target) : value;
+                    }
+
+                    return undefined;
+                }
+
+                if (typeof property !== 'string') {
+                    return undefined;
+                }
+
+                return (...args: unknown[]) => {
+                    const promise = target._promise.then(value => {
+                        const member = (value as Record<string, unknown>)[property];
+                        if (typeof member !== 'function') {
+                            throw new Error(`Fluent promise target does not define method '${property}'.`);
+                        }
+
+                        return Reflect.apply(member, value, args);
+                    });
+
+                    const transition = target.transitions[property];
+                    if (transition === undefined || transition === null) {
+                        return promise;
+                    }
+
+                    const [getConstructor, shouldTrack, shouldTrackTransitions = true] = Array.isArray(transition)
+                        ? transition
+                        : [transition, true, true] as const;
+                    const PromiseConstructor = getConstructor();
+                    return new PromiseConstructor(
+                        promise,
+                        target._client,
+                        target._trackTransitions && shouldTrack,
+                        target._trackTransitions && shouldTrackTransitions);
+                };
+            }
+        });
+    }
+
+    protected get transitions(): FluentPromiseTransitions {
+        return {};
+    }
+
+    then<TResult1 = T, TResult2 = never>(
+        onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+}
+
+/** @internal */
+export type FluentPromiseClass<T, TPromise extends PromiseLike<T>> = new (
+    promise: Promise<T>,
+    client: AspireClientRpc,
+    track?: boolean,
+    trackTransitions?: boolean
+) => TPromise;
+
+/**
+ * Creates a typed generated promise implementation backed by {@link FluentPromise}.
+ *
+ * The transition factory is lazy because generated types can refer to promise implementations
+ * declared later in the module. Its result is cached once the module has initialized.
+ *
+ * @internal
+ */
+export function createFluentPromiseClass<T, TPromise extends PromiseLike<T>>(
+    createTransitions: () => FluentPromiseTransitions
+): FluentPromiseClass<T, TPromise> {
+    let transitions: FluentPromiseTransitions | undefined;
+
+    class GeneratedFluentPromise extends FluentPromise<T> {
+        protected override get transitions(): FluentPromiseTransitions {
+            return transitions ??= createTransitions();
+        }
+    }
+
+    return GeneratedFluentPromise as unknown as FluentPromiseClass<T, TPromise>;
+}
+
+// ============================================================================
 // AspireList<T> - Mutable List Wrapper
 // ============================================================================
 

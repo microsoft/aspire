@@ -1,5 +1,15 @@
 # Aspire VS Code Extension Changelog
 
+## v1.22.0
+
+<!-- aspire-ext-changelog-done from=93b731db94a086cb90e6b126d6a2ebab555ee300 to=8e47a3dbf220a74a79fd734ea7b4b941c842595e base=1.21.0 -->
+
+### Fixes
+
+- Fix the Java starter using an ambient JDK instead of the modeled toolchain, and improve Java AppHost transport reliability ([#19635](https://github.com/microsoft/aspire/pull/19635)).
+- Fix Rust AppHost debugging so an early adapter-launched process no longer gets rejected and recycled by DCP, which could leave the resource with no logs or proxy ([#19750](https://github.com/microsoft/aspire/issues/19750), [#19831](https://github.com/microsoft/aspire/pull/19831)).
+- Consolidate AppHost build failure notifications into a single error notification with **Open CLI Log** and **Open AppHost Log** actions ([#19748](https://github.com/microsoft/aspire/issues/19748), [#19755](https://github.com/microsoft/aspire/pull/19755)).
+
 ## v1.21.0
 
 <!-- aspire-ext-changelog-done from=689b3c3226482b5d84d80e6d8c7ea8408c704c1f to=1410c1a7fc2e0dce9539f234e2464ca3e20cd9bf base=1.20.0 -->

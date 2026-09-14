@@ -2,12 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Storage;
 using Microsoft.DotNet.RemoteExecutor;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -243,6 +247,93 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         var mainBicep = File.ReadAllText(Path.Combine(workspace.Path, "main.bicep"));
 
         await Verify(mainBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AzurePublishingContext_ExcludeMainBicepFile_WritesModulesWithoutMainBicep()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddAzureEnvironment();
+        AddTenantScopedModuleWithoutLocation(builder);
+
+        using var app = builder.Build();
+
+        var outputPath = Path.Combine(workspace.Path, "exclude-main");
+        var context = await CreatePublishingContextAsync(app, outputPath);
+        context.ExcludeMainBicepFile = true;
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = model.Resources.OfType<AzureEnvironmentResource>().Single();
+
+        await context.WriteModelAsync(model, environment, CancellationToken.None);
+
+        Assert.False(File.Exists(Path.Combine(outputPath, "main.bicep")));
+        Assert.True(File.Exists(Path.Combine(outputPath, "mod", "mod.bicep")));
+
+        // The lookups are still populated so callers can resolve parameters and outputs
+        // even though the root template was never compiled.
+        Assert.Contains(environment.Location, context.ParameterLookup.Keys);
+        Assert.Contains(environment.ResourceGroupName, context.ParameterLookup.Keys);
+    }
+
+    [Fact]
+    public async Task AzurePublishingContext_WritesMainBicepByDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddAzureEnvironment();
+        AddTenantScopedModuleWithoutLocation(builder);
+
+        using var app = builder.Build();
+
+        var outputPath = Path.Combine(workspace.Path, "write-main");
+        var context = await CreatePublishingContextAsync(app, outputPath);
+
+        Assert.False(context.ExcludeMainBicepFile);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = model.Resources.OfType<AzureEnvironmentResource>().Single();
+
+        await context.WriteModelAsync(model, environment, CancellationToken.None);
+
+        Assert.True(File.Exists(Path.Combine(outputPath, "mod", "mod.bicep")));
+
+        // The default root is written, and it passes `location` to the tenant-scoped module even though
+        // that module declares no such parameter. This is the shape that fails a real `bicep build` with
+        // BCP037 and motivates ExcludeMainBicepFile. Azure.Provisioning emits the text without running the
+        // Bicep compiler, so the invalid template is only observable in the generated content here.
+        var mainBicep = await File.ReadAllTextAsync(Path.Combine(outputPath, "main.bicep"));
+        Assert.Contains("scope: tenant()", mainBicep);
+        Assert.Contains("location: location", mainBicep);
+    }
+
+    /// <summary>
+    /// Adds the module shape that motivates <see cref="AzurePublishingContext.ExcludeMainBicepFile"/>: a
+    /// tenant-scoped module that declares no <c>location</c> parameter, which the generated root passes
+    /// <c>location</c> to regardless.
+    /// </summary>
+    private static void AddTenantScopedModuleWithoutLocation(IDistributedApplicationBuilder builder)
+    {
+        var module = builder.AddBicepTemplateString("mod",
+            """
+            targetScope = 'tenant'
+
+            output value string = 'mod'
+            """);
+
+        module.Resource.Scope = AzureBicepResourceScope.CreateForTenant();
+    }
+
+    private async Task<AzurePublishingContext> CreatePublishingContextAsync(DistributedApplication app, string outputPath)
+    {
+        var provisioningOptions = app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>().Value;
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<AzurePublishingContext>();
+        var step = await new TestPipelineActivityReporter(output).CreateStepAsync("Publishing Azure resources");
+
+        return new AzurePublishingContext(outputPath, provisioningOptions, app.Services, logger, step);
     }
 
     private sealed class TestProject : IProjectMetadata

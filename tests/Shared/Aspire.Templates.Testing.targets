@@ -12,12 +12,12 @@
   <PropertyGroup>
     <SdkVersionForNet8TFM>$(DotNetSdkNet8VersionForTesting)</SdkVersionForNet8TFM>
     <SdkVersionForNet9TFM>$(DotNetSdkNet9VersionForTesting)</SdkVersionForNet9TFM>
-    <SdkVersionForNet11TFM>$(DotNetSdkNet11VersionForTesting)</SdkVersionForNet11TFM>
+    <SdkVersionForNet10TFM>$(DotNetSdkNet10VersionForTesting)</SdkVersionForNet10TFM>
 
-    <!-- global.json uses the .NET 10 SDK. -->
+    <!-- global.json uses the .NET 11 SDK. -->
     <_GlobalJsonContent>$([System.IO.File]::ReadAllText('$(RepoRoot)global.json'))</_GlobalJsonContent>
     <_DotNetCliVersionFromGlobalJson>$([System.Text.RegularExpressions.Regex]::Match($(_GlobalJsonContent), '(%3F&lt;="dotnet": ").*(%3F=")'))</_DotNetCliVersionFromGlobalJson>
-    <SdkVersionForNet10TFM>$(_DotNetCliVersionFromGlobalJson)</SdkVersionForNet10TFM>
+    <SdkVersionForNet11TFM>$(_DotNetCliVersionFromGlobalJson)</SdkVersionForNet11TFM>
 
     <SdkDirForNet8TFM>$(ArtifactsBinDir)dotnet-8\</SdkDirForNet8TFM>
     <SdkStampPathForNet8TFM>$(SdkDirForNet8TFM).version-$(SdkVersionForNet8TFM).stamp</SdkStampPathForNet8TFM>

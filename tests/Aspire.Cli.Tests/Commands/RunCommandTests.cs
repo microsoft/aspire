@@ -20,6 +20,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Cli.Telemetry;
@@ -33,6 +34,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using StreamJsonRpc;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -304,6 +306,363 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WhenProjectExitsSuccessfullyBeforeBuildCompletion_ReturnsFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (_, _) =>
+            {
+                await Task.Yield();
+                return CliExitCodes.Success;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Equal(InteractionServiceStrings.ProjectCouldNotBeBuilt, Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenProjectThrowsBeforeBuildCompletion_FailsPromptly()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (_, _) =>
+            {
+                await Task.Yield();
+                throw new InvalidOperationException("Project failed before build completion.");
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Equal(
+            string.Format(
+                CultureInfo.CurrentCulture,
+                InteractionServiceStrings.UnexpectedErrorOccurred,
+                "Project failed before build completion."),
+            Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenCancelledDuringBuild_ExitsSuccessfully()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (_, runCancellationToken) =>
+            {
+                Assert.NotEqual(cts.Token, runCancellationToken);
+                cts.Cancel();
+                return Task.FromCanceled<int>(runCancellationToken);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunCommand_WhenExtensionStopsCliDuringStartup_AwaitsRunCleanupPastLocalTimeout(bool buildCompleted)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(5));
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var projectFactory = new TestAppHostProjectFactory();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.TimeProvider = timeProvider;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var cancellationManager = provider.GetRequiredService<ConsoleCancellationManager>();
+        var rpcTarget = provider.GetRequiredService<IExtensionRpcTarget>();
+        var runCompletionSource = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopRequested = false;
+        interactionService.ShowStatusCallback = status =>
+        {
+            if (buildCompleted && status == RunCommandStrings.ConnectingToAppHost)
+            {
+                Assert.True(rpcTarget.StopCliAsync().IsCompletedSuccessfully);
+                stopRequested = true;
+            }
+        };
+        projectFactory.RunAsyncCallback = (context, runCancellationToken) =>
+        {
+            // Cancel synchronously at the selected startup phase so InvokeAsync cannot yield
+            // until cleanup is waiting on the incomplete run task.
+            if (buildCompleted)
+            {
+                context.BuildCompletionSource!.SetResult(true);
+            }
+            else
+            {
+                Assert.True(rpcTarget.StopCliAsync().IsCompletedSuccessfully);
+                Assert.True(runCancellationToken.IsCancellationRequested);
+                stopRequested = true;
+            }
+            return runCompletionSource.Task;
+        };
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+        var pendingCommand = result.InvokeAsync(cancellationToken: cancellationManager.Token);
+
+        int exitCode;
+        try
+        {
+            Assert.True(stopRequested, "The setup must request cancellation synchronously before inspecting cleanup.");
+
+            // Advance beyond the old local timeout only after the command has entered its cleanup wait.
+            timeProvider.Advance(TimeSpan.FromSeconds(6));
+
+            Assert.False(timeProvider.TimerCreated.Task.IsCompleted, "Manager-owned cancellation armed the local startup timeout.");
+            Assert.False(pendingCommand.IsCompleted, "The CLI exited before run cleanup completed.");
+        }
+        finally
+        {
+            runCompletionSource.TrySetResult(CliExitCodes.Cancelled);
+            exitCode = await pendingCommand.DefaultTimeout();
+        }
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunCommand_WhenDirectlyCancelledDuringStartup_StopsWaitingAtLocalTimeout(bool buildCompleted)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(5));
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var buildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupCanFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connectingToAppHost = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        interactionService.ShowStatusCallback = status =>
+        {
+            if (status == RunCommandStrings.ConnectingToAppHost)
+            {
+                connectingToAppHost.TrySetResult();
+            }
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                if (buildCompleted)
+                {
+                    context.BuildCompletionSource!.SetResult(true);
+                }
+                buildStarted.TrySetResult();
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    cleanupStarted.TrySetResult();
+                    await cleanupCanFinish.Task;
+                    cleanupCompleted.TrySetResult();
+                    context.BuildCompletionSource?.TrySetResult(false);
+                }
+
+                return CliExitCodes.Cancelled;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.TimeProvider = timeProvider;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+        var pendingCommand = result.InvokeAsync(cancellationToken: cts.Token);
+
+        await buildStarted.Task.DefaultTimeout();
+        if (buildCompleted)
+        {
+            await connectingToAppHost.Task.DefaultTimeout();
+        }
+        cts.Cancel();
+        await cleanupStarted.Task.DefaultTimeout();
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
+
+        try
+        {
+            Assert.False(pendingCommand.IsCompleted, "Direct cancellation did not wait for run cleanup.");
+            timeProvider.Advance(TimeSpan.FromSeconds(6));
+
+            var exitCode = await pendingCommand.DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.False(cleanupCompleted.Task.IsCompleted, "Direct cancellation waited past its local safety timeout.");
+            Assert.Empty(interactionService.DisplayedErrors);
+        }
+        finally
+        {
+            cleanupCanFinish.TrySetResult();
+            await cleanupCompleted.Task.DefaultTimeout();
+            await pendingCommand.DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenProjectReturnsCancelledDuringBuild_ExitsSuccessfully()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, _) =>
+            {
+                // GuestAppHostProject signals failed preparation before translating cancellation to
+                // an exit code. Complete both synchronously to exercise that returned-result path.
+                context.BuildCompletionSource?.TrySetResult(false);
+                cts.Cancel();
+                return Task.FromResult(CliExitCodes.Cancelled);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
+    }
+
+    [Fact]
     public async Task RunCommand_WhenAppHostStartupTimesOut_DisplaysTimeoutGuidance()
     {
         var interactionService = new TestInteractionService();
@@ -359,65 +718,104 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.True(runCancellationObserved.Task.IsCompletedSuccessfully);
     }
 
-    [Fact]
-    public async Task RunCommand_WhenCancelledDuringStartupTimeout_ExitsWithoutWaitingForFullTimeout()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RunCommand_WhenCancelledDuringStartupTimeoutCleanup_AwaitsRunCleanup(bool managerOwned, bool timeoutWins)
     {
-        // Verifies that when Ctrl+C fires (cancellationToken) during startup, the command exits
-        // promptly rather than blocking for the 5-second CancelAppHostStartupAsync timeout.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cts = new CancellationTokenSource();
         var interactionService = new TestInteractionService();
-        var buildCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(5));
         var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
         var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
-        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
 
         var projectLocator = new TestProjectLocator
         {
             UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
                 Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
         };
-
+        var runCompletion = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var projectFactory = new TestAppHostProjectFactory
         {
-            RunAsyncCallback = async (context, _) =>
+            RunAsyncCallback = (context, _) =>
             {
-                context.BuildCompletionSource?.TrySetResult(true);
-                buildCompleted.SetResult();
-
-                // Never signal BackchannelCompletionSource and ignore cancellation to
-                // simulate a hung AppHost process.
-                await Task.Delay(TimeSpan.FromSeconds(30), CancellationToken.None);
-                return 0;
+                context.BuildCompletionSource!.SetResult(true);
+                return runCompletion.Task;
             }
         };
-
+        interactionService.ShowStatusCallback = status =>
+        {
+            if (status == RunCommandStrings.ConnectingToAppHost)
+            {
+                // Expire startup before its wait is created, keeping the transition into
+                // timeout cleanup synchronous rather than depending on scheduler timing.
+                timeProvider.Advance(TimeSpan.FromSeconds(1));
+            }
+        };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.ProjectLocatorFactory = _ => projectLocator;
             options.AppHostProjectFactory = _ => projectFactory;
+            options.TimeProvider = timeProvider;
+            options.ConfigurationCallback += config => config[CliConfigNames.AppHostStartupTimeout] = "1";
         });
 
         using var provider = services.BuildServiceProvider();
+        var cancellationManager = provider.GetRequiredService<ConsoleCancellationManager>();
+        var rpcTarget = provider.GetRequiredService<IExtensionRpcTarget>();
+        var cleanupWaits = 0;
+        timeProvider.TimerCreatedCallback = () =>
+        {
+            if (++cleanupWaits == 1)
+            {
+                if (timeoutWins)
+                {
+                    // Complete the timeout first, then cancel before the command observes it.
+                    timeProvider.Advance(TimeSpan.FromSeconds(5));
+                }
+                // Interrupt the startup-timeout cleanup wait, not the startup wait itself.
+                if (managerOwned)
+                {
+                    Assert.True(rpcTarget.StopCliAsync().IsCompletedSuccessfully);
+                }
+                else
+                {
+                    cts.Cancel();
+                }
+            }
+        };
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+        var pendingCommand = command.Parse($"run --apphost {appHostFile.FullName}")
+            .InvokeAsync(cancellationToken: managerOwned ? cancellationManager.Token : cts.Token);
 
-        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+        int exitCode;
+        try
+        {
+            Assert.Equal(managerOwned ? 1 : 2, cleanupWaits);
+            Assert.False(pendingCommand.IsCompleted, "Cancellation escaped the startup-timeout cleanup wait.");
+            timeProvider.Advance(TimeSpan.FromSeconds(6));
+            if (managerOwned)
+            {
+                Assert.False(pendingCommand.IsCompleted, "Manager-owned cleanup stopped at the local timeout.");
+            }
+            else
+            {
+                Assert.Equal(CliExitCodes.Success, await pendingCommand.DefaultTimeout());
+            }
+        }
+        finally
+        {
+            runCompletion.TrySetResult(CliExitCodes.Cancelled);
+            exitCode = await pendingCommand.DefaultTimeout();
+        }
 
-        // Cancel after build completes to simulate Ctrl+C during startup.
-        await buildCompleted.Task.DefaultTimeout();
-        cts.Cancel();
-
-        var stopwatch = Stopwatch.StartNew();
-        var exitCode = await pendingRun.DefaultTimeout();
-        stopwatch.Stop();
-
-        // Without the cancellationToken plumbing, this would block for the full 5-second
-        // CancelAppHostStartupAsync timeout. With the fix, it exits promptly.
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"Expected prompt exit after Ctrl+C, but took {stopwatch.Elapsed}.");
         Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
     }
 
     [Fact]
@@ -710,22 +1108,34 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_StartupTimeoutBudgetIncludesBuildAndBackchannelWaits()
+    public async Task RunCommand_StartupTimeoutStartsAfterBuildCompletes()
     {
         var interactionService = new TestInteractionService();
         var timeProvider = new FakeTimeProvider();
+        var appHostReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowBackchannel = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var backchannelFactory = (IServiceProvider sp) => new TestAppHostBackchannel
+        {
+            NotifyAppHostReadyAsyncCalled = appHostReady,
+            GetAppHostLogEntriesAsyncCallback = EmptyLogEntriesAsync
+        };
 
         var runnerFactory = (IServiceProvider sp) =>
         {
             var runner = new TestDotNetCliRunner();
             runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) =>
             {
-                timeProvider.Advance(TimeSpan.FromSeconds(2));
+                timeProvider.Advance(TimeSpan.FromSeconds(3));
                 return 0;
             };
             runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
             runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
             {
+                runStarted.TrySetResult();
+                await allowBackchannel.Task.WaitAsync(ct);
+                backchannelCompletionSource!.SetResult(sp.GetRequiredService<IAppHostCliBackchannel>());
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
                 return 0;
             };
@@ -738,6 +1148,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.AppHostBackchannelFactory = backchannelFactory;
             options.DotNetCliRunnerFactory = runnerFactory;
             options.ConfigurationCallback += config =>
             {
@@ -752,12 +1163,18 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
 
-        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
-        Assert.Contains(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 2, CliConfigNames.AppHostStartupTimeout),
-            interactionService.DisplayedErrors);
+        Assert.Same(runStarted.Task, await Task.WhenAny(runStarted.Task, pendingRun).DefaultTimeout());
+        allowBackchannel.SetResult();
+        Assert.Same(appHostReady.Task, await Task.WhenAny(appHostReady.Task, pendingRun).DefaultTimeout());
+
+        await cts.CancelAsync().DefaultTimeout();
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
     }
 
     [Fact]
@@ -1529,8 +1946,10 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("An unexpected error occurred", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task RunCommand_WhenCancelledDuringStartupRpc_CompletesSuccessfully()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunCommand_WhenCancelledDuringStartupRpc_AwaitsRunCleanup(bool useRunCancellationToken)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cts = new CancellationTokenSource();
@@ -1549,7 +1968,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var interactionService = new TestInteractionService();
         var projectFactory = new TestAppHostProjectFactory
         {
-            RunAsyncCallback = async (context, _) =>
+            RunAsyncCallback = async (context, runCancellationToken) =>
             {
                 context.BuildCompletionSource?.TrySetResult(true);
                 context.BackchannelCompletionSource?.TrySetResult(new TestAppHostBackchannel
@@ -1557,7 +1976,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                     GetDashboardUrlsAsyncCallback = ct =>
                     {
                         cts.Cancel();
-                        return Task.FromCanceled<DashboardUrlsState>(ct);
+                        return Task.FromCanceled<DashboardUrlsState>(useRunCancellationToken ? runCancellationToken : ct);
                     }
                 });
 
@@ -1577,21 +1996,27 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"run --apphost {appHostFile.FullName}");
 
+        var pendingCommand = result.InvokeAsync(cancellationToken: cts.Token);
+        int exitCode;
         try
         {
-            var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
-
-            Assert.Equal(CliExitCodes.Success, exitCode);
-            Assert.Empty(interactionService.DisplayedErrors);
+            Assert.True(cts.IsCancellationRequested, "The dashboard RPC must request cancellation synchronously.");
+            Assert.False(pendingCommand.IsCompleted, "The CLI exited before run cleanup completed.");
         }
         finally
         {
             runCanExit.TrySetResult();
+            exitCode = await pendingCommand.DefaultTimeout();
         }
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
     }
 
-    [Fact]
-    public async Task RunCommand_WhenStartupRpcThrowsUnrelatedCancellationAfterUserCancellation_DoesNotTreatRunAsSuccessful()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunCommand_WhenStartupRpcFailsAfterUserCancellation_AwaitsRunCleanupAndPreservesFailure(bool unrelatedCancellation)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cts = new CancellationTokenSource();
@@ -1620,7 +2045,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                     {
                         cts.Cancel();
                         unrelatedCts.Cancel();
-                        return Task.FromCanceled<DashboardUrlsState>(unrelatedCts.Token);
+                        return unrelatedCancellation
+                            ? Task.FromCanceled<DashboardUrlsState>(unrelatedCts.Token)
+                            : Task.FromException<DashboardUrlsState>(new InvalidOperationException("Dashboard RPC failed."));
                     }
                 });
 
@@ -1640,17 +2067,143 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"run --apphost {appHostFile.FullName}");
 
+        var pendingCommand = result.InvokeAsync(cancellationToken: cts.Token);
+        int exitCode;
         try
         {
-            var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
-
-            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
-            Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("unexpected error", StringComparison.OrdinalIgnoreCase));
+            Assert.True(cts.IsCancellationRequested, "The dashboard RPC must request cancellation synchronously.");
+            Assert.False(pendingCommand.IsCompleted, "An RPC failure bypassed cancellation cleanup.");
         }
         finally
         {
             runCanExit.TrySetResult();
+            exitCode = await pendingCommand.DefaultTimeout();
         }
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("unexpected error", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, true)]
+    public async Task RunCommand_WhenCancelledDuringFinalTeardown_AwaitsRunCleanup(bool managerOwned, bool teardownFails, bool extensionCancelled)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(5));
+        var runCompletion = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var configurationProvider = new CallbackConfigurationProvider();
+        var rpcFailed = false;
+        var cancellationRequested = false;
+        var runToken = CancellationToken.None;
+        if (extensionCancelled)
+        {
+            // Expire the initial extension-operation cancellation wait synchronously.
+            // A later stopCli must upgrade that already-handled local wait to manager ownership.
+            timeProvider.TimerCreatedCallback = () => timeProvider.Advance(TimeSpan.FromSeconds(5));
+        }
+
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, token) =>
+            {
+                runToken = token;
+                context.BuildCompletionSource!.SetResult(true);
+                context.BackchannelCompletionSource!.SetResult(new TestAppHostBackchannel
+                {
+                    GetDashboardUrlsAsyncCallback = _ =>
+                    {
+                        rpcFailed = true;
+                        return Task.FromException<DashboardUrlsState>(extensionCancelled
+                            ? new ExtensionOperationCanceledException("Extension operation canceled.")
+                            : new InvalidOperationException("Dashboard RPC failed."));
+                    }
+                });
+                return runCompletion.Task;
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.TimeProvider = timeProvider;
+        });
+        var originalConfiguration = Assert.IsAssignableFrom<IConfiguration>(
+            services.Single(service => service.ServiceType == typeof(IConfiguration)).ImplementationInstance);
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+            .AddConfiguration(originalConfiguration)
+            .Add(configurationProvider)
+            .Build());
+
+        using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<ConsoleCancellationManager>();
+        var rpcTarget = provider.GetRequiredService<IExtensionRpcTarget>();
+        configurationProvider.Reading = key =>
+        {
+            if (!rpcFailed || cancellationRequested || key != KnownConfigNames.CliRunDetached)
+            {
+                return;
+            }
+
+            // The final detached-child check used to run after the cancellation snapshot.
+            // Deliver cancellation at that exact boundary, without a scheduler-dependent delay.
+            cancellationRequested = true;
+            if (managerOwned)
+            {
+                Assert.True(rpcTarget.StopCliAsync().IsCompletedSuccessfully);
+            }
+            else
+            {
+                cts.Cancel();
+            }
+
+            if (teardownFails)
+            {
+                throw new InvalidOperationException("Final teardown failed.");
+            }
+        };
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var pendingCommand = command.Parse($"run --apphost {appHostFile.FullName}")
+            .InvokeAsync(cancellationToken: managerOwned ? manager.Token : cts.Token);
+        int exitCode;
+        try
+        {
+            Assert.True(cancellationRequested);
+            Assert.True(runToken.IsCancellationRequested);
+            Assert.False(pendingCommand.IsCompleted, "Final teardown bypassed cancellation cleanup.");
+
+            timeProvider.Advance(TimeSpan.FromSeconds(6));
+            Assert.Equal(!managerOwned || extensionCancelled, timeProvider.TimerCreated.Task.IsCompleted);
+            if (managerOwned)
+            {
+                Assert.False(pendingCommand.IsCompleted, "Manager-owned cleanup used a local deadline.");
+            }
+            else
+            {
+                await pendingCommand.DefaultTimeout();
+                Assert.False(runCompletion.Task.IsCompleted);
+            }
+        }
+        finally
+        {
+            runCompletion.TrySetResult(CliExitCodes.Cancelled);
+            exitCode = await pendingCommand.DefaultTimeout();
+        }
+
+        Assert.Equal(teardownFails ? CliExitCodes.InvalidCommand :
+            extensionCancelled ? CliExitCodes.Success : CliExitCodes.FailedToDotnetRunAppHost, exitCode);
     }
 
     [Fact]
@@ -2060,6 +2613,132 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_InRemoteNonInteractiveHost_DisplaysEachEndpointOnce()
+    {
+        var resourceStatesProcessed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interactionService = new TestInteractionService();
+
+        var backchannelFactory = (IServiceProvider sp) =>
+        {
+            return new TestAppHostBackchannel
+            {
+                GetAppHostLogEntriesAsyncCallback = EmptyLogEntriesAsync,
+                GetDashboardUrlsAsyncCallback = _ => Task.FromResult(new DashboardUrlsState
+                {
+                    DashboardHealthy = true,
+                    BaseUrlWithLoginToken = "http://localhost:5000/login?t=abcd",
+                    CodespacesUrlWithLoginToken = null
+                }),
+                GetResourceStatesAsyncCallback = cancellationToken => GetResourceStatesAsync(resourceStatesProcessed, cancellationToken)
+            };
+        };
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
+                backchannelCompletionSource!.SetResult(backchannel);
+
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+
+                return 0;
+            };
+
+            return runner;
+        };
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AppHostBackchannelFactory = backchannelFactory;
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ConfigurationCallback += config =>
+            {
+                config["VSCODE_IPC_HOOK_CLI"] = "test-ipc-hook";
+                config["SSH_CONNECTION"] = "127.0.0.1 1 127.0.0.1 2";
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+
+        try
+        {
+            await resourceStatesProcessed.Task.DefaultTimeout();
+        }
+        finally
+        {
+            cts.Cancel();
+
+            var exitCode = await pendingRun.DefaultTimeout();
+            Assert.Equal(CliExitCodes.Success, exitCode);
+        }
+
+        var renderedOutput = interactionService.DisplayedRenderables.Select(RenderToPlainConsole).ToList();
+
+        Assert.Empty(interactionService.DisplayedLiveRenderables);
+        Assert.Single(renderedOutput, output => output.Contains("frontend has endpoint http://localhost:5000", StringComparison.Ordinal));
+        Assert.Single(renderedOutput, output => output.Contains("backend has endpoint http://localhost:5001", StringComparison.Ordinal));
+        Assert.Single(renderedOutput, output => output.Contains("Endpoints:", StringComparison.Ordinal));
+        Assert.Single(renderedOutput, output => output.Contains("Press CTRL+C to stop the AppHost and exit.", StringComparison.Ordinal));
+
+        static async IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(
+            TaskCompletionSource resourceStatesProcessed,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new RpcResourceState
+            {
+                Resource = "frontend",
+                Type = "Project",
+                State = "Running",
+                Endpoints = ["http://localhost:5000"],
+                Health = "Healthy"
+            };
+            yield return new RpcResourceState
+            {
+                Resource = "backend",
+                Type = "Project",
+                State = "Running",
+                Endpoints = ["http://localhost:5001"],
+                Health = "Healthy"
+            };
+
+            resourceStatesProcessed.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        static string RenderToPlainConsole(IRenderable renderable)
+        {
+            var writer = new StringWriter();
+            var console = AnsiConsole.Create(new AnsiConsoleSettings
+            {
+                Ansi = AnsiSupport.No,
+                Interactive = InteractionSupport.No,
+                ColorSystem = ColorSystemSupport.NoColors,
+                Out = new AnsiConsoleOutput(writer),
+                Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+            });
+
+            console.Profile.Width = int.MaxValue;
+            console.Profile.Capabilities.Links = false;
+            console.Write(renderable);
+
+            return writer.ToString().Replace("\r\n", "\n");
+        }
+    }
+
+    [Fact]
     public async Task RunCommand_InRemoteExtensionHost_DisplaysDashboardUrlsBeforeLiveEndpointDisplayCompletes()
     {
         var displayLiveStarted = new TaskCompletionSource();
@@ -2099,6 +2778,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.AppHostBackchannelFactory = backchannelFactory;
             options.DotNetCliRunnerFactory = runnerFactory;
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
             options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
             {
@@ -2525,7 +3205,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(appHostProjectFile.FullName, "<Project></Project>");
 
         var options = new ProcessInvocationOptions();
-        await AppHostHelper.BuildAppHostAsync(testRunner, testInteractionService, appHostProjectFile, noRestore: false, options, workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        await AppHostHelper.BuildAppHostAsync(testRunner, testInteractionService, appHostProjectFile, noRestore: false, env: null, options, workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
     }
 
     [Fact]
@@ -2534,7 +3214,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var buildCalled = false;
 
         var extensionBackchannel = new TestExtensionBackchannel();
-        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { "devkit" });
+        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { "devkit", "project" });
 
         var appHostBackchannel = new TestAppHostBackchannel();
         appHostBackchannel.GetDashboardUrlsAsyncCallback = (ct) => Task.FromResult(new DashboardUrlsState
@@ -2604,7 +3284,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var buildCalled = false;
 
         var extensionBackchannel = new TestExtensionBackchannel();
-        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(Array.Empty<string>());
+        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { "project" });
 
         var appHostBackchannel = new TestAppHostBackchannel();
         appHostBackchannel.GetDashboardUrlsAsyncCallback = (ct) => Task.FromResult(new DashboardUrlsState
@@ -4763,7 +5443,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(backchannelsDirectory);
 
         var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostFile.FullName);
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, homeDirectory.FullName);
+        var prefix = BackchannelConstants.ComputeSocketPrefix(resolvedAppHostPath, homeDirectory.FullName);
         var appHostId = Path.GetFileName(prefix);
         var socketPath = Path.Combine(
             backchannelsDirectory,

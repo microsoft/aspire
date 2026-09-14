@@ -30,11 +30,31 @@ namespace Aspire.Hosting.Azure;
 
 internal static class AzureSandboxContainerDeployment
 {
+    private const int DefaultContainerPort = 8080;
     private const string SandboxStateParentSection = "Azure:Sandboxes";
     internal const string SandboxStateSectionPrefix = $"{SandboxStateParentSection}:";
     private const int DiskImageReadyTimeoutSeconds = 600;
-    private const int PublicEndpointTimeoutSeconds = 180;
     private static readonly IReadOnlySet<string> s_noExcludedIds = new HashSet<string>(StringComparer.Ordinal);
+    // TODO: Replace this publisher-owned key list with app-model metadata that lets resources declare
+    // their required outbound hosts. https://github.com/microsoft/aspire/issues/19883
+    private static readonly IReadOnlySet<string> s_outboundHttpConnectionStringKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "AccountEndpoint",
+        "Address",
+        "BlobEndpoint",
+        "Data Source",
+        "DataLakeEndpoint",
+        "Endpoint",
+        "EndpointAIInference",
+        "FileEndpoint",
+        "IngestionEndpoint",
+        "LiveEndpoint",
+        "QueueEndpoint",
+        "ServiceUri",
+        "TableEndpoint",
+        "Uri",
+        "Url"
+    };
 
     public static IEnumerable<PipelineStep> CreatePipelineSteps(AzureSandboxContainerResource resource)
     {
@@ -344,11 +364,6 @@ internal static class AzureSandboxContainerDeployment
                     addedPorts.Add(endpoint);
 
                     var endpointUrl = addedPort.Url.ToString();
-                    if (endpoint.IsExternal && endpoint.IsHttp)
-                    {
-                        await WaitForPublicHttpAsync(endpointUrl, GetPublicEndpointReadyTimeout(resource), context.CancellationToken).ConfigureAwait(false);
-                    }
-
                     portStates.Add(new JsonObject
                     {
                         ["Name"] = endpoint.Name,
@@ -483,11 +498,11 @@ internal static class AzureSandboxContainerDeployment
                 var retainedUrl = securityConfigurationChanged || ownerChanged
                     ? null
                     : GetFirstStateUrl(previousStateSection);
-                context.Summary.Add(resource.Name, new MarkdownString(CreateSandboxUrlSummary(publicUrl, retainedUrl)));
+                context.Summary.Add(resource.TargetResource.Name, new MarkdownString(CreateSandboxUrlSummary(publicUrl, retainedUrl)));
             }
             else
             {
-                context.Summary.Add(resource.Name, new MarkdownString($"Sandbox `{sandboxId}`"));
+                context.Summary.Add(resource.TargetResource.Name, new MarkdownString($"Sandbox `{sandboxId}`"));
             }
         }
         catch
@@ -860,12 +875,14 @@ internal static class AzureSandboxContainerDeployment
         try
         {
             // Aspire connection references can resolve to composite values such as:
-            //   Endpoint=https://account.blob.core.windows.net;ContainerName=uploads
-            // Use the connection-string parser so quoted values containing semicolons remain intact.
+            //   Endpoint=https://account.blob.core.windows.net;Password="value;with;semicolons"
+            // Only address-bearing fields contribute policy hosts. Inspecting arbitrary values could
+            // mistake a URI-shaped credential for an endpoint and widen the deny-by-default policy.
             var builder = new DbConnectionStringBuilder { ConnectionString = value };
-            return builder.Values
-                .Cast<object>()
-                .Select(static candidate => Convert.ToString(candidate, CultureInfo.InvariantCulture))
+            return builder.Keys
+                .Cast<string>()
+                .Where(s_outboundHttpConnectionStringKeys.Contains)
+                .Select(key => Convert.ToString(builder[key], CultureInfo.InvariantCulture))
                 .Select(static candidate => TryGetOutboundHttpHost(candidate, out var candidateHost) ? candidateHost : null)
                 .OfType<string>();
         }
@@ -925,13 +942,31 @@ internal static class AzureSandboxContainerDeployment
             {
                 Name = endpoint.Name,
                 Port = endpoint.TargetPort,
-                Auth = endpoint.IsExternal ? new AzureDevComputePortAuthConfig { Anonymous = endpoint.Anonymous ?? false } : null,
+                Auth = endpoint.IsExternal ? CreatePortAuthConfig(endpoint.Anonymous == true) : null,
                 Protocol = endpoint.Protocol
             },
             context.CancellationToken).ConfigureAwait(false);
 
         return ports.FirstOrDefault(port => port.Port == endpoint.TargetPort)
             ?? throw new InvalidOperationException($"The ADC port add response did not contain port '{endpoint.TargetPort}' for sandbox '{sandboxId}'.");
+    }
+
+    internal static AzureDevComputePortAuthConfig CreatePortAuthConfig(bool anonymous)
+    {
+        // ADC requires at least one authentication provider to be enabled. Sending
+        // `anonymous: false` alone is invalid, so the secure default enables Entra ID.
+        // https://management.azuredevcompute.io/openapi/v1.json
+        return anonymous
+            ? new AzureDevComputePortAuthConfig { Anonymous = true }
+            : new AzureDevComputePortAuthConfig
+            {
+                EntraId = new AzureDevComputePortEntraIdAuthConfig
+                {
+                    Enabled = true,
+                    ObjectIds = [],
+                    TenantIds = []
+                }
+            };
     }
 
     private static async Task<string> ResolveContainerImageAsync(PipelineStepContext context, AzureSandboxContainerResource resource)
@@ -1144,6 +1179,13 @@ internal static class AzureSandboxContainerDeployment
                     return new ResolvedValue(string.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                 case string s:
                     return new ResolvedValue(s, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                case ConnectionStringReference connectionStringReference:
+                    var connectionString = await ((IValueProvider)connectionStringReference).GetValueAsync(
+                        new ValueProviderContext { ExecutionContext = context.ExecutionContext, Caller = resource },
+                        context.CancellationToken).ConfigureAwait(false) ?? string.Empty;
+                    return new ResolvedValue(
+                        connectionString,
+                        new HashSet<string>(GetOutboundHttpHosts(connectionString), StringComparer.OrdinalIgnoreCase));
                 case IResourceWithConnectionString connectionStringResource:
                     value = connectionStringResource.ConnectionStringExpression;
                     continue;
@@ -1437,15 +1479,29 @@ internal static class AzureSandboxContainerDeployment
             static endpoint => endpoint.Name!,
             StringComparer.OrdinalIgnoreCase);
         var unmatchedEndpointOptions = endpointOptions is null ? null : new HashSet<string>(endpointOptions.Keys, StringComparer.OrdinalIgnoreCase);
+        var resolvedEndpoints = resource.TargetResource.ResolveEndpoints();
         var endpoints = new Dictionary<int, SandboxEndpoint>();
-        foreach (var resolvedEndpoint in resource.TargetResource.ResolveEndpoints())
+        foreach (var resolvedEndpoint in resolvedEndpoints)
         {
             if (!resolvedEndpoint.Endpoint.IsExternal)
             {
                 continue;
             }
 
-            if (resolvedEndpoint.TargetPort.Value is not int targetPort)
+            if (resource.TargetResource is ProjectResource &&
+                string.Equals(resolvedEndpoint.Endpoint.UriScheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+                !resolvedEndpoints.Any(candidate =>
+                    string.Equals(candidate.Endpoint.UriScheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+                    candidate.TargetPort.Value == resolvedEndpoint.TargetPort.Value))
+            {
+                throw new NotSupportedException(
+                    $"Endpoint '{resolvedEndpoint.Endpoint.Name}' on project resource '{resource.TargetResource.Name}' is exposed through Azure sandbox ingress, which terminates TLS and forwards plaintext HTTP. " +
+                    "Add an HTTP endpoint that shares this endpoint's target port.");
+            }
+
+            var targetPort = ResolveSandboxTargetPort(resource.TargetResource, resolvedEndpoint);
+
+            if (targetPort is not int resolvedTargetPort)
             {
                 throw new InvalidOperationException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' does not have a target port. Configure a target port before deploying it to an Azure sandbox.");
             }
@@ -1456,33 +1512,36 @@ internal static class AzureSandboxContainerDeployment
             unmatchedEndpointOptions?.Remove(resolvedEndpoint.Endpoint.Name);
             var endpoint = new SandboxEndpoint(
                 resolvedEndpoint.Endpoint.Name,
-                targetPort,
-                resolvedEndpoint.Endpoint.IsExternal,
+                resolvedTargetPort,
+                IsExternal: true,
                 IsHttp: true,
                 protocol,
-                resolvedEndpointOptions?.Anonymous ?? false);
+                resolvedEndpointOptions?.Anonymous);
 
-            if (endpoints.TryGetValue(targetPort, out var existingEndpoint))
+            if (endpoints.TryGetValue(resolvedTargetPort, out var existingEndpoint))
             {
                 if (!string.Equals(existingEndpoint.Protocol, endpoint.Protocol, StringComparison.Ordinal))
                 {
-                    throw new NotSupportedException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' shares target port {targetPort} with endpoint '{existingEndpoint.Name}' but uses a different transport. Azure sandbox ports support a single HTTP protocol per target port.");
+                    throw new NotSupportedException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' shares target port {resolvedTargetPort} with endpoint '{existingEndpoint.Name}' but uses a different transport. Azure sandbox ports support a single HTTP protocol per target port.");
                 }
 
-                if (existingEndpoint.Anonymous != endpoint.Anonymous)
+                if (existingEndpoint.Anonymous is not null &&
+                    endpoint.Anonymous is not null &&
+                    existingEndpoint.Anonymous != endpoint.Anonymous)
                 {
-                    throw new NotSupportedException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' shares target port {targetPort} with endpoint '{existingEndpoint.Name}' but configures a different anonymous-access policy. Azure sandbox ports support a single access policy per target port.");
+                    throw new NotSupportedException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' shares target port {resolvedTargetPort} with endpoint '{existingEndpoint.Name}' but configures a different anonymous-access policy. Azure sandbox ports support a single access policy per target port.");
                 }
 
-                endpoints[targetPort] = existingEndpoint with
+                endpoints[resolvedTargetPort] = existingEndpoint with
                 {
                     IsExternal = existingEndpoint.IsExternal || endpoint.IsExternal,
-                    IsHttp = existingEndpoint.IsHttp || endpoint.IsHttp
+                    IsHttp = existingEndpoint.IsHttp || endpoint.IsHttp,
+                    Anonymous = existingEndpoint.Anonymous ?? endpoint.Anonymous
                 };
             }
             else
             {
-                endpoints.Add(targetPort, endpoint);
+                endpoints.Add(resolvedTargetPort, endpoint);
             }
         }
 
@@ -1491,7 +1550,27 @@ internal static class AzureSandboxContainerDeployment
             throw new InvalidOperationException($"Resource '{resource.TargetResource.Name}' has Azure sandbox endpoint options for endpoint(s) that are not exposed by EndpointAnnotation: {string.Join(", ", unmatchedEndpointOptions)}.");
         }
 
-        return [.. endpoints.Values.OrderBy(static endpoint => endpoint.TargetPort)];
+        return
+        [
+            .. endpoints.Values
+                .OrderBy(static endpoint => endpoint.TargetPort)
+                .Select(static endpoint => endpoint with { Anonymous = endpoint.Anonymous ?? false })
+        ];
+    }
+
+    internal static int? ResolveSandboxTargetPort(IResource resource, ResolvedEndpoint endpoint)
+    {
+        if (endpoint.TargetPort.Value is int targetPort)
+        {
+            return targetPort;
+        }
+
+        // .NET project publishing uses ContainerPortReference for the shared HTTP/HTTPS
+        // destination when no target port is specified. Sandbox ingress terminates TLS,
+        // so both app-model endpoints route to the framework's HTTP container port.
+        return resource is ProjectResource && endpoint.Endpoint.Transport is "http" or "http2"
+            ? DefaultContainerPort
+            : null;
     }
 
     private static string ResolveSandboxPortProtocol(IResource resource, EndpointAnnotation endpoint)
@@ -2139,48 +2218,6 @@ internal static class AzureSandboxContainerDeployment
         }
     }
 
-    internal static TimeSpan GetPublicEndpointReadyTimeout(AzureSandboxContainerResource resource)
-    {
-        return GetAzureSandboxContainerOptions(resource.TargetResource)?.PublicEndpointReadyTimeout ??
-            TimeSpan.FromSeconds(PublicEndpointTimeoutSeconds);
-    }
-
-    private static async Task WaitForPublicHttpAsync(string publicUrl, TimeSpan timeout, CancellationToken cancellationToken)
-    {
-        using var httpClient = new HttpClient(CreatePublicEndpointHttpHandler()) { Timeout = TimeSpan.FromSeconds(10) };
-        var deadline = DateTimeOffset.UtcNow.Add(timeout);
-        Exception? lastException = null;
-        HttpStatusCode? lastStatusCode = null;
-
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            try
-            {
-                using var response = await httpClient.GetAsync(publicUrl.TrimEnd('/'), cancellationToken).ConfigureAwait(false);
-                lastStatusCode = response.StatusCode;
-                if ((int)response.StatusCode < 500)
-                {
-                    return;
-                }
-            }
-            catch (HttpRequestException ex)
-            {
-                lastException = ex;
-            }
-            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                lastException = ex;
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
-        }
-
-        throw new TimeoutException($"Sandbox public URL '{publicUrl}' was not ready after {timeout.TotalSeconds} seconds (last HTTP status: '{lastStatusCode}').", lastException);
-    }
-
-    internal static HttpClientHandler CreatePublicEndpointHttpHandler() =>
-        new() { AllowAutoRedirect = false };
-
     internal static async Task DeleteSandboxAsync(
         PipelineStepContext context,
         IAzureDevComputeClient client,
@@ -2332,7 +2369,13 @@ internal static class AzureSandboxContainerDeployment
 
     private static string GetDestroyStepName(AzureSandboxContainerResource resource) => $"destroy-{resource.Name}";
 
-    internal readonly record struct SandboxEndpoint(string Name, int TargetPort, bool IsExternal, bool IsHttp, string Protocol, bool? Anonymous);
+    internal readonly record struct SandboxEndpoint(
+        string Name,
+        int TargetPort,
+        bool IsExternal,
+        bool IsHttp,
+        string Protocol,
+        bool? Anonymous);
 
     internal sealed record ContainerImageMetadata(
         IReadOnlyList<string> Entrypoint,

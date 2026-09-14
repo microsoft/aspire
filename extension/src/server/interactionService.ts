@@ -27,7 +27,7 @@ export interface IInteractionService extends vscode.Disposable {
     promptForFilePath: (promptText: string, defaultValue: string | null, directory: boolean) => Promise<string | null>;
     confirm: (promptText: string, defaultValue: boolean) => Promise<boolean | null>;
     promptForSelection: (promptText: string, choices: string[]) => Promise<string | null>;
-    promptForSelections: (promptText: string, choices: string[]) => Promise<string[] | null>;
+    promptForSelections: (promptText: string, choices: string[], preSelected?: string[]) => Promise<string[] | null>;
     displayIncompatibleVersionError: (requiredCapability: string, appHostHostingSdkVersion: string, rpcClient: ICliRpcClient) => Promise<void>;
     displayError: (errorMessage: string, actions?: InteractionMessageAction[]) => Promise<void>;
     displayMessage: (emoji: string, message: string, actions?: InteractionMessageAction[]) => Promise<void>;
@@ -324,16 +324,21 @@ export class InteractionService implements IInteractionService {
         return selected ?? null;
     }
 
-    async promptForSelections(promptText: string, choices: string[]): Promise<string[] | null> {
+    async promptForSelections(promptText: string, choices: string[], preSelected: string[] = []): Promise<string[] | null> {
         extensionLogOutputChannel.info(`Prompting for multiple selections: ${promptText}`);
 
-        const selected = await vscode.window.showQuickPick(choices, {
+        const preSelectedSet = new Set(preSelected);
+        const items: vscode.QuickPickItem[] = choices.map(label => ({
+            label,
+            picked: preSelectedSet.has(label)
+        }));
+        const selected = await vscode.window.showQuickPick(items, {
             placeHolder: formatText(promptText),
             canPickMany: true,
             ignoreFocusOut: true
         });
 
-        return selected ?? null;
+        return selected?.map(item => item.label) ?? null;
     }
 
     async displayIncompatibleVersionError(requiredCapabilityStr: string, appHostHostingSdkVersion: string, rpcClient: ICliRpcClient) {

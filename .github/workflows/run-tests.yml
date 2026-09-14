@@ -99,6 +99,10 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: ${{ env.DOTNET_ROOT }}
 
+      - name: Setup Deno
+        if: inputs.testShortName == 'Hosting.JavaScript'
+        uses: ./.github/actions/setup-deno
+
       - name: Set up Java
         if: ${{ fromJson(inputs.properties).requiresJava == true }}
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0

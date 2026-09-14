@@ -15,14 +15,14 @@
             @if (ShowNoLogsMessage && logEntries.EntriesCount == 0)
             {
                 <div class="console-empty-message" role="status" aria-live="polite">
-                    <FluentIcon Value="@(new Icons.Regular.Size24.SlideText())" aria-hidden="true" />
+                    <FluentIcon Value="@(new Icons.Regular.Size24.SlideText())" Color="Color.Primary" aria-hidden="true" />
                     <span>@(NoLogsMessage ?? Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsFound)])</span>
                 </div>
             }
             else if (!string.IsNullOrWhiteSpace(FilterText) && logEntries.EntriesCount > 0 && GetVisibleEntries().Count == 0)
             {
                 <div class="console-empty-message" role="status" aria-live="polite">
-                    <FluentIcon Value="@(new Icons.Regular.Size24.SlideText())" aria-hidden="true" />
+                    <FluentIcon Value="@(new Icons.Regular.Size24.SlideText())" Color="Color.Primary" aria-hidden="true" />
                     <span>@Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsMatchFilter)]</span>
                 </div>
             }

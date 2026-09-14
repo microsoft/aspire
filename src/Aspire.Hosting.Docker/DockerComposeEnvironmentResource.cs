@@ -339,9 +339,9 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             }
 
             // Configure OTLP for resources if dashboard is enabled (before creating the service resource)
-            if (DashboardEnabled && Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
+            if (DashboardEnabled && Dashboard?.Resource is { } dashboardResource)
             {
-                ConfigureOtlp(r, otlpGrpcEndpoint);
+                ConfigureOtlp(r, dashboardResource);
             }
 
             // Create a Docker Compose compute resource for the resource
@@ -382,21 +382,49 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
         return LocalContainerRegistry.Instance;
     }
 
-    private static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
+    private static void ConfigureOtlp(IResource resource, DockerComposeAspireDashboardResource dashboard)
     {
+        var otlpExporter = GetEffectiveOtlpExporterAnnotation(resource);
+
         // Only configure OTLP for resources that have the OtlpExporterAnnotation and implement IResourceWithEnvironment
-        if (resource is IResourceWithEnvironment resourceWithEnv && resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        if (resource is IResourceWithEnvironment resourceWithEnv &&
+            otlpExporter is not null)
         {
-            // Configure OTLP environment variables
+            var (otlpEndpoint, protocol) = otlpExporter.RequiredProtocol switch
+            {
+                OtlpProtocol.HttpProtobuf => (dashboard.OtlpHttpEndpoint, "http/protobuf"),
+                OtlpProtocol.HttpJson => (dashboard.OtlpHttpEndpoint, "http/json"),
+                _ => (dashboard.OtlpGrpcEndpoint, "grpc"),
+            };
+
             resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
             {
                 context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
-                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = protocol;
                 context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
+                ApplyActivationEnvironmentVariables(resource, context.EnvironmentVariables);
                 return Task.CompletedTask;
             }));
         }
     }
+
+    private static void ApplyActivationEnvironmentVariables(
+        IResource resource,
+        IDictionary<string, object> environmentVariables)
+    {
+        if (GetEffectiveOtlpExporterAnnotation(resource) is not IReadOnlyDictionary<string, string> activationEnvironmentVariables)
+        {
+            return;
+        }
+
+        foreach (var (name, value) in activationEnvironmentVariables)
+        {
+            environmentVariables.TryAdd(name, value);
+        }
+    }
+
+    private static OtlpExporterAnnotation? GetEffectiveOtlpExporterAnnotation(IResource resource)
+        => resource.Annotations.OfType<OtlpExporterAnnotation>().LastOrDefault();
 
     private async Task DockerComposeUpAsync(PipelineStepContext context)
     {

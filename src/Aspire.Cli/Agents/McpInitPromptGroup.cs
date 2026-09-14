@@ -28,11 +28,6 @@ internal sealed class McpInitPromptGroup
     /// </summary>
     public static readonly McpInitPromptGroup Tools = new("Tools", priority: 2);
 
-    /// <summary>
-    /// Group for additional optional configurations.
-    /// </summary>
-    public static readonly McpInitPromptGroup AdditionalOptions = new("AdditionalOptions", priority: 3);
-
     private McpInitPromptGroup(string name, int priority)
     {
         Name = name;

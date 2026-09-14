@@ -325,8 +325,10 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // so use the actual source file to keep their deployment state isolated.
             var isSourceFileAppHost = !string.IsNullOrEmpty(appHostFilePath) &&
                 !string.Equals(Path.GetExtension(appHostFilePath), ".csproj", StringComparison.OrdinalIgnoreCase);
+            // This path feeds a persisted deployment-state identity. Preserve the pre-existing
+            // casing-only normalization so adding symlink resolution does not move existing state.
             var appHostIdentityPath = isSourceFileAppHost
-                ? PathNormalizer.ResolveToFilesystemPath(Path.GetFullPath(appHostFilePath!))
+                ? PathNormalizer.ResolvePathCasing(Path.GetFullPath(appHostFilePath!))
                 : AppHostPath;
             var normalizedAppHostIdentityPath = isSourceFileAppHost && !OperatingSystem.IsWindows()
                 ? appHostIdentityPath

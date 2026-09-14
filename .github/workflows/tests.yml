@@ -10,10 +10,6 @@ on:
       extensionVersionOverride:
         required: false
         type: string
-      extensionReleaseOnly:
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   actions: read
@@ -22,7 +18,6 @@ permissions:
 jobs:
   setup_for_tests:
     name: Setup for tests
-    if: ${{ !inputs.extensionReleaseOnly }}
     runs-on: ubuntu-latest
     # This job checks out and runs PR-authored code (SelectTests, the test build), so it is kept at
     # contents:read with no pull-requests:write. The selection comment is posted from the
@@ -37,7 +32,6 @@ jobs:
       SELECT_TESTS_COMMENT_FILE: ${{ github.workspace }}/artifacts/select-tests-comment.md
     outputs:
       tests_matrix_no_nugets: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets }}
-      tests_matrix_no_nugets_overflow: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets_overflow }}
       tests_matrix_requires_nugets_linux: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_linux }}
       tests_matrix_requires_nugets_windows: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_windows }}
       tests_matrix_requires_nugets_macos: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_macos }}
@@ -53,6 +47,7 @@ jobs:
       run_winget_installer: ${{ fromJSON(steps.select_tests.outputs.selection).run_winget_installer }}
       run_homebrew_installer: ${{ fromJSON(steps.select_tests.outputs.selection).run_homebrew_installer }}
       run_nix_package: ${{ fromJSON(steps.select_tests.outputs.selection).run_nix_package }}
+      run_cli_starter_validation: ${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         # This job runs PR-authored code; don't leave the checkout's GITHUB_TOKEN persisted in
@@ -258,14 +253,12 @@ jobs:
 
   build_packages:
     name: Build packages
-    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-packages.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
   build_cli_archive_linux:
     name: Build native CLI archive (Linux)
-    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -273,7 +266,6 @@ jobs:
 
   build_cli_archive_linux_arm64:
     name: Build native CLI archive (Linux ARM64)
-    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -285,7 +277,6 @@ jobs:
   # without waiting for the slower Windows/macOS builds.
   build_cli_archive_windows:
     name: Build native CLI archive (Windows)
-    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -293,7 +284,6 @@ jobs:
 
   build_cli_archive_windows_arm64:
     name: Build native CLI archive (Windows ARM64)
-    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -301,7 +291,6 @@ jobs:
 
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
-    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -309,7 +298,6 @@ jobs:
 
   build_cli_archive_macos_x64:
     name: Build native CLI archive (macOS x64)
-    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -386,7 +374,7 @@ jobs:
     if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null }}
 
   tests_no_nugets:
-    name: ${{ matrix.shortname }}
+    name: No-package tests
     uses: ./.github/workflows/run-tests.yml
     needs: setup_for_tests
     if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null }}
@@ -402,27 +390,10 @@ jobs:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
 
-  tests_no_nugets_overflow:
-    name: ${{ matrix.shortname }}
-    uses: ./.github/workflows/run-tests.yml
-    needs: setup_for_tests
-    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets_overflow).include[0] != null }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets_overflow) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: ${{ matrix.runs-on }}
-      testProjectPath: ${{ matrix.testProjectPath }}
-      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      properties: ${{ toJson(matrix.properties) }}
-
   # Split requires-nugets tests by OS so each group depends only on
   # the CLI archive build for its platform, avoiding cross-OS blocking.
   tests_requires_nugets_linux:
-    name: ${{ matrix.shortname }}
+    name: Package tests - Linux
     uses: ./.github/workflows/run-tests.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_linux]
     if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux).include[0] != null }}
@@ -439,7 +410,7 @@ jobs:
       properties: ${{ toJson(matrix.properties) }}
 
   tests_requires_nugets_windows:
-    name: ${{ matrix.shortname }}
+    name: Package tests - Windows
     uses: ./.github/workflows/run-tests.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_windows]
     if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_windows).include[0] != null }}
@@ -456,7 +427,7 @@ jobs:
       properties: ${{ toJson(matrix.properties) }}
 
   tests_requires_nugets_macos:
-    name: ${{ matrix.shortname }}
+    name: Package tests - macOS
     uses: ./.github/workflows/run-tests.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_macos]
     if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null }}
@@ -473,7 +444,7 @@ jobs:
       properties: ${{ toJson(matrix.properties) }}
 
   tests_requires_cli_archive:
-    name: ${{ matrix.shortname }}
+    name: CLI archive tests
     uses: ./.github/workflows/run-tests.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_e2e_image]
     if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null }}
@@ -502,8 +473,8 @@ jobs:
 
   cli_starter_validation_linux_x64:
     name: Aspire CLI Starter Validation (Ubuntu x64)
-    needs: [build_packages, build_cli_archive_linux]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: ubuntu-latest
@@ -516,8 +487,8 @@ jobs:
 
   cli_starter_validation_linux_arm64:
     name: Aspire CLI Starter Validation (Ubuntu ARM64)
-    needs: [build_packages, build_cli_archive_linux_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux_arm64]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: ubuntu-24.04-arm
@@ -530,8 +501,8 @@ jobs:
 
   cli_starter_validation_windows_x64:
     name: Aspire CLI Starter Validation (Windows x64)
-    needs: [build_packages, build_cli_archive_windows]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_windows]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: windows-latest
@@ -544,8 +515,8 @@ jobs:
 
   cli_starter_validation_windows_arm64:
     name: Aspire CLI Starter Validation (Windows ARM64)
-    needs: [build_packages, build_cli_archive_windows_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_windows_arm64]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: windows-11-arm
@@ -558,8 +529,8 @@ jobs:
 
   cli_starter_validation_macos_x64:
     name: Aspire CLI Starter Validation (macOS x64)
-    needs: [build_packages, build_cli_archive_macos_x64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_macos_x64]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: macos-15-intel
@@ -572,8 +543,8 @@ jobs:
 
   cli_starter_validation_macos_arm64:
     name: Aspire CLI Starter Validation (macOS ARM64)
-    needs: [build_packages, build_cli_archive_macos]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_macos]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: macos-latest
@@ -586,113 +557,16 @@ jobs:
 
   extension_tests_win:
     name: Run VS Code extension unit tests (Windows)
-    runs-on: windows-latest
+    uses: ./.github/workflows/extension-unit-tests.yml
     needs: [setup_for_tests]
     # Also gated on run_extension_e2e (not just run_extension_unit): this job packages and uploads
-    # the aspire-extension VSIX that extension_e2e_tests installs, so skipping it would leave the
-    # shards with nothing to install. !cancelled() lets release-only calls run after setup_for_tests
-    # is intentionally skipped.
-    if: ${{ !cancelled() && (inputs.extensionReleaseOnly || needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true') }}
-    env:
-      NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
-      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
-    defaults:
-      run:
-        working-directory: ./extension
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Setup Node.js environment
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
-        with:
-          node-version: '22.x'
-      - name: Install Corepack
-        run: |
-          # Scope Corepack's cache to this job so prepareCorepackYarn.mjs cannot
-          # collide with any other build sharing the runner's user profile.
-          # Cannot be set at job-level env: the `runner` context is unavailable
-          # in job env evaluation, so we forward it through $GITHUB_ENV instead.
-          $CorepackHome = Join-Path $env:RUNNER_TEMP 'corepack'
-          $env:COREPACK_HOME = $CorepackHome
-          "COREPACK_HOME=$CorepackHome" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-          $CorepackVersion = (Get-Content -Raw -Path 'scripts/corepack-version.txt').Trim()
-          # The hosted Windows image already has a yarn shim in npm's global
-          # prefix. The npm Corepack package owns that shim too, so force only
-          # in CI where the tool install is isolated to this ephemeral job.
-          npm install --global --force --registry "$env:NPM_REGISTRY" "corepack@$CorepackVersion"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          $npmGlobalBin = (npm prefix --global).Trim()
-          $env:PATH = "$npmGlobalBin$([IO.Path]::PathSeparator)$env:PATH"
-          $npmGlobalBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-          $installed = (corepack --version).Trim()
-          if ($installed -ne $CorepackVersion) {
-            Write-Error "corepack version mismatch: expected $CorepackVersion, got '$installed'. The bundled Corepack on PATH may be taking precedence over the npm-global install."
-            exit 1
-          }
-
-          corepack enable
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          # Seed Corepack's cache from the internal dnceng npm feed. Corepack's
-          # built-in `corepack prepare --activate` would download Yarn 1.x from
-          # its hardcoded upstream endpoint rather than the configured internal
-          # feed, bypassing the dependency source this workflow is supposed to
-          # validate. The shared
-          # prepareCorepackYarn.mjs script does the equivalent via `npm pack`
-          # against $NPM_REGISTRY, then drops the same on-disk layout Corepack
-          # would have written.
-          node ./scripts/prepareCorepackYarn.mjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          corepack yarn --version
-      - name: Validate lockfile registries
-        # Allowlist scoped to lines starting with "resolved" (the only lines in
-        # yarn.lock that carry a tarball URL — `npm:` aliases don't).
-        # CONTRIBUTING.MD asks contributors to regenerate yarn.lock through the
-        # internal dotnet-public-npm feed; an allowlist catches drift to any
-        # other public mirror or tarball host.
-        run: |
-          node -e "const fs = require('fs'); const allow = 'pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm'; const bad = fs.readFileSync('yarn.lock', 'utf8').split(/\r?\n/).filter(l => /^\s*resolved\s+\x22/.test(l)).filter(l => !l.includes(allow)); if (bad.length) { throw new Error('extension/yarn.lock contains resolved entries outside the internal dotnet-public-npm feed. Regenerate it through the internal feed before restoring. First offender -> ' + bad[0]); }"
-      - name: Install dependencies
-        run: corepack yarn install --frozen-lockfile --non-interactive
-      - name: Run tests
-        run: corepack yarn test
-      # The VSIX steps from here down run even when 'Run tests' failed. extension_e2e_tests
-      # installs the artifact this job uploads but is deliberately not gated on the unit-test
-      # result, so the packaging has to happen regardless or that decoupling buys nothing.
-      # Release-only calls do not have an E2E consumer, so they stop after the unit tests.
-      - name: Override extension version for PR builds
-        if: ${{ !inputs.extensionReleaseOnly && !cancelled() && inputs.extensionVersionOverride != '' }}
-        run: corepack yarn version --new-version "${{ inputs.extensionVersionOverride }}" --no-git-tag-version
-      - name: Package VSIX
-        if: ${{ !inputs.extensionReleaseOnly && !cancelled() }}
-        env:
-          ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"
-        run: corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
-      - name: Assert E2E VSIX contains bridge
-        if: ${{ !inputs.extensionReleaseOnly && !cancelled() }}
-        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present
-      # Packaged separately (not reusing out/aspire-extension.vsix) because the step above already
-      # proved that VSIX contains the bridge on purpose; asserting Absent against it would be
-      # self-contradictory. No env override here is the point: webpack.config.js only stubs the
-      # bridge in `--mode production` when ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE isn't 'true', and
-      # GitHub Actions step `env:` blocks don't leak into later steps, so this reproduces exactly
-      # what Extension.proj's shipping build packages, with no ability to inherit the opt-in above.
-      - name: Package production VSIX
-        if: ${{ !inputs.extensionReleaseOnly && !cancelled() }}
-        run: corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix
-      - name: Assert production VSIX excludes bridge
-        if: ${{ !inputs.extensionReleaseOnly && !cancelled() }}
-        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent
-      - name: Upload VSIX
-        if: ${{ !inputs.extensionReleaseOnly && !cancelled() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: aspire-extension
-          path: extension/out/aspire-extension.vsix
+    # the aspire-extension VSIX that extension_e2e_tests installs. The focused workflow preserves
+    # packaging after unit-test failures so E2E
+    # still receives its VSIX and provides an independent signal.
+    if: ${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
+    with:
+      packageVsix: true
+      extensionVersionOverride: ${{ inputs.extensionVersionOverride }}
 
   extension_bootstrap_linux:
     name: Validate VS Code extension bootstrap (Linux)
@@ -810,7 +684,6 @@ jobs:
       typescript_sdk_tests,
       typescript_api_compat,
       tests_no_nugets,
-      tests_no_nugets_overflow,
       tests_requires_nugets_linux,
       tests_requires_nugets_windows,
       tests_requires_nugets_macos,
@@ -819,44 +692,39 @@ jobs:
     ]
     steps:
       - name: Checkout code
-        if: ${{ !inputs.extensionReleaseOnly }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Create test results directory
-        if: ${{ !inputs.extensionReleaseOnly }}
         shell: bash
         run: mkdir -p "${{ github.workspace }}/testresults"
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        if: ${{ !inputs.extensionReleaseOnly }}
         with:
           pattern: logs-*-ubuntu-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/ubuntu-latest
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        if: ${{ !inputs.extensionReleaseOnly }}
         with:
           pattern: logs-*-windows-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/windows-latest
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        if: ${{ !inputs.extensionReleaseOnly }}
         with:
           pattern: logs-*-macos-latest
           merge-multiple: true
           path: testresults/macos-latest
 
       - name: Upload test results
-        if: ${{ always() && !inputs.extensionReleaseOnly }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: All-TestResults
           path: ${{ github.workspace }}/testresults/**/*.trx
 
       - name: Generate test results summary
-        if: ${{ always() && !inputs.extensionReleaseOnly }}
+        if: ${{ always() }}
         shell: bash
         run: |
           ${{ github.workspace }}/dotnet.sh \
@@ -867,7 +735,7 @@ jobs:
             --combined
 
       - name: Generate CI timeline
-        if: ${{ always() && !inputs.extensionReleaseOnly }}
+        if: ${{ always() }}
         continue-on-error: true
         shell: bash
         env:
@@ -884,39 +752,34 @@ jobs:
         # For example, one of setup_* jobs failing and the dependent test jobs getting 'skipped'.
         # Some jobs are optional and can have an empty matrix. In those cases we allow a 'skipped'
         # result. Specifically:
-        # - tests_no_nugets_overflow: this overflow bucket is expected to be empty unless the
-        #   primary no-nugets matrix exceeds the overflow threshold.
         # - the test-bucket jobs (tests_no_nugets, tests_requires_nugets_{linux,windows,macos},
         #   tests_requires_cli_archive): selective CI routes a PR's changes to a subset of buckets, so
         #   any bucket can be legitimately empty -> its job is 'skipped'. Each is therefore gated on its
         #   matrix being non-empty (include[0] != null); a 'skipped' result is only a failure when the
         #   bucket actually had work. Before selective CI these were always populated on a full run.
-        # - cli_starter_validation_*: these jobs run for every pull request and are expected
-        #   to be skipped for other workflow events.
+        # - cli_starter_validation_*: these jobs run on pull requests when the selector routes the
+        #   change to job:cli-starter-validation, and are expected to be skipped otherwise (a
+        #   non-selecting PR, or any other workflow event).
         # - extension_e2e_tests: this job only runs when the PR/push changes the VS Code extension,
         #   Aspire CLI, or the extension E2E workflow wiring.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
         #   expected to be skipped for other workflow events.
-        # Release-only calls intentionally skip every dependency except extension_tests_win, which
-        # must succeed. Normal calls retain the existing unexpected-skip checks below.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
         if: >-
           ${{ always() &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
-               (inputs.extensionReleaseOnly &&
-                needs.extension_tests_win.result != 'success') ||
-               (!inputs.extensionReleaseOnly &&
-                ((github.event_name == 'pull_request' &&
+               ((github.event_name == 'pull_request' &&
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
                  (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
-                 needs.cli_starter_validation_linux_x64.result == 'skipped' ||
-                 needs.cli_starter_validation_linux_arm64.result == 'skipped' ||
-                 needs.cli_starter_validation_windows_x64.result == 'skipped' ||
-                 needs.cli_starter_validation_windows_arm64.result == 'skipped' ||
-                 needs.cli_starter_validation_macos_x64.result == 'skipped' ||
-                 needs.cli_starter_validation_macos_arm64.result == 'skipped' ||
+                 (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' &&
+                  (needs.cli_starter_validation_linux_x64.result == 'skipped' ||
+                   needs.cli_starter_validation_linux_arm64.result == 'skipped' ||
+                   needs.cli_starter_validation_windows_x64.result == 'skipped' ||
+                   needs.cli_starter_validation_windows_arm64.result == 'skipped' ||
+                   needs.cli_starter_validation_macos_x64.result == 'skipped' ||
+                   needs.cli_starter_validation_macos_arm64.result == 'skipped')) ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  (needs.typescript_api_compat.result == 'skipped' &&
@@ -957,7 +820,7 @@ jobs:
                  (github.ref == 'refs/heads/main' &&
                   (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.run_polyglot == 'true'))) ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                  needs.tests_requires_nugets_macos.result == 'skipped')))))) }}
+                  needs.tests_requires_nugets_macos.result == 'skipped'))))) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1

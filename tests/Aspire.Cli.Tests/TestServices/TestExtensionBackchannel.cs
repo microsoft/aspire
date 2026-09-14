@@ -3,6 +3,7 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -48,6 +49,7 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     public TaskCompletionSource? PromptForSelectionAsyncCalled { get; set; }
 
     public TaskCompletionSource? PromptForSelectionsAsyncCalled { get; set; }
+    public Func<string, IReadOnlyList<string>, IReadOnlyList<string>, Task<IReadOnlyList<string>>>? PromptForSelectionsAsyncCallback { get; set; }
 
     public TaskCompletionSource? ConfirmAsyncCalled { get; set; }
     public Func<string, bool, Task<bool>>? ConfirmAsyncCallback { get; set; }
@@ -189,16 +191,28 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
         return Task.FromResult(choices.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken) where T : notnull
+    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected, CancellationToken cancellationToken) where T : notnull
     {
         PromptForSelectionsAsyncCalled?.SetResult();
 
-        if (!choices.Any())
+        var choicesList = choices.ToList();
+        if (choicesList.Count == 0)
         {
             throw new InvalidOperationException($"No items available for selection: {promptText}");
         }
 
-        return Task.FromResult<IReadOnlyList<T>>(choices.ToList());
+        if (PromptForSelectionsAsyncCallback is null)
+        {
+            return choicesList;
+        }
+
+        var choicesByFormattedValue = choicesList.ToDictionary(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)), choice => choice);
+        var formattedPreSelected = preSelected?
+            .Select(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)))
+            .ToList() ?? [];
+        var selectedValues = await PromptForSelectionsAsyncCallback(promptText, choicesByFormattedValue.Keys.ToList(), formattedPreSelected);
+
+        return selectedValues.Select(value => choicesByFormattedValue[value]).ToList();
     }
 
     public Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default)

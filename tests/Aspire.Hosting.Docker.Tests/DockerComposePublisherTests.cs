@@ -467,6 +467,38 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_WithDashboard_HonorsRequiredOtlpProtocols()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard();
+
+        builder.AddContainer("default", "my-default")
+            .WithOtlpExporter();
+
+        builder.AddContainer("grpc", "my-grpc")
+            .WithOtlpExporter(OtlpProtocol.Grpc);
+
+        builder.AddContainer("http-protobuf", "my-http-protobuf")
+            .WithOtlpExporter(OtlpProtocol.HttpProtobuf);
+
+        builder.AddContainer("http-json", "my-http-json")
+            .WithOtlpExporter(OtlpProtocol.HttpJson);
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        await Verify(File.ReadAllText(composePath), "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_WithDashboardDisabled_DoesNotIncludeDashboardService()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -490,6 +522,65 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var composeContent = File.ReadAllText(composePath);
 
         await Verify(composeContent, "yaml");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PublishAsync_DenoNativeOpenTelemetryFollowsInjectedEndpoint(bool dashboardEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(dashboardEnabled);
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+        var compose = await File.ReadAllTextAsync(composePath);
+
+        var hasEndpoint = compose.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", StringComparison.Ordinal);
+        var hasNativeDenoTelemetry = compose.Contains("OTEL_DENO", StringComparison.Ordinal);
+
+        Assert.Equal(dashboardEnabled, hasEndpoint);
+        Assert.Equal(hasEndpoint, hasNativeDenoTelemetry);
+    }
+
+    [Fact]
+    public async Task PublishAsync_LastOtlpExporterAnnotationDoesNotApplySupersededActivation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard();
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true")
+            .WithOtlpExporter();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+        var compose = await File.ReadAllTextAsync(composePath);
+
+        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", compose);
+        Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL: \"grpc\"", compose);
+        Assert.False(compose.Contains("OTEL_DENO", StringComparison.Ordinal));
     }
 
     [Fact]
