@@ -1,0 +1,20 @@
+{
+  "id": "vscode-e2e-windows-teardown-ebusy-rmdir",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E dynamic debug configuration test teardown fails with EBUSY resource busy/locked on Windows temp workspace rmdir",
+  "test_name": "Aspire dynamic debug configuration E2E \"after each\" hook for \"re-resolves the selected AppHost by dynamic configuration name in duplicate-alias workspaces\"",
+  "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+  "error_pattern": "AggregateError: Dynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-1vmxmS\\workspace\\.e2e-dynamic-debug\\first'\n    at runE2eTeardown (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:217:15)",
+  "analysis": "The failure occurs in the test teardown ('after each' hook) while removing a temp workspace directory on Windows, with EBUSY indicating the directory was still held open by another process (e.g. VS Code, a file watcher, or a lingering child process) when cleanup ran. This is a classic Windows file-locking race condition unrelated to test assertions or application logic. The PR only touches src/Aspire.Cli/Projects/DotNetAppHostProject.cs and CLI launch-profile tests; it does not modify the VS Code extension E2E test fixtures or the dynamic debug configuration test/workspace teardown code, so the failure is not attributable to the PR's changes.",
+  "failure_details": "Dynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-1vmxmS\\workspace\\.e2e-dynamic-debug\\first'\nAggregateError: Dynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-1vmxmS\\workspace\\.e2e-dynamic-debug\\first'\n    at runE2eTeardown (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:217:15)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\dynamicDebugConfiguration.e2e.test.js:62:9)\nAnnotation: failure: Process completed with exit code 1.",
+  "occurrences": [
+    {
+      "run_id": 34877461342,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34877461342",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 19958,
+      "observed_at": "2026-09-14T18:32:15Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20122"
+}
