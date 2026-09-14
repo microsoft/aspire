@@ -316,8 +316,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         {
             // Read configs in their original hierarchy so relative feeds and inherited settings
             // retain their meaning even though the scanner project is generated elsewhere.
-            doc.Root!.Descendants("PropertyGroup").First()
-                .Add(new XElement("RestoreRootConfigDirectory", _restoreRootConfigDirectory));
+            projectFile.AddProperty("RestoreRootConfigDirectory", _restoreRootConfigDirectory);
         }
 
         // Add channel sources to the project
