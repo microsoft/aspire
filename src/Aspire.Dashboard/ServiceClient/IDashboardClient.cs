@@ -67,11 +67,12 @@ public interface IDashboardClient : IResourceRepository, IAsyncDisposable
     Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Opens a duplex byte stream to a terminal-typed interaction input hosted by the AppHost.
+    /// Opens a duplex byte stream to an AppHost-owned terminal.
     /// </summary>
     /// <remarks>
-    /// The returned stream carries opaque HMP1 frames in both directions. The dashboard relays them verbatim between
-    /// the browser's WebSocket and the AppHost, exactly as it does for resource terminals.
+    /// Used by terminal interaction inputs, docked terminals, and detached terminal windows.
+    /// The returned stream carries HMP1 frames between the dashboard and the AppHost. The dashboard's terminal
+    /// replica bridges this stream to the browser's HWT1 WebSocket connection.
     /// </remarks>
     Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken);
 

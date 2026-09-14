@@ -78,7 +78,7 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         _routeIdentity = routeIdentity;
         var generation = ++_watchGeneration;
         _ended = false;
-        _endpoint = terminalId is not null ? $"/api/apphost-terminal?terminalId={Uri.EscapeDataString(terminalId)}" : null;
+        _endpoint = terminalId is not null ? $"api/apphost-terminal?terminalId={Uri.EscapeDataString(terminalId)}" : null;
         _title = terminalId ?? (resourceName is not null
             ? replicaIndex > 0 ? $"{resourceName} #{replicaIndex}" : resourceName
             : string.Empty);

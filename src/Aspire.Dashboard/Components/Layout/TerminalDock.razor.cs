@@ -462,7 +462,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     }
 
     private static string BuildEndpoint(string terminalId)
-        => $"/api/apphost-terminal?terminalId={Uri.EscapeDataString(terminalId)}";
+        => $"api/apphost-terminal?terminalId={Uri.EscapeDataString(terminalId)}";
 
     public async ValueTask DisposeAsync()
     {

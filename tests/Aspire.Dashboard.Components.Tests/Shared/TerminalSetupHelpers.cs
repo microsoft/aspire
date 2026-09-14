@@ -8,6 +8,7 @@ using Aspire.DashboardService.Proto.V1;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Assert = Xunit.Assert;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
 
@@ -59,6 +60,15 @@ internal static class TerminalSetupHelpers
         windows.Setup<bool>("focusTerminalWindow", _ => true).SetResult(true);
         windows.SetupVoid("closeTerminalWindow", _ => true).SetVoidResult();
         windows.SetupVoid("untrackTerminalWindow", _ => true).SetVoidResult();
+    }
+
+    public static void AssertSingleTerminalConnection(TestContext context, string expectedWebSocketUrl)
+    {
+        var invocation = Assert.Single(context.JSInterop.Invocations, invocation => invocation.Identifier == "initTerminal");
+        var options = Assert.IsType<TerminalViewOptions>(invocation.Arguments[3]);
+        Assert.Equal($"{expectedWebSocketUrl}&viewId={options.ViewId}", invocation.Arguments[1]);
+        Assert.True(context.Services.GetRequiredService<TerminalViewSessionRegistry>().TryGet(
+            options.ViewId, new Uri(expectedWebSocketUrl).PathAndQuery, out _));
     }
 
     public static WatchTerminalsUpdate Snapshot(params string[] terminalIds) => new()

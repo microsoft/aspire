@@ -26,6 +26,38 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 public sealed class InteractionsInputDialogTests : DashboardTestContext
 {
     [Theory]
+    [InlineData("", "terminal", "terminal")]
+    [InlineData("/aspire/nested", "terminal", "terminal")]
+    [InlineData("", "terminal #1/?%+", "terminal%20%231%2F%3F%25%2B")]
+    [InlineData("/aspire/nested", "terminal #1/?%+", "terminal%20%231%2F%3F%25%2B")]
+    public async Task AppHostTerminalEndpoint_UsesDashboardBaseUri(string pathBase, string terminalId, string escapedTerminalId)
+    {
+        Services.AddSingleton<NavigationManager>(new TestNavigationManager($"https://dashboard.example{pathBase}/"));
+        TerminalSetupHelpers.SetupTerminalView(this, pathBase);
+        var getCut = SetUpDialog(out var dialogService);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/other");
+        var viewModel = new InteractionsInputsDialogViewModel
+        {
+            Interaction = new WatchInteractionsResponseUpdate
+            {
+                InteractionId = 1,
+                InputsDialog = new InteractionInputsDialog
+                {
+                    InputItems = { new InteractionInput { Name = "shell", InputType = InputType.Terminal, TerminalId = terminalId } }
+                }
+            },
+            Message = string.Empty,
+            DashboardClient = new TestDashboardClient(),
+            OnSubmitCallback = (_, _) => Task.CompletedTask
+        };
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters { Title = "Shell" });
+
+        getCut().WaitForAssertion(() => TerminalSetupHelpers.AssertSingleTerminalConnection(this,
+            $"wss://dashboard.example{pathBase}/api/apphost-terminal?terminalId={escapedTerminalId}"));
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -73,7 +105,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
                 var current = cut.FindComponent<TerminalView>().Instance;
                 Assert.Same(terminal, current);
                 Assert.Equal(state.Disabled || state.Loading, current.ReadOnly);
-                Assert.Equal("/api/apphost-terminal?terminalId=terminal", current.EndpointPathAndQuery);
+                Assert.Equal("api/apphost-terminal?terminalId=terminal", current.EndpointPathAndQuery);
             });
         }
     }

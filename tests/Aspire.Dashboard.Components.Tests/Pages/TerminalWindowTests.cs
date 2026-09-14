@@ -19,6 +19,24 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public class TerminalWindowTests : DashboardTestContext
 {
     [Theory]
+    [InlineData("", "terminal", "terminal")]
+    [InlineData("/aspire/nested", "terminal", "terminal")]
+    [InlineData("", "terminal #1/?%+", "terminal%20%231%2F%3F%25%2B")]
+    [InlineData("/aspire/nested", "terminal #1/?%+", "terminal%20%231%2F%3F%25%2B")]
+    public void AppHostTerminalEndpoint_UsesDashboardBaseUri(string pathBase, string terminalId, string escapedTerminalId)
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        Services.AddSingleton<NavigationManager>(new TestNavigationManager($"https://dashboard.example{pathBase}/"));
+        TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient(terminalChannelProvider: () => updates), pathBase);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"terminal-window/apphost/{escapedTerminalId}");
+
+        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, terminalId));
+
+        cut.WaitForAssertion(() => TerminalSetupHelpers.AssertSingleTerminalConnection(this,
+            $"wss://dashboard.example{pathBase}/api/apphost-terminal?terminalId={escapedTerminalId}"));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void OpeningWindow_AutoFitsUsingFontFromQuery(bool appHost)
@@ -98,7 +116,7 @@ public class TerminalWindowTests : DashboardTestContext
         {
             Assert.Equal(2, client.TerminalSubscriptionCount);
             Assert.Equal(1, client.ActiveTerminalSubscriptionCount);
-            Assert.Equal("/api/apphost-terminal?terminalId=second", cut.FindComponent<TerminalView>().Instance.EndpointPathAndQuery);
+            Assert.Equal("api/apphost-terminal?terminalId=second", cut.FindComponent<TerminalView>().Instance.EndpointPathAndQuery);
             Assert.Equal("second", head.Find("title").TextContent);
             Assert.Empty(cut.FindAll(".terminal-window-ended"));
         });
@@ -154,7 +172,7 @@ public class TerminalWindowTests : DashboardTestContext
         Assert.Equal(2, client.TerminalSubscriptionCount);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Retitled, "next", "Next shell"));
         head.WaitForAssertion(() => Assert.Equal("Next shell", head.Find("title").TextContent));
-        Assert.Equal("/api/apphost-terminal?terminalId=next", cut.FindComponent<TerminalView>().Instance.EndpointPathAndQuery);
+        Assert.Equal("api/apphost-terminal?terminalId=next", cut.FindComponent<TerminalView>().Instance.EndpointPathAndQuery);
     }
 
     [Theory]
@@ -195,11 +213,11 @@ public class TerminalWindowTests : DashboardTestContext
             await firstUpdates.Writer.WriteAsync(delayedUpdate);
             await updateReceived.Task.DefaultTimeout();
             var intermediateRoute = SetTerminalAsync(cut, "intermediate");
-            cut.WaitForAssertion(() => Assert.Equal("/api/apphost-terminal?terminalId=intermediate",
+            cut.WaitForAssertion(() => Assert.Equal("api/apphost-terminal?terminalId=intermediate",
                 cut.FindComponent<TerminalView>().Instance.EndpointPathAndQuery));
             var latestId = returnToFirst ? "first" : "latest";
             var latestRoute = SetTerminalAsync(cut, latestId);
-            cut.WaitForAssertion(() => Assert.Equal($"/api/apphost-terminal?terminalId={latestId}",
+            cut.WaitForAssertion(() => Assert.Equal($"api/apphost-terminal?terminalId={latestId}",
                 cut.FindComponent<TerminalView>().Instance.EndpointPathAndQuery));
             Assert.False(intermediateRoute.IsCompleted);
             Assert.False(latestRoute.IsCompleted);
@@ -247,7 +265,7 @@ public class TerminalWindowTests : DashboardTestContext
             await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot());
             await updateReceived.Task.DefaultTimeout();
             var routeChange = SetTerminalAsync(cut, "next");
-            cut.WaitForAssertion(() => Assert.Equal("/api/apphost-terminal?terminalId=next",
+            cut.WaitForAssertion(() => Assert.Equal("api/apphost-terminal?terminalId=next",
                 cut.FindComponent<TerminalView>().Instance.EndpointPathAndQuery));
             var disposal = cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
             Assert.False(disposal.IsCompleted);

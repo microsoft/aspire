@@ -24,6 +24,27 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 public class TerminalDockTests : DashboardTestContext
 {
     [Theory]
+    [InlineData("", "terminal", "terminal")]
+    [InlineData("/aspire/nested", "terminal", "terminal")]
+    [InlineData("", "terminal #1/?%+", "terminal%20%231%2F%3F%25%2B")]
+    [InlineData("/aspire/nested", "terminal #1/?%+", "terminal%20%231%2F%3F%25%2B")]
+    public async Task AppHostTerminalEndpoint_UsesDashboardBaseUri(string pathBase, string terminalId, string escapedTerminalId)
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        Services.AddSingleton<NavigationManager>(new TestNavigationManager($"https://dashboard.example{pathBase}/"));
+        TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/other");
+        var cut = RenderComponent<TerminalDock>();
+
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot(terminalId));
+
+        cut.WaitForAssertion(() => TerminalSetupHelpers.AssertSingleTerminalConnection(this,
+            $"wss://dashboard.example{pathBase}/api/apphost-terminal?terminalId={escapedTerminalId}"));
+    }
+
+    [Theory]
     [InlineData(400, 900, 120, 900, 400)]
     [InlineData(-1, 900, 120, 900, 120)]
     [InlineData(1400, 1600, 120, 1200, 1200)]

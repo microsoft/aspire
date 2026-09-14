@@ -306,7 +306,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     /// </summary>
     private static string BuildInteractionTerminalEndpoint(InputViewModel inputModel)
     {
-        return $"/api/apphost-terminal?terminalId={Uri.EscapeDataString(inputModel.Input.TerminalId ?? string.Empty)}";
+        return $"api/apphost-terminal?terminalId={Uri.EscapeDataString(inputModel.Input.TerminalId ?? string.Empty)}";
     }
 
     private static Icon GetSecretTextIcon(InputViewModel inputModel)
