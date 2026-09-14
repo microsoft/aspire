@@ -301,8 +301,9 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
             Assert.StartsWith($"{server}/", container.GetProperty("image").GetString(), StringComparison.OrdinalIgnoreCase);
             var identity = registry.GetProperty("identity").GetString()!;
             Assert.Contains("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/", identity, StringComparison.OrdinalIgnoreCase);
-            Assert.True(app.GetProperty("identity").GetProperty("userAssignedIdentities").TryGetProperty(identity, out _),
-                "The ACR pull identity must be assigned to the app.");
+            // Azure can return "resourcegroups" here but "resourceGroups" in the registry binding.
+            Assert.Contains(app.GetProperty("identity").GetProperty("userAssignedIdentities").EnumerateObject(),
+                assignedIdentity => string.Equals(assignedIdentity.Name, identity, StringComparison.OrdinalIgnoreCase));
             Assert.True(!registry.TryGetProperty("passwordSecretRef", out var password) || string.IsNullOrEmpty(password.GetString()),
                 "Image pulls must not fall back to registry password authentication.");
 
