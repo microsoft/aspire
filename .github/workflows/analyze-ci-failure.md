@@ -240,8 +240,11 @@ jobs:
           fi
 
           # Fetch the artifact list once so both TRX and extension E2E results can be selected.
-          gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/artifacts?per_page=100" \
-            --jq '.artifacts[]' | jq -s '.' > ci-failure-data/artifacts.json
+          if ! gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/artifacts?per_page=100" \
+              --jq '.artifacts[]' | jq -s '.' > ci-failure-data/artifacts.json; then
+            echo "::warning::Failed to list artifacts for run ${RUN_ID}"
+            echo '[]' > ci-failure-data/artifacts.json
+          fi
           > ci-failure-data/test-failures.jsonl
 
           # Fetch the aggregate TRX artifact if available and extract test failure info.

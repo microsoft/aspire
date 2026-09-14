@@ -376,6 +376,9 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("{\"auth\":\"dXNlcjpwYXNzd29yZA==\"}", "{\"auth\":\"[REDACTED]\"}")]
     [InlineData("{'_auth':'dXNlcjpwYXNzd29yZA=='}", "{'_auth':'[REDACTED]'}")]
     [InlineData("_auth=dXNlcjpwYXNzd29yZA==", "_auth=[REDACTED]")]
+    [InlineData("PGPASSWORD=database-secret", "PGPASSWORD=[REDACTED]")]
+    [InlineData("{\"PGPASSWORD\":\"database-secret\"}", "{\"PGPASSWORD\":\"[REDACTED]\"}")]
+    [InlineData("env.PGPASSWORD=\"database-secret\"", "env.PGPASSWORD=\"[REDACTED]\"")]
     [RequiresTools(["node"])]
     public async Task RedactOperationRemovesTokenValues(string value, string expected)
     {
@@ -430,6 +433,8 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var workflow = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", workflowName));
 
         Assert.Contains("extension-e2e-diagnostics-", workflow);
+        Assert.Contains("if ! gh api --paginate \"repos/${REPO}/actions/runs/${RUN_ID}/artifacts?per_page=100\"", workflow);
+        Assert.Contains("echo '[]' > ci-failure-data/artifacts.json", workflow);
         Assert.Contains("if ! node .github/workflows/analyze-ci-failure.js extract-mocha-failures \"${MOCHA_FILE}\" \"${E2E_JOB_NAME}\"", workflow);
         Assert.Contains("::warning::Failed to parse extension E2E results:", workflow);
     }
