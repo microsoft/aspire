@@ -11,7 +11,7 @@ using Sigstore;
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Verifies GitHub release asset attestations for downloaded Aspire Skills bundle artifacts.
+/// Verifies GitHub release asset attestations for downloaded Aspire skills artifacts.
 /// </summary>
 internal interface IGitHubArtifactAttestationVerifier
 {

@@ -15,6 +15,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.AspireSkills;
 
+/// <summary>
+/// Resolves, verifies, and caches Aspire agent assets from the external Aspire skills package.
+/// </summary>
 internal sealed class AspireSkillsInstaller(
     IGitHubArtifactAttestationVerifier githubArtifactAttestationVerifier,
     IHttpClientFactory httpClientFactory,
@@ -25,34 +28,32 @@ internal sealed class AspireSkillsInstaller(
     AspireCliTelemetry telemetry,
     ILogger<AspireSkillsInstaller> logger) : IAspireSkillsInstaller
 {
+    internal const string Version = "0.0.1";
     internal const string GitHubRepository = "microsoft/aspire-skills";
     internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
     internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";
+    internal const string ExpectedBuildType = "https://actions.github.io/buildtypes/workflow/v1";
     internal const string DisablePackageValidationKey = "disableAspireSkillsPackageValidation";
     internal const string VersionOverrideKey = "aspireSkillsVersion";
     internal const string MaxCacheAgeKey = "AspireSkillsMaxCacheAgeSeconds";
+
+    private const string GitHubApiBaseUrl = "https://api.github.com";
     internal const string ArchiveSha512FileName = ".archive-sha512";
     internal const string GitHubArchiveSha256FileName = ".github-archive-sha256";
     internal const string GitHubAttestationVerifiedFileName = ".github-attestation-verified";
-    internal const string TelemetryActivityName = "AspireSkillsInstaller.Install";
-    internal const string Version = "0.0.1";
+    private const string LastUsedFileName = ".lastused";
 
-    private const string ExpectedBuildType = "https://actions.github.io/buildtypes/workflow/v1";
+    private const int CacheLockMaxAttempts = 4;
     private const int WindowsSharingViolationHResult = unchecked((int)0x80070020);
     private const int WindowsLockViolationHResult = unchecked((int)0x80070021);
     private const int LinuxWouldBlockHResult = 11;
     private const int MacOsWouldBlockHResult = 35;
-    private const string GitHubApiBaseUrl = "https://api.github.com";
-    private const string LastUsedFileName = ".lastused";
-    private const int CacheLockMaxAttempts = 4;
 
     private static readonly TimeSpan s_cacheLockInitialRetryDelay = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan s_cacheLockMaxRetryDelay = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan s_defaultMaxCacheAge = TimeSpan.FromDays(7);
 
-    public Task<AspireSkillsInstallResult> InstallAsync(
-        IAspireSkillsBundleProvider provider,
-        CancellationToken cancellationToken)
+    public Task<AspireSkillsInstallResult> InstallAsync(IAspireSkillsBundleProvider provider, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(provider);
 
@@ -64,28 +65,14 @@ internal sealed class AspireSkillsInstaller(
             () => InstallCoreAsync(provider, cancellationToken));
     }
 
-    internal static bool IsCacheLockContention(IOException exception, bool isWindows)
+    private async Task<AspireSkillsInstallResult> InstallCoreAsync(IAspireSkillsBundleProvider provider, CancellationToken cancellationToken)
     {
-        if (isWindows)
-        {
-            return exception.HResult is WindowsSharingViolationHResult or WindowsLockViolationHResult;
-        }
+        using var activity = telemetry.StartReportedActivity("AspireSkillsInstaller.Install");
 
-        // On Unix, FileStream implements FileShare.None with a non-blocking flock and exposes
-        // EWOULDBLOCK as the raw errno in IOException.HResult: 11 on Linux and 35 on macOS.
-        // See https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/Microsoft/Win32/SafeHandles/SafeFileHandle.Unix.cs.
-        return exception.HResult is LinuxWouldBlockHResult or MacOsWouldBlockHResult;
-    }
-
-    private async Task<AspireSkillsInstallResult> InstallCoreAsync(
-        IAspireSkillsBundleProvider provider,
-        CancellationToken cancellationToken)
-    {
-        using var activity = telemetry.StartReportedActivity(TelemetryActivityName);
         var effectiveVersion = configuration[VersionOverrideKey];
         if (string.IsNullOrWhiteSpace(effectiveVersion))
         {
-            effectiveVersion = AspireSkillsInstaller.Version;
+            effectiveVersion = Version;
         }
 
         activity?.SetTag($"aspire.{provider.Descriptor.AssetKindName}.version", effectiveVersion);
@@ -94,7 +81,7 @@ internal sealed class AspireSkillsInstaller(
         Directory.CreateDirectory(cacheRoot);
 
         var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
-        var embeddedMetadata = provider.GetEmbeddedMetadata();
+        var embeddedMetadata = provider.Metadata;
 
         async Task<AspireSkillsInstallResult> CompleteInstallationAsync(AspireSkillsBundle bundle, string archiveSha512)
         {
@@ -329,12 +316,11 @@ internal sealed class AspireSkillsInstaller(
 
         if (ValidateEmbeddedMetadata(provider, metadata) is { } metadataError)
         {
-            return AcquisitionResult.Failed(
-                string.Format(
-                    CultureInfo.CurrentCulture,
-                    AgentCommandStrings.AspireSkillsInstaller_InvalidMetadata,
-                    provider.Descriptor.DisplayName,
-                    metadataError));
+            return AcquisitionResult.Failed(string.Format(
+                CultureInfo.CurrentCulture,
+                AgentCommandStrings.AspireSkillsInstaller_InvalidMetadata,
+                provider.Descriptor.DisplayName,
+                metadataError));
         }
 
         if (!string.Equals(metadata.Version, version, StringComparison.OrdinalIgnoreCase))
@@ -405,9 +391,7 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
-    private static string? ValidateEmbeddedMetadata(
-        IAspireSkillsBundleProvider provider,
-        EmbeddedAspireSkillsBundleMetadata metadata)
+    private static string? ValidateEmbeddedMetadata(IAspireSkillsBundleProvider provider, EmbeddedAspireSkillsBundleMetadata metadata)
     {
         if (string.IsNullOrWhiteSpace(metadata.Version))
         {
@@ -480,11 +464,7 @@ internal sealed class AspireSkillsInstaller(
             : null;
     }
 
-    private async Task<GitHubReleaseInfo?> TryGetGitHubReleaseAsync(
-        IAspireSkillsBundleProvider provider,
-        HttpClient httpClient,
-        string version,
-        CancellationToken cancellationToken)
+    private async Task<GitHubReleaseInfo?> TryGetGitHubReleaseAsync(IAspireSkillsBundleProvider provider, HttpClient httpClient, string version, CancellationToken cancellationToken)
     {
         foreach (var tag in GetGitHubTagCandidates(version))
         {
@@ -551,10 +531,7 @@ internal sealed class AspireSkillsInstaller(
         return new GitHubReleaseInfo(tagName, assets);
     }
 
-    private static GitHubReleaseAsset? FindGitHubReleaseAsset(
-        IAspireSkillsBundleProvider provider,
-        GitHubReleaseInfo release,
-        string version)
+    private static GitHubReleaseAsset? FindGitHubReleaseAsset(IAspireSkillsBundleProvider provider, GitHubReleaseInfo release, string version)
     {
         foreach (var assetName in GetGitHubReleaseAssetNameCandidates(provider, version))
         {
@@ -581,9 +558,7 @@ internal sealed class AspireSkillsInstaller(
         yield return version;
     }
 
-    private static IEnumerable<string> GetGitHubReleaseAssetNameCandidates(
-        IAspireSkillsBundleProvider provider,
-        string version)
+    private static IEnumerable<string> GetGitHubReleaseAssetNameCandidates(IAspireSkillsBundleProvider provider, string version)
     {
         var unprefixedVersion = version.StartsWith('v') || version.StartsWith('V') ? version[1..] : version;
         var prefixedVersion = $"v{unprefixedVersion}";
@@ -916,10 +891,7 @@ internal sealed class AspireSkillsInstaller(
         File.Delete(Path.Combine(bundleDirectory, LastUsedFileName));
     }
 
-    private TemporaryCacheDirectory CreateTemporaryCacheDirectory(
-        IAspireSkillsBundleProvider provider,
-        string cacheRoot,
-        string prefix)
+    private TemporaryCacheDirectory CreateTemporaryCacheDirectory(IAspireSkillsBundleProvider provider, string cacheRoot, string prefix)
     {
         return TemporaryCacheDirectory.Create(
             cacheRoot,
@@ -928,20 +900,12 @@ internal sealed class AspireSkillsInstaller(
             path => TryDeleteFile(provider, path));
     }
 
-    private Task<FileStream> AcquireCacheLockAsync(
-        IAspireSkillsBundleProvider provider,
-        string cacheRoot,
-        string version,
-        CancellationToken cancellationToken)
+    private Task<FileStream> AcquireCacheLockAsync(IAspireSkillsBundleProvider provider, string cacheRoot, string version, CancellationToken cancellationToken)
     {
         return AcquireCacheLockCoreAsync(provider, cacheRoot, version, maxAttempts: null, cancellationToken);
     }
 
-    private Task<FileStream> AcquireCacheLockForCleanupAsync(
-        IAspireSkillsBundleProvider provider,
-        string cacheRoot,
-        string version,
-        CancellationToken cancellationToken)
+    private Task<FileStream> AcquireCacheLockForCleanupAsync(IAspireSkillsBundleProvider provider, string cacheRoot, string version, CancellationToken cancellationToken)
     {
         return AcquireCacheLockCoreAsync(provider, cacheRoot, version, CacheLockMaxAttempts, cancellationToken);
     }
@@ -1004,10 +968,20 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
-    private static void ValidateBundleVersion(
-        IAspireSkillsBundleProvider provider,
-        AspireSkillsBundle bundle,
-        string expectedVersion)
+    internal static bool IsCacheLockContention(IOException exception, bool isWindows)
+    {
+        if (isWindows)
+        {
+            return exception.HResult is WindowsSharingViolationHResult or WindowsLockViolationHResult;
+        }
+
+        // On Unix, FileStream implements FileShare.None with a non-blocking flock and exposes
+        // EWOULDBLOCK as the raw errno in IOException.HResult: 11 on Linux and 35 on macOS.
+        // See https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/Microsoft/Win32/SafeHandles/SafeFileHandle.Unix.cs.
+        return exception.HResult is LinuxWouldBlockHResult or MacOsWouldBlockHResult;
+    }
+
+    private static void ValidateBundleVersion(IAspireSkillsBundleProvider provider, AspireSkillsBundle bundle, string expectedVersion)
     {
         if (!string.Equals(bundle.Version, expectedVersion, StringComparison.OrdinalIgnoreCase))
         {
@@ -1156,9 +1130,7 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
-    private static bool HasLegacyCacheLayout(
-        IAspireSkillsBundleProvider provider,
-        string versionCacheDirectory)
+    private static bool HasLegacyCacheLayout(IAspireSkillsBundleProvider provider, string versionCacheDirectory)
     {
         return Directory.Exists(Path.Combine(versionCacheDirectory, provider.Descriptor.ContentRootDirectoryName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, provider.Descriptor.ManifestFileName)) ||
@@ -1168,9 +1140,7 @@ internal sealed class AspireSkillsInstaller(
             File.Exists(Path.Combine(versionCacheDirectory, LastUsedFileName));
     }
 
-    private void RemoveLegacyCacheLayout(
-        IAspireSkillsBundleProvider provider,
-        string versionCacheDirectory)
+    private void RemoveLegacyCacheLayout(IAspireSkillsBundleProvider provider, string versionCacheDirectory)
     {
         // Older CLIs stored extracted files directly in the version directory. Remove only
         // those known entries so digest-addressed children created by newer CLIs remain intact.
@@ -1226,9 +1196,7 @@ internal sealed class AspireSkillsInstaller(
         return Directory.GetLastWriteTimeUtc(directory);
     }
 
-    private static string GetSafeFileName(
-        IAspireSkillsBundleProvider provider,
-        string fileName)
+    private static string GetSafeFileName(IAspireSkillsBundleProvider provider, string fileName)
     {
         var safeName = Path.GetFileName(fileName);
         foreach (var invalidCharacter in Path.GetInvalidFileNameChars())
@@ -1330,4 +1298,5 @@ internal sealed class AspireSkillsInstaller(
     private sealed record GitHubReleaseInfo(string TagName, IReadOnlyList<GitHubReleaseAsset> Assets);
 
     private sealed record GitHubReleaseAsset(string Name, string DownloadUrl, string? Digest);
+
 }

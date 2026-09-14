@@ -12,13 +12,9 @@ internal static class SkillFileValidator
 {
     private const int MaxSkillDescriptionLength = 1024;
 
-    public static void Validate(string assetName, ReadOnlySpan<byte> content)
+    public static void Validate(string skillName, ReadOnlySpan<byte> bytes)
     {
-        ValidateFrontmatter(assetName, AgentAssetFile.DecodeText(content));
-    }
-
-    private static void ValidateFrontmatter(string skillName, string content)
-    {
+        var content = AgentAssetFile.DecodeText(bytes);
         var frontmatterName = GetFrontmatterValue(content, "name");
         if (string.IsNullOrWhiteSpace(frontmatterName))
         {

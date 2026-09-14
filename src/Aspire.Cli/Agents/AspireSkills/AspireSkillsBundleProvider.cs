@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Formats.Tar;
 using System.Globalization;
+using System.Formats.Tar;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -21,6 +21,10 @@ internal interface IAspireSkillsBundleProvider
 {
     AspireSkillsBundleDescriptor Descriptor { get; }
 
+    /// <summary>
+    /// Creates an Aspire skills bundle from an archive and materializes its validated files
+    /// in a dedicated staging directory.
+    /// </summary>
     Task<AspireSkillsBundle> CreateAsync(
         FileInfo archive,
         DirectoryInfo bundleDirectory,
@@ -28,12 +32,15 @@ internal interface IAspireSkillsBundleProvider
         CancellationToken cancellationToken,
         bool skipCompatibilityCheck = false);
 
-    Task<AspireSkillsBundle> LoadAsync(
-        DirectoryInfo bundleDirectory,
-        CancellationToken cancellationToken,
-        bool skipCompatibilityCheck = false);
+    /// <summary>
+    /// Loads an Aspire skills bundle from disk.
+    /// </summary>
+    Task<AspireSkillsBundle> LoadAsync(DirectoryInfo bundleDirectory, CancellationToken cancellationToken, bool skipCompatibilityCheck = false);
 
-    EmbeddedAspireSkillsBundleMetadata? GetEmbeddedMetadata();
+    /// <summary>
+    /// Gets the parsed metadata embedded alongside the Aspire skills bundle archive.
+    /// </summary>
+    EmbeddedAspireSkillsBundleMetadata? Metadata { get; }
 
     Task<AspireSkillsBundle?> CreateEmbeddedBundleAsync(
         DirectoryInfo bundleDirectory,
@@ -98,10 +105,6 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     /// </summary>
     public AspireSkillsBundleDescriptor Descriptor { get; }
 
-    /// <summary>
-    /// Creates an Aspire Skills bundle from an archive and materializes its validated files
-    /// in a dedicated staging directory.
-    /// </summary>
     public virtual async Task<AspireSkillsBundle> CreateAsync(
         FileInfo archive,
         DirectoryInfo bundleDirectory,
@@ -131,16 +134,13 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         ExtractArchive(archive.FullName, extractionDirectory.FullName);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var bundleRoot = FindBundleRoot(extractionDirectory.FullName, Descriptor.ManifestFileName);
+        var bundleRoot = FindBundleRoot(extractionDirectory.FullName);
         var bundle = await LoadAsync(bundleRoot, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
 
         CopyDirectory(bundleRoot.FullName, bundleDirectory.FullName);
         return bundle;
     }
 
-    /// <summary>
-    /// Loads an Aspire Skills bundle from disk.
-    /// </summary>
     public async Task<AspireSkillsBundle> LoadAsync(
         DirectoryInfo bundleDirectory,
         CancellationToken cancellationToken,
@@ -174,13 +174,10 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return CreateBundle(bundleDirectory, manifest, skipCompatibilityCheck);
+        return CreateBundle(bundleDirectory, manifest, _currentCliVersion, _currentSdkVersion, skipCompatibilityCheck);
     }
 
-    public EmbeddedAspireSkillsBundleMetadata? GetEmbeddedMetadata()
-    {
-        return _embeddedMetadata.Value;
-    }
+    public EmbeddedAspireSkillsBundleMetadata? Metadata => _embeddedMetadata.Value;
 
     public async Task<AspireSkillsBundle?> CreateEmbeddedBundleAsync(
         DirectoryInfo bundleDirectory,
@@ -188,7 +185,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     {
         ArgumentNullException.ThrowIfNull(bundleDirectory);
 
-        var metadata = GetEmbeddedMetadata();
+        var metadata = Metadata;
         if (metadata is null || string.IsNullOrWhiteSpace(metadata.Sha512))
         {
             return null;
@@ -305,27 +302,11 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         return (JsonTypeInfo<AspireSkillsBundleManifest>)options.GetTypeInfo(typeof(AspireSkillsBundleManifest));
     }
 
-    /// <summary>
-    /// Preserves skill text semantics while retaining extension payloads as bytes.
-    /// </summary>
-    private AgentAssetFile CreateAssetFile(string relativePath, byte[] bytes)
-    {
-        if (Descriptor.AssetKind is AgentAssetKind.Skill)
-        {
-            // All skill files were decoded as text and written as UTF-8, regardless of
-            // filename extension. Keep that behavior for scripts such as helper.py too.
-            return new(relativePath, AgentAssetFile.DecodeText(bytes));
-        }
-
-        var comparison = s_textFileExtensions.Contains(Path.GetExtension(relativePath))
-            ? AgentAssetFileComparison.NormalizedUtf8Text
-            : AgentAssetFileComparison.ExactBytes;
-        return new(relativePath, bytes, comparison);
-    }
-
     private AspireSkillsBundle CreateBundle(
         DirectoryInfo bundleDirectory,
         AspireSkillsBundleManifest manifest,
+        string currentCliVersion,
+        string currentSdkVersion,
         bool skipCompatibilityCheck)
     {
         var version = manifest.Version;
@@ -341,7 +322,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         // ">=13.4.0 <13.5.0").
         if (!skipCompatibilityCheck)
         {
-            ValidateCompatibility(manifest.Supports, _currentCliVersion, _currentSdkVersion);
+            ValidateCompatibility(manifest.Supports, currentCliVersion, currentSdkVersion);
         }
 
         var assets = manifest.Assets;
@@ -465,17 +446,14 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 MaxAssetNameLength));
         }
 
-        if (!IsSafePathSegment(assetName))
+        if (!IsPortablePathSegment(assetName))
         {
             throw new InvalidOperationException(
                 $"{Descriptor.DisplayName} bundle asset name '{assetName}' is not portable.");
         }
     }
 
-    private AgentAssetFile ValidateFile(
-        DirectoryInfo bundleDirectory,
-        string assetName,
-        AspireSkillsBundleFile file)
+    private AgentAssetFile ValidateFile(DirectoryInfo bundleDirectory, string assetName, AspireSkillsBundleFile file)
     {
         var relativePath = NormalizeRelativePath(file.RelativePath);
         var fullPath = Path.Combine(bundleDirectory.FullName, Descriptor.ContentRootDirectoryName, assetName, relativePath);
@@ -491,8 +469,9 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         string expectedHash;
         string actualHash;
         string algorithmName;
-        // Prefer SHA-512 when the manifest provides it. SHA-256 remains supported for published
-        // Aspire Skills bundles whose attested archive manifests use that digest.
+        // The attestation-verified v0.0.1 archive predates the SHA-512 switch and cannot
+        // be rebuilt without changing its signed subject digest. Prefer SHA-512 for current
+        // bundles while continuing to validate that embedded archive's per-file SHA-256 hashes.
         if (!string.IsNullOrWhiteSpace(file.Sha512))
         {
             expectedHash = NormalizeSha512(file.Sha512);
@@ -522,7 +501,17 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             Descriptor.ValidateRequiredFile(assetName, bytes);
         }
 
-        return CreateAssetFile(relativePath, bytes);
+        if (Descriptor.AssetKind is AgentAssetKind.Skill)
+        {
+            // All skill files were decoded as text and written as UTF-8, regardless of
+            // filename extension. Keep that behavior for scripts such as helper.py too.
+            return new(relativePath, AgentAssetFile.DecodeText(bytes));
+        }
+
+        var comparison = s_textFileExtensions.Contains(Path.GetExtension(relativePath))
+            ? AgentAssetFileComparison.NormalizedUtf8Text
+            : AgentAssetFileComparison.ExactBytes;
+        return new(relativePath, bytes, comparison);
     }
 
     internal string NormalizeRelativePath(string? relativePath)
@@ -542,7 +531,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
 
         var segments = normalizedPath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0 || segments.Any(segment => !IsSafePathSegment(segment)))
+        if (segments.Length == 0 || segments.Any(segment => !IsPortablePathSegment(segment)))
         {
             throw new InvalidOperationException($"{Descriptor.DisplayName} bundle path '{relativePath}' is not safe.");
         }
@@ -550,7 +539,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         return Path.Combine(segments);
     }
 
-    private bool IsSafePathSegment(string segment)
+    private bool IsPortablePathSegment(string segment)
     {
         // Preserve the existing skill path contract: traversal, control characters and
         // Windows-invalid characters (including ':' for alternate data streams) are rejected.
@@ -715,7 +704,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         var segments = normalizedEntryName.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (Path.IsPathRooted(normalizedEntryName) ||
             segments.Length == 0 ||
-            segments.Any(segment => !IsSafePathSegment(segment)))
+            segments.Any(segment => !IsPortablePathSegment(segment)))
         {
             throw new InvalidDataException($"{Descriptor.DisplayName} bundle archive entry '{entryName}' is not safe.");
         }
@@ -730,8 +719,9 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         return destinationPath;
     }
 
-    private DirectoryInfo FindBundleRoot(string extractionDirectory, string manifestFileName)
+    private DirectoryInfo FindBundleRoot(string extractionDirectory)
     {
+        var manifestFileName = Descriptor.ManifestFileName;
         var rootManifestPath = Path.Combine(extractionDirectory, manifestFileName);
         if (File.Exists(rootManifestPath))
         {

@@ -80,7 +80,7 @@ public class AspireSkillsInstallerTests
             var result = await installer.InstallAsync(skillProvider, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
-            var activity = Assert.Single(activities, static activity => activity.OperationName == AspireSkillsInstaller.TelemetryActivityName);
+            var activity = Assert.Single(activities, static activity => activity.OperationName == "AspireSkillsInstaller.Install");
             Assert.Equal(
                 AspireSkillsInstaller.Version,
                 activity.GetTagItem("aspire.skills.version"));
@@ -98,7 +98,7 @@ public class AspireSkillsInstallerTests
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, cachedResult.Status);
             var cachedActivity = Assert.Single(activities, item =>
-                item.OperationName == AspireSkillsInstaller.TelemetryActivityName && item != activity);
+                item.OperationName == "AspireSkillsInstaller.Install" && item != activity);
             Assert.Equal(AspireSkillsInstaller.Version, cachedActivity.GetTagItem("aspire.skills.version"));
             Assert.Equal(true, cachedActivity.GetTagItem("aspire.skills.cache_hit"));
             Assert.Null(cachedActivity.GetTagItem("aspire.skills.source"));
@@ -158,7 +158,7 @@ public class AspireSkillsInstallerTests
                     Assert.Equal([0x00, 0x80, 0xFF, 0x0D, 0x0A], file.Bytes.ToArray());
                 });
 
-            var activity = Assert.Single(activities, static activity => activity.OperationName == AspireSkillsInstaller.TelemetryActivityName);
+            var activity = Assert.Single(activities, static activity => activity.OperationName == "AspireSkillsInstaller.Install");
             Assert.Equal(AspireSkillsInstaller.Version, activity.GetTagItem("aspire.extensions.version"));
             Assert.Equal("embedded", activity.GetTagItem("aspire.extensions.source"));
             Assert.Equal(false, activity.GetTagItem("aspire.extensions.cache_hit"));
@@ -172,7 +172,7 @@ public class AspireSkillsInstallerTests
             Assert.Equal(extensionFiles.Select(static file => file.RelativePath), cachedFiles.Select(static file => file.RelativePath));
             Assert.All(extensionFiles.Zip(cachedFiles), static pair => Assert.Equal(pair.First.Bytes.ToArray(), pair.Second.Bytes.ToArray()));
             var bundleActivities = activities
-                .Where(static activity => activity.OperationName == AspireSkillsInstaller.TelemetryActivityName)
+                .Where(static activity => activity.OperationName == "AspireSkillsInstaller.Install")
                 .ToList();
             Assert.Equal(2, bundleActivities.Count);
             var cachedActivity = bundleActivities[1];
@@ -1619,7 +1619,7 @@ public class AspireSkillsInstallerTests
             var bundleDirectory = new DirectoryInfo(Path.Combine(rootDirectory, "bundle"));
             var bundleProvider = TestBundleProviderFactory.CreateSkills();
 
-            var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(bundleProvider.GetEmbeddedMetadata());
+            var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(bundleProvider.Metadata);
             var bundle = await bundleProvider.CreateEmbeddedBundleAsync(bundleDirectory, CancellationToken.None);
 
             Assert.NotNull(bundle);
@@ -1645,7 +1645,7 @@ public class AspireSkillsInstallerTests
             var bundleDirectory = new DirectoryInfo(Path.Combine(rootDirectory, "bundle"));
             var bundleProvider = TestBundleProviderFactory.CreateExtensions();
 
-            var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(bundleProvider.GetEmbeddedMetadata());
+            var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(bundleProvider.Metadata);
             var bundle = await bundleProvider.CreateEmbeddedBundleAsync(bundleDirectory, CancellationToken.None);
 
             Assert.NotNull(bundle);
@@ -2599,11 +2599,6 @@ public class AspireSkillsInstallerTests
 
         public bool CreateBundleCalled { get; private set; }
 
-        public EmbeddedAspireSkillsBundleMetadata? GetMetadata()
-        {
-            return Metadata;
-        }
-
         public async Task<AspireSkillsBundle?> CreateBundleAsync(
             DirectoryInfo bundleDirectory,
             CancellationToken cancellationToken)
@@ -2653,8 +2648,7 @@ public class AspireSkillsInstallerTests
             bool skipCompatibilityCheck = false)
             => reader.LoadAsync(bundleDirectory, cancellationToken, skipCompatibilityCheck);
 
-        public EmbeddedAspireSkillsBundleMetadata? GetEmbeddedMetadata()
-            => embeddedProvider.GetMetadata();
+        public EmbeddedAspireSkillsBundleMetadata? Metadata => embeddedProvider.Metadata;
 
         public Task<AspireSkillsBundle?> CreateEmbeddedBundleAsync(DirectoryInfo bundleDirectory, CancellationToken cancellationToken)
             => embeddedProvider.CreateBundleAsync(bundleDirectory, cancellationToken);
