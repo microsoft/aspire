@@ -498,15 +498,16 @@ safe-outputs:
               exit 1
             fi
 
-            # The agent also sees job logs and can add fields or reproduce values that were not
-            # present in the pre-redacted TRX fields. Project its output to the documented schema
-            # and redact it at the publish boundary before reading, rendering, or persisting it.
-            node .github/workflows/analyze-ci-failure.js redact-analysis "$ANALYSIS_FILE" \
+            # The agent also sees job logs and can reproduce values that were not present in
+            # the pre-redacted TRX fields. Redact its complete output again at the publish
+            # boundary before reading, rendering, or persisting any analysis fields.
+            node .github/workflows/analyze-ci-failure.js redact "$ANALYSIS_FILE" \
               > "${ANALYSIS_FILE}.redacted"
             mv "${ANALYSIS_FILE}.redacted" "$ANALYSIS_FILE"
 
-            # Apply the same schema projection and redaction to every valid cause before any
-            # field is rendered or persisted.
+            # The agent can reproduce sensitive values from job logs in any cause field,
+            # including fields used directly in issue titles and occurrence rows. Redact
+            # every valid cause before any field is rendered or persisted.
             if [ -d "$CAUSES_DIR" ]; then
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
@@ -514,7 +515,7 @@ safe-outputs:
                   echo "::warning::Invalid JSON in cause file: $(basename "$CAUSE_FILE")"
                   continue
                 fi
-                node .github/workflows/analyze-ci-failure.js redact-cause "$CAUSE_FILE" \
+                node .github/workflows/analyze-ci-failure.js redact "$CAUSE_FILE" \
                   > "${CAUSE_FILE}.redacted"
                 mv "${CAUSE_FILE}.redacted" "$CAUSE_FILE"
               done

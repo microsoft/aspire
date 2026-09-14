@@ -9,56 +9,6 @@ const redactedFieldLimits = {
     standard_error: 4000,
 };
 
-// Agent-authored JSON can contain fields outside the requested shape. Project it to the
-// documented schema before persistence so unexpected values cannot reach the memory branch.
-const analysisSchema = {
-    run_id: 'number',
-    run_attempt: 'number',
-    run_url: 'string',
-    analyzed_at: 'string',
-    verdict: 'string',
-    pr: {
-        number: 'number',
-        title: 'string',
-        author: 'string',
-        state: 'string',
-        head_branch: 'string',
-        base_branch: 'string',
-        url: 'string',
-    },
-    failed_jobs: [{
-        name: 'string',
-        id: 'number',
-        conclusion: 'string',
-        url: 'string',
-        classification: 'string',
-        reason: 'string',
-        failed_steps: ['string'],
-    }],
-    failed_tests: [{
-        name: 'string',
-        job: 'string',
-        error: 'string',
-        stack_trace: 'string',
-        standard_output: 'string',
-        standard_error: 'string',
-        classification: 'string',
-        reason: 'string',
-    }],
-    causes: ['string'],
-};
-
-const causeSchema = {
-    id: 'string',
-    type: 'string',
-    title: 'string',
-    test_name: 'string',
-    job_name: 'string',
-    error_pattern: 'string',
-    analysis: 'string',
-    failure_details: 'string',
-};
-
 function escapeHtml(value) {
     return String(value ?? '')
         .replaceAll('&', '&amp;')
@@ -103,43 +53,6 @@ function redactJson(value, propertyName) {
     }
 
     return value;
-}
-
-function projectJson(value, schema) {
-    if (typeof schema === 'string') {
-        return typeof value === schema ? value : undefined;
-    }
-
-    if (Array.isArray(schema)) {
-        if (!Array.isArray(value)) {
-            return undefined;
-        }
-
-        return value
-            .map(item => projectJson(item, schema[0]))
-            .filter(item => item !== undefined);
-    }
-
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-        return undefined;
-    }
-
-    return Object.fromEntries(Object.entries(schema).flatMap(([key, propertySchema]) => {
-        if (!Object.hasOwn(value, key)) {
-            return [];
-        }
-
-        const projected = projectJson(value[key], propertySchema);
-        return projected === undefined ? [] : [[key, projected]];
-    }));
-}
-
-function redactAnalysis(analysis) {
-    return redactJson(projectJson(analysis, analysisSchema) ?? {});
-}
-
-function redactCause(cause) {
-    return redactJson(projectJson(cause, causeSchema) ?? {});
 }
 
 function getTrxText(value) {
@@ -345,12 +258,6 @@ function main(args) {
         case 'redact':
             process.stdout.write(JSON.stringify(redactJson(analysis)));
             break;
-        case 'redact-analysis':
-            process.stdout.write(JSON.stringify(redactAnalysis(analysis)));
-            break;
-        case 'redact-cause':
-            process.stdout.write(JSON.stringify(redactCause(analysis)));
-            break;
         case 'extract-test-failures': {
             const failures = extractTestFailures(analysis);
             if (failures.length > 0) {
@@ -396,9 +303,6 @@ module.exports = {
     getCauseJobName,
     getObservedAt,
     normalizeIssueTitle,
-    projectJson,
-    redactAnalysis,
-    redactCause,
     redactJson,
     redactSensitiveData,
     toCodeBlock,
