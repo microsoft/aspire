@@ -735,7 +735,7 @@ internal class DotNetTemplateFactory(
             return new TemplateResult(
                 CliExitCodes.Success,
                 outputPath,
-                appHostProject is null ? null : Path.Combine(outputPath, IntegrationTestSourceFileName));
+                resolveIntegrationTestAppHost ? Path.Combine(outputPath, IntegrationTestSourceFileName) : null);
         }
         catch (OperationCanceledException)
         {
