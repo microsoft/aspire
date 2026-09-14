@@ -1412,6 +1412,44 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void IncompatibleHistoricalRun_SelectsCurrentRunWithoutAcquiringLease()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var currentRunStore = CreateRunStore(options);
+        var currentRun = Assert.Single(currentRunStore.GetRuns());
+        var incompatibleRun = currentRun with
+        {
+            RunId = "incompatible",
+            SchemaVersion = DashboardRunStore.SchemaVersion + 1,
+            DatabasePath = Path.Combine(workspace.Path, "incompatible", DashboardRunStore.DatabaseFileName),
+            IsCurrent = false
+        };
+        var leaseRequested = false;
+        var runStore = new TestDashboardRunStore(
+            [currentRun, incompatibleRun],
+            _ =>
+            {
+                leaseRequested = true;
+                return null;
+            });
+        var repositoryFactory = CreateRepositoryFactory(options);
+        using var dataSourcePool = new DashboardDataSourcePool(runStore, repositoryFactory);
+        using var dataSource = CreateDataSource(runStore, dataSourcePool);
+        var currentTelemetryRepository = dataSource.TelemetryRepository;
+        var currentResourceRepository = dataSource.ResourceRepository;
+
+        dataSource.SelectRun(incompatibleRun.RunId);
+
+        Assert.False(leaseRequested);
+        Assert.False(dataSource.IsReadOnly);
+        Assert.Same(currentRun, dataSource.SelectedRun);
+        Assert.Same(currentResourceRepository, dataSource.ResourceRepository);
+        Assert.Same(currentTelemetryRepository, dataSource.TelemetryRepository);
+        Assert.False(File.Exists(incompatibleRun.DatabasePath));
+    }
+
+    [Fact]
     public void UnavailableHistoricalRun_SelectsCurrentRun()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
