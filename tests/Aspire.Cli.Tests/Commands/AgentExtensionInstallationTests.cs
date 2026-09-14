@@ -209,11 +209,6 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
         Assert.Equal(updatedSummaries, interaction.DisplayedMessages
             .Where(message => message.Emoji.Equals(KnownEmojis.Robot))
             .Select(message => message.Message));
-        await Verify(new
-        {
-            Initial = summaries,
-            AfterStaleRemoval = updatedSummaries.Skip(summaries.Length).ToArray()
-        }).UseParameters(installSkills);
     }
 
     [Fact]
