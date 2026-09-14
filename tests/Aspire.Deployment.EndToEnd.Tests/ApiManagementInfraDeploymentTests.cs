@@ -86,10 +86,15 @@ var apim = builder.AddAzureApiManagement("apim", new()
 
 apim.AddNamedValue("environment", "infra-test");
 
+// This test verifies provisioning only; it does not send traffic to the backend.
+var catalogBackend = apim.AddBackend(
+    "catalog-backend",
+    ReferenceExpression.Create($"https://example.com"));
 var catalogApi = apim.AddApi(
     "catalog-api",
     path: "catalog",
-    displayName: "Catalog API");
+    displayName: "Catalog API")
+    .WithBackend(catalogBackend);
 catalogApi.AddOperation(
     "get-items",
     method: "GET",
@@ -114,10 +119,9 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter);
 
             output.WriteLine("Step 6: Deploying API Management infrastructure...");
-            await auto.TypeAsync("aspire deploy --clear-cache");
-            await auto.EnterAsync();
-            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(20));
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+            // Model validation can fail before the pipeline starts, without printing "Pipeline failed".
+            // The command's exit status also catches these failures without waiting for the full timeout.
+            await auto.RunCommandAsync("aspire deploy --clear-cache", counter, TimeSpan.FromMinutes(20));
 
             output.WriteLine("Step 7: Verifying API Management infrastructure...");
             await auto.TypeAsync(
@@ -135,6 +139,9 @@ builder.Build().Run();
                 $"az apim product api check -g \"{resourceGroupName}\" -n \"$SERVICE\" --subscription \"{subscriptionId}\" " +
                 "--product-id catalog-product --api-id catalog-api --output none && " +
                 $"SERVICE_ID=$(az apim show -g \"{resourceGroupName}\" -n \"$SERVICE\" --subscription \"{subscriptionId}\" --query id -o tsv) && " +
+                "[ \"$(az rest --method get " +
+                "--url \"https://management.azure.com${SERVICE_ID}/backends/catalog-backend?api-version=2024-05-01\" " +
+                "--query properties.url -o tsv)\" = \"https://example.com\" ] && " +
                 "SUBSCRIPTION_SCOPE=$(az rest --method get " +
                 "--url \"https://management.azure.com${SERVICE_ID}/subscriptions/catalog-client?api-version=2024-05-01\" " +
                 "--query properties.scope -o tsv) && " +
@@ -205,6 +212,14 @@ builder.Build().Run();
         if (process.ExitCode != 0)
         {
             var error = string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError;
+            // A pre-provisioning failure leaves no group to delete. Azure CLI reports this as
+            // "ERROR: (ResourceGroupNotFound) Resource group '...' could not be found."
+            if (error.Contains("ERROR: (ResourceGroupNotFound)", StringComparison.Ordinal))
+            {
+                DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Resource group was already absent");
+                return;
+            }
+
             DeploymentReporter.ReportCleanupStatus(
                 resourceGroupName,
                 success: false,
