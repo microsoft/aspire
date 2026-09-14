@@ -1,6 +1,11 @@
 'use strict';
 
 const fs = require('node:fs');
+const { isDeepStrictEqual } = require('node:util');
+
+const validVerdicts = new Set(['transient-infra', 'flaky-test', 'code-issue', 'pr-test-failure', 'mixed', 'unknown']);
+const retryableVerdicts = new Set(['transient-infra', 'flaky-test', 'mixed', 'unknown']);
+const maxTestResultsArtifactBytes = 100 * 1024 * 1024;
 
 const redactedFieldLimits = {
     error: 1000,
@@ -53,6 +58,87 @@ function redactJson(value, propertyName) {
     }
 
     return value;
+}
+
+function validatePublication(analysis, trustedContext, trustedEvidence) {
+    const manifest = {
+        run_id: Number(trustedContext.run_id),
+        run_attempt: Number(trustedContext.run_attempt),
+        run_url: trustedContext.run_url,
+        run_event: trustedContext.run_event,
+        analyzed_commit_sha: trustedContext.analyzed_commit_sha,
+        pr_number: Number(trustedContext.pr_number),
+        pr_state: trustedContext.pr_state,
+        dry_run: trustedContext.dry_run === true,
+        verdict: analysis.verdict,
+        rerun_eligible: analysis.rerun?.eligible,
+    };
+
+    if (!Number.isInteger(manifest.run_id)
+        || !Number.isInteger(manifest.run_attempt)
+        || !Number.isInteger(manifest.pr_number)
+        || Number(analysis.run_id) !== manifest.run_id
+        || Number(analysis.run_attempt) !== manifest.run_attempt
+        || analysis.run_url !== manifest.run_url
+        || analysis.run_event !== manifest.run_event
+        || analysis.analyzed_commit_sha !== manifest.analyzed_commit_sha
+        || Number(analysis.pr?.number) !== manifest.pr_number
+        || analysis.pr?.state !== manifest.pr_state
+        || !isDeepStrictEqual(analysis.evidence, trustedEvidence)) {
+        throw new Error('Agent analysis does not match the collected run, analyzed commit, or evidence metadata.');
+    }
+
+    if (!validVerdicts.has(manifest.verdict)) {
+        throw new Error(`Invalid analysis verdict '${manifest.verdict}'.`);
+    }
+
+    if (typeof manifest.rerun_eligible !== 'boolean') {
+        throw new Error('Analysis result must contain a boolean rerun.eligible decision.');
+    }
+
+    const expectedRerunEligible = manifest.run_event === 'pull_request'
+        && retryableVerdicts.has(manifest.verdict)
+        && manifest.run_attempt <= 3
+        && manifest.pr_state === 'open';
+    if (manifest.rerun_eligible !== expectedRerunEligible) {
+        throw new Error(`Rerun decision conflicts with run event '${manifest.run_event}' and verdict '${manifest.verdict}'.`);
+    }
+
+    return manifest;
+}
+
+function selectTestResultsArtifact(artifacts) {
+    const candidates = Array.isArray(artifacts)
+        ? artifacts
+            .filter(artifact => artifact?.name === 'All-TestResults' && artifact.expired !== true)
+            .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+        : [];
+    const selected = candidates[0];
+
+    return selected && Number(selected.size_in_bytes) <= maxTestResultsArtifactBytes ? selected : null;
+}
+
+function validateRerunRequest(analysis, trustedContext, trustedEvidence, request) {
+    const manifest = validatePublication(analysis, trustedContext, trustedEvidence);
+    const requestedRunId = Number(request?.run_id);
+    const requestedPrNumbers = String(request?.pr_numbers ?? '').split(',').map(Number).filter(number => number > 0);
+    const requestedReason = String(request?.reason ?? '');
+
+    if (requestedRunId !== manifest.run_id
+        || requestedPrNumbers.length !== 1
+        || requestedPrNumbers[0] !== manifest.pr_number) {
+        throw new Error('Rerun request does not match the analyzed run and pull request.');
+    }
+
+    if (!manifest.rerun_eligible
+        || typeof analysis.rerun?.reason !== 'string'
+        || analysis.rerun.reason.length === 0
+        || requestedReason !== analysis.rerun.reason
+        || !retryableVerdicts.has(manifest.verdict)) {
+        throw new Error(`Rerun request conflicts with analysis verdict '${manifest.verdict}'.`);
+    }
+
+    return manifest;
 }
 
 function getTrxText(value) {
@@ -210,13 +296,39 @@ function buildFlakyTestList(analysis) {
         .join('\n');
 }
 
-function buildPrComment(analysis) {
+function buildEvidenceNote(analysis) {
+    if (analysis.evidence?.completeness !== 'partial') {
+        return '';
+    }
+
+    const gaps = Array.isArray(analysis.evidence.gaps)
+        ? analysis.evidence.gaps.map(gap => `- ${toInlineCode(gap)}`).join('\n')
+        : '';
+
+    return `\n\n**Evidence completeness:** Partial${gaps ? `\n${gaps}` : ''}`;
+}
+
+function buildRerunNote(analysis, dryRun) {
+    if (analysis.rerun?.eligible === true) {
+        if (dryRun) {
+            return '\n\nThe analysis requested an automatic rerun, but this manual dry run suppressed the rerun request.';
+        }
+
+        return '\n\nThe analysis requested an automatic rerun of the failed CI jobs.';
+    }
+
+    return '\n\nThe CI will not be automatically rerun.';
+}
+
+function buildPrComment(analysis, dryRun = false) {
     const marker = '<!-- analyze-ci-failure -->';
     const runUrl = analysis.run_url ?? '';
     const allJobs = buildJobList(analysis);
+    const evidenceNote = buildEvidenceNote(analysis);
+    const rerunNote = buildRerunNote(analysis, dryRun);
 
     if (analysis.verdict === 'transient-infra') {
-        return `${marker}\n🔍 **CI Failure Analysis: Transient Infrastructure Failure**\n\nThe CI build failed due to transient infrastructure issues.\n\n**Failed jobs:**\n${allJobs}\n\nIf a rerun was not already requested automatically, visit the [workflow run page](${runUrl}) to rerun the failed jobs manually.\n`;
+        return `${marker}\n🔍 **CI Failure Analysis: Transient Infrastructure Failure**\n\nThe CI build failed due to transient infrastructure issues.\n\n**Failed jobs:**\n${allJobs}${evidenceNote}${rerunNote}\n\n[View the workflow run](${runUrl}).\n`;
     }
 
     if (analysis.verdict === 'flaky-test') {
@@ -225,14 +337,22 @@ function buildPrComment(analysis) {
         const heading = hasFlakyTests ? 'Suspected flaky test(s)' : 'Suspected flaky failure(s)';
         const failures = hasFlakyTests ? flakyTests : buildJobList(analysis, 'flaky-test');
 
-        return `${marker}\n⚠️ **CI Failure Analysis: Possible Flaky Test(s)**\n\nThe CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.\n\n**${heading}:**\n${failures}\n\n**Suggested actions:**\n- Re-run the failed CI jobs to confirm if the failure is intermittent\n- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using \`/quarantine-test <test name> <issue URL>\`\n- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky\n\nYou can re-run the failed jobs from the [workflow run page](${runUrl}).\n`;
+        return `${marker}\n⚠️ **CI Failure Analysis: Possible Flaky Test(s)**\n\nThe CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.\n\n**${heading}:**\n${failures}${evidenceNote}${rerunNote}\n\n**Suggested actions:**\n- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using \`/quarantine-test <test name> <issue URL>\`\n- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky\n\n[View the workflow run](${runUrl}).\n`;
     }
 
     if (analysis.verdict === 'code-issue') {
-        return `${marker}\n❌ **CI Failure Analysis: Code Issue Detected**\n\nThe CI build failed due to issue(s) caused by changes in this PR.\n\n**Failed jobs:**\n${allJobs}\n\nThe CI will not be automatically rerun. Please fix the issue and push an updated commit.\n`;
+        return `${marker}\n❌ **CI Failure Analysis: Code Issue Detected**\n\nThe CI build failed due to issue(s) caused by changes in this PR.\n\n**Failed jobs:**\n${allJobs}${evidenceNote}\n\nThe CI will not be automatically rerun. Please fix the issue and push an updated commit.\n`;
     }
 
-    return `${marker}\n⚠️ **CI Failure Analysis: Mixed Failures**\n\nThe CI build contains both transient and non-transient failures.\n\n**Failed jobs:**\n${allJobs}\n\nThe CI will not be automatically rerun. Please review the failures above.\n`;
+    if (analysis.verdict === 'pr-test-failure') {
+        return `${marker}\n❌ **CI Failure Analysis: Test Regression Detected**\n\nThe CI build contains test failure(s) caused by changes in this PR.\n\n**Failed jobs:**\n${allJobs}${evidenceNote}\n\nThe CI will not be automatically rerun. Please fix the failing behavior or update the affected test, then push an updated commit.\n`;
+    }
+
+    if (analysis.verdict === 'unknown') {
+        return `${marker}\n❓ **CI Failure Analysis: Unable to Classify**\n\nThe available evidence was insufficient to determine whether this failure is transient or caused by the PR.\n\n**Failed jobs:**\n${allJobs}${evidenceNote}${rerunNote}\n\nReview the [workflow run logs](${runUrl}) if the next attempt fails.\n`;
+    }
+
+    return `${marker}\n⚠️ **CI Failure Analysis: Mixed Failures**\n\nThe CI build contains both transient and non-transient failures.\n\n**Failed jobs:**\n${allJobs}${evidenceNote}${rerunNote}\n\nPlease review the failures above.\n`;
 }
 
 function getFailureInformation(analysis, cause) {
@@ -347,7 +467,16 @@ function main(args) {
             process.stdout.write(formatTestFailures(analysis));
             break;
         case 'pr-comment':
-            process.stdout.write(buildPrComment(analysis));
+            process.stdout.write(buildPrComment(analysis, causePath ? readJson(causePath).dry_run === true : false));
+            break;
+        case 'validate-publication':
+            process.stdout.write(JSON.stringify(validatePublication(analysis, readJson(causePath), readJson(marker))));
+            break;
+        case 'validate-rerun-request':
+            process.stdout.write(JSON.stringify(validateRerunRequest(analysis, readJson(causePath), readJson(marker), readJson(args[4]))));
+            break;
+        case 'select-test-results-artifact':
+            process.stdout.write(JSON.stringify(selectTestResultsArtifact(analysis)));
             break;
         case 'job-name':
             process.stdout.write(getCauseJobName(analysis, getCause()));
@@ -388,6 +517,9 @@ module.exports = {
     normalizeIssueTitle,
     redactJson,
     redactSensitiveData,
+    selectTestResultsArtifact,
     toCodeBlock,
     toInlineCode,
+    validatePublication,
+    validateRerunRequest,
 };

@@ -240,7 +240,7 @@ bash) and asserts YAML contracts in `tests/Infrastructure.Tests/`. PR CI runs
 that project **only when `ci.yml`'s test job isn't skipped** — and it *is*
 skipped when every changed file matches a glob in
 `eng/github-ci/ci-skip-entirely-patterns.txt`, which includes `eng/pipelines/**`
-and `auto-rerun-transient-ci-failures.*` (see Step I-1). So for an infra-only PR
+and the generated agentic workflow files (see Step I-1). So for an infra-only PR
 that touches just those paths, CI does **not** run `Infrastructure.Tests` for
 you — run the matching class locally. When the test job does run, use the map
 below to know which changed files CI already validates (so you don't re-run
@@ -254,16 +254,16 @@ dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
   --no-launch-profile -- \
   --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 
-# Or target one class, e.g. the auto-rerun JS:
+# Or target one class, e.g. CI failure analysis:
 dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
   --no-launch-profile -- \
-  --filter-class "*.AutoRerunTransientCiFailuresTests" \
+  --filter-class "*.AnalyzeCiFailureWorkflowTests" \
   --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
 | Changed file | Test class |
 |--------------|-----------|
-| `.github/workflows/auto-rerun-transient-ci-failures.js`, `eng/test-retry-patterns.json` | `AutoRerunTransientCiFailuresTests` |
+| `.github/workflows/analyze-ci-failure.js`, `.github/workflows/analyze-ci-failure.md` | `AnalyzeCiFailureWorkflowTests` |
 | `.github/workflows/create-failing-test-issue.js`, `workflow-command-helpers.js` | `CreateFailingTestIssueWorkflowTests`, `CreateFailingTestIssueToolTests` |
 | `eng/scripts/build-test-matrix.ps1` | `BuildTestMatrixTests` |
 | `eng/scripts/split-test-projects-for-ci.ps1` | `SplitTestProjectsTests` |
@@ -283,7 +283,7 @@ a prompt to validate that logic by hand here.
 
 Some of these classes also include **YAML-contract assertions** — they read the
 workflow `.yml` text and assert key trigger / safety-rail lines are present
-(e.g. `WorkflowYamlKeepsDocumentedSafetyRails` in `AutoRerunTransientCiFailuresTests`).
+(e.g. `WorkflowOwnsAndValidatesAutomaticRerunDecision` in `AnalyzeCiFailureWorkflowTests`).
 If you changed a workflow's `on:`, `if:`, permissions, or job gating, a contract
 test may need updating — a red contract test here is signal, not noise.
 
@@ -509,9 +509,9 @@ gh run watch "$(gh run list --workflow <workflow>.yml -L1 --json databaseId \
   validation branch, and otherwise validate statically and lean on the PR's own
   required checks. Never trigger one against `microsoft/aspire` just to "see if it
   works."
-- `auto-rerun-transient-ci-failures.yml` has a `dry_run` input that produces the
-  full analysis summary without requesting a rerun — use it to validate matcher
-  changes against a real failed CI run id.
+- `analyze-ci-failure.md` accepts a failed CI `run_id`, but it can post a PR
+  comment and request a rerun. Treat manual dispatch as a real side effect and
+  require explicit maintainer approval.
 
 A green `--exit-status` from a dispatched run is necessary but **not** sufficient —
 always follow it with Step I-5 against that run.

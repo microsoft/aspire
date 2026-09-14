@@ -65,7 +65,7 @@ Aspire-Core.slnf
 .github/workflows/tests-outerloop.yml
 .github/workflows/tests-quarantine.yml
 .github/workflows/update-*.yml
-.github/workflows/auto-rerun-transient-ci-failures.*
+.github/workflows/analyze-ci-failure.js
 
 # GitHub Agentic Workflows (gh-aw): shared action locks (.github/aw/**), compiled
 # *.lock.yml workflows, and the agentics-maintenance workflows. The .md source files

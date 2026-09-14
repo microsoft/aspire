@@ -25,10 +25,10 @@ outerloop CI.
 The whole workflow is the eligibility `if` plus a single `rerun-failed-jobs` API
 call — there is no script logic to maintain. This is deliberately separate from
 the PR-facing
-[auto-rerun-transient-ci-failures](auto-rerun-transient-ci-failures.md) workflow,
-which classifies failures and posts PR comments: that one's unconditional
-behavior is a temporary `FORCE_RERUN_ALL` measure and its normal path is
-PR-shaped, whereas outerloop's unconditional rerun is the permanent intent.
+[CI failure analysis and rerun](auto-rerun-transient-ci-failures.md) workflow,
+which classifies failures, decides whether a rerun is safe, and posts PR
+comments. Outerloop's unconditional rerun remains separate because it has no PR
+or analysis result to guide the decision.
 
 ```text
 Outerloop Tests run fails
