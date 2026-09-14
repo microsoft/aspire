@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Engineering automation change to the CI failure analysis workflow; no user-facing product impact.",
+  "mergedAt": "2026-09-14T06:56:20Z",
+  "number": 18763,
+  "runDate": "2026-09-14T12:07:41Z",
+  "status": "excluded",
+  "title": "Include failure details in CI analysis issues"
+}
