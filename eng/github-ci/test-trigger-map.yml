@@ -227,6 +227,7 @@ path_rules:
       - src/Aspire.Hosting/**
       - src/Aspire.Hosting.AppHost/**
       - src/Aspire.Hosting.Azure.Functions/**
+      - src/Aspire.Hosting.Blazor/**
       - src/Aspire.Hosting.CodeGeneration.Java/**
       - src/Aspire.Hosting.CodeGeneration.TypeScript/**
       - src/Aspire.Hosting.Docker/**
@@ -461,6 +462,7 @@ affected_project_rules:
       - Aspire.Hosting
       - Aspire.Hosting.AppHost
       - Aspire.Hosting.Azure.Functions
+      - Aspire.Hosting.Blazor
       - Aspire.Hosting.CodeGeneration.Java
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.Docker

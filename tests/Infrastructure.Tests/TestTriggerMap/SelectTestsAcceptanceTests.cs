@@ -1030,7 +1030,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     }
 
     [Fact]
-    public void RealMapBlazorRuntimeAssetChangeRunsPackageAndPolyglotRegressions()
+    public void RealMapBlazorRuntimeAssetChangeRunsPackageExtensionAndPolyglotRegressions()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
         var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
@@ -1043,6 +1043,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.False(r.SelectsAll);
         Assert.Contains("Aspire.Hosting.Tests", r.TestProjects);
         Assert.Contains("Aspire.Cli.EndToEnd.Tests", r.TestProjects);
+        Assert.Contains("job:extension-e2e", r.Jobs);
         Assert.Contains("job:polyglot", r.Jobs);
     }
 
