@@ -23,7 +23,7 @@ internal static class AppHostPresentation
         {
             name = name[..^Suffix.Length];
         }
-        return string.IsNullOrEmpty(name) ? "AppHost" : name;
+        return string.IsNullOrEmpty(name) ? "AppHost" : ToSingleLine(name);
     }
 
     public static string GetTitle(AppHostInfo host) => Compact(GetDisplayName(host));
@@ -31,7 +31,7 @@ internal static class AppHostPresentation
     public static string GetSubtitle(AppHostInfo host) => $"{Compact(GetLocation(host))} \u00b7 PID {host.AppHostPid}";
 
     public static string GetLabel(AppHostInfo host)
-        => $"{Path.GetFileNameWithoutExtension(host.AppHostPath)} - {GetLocation(host)} (PID {host.AppHostPid})";
+        => ToSingleLine($"{Path.GetFileNameWithoutExtension(host.AppHostPath)} - {GetLocation(host)} (PID {host.AppHostPid})");
 
     public static string GetDirectory(AppHostInfo host) => Path.GetDirectoryName(host.AppHostPath) ?? host.AppHostPath;
 
@@ -45,7 +45,7 @@ internal static class AppHostPresentation
     private static string Compact(string value)
     {
         const int MaximumTextElements = 44;
-        value = value.ReplaceLineEndings(" ").Replace('\t', ' ');
+        value = ToSingleLine(value);
         var elements = StringInfo.ParseCombiningCharacters(value);
         if (elements.Length <= MaximumTextElements)
         {
@@ -55,4 +55,6 @@ internal static class AppHostPresentation
         // Keep both ends without cutting a surrogate pair or a combining sequence.
         return value[..elements[21]] + "\u2026" + value[elements[^22]..];
     }
+
+    private static string ToSingleLine(string value) => value.ReplaceLineEndings(" ").Replace('\t', ' ');
 }

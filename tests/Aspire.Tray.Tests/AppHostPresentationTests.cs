@@ -24,6 +24,8 @@ public class AppHostPresentationTests
     [InlineData("worktree-a/Shop.AppHost/Shop.AppHost.csproj", "Shop")]
     [InlineData("worktree-a/Shop.AppHost/apphost.cs", "Shop")]
     [InlineData("worktree-a/custom-app.cs", "custom-app")]
+    [InlineData("worktree\nbranch/AppHost/apphost.cs", "worktree branch")]
+    [InlineData("worktree-a/my\nproject.AppHost/my\nproject.AppHost.csproj", "my project")]
     public void NamesPreferTheProjectOrWorktreeOverGenericAppHostNames(string path, string expected)
     {
         var host = new AppHostInfo(Path.GetFullPath(path), 42, null);
@@ -44,24 +46,41 @@ public class AppHostPresentationTests
         Assert.Equal($"{Path.Combine("worktree-b", "Shop.AppHost")} \u00b7 PID 43", AppHostPresentation.GetSubtitle(second));
     }
 
-    [Fact]
-    public void LongNamesKeepBothEndsAndPreserveGraphemes()
+    [Theory]
+    [InlineData("\U0001F469\u200D\U0001F4BB", 44)]
+    [InlineData("\U0001F469\u200D\U0001F4BB", 45)]
+    [InlineData("\U0001F469\u200D\U0001F4BB", 60)]
+    [InlineData("e\u0301", 60)]
+    [InlineData("\U0001F600", 60)]
+    public void LongNamesKeepBothEndsAndPreserveGraphemes(string grapheme, int count)
     {
-        const string Grapheme = "\U0001F469\u200D\U0001F4BB";
-        var name = string.Concat(Enumerable.Repeat(Grapheme, 60));
+        var name = string.Concat(Enumerable.Repeat(grapheme, count));
         var host = new AppHostInfo(Path.GetFullPath($"{name}/apphost.cs"), 42, null);
+        var expected = count <= 44
+            ? name
+            : string.Concat(Enumerable.Repeat(grapheme, 21)) + "\u2026" + string.Concat(Enumerable.Repeat(grapheme, 22));
 
         Assert.Equal(name, AppHostPresentation.GetDisplayName(host));
-        Assert.Equal(string.Concat(Enumerable.Repeat(Grapheme, 21)) + "\u2026" + string.Concat(Enumerable.Repeat(Grapheme, 22)),
-            AppHostPresentation.GetTitle(host));
-        Assert.Equal(44, StringInfo.ParseCombiningCharacters(AppHostPresentation.GetTitle(host)).Length);
+        Assert.Equal(expected, AppHostPresentation.GetTitle(host));
+        Assert.Equal(Math.Min(count, 44), StringInfo.ParseCombiningCharacters(AppHostPresentation.GetTitle(host)).Length);
     }
 
-    [Fact]
-    public void MenuLabelsDoNotIntroduceExtraLines()
+    [Theory]
+    [InlineData("my\nproject\tname", "my project name")]
+    [InlineData("my\r\nproject\tname", "my project name")]
+    [InlineData("my\u0085project\u2028name\u2029end", "my project name end")]
+    public void MenuLabelsDoNotIntroduceExtraLines(string name, string expected)
     {
-        var host = new AppHostInfo(Path.GetFullPath("worktree-a/my\nproject\tname.cs"), 42, null);
-        Assert.Equal("my project name", AppHostPresentation.GetTitle(host));
+        var path = Path.GetFullPath($"worktree\nbranch/apphost/{name}.cs");
+        var host = new AppHostInfo(path, 42, null);
+        var location = Path.Combine("worktree branch", "apphost");
+
+        Assert.Equal(expected, AppHostPresentation.GetDisplayName(host));
+        Assert.Equal(expected, AppHostPresentation.GetTitle(host));
+        Assert.Equal($"{location} \u00b7 PID 42", AppHostPresentation.GetSubtitle(host));
+        Assert.Equal($"{expected} - {location} (PID 42)", AppHostPresentation.GetLabel(host));
+        Assert.Equal(path, host.AppHostPath);
+        Assert.Equal(Path.GetDirectoryName(path), AppHostPresentation.GetDirectory(host));
     }
 
     [Theory]

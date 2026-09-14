@@ -96,7 +96,7 @@ dotnet build src/Aspire.Cli/Aspire.Cli.csproj
 
 DOTNET_ROOT="$PWD/.dotnet" \
 "artifacts/bin/Aspire.Tray.Mac/Release/net10.0/osx-arm64/app/Aspire Tray.app/Contents/MacOS/aspire-tray" \
-    --cli "$PWD/artifacts/bin/Aspire.Cli/Debug/net11.0/aspire"
+    --cli "$PWD/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire"
 ```
 
 `DOTNET_ROOT` is needed by the managed development CLI, not by the NativeAOT tray.
@@ -228,7 +228,7 @@ Smoke bypasses the normal singleton lock, so it can run alongside the tray.
 ```sh
 DOTNET_ROOT="$PWD/.dotnet" \
 "artifacts/bin/Aspire.Tray.Mac/Release/net10.0/osx-arm64/app/Aspire Tray.app/Contents/MacOS/aspire-tray" \
-    --cli "$PWD/artifacts/bin/Aspire.Cli/Debug/net11.0/aspire" --smoke-seconds 20
+    --cli "$PWD/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire" --smoke-seconds 20
 
 dotnet test --project tests/Aspire.Tray.Tests/Aspire.Tray.Tests.csproj \
     --no-launch-profile -- \
