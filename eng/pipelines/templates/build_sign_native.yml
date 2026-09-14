@@ -214,9 +214,8 @@ jobs:
                 $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
               displayName: 🟣Ad-hoc codesign aspire-managed with JIT entitlements
 
-          # Build the native AppKit app on macOS only. No macOS .NET workload is
-          # needed. Complete the app (plist/icon/ad-hoc seal) BEFORE official signing.
-          - ${{ if eq(parameters.agentOs, 'macos') }}:
+          # Publish native tray payloads before signing and never republish afterward.
+          - ${{ if in(parameters.agentOs, 'macos', 'windows') }}:
             - script: >-
                 $(Build.SourcesDirectory)/$(dotnetScript)
                 msbuild
@@ -227,7 +226,7 @@ jobs:
                 ${{ parameters.extraBuildArgs }}
                 /bl:$(Build.Arcade.LogsPath)PublishTray.binlog
               displayName: 🟣Prepare native tray app
-            - ${{ if eq(parameters.codeSign, true) }}:
+            - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
               - script: >-
                   $(Build.SourcesDirectory)/$(dotnetScript)
                   msbuild
@@ -244,7 +243,7 @@ jobs:
                 ${{ parameters.extraBuildArgs }}
                 -projects $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
                 /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
-              # eng/Signing.props also includes the prepared macOS .app transport.
+              # eng/Signing.props includes the macOS .app transport and Windows tray publish output.
               displayName: 🟣Sign bundle components
               env:
                 SYSTEM_ACCESSTOKEN: $(System.AccessToken)
@@ -282,6 +281,7 @@ jobs:
               /p:TargetRid=${{ targetRid }}
               /p:BundleVersion=ci-bundlepayload
               /p:SkipTrayBuild=true
+              /p:RequireWindowsTraySignature=${{ parameters.codeSign }}
               /p:ContinuousIntegrationBuild=true
               /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
             displayName: 🟣Create bundle layout

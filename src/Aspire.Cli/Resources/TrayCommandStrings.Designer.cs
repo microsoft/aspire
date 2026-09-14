@@ -72,9 +72,9 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string MacOSOnly {
+        public static string UnsupportedPlatform {
             get {
-                return ResourceManager.GetString("MacOSOnly", resourceCulture);
+                return ResourceManager.GetString("UnsupportedPlatform", resourceCulture);
             }
         }
 

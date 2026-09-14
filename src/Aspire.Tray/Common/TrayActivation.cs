@@ -65,12 +65,16 @@ internal sealed class TrayActivation : IAsyncDisposable
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         try
         {
-            // Connecting waits for a first launch still setting up AppKit. Readiness and
+            // Connecting waits for a first launch still setting up the native UI. Readiness and
             // restoration are acknowledged by the UI thread, not by accepting the socket.
             await pipe.ConnectAsync(timeout.Token).ConfigureAwait(false);
             await pipe.WriteAsync(new byte[] { command }, timeout.Token).ConfigureAwait(false);
             var response = new byte[ResponseLength];
             await pipe.ReadExactlyAsync(response, timeout.Token).ConfigureAwait(false);
+            if (OperatingSystem.IsWindows())
+            {
+                await pipe.WriteAsync(new byte[] { AcceptedResponse }, timeout.Token).ConfigureAwait(false);
+            }
             if (response[0] != AcceptedResponse)
             {
                 throw new InvalidOperationException(command switch
@@ -106,7 +110,7 @@ internal sealed class TrayActivation : IAsyncDisposable
                 request.CancelAfter(_timeout);
                 try
                 {
-                    // Private control-v1.sock protocol: request [1] = restore, [2] = stop,
+                    // Private control-v1 protocol: request [1] = restore, [2] = stop,
                     // [3] = ready. The 13-byte reply is [1 = accepted / 0 = rejected,
                     // int32 PID, int64 UTC start ticks], with little-endian integers.
                     // The lifetime lets stop wait for this tray, never a reused PID.
@@ -135,6 +139,19 @@ internal sealed class TrayActivation : IAsyncDisposable
                     BinaryPrimitives.WriteInt32LittleEndian(reply.AsSpan(1), _identity.ProcessId);
                     BinaryPrimitives.WriteInt64LittleEndian(reply.AsSpan(5), _identity.StartTimeUtcTicks);
                     await _pipe.WriteAsync(reply, request.Token).ConfigureAwait(false);
+                    if (OperatingSystem.IsWindows())
+                    {
+                        // DisconnectNamedPipe discards unread replies. Windows clients acknowledge
+                        // consuming the reply before we disconnect or quit; unlike WaitForPipeDrain,
+                        // this read is cancellable and cannot hold shutdown hostage.
+                        // The Windows control-v1 reply is followed by the client's single byte [1].
+                        var acknowledgement = new byte[1];
+                        await _pipe.ReadExactlyAsync(acknowledgement, request.Token).ConfigureAwait(false);
+                        if (acknowledgement[0] != AcceptedResponse)
+                        {
+                            throw new InvalidDataException("The tray control acknowledgement is invalid.");
+                        }
+                    }
                     if (response == AcceptedResponse && command[0] == StopRequest)
                     {
                         // Acknowledge before posting quit: UI shutdown disposes this listener.

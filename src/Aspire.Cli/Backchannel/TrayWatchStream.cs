@@ -35,7 +35,17 @@ internal sealed class TrayWatchStream(
             SingleReader = true,
             SingleWriter = true
         });
+        var healthChanges = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
+        {
+            FullMode = BoundedChannelFullMode.DropWrite,
+            SingleReader = true
+        });
+        var healthSubscriptions = new Dictionary<IAppHostAuxiliaryBackchannel, TrayResourceHealthSubscription>(ReferenceEqualityComparer.Instance);
+        List<(IAppHostAuxiliaryBackchannel Connection, TrayAppHost Host)> candidates = [];
+        TrayAppHost[] hosts = [];
         Task producer = Task.CompletedTask;
+        Task<bool>? pendingConnectionsRead = null;
+        Task<bool>? pendingHealthRead = null;
         Task<bool>? pendingRead = null;
         Task<bool>? pendingHeartbeat = null;
         var terminalError = false;
@@ -120,6 +130,14 @@ internal sealed class TrayWatchStream(
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
             }
+            try
+            {
+                await Task.WhenAll(pendingConnectionsRead ?? Task.CompletedTask, pendingHealthRead ?? Task.CompletedTask).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+            }
+            await Task.WhenAll(healthSubscriptions.Values.Select(subscription => subscription.DisposeAsync().AsTask())).ConfigureAwait(false);
         }
 
         async Task ProduceAsync(string lastSnapshot)
@@ -153,38 +171,83 @@ internal sealed class TrayWatchStream(
         {
             try
             {
-                if (!await connections.MoveNextAsync().ConfigureAwait(false))
+                pendingConnectionsRead ??= connections.MoveNextAsync().AsTask();
+                if (pendingHealthRead is not null)
                 {
-                    return Error("discovery_failed");
+                    await Task.WhenAny(pendingConnectionsRead, pendingHealthRead).ConfigureAwait(false);
                 }
 
-                var candidates = new List<(IAppHostAuxiliaryBackchannel Connection, TrayAppHost Host)>();
-                foreach (var connection in connections.Current)
+                if (pendingHealthRead is null || pendingConnectionsRead.IsCompleted)
                 {
-                    if (connection.AppHostInfo is not { } info)
+                    var connectionRead = pendingConnectionsRead;
+                    pendingConnectionsRead = null;
+                    if (!await connectionRead.ConfigureAwait(false))
                     {
-                        continue;
-                    }
-                    if (candidates.Count == TrayCliProtocol.MaximumAppHosts)
-                    {
-                        return Error("limit_exceeded");
+                        return Error("discovery_failed");
                     }
 
-                    var startedAt = processIdentityProvider.GetStartTimeUnixMilliseconds(info.ProcessId);
-                    candidates.Add((connection, new TrayAppHost
+                    candidates = [];
+                    foreach (var connection in connections.Current)
                     {
-                        AppHostPath = info.AppHostPath,
-                        AppHostPid = info.ProcessId,
-                        ProcessStartTimeUnixMilliseconds = startedAt is > 0 ? startedAt : null
-                    }));
+                        if (connection.AppHostInfo is not { } info)
+                        {
+                            continue;
+                        }
+                        if (candidates.Count == TrayCliProtocol.MaximumAppHosts)
+                        {
+                            return Error("limit_exceeded");
+                        }
+
+                        var startedAt = processIdentityProvider.GetStartTimeUnixMilliseconds(info.ProcessId);
+                        candidates.Add((connection, new TrayAppHost
+                        {
+                            AppHostPath = info.AppHostPath,
+                            AppHostPid = info.ProcessId,
+                            ProcessStartTimeUnixMilliseconds = startedAt is > 0 ? startedAt : null
+                        }));
+                    }
+
+                    var currentConnections = new Dictionary<IAppHostAuxiliaryBackchannel, TrayAppHost>(ReferenceEqualityComparer.Instance);
+                    foreach (var (connection, host) in candidates)
+                    {
+                        currentConnections.Add(connection, host);
+                    }
+                    foreach (var (connection, subscription) in healthSubscriptions.ToArray())
+                    {
+                        if (!currentConnections.TryGetValue(connection, out var host) || subscription.Host != host)
+                        {
+                            await subscription.DisposeAsync().ConfigureAwait(false);
+                            healthSubscriptions.Remove(connection);
+                        }
+                    }
+                    foreach (var (connection, host) in candidates)
+                    {
+                        if (!healthSubscriptions.ContainsKey(connection))
+                        {
+                            healthSubscriptions.Add(connection, new TrayResourceHealthSubscription(
+                                connection, host, () => healthChanges.Writer.TryWrite(true), logger, token));
+                        }
+                    }
+
+                    // Health-only publications reuse the last URL enrichment instead of issuing
+                    // optional dashboard RPCs for every resource transition.
+                    hosts = await EnrichDashboardUrlsAsync(candidates, token).ConfigureAwait(false);
                 }
 
-                var hosts = await EnrichDashboardUrlsAsync(candidates, token).ConfigureAwait(false);
+                if (pendingHealthRead is not null && pendingHealthRead.IsCompleted)
+                {
+                    await pendingHealthRead.ConfigureAwait(false);
+                    pendingHealthRead = null;
+                }
+                healthChanges.Reader.TryRead(out _);
+                pendingHealthRead ??= healthChanges.Reader.WaitToReadAsync(token).AsTask();
+
                 var message = new TrayWatchMessage
                 {
                     Version = TrayCliProtocol.Version,
                     Type = "snapshot",
-                    AppHosts = hosts.OrderBy(host => host.AppHostPath, StringComparer.Ordinal)
+                    AppHosts = hosts.Select((host, index) => host with { Health = healthSubscriptions[candidates[index].Connection].Health })
+                        .OrderBy(host => host.AppHostPath, StringComparer.Ordinal)
                         .ThenBy(host => host.AppHostPid)
                         .ThenBy(host => host.ProcessStartTimeUnixMilliseconds)
                         .ThenBy(host => host.DashboardUrl, StringComparer.Ordinal)

@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Shared;
 
 namespace Aspire.Tools.CreateLayout;
 
@@ -59,6 +60,11 @@ public static class Program
             Description = "Enable verbose output"
         };
 
+        var windowsTrayOption = new Option<string?>("--tray-windows")
+        {
+            Description = "Pre-built Windows tray publish directory (required for Windows; signed before layout assembly)"
+        };
+
         var rootCommand = new RootCommand("CreateLayout - Build Aspire bundle layout for distribution");
         rootCommand.Options.Add(outputOption);
         rootCommand.Options.Add(artifactsOption);
@@ -66,6 +72,7 @@ public static class Program
         rootCommand.Options.Add(bundleVersionOption);
         rootCommand.Options.Add(archiveOption);
         rootCommand.Options.Add(trayAppOption);
+        rootCommand.Options.Add(windowsTrayOption);
         rootCommand.Options.Add(verboseOption);
 
         rootCommand.SetAction(async (parseResult, cancellationToken) =>
@@ -79,7 +86,8 @@ public static class Program
 
             try
             {
-                using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, version, verbose, parseResult.GetValue(trayAppOption));
+                using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, version, verbose,
+                    parseResult.GetValue(trayAppOption), parseResult.GetValue(windowsTrayOption));
                 await builder.BuildAsync().ConfigureAwait(false);
 
                 if (createArchive)
@@ -116,8 +124,9 @@ internal sealed class LayoutBuilder : IDisposable
     private readonly string _version;
     private readonly bool _verbose;
     private readonly string? _trayAppPath;
+    private readonly string? _windowsTrayPath;
 
-    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string version, bool verbose, string? trayAppPath)
+    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string version, bool verbose, string? trayAppPath, string? windowsTrayPath)
     {
         _outputPath = Path.GetFullPath(outputPath);
         _artifactsPath = Path.GetFullPath(artifactsPath);
@@ -125,6 +134,7 @@ internal sealed class LayoutBuilder : IDisposable
         _version = version;
         _verbose = verbose;
         _trayAppPath = trayAppPath;
+        _windowsTrayPath = windowsTrayPath;
     }
 
     public void Dispose()
@@ -155,8 +165,25 @@ internal sealed class LayoutBuilder : IDisposable
 
     internal void CopyTray()
     {
-        // Only macOS is a shipping tray implementation. Do not accidentally package
-        // the Windows scaffold just because its build artifacts happen to exist.
+        if (_rid.StartsWith("win-", StringComparison.Ordinal))
+        {
+            if (string.IsNullOrWhiteSpace(_windowsTrayPath))
+            {
+                throw new InvalidOperationException("The Windows bundle requires --tray-windows pointing to the pre-built native tray publish directory.");
+            }
+            WindowsTrayPayload.Validate(_windowsTrayPath, _rid);
+            var destination = Path.Combine(_outputPath, "tray");
+            Directory.CreateDirectory(destination);
+            // Only the explicitly produced runtime payload is shipped, never PDBs,
+            // managed build intermediates, or logs from a previous smoke run.
+            foreach (var name in new[] { WindowsTrayPayload.ExecutableName, WindowsTrayPayload.IconName })
+            {
+                File.Copy(Path.Combine(_windowsTrayPath, name), Path.Combine(destination, name), overwrite: true);
+            }
+            Log("Copied Windows tray to tray/");
+            return;
+        }
+
         if (!_rid.StartsWith("osx-", StringComparison.OrdinalIgnoreCase))
         {
             return;

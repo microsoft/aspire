@@ -32,6 +32,8 @@ internal sealed class NativeSmokeHarness
     };
     private readonly CancellationTokenSource _trackingShutdown = new();
     private readonly TrayController _controller;
+    private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("aspire-tray-smoke-");
+    private readonly AppHostInfo _savedHost;
     private MacTrayApplication _application = null!;
     private TrayController? _discovery;
     private int _phase;
@@ -42,10 +44,20 @@ internal sealed class NativeSmokeHarness
     private bool _trackingRefreshVerified;
     private Task? _trackingWorker;
     private Task? _restoreTask;
+    private int _clearConfirmations;
+    private int _removeConfirmations;
+    private bool _inspectionMode;
 
     private NativeSmokeHarness()
     {
         _controller = new(_client);
+        var path = Path.Combine(_directory.FullName, "Saved.AppHost.cs");
+        File.WriteAllText(path, "// Native smoke fixture; never executed.");
+        _savedHost = new(path, 41006, null)
+        {
+            ProcessStartTimeUnixMilliseconds = 1_700_000_000_006,
+            Health = AppHostHealth.Healthy
+        };
     }
 
     public static int Run(string cliPath, int seconds) => new NativeSmokeHarness().RunCore(cliPath, seconds);
@@ -54,7 +66,8 @@ internal sealed class NativeSmokeHarness
     {
         // The normal tray's single-instance lock is intentionally not acquired: deterministic
         // smoke never uses real AppHost actions and may coexist with the user's running tray.
-        using var application = new MacTrayApplication(_controller, "AspireTray.Smoke", OpenDashboard, ConfirmStop);
+        using var application = new MacTrayApplication(_controller, "AspireTray.Smoke",
+            OpenDashboard, ConfirmStop, ConfirmAction);
         _application = application;
         try
         {
@@ -62,6 +75,7 @@ internal sealed class NativeSmokeHarness
                 "Readiness was acknowledged before the native event loop ran.");
             application.MenuUpdated += Advance;
             _client.StopStarted = application.RequestRefresh;
+            _client.StartStarted = application.RequestRefresh;
             application.SetSmokeDeadline(seconds, OnTimeout);
             if (Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_VERIFY_CLI") == "1")
             {
@@ -97,6 +111,7 @@ internal sealed class NativeSmokeHarness
             }
             _controller.DisposeAsync().AsTask().GetAwaiter().GetResult();
             _client.StopStarted = null;
+            _directory.Delete(recursive: true);
         }
     }
 
@@ -122,11 +137,13 @@ internal sealed class NativeSmokeHarness
             "The native event loop did not acknowledge readiness.");
         var menu = _application.InspectMenu();
         Require(menu.AutosaveName == "AspireTray.Smoke", "Smoke must not share the production item's saved placement.");
-        Require(menu.HasColorIcon && menu.HasHeaderIcon && menu.HasNoItemTooltips
+        Require(menu.HasColorIcon && menu.HasIconOnlyTitle && menu.HasExpectedConnectionBadge && menu.HasNoItemTooltips
             && menu.HasCommandQ && menu.DispatcherSupportsAllModes, "Icon, tooltip, keyboard, or dispatcher contract failed.");
-        Require(menu.ItemCount == Math.Max(menu.Rows.Count, 1) + 4, "Unexpected menu structure.");
-        Require(menu.HeaderSubtitle is null ? menu.HeaderTitle == $"Aspire - {state.Status}"
-            : menu.HeaderTitle == "Aspire" && menu.HeaderSubtitle == state.Status, "Status is not visible.");
+        Require(menu.ItemCount == menu.Rows.Count + 6 + (menu.StatusNotice is null ? 0 : 1), "Unexpected menu structure.");
+        if (menu.StatusNotice is not null)
+        {
+            Require(menu.StatusNotice == state.Status, "Status notice was not updated.");
+        }
         Require(menu.Rows.All(row => row.HasActionIcons && row.HasCorrectActions), "Missing native action/icon.");
 
         if (_trackingInProgress)
@@ -338,11 +355,140 @@ internal sealed class NativeSmokeHarness
                 Require(menu.IsStatusItemVisible && _restoreTask is { IsCompletedSuccessfully: true }
                     && restoredPlacement,
                     $"Icon restoration incomplete: visible={menu.IsStatusItemVisible}, acknowledgement={_restoreTask?.Status}, recoveryPreference={restoredPlacement}.");
+                _application.VerifyInformationItemsForSmoke();
+                _application.VerifyStatusArtworkForSmoke();
+                _controller.ClearRecent();
+                _phase++;
+                Publish([_savedHost]);
+                break;
+            case 22:
+                VerifyRows(state, menu);
+                Require(menu.Rows.Single().Health == AppHostHealth.Healthy && menu.StatusNotice is null,
+                    "Healthy resources should show a checkmark without a redundant header.");
+                _application.PerformPinForSmoke(_savedHost.AppHostPath, useContextMenu: true);
+                _application.SetTrackingForSmoke(null, open: true);
+                _phase++;
+                Publish([_savedHost with { Health = AppHostHealth.Warning }]);
+                break;
+            case 23:
+                Require(menu.Rows.Single() is { Health: AppHostHealth.Warning, PinTitle: "Unpin AppHost" },
+                    "Waiting resource state or pin action did not update during menu tracking.");
+                _phase++;
+                Publish([_savedHost with { Health = AppHostHealth.Unhealthy }]);
+                break;
+            case 24:
+                Require(menu.Rows.Single().Health == AppHostHealth.Unhealthy, "Failed resources did not update the native status icon.");
+                _application.SetTrackingForSmoke(null, open: false);
+                _phase++;
+                Publish([]);
+                break;
+            case 25:
+                Require(menu.Rows.Single() is { Health: AppHostHealth.Unknown, CanStart: true, CanStop: false },
+                    "An offline pin should remain available with a neutral icon and explicit Start.");
+                Require(menu.RecentPaths.Count == 0, "Pinned AppHost was also listed in Open Recent.");
+                _phase++;
+                _application.PerformStartForSmoke(_savedHost.AppHostPath);
+                break;
+            case 26:
+                if (_client.StartCount == 0)
+                {
+                    return;
+                }
+                _phase++;
+                Publish([_savedHost]);
+                break;
+            case 27:
+                Require(menu.Rows.Single() is { Health: AppHostHealth.Healthy, CanStop: true, CanStart: false },
+                    "A started pin did not become a live row.");
+                Require(menu.RecentPaths.Count == 0, "A running AppHost appeared in Open Recent.");
+                _phase++;
+                _application.PerformPinForSmoke(_savedHost.AppHostPath, useContextMenu: false);
+                Publish([]);
+                break;
+            case 28:
+                Require(menu.Rows.Count == 0 && menu.RecentPaths.Contains(_savedHost.AppHostPath),
+                    "A stopped unpinned AppHost was not retained in Open Recent.");
+                var recentBeforeCancel = menu.RecentPaths.ToArray();
+                _application.PerformClearRecentForSmoke();
+                Require(_controller.State.RecentAppHosts.Select(host => host.Id.AppHostPath).SequenceEqual(recentBeforeCancel),
+                    "Cancel cleared recent history.");
+                _phase++;
+                _application.PerformClearRecentForSmoke();
+                break;
+            case 29:
+                Require(menu.RecentPaths.Count == 0 && !menu.CanClearRecent && _clearConfirmations == 2,
+                    "Confirmed Clear did not empty recent history.");
+                _phase++;
+                Publish([_first]);
+                Publish([]);
+                break;
+            case 30:
+                Require(menu.RecentPaths.Contains(_first.AppHostPath), "Missing-path recent fixture was not listed.");
+                _phase++;
+                _application.PerformStartForSmoke(_first.AppHostPath);
+                break;
+            case 31:
+                Require(_removeConfirmations == 1 && menu.RecentPaths.Count == 0 && _client.StartCount == 1,
+                    "Missing recent AppHost was not removed safely, or attempted a launch.");
+                _phase++;
+                Publish([_savedHost]);
+                _controller.SetPinned(_savedHost.AppHostPath, true);
+                Publish([]);
+                break;
+            case 32:
+                Require(menu.Rows.Single() is { CanStart: true, PinTitle: "Unpin AppHost" },
+                    "Missing-pin removal fixture was not initially available.");
+                File.Delete(_savedHost.AppHostPath);
+                _phase++;
+                _application.SetTrackingForSmoke(null, open: true);
+                _application.RequestRefresh();
+                break;
+            case 33:
+                Require(state.AppHosts.Count == 0 && state.RecentAppHosts.Count == 0 && !menu.Rows.Single().Enabled,
+                    "A missing pin was not removed, or its stale tracked action remained enabled.");
+                _phase++;
+                _application.SetTrackingForSmoke(null, open: false);
+                break;
+            case 34:
+                Require(menu.Rows.Count == 0 && menu.RecentPaths.Count == 0 && menu.HasEmptyPlaceholder,
+                    "A deleted pin remained in the native menu or returned through recent history.");
+                File.WriteAllText(_savedHost.AppHostPath, "// Native smoke fixture; never executed.");
+                var warning = CreatePreviewHost(_first, AppHostHealth.Warning);
+                var unhealthy = CreatePreviewHost(_second, AppHostHealth.Unhealthy);
+                var notStarted = CreatePreviewHost(new("/preview/Not started/apphost.cs", 41007, null)
+                {
+                    ProcessStartTimeUnixMilliseconds = 1_700_000_000_007
+                }, AppHostHealth.Unknown);
+                _phase++;
+                Publish([_savedHost, warning, unhealthy, notStarted]);
+                _controller.SetPinned(notStarted.AppHostPath, true);
+                Publish([_savedHost, warning, unhealthy]);
+                break;
+            case 35:
+                VerifyRows(state, menu);
+                Require(menu.Rows.Count == 4 && state.AppHosts.Single(host => host.Title == "Not started")
+                    is { IsRunning: false, CanStart: true, Health: AppHostHealth.Unknown },
+                    "The preview must include a stopped pin with a white status icon.");
                 _finished = true;
-                Console.WriteLine($"Native smoke passed: 22 phases; full-color icon; no item tooltips; Command-Q; default Cancel; per-host progress/errors; stable identity; nested-menu deferral; modal revalidation; real tracking-mode refresh and timed auto-close; delayed action identity after menuDidClose/rebuild; acknowledged icon restoration after menu closure; CLI discovery: {(_discovery is null ? "not requested" : "live")}.");
+                Console.WriteLine($"Native smoke passed: 36 phases; supplied tray assets at 1x/2x with preserved alpha; lower-right purple badge with transparent border; solid status circles; white not-started preview example; context pin/unpin; missing-pin pruning; explicit start; filtered recents; safe clear/remove dialogs; top-level Documentation/About; standard Stop contrast; identity and tracking regressions; CLI discovery: {(_discovery is null ? "not requested" : "live")}.");
+                if (Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_INTERACTIVE") == "1")
+                {
+                    _inspectionMode = true;
+                    _application.EnableInteractiveSmoke();
+                    Console.WriteLine("Native smoke inspection is ready with fake AppHosts. Use Quit Aspire to close it.");
+                    break;
+                }
                 _application.FinishSmoke(success: true);
                 break;
         }
+    }
+
+    private AppHostInfo CreatePreviewHost(AppHostInfo host, AppHostHealth health)
+    {
+        var directory = Directory.CreateDirectory(Path.Combine(_directory.FullName, AppHostPresentation.GetDisplayName(host)));
+        var path = Path.Combine(directory.FullName, "apphost.cs");
+        File.WriteAllText(path, "// Native smoke fixture; never executed.");
+        return host with { AppHostPath = path, Health = health };
     }
 
     private void FinishRealTracking(bool deadlineFired)
@@ -381,7 +527,9 @@ internal sealed class NativeSmokeHarness
             var row = state.AppHosts.Single(host => host.Id == native.Id);
             Require(native.Title == (native.Subtitle is null ? $"{row.Title} - {row.Subtitle}" : row.Title)
                 && (native.Subtitle is null || native.Subtitle == row.Subtitle), "Native title/subtitle mismatch.");
-            Require(native.AccessibilityLabel == $"{row.DisplayName}, {row.Subtitle}, AppHost actions", "Accessibility label mismatch.");
+            Require(native.AccessibilityLabel.StartsWith($"{row.DisplayName}, ", StringComparison.Ordinal)
+                && native.AccessibilityLabel.EndsWith($", {row.Subtitle}, AppHost actions", StringComparison.Ordinal),
+                "Accessibility label mismatch.");
             Require(native.CanOpenDashboard == row.CanOpenDashboard && native.CanStop == row.CanStop
                 && native.StopTitle == (row.IsStopping ? "Stopping AppHost..." : "Stop AppHost\u2026"), "Native action state mismatch.");
         }
@@ -396,7 +544,7 @@ internal sealed class NativeSmokeHarness
     private bool ConfirmStop(StopConfirmation confirmation)
     {
         Require(confirmation.ButtonCount == 2 && confirmation.CancelIsDefault
-            && confirmation.StopRequiresExplicitChoice && confirmation.HasColorIcon,
+            && confirmation.StopRequiresExplicitChoice && confirmation.HasColorIcon && confirmation.HasStandardButtonContrast,
             "The real NSAlert has an unsafe default or missing icon.");
         _confirmations++;
         if (_confirmations == 1)
@@ -412,6 +560,20 @@ internal sealed class NativeSmokeHarness
         return true;
     }
 
+    private bool ConfirmAction(TrayConfirmation confirmation)
+    {
+        Require(confirmation.CancelIsDefault && confirmation.ActionRequiresExplicitChoice, "Saved-state dialog has an unsafe default.");
+        if (confirmation.ActionTitle == "Clear")
+        {
+            Require(confirmation.Message == "Do you want to clear all recently opened AppHosts?"
+                && confirmation.Detail == "This action is irreversible.\n\nPinned AppHosts will be kept.", "Clear confirmation text mismatch.");
+            return ++_clearConfirmations > 1;
+        }
+        Require(confirmation.ActionTitle == "Remove", "Unexpected native confirmation.");
+        _removeConfirmations++;
+        return true;
+    }
+
     private void Publish(IReadOnlyList<AppHostInfo> hosts, DiscoveryState discovery = DiscoveryState.Live)
         => _client.Publish(new(hosts, discovery));
 
@@ -420,6 +582,10 @@ internal sealed class NativeSmokeHarness
 
     private void OnTimeout()
     {
+        if (_inspectionMode)
+        {
+            return;
+        }
         if (!_finished)
         {
             _finished = true;
@@ -445,6 +611,8 @@ internal sealed class NativeSmokeHarness
         public int StopCount => _stops.Count;
         public IEnumerable<AppHostId> StoppedIds => _stops.Keys;
         public Action? StopStarted { get; set; }
+        public Action? StartStarted { get; set; }
+        public int StartCount;
         public bool HasStop(AppHostId id) => _stops.ContainsKey(id);
 
         public void Publish(AppHostSnapshot snapshot)
@@ -471,6 +639,13 @@ internal sealed class NativeSmokeHarness
             Require(_stops.TryAdd(id, pending), "Duplicate fake stop request.");
             StopStarted?.Invoke();
             return pending.Task.WaitAsync(cancellationToken);
+        }
+
+        public Task<StartResult> StartAsync(string path, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref StartCount);
+            StartStarted?.Invoke();
+            return Task.FromResult(new StartResult(StartOutcome.Started, 0));
         }
 
         public void Complete(AppHostId id, StopResult result)

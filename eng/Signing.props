@@ -75,6 +75,7 @@
     <!-- Aspire is a Microsoft product rather than a .NET runtime binary, so use Arcade's general Microsoft certificate. -->
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire.exe" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire-managed.exe" CertificateName="Microsoft400" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire-tray.exe" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire-managed" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire" CertificateName="MacDeveloperHardenWithNotarization" />
@@ -115,6 +116,7 @@
 
     <!-- Sign the aspire-managed binary at its publish output path (before it gets packed into the bundle archive) -->
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe" />
+    <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsLinux())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsMacOS())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
     <!-- .app signing inputs are ZIP files in Arcade/MicroBuild's app transport format. -->

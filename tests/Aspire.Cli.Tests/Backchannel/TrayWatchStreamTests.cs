@@ -608,17 +608,215 @@ public class TrayWatchStreamTests
     }
 
     [Fact]
+    public async Task ResourceHealthTransitionsPublishWithoutDiscoveryChangesOrPolling()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var snapshots = Channel.CreateUnbounded<IReadOnlyList<IAppHostAuxiliaryBackchannel>>();
+        var resourceUpdates = Channel.CreateUnbounded<ResourceSnapshot>();
+        var messages = Channel.CreateUnbounded<TrayWatchMessage>();
+        var watchStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connection = Connection("/project/a.cs", 10);
+        connection.SupportsResourceSnapshotVersionsV1 = true;
+        connection.ResourceSnapshots =
+        [
+            new() { Name = "api", State = "Starting", Version = 1 },
+            new() { Name = "cache", State = "Running", HealthStatus = "Healthy", Version = 1 }
+        ];
+        var watchCalls = 0;
+        var dashboardCalls = 0;
+        connection.WatchResourceSnapshotsHandler = Watch;
+        connection.GetDashboardUrlsHandler = _ =>
+        {
+            Interlocked.Increment(ref dashboardCalls);
+            return Task.FromResult<DashboardUrlsState?>(null);
+        };
+        snapshots.Writer.TryWrite([connection]);
+        var monitor = new TestAuxiliaryBackchannelMonitor { WatchConnectionsHandler = token => snapshots.Reader.ReadAllAsync(token) };
+        var run = CreateStream(monitor, new FakeTimeProvider(), new TestProcessIdentityProvider { GetStartTime = _ => 1000 })
+            .RunAsync((json, _) =>
+            {
+                messages.Writer.TryWrite(Deserialize(json));
+                return Task.CompletedTask;
+            }, cancellation.Token);
+
+        try
+        {
+            var initial = await ReadHostAsync();
+            Assert.Equal("warning", initial.Health);
+            Assert.Equal(1000, initial.ProcessStartTimeUnixMilliseconds);
+
+            resourceUpdates.Writer.TryWrite(new() { Name = "api", State = "Running", HealthStatus = "Healthy", Version = 2 });
+            Assert.Equal(initial with { Health = "healthy" }, await ReadHostAsync());
+
+            resourceUpdates.Writer.TryWrite(new() { Name = "cache", State = "Running", HealthStatus = "Degraded", Version = 2 });
+            Assert.Equal(initial with { Health = "warning" }, await ReadHostAsync());
+
+            resourceUpdates.Writer.TryWrite(new() { Name = "cache", State = "Running", HealthStatus = "Unhealthy", Version = 3 });
+            Assert.Equal(initial with { Health = "unhealthy" }, await ReadHostAsync());
+
+            resourceUpdates.Writer.TryWrite(new() { Name = "cache", State = "Running", HealthStatus = "Healthy", Version = 4 });
+            Assert.Equal(initial with { Health = "healthy" }, await ReadHostAsync());
+
+            resourceUpdates.Writer.TryWrite(new() { Name = "api", State = "Running", HealthStatus = "Unhealthy", Version = 1 });
+            resourceUpdates.Writer.TryWrite(new() { Name = "cache", State = "FailedToStart", Version = 5 });
+            Assert.Equal(initial with { Health = "unhealthy" }, await ReadHostAsync());
+
+            resourceUpdates.Writer.TryWrite(new() { Name = "cache", State = "FailedToStart", IsHidden = true, Version = 6 });
+            Assert.Equal(initial with { Health = "healthy" }, await ReadHostAsync());
+
+            resourceUpdates.Writer.TryComplete();
+            Assert.Equal(initial with { Health = null }, await ReadHostAsync());
+            Assert.Equal(1, connection.GetResourceSnapshotsCallCount);
+            Assert.Equal(1, Volatile.Read(ref watchCalls));
+            Assert.Equal(1, Volatile.Read(ref dashboardCalls));
+        }
+        finally
+        {
+            cancellation.Cancel();
+            Assert.Equal(CliExitCodes.Success, await run.DefaultTimeout());
+        }
+        await watchStopped.Task.DefaultTimeout();
+
+        async Task<TrayAppHost> ReadHostAsync()
+        {
+            var message = await messages.Reader.ReadAsync().AsTask().DefaultTimeout();
+            Assert.Equal("snapshot", message.Type);
+            return Assert.Single(message.AppHosts!);
+        }
+
+        async IAsyncEnumerable<ResourceSnapshot> Watch(bool includeHidden, [EnumeratorCancellation] CancellationToken token)
+        {
+            Assert.True(includeHidden);
+            Interlocked.Increment(ref watchCalls);
+            try
+            {
+                await foreach (var resource in resourceUpdates.Reader.ReadAllAsync(token))
+                {
+                    yield return resource;
+                }
+            }
+            finally
+            {
+                watchStopped.TrySetResult();
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MissingOrFailedResourceStreamLeavesHostUnknownWithoutFailingDiscovery(bool fails)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var resourceUpdates = Channel.CreateUnbounded<ResourceSnapshot>();
+        var messages = Channel.CreateUnbounded<TrayWatchMessage>();
+        var connection = Connection("/project/a.cs", 10);
+        connection.ResourceSnapshots = [new() { Name = "api", State = "Running", HealthStatus = "Healthy" }];
+        connection.WatchResourceSnapshotsHandler = (_, token) => resourceUpdates.Reader.ReadAllAsync(token);
+        var logger = new FakeLogger();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection(connection.SocketPath, connection);
+        var run = new TrayWatchStream(monitor, new TestProcessIdentityProvider(), new FakeTimeProvider(), logger)
+            .RunAsync((json, _) =>
+            {
+                messages.Writer.TryWrite(Deserialize(json));
+                return Task.CompletedTask;
+            }, cancellation.Token);
+
+        try
+        {
+            Assert.Equal("healthy", Assert.Single((await messages.Reader.ReadAsync().AsTask().DefaultTimeout()).AppHosts!).Health);
+            resourceUpdates.Writer.TryComplete(fails ? new IOException("Resource stream failed.") : null);
+
+            var message = await messages.Reader.ReadAsync().AsTask().DefaultTimeout();
+            Assert.Equal("snapshot", message.Type);
+            Assert.Null(Assert.Single(message.AppHosts!).Health);
+            var log = Assert.Single(logger.Collector.GetSnapshot());
+            Assert.Equal(LogLevel.Debug, log.Level);
+            Assert.Equal(fails
+                ? "Resource health unavailable for AppHost PID 10."
+                : "Resource health stream ended for AppHost PID 10.", log.Message);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            Assert.Equal(CliExitCodes.Success, await run.DefaultTimeout());
+        }
+    }
+
+    [Fact]
+    public async Task RemovedHostCancelsItsResourceWatchAndReplacementDoesNotReuseHealth()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var snapshots = Channel.CreateUnbounded<IReadOnlyList<IAppHostAuxiliaryBackchannel>>();
+        var messages = Channel.CreateUnbounded<TrayWatchMessage>();
+        var watchStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var initial = Connection("/project/a.cs", 10);
+        initial.ResourceSnapshots = [new() { Name = "api", State = "Running", HealthStatus = "Healthy" }];
+        initial.WatchResourceSnapshotsHandler = Watch;
+        var replacement = Connection("/project/a.cs", 10);
+        replacement.ResourceSnapshots = [new() { Name = "api", State = "Waiting" }];
+        var startedAt = 1000L;
+        var monitor = new TestAuxiliaryBackchannelMonitor { WatchConnectionsHandler = token => snapshots.Reader.ReadAllAsync(token) };
+        snapshots.Writer.TryWrite([initial]);
+        var run = CreateStream(monitor, new FakeTimeProvider(), new TestProcessIdentityProvider { GetStartTime = _ => Volatile.Read(ref startedAt) })
+            .RunAsync((json, _) =>
+            {
+                messages.Writer.TryWrite(Deserialize(json));
+                return Task.CompletedTask;
+            }, cancellation.Token);
+
+        try
+        {
+            var first = Assert.Single((await messages.Reader.ReadAsync().AsTask().DefaultTimeout()).AppHosts!);
+            Assert.Equal("healthy", first.Health);
+            Assert.Equal(1000, first.ProcessStartTimeUnixMilliseconds);
+
+            snapshots.Writer.TryWrite([]);
+            Assert.Empty((await messages.Reader.ReadAsync().AsTask().DefaultTimeout()).AppHosts!);
+            await watchStopped.Task.DefaultTimeout();
+
+            Volatile.Write(ref startedAt, 2000);
+            snapshots.Writer.TryWrite([replacement]);
+            var second = Assert.Single((await messages.Reader.ReadAsync().AsTask().DefaultTimeout()).AppHosts!);
+            Assert.Equal(first with { Health = "warning", ProcessStartTimeUnixMilliseconds = 2000 }, second);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            Assert.Equal(CliExitCodes.Success, await run.DefaultTimeout());
+        }
+
+        async IAsyncEnumerable<ResourceSnapshot> Watch(bool includeHidden, [EnumeratorCancellation] CancellationToken token)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                yield break;
+            }
+            finally
+            {
+                watchStopped.TrySetResult();
+            }
+        }
+    }
+
+    [Fact]
     public async Task SharedMessagesUseCompactVersionedSchema()
     {
+        var host = new TrayAppHost { AppHostPath = "/project/apphost.cs", AppHostPid = 42, ProcessStartTimeUnixMilliseconds = 1000 };
         var snapshot = new TrayWatchMessage
         {
             Version = TrayCliProtocol.Version,
             Type = "snapshot",
-            AppHosts = [new TrayAppHost { AppHostPath = "/project/apphost.cs", AppHostPid = 42, ProcessStartTimeUnixMilliseconds = 1000 }]
+            AppHosts = [host]
         };
         var stop = new TrayStopMessage { Version = TrayCliProtocol.Version, Outcome = "stopped", ExitCode = 0 };
         await Verify(string.Join('\n',
             JsonSerializer.Serialize(snapshot, TrayCliJsonContext.Default.TrayWatchMessage),
+            JsonSerializer.Serialize(snapshot with { AppHosts = [host with { Health = "healthy" }] }, TrayCliJsonContext.Default.TrayWatchMessage),
+            JsonSerializer.Serialize(snapshot with { AppHosts = [host with { Health = "warning" }] }, TrayCliJsonContext.Default.TrayWatchMessage),
+            JsonSerializer.Serialize(snapshot with { AppHosts = [host with { Health = "unhealthy" }] }, TrayCliJsonContext.Default.TrayWatchMessage),
             JsonSerializer.Serialize(stop, TrayCliJsonContext.Default.TrayStopMessage)), "txt");
     }
 
@@ -631,6 +829,13 @@ public class TrayWatchStreamTests
     private static TestAppHostAuxiliaryBackchannel Connection(string path, int pid) => new()
     {
         SocketPath = $"socket-{pid}",
-        AppHostInfo = new AppHostInformation { AppHostPath = path, ProcessId = pid }
+        AppHostInfo = new AppHostInformation { AppHostPath = path, ProcessId = pid },
+        WatchResourceSnapshotsHandler = (_, token) => WatchUntilCanceled(token)
     };
+
+    private static async IAsyncEnumerable<ResourceSnapshot> WatchUntilCanceled([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        yield break;
+    }
 }

@@ -407,8 +407,11 @@ path_rules:
   - paths:
       - eng/Bundle.proj
       - tools/CreateLayout/**
-    targets: [CLI_BUNDLE]
-    reason: assembles the CLI bundle, including the macOS tray, for runtime consumers
+    targets: [CLI_BUNDLE, test:Infrastructure.Tests]
+    reason: assembles and validates native CLI bundle payloads
+  - paths: [src/Aspire.Tray/Windows/publish.ps1]
+    targets: [CLI_BUNDLE, test:Infrastructure.Tests]
+    reason: Windows native publishing and smoke invocation
 
 # Project rules: an affected non-matrix project (Layer 1, matched by project-NAME glob) -> targets.
 # This follows the graph's transitive closure: a change to a project's dependency marks it affected,
@@ -422,9 +425,9 @@ affected_project_rules:
   - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
     targets: [test:Aspire.Tray.Tests, test:Infrastructure.Tests]
     reason: native platform changes must retain shared tray contracts and the packaging/signing invariants; tests source-link common code rather than referencing the platform executables
-  - projects: [Aspire.Tray.Mac]
+  - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
     targets: [CLI_BUNDLE]
-    reason: the macOS app is embedded in the CLI bundle; Windows remains an unvalidated scaffold and is not packaged
+    reason: native tray payloads are embedded in the CLI bundle
   - projects: [CreateLayout]
     targets: [CLI_BUNDLE]
     reason: CreateLayout assembles the CLI bundle consumed by these tests and jobs

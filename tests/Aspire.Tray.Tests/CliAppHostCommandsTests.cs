@@ -195,6 +195,149 @@ public class CliAppHostCommandsTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new CliAppHostCommands(Path.GetFullPath("aspire"), Timeout.InfiniteTimeSpan));
     }
 
+    [Fact]
+    public void StartUsesConfiguredExecutableAndExplicitArgumentsWithoutAShell()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var appHost = directory.CreateAppHost("project with spaces & apostrophe's/apphost.cs");
+        var executable = Path.GetFullPath("configured cli path/aspire");
+
+        var info = CliAppHostCommands.CreateStartStartInfo(executable, appHost);
+
+        Assert.Equal(executable, info.FileName);
+        Assert.Equal(["start", "--apphost", appHost, "--non-interactive", "--nologo"], info.ArgumentList);
+        Assert.Equal(Path.GetDirectoryName(appHost), info.WorkingDirectory);
+        Assert.False(info.UseShellExecute);
+        Assert.True(info.CreateNoWindow);
+        Assert.True(info.RedirectStandardInput);
+        Assert.True(info.RedirectStandardOutput);
+        Assert.True(info.RedirectStandardError);
+    }
+
+    [Fact]
+    public async Task StartRequiresAnExistingAbsoluteFileAndDoesNotLaunchForMissingPaths()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var appHost = directory.CreateAppHost("apphost.cs");
+        var commands = new CliAppHostCommands(Path.GetFullPath("missing-cli"), TimeSpan.FromSeconds(60));
+        Assert.Throws<ArgumentException>(() => CliAppHostCommands.CreateStartStartInfo("aspire", appHost));
+        Assert.Throws<ArgumentException>(() => CliAppHostCommands.CreateStartStartInfo(Path.GetFullPath("aspire"), "apphost.cs"));
+        Assert.Throws<FileNotFoundException>(() =>
+            CliAppHostCommands.CreateStartStartInfo(Path.GetFullPath("aspire"), Path.GetDirectoryName(appHost)!));
+        File.Delete(appHost);
+
+        Assert.Equal(new StartResult(StartOutcome.NotFound, null),
+            await commands.StartAsync(appHost, TestContext.Current.CancellationToken));
+    }
+
+    [Theory(Skip = "The fixture requires /bin/sh.", SkipUnless = nameof(SupportsShell))]
+    [InlineData(0)]
+    [InlineData(17)]
+    public async Task StartDrainsBothStreamsWithoutParsingOrExposingDiagnostics(int exitCode)
+    {
+        using var directory = new TestTrayStateDirectory();
+        var appHost = directory.CreateAppHost("project with spaces & apostrophe's/apphost.cs");
+        using var cli = new FixtureCli($$"""
+            i=0
+            while [ "$i" -lt 4096 ]; do
+                printf 'https://localhost/?token=private%080d\n' "$i"
+                printf 'localized error with private credentials %080d\n' "$i" >&2
+                i=$((i + 1))
+            done
+            exit {{exitCode}}
+            """);
+        var commands = new CliAppHostCommands(cli.Path, TimeSpan.FromSeconds(30));
+
+        var result = await commands.StartAsync(appHost, TestContext.Current.CancellationToken);
+
+        Assert.Equal(new StartResult(exitCode == 0 ? StartOutcome.Started : StartOutcome.Failed, exitCode), result);
+        Assert.Equal(["start", "--apphost", appHost, "--non-interactive", "--nologo"], cli.ReadArguments());
+    }
+
+    [Fact(Skip = "The fixture requires /bin/sh.", SkipUnless = nameof(SupportsShell))]
+    public async Task StartCancellationTerminatesOnlyCliAndLeavesDetachedAppHostRunning()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var appHost = directory.CreateAppHost("apphost.cs");
+        using var cli = new FixtureCli("""
+            /bin/sleep 60 </dev/null >/dev/null 2>&1 &
+            printf '%s\n' "$!" > "$0.detached.pid"
+            exec /bin/sleep 60
+            """);
+        using var shutdown = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var commands = new CliAppHostCommands(cli.Path, TimeSpan.FromSeconds(30));
+        var task = commands.StartAsync(appHost, shutdown.Token);
+        Process? detached = null;
+        try
+        {
+            detached = Process.GetProcessById(await cli.WaitForDetachedPidAsync(TestContext.Current.CancellationToken));
+            using var process = Process.GetProcessById(await cli.WaitForPidAsync(TestContext.Current.CancellationToken));
+            await shutdown.CancelAsync();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+            Assert.True(process.HasExited);
+            Assert.False(detached.HasExited);
+        }
+        finally
+        {
+            try
+            {
+                await shutdown.CancelAsync();
+                try
+                {
+                    await task.ConfigureAwait(true);
+                }
+                catch (OperationCanceledException) when (shutdown.IsCancellationRequested)
+                {
+                }
+            }
+            finally
+            {
+                if (detached is not null)
+                {
+                    using (detached)
+                    {
+                        await CliProcess.TerminateOwnedChildAsync(detached);
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact(Skip = "The fixture requires /bin/sh.", SkipUnless = nameof(SupportsShell))]
+    public async Task StartTimeoutReportsUncertainResultAndWaitsForCliExit()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var appHost = directory.CreateAppHost("apphost.cs");
+        using var cli = new FixtureCli("exec /bin/sleep 60");
+        var commands = new CliAppHostCommands(cli.Path, TimeSpan.FromSeconds(5));
+        var task = commands.StartAsync(appHost, TestContext.Current.CancellationToken);
+        using var process = Process.GetProcessById(await cli.WaitForPidAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(new StartResult(StartOutcome.TimedOut, null), await task.ConfigureAwait(true));
+        Assert.True(process.HasExited);
+    }
+
+    [Fact]
+    public async Task MissingCliReturnsSafeTypedStartFailure()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var appHost = directory.CreateAppHost("apphost.cs");
+        var commands = new CliAppHostCommands(Path.GetFullPath("missing-cli"), TimeSpan.FromSeconds(60));
+
+        Assert.Equal(new StartResult(StartOutcome.Failed, null),
+            await commands.StartAsync(appHost, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CanceledStartDoesNotLaunchCli()
+    {
+        var commands = new CliAppHostCommands(Path.GetFullPath("missing-cli"), TimeSpan.FromSeconds(60));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => commands.StartAsync(
+            Path.GetFullPath("missing-apphost.cs"), new CancellationToken(canceled: true)));
+    }
+
     private static AppHostId Host() => new(Path.GetFullPath("project with spaces & apostrophe's/apphost.cs"), 42, 1000);
 
     private static string[] Arguments(AppHostId host) =>

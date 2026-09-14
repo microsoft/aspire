@@ -45,7 +45,14 @@ internal static class CliProtocol
             }
             var host = new AppHostInfo(item.AppHostPath, item.AppHostPid, item.DashboardUrl)
             {
-                ProcessStartTimeUnixMilliseconds = item.ProcessStartTimeUnixMilliseconds
+                ProcessStartTimeUnixMilliseconds = item.ProcessStartTimeUnixMilliseconds,
+                Health = item.Health switch
+                {
+                    "healthy" => AppHostHealth.Healthy,
+                    "warning" => AppHostHealth.Warning,
+                    "unhealthy" => AppHostHealth.Unhealthy,
+                    _ => AppHostHealth.Unknown
+                }
             };
             if (!processes.Add(host.AppHostPid))
             {

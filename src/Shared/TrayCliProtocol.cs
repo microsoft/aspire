@@ -26,6 +26,7 @@ internal sealed record TrayAppHost
     public required int AppHostPid { get; init; }
     public long? ProcessStartTimeUnixMilliseconds { get; init; }
     public string? DashboardUrl { get; init; }
+    public string? Health { get; init; }
 }
 
 /// <summary>

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Layout;
@@ -24,12 +25,18 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("start")]
-    [InlineData("stop")]
-    public async Task HelperArgumentsAndLeaseHandoffAreBoundToInvokingBundle(string action)
+    [InlineData("start", false)]
+    [InlineData("stop", false)]
+    [InlineData("start", true)]
+    [InlineData("stop", true)]
+    public async Task HelperArgumentsAndLeaseHandoffAreBoundToInvokingBundle(string action, bool windows)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (services, bundle, factory, interaction, cliPath) = CreateServices(workspace);
+        if (windows)
+        {
+            ConfigureWindows(services, bundle);
+        }
         var layout = bundle.Layout!;
         var root = layout.LayoutPath!;
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -61,6 +68,7 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal(root, factory.LastEnvironmentVariables![BundleDiscovery.BundleVersionDirectoryEnvVar]);
             Assert.Equal(root, factory.LastWorkingDirectory!.FullName);
             Assert.False(factory.LastProcessInvocationOptions!.Detached);
+            Assert.False(factory.LastProcessInvocationOptions.KillOnParentExit);
             Assert.Equal("cli", bundle.LastHolderKind);
             Assert.Equal($"tray {action}", bundle.LastCommandName);
 
@@ -99,21 +107,19 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("start", true)]
-    [InlineData("stop", true)]
-    [InlineData("start", false)]
-    [InlineData("stop", false)]
-    public async Task UnsupportedPlatformDoesNotAcquireBundleOrLaunchHelper(string action, bool windows)
+    [InlineData("start")]
+    [InlineData("stop")]
+    public async Task UnsupportedPlatformDoesNotAcquireBundleOrLaunchHelper(string action)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (services, bundle, factory, interaction, _) = CreateServices(workspace);
-        services.AddSingleton<IEnvironment>(windows ? TestEnvironment.CreateWindows() : TestEnvironment.CreateLinux());
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateLinux());
         using var provider = services.BuildServiceProvider();
 
         Assert.Equal(CliExitCodes.InvalidCommand, await provider.GetRequiredService<RootCommand>()
             .Parse($"tray {action}").InvokeAsync().DefaultTimeout());
 
-        Assert.Equal(TrayCommandStrings.MacOSOnly, Assert.Single(interaction.DisplayedErrors));
+        Assert.Equal(TrayCommandStrings.UnsupportedPlatform, Assert.Single(interaction.DisplayedErrors));
         Assert.Equal(0, bundle.AcquireLayoutCallCount);
         Assert.Empty(factory.CreatedExecutions);
     }
@@ -443,5 +449,103 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
         });
         services.AddSingleton<IEnvironment>(TestEnvironment.CreateMacOS());
         return (services, bundle, factory, interaction, cliPath);
+    }
+
+    private static void ConfigureWindows(IServiceCollection services, TestBundleService bundle)
+    {
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateWindows());
+        bundle.Layout!.Components.Tray = WindowsTrayPayload.ExecutablePath;
+        WindowsTrayTestPayload.Create(Path.Combine(bundle.Layout.LayoutPath!, "tray"),
+            RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "win-arm64" : "win-x64");
+    }
+
+    [Theory]
+    [InlineData("start")]
+    [InlineData("stop")]
+    public async Task WindowsHelperRedirectedDiagnosticsPreserveNativeExitCode(string action)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, interaction, _) = CreateServices(workspace);
+        ConfigureWindows(services, bundle);
+        factory.AttemptCallback = (_, options) =>
+        {
+            Assert.NotNull(options.StandardOutputCallback);
+            Assert.NotNull(options.StandardErrorCallback);
+            options.StandardOutputCallback("helper diagnostic");
+            options.StandardErrorCallback("Windows tray control protocol is incompatible.");
+            return (42, null);
+        };
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(42, await provider.GetRequiredService<RootCommand>()
+            .Parse($"tray {action}").InvokeAsync().DefaultTimeout());
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, TrayCommandStrings.OperationFailed, action,
+            "Windows tray control protocol is incompatible."), Assert.Single(interaction.DisplayedErrors));
+        Assert.Empty(interaction.DisplayedSuccess);
+        Assert.False(BundleVersionLease.HasActiveLease(bundle.Layout!.LayoutPath!));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ManagedWindowsCliMayStopLeasedTrayButCannotStartIt(bool start)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, interaction, cliPath) = CreateServices(workspace);
+        ConfigureWindows(services, bundle);
+        services.AddSingleton<Aspire.Cli.Utils.IProcessPathProvider>(
+            new TestProcessPathProvider(cliPath) { IsNativeAot = false });
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(start ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
+            await provider.GetRequiredService<RootCommand>()
+                .Parse(start ? "tray start" : "tray stop").InvokeAsync().DefaultTimeout());
+        Assert.Equal(start ? 0 : 1, bundle.AcquireLayoutCallCount);
+        if (start)
+        {
+            Assert.Equal(TrayCommandStrings.NativeCliRequired, Assert.Single(interaction.DisplayedErrors));
+            Assert.Empty(factory.CreatedExecutions);
+        }
+        else
+        {
+            Assert.NotNull(factory.LastArguments);
+            Assert.Equal(["stop"], factory.LastArguments);
+            Assert.Equal(TrayCommandStrings.Stopped, Assert.Single(interaction.DisplayedSuccess));
+        }
+    }
+
+    [Theory]
+    [InlineData("start", "wrong-rid")]
+    [InlineData("stop", "wrong-rid")]
+    [InlineData("start", "missing-icon")]
+    [InlineData("stop", "missing-icon")]
+    [InlineData("start", "managed")]
+    [InlineData("stop", "managed")]
+    public async Task WindowsRejectsIncompleteOrIncompatiblePayload(string action, string scenario)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, interaction, _) = CreateServices(workspace);
+        ConfigureWindows(services, bundle);
+        var root = bundle.Layout!.LayoutPath!;
+        if (scenario == "wrong-rid")
+        {
+            WindowsTrayTestPayload.Create(Path.Combine(root, "tray"),
+                RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "win-x64" : "win-arm64");
+        }
+        else if (scenario == "missing-icon")
+        {
+            File.Delete(Path.Combine(root, "tray", "Aspire.ico"));
+        }
+        else
+        {
+            File.Copy(typeof(TrayCommandTests).Assembly.Location, bundle.Layout.GetTrayPath()!, overwrite: true);
+        }
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, await provider.GetRequiredService<RootCommand>()
+            .Parse($"tray {action}").InvokeAsync().DefaultTimeout());
+        Assert.Single(interaction.DisplayedErrors);
+        Assert.Empty(factory.CreatedExecutions);
+        Assert.False(BundleVersionLease.HasActiveLease(root));
     }
 }

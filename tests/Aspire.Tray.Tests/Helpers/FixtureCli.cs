@@ -27,14 +27,20 @@ internal sealed class FixtureCli : IDisposable
 
     public string[] ReadArguments() => File.ReadAllLines(Path + ".args");
 
-    public async Task<int> WaitForPidAsync(CancellationToken cancellationToken)
+    public Task<int> WaitForPidAsync(CancellationToken cancellationToken)
+        => WaitForPidFileAsync(Path + ".pid", cancellationToken);
+
+    public Task<int> WaitForDetachedPidAsync(CancellationToken cancellationToken)
+        => WaitForPidFileAsync(Path + ".detached.pid", cancellationToken);
+
+    private static async Task<int> WaitForPidFileAsync(string path, CancellationToken cancellationToken)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         while (true)
         {
-            if (File.Exists(Path + ".pid")
-                && int.TryParse(await File.ReadAllTextAsync(Path + ".pid", lifetime.Token).ConfigureAwait(false),
+            if (File.Exists(path)
+                && int.TryParse(await File.ReadAllTextAsync(path, lifetime.Token).ConfigureAwait(false),
                     NumberStyles.Integer, CultureInfo.InvariantCulture, out var pid))
             {
                 return pid;

@@ -12,6 +12,7 @@ namespace Aspire.Tray;
 internal sealed partial class MacTrayApplication
 {
     private nint _smokeTimer;
+    private nint _smokePreviewTimer;
     private nint _smokeTrackingStartTimer;
     private nint _smokeTrackingWorkerTimer;
     private nint _smokeTrackingDeadlineTimer;
@@ -22,7 +23,15 @@ internal sealed partial class MacTrayApplication
     private Action<bool>? _smokeMenuClosed;
     private bool _smokeTrackingDeadlineFired;
     private long _smokeTrackingStartedAt;
+    private bool _interactiveSmoke;
     internal event Action<TrayViewState>? MenuUpdated;
+
+    internal void EnableInteractiveSmoke()
+    {
+        _interactiveSmoke = true;
+        ReleaseSmokeTimer(ref _smokeTimer);
+        _smokePreviewTimer = CreateSmokeTimer(0.1, "smokeShowPreview:");
+    }
 
     internal void SetSmokeDeadline(int seconds, Action timeout)
     {
@@ -172,7 +181,6 @@ internal sealed partial class MacTrayApplication
         VerifyUIThread();
         var icon = AppKit.Get(AppKit.Get(_statusItem, "button"), "image");
         var quit = AppKit.Get(_menu, "itemAtIndex:", AppKit.Get(_menu, "numberOfItems") - 1);
-        var empty = _rows.Count == 0 ? AppKit.Get(_menu, "itemAtIndex:", 2) : 0;
         return new(
             _rows.Select(row => new NativeRowInspection(row.Id,
                 AppKit.Text(AppKit.Get(row.Item, "title")),
@@ -183,20 +191,239 @@ internal sealed partial class MacTrayApplication
                 AppKit.Get(row.Item, "image") != 0
                     && AppKit.Get(row.Dashboard, "image") != 0 && AppKit.Get(row.Stop, "image") != 0,
                 AppKit.Get(row.Dashboard, "action") == AppKit.Selector("openDashboard:")
-                    && AppKit.Get(row.Stop, "action") == AppKit.Selector("stopAppHost:"))).ToArray(),
+                    && AppKit.Get(row.Stop, "action") == AppKit.Selector("stopAppHost:"),
+                Enabled(row.Start),
+                AppKit.Text(AppKit.Get(row.Pin, "title")),
+                _healthImages.Single(pair => pair.Value == AppKit.Get(row.Item, "image")).Key)).ToArray(),
             checked((int)AppKit.Get(_menu, "numberOfItems")),
-            AppKit.Text(AppKit.Get(_header, "title")),
-            AppKit.Supports(_header, "subtitle") ? AppKit.Text(AppKit.Get(_header, "subtitle")) : null,
+            _header == 0 ? null : AppKit.Text(AppKit.Get(_header, "title")),
             icon != 0 && AppKit.GetBool(icon, AppKit.Selector("isTemplate")) == 0,
-            AppKit.Get(_header, "image") != 0,
+            AppKit.Text(AppKit.Get(AppKit.Get(_statusItem, "button"), "title")) == "",
             HasNoItemTooltips(_menu),
             AppKit.Text(AppKit.Get(quit, "keyEquivalent")) == "q"
                 && AppKit.Get(quit, "keyEquivalentModifierMask") == 1 << 20 && Enabled(quit),
-            empty != 0 && !Enabled(empty) && AppKit.Text(AppKit.Get(empty, "title")).StartsWith("AppHosts will appear here", StringComparison.Ordinal),
+            _rows.Count == 0 && _header != 0 && !Enabled(_header),
             _runLoopModes.Count == 3 && _runLoopModes.All(mode => AppKit.CFRunLoopContainsSource(_runLoop, _refreshSource, mode) != 0),
             IsInMenuTrackingMode(),
             AppKit.Text(AppKit.Get(_statusItem, "autosaveName")),
-            AppKit.GetBool(_statusItem, AppKit.Selector("isVisible")) != 0);
+            AppKit.GetBool(_statusItem, AppKit.Selector("isVisible")) != 0,
+            _recentRows.Select(row => row.Id.AppHostPath).ToArray(),
+            Enabled(_clearRecent),
+            AppKit.Get(AppKit.Get(_statusItem, "button"), "image") == GetTrayImage(_controller.State.HasActiveAppHosts));
+    }
+
+    internal void PerformPinForSmoke(string path, bool useContextMenu)
+    {
+        var row = _rows.Concat(_recentRows).First(row => row.Id.AppHostPath == path);
+        if (!useContextMenu)
+        {
+            AppKit.SendVoidPointer(_target, AppKit.Get(row.Pin, "action"), row.Pin);
+            return;
+        }
+        var pinned = AppKit.Get(row.Pin, "action") == AppKit.Selector("unpinAppHost:");
+        var menu = CreatePinContextMenu(path, pinned);
+        try
+        {
+            var item = AppKit.Get(menu, "itemAtIndex:", 0);
+            if (AppKit.Get(item, "image") == 0 || SelectedPath(item) != path)
+            {
+                throw new InvalidOperationException("The pin context menu lost its icon or selected path.");
+            }
+            AppKit.Set(menu, "performActionForItemAtIndex:", 0);
+        }
+        finally
+        {
+            AppKit.Set(menu, "setDelegate:", 0);
+            _menus.Remove(menu);
+            AppKit.Release(menu);
+        }
+    }
+
+    internal void PerformStartForSmoke(string path)
+    {
+        var row = _rows.Concat(_recentRows).Single(row => row.Id.AppHostPath == path);
+        AppKit.Set(_target, "startAppHost:", row.Start);
+    }
+
+    internal void PerformClearRecentForSmoke()
+        => AppKit.Set(_target, "clearRecent:", _clearRecent);
+
+    internal void VerifyInformationItemsForSmoke()
+    {
+        var expected = new[] { "", "Open Recent", "Documentation", "About Aspire", "", "Quit Aspire" };
+        for (var i = 0; i < expected.Length; i++)
+        {
+            var item = AppKit.Get(_menu, "itemAtIndex:", AppKit.Get(_menu, "numberOfItems") - expected.Length + i);
+            if (AppKit.Text(AppKit.Get(item, "title")) != expected[i]
+                || (i is 2 or 3 && (!Enabled(item) || AppKit.Get(item, "submenu") != 0)))
+            {
+                throw new InvalidOperationException("The top-level information actions do not match the expected menu.");
+            }
+            if (i == 2)
+            {
+                var documentationArtwork = AppKit.Get(AppKit.Get(item, "image"), "TIFFRepresentation");
+                var dashboardIcon = AppKit.SendTwoPointers(AppKit.Class("NSImage"),
+                    AppKit.Selector("imageWithSystemSymbolName:accessibilityDescription:"),
+                    AppKit.String("arrow.up.right.square"), AppKit.String("Open dashboard"));
+                var dashboardArtwork = AppKit.Get(dashboardIcon, "TIFFRepresentation");
+                if (documentationArtwork == 0 || dashboardArtwork == 0
+                    || AppKit.SendReturningBool(documentationArtwork, AppKit.Selector("isEqualToData:"), dashboardArtwork) == 0)
+                {
+                    throw new InvalidOperationException("Documentation must use the same icon as Open Dashboard.");
+                }
+            }
+        }
+    }
+
+    internal void VerifyStatusArtworkForSmoke()
+    {
+        foreach (var health in Enum.GetValues<AppHostHealth>())
+        {
+            var size = AppKit.GetSize(GetHealthImage(health), AppKit.Selector("size"));
+            if (size != new AppKit.NativeSize(12, 12))
+            {
+                throw new InvalidOperationException("AppHost status artwork must use a consistent 12-point size.");
+            }
+        }
+        if (AppKit.GetSize(GetTrayImage(true), AppKit.Selector("size")) != new AppKit.NativeSize(22, 22))
+        {
+            throw new InvalidOperationException("The tray artwork must use the larger 22-point canvas.");
+        }
+        VerifyTrayMarkForSmoke();
+        VerifyIconPixel(GetTrayImage(true), new(10, 21.5), 0, 0, "transparent top margin");
+        VerifyIconPixel(GetTrayImage(true), new(0.5, 0.5), 0, 0, "transparent mark background");
+        VerifyIconPixel(GetTrayImage(true), new(17.5, 4.5), 0x512BD4, 1, "lower-right connected purple circle");
+        VerifyIconPixel(GetTrayImage(true), new(17.5, 9.5), 0, 0, "transparent connected border");
+        VerifyIconPixel(GetTrayImage(true), new(12.5, 4.5), 0, 0, "transparent connected inner border");
+        VerifyIconPixel(GetTrayImage(false), new(17.5, 4.5), 0x606060, 1, "lower-right disconnected cross");
+        VerifyIconPixel(GetTrayImage(false), new(17.5, 9.5), 0, 0, "transparent disconnected border");
+        VerifyIconPixel(GetHealthImage(AppHostHealth.Healthy), new(6, 10), 0x4A9F30, 1, "available green");
+        VerifyIconPixel(GetHealthImage(AppHostHealth.Healthy), new(5.3, 4), 0x4A9F30, 1, "solid available circle");
+        VerifyIconPixel(GetHealthImage(AppHostHealth.Warning), new(3, 6), 0xDFA638, 1, "away amber");
+        VerifyIconPixel(GetHealthImage(AppHostHealth.Warning), new(6, 7), 0xDFA638, 1, "solid waiting circle");
+        VerifyIconPixel(GetHealthImage(AppHostHealth.Unhealthy), new(6, 6), 0xB52A29, 1, "busy red");
+        VerifyIconPixel(GetHealthImage(AppHostHealth.Unknown), new(6, 6), 0xFFFFFF, 1, "white not-started circle");
+    }
+
+    private unsafe void VerifyTrayMarkForSmoke()
+    {
+        if (AppKit.GetSize(_trayMarkImage, AppKit.Selector("size")) != new AppKit.NativeSize(20, 20)
+            || AppKit.GetBool(_trayMarkImage, AppKit.Selector("isTemplate")) == 0)
+        {
+            throw new InvalidOperationException("The supplied tray template must have a 20-point logical size.");
+        }
+        nuint* sourcePixel = stackalloc nuint[4];
+        nuint* renderedPixel = stackalloc nuint[4];
+        foreach (var scale in new[] { 1, 2 })
+        {
+            var source = GetBitmapForSmoke(_trayMarkImage, 20 * scale);
+            foreach (var connected in new[] { false, true })
+            {
+                var image = GetTrayImage(connected);
+                if (AppKit.GetBool(image, AppKit.Selector("isTemplate")) != 0)
+                {
+                    throw new InvalidOperationException("The composite must preserve the connection badge's color.");
+                }
+                var rendered = GetBitmapForSmoke(image, 22 * scale);
+                var opaquePixels = 0;
+                var transparentPixels = 0;
+                var left = 20 * scale;
+                var top = 20 * scale;
+                var right = -1;
+                var bottom = -1;
+                for (var y = 0; y < 20 * scale; y++)
+                {
+                    for (var x = 0; x < 20 * scale; x++)
+                    {
+                        // The badge intentionally cuts into the lower-right mark. Elsewhere,
+                        // compare every source alpha sample, including its separator cutouts.
+                        if (x >= 12 * scale && y >= 11 * scale)
+                        {
+                            continue;
+                        }
+                        AppKit.GetPixel(source, AppKit.Selector("getPixel:atX:y:"), sourcePixel, x, y);
+                        // Bitmap rows start at the top: the (0, 1) mark has one point above it.
+                        AppKit.GetPixel(rendered, AppKit.Selector("getPixel:atX:y:"), renderedPixel, x, y + scale);
+                        if (Math.Abs((double)sourcePixel[3] - renderedPixel[3]) > 1
+                            || (sourcePixel[3] == 255 && (renderedPixel[0] != 255 || renderedPixel[1] != 255 || renderedPixel[2] != 255)))
+                        {
+                            throw new InvalidOperationException($"The supplied tray mask changed at ({x}, {y}), {scale}x, connected={connected}: expected alpha {sourcePixel[3]}, got RGBA ({renderedPixel[0]}, {renderedPixel[1]}, {renderedPixel[2]}, {renderedPixel[3]}).");
+                        }
+                        opaquePixels += sourcePixel[3] == 255 ? 1 : 0;
+                        transparentPixels += sourcePixel[3] == 0 ? 1 : 0;
+                        if (renderedPixel[3] >= 128)
+                        {
+                            left = Math.Min(left, x);
+                            top = Math.Min(top, y);
+                            right = Math.Max(right, x);
+                            bottom = Math.Max(bottom, y);
+                        }
+                    }
+                }
+                if (opaquePixels == 0 || transparentPixels == 0)
+                {
+                    throw new InvalidOperationException("The tray template must include opaque artwork and transparent cutouts.");
+                }
+                // Measure the visible white mark, excluding the badge, rather than just its
+                // image frame. Transparent source padding previously made a 20-point icon tiny.
+                if (right - left + 1 < 15 * scale || bottom - top + 1 < 17 * scale)
+                {
+                    throw new InvalidOperationException($"The visible tray mark is too small at {scale}x: {right - left + 1} by {bottom - top + 1} pixels.");
+                }
+                Console.WriteLine($"Visible tray mark at {scale}x, connected={connected}: {right - left + 1} by {bottom - top + 1} pixels.");
+            }
+        }
+    }
+
+    private static nint GetBitmapForSmoke(nint image, int pixels)
+    {
+        var representations = AppKit.Get(image, "representations");
+        if (AppKit.Get(representations, "count") != 2)
+        {
+            throw new InvalidOperationException("Tray artwork must include standard and Retina representations.");
+        }
+        for (var i = 0; i < 2; i++)
+        {
+            var bitmap = AppKit.Get(representations, "objectAtIndex:", i);
+            if (AppKit.Get(bitmap, "pixelsWide") == pixels && AppKit.Get(bitmap, "pixelsHigh") == pixels
+                && AppKit.Get(bitmap, "bitsPerSample") == 8 && AppKit.Get(bitmap, "samplesPerPixel") == 4)
+            {
+                return bitmap;
+            }
+        }
+        throw new InvalidOperationException($"Missing {pixels}-pixel RGBA tray representation.");
+    }
+
+    private static unsafe void VerifyIconPixel(nint image, AppKit.NativePoint point, uint expectedRgb, double expectedAlpha, string description)
+    {
+        var bitmap = AppKit.Get(AppKit.Get(image, "representations"), "objectAtIndex:", 0);
+        var size = AppKit.GetSize(image, AppKit.Selector("size"));
+        var width = AppKit.Get(bitmap, "pixelsWide");
+        var height = AppKit.Get(bitmap, "pixelsHigh");
+        if (AppKit.Get(bitmap, "bitsPerSample") != 8 || AppKit.Get(bitmap, "samplesPerPixel") != 4
+            || AppKit.SendReturningBool(AppKit.Get(bitmap, "colorSpace"), AppKit.Selector("isEqual:"),
+                AppKit.Get(AppKit.Class("NSColorSpace"), "sRGBColorSpace")) == 0)
+        {
+            throw new InvalidOperationException("Status artwork must use an 8-bit sRGB RGBA representation.");
+        }
+        // Read the encoded sRGB samples directly. colorAtX:y: wraps samples in a calibrated
+        // NSColor; converting that color to sRGB would apply a second color-space transform.
+        nuint* components = stackalloc nuint[4];
+        AppKit.GetPixel(bitmap, AppKit.Selector("getPixel:atX:y:"), components,
+            (nint)(point.X / size.Width * width), (nint)((size.Height - point.Y) / size.Height * height));
+        var red = components[0] / 255.0;
+        var green = components[1] / 255.0;
+        var blue = components[2] / 255.0;
+        var alpha = components[3] / 255.0;
+        const double Tolerance = 0.025;
+        if (Math.Abs(alpha - expectedAlpha) > Tolerance
+            || (expectedAlpha > 0
+                && (Math.Abs(red - (expectedRgb >> 16 & 0xff) / 255.0) > Tolerance
+                    || Math.Abs(green - (expectedRgb >> 8 & 0xff) / 255.0) > Tolerance
+                    || Math.Abs(blue - (expectedRgb & 0xff) / 255.0) > Tolerance)))
+        {
+            throw new InvalidOperationException($"Unexpected {description} pixel: RGBA ({red:F3}, {green:F3}, {blue:F3}, {alpha:F3}).");
+        }
     }
 
     internal void HideStatusItemForSmoke()
@@ -274,6 +501,7 @@ internal sealed partial class MacTrayApplication
     {
         CancelSmokeTracking();
         ReleaseSmokeTimer(ref _smokeTimer);
+        ReleaseSmokeTimer(ref _smokePreviewTimer);
         ReleaseSmokeTimer(ref _smokeTrackingStartTimer);
         ReleaseSmokeTimer(ref _smokeTrackingWorkerTimer);
         ReleaseSmokeTimer(ref _smokeTrackingDeadlineTimer);
@@ -305,6 +533,14 @@ internal sealed partial class MacTrayApplication
     private static void OnSmokeTrackingDeadline(nint self, nint selector, nint sender)
         => Route(self, sender, static (app, _) => app.FinishSmokeTracking());
 
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnSmokeShowPreview(nint self, nint selector, nint sender)
+        => Route(self, sender, static (app, _) =>
+        {
+            ReleaseSmokeTimer(ref app._smokePreviewTimer);
+            app.ShowAbout();
+        });
+
     private static bool Enabled(nint item) => AppKit.GetBool(item, AppKit.Selector("isEnabled")) != 0;
 
     private static bool HasNoItemTooltips(nint menu)
@@ -330,17 +566,19 @@ internal sealed partial class MacTrayApplication
 internal sealed record NativeMenuInspection(
     IReadOnlyList<NativeRowInspection> Rows,
     int ItemCount,
-    string HeaderTitle,
-    string? HeaderSubtitle,
+    string? StatusNotice,
     bool HasColorIcon,
-    bool HasHeaderIcon,
+    bool HasIconOnlyTitle,
     bool HasNoItemTooltips,
     bool HasCommandQ,
     bool HasEmptyPlaceholder,
     bool DispatcherSupportsAllModes,
     bool IsInMenuTrackingMode,
     string AutosaveName,
-    bool IsStatusItemVisible);
+    bool IsStatusItemVisible,
+    IReadOnlyList<string> RecentPaths,
+    bool CanClearRecent,
+    bool HasExpectedConnectionBadge);
 
 internal sealed record NativeRowInspection(
     AppHostId Id,
@@ -352,4 +590,7 @@ internal sealed record NativeRowInspection(
     bool CanStop,
     string StopTitle,
     bool HasActionIcons,
-    bool HasCorrectActions);
+    bool HasCorrectActions,
+    bool CanStart,
+    string PinTitle,
+    AppHostHealth Health);

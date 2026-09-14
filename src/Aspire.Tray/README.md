@@ -1,15 +1,16 @@
 # Aspire Tray
 
-An experimental **C# NativeAOT** companion for the Aspire CLI, currently bundled on macOS.
-It uses native AppKit status items and menus through a small Objective-C runtime
-interop layer. It does not require a Swift build step, a WebView, a macOS .NET workload, or an
-installed .NET runtime on the machine running the published app.
+An experimental **C# NativeAOT** companion for the Aspire CLI, bundled on macOS and Windows.
+It uses native AppKit status items on macOS and Win32 notification icons and menus
+on Windows through small platform interop layers. It does not require a Swift build
+step, a WebView, a macOS .NET workload, Windows Forms, or an installed .NET runtime
+on the machine running the published app.
 
 ## Project layout
 
 - `src/Aspire.Tray/Common/`: shared protocol client, controller, and lifecycle code.
 - `src/Aspire.Tray/Mac/`: native AppKit frontend and macOS app packaging.
-- `src/Aspire.Tray/Windows/`: native Windows frontend, not yet bundled.
+- `src/Aspire.Tray/Windows/`: native Win32 frontend and Windows publishing.
 - `tests/Aspire.Tray.Tests/`: protocol, controller, and lifecycle tests in the normal test matrix.
 
 The platform projects and tests are included in `Aspire.slnx` and inherit the
@@ -17,10 +18,11 @@ repository build, analyzer, versioning, and test infrastructure. Shared code is
 source-linked into each executable; no separate UI framework or shared runtime
 assembly is deployed.
 
-## Try the bundled companion on macOS
+## Try the bundled companion
 
-The macOS native CLI bundle includes `tray/Aspire Tray.app`. No separate tray
-installer or private CLI installation is required:
+The native CLI bundle includes `tray/Aspire Tray.app` on macOS or
+`tray/aspire-tray.exe` and `tray/Aspire.ico` on Windows. No separate tray installer
+or private CLI installation is required:
 
 ```sh
 aspire tray start
@@ -31,12 +33,12 @@ aspire tray stop   # Quit the companion, not the AppHosts.
 Use a native CLI built from this branch. To try a PR build after its native
 archive job finishes, use [PR dogfooding](../../docs/dogfooding-pull-requests.md)
 in archive mode and invoke that PR's CLI explicitly, rather than an older
-`aspire` on PATH. Windows and Linux return an experimental macOS-only error.
+`aspire` on PATH. Linux remains unsupported.
 Managed development CLIs cannot start the bundled companion.
 
 Start extracts the payload into the CLI installation's versioned bundle layout.
-A short-lived helper launches the app through macOS Launch Services and waits
-for an acknowledgement from its running UI loop. The GUI acquires its own
+A short-lived helper launches the native GUI and waits for an acknowledgement
+from its running UI loop. macOS uses Launch Services. The GUI acquires its own
 bundle lease before acknowledging readiness; the CLI and helper retain their
 leases until the handoff completes. The GUI then survives the launching command
 and terminal, while its lease prevents Aspire's bundle cleanup from removing its
@@ -48,7 +50,7 @@ backend or bundle. Stop and start again to adopt a new installation/version.
 The companion uses the absolute invoking CLI path for discovery and actions,
 not a copied or independently pinned CLI.
 
-The same-user control endpoint is
+The macOS same-user control endpoint is
 `~/Library/Application Support/Aspire/Tray/control-v1.sock`.
 Launch diagnostics go to `aspire-tray.log` in the same directory, with
 user-only creation permissions and no raw discovery payloads or dashboard URLs.
@@ -107,18 +109,63 @@ The foreground development entrypoint's `--cli` argument must be an existing
 **absolute executable path**. Unlike the packaged start command, this development
 entrypoint also accepts a managed CLI apphost when its .NET runtime is available.
 
-The menu bar shows the full-color Aspire icon from `src/Shared/Aspire_icon_256.png`
-and a compact observed AppHost count.
-The menu has a branded header and native two-line AppHost rows: project/worktree
-name first, directory context and PID underneath. Each AppHost has an
-**Open Dashboard** action and **Stop AppHost...** action. Menu items have no
+The menu bar shows the 20-point single-wave artwork from `Mac/Assets/AspireTrayTemplate.png`
+and `AspireTrayTemplate@2x.png` on a 22-point canvas. Excess transparent padding is
+trimmed from the supplied high-resolution artwork before generating the 20- and
+40-pixel standard/Retina representations, so the visible mark fills the tray space.
+The mark is rendered white, preserving the assets' transparent diagonal wave rather
+than drawing additional shading. The composite is not a template image, so the
+connection badge retains its color. These are Aspire-inspired concept assets, not
+official brand masters; their supplied provenance is in `Mac/Assets/PROVENANCE.txt`.
+The app bundle and dialogs continue to use `src/Shared/Aspire_icon_256.png`.
+The lower-right connection badge replaces a numeric count: a gray cross when
+inactive/disconnected, and a solid purple circle when discovery sees a running
+AppHost. The badge's transparent border reveals the menu-bar background rather
+than painting an opaque outline. Native two-line AppHost
+rows show the project/worktree name first and directory context and PID underneath.
+The redundant branded/count header is omitted when AppHosts are listed; an empty
+placeholder or actionable error/disconnection notice is shown when appropriate.
+Each live AppHost has an **Open Dashboard** action and **Stop AppHost...** action.
+Menu items have no
 hover tooltips, so they cannot cover the action submenu. Stopping opens a native
 confirmation dialog showing the full project path and PID, with Cancel as the
-default.
+default. Stop uses the system's standard adaptive button text rather than
+low-contrast red text on a gray button.
 Long names are shortened in the middle, preserving both ends. Native subtitles
 require macOS 14.4; older systems use a single-line layout with the same details.
 **Quit Aspire** (Command-Q while using the menu) removes the icon and stops its
 own discovery subprocess, not any AppHost.
+
+Each AppHost has a compact, consistently sized solid status circle: green for
+healthy resources, amber for waiting/degraded resources, red for unhealthy/failed
+resources, or white when not started or health is unknown. The circles have no
+interior glyphs. Updates change the existing row's icon even while the menu is open.
+The menu-bar connection badge indicates AppHost presence, not aggregate health.
+
+**Pin AppHost** keeps a project in the main list after it stops. **Unpin AppHost**
+removes that preference. Both are available in the AppHost action submenu and
+through a right-click context action. An offline pin has a neutral icon and an
+explicit **Start AppHost** action. Merely opening an AppHost submenu never starts it.
+Missing pinned projects are automatically removed from saved state rather than
+kept as broken entries. A discovery disconnection alone does not remove pins.
+
+**Open Recent** lists previously observed projects that are neither running nor
+already pinned in the main list. Each entry offers explicit Start, Pin, and folder
+actions. Missing project files prompt for removal when a file-dependent action is
+requested. **Clear Recently Opened...** asks for confirmation with Cancel as the
+default, warns that clearing is irreversible, and preserves pinned projects.
+History stores only project paths and preferences, never process identities or
+dashboard login URLs, in the tray's per-user settings directory.
+
+**Open In** resolves installed folder-capable applications using macOS Launch
+Services, rather than assuming applications live in `/Applications`. Supported
+editors/terminals include VS Code, VS Code Insiders, Terminal, Ghostty, iTerm,
+Rider, and Xcode; only installed applications appear. The selected app opens the
+AppHost's directory without starting the AppHost. **Show in Finder** reveals the
+project file. This intentionally uses a tray-owned menu: Finder's Services menu
+requires a document selection/responder contract that a status-menu row does not
+provide. **Documentation** opens [aspire.dev](https://aspire.dev), and **About Aspire**
+shows the build version. Both are directly available in the main tray menu.
 A repeated launch restores the existing tray icon instead of starting another
 instance or watcher. It sends a same-user activation request, waits for native
 restoration to complete, and exits successfully. An unresponsive or older
@@ -146,18 +193,79 @@ The official pipeline signs/notarizes the whole app before copying it into the
 payload and embeds it without republishing. That official signing path still
 requires release-pipeline validation; this remains a draft feedback POC.
 
+## Windows companion
+
+Windows uses the original colored `src/Shared/Aspire.ico`, not the macOS wave
+artwork. Its notification icon indicates whether an AppHost is connected, without
+a numeric count. The AppHost menus use the same shared health, history, pinning,
+explicit Start, and exact-instance Stop behavior described above. Documentation
+and About are top-level actions; Documentation and Open Dashboard use the same
+external-link artwork.
+
+The Windows adapter uses native popup menus and confirmation dialogs.
+**Show in Explorer** and **Open In** act on the AppHost's source location without
+starting it. Missing pinned projects are pruned, while missing recent projects
+offer removal and clearing history requires confirmation. The adapter retains
+native menu resources while a popup is being tracked, restores the notification
+icon after Explorer restarts, and responds to display scaling changes.
+
+State and timestamped diagnostics are stored in
+`%LocalAppData%\Aspire\Tray\apphosts.json` and `aspire-tray.log`. The current-user
+secured mutex and named pipe are shared across that user's desktop sessions.
+The icon stays in the session where the companion first started; another session
+restores or stops that instance. Stop and start again to move it to the launching
+session.
+
+Build on Windows with PowerShell 7.4 or later, the repository-pinned SDK, Visual Studio's **Desktop
+development with C++** tools, and a compatible Windows SDK installed. NativeAOT
+publishing requires a Windows host; a managed cross-platform build is not a
+substitute:
+
+```powershell
+.\restore.cmd -projects .\src\Aspire.Tray\Windows\Aspire.Tray.Windows.csproj
+dotnet publish .\src\Aspire.Tray\Windows\Aspire.Tray.Windows.csproj -c Release -r win-x64
+```
+
+The publishing helper also validates the original icon and native PE architecture:
+
+```powershell
+.\src\Aspire.Tray\Windows\publish.ps1 -Architecture x64
+# After publishing, run isolated native assertions against the existing output:
+.\src\Aspire.Tray\Windows\publish.ps1 -Architecture x64 -SkipPublish `
+    -CliPath C:\absolute\path\to\aspire.exe -SmokeSeconds 30
+```
+
+Smoke requires an interactive Windows desktop with Explorer. It exercises real
+menus, safe-default dialogs, immutable actions, pin/history operations, connection
+and health artwork, Explorer recovery, activation, and artwork invalidation.
+Synthetic invalidation is not a real monitor-DPI transition; verify display-scale
+changes separately on the desktop. Smoke uses only isolated fake AppHosts and
+captures output under `artifacts/log/Release/tray-win-x64`.
+CI checks for an interactive session, Explorer notification area, and an accessible
+input desktop before running native UI smoke. Runners without those capabilities
+emit an explicit warning and summary instead of claiming UI coverage; native
+publishing and payload verification still run.
+
+Use `win-arm64` and the matching native C++ toolchain for ARM64. The CLI bundle
+includes the published executable and its adjacent `Aspire.ico`; copying only
+the executable omits required notification artwork. Use `aspire tray start` and
+`aspire tray stop` from the native Windows CLI bundle for the normal lifetime and
+bundle-lease handoff. A foreground development run can use an explicit absolute
+`--cli` path, including a locally built managed CLI when its .NET runtime is
+installed.
+
 ## Architecture and boundaries
 
 - One global companion per OS user, independent of the launch directory.
 - One long-lived child process:
   `aspire ps --follow --format json --protocol-version 1 --non-interactive --nologo`.
-- `IAppHostClient` is the only backend interface: watch snapshots and stop an
-  exact instance. `CliAppHostClient` owns subprocesses and protocol validation.
+- `IAppHostClient` is the only backend interface: watch snapshots, explicitly start
+  a project, and stop an exact instance. `CliAppHostClient` owns subprocesses and protocol validation.
   No shell, per-AppHost watchers, or direct backchannel access from the tray.
 - `TrayController` owns application state and independent per-AppHost operations.
   Its immutable view snapshots contain no AppKit handles or selectors.
   `AppHostPresentation` handles names, truncation, and directory context.
-- The macOS adapter owns native menus, callbacks, confirmation, browser launch,
+- The platform adapters own native menus, callbacks, confirmation, browser launch,
   and the main-thread event loop. There is no generic UI framework, MVVM/DI
   container, reflection-based binding, or additional UI runtime.
 - UI changes are posted to the native main thread and coalesced, not polled.
@@ -188,6 +296,10 @@ requires release-pipeline validation; this remains a draft feedback POC.
   an already-requested AppHost shutdown may still complete.
 - Persistent resources are not force-cleaned by Stop. Other instances of the
   same project are not targeted.
+- Saved paths are separate from live process identities. Offline pins never
+  reuse an old PID, and Start is disabled when discovery cannot rule out an
+  already-running project. History/pinning and start state are shared,
+  platform-independent code used by both native frontends.
 
 The experimental wire contract is defined once in
 `src/Shared/TrayCliProtocol.cs`, source-linked into the CLI, tray, and tests.
@@ -201,10 +313,10 @@ process exit. Human-readable diagnostics are not part of the protocol.
 The opt-in protocol does not change existing `ps --follow --format json`
 consumers. See [CLI output formats](../../docs/specs/cli-output-formats.md).
 
-Restarting AppHosts, resource details, search, login startup, automatic tray
-upgrade handoff, and Windows native UX are outside this POC. The companion's own
-project remains workload-free and isolated from the product's managed build
-configuration, but the macOS bundle builds and ships it.
+Restarting AppHosts, resource details, search, login startup, and automatic tray
+upgrade handoff are outside this POC. The companion's own projects remain
+workload-free and isolated from the product's managed build configuration, but
+the macOS and Windows native bundles build and ship them.
 
 The undocumented icon-placement recovery is not a supported macOS positioning
 API, and very long home-directory paths can exceed macOS's Unix socket path
@@ -218,7 +330,9 @@ subprocess protocol, rather than a single-process tray.
 The separate native smoke harness uses an injected fake backend with real
 AppKit objects and callbacks. It checks menu structure, titles/subtitles, icons,
 accessibility, absent tooltips, enabled state, safe-default confirmation, and
-Quit. Scenarios include empty/disconnected discovery, missing dashboards,
+Quit. It also checks connection badges, live health transitions, context pinning,
+offline pins, explicit Start, filtered recents, and safe clear/missing-file dialogs.
+Scenarios include empty/disconnected discovery, missing dashboards,
 independent pending stops, reordered rows, process replacement, retained
 senders after menu closure, updates during genuine native menu tracking, and
 acknowledged hidden-icon restoration deferred until menus close.
@@ -240,9 +354,24 @@ discovery stream through the supplied CLI. Real discovered identities are
 never passed to smoke actions. Without that setting, `--cli` only needs to
 reference an existing absolute executable; all discovery/action data is fake.
 
+For a manual inspection, set `ASPIRE_TRAY_SMOKE_INTERACTIVE=1` and use
+`--smoke-seconds 120`. After the automated checks pass, the harness leaves three
+fake running AppHosts with healthy/waiting/failed icons and a stopped, pinned
+**Not started** example with a white icon. It enables real native
+confirmation dialogs until **Quit Aspire**. The watchdog still bounds the automated
+checks but is removed when the interactive preview is ready. An About window
+identifies the preview so it is easy to find. History remains isolated from
+the normal tray. Its Start/Stop backend remains fake; explicit Open In actions
+can open the temporary fixture folder in a real installed application.
+An isolated preview `.app` can set `ASPIRE_TRAY_SMOKE_INTERACTIVE=1` and
+`ASPIRE_TRAY_SMOKE_CLI=<absolute CLI path>` in its `LSEnvironment` to support
+Launch Services opening it without arguments. Normal product bundles do not set
+these variables.
+
 Platform-independent tests exercise protocol framing and validation, subprocess
 cleanup, reconnects, lifetime replacement, concurrent stops, and controller
 shutdown without AppKit or running AppHosts. macOS ARM64 is the runtime exercised
-during development. The Windows scaffold shares the typed backend/controller, but its
-native UX and runtime validation remain deferred; its menu is still read-only.
-macOS x64 is not runtime-validated.
+during this development session. Windows native UI, Windows NativeAOT publishing,
+and official Windows signing require a Windows host; cross-platform unit tests or
+a managed build on macOS do not validate those paths. macOS x64 is not
+runtime-validated in this session.

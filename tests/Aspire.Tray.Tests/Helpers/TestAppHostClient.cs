@@ -13,7 +13,11 @@ internal sealed class TestAppHostClient : IAppHostClient
     private readonly Channel<AppHostId> _started = Channel.CreateUnbounded<AppHostId>();
     private readonly Channel<AppHostId> _finished = Channel.CreateUnbounded<AppHostId>();
     private readonly ConcurrentDictionary<AppHostId, TaskCompletionSource<StopResult>> _stops = new();
+    private readonly Channel<string> _starting = Channel.CreateUnbounded<string>();
+    private readonly Channel<string> _finishedStarts = Channel.CreateUnbounded<string>();
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<StartResult>> _starts = new(TrayAppHostPath.Comparer);
     public ConcurrentQueue<AppHostId> Requests { get; } = new();
+    public ConcurrentQueue<string> StartRequests { get; } = new();
     public TaskCompletionSource WatchFinished { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public void Publish(AppHostSnapshot snapshot)
@@ -60,6 +64,43 @@ internal sealed class TestAppHostClient : IAppHostClient
     }
 
     public void CompleteStop(AppHostId id, StopResult result) => _stops[id].SetResult(result);
+
+    public async Task<StartResult> StartAsync(string appHostPath, CancellationToken cancellationToken)
+    {
+        var completion = new TaskCompletionSource<StartResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_starts.TryAdd(appHostPath, completion))
+        {
+            throw new InvalidOperationException("The same path received concurrent start commands.");
+        }
+        StartRequests.Enqueue(appHostPath);
+        _starting.Writer.TryWrite(appHostPath);
+        try
+        {
+            return await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _starts.TryRemove(appHostPath, out _);
+            _finishedStarts.Writer.TryWrite(appHostPath);
+        }
+    }
+
+    public void CompleteStart(string appHostPath, StartResult result) => _starts[appHostPath].SetResult(result);
+
+    public void FailStart(string appHostPath, Exception exception) => _starts[appHostPath].SetException(exception);
+
+    public Task<string> NextStartAsync()
+        => _starting.Reader.ReadAsync(TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+
+    public Task<string> NextFinishedStartAsync()
+        => _finishedStarts.Reader.ReadAsync(TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+
+    public async Task PublishAndWaitAsync(TrayController controller, AppHostSnapshot snapshot)
+    {
+        var previous = controller.State;
+        Publish(snapshot);
+        await WaitForStateAsync(controller, state => !ReferenceEquals(previous, state)).ConfigureAwait(false);
+    }
 
     public Task<AppHostId> NextStopAsync()
         => _started.Reader.ReadAsync(TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(10));

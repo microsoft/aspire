@@ -8,6 +8,7 @@
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Common/*.cs" Link="Common/%(Filename)%(Extension)" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Mac/SingleInstance.cs" Link="Mac/SingleInstance.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Windows/SingleInstance.cs" Link="Windows/SingleInstance.cs" />
     <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Shared/DirectoryHelper.cs" />
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="Shared/TrayCliProtocol.cs" />
     <Using Include="Xunit" />

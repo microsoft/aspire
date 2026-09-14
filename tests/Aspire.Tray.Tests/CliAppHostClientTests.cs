@@ -25,6 +25,19 @@ public class CliAppHostClientTests
     }
 
     [Fact(Skip = "The fixture requires /bin/sh.", SkipUnless = nameof(SupportsShell))]
+    public async Task StartUsesTheConfiguredCliWithoutCreatingADiscoveryStream()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var appHost = directory.CreateAppHost("apphost.cs");
+        using var cli = new FixtureCli("exit 0");
+        IAppHostClient client = new CliAppHostClient(cli.Path);
+
+        Assert.Equal(new StartResult(StartOutcome.Started, 0),
+            await client.StartAsync(appHost, TestContext.Current.CancellationToken));
+        Assert.Equal(["start", "--apphost", appHost, "--non-interactive", "--nologo"], cli.ReadArguments());
+    }
+
+    [Fact(Skip = "The fixture requires /bin/sh.", SkipUnless = nameof(SupportsShell))]
     public async Task EmptySnapshotIsLiveAndDisposingTheReaderCleansUpItsChild()
     {
         using var cli = new FixtureCli("""

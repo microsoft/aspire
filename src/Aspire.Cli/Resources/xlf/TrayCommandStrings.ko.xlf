@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a macOS Aspire bundle that includes the tray companion.</source>
-        <target state="new">The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a macOS Aspire bundle that includes the tray companion.</target>
+        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</source>
+        <target state="new">The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage the macOS menu bar companion (Experimental)</source>
-        <target state="new">Manage the macOS menu bar companion (Experimental)</target>
+        <source>Manage the Windows or macOS tray companion (Experimental)</source>
+        <target state="new">Manage the Windows or macOS tray companion (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelperFailed">
@@ -22,11 +22,6 @@
         <target state="new">The Aspire tray '{0}' helper did not acknowledge completion within 30 seconds.</target>
         <note>{0} is the start or stop subcommand name.</note>
       </trans-unit>
-      <trans-unit id="MacOSOnly">
-        <source>The experimental Aspire tray is currently supported only on macOS.</source>
-        <target state="new">The experimental Aspire tray is currently supported only on macOS.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="NativeCliRequired">
         <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
         <target state="new">Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</target>
@@ -38,13 +33,13 @@
         <note>{0} is the start or stop subcommand name. {1} is the underlying error message.</note>
       </trans-unit>
       <trans-unit id="PayloadMissing">
-        <source>The CLI bundle does not contain the macOS tray companion (tray/Aspire Tray.app/Contents/MacOS/aspire-tray). Install a macOS Aspire bundle that includes the experimental tray, or run 'aspire setup --force' to repair an incomplete extraction.</source>
-        <target state="new">The CLI bundle does not contain the macOS tray companion (tray/Aspire Tray.app/Contents/MacOS/aspire-tray). Install a macOS Aspire bundle that includes the experimental tray, or run 'aspire setup --force' to repair an incomplete extraction.</target>
+        <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
+        <target state="new">The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
-        <source>Start or restore the macOS tray icon (Experimental)</source>
-        <target state="new">Start or restore the macOS tray icon (Experimental)</target>
+        <source>Start or restore the tray icon (Experimental)</source>
+        <target state="new">Start or restore the tray icon (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
@@ -53,13 +48,18 @@
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">
-        <source>Stop the macOS tray without stopping AppHosts (Experimental)</source>
-        <target state="new">Stop the macOS tray without stopping AppHosts (Experimental)</target>
+        <source>Stop the tray without stopping AppHosts (Experimental)</source>
+        <target state="new">Stop the tray without stopping AppHosts (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
         <source>The Aspire tray is stopped. AppHosts were not stopped.</source>
         <target state="new">The Aspire tray is stopped. AppHosts were not stopped.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnsupportedPlatform">
+        <source>The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</source>
+        <target state="new">The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</target>
         <note />
       </trans-unit>
     </body>

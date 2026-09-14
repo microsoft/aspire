@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Formats.Tar;
+using System.IO.Compression;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
@@ -24,7 +27,8 @@ public sealed class TrayLayoutTests(ITestOutputHelper output)
         Directory.CreateDirectory(Path.Combine(components, "dcp"));
         File.WriteAllText(Path.Combine(components, "managed", BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)), "");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(Path.Combine(components, "dcp")), "");
-        var trayPath = Path.Combine(components, LayoutComponents.MacTrayExecutablePath);
+        var trayPath = Path.Combine(components, OperatingSystem.IsWindows()
+            ? WindowsTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath);
         if (hasTray)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(trayPath)!);
@@ -50,5 +54,36 @@ public sealed class TrayLayoutTests(ITestOutputHelper output)
 
         Assert.Null(layout.Components.Tray);
         Assert.Null(layout.GetTrayPath());
+    }
+
+    [Theory]
+    [InlineData("win-x64")]
+    [InlineData("win-arm64")]
+    public async Task WindowsTrayPayloadSurvivesProductionExtraction(string rid)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var source = Path.Combine(workspace.Path, "publish");
+        WindowsTrayTestPayload.Create(source, rid);
+        using var payload = new MemoryStream();
+        using (var gzip = new GZipStream(payload, CompressionMode.Compress, leaveOpen: true))
+        using (var writer = new TarWriter(gzip, leaveOpen: true))
+        {
+            foreach (var file in new[] { "aspire-tray.exe", "Aspire.ico" })
+            {
+                writer.WriteEntry(Path.Combine(source, file), $"{rid}/tray/{file}");
+            }
+        }
+        payload.Position = 0;
+        var extracted = Path.Combine(workspace.Path, "extracted");
+
+        await BundleService.ExtractPayloadAsync(payload, extracted, TestEnvironment.CreateWindows(), CancellationToken.None);
+
+        WindowsTrayPayload.Validate(Path.Combine(extracted, "tray"), rid);
+        Assert.Equal(new[] { "Aspire.ico", "aspire-tray.exe" }.Order(),
+            Directory.GetFiles(Path.Combine(extracted, "tray")).Select(Path.GetFileName).Order());
+        foreach (var file in new[] { "aspire-tray.exe", "Aspire.ico" })
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(source, file)), File.ReadAllBytes(Path.Combine(extracted, "tray", file)));
+        }
     }
 }

@@ -3,6 +3,7 @@
 
 using System.ComponentModel;
 using System.Runtime.Versioning;
+using Aspire.Shared;
 
 namespace Aspire.Tray;
 
@@ -11,6 +12,11 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args is ["--help"])
+        {
+            Console.WriteLine(TrayOptions.Usage);
+            return 0;
+        }
         if (!OperatingSystem.IsWindows())
         {
             Console.Error.WriteLine("This tray frontend requires Windows.");
@@ -23,56 +29,94 @@ internal static class Program
     [SupportedOSPlatform("windows")]
     private static int RunWindows(string[] args)
     {
-        // Suppress modal dialogs even when smoke arguments are malformed, so automation cannot hang.
         var smoke = args.Contains("--smoke-seconds", StringComparer.Ordinal);
+        var helper = args.FirstOrDefault() is "start" or "stop";
+        WindowsTrayLog? log = null;
         try
         {
-            var options = TrayOptions.Parse(args);
-            if (options.BundleRoot is not null)
+            if (args is ["stop"])
             {
-                throw new InvalidOperationException("The Windows scaffold does not support bundled tray lifecycle commands.");
+                WindowsTrayLauncher.StopAsync().GetAwaiter().GetResult();
+                return 0;
             }
-            using var instance = SingleInstance.Acquire();
+            if (args is ["start", .. var startArgs])
+            {
+                WindowsTrayLauncher.StartAsync(TrayOptions.Parse(startArgs)).GetAwaiter().GetResult();
+                return 0;
+            }
+            if (!smoke && !helper)
+            {
+                log = new WindowsTrayLog();
+            }
+            var options = TrayOptions.Parse(args);
+            if (options.SmokeSeconds is int seconds)
+            {
+                return NativeSmokeHarness.Run(options.CliPath, seconds);
+            }
+
+            // Run, acquire, and release the named mutex on the initial STA thread.
+            using var instance = WindowsSingleInstance.TryAcquire();
             if (instance is null)
             {
-                ReportError("The Aspire Tray is already running for this user. This frontend does not activate the existing instance.", smoke);
-                return 2;
+                TrayActivation.ShowExistingAsync(WindowsSingleInstance.ActivationPipeName, CancellationToken.None).GetAwaiter().GetResult();
+                Log("Restored the running Aspire tray icon.");
+                return 0;
             }
 
-            var controller = new TrayController(new CliAppHostClient(options.CliPath));
+            using var lease = options.BundleRoot is null
+                ? null : BundleVersionLease.Acquire(options.BundleRoot, "tray", "tray");
+            var controller = new TrayController(new CliAppHostClient(options.CliPath),
+                new FileTraySavedStateStore(Path.Combine(WindowsSingleInstance.DirectoryPath, "apphosts.json")));
+            TrayApplication? tray = null;
+            TrayActivation? activation = null;
             try
             {
-                var tray = new TrayApplication(controller, options.SmokeSeconds);
-                try
-                {
-                    controller.Start();
-                    tray.Run();
-                }
-                finally
-                {
-                    tray.Dispose();
-                }
-
-                return tray.ExitCode;
+                tray = new TrayApplication(controller, smokeSeconds: null);
+                activation = new TrayActivation(WindowsSingleInstance.ActivationPipeName,
+                    tray.RestoreIconAsync, tray.WaitUntilReadyAsync, tray.RequestQuit);
+                Log("Starting the Windows Aspire tray.");
+                controller.Start();
+                tray.Run();
             }
             finally
             {
-                // Keep the native message loop and the named mutex on this thread. Only discovery
-                // runs asynchronously; releasing a mutex from an async continuation is not valid.
-                controller.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                // Join IPC and controller producers while their native dispatcher is still
+                // alive. Keep the bundle lease, diagnostic streams, and mutex through cleanup.
+                try
+                {
+                    activation?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                }
+                finally
+                {
+                    try
+                    {
+                        controller.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    }
+                    finally
+                    {
+                        tray?.Dispose();
+                    }
+                }
             }
+            Log($"The Windows Aspire tray stopped (exit {tray.ExitCode}).");
+            return tray.ExitCode;
         }
         catch (Exception ex)
         {
             var message = ex switch
             {
                 NativeCallException => ex.Message,
-                ArgumentException => TrayOptions.Usage,
-                Win32Exception native => $"Windows startup failed (native error {native.NativeErrorCode}).",
+                ArgumentException or TimeoutException or InvalidOperationException or FileNotFoundException => ex.Message,
+                Win32Exception native => $"Windows startup failed (native error {native.NativeErrorCode}). {native.Message}",
                 _ => $"The tray failed ({ex.GetType().Name})."
             };
-            ReportError(message, smoke);
+            // Helpers and malformed smoke invocations must never block automation on a modal dialog.
+            Log(message);
             return 1;
+        }
+        finally
+        {
+            log?.Dispose();
         }
     }
 
@@ -83,20 +127,12 @@ internal static class Program
         {
             Console.Error.WriteLine(message);
         }
-        catch (IOException)
+        catch (IOException ex)
         {
-            // Closing a redirected console must not throw through a native window callback.
+            // Never let a closed console or failing disk throw through a native callback.
+            // Preserve the failure in the debugger channel instead of silently swallowing it.
+            NativeMethods.OutputDebugString($"Tray diagnostic write failed ({ex.GetType().Name}).{Environment.NewLine}");
         }
         NativeMethods.OutputDebugString(message + Environment.NewLine);
-    }
-
-    [SupportedOSPlatform("windows")]
-    private static void ReportError(string message, bool smoke)
-    {
-        Log(message);
-        if (!smoke)
-        {
-            NativeMethods.MessageBox(0, message, "Aspire Tray", NativeMethods.MbIconError);
-        }
     }
 }

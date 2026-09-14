@@ -1,2 +1,5 @@
 ﻿{"version":1,"type":"snapshot","appHosts":[{"appHostPath":"/project/apphost.cs","appHostPid":42,"processStartTimeUnixMilliseconds":1000}]}
+{"version":1,"type":"snapshot","appHosts":[{"appHostPath":"/project/apphost.cs","appHostPid":42,"processStartTimeUnixMilliseconds":1000,"health":"healthy"}]}
+{"version":1,"type":"snapshot","appHosts":[{"appHostPath":"/project/apphost.cs","appHostPid":42,"processStartTimeUnixMilliseconds":1000,"health":"warning"}]}
+{"version":1,"type":"snapshot","appHosts":[{"appHostPath":"/project/apphost.cs","appHostPid":42,"processStartTimeUnixMilliseconds":1000,"health":"unhealthy"}]}
 {"version":1,"outcome":"stopped","exitCode":0}

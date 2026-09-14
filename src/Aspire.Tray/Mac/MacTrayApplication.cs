@@ -8,6 +8,7 @@ internal sealed partial class MacTrayApplication : IDisposable
     private readonly TrayController _controller;
     private readonly Action<Uri> _openDashboard;
     private readonly Func<StopConfirmation, bool>? _confirmStop;
+    private readonly Func<TrayConfirmation, bool>? _confirmAction;
     private readonly string _autosaveName;
     private readonly int _uiThread = Environment.CurrentManagedThreadId;
     private int _exitCode;
@@ -16,13 +17,15 @@ internal sealed partial class MacTrayApplication : IDisposable
         TrayController controller,
         string autosaveName,
         Action<Uri>? openDashboard = null,
-        Func<StopConfirmation, bool>? confirmStop = null)
+        Func<StopConfirmation, bool>? confirmStop = null,
+        Func<TrayConfirmation, bool>? confirmAction = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(autosaveName);
         _autosaveName = autosaveName;
         _controller = controller;
         _openDashboard = openDashboard ?? OpenDashboardInBrowser;
         _confirmStop = confirmStop;
+        _confirmAction = confirmAction;
         InitializeNative();
         _controller.Changed += RequestRefresh;
         RequestRefresh();
@@ -39,6 +42,9 @@ internal sealed partial class MacTrayApplication : IDisposable
     {
         VerifyUIThread();
         _controller.Changed -= RequestRefresh;
+        _openShutdown.Cancel();
+        Task.WhenAll(_openTasks).GetAwaiter().GetResult();
+        _openShutdown.Dispose();
         DisposeNative();
     }
 
@@ -106,4 +112,12 @@ internal sealed record StopConfirmation(
     int ButtonCount,
     bool CancelIsDefault,
     bool StopRequiresExplicitChoice,
-    bool HasColorIcon);
+    bool HasColorIcon,
+    bool HasStandardButtonContrast);
+
+internal sealed record TrayConfirmation(
+    string Message,
+    string Detail,
+    string ActionTitle,
+    bool CancelIsDefault,
+    bool ActionRequiresExplicitChoice);

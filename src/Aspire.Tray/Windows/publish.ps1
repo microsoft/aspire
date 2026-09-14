@@ -1,14 +1,18 @@
+#requires -Version 7.4
 <#
 .SYNOPSIS
 Publishes the C# NativeAOT Windows tray companion, optionally running its native UI smoke.
 .DESCRIPTION
-Run this script on Windows with .NET 10 and the Visual Studio C++ NativeAOT prerequisites
-for the selected architecture. Windows NativeAOT linking is not supported from macOS.
+Run this script on Windows with the repository-pinned SDK installed by restore.cmd and
+the Visual Studio C++ NativeAOT prerequisites for the selected architecture.
+The tray targets net10.0. Windows NativeAOT linking is not supported from macOS.
 Smoke runs require an interactive desktop, Explorer, and an existing Aspire CLI executable.
 It creates real notification icons and menus but never opens a browser or stops AppHosts.
-The WinExe logs are captured beside the published executable; no console window is required.
-The per-user singleton spans Windows sessions. A second instance fails explicitly rather
-than activating the first. Windows signing and installer integration are not yet implemented.
+The WinExe logs are captured under artifacts/log; no console window is required.
+PowerShell 7.4 or later is required for argument-list invocation and concurrent pipe draining.
+Production bundles publish on Windows, Authenticode-sign the executable in the official
+pipeline, then embed the executable and the original Aspire.ico in the invoking CLI.
+This script publishes unsigned development output; it does not install a separate tray.
 .EXAMPLE
 .\publish.ps1 -Architecture x64
 .EXAMPLE
@@ -22,7 +26,14 @@ param(
     [string] $CliPath,
 
     [ValidateRange(1, 120)]
-    [int] $SmokeSeconds
+    [int] $SmokeSeconds,
+
+    [ValidateSet('Debug', 'Release')]
+    [string] $Configuration = 'Release',
+
+    [string] $PublishDirectory,
+
+    [switch] $SkipPublish
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,48 +44,74 @@ if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
 $runSmoke = $PSBoundParameters.ContainsKey('SmokeSeconds')
 if ($runSmoke -and (
         [string]::IsNullOrWhiteSpace($CliPath) -or
-        -not [IO.Path]::IsPathRooted($CliPath) -or
-        [IO.Path]::GetPathRoot($CliPath).Length -lt 3 -or
+        -not [IO.Path]::IsPathFullyQualified($CliPath) -or
         -not (Test-Path -LiteralPath $CliPath -PathType Leaf))) {
     throw 'Smoke requires -CliPath with an existing absolute Aspire executable path.'
 }
 
 $project = Join-Path $PSScriptRoot 'Aspire.Tray.Windows.csproj'
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
-$output = Join-Path $repository "artifacts/bin/Aspire.Tray.Windows/Release/net10.0/win-$Architecture/publish"
-
-& dotnet publish $project -c Release -r "win-$Architecture" --self-contained true -o $output
-if ($LASTEXITCODE -ne 0) {
-    throw "NativeAOT publish failed with exit code $LASTEXITCODE."
+$output = if ($PublishDirectory) {
+    [IO.Path]::GetFullPath($PublishDirectory)
+} else {
+    Join-Path $repository "artifacts/bin/Aspire.Tray.Windows/$Configuration/net10.0/win-$Architecture/publish"
 }
+
+if (-not $SkipPublish) {
+    & dotnet publish $project -c $Configuration -r "win-$Architecture" --self-contained true -o $output
+    if ($LASTEXITCODE -ne 0) {
+        throw "NativeAOT publish failed with exit code $LASTEXITCODE."
+    }
+}
+& (Join-Path $repository 'tools/CreateLayout/verify-windows-tray-payload.ps1') `
+    -PublishDirectory $output -Rid "win-$Architecture"
 Write-Host "NativeAOT output: $output"
 
 if ($runSmoke) {
+    $processArchitecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+    if ($processArchitecture -ine $Architecture) {
+        throw "Native smoke requires a matching $Architecture runner (current process: $processArchitecture)."
+    }
     $executable = Join-Path $output 'aspire-tray.exe'
-    $stdout = Join-Path $output 'smoke.stdout.log'
-    $stderr = Join-Path $output 'smoke.stderr.log'
-    # Windows paths cannot contain quotes. Quote the entire executable argument because
-    # Start-Process joins ArgumentList into a single command-line string, even for arrays.
-    if ($CliPath.Contains('"')) {
-        throw 'The CLI path cannot contain quotation marks.'
+    $logs = Join-Path $repository "artifacts/log/$Configuration/tray-win-$Architecture"
+    $null = New-Item -ItemType Directory -Path $logs -Force
+    $startInfo = [Diagnostics.ProcessStartInfo]::new($executable)
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.WorkingDirectory = $output
+    foreach ($argument in @('--cli', $CliPath, '--smoke-seconds', "$SmokeSeconds")) {
+        $startInfo.ArgumentList.Add($argument)
     }
-    $arguments = "--cli `"$CliPath`" --smoke-seconds $SmokeSeconds"
-    $process = Start-Process -FilePath $executable -ArgumentList $arguments -PassThru `
-        -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-    # Cache the native process handle before it exits, including on Windows PowerShell 5.1,
-    # so ExitCode remains available after the bounded WaitForExit below.
-    $null = $process.Handle
-    if (-not $process.WaitForExit(($SmokeSeconds + 30) * 1000)) {
-        # This is only the tray process launched above, never an AppHost or a process tree.
-        Stop-Process -Id $process.Id -ErrorAction SilentlyContinue
-        throw "Tray smoke timed out. See $stderr."
+    $process = [Diagnostics.Process]::Start($startInfo)
+    try {
+        # WinExe invocation does not imply a console wait. Observe the real process
+        # and drain both pipes concurrently so UI/helper diagnostics cannot deadlock.
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        $stderr = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(($SmokeSeconds + 30) * 1000)) {
+            $process.Kill()
+            $process.WaitForExit()
+            throw "Tray smoke timed out. Logs: $logs."
+        }
+        if ($process.ExitCode -ne 0) {
+            throw "Tray smoke failed with exit code $($process.ExitCode). Logs: $logs."
+        }
     }
-    # Flush redirected asynchronous output before consuming the diagnostic files.
-    $process.WaitForExit()
-    Get-Content -LiteralPath $stdout
-    Get-Content -LiteralPath $stderr
-    if ($process.ExitCode -ne 0) {
-        throw "Tray smoke failed with exit code $($process.ExitCode)."
+    finally {
+        if ($stdout -and $stderr) {
+            $outText = $stdout.GetAwaiter().GetResult()
+            $errorText = $stderr.GetAwaiter().GetResult()
+            [IO.File]::WriteAllText((Join-Path $logs 'smoke.stdout.log'), $outText)
+            [IO.File]::WriteAllText((Join-Path $logs 'smoke.stderr.log'), $errorText)
+            Write-Host $outText
+            Write-Host $errorText
+        }
+        $process.Dispose()
     }
-    Write-Host 'Native UI smoke passed. Verify discovery status in the log; this is not an AppHost connectivity assertion.'
+    if (-not $errorText.Contains('Windows native smoke passed:', [StringComparison]::Ordinal)) {
+        throw "Tray exited without completing the NativeSmokeHarness assertions. Logs: $logs."
+    }
+    Write-Host 'Native UI smoke assertions passed. Fixture-only smoke does not validate live AppHost connectivity.'
 }

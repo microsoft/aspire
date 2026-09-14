@@ -9,6 +9,8 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="$(SharedDir)Aspire_icon_256.png" LogicalName="aspire.png" />
+    <EmbeddedResource Include="Assets/AspireTrayTemplate.png" LogicalName="AspireTrayTemplate.png" />
+    <EmbeddedResource Include="Assets/AspireTrayTemplate@2x.png" LogicalName="AspireTrayTemplate@2x.png" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Shared/BundleVersionLease.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared/BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared/HeldFileLease.cs" />

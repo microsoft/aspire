@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -25,9 +27,10 @@ internal sealed class TrayLifecycleService(
 
     public async Task<CommandResult> ExecuteAsync(bool start, CancellationToken cancellationToken)
     {
-        if (!environment.IsMacOS())
+        if ((!environment.IsMacOS() && !environment.IsWindows()) ||
+            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
         {
-            return CommandResult.Failure(CliExitCodes.InvalidCommand, TrayCommandStrings.MacOSOnly);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TrayCommandStrings.UnsupportedPlatform);
         }
 
         string? cliPath = null;
@@ -65,6 +68,16 @@ internal sealed class TrayLifecycleService(
             if (trayPath is null || !Path.IsPathFullyQualified(trayPath) || !File.Exists(trayPath))
             {
                 return CommandResult.Failure(CliExitCodes.InvalidCommand, TrayCommandStrings.PayloadMissing);
+            }
+
+            if (environment.IsWindows())
+            {
+                if (!string.Equals(trayPath, Path.Combine(bundleRoot, WindowsTrayPayload.ExecutablePath), StringComparison.OrdinalIgnoreCase))
+                {
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, TrayCommandStrings.PayloadMissing);
+                }
+                WindowsTrayPayload.Validate(Path.GetDirectoryName(trayPath)!,
+                    RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "win-arm64" : "win-x64");
             }
 
             string[] arguments = start ? ["start", "--cli", cliPath!, "--bundle-root", bundleRoot] : ["stop"];

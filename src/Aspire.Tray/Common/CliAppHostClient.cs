@@ -37,6 +37,9 @@ internal sealed class CliAppHostClient : IAppHostClient
     public Task<StopResult> StopAsync(AppHostId id, CancellationToken cancellationToken)
         => _commands.StopAsync(id, cancellationToken);
 
+    public Task<StartResult> StartAsync(string appHostPath, CancellationToken cancellationToken)
+        => _commands.StartAsync(appHostPath, cancellationToken);
+
     public async IAsyncEnumerable<AppHostSnapshot> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var latest = new AppHostSnapshot([], DiscoveryState.Connecting);

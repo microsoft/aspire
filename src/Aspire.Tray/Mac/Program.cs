@@ -33,6 +33,13 @@ internal static class Program
                 MacTrayLauncher.StartAsync(TrayOptions.Parse(startArgs)).GetAwaiter().GetResult();
                 return 0;
             }
+            // An isolated preview bundle can opt into the fake backend through its
+            // LSEnvironment, so Launch Services can open it without command-line arguments.
+            if (args.Length == 0 && Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_INTERACTIVE") == "1")
+            {
+                args = ["--cli", Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_CLI") ?? "",
+                    "--smoke-seconds", "120"];
+            }
             var options = TrayOptions.Parse(args);
             if (options.SmokeSeconds is int seconds)
             {
@@ -49,7 +56,8 @@ internal static class Program
 
             using var lease = options.BundleRoot is null
                 ? null : BundleVersionLease.Acquire(options.BundleRoot, "tray", "tray");
-            var controller = new TrayController(new CliAppHostClient(options.CliPath));
+            var controller = new TrayController(new CliAppHostClient(options.CliPath),
+                new FileTraySavedStateStore(Path.Combine(SingleInstance.DirectoryPath, "apphosts.json")));
             using var application = new MacTrayApplication(controller, "AspireTray");
             TrayActivation? activation = null;
             try

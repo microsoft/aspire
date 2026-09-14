@@ -7,6 +7,7 @@ internal interface IAppHostClient
 {
     IAsyncEnumerable<AppHostSnapshot> WatchAsync(CancellationToken cancellationToken);
     Task<StopResult> StopAsync(AppHostId id, CancellationToken cancellationToken);
+    Task<StartResult> StartAsync(string appHostPath, CancellationToken cancellationToken);
 }
 
 internal readonly record struct AppHostId(string AppHostPath, int AppHostPid, long? ProcessStartTimeUnixMilliseconds);
@@ -36,6 +37,16 @@ internal enum StopOutcome
 
 internal sealed record StopResult(StopOutcome Outcome, int? ExitCode);
 
+internal enum StartOutcome
+{
+    Started,
+    NotFound,
+    Failed,
+    TimedOut
+}
+
+internal sealed record StartResult(StartOutcome Outcome, int? ExitCode);
+
 internal sealed record AppHostMenuItem(
     AppHostId Id,
     string Title,
@@ -44,9 +55,23 @@ internal sealed record AppHostMenuItem(
     bool CanOpenDashboard,
     bool CanStop,
     bool IsStopping,
-    string? Error);
+    string? Error)
+{
+    public bool IsPinned { get; init; }
+    public bool CanStart { get; init; }
+    public bool IsStarting { get; init; }
+    public bool IsRunning { get; init; } = true;
+    public AppHostHealth Health { get; init; }
+}
 
 internal sealed record TrayViewState(
     DiscoveryState Discovery,
     IReadOnlyList<AppHostMenuItem> AppHosts,
-    string Status);
+    string Status)
+{
+    public IReadOnlyList<AppHostMenuItem> RecentAppHosts { get; init; } = [];
+    public bool CanClearRecent { get; init; }
+    public bool HasActiveAppHosts { get; init; } = AppHosts.Any(host => host.IsRunning || host.IsStarting);
+    public bool ShowStatus { get; init; } = AppHosts.Count == 0 || Discovery != DiscoveryState.Live
+        || AppHosts.Any(host => host.Error is not null);
+}

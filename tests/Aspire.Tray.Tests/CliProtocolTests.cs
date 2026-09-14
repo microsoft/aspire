@@ -36,6 +36,35 @@ public class CliProtocolTests
         Assert.NotEqual(original.Id, replacement.Id);
     }
 
+    [Theory]
+    [InlineData(null, "Unknown")]
+    [InlineData("healthy", "Healthy")]
+    [InlineData("warning", "Warning")]
+    [InlineData("unhealthy", "Unhealthy")]
+    [InlineData("future-health", "Unknown")]
+    public void OptionalHealthMapsWithoutChangingProcessIdentity(string? health, string expected)
+    {
+        var original = Assert.Single(Parse(Snapshot(Host(42))).AppHosts);
+        var updated = Assert.Single(Parse(Snapshot(Host(42) with { Health = health })).AppHosts);
+
+        Assert.Equal(expected, updated.Health.ToString());
+        Assert.Equal(original.Id, updated.Id);
+        Assert.Equal(expected == "Unknown", original == updated);
+    }
+
+    [Fact]
+    public void OlderSnapshotWithoutHealthIsUnknown()
+    {
+        // Use an older producer's frame, not today's serializer with a default property.
+        var path = JsonSerializer.Serialize(Path.GetFullPath("sample/apphost.cs"));
+        var host = Assert.Single(Parse(
+            $$"""{"version":1,"type":"snapshot","appHosts":[{"appHostPath":{{path}},"appHostPid":42,"processStartTimeUnixMilliseconds":1000}]}""").AppHosts);
+
+        Assert.Equal(AppHostHealth.Unknown, host.Health);
+        Assert.Equal(42, host.AppHostPid);
+        Assert.Equal(1000, host.ProcessStartTimeUnixMilliseconds);
+    }
+
     [Fact]
     public void PathIdentityUsesPlatformCaseSemantics()
     {

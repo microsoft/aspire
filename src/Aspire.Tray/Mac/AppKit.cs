@@ -105,6 +105,15 @@ internal static partial class AppKit
     public static partial nint SendTwoDoubles(nint receiver, nint selector, double first, double second);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint SendFourDoubles(nint receiver, nint selector, double first, double second, double third, double fourth);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SetDouble(nint receiver, nint selector, double value);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SendPoint(nint receiver, nint selector, NativePoint point);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial void SetDoubleForKey(nint receiver, nint selector, double value, nint key);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
@@ -120,10 +129,36 @@ internal static partial class AppKit
     public static partial void SendSize(nint receiver, nint selector, NativeSize size);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial NativeSize GetSize(nint receiver, nint selector);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint SendSizeReturningPointer(nint receiver, nint selector, NativeSize size);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint SendRect(nint receiver, nint selector, NativeRect rect);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void DrawImage(nint receiver, nint selector, NativeRect destination, NativeRect source,
+        nuint operation, double fraction);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial NativePoint GetPoint(nint receiver, nint selector);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial nint CreateTimer(nint receiver, nint selector, double seconds, nint target, nint action, nint userInfo, byte repeats);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static unsafe partial nint CreateData(nint receiver, nint selector, byte* bytes, nuint length);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint CreateBitmap(nint receiver, nint selector, nint planes, nint width, nint height,
+        nint bitsPerSample, nint samplesPerPixel, byte hasAlpha, byte isPlanar, nint colorSpaceName, nint bytesPerRow, nint bitsPerPixel);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static unsafe partial void GetPixel(nint receiver, nint selector, nuint* components, nint x, nint y);
+
+    [LibraryImport("/System/Library/Frameworks/AppKit.framework/AppKit", EntryPoint = "NSRectFillUsingOperation")]
+    public static partial void FillRectUsingOperation(NativeRect rect, nuint operation);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial nint CreateEvent(nint receiver, nint selector, nuint type, NativePoint location,
@@ -187,4 +222,7 @@ internal static partial class AppKit
 
     [StructLayout(LayoutKind.Sequential)]
     internal readonly record struct NativePoint(double X, double Y);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal readonly record struct NativeRect(NativePoint Origin, NativeSize Size);
 }

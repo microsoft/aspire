@@ -322,7 +322,8 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
     /// </summary>
     internal static string? FindTrayRelativePath(string layoutPath, string bundleDirectory)
     {
-        var relativePath = Path.Combine(bundleDirectory, LayoutComponents.MacTrayExecutablePath);
+        var relativePath = Path.Combine(bundleDirectory, OperatingSystem.IsWindows()
+            ? WindowsTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath);
         return File.Exists(Path.Combine(layoutPath, relativePath)) ? relativePath : null;
     }
 

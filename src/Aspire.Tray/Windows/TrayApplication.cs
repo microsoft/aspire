@@ -8,39 +8,88 @@ using System.Runtime.Versioning;
 namespace Aspire.Tray;
 
 [SupportedOSPlatform("windows")]
-internal sealed unsafe class TrayApplication(TrayController controller, int? smokeSeconds) : IDisposable
+internal sealed unsafe partial class TrayApplication(TrayController controller, int? smokeSeconds) : IDisposable
 {
     private const string ClassName = "Aspire.Tray.MessageWindow";
     private const nuint TimerId = 1;
-    private const uint QuitCommand = 1;
-    private const uint FirstDashboardCommand = 100;
     private static TrayApplication? s_current;
+    private readonly object _lifecycleGate = new();
+    private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly List<TaskCompletionSource> _restoreRequests = [];
     private nint _module;
     private nint _window;
-    private nint _icon;
+    private nint _previousDpiContext;
     private uint _taskbarCreated;
     private bool _classRegistered;
     private bool _iconAdded;
     private bool _timerAdded;
     private bool _menuOpen;
     private bool _quitRequested;
+    private bool _shutdownRequested;
+    private bool _loopEnded;
     private bool _disposed;
+    private int _modalDepth;
+    private int _dispatchDepth;
+    private int _refreshPosted;
     private int _restoreAttempts;
     private long? _smokeDeadline;
     private NativeMethods.NotifyIconData _iconData;
     private NativeMenu? _menu;
     private TrayViewState? _displayedState;
     private Exception? _callbackFailure;
-    private string? _actionStatus;
+    private Artwork? _artwork;
+    private bool? _connectedIcon;
+    private bool _dpiDirty;
 
     internal int ExitCode { get; private set; }
+    internal Action? SmokeTick { get; set; }
+    internal Func<string, string, uint, bool>? ConfirmForSmoke { get; set; }
+    internal Action<Uri>? OpenUrlForSmoke { get; set; }
+    internal Action<Exception>? ErrorForSmoke { get; set; }
+
+    internal Task WaitUntilReadyAsync(CancellationToken cancellationToken) => _ready.Task.WaitAsync(cancellationToken);
+
+    internal Task RestoreIconAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_lifecycleGate)
+        {
+            if (_shutdownRequested || _loopEnded || _disposed)
+            {
+                return Task.FromException(new InvalidOperationException("The tray is shutting down."));
+            }
+            _restoreRequests.Add(completion);
+            if (_window != 0 && NativeMethods.PostMessage(_window, NativeMethods.RestoreMessage, 0, 0) == 0)
+            {
+                _restoreRequests.Remove(completion);
+                completion.SetException(new NativeCallException("PostMessageW(restore)", Marshal.GetLastPInvokeError()));
+            }
+        }
+        return completion.Task.WaitAsync(cancellationToken);
+    }
+
+    internal void RequestQuit()
+    {
+        lock (_lifecycleGate)
+        {
+            _shutdownRequested = true;
+            if (_window != 0 && !_loopEnded && NativeMethods.PostMessage(_window, NativeMethods.QuitMessage, 0, 0) == 0)
+            {
+                // The timer also observes this flag if posting fails. Never post WM_QUIT on
+                // an activation worker: it belongs to the native loop's owning thread.
+                _callbackFailure ??= new NativeCallException("PostMessageW(quit)", Marshal.GetLastPInvokeError());
+                Program.Log(_callbackFailure.Message);
+            }
+        }
+    }
 
     internal void Run()
     {
         if (RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64)
-            || sizeof(NativeMethods.WindowClass) != 72
-            || sizeof(NativeMethods.Message) != 48
-            || sizeof(NativeMethods.NotifyIconData) != 976)
+            || sizeof(NativeMethods.WindowClass) != 72 || sizeof(NativeMethods.Message) != 48
+            || sizeof(NativeMethods.NotifyIconData) != 976 || sizeof(NativeMethods.MenuItemInfo) != 80
+            || sizeof(NativeMethods.IconInfo) != 32 || sizeof(NativeMethods.BitmapInfo) != 44)
         {
             throw new PlatformNotSupportedException("This frontend requires the Windows x64 or ARM64 native layouts.");
         }
@@ -48,80 +97,104 @@ internal sealed unsafe class TrayApplication(TrayController controller, int? smo
         {
             throw new InvalidOperationException("A native tray message loop is already active.");
         }
-
-        // The static root anchors the managed receiver for the unmanaged function pointer.
-        // It is cleared only after DestroyWindow and UnregisterClass stop native callbacks.
+        // Keep the receiver rooted until DestroyWindow and UnregisterClass stop callbacks.
         s_current = this;
+        try
+        {
+            Initialize();
+            while (true)
+            {
+                var result = NativeMethods.GetMessage(out var message, 0, 0, 0);
+                NativeCallException.Require(result != -1, "GetMessageW");
+                if (result == 0)
+                {
+                    break;
+                }
+                NativeMethods.TranslateMessage(in message);
+                NativeMethods.DispatchMessage(in message);
+            }
+            if (_callbackFailure is not null)
+            {
+                throw _callbackFailure;
+            }
+        }
+        finally
+        {
+            lock (_lifecycleGate)
+            {
+                _loopEnded = true;
+                _ready.TrySetException(new InvalidOperationException("The tray message loop ended."));
+                FailRestoreRequests(new InvalidOperationException("The tray message loop ended."));
+            }
+        }
+    }
+
+    private void Initialize()
+    {
+        _previousDpiContext = NativeMethods.SetThreadDpiAwarenessContext(-4);
+        NativeCallException.Require(_previousDpiContext != 0, "SetThreadDpiAwarenessContext");
         _module = NativeMethods.GetModuleHandle(null);
         NativeCallException.Require(_module != 0, "GetModuleHandleW");
         _taskbarCreated = NativeMethods.RegisterWindowMessage("TaskbarCreated");
         NativeCallException.Require(_taskbarCreated != 0, "RegisterWindowMessageW");
-        _icon = NativeMethods.LoadImage(0, Path.Combine(AppContext.BaseDirectory, "Aspire.ico"),
-            NativeMethods.ImageIcon, NativeMethods.GetSystemMetrics(NativeMethods.SmCxSmallIcon),
-            NativeMethods.GetSystemMetrics(NativeMethods.SmCySmallIcon), NativeMethods.LrLoadFromFile);
-        NativeCallException.Require(_icon != 0, "LoadImageW");
-
         fixed (char* name = ClassName)
         {
             var windowClass = new NativeMethods.WindowClass
             {
-                WindowProcedure = &WindowProcedure,
-                Instance = _module,
-                Icon = _icon,
-                ClassName = name
+                WindowProcedure = &WindowProcedure, Instance = _module, ClassName = name
             };
             NativeCallException.Require(NativeMethods.RegisterClass(ref windowClass) != 0, "RegisterClassW");
         }
         _classRegistered = true;
-
-        // A hidden top-level window (not HWND_MESSAGE) receives Explorer's TaskbarCreated broadcast.
-        _window = NativeMethods.CreateWindowEx(0, ClassName, "Aspire Tray", 0,
-            0, 0, 0, 0, 0, 0, _module, 0);
-        NativeCallException.Require(_window != 0, "CreateWindowExW");
+        // HWND_MESSAGE would not receive Explorer's TaskbarCreated broadcast.
+        var window = NativeMethods.CreateWindowEx(0, ClassName, "Aspire Tray", 0, 0, 0, 0, 0, 0, 0, _module, 0);
+        NativeCallException.Require(window != 0, "CreateWindowExW");
+        lock (_lifecycleGate)
+        {
+            _window = window;
+        }
         _iconData = new NativeMethods.NotifyIconData
         {
-            Size = (uint)sizeof(NativeMethods.NotifyIconData),
-            Window = _window,
-            Id = 1,
+            Size = (uint)sizeof(NativeMethods.NotifyIconData), Window = window, Id = 1,
             Flags = NativeMethods.NifMessage | NativeMethods.NifIcon | NativeMethods.NifTip | NativeMethods.NifShowTip,
-            CallbackMessage = NativeMethods.TrayCallback,
-            Icon = _icon
+            CallbackMessage = NativeMethods.TrayCallback
         };
-        fixed (char* tip = _iconData.Tip)
+        _installedApplications = FolderApplication.Discover(message =>
         {
-            "Aspire Tray (read only)".AsSpan().CopyTo(new Span<char>(tip, 128));
-        }
-        if (!TryAddIcon())
-        {
-            throw new NativeCallException("Shell_NotifyIconW(NIM_ADD)");
-        }
-
+            Program.Log(message);
+            controller.ReportActionError(message);
+        });
         RefreshMenu();
-        _timerAdded = NativeMethods.SetTimer(_window, TimerId, 1000, 0) != 0;
+        NativeCallException.Require(TryAddIcon(), "Shell_NotifyIconW(NIM_ADD)");
+        _timerAdded = NativeMethods.SetTimer(window, TimerId, 200, 0) != 0;
         NativeCallException.Require(_timerAdded, "SetTimer");
         _smokeDeadline = smokeSeconds is int seconds ? Environment.TickCount64 + seconds * 1000L : null;
-        Program.Log($"Windows tray ready: HWND=0x{_window:X}, HICON=0x{_icon:X}, HMENU=0x{_menu!.Handle:X}, smoke={smokeSeconds is not null}.");
+        controller.Changed += RequestRefresh;
+        // Allocation is not readiness: this message must actually pass through DispatchMessage.
+        NativeCallException.Require(NativeMethods.PostMessage(window, NativeMethods.ReadyMessage, 0, 0) != 0, "PostMessageW(ready)");
+    }
 
-        while (true)
+    private void RequestRefresh()
+    {
+        lock (_lifecycleGate)
         {
-            var result = NativeMethods.GetMessage(out var message, 0, 0, 0);
-            NativeCallException.Require(result != -1, "GetMessageW");
-            if (result == 0)
+            if (_window == 0 || _shutdownRequested || _loopEnded || _disposed || Interlocked.Exchange(ref _refreshPosted, 1) != 0)
             {
-                break;
+                return;
             }
-            NativeMethods.TranslateMessage(in message);
-            NativeMethods.DispatchMessage(in message);
-        }
-        if (_callbackFailure is not null)
-        {
-            throw _callbackFailure;
+            if (NativeMethods.PostMessage(_window, NativeMethods.RefreshMessage, 0, 0) == 0)
+            {
+                Interlocked.Exchange(ref _refreshPosted, 0);
+                _callbackFailure ??= new NativeCallException("PostMessageW(refresh)", Marshal.GetLastPInvokeError());
+                _shutdownRequested = true;
+                Program.Log(_callbackFailure.Message);
+            }
         }
     }
 
     private bool TryAddIcon()
     {
-        // Shell_NotifyIcon does not promise a last-error value, so do not report a stale one.
+        // Shell_NotifyIcon does not promise a last-error value.
         if (NativeMethods.ShellNotifyIcon(NativeMethods.NimAdd, ref _iconData) == 0)
         {
             return false;
@@ -132,8 +205,39 @@ internal sealed unsafe class TrayApplication(TrayController controller, int? smo
         {
             throw new NativeCallException("Shell_NotifyIconW(NIM_SETVERSION)");
         }
-
         return true;
+    }
+
+    private void RestoreOnLoop()
+    {
+        lock (_lifecycleGate)
+        {
+            if (_shutdownRequested)
+            {
+                FailRestoreRequests(new InvalidOperationException("The tray is shutting down."));
+                return;
+            }
+        }
+        RefreshMenu();
+        if (!_iconAdded && !TryAddIcon())
+        {
+            // Explorer may broadcast while its notification area is still initializing.
+            return;
+        }
+        if (NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref _iconData) == 0)
+        {
+            _iconAdded = false;
+            _restoreAttempts = 0;
+            return;
+        }
+        lock (_lifecycleGate)
+        {
+            foreach (var request in _restoreRequests)
+            {
+                request.TrySetResult();
+            }
+            _restoreRequests.Clear();
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
@@ -148,12 +252,13 @@ internal sealed unsafe class TrayApplication(TrayController controller, int? smo
         }
         catch (Exception ex)
         {
-            // Managed exceptions must never unwind through user32's unmanaged callback frames.
+            // Managed exceptions must not cross user32 callback frames, including nested menus.
             if (s_current is { } application)
             {
                 application._callbackFailure ??= ex;
                 application.ExitCode = 1;
-                application.RequestQuit();
+                Program.Log($"Native callback failed: {ex.Message}");
+                application.QuitOnLoop();
             }
             else
             {
@@ -161,7 +266,6 @@ internal sealed unsafe class TrayApplication(TrayController controller, int? smo
             }
             return 0;
         }
-
         return NativeMethods.DefWindowProc(window, message, wParam, lParam);
     }
 
@@ -171,17 +275,52 @@ internal sealed unsafe class TrayApplication(TrayController controller, int? smo
         {
             _iconAdded = false;
             _restoreAttempts = 0;
-            Program.Log("Explorer restarted; restoring the notification icon.");
+            RestoreOnLoop();
             return 0;
         }
         switch (message)
         {
+            case NativeMethods.ReadyMessage:
+                lock (_lifecycleGate)
+                {
+                    if (_shutdownRequested)
+                    {
+                        QuitOnLoop();
+                        return 0;
+                    }
+                    _ready.TrySetResult();
+                }
+                RestoreOnLoop();
+                return 0;
+            case NativeMethods.RefreshMessage:
+                Interlocked.Exchange(ref _refreshPosted, 0);
+                if (!_quitRequested)
+                {
+                    RefreshMenu();
+                }
+                return 0;
+            case NativeMethods.RestoreMessage:
+                RestoreOnLoop();
+                return 0;
+            case NativeMethods.QuitMessage:
+                QuitOnLoop();
+                return 0;
+            case NativeMethods.SmokeMessage when smokeSeconds is not null:
+                Dispatch(_smokeActions[checked((int)wParam)]);
+                return 0;
             case NativeMethods.WmTimer when wParam == TimerId:
                 OnTimer();
                 return 0;
-            case NativeMethods.TrayCallback when !_menuOpen && !_quitRequested:
-                // Version 4 packs the event in LOWORD(lParam), and signed screen coordinates
-                // in wParam; it is not the old wParam=icon ID, lParam=event protocol.
+            case NativeMethods.WmDpiChanged:
+            case NativeMethods.WmSettingChange:
+                _dpiDirty = true;
+                RequestRefresh();
+                return 0;
+            case NativeMethods.WmMenuRightButtonUp when _menuOpen && _modalDepth == 0:
+                PinContextRow(lParam, (uint)wParam);
+                return 0;
+            case NativeMethods.TrayCallback when !_menuOpen && !_quitRequested && _modalDepth == 0:
+                // NIM_SETVERSION(4): LOWORD(lParam)=event; wParam holds signed screen coordinates.
                 var notification = (uint)((nuint)lParam & 0xFFFF);
                 if (notification is NativeMethods.WmContextMenu or NativeMethods.NinSelect or NativeMethods.NinKeySelect)
                 {
@@ -191,7 +330,7 @@ internal sealed unsafe class TrayApplication(TrayController controller, int? smo
             case NativeMethods.WmClose:
             case NativeMethods.WmDestroy:
             case NativeMethods.WmEndSession when wParam != 0:
-                RequestQuit();
+                QuitOnLoop();
                 return 0;
             default:
                 return NativeMethods.DefWindowProc(window, message, wParam, lParam);
@@ -200,222 +339,73 @@ internal sealed unsafe class TrayApplication(TrayController controller, int? smo
 
     private void OnTimer()
     {
-        if (_quitRequested)
+        lock (_lifecycleGate)
         {
-            return;
+            if (_shutdownRequested)
+            {
+                QuitOnLoop();
+                return;
+            }
         }
         if (!_iconAdded)
         {
-            if (TryAddIcon())
+            RestoreOnLoop();
+            if (!_iconAdded && ++_restoreAttempts >= 50)
             {
-                Program.Log("Notification icon restored after Explorer restart.");
-            }
-            else if (++_restoreAttempts >= 10)
-            {
-                throw new NativeCallException("Shell_NotifyIconW(NIM_ADD after Explorer restart)");
+                throw new NativeCallException("Shell_NotifyIconW(Explorer recovery)");
             }
         }
-
-        // TrackPopupMenuEx pumps a nested native loop, including WM_TIMER. Never replace or
-        // destroy its active HMENU; dashboard commands revalidate discovery after selection.
-        if (!_menuOpen)
-        {
-            RefreshMenu();
-        }
-        if (_smokeDeadline is long deadline && Environment.TickCount64 >= deadline)
-        {
-            if (!_iconAdded)
-            {
-                ExitCode = 1;
-                Program.Log("Notification icon restoration did not complete before the smoke deadline.");
-            }
-            var state = controller.State;
-            Program.Log($"Windows tray smoke completed: AppHosts={state.AppHosts.Count}, discovery={state.Discovery}.");
-            RequestQuit();
-        }
-    }
-
-    private void RefreshMenu()
-    {
-        var state = controller.State;
-        if (ReferenceEquals(state, _displayedState))
-        {
-            return;
-        }
-
-        var replacement = BuildMenu(state);
-        _menu?.Dispose();
-        _menu = replacement;
-        _displayedState = state;
-        Program.Log($"Tray state: AppHosts={state.AppHosts.Count}, discovery={state.Discovery}, status={state.Status}, HMENU=0x{replacement.Handle:X}.");
-    }
-
-    private NativeMenu BuildMenu(TrayViewState state)
-    {
-        var root = new NativeMenu(this);
-        try
-        {
-            Append(root.Handle, NativeMethods.MfGrayed, 0, state.Status);
-            if (_actionStatus is not null)
-            {
-                Append(root.Handle, NativeMethods.MfGrayed, 0, _actionStatus);
-            }
-            Append(root.Handle, NativeMethods.MfSeparator, 0, null);
-            if (state.AppHosts.Count == 0)
-            {
-                Append(root.Handle, NativeMethods.MfGrayed, 0, state.Discovery == DiscoveryState.Live ? "No AppHosts running" : "No AppHosts received yet");
-            }
-
-            var command = FirstDashboardCommand;
-            foreach (var host in state.AppHosts)
-            {
-                var submenu = NativeMethods.CreatePopupMenu();
-                NativeCallException.Require(submenu != 0, "CreatePopupMenu");
-                var attached = false;
-                try
-                {
-                    Append(submenu, NativeMethods.MfGrayed, 0, $"Path: {host.Id.AppHostPath}");
-                    Append(submenu, NativeMethods.MfGrayed, 0, $"PID: {host.Id.AppHostPid}");
-                    Append(submenu, NativeMethods.MfSeparator, 0, null);
-                    Append(submenu, host.CanOpenDashboard ? 0u : NativeMethods.MfGrayed,
-                        command, "Open dashboard");
-                    Append(root.Handle, NativeMethods.MfPopup, (nuint)submenu, $"{host.Title} - {host.Subtitle}");
-                    attached = true;
-                    root.DashboardCommands.Add(command++, host.Id);
-                }
-                finally
-                {
-                    // Once appended, ownership transfers to the root's recursive DestroyMenu.
-                    if (!attached)
-                    {
-                        Cleanup(NativeMethods.DestroyMenu(submenu) != 0, "DestroyMenu(unattached submenu)");
-                    }
-                }
-            }
-            Append(root.Handle, NativeMethods.MfSeparator, 0, null);
-            Append(root.Handle, 0, QuitCommand, "Quit");
-            return root;
-        }
-        catch
-        {
-            root.Dispose();
-            throw;
-        }
-    }
-
-    private static void Append(nint menu, uint flags, nuint id, string? text)
-    {
-        // Win32 menu text interprets '&' as a mnemonic and tabs as shortcut separators.
-        // Paths such as C:\src\A&B\AppHost.cs must remain literal, not become accelerators.
-        var literal = text?.Replace("&", "&&", StringComparison.Ordinal).Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
-        NativeCallException.Require(NativeMethods.AppendMenu(menu, flags, id, literal) != 0, "AppendMenuW");
-    }
-
-    private void ShowMenu(nuint coordinates)
-    {
         RefreshMenu();
-        var menu = _menu!;
-        var point = new NativeMethods.Point
+        if (smokeSeconds is not null && _modalDepth != 0)
         {
-            X = unchecked((short)(coordinates & 0xFFFF)),
-            Y = unchecked((short)((coordinates >> 16) & 0xFFFF))
-        };
-        if (point.X == -1 && point.Y == -1)
-        {
-            NativeCallException.Require(NativeMethods.GetCursorPos(out point) != 0, "GetCursorPos");
+            CompleteDialogForSmoke();
         }
-        if (NativeMethods.SetForegroundWindow(_window) == 0)
+        if (_ready.Task.IsCompletedSuccessfully && _modalDepth == 0)
         {
-            throw new NativeCallException("SetForegroundWindow");
+            SmokeTick?.Invoke();
         }
+        if (!_quitRequested && _smokeDeadline is long deadline && Environment.TickCount64 >= deadline)
+        {
+            throw new TimeoutException("The Windows native smoke assertions did not finish before the deadline.");
+        }
+    }
 
-        uint selected;
-        _menuOpen = true;
-        try
-        {
-            selected = NativeMethods.TrackPopupMenuEx(menu.Handle,
-                NativeMethods.TpmReturnCmd | NativeMethods.TpmNonotify | NativeMethods.TpmRightButton,
-                point.X, point.Y, _window, 0);
-            var error = Marshal.GetLastPInvokeError();
-            if (selected == 0 && error != 0)
-            {
-                throw new NativeCallException("TrackPopupMenuEx", error);
-            }
-        }
-        finally
-        {
-            _menuOpen = false;
-        }
-
-        // Required for notification-area context menus to dismiss correctly on subsequent opens.
-        // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-trackpopupmenuex
-        NativeCallException.Require(NativeMethods.PostMessage(_window, NativeMethods.WmNull, 0, 0) != 0, "PostMessageW");
+    private void QuitOnLoop()
+    {
         if (_quitRequested)
         {
             return;
         }
-        if (selected == QuitCommand)
-        {
-            RequestQuit();
-        }
-        else if (menu.DashboardCommands.TryGetValue(selected, out var host))
-        {
-            OpenDashboard(host);
-        }
-    }
-
-    private void OpenDashboard(AppHostId selected)
-    {
-        if (smokeSeconds is not null)
-        {
-            Program.Log("Dashboard launch suppressed during smoke.");
-            return;
-        }
-        Uri? uri = null;
-        try
-        {
-            uri = controller.GetDashboardUri(selected);
-        }
-        catch (InvalidOperationException ex)
-        {
-            _actionStatus = ex.Message;
-        }
-        if (uri is not null)
-        {
-            // Pass the validated http(s) URI as the file to the OS URL handler. No command
-            // interpreter, interpolated shell command, or credentials in diagnostic output.
-            var result = NativeMethods.ShellExecute(_window, "open", uri.AbsoluteUri, null, null, 1);
-            if (result <= 32)
-            {
-                ExitCode = 1;
-                _actionStatus = $"Could not open the dashboard (native error {result}).";
-            }
-            else
-            {
-                _actionStatus = null;
-            }
-        }
-        if (_actionStatus is not null)
-        {
-            Program.Log(_actionStatus);
-            if (NativeMethods.MessageBox(_window, _actionStatus, "Aspire Tray", NativeMethods.MbIconError) == 0)
-            {
-                ExitCode = 1;
-                Program.Log("MessageBoxW failed while displaying the dashboard error.");
-            }
-        }
-        _displayedState = null;
-        RefreshMenu();
-    }
-
-    private void RequestQuit()
-    {
         _quitRequested = true;
+        lock (_lifecycleGate)
+        {
+            _shutdownRequested = true;
+            FailRestoreRequests(new InvalidOperationException("The tray is shutting down."));
+        }
         if (_menuOpen)
         {
             Cleanup(NativeMethods.EndMenu() != 0, "EndMenu");
         }
+        if (_modalDepth != 0)
+        {
+            // WM_QUIT alone does not dismiss an owned MessageBox reliably. Close its popup
+            // as Cancel before ending the main loop; never target another application's UI.
+            var popup = NativeMethods.GetLastActivePopup(_window);
+            if (popup != 0 && popup != _window)
+            {
+                Cleanup(NativeMethods.PostMessage(popup, NativeMethods.WmClose, 0, 0) != 0, "PostMessageW(close dialog)");
+            }
+        }
         NativeMethods.PostQuitMessage(ExitCode);
+    }
+
+    private void FailRestoreRequests(Exception exception)
+    {
+        foreach (var request in _restoreRequests)
+        {
+            request.TrySetException(exception);
+        }
+        _restoreRequests.Clear();
     }
 
     private void Cleanup(bool success, string operation)
@@ -429,60 +419,49 @@ internal sealed unsafe class TrayApplication(TrayController controller, int? smo
 
     public void Dispose()
     {
-        if (_disposed)
+        lock (_lifecycleGate)
         {
-            return;
-        }
-        _disposed = true;
-        if (_timerAdded)
-        {
-            Cleanup(NativeMethods.KillTimer(_window, TimerId) != 0, "KillTimer");
-        }
-        if (_iconAdded)
-        {
-            Cleanup(NativeMethods.ShellNotifyIcon(NativeMethods.NimDelete, ref _iconData) != 0, "Shell_NotifyIconW(NIM_DELETE)");
-        }
-        _menu?.Dispose();
-        if (_window != 0)
-        {
-            Cleanup(NativeMethods.DestroyWindow(_window) != 0, "DestroyWindow");
-        }
-        if (_classRegistered)
-        {
-            Cleanup(NativeMethods.UnregisterClass(ClassName, _module) != 0, "UnregisterClassW");
-        }
-        if (_icon != 0)
-        {
-            Cleanup(NativeMethods.DestroyIcon(_icon) != 0, "DestroyIcon");
-        }
-        if (ReferenceEquals(s_current, this))
-        {
-            s_current = null;
-        }
-        Program.Log($"Windows tray cleanup complete: exit={ExitCode}.");
-    }
-
-    private sealed class NativeMenu : IDisposable
-    {
-        private readonly TrayApplication _owner;
-        private bool _disposed;
-
-        internal NativeMenu(TrayApplication owner)
-        {
-            _owner = owner;
-            Handle = NativeMethods.CreatePopupMenu();
-            NativeCallException.Require(Handle != 0, "CreatePopupMenu");
-        }
-
-        internal nint Handle { get; }
-        internal Dictionary<uint, AppHostId> DashboardCommands { get; } = [];
-
-        public void Dispose()
-        {
-            if (!_disposed)
+            if (_disposed)
             {
-                _disposed = true;
-                _owner.Cleanup(NativeMethods.DestroyMenu(Handle) != 0, "DestroyMenu");
+                return;
+            }
+            _disposed = true;
+            _shutdownRequested = true;
+            _ready.TrySetException(new ObjectDisposedException(nameof(TrayApplication)));
+            FailRestoreRequests(new ObjectDisposedException(nameof(TrayApplication)));
+            controller.Changed -= RequestRefresh;
+            if (_timerAdded)
+            {
+                Cleanup(NativeMethods.KillTimer(_window, TimerId) != 0, "KillTimer");
+            }
+            if (_iconAdded)
+            {
+                Cleanup(NativeMethods.ShellNotifyIcon(NativeMethods.NimDelete, ref _iconData) != 0, "Shell_NotifyIconW(NIM_DELETE)");
+            }
+            _menu?.Dispose();
+            if (_window != 0)
+            {
+                // Keep the static receiver if destruction fails; native code could still call it.
+                if (NativeMethods.DestroyWindow(_window) == 0)
+                {
+                    Cleanup(false, "DestroyWindow");
+                    return;
+                }
+                _window = 0;
+            }
+            if (_classRegistered && NativeMethods.UnregisterClass(ClassName, _module) == 0)
+            {
+                Cleanup(false, "UnregisterClassW");
+                return;
+            }
+            _artwork?.Dispose();
+            if (_previousDpiContext != 0)
+            {
+                Cleanup(NativeMethods.SetThreadDpiAwarenessContext(_previousDpiContext) != 0, "SetThreadDpiAwarenessContext(restore)");
+            }
+            if (ReferenceEquals(s_current, this))
+            {
+                s_current = null;
             }
         }
     }

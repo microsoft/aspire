@@ -15,6 +15,8 @@ internal sealed partial class MacTrayApplication
     private readonly object _dispatchGate = new();
     private readonly HashSet<nint> _openMenus = [];
     private readonly List<NativeAppHostRow> _rows = [];
+    private readonly List<NativeAppHostRow> _recentRows = [];
+    private readonly List<nint> _menus = [];
     private readonly List<nint> _runLoopModes = [];
     private nint _pool;
     private nint _application;
@@ -22,7 +24,13 @@ internal sealed partial class MacTrayApplication
     private nint _statusItem;
     private nint _menu;
     private nint _header;
+    private nint _recentMenu;
+    private nint _clearRecent;
     private nint _brandImage;
+    private nint _trayMarkImage;
+    private readonly Dictionary<bool, nint> _trayImages = [];
+    private readonly Dictionary<AppHostHealth, nint> _healthImages = [];
+    private bool _showStatus;
     private nint _runLoop;
     private nint _refreshSource;
     private bool _refreshPending;
@@ -57,10 +65,19 @@ internal sealed partial class MacTrayApplication
             }
             AddCallback(callbackClass, "openDashboard:", &OnDashboard);
             AddCallback(callbackClass, "stopAppHost:", &OnStopAppHost);
+            AddCallback(callbackClass, "startAppHost:", &OnStartAppHost);
+            AddCallback(callbackClass, "pinAppHost:", &OnPinAppHost);
+            AddCallback(callbackClass, "unpinAppHost:", &OnUnpinAppHost);
+            AddCallback(callbackClass, "clearRecent:", &OnClearRecent);
+            AddCallback(callbackClass, "openIn:", &OnOpenIn);
+            AddCallback(callbackClass, "showInFinder:", &OnShowInFinder);
+            AddCallback(callbackClass, "openDocumentation:", &OnOpenDocumentation);
+            AddCallback(callbackClass, "showAbout:", &OnShowAbout);
             AddCallback(callbackClass, "quit:", &OnQuit);
             AddCallback(callbackClass, "menuWillOpen:", &OnMenuWillOpen);
             AddCallback(callbackClass, "menuDidClose:", &OnMenuDidClose);
             AddCallback(callbackClass, "smokeTimeout:", &OnSmokeTimeout);
+            AddCallback(callbackClass, "smokeShowPreview:", &OnSmokeShowPreview);
             AddCallback(callbackClass, "smokeTrackingStart:", &OnSmokeTrackingStart);
             AddCallback(callbackClass, "smokeTrackingWorker:", &OnSmokeTrackingWorker);
             AddCallback(callbackClass, "smokeTrackingDeadline:", &OnSmokeTrackingDeadline);
@@ -90,6 +107,7 @@ internal sealed partial class MacTrayApplication
             }
 
             CreateStatusItem();
+            InstallContextMenuMonitor();
             UpdateMenu(_controller.State);
         }
         catch
@@ -181,6 +199,7 @@ internal sealed partial class MacTrayApplication
         var state = _controller.State;
         TraceSmokeTracking("refresh-begin");
         UpdateMenu(state);
+        ShowPendingPinContextMenu();
         _ready.TrySetResult();
         TraceSmokeTracking("refresh-end");
         MenuUpdated?.Invoke(state);
@@ -265,15 +284,20 @@ internal sealed partial class MacTrayApplication
 
     private void UpdateMenu(TrayViewState state)
     {
-        var structureChanged = _menu == 0 || !_rows.Select(row => row.Id).SequenceEqual(state.AppHosts.Select(row => row.Id));
+        var structureChanged = _menu == 0 || _showStatus != state.ShowStatus
+            || !_rows.Select(row => row.Id).SequenceEqual(state.AppHosts.Select(row => row.Id))
+            || !_recentRows.Select(row => row.Id).SequenceEqual(state.RecentAppHosts.Select(row => row.Id));
         if (structureChanged && _openMenus.Count == 0 && _modalDepth == 0)
         {
             RebuildMenu(state);
         }
 
-        SetTitleAndSubtitle(_header, "Aspire", state.Status);
-        var current = state.AppHosts.ToDictionary(row => row.Id);
-        foreach (var row in _rows)
+        if (_header != 0)
+        {
+            AppKit.Set(_header, "setTitle:", AppKit.String(state.Status));
+        }
+        var current = state.AppHosts.Concat(state.RecentAppHosts).ToDictionary(row => row.Id);
+        foreach (var row in _rows.Concat(_recentRows))
         {
             var exists = current.TryGetValue(row.Id, out var host);
             var subtitle = host?.Subtitle ?? "AppHost no longer available.";
@@ -281,14 +305,23 @@ internal sealed partial class MacTrayApplication
             SetEnabled(row.Item, exists);
             SetEnabled(row.Dashboard, host?.CanOpenDashboard == true);
             SetEnabled(row.Stop, host?.CanStop == true);
+            SetEnabled(row.Start, host?.CanStart == true);
+            SetEnabled(row.Pin, exists);
+            AppKit.Set(row.Start, "setTitle:", AppKit.String(host?.IsStarting == true ? "Starting AppHost..." : "Start AppHost"));
+            AppKit.Set(row.Pin, "setTitle:", AppKit.String(host?.IsPinned == true ? "Unpin AppHost" : "Pin AppHost"));
+            AppKit.Set(row.Pin, "setAction:", AppKit.Selector(host?.IsPinned == true ? "unpinAppHost:" : "pinAppHost:"));
+            SetSymbol(row.Pin, host?.IsPinned == true ? "pin.slash" : "pin", host?.IsPinned == true ? "Unpin AppHost" : "Pin AppHost");
             AppKit.Set(row.Stop, "setTitle:", AppKit.String(host?.IsStopping == true ? "Stopping AppHost..." : "Stop AppHost\u2026"));
+            var health = host?.Health ?? AppHostHealth.Unknown;
+            AppKit.Set(row.Item, "setImage:", GetHealthImage(health));
             AppKit.Set(row.Item, "setAccessibilityLabel:",
-                AppKit.String($"{host?.DisplayName ?? row.DisplayName}, {subtitle}, AppHost actions"));
+                AppKit.String($"{host?.DisplayName ?? row.DisplayName}, {HealthDescription(health)}, {subtitle}, AppHost actions"));
         }
+        SetEnabled(_clearRecent, state.CanClearRecent);
 
         var button = AppKit.Get(_statusItem, "button");
-        var count = state.Discovery == DiscoveryState.Live && state.AppHosts.Count > 0 ? $" {state.AppHosts.Count}" : "";
-        AppKit.Set(button, "setTitle:", AppKit.String(count));
+        AppKit.Set(button, "setTitle:", AppKit.String(""));
+        AppKit.Set(button, "setImage:", GetTrayImage(state.HasActiveAppHosts));
         AppKit.Set(button, "setToolTip:", AppKit.String($"Aspire\n{state.Status}"));
         AppKit.Set(button, "setAccessibilityLabel:", AppKit.String($"Aspire, {state.Status}"));
     }
@@ -300,6 +333,8 @@ internal sealed partial class MacTrayApplication
         var previous = _menu;
         DetachMenuDelegates();
         _rows.Clear();
+        _recentRows.Clear();
+        _menus.Clear();
         _menu = CreateMenu();
         try
         {
@@ -316,52 +351,82 @@ internal sealed partial class MacTrayApplication
 
     private void PopulateMenu(TrayViewState state)
     {
-        _header = AddItem(_menu, "Aspire", null, enabled: false);
-        AppKit.Set(_header, "setImage:", _brandImage);
-        if (OperatingSystem.IsMacOSVersionAtLeast(15))
+        DiscoverFolderApplications();
+        _showStatus = state.ShowStatus;
+        _header = 0;
+        if (_showStatus)
         {
-            // macOS 14.4 hides subtitles when an attributed title is present.
-            // https://developer.apple.com/documentation/appkit/nsmenuitem/subtitle
-            var font = AppKit.SendDouble(AppKit.Class("NSFont"), AppKit.Selector("boldSystemFontOfSize:"), 13);
-            var attributes = AppKit.SendTwoPointers(AppKit.Class("NSDictionary"), AppKit.Selector("dictionaryWithObject:forKey:"),
-                font, AppKit.Constant("NSFontAttributeName"));
-            var title = AppKit.SendTwoPointers(AppKit.Get(AppKit.Class("NSAttributedString"), "alloc"),
-                AppKit.Selector("initWithString:attributes:"), AppKit.String("Aspire"), attributes);
-            AppKit.Set(_header, "setAttributedTitle:", title);
-            AppKit.Release(title);
-        }
-        AddSeparator(_menu);
-        if (state.AppHosts.Count == 0)
-        {
-            var empty = AddItem(_menu, "AppHosts will appear here", null, enabled: false);
-            SetTitleAndSubtitle(empty, "AppHosts will appear here", "Start one from your terminal or editor.");
-            SetSymbol(empty, "terminal", "AppHosts");
+            _header = AddItem(_menu, state.Status, null, enabled: false);
         }
         foreach (var host in state.AppHosts)
         {
-            var item = AddItem(_menu, host.Title, null, enabled: true);
-            SetSymbol(item, "macwindow", "AppHost");
-            var submenu = CreateMenu();
-            try
-            {
-                var dashboard = AddItem(submenu, "Open Dashboard", "openDashboard:", host.CanOpenDashboard);
-                SetSymbol(dashboard, "arrow.up.right.square", "Open dashboard");
-                AddSeparator(submenu);
-                var stop = AddItem(submenu, "Stop AppHost\u2026", "stopAppHost:", host.CanStop);
-                SetSymbol(stop, "stop.circle", "Stop AppHost");
-                AppKit.Set(item, "setSubmenu:", submenu);
-                _rows.Add(new(host.Id, host.Title, host.DisplayName, item, submenu, dashboard, stop));
-                AttachAppHostIdentity(host.Id, dashboard, stop);
-            }
-            finally
-            {
-                AppKit.Release(submenu);
-            }
+            _rows.Add(AddAppHostMenu(_menu, host));
         }
+        AddSeparator(_menu);
+        var recent = AddItem(_menu, "Open Recent", null, enabled: true);
+        SetSymbol(recent, "clock", "Recently opened AppHosts");
+        _recentMenu = CreateMenu();
+        try
+        {
+            foreach (var host in state.RecentAppHosts)
+            {
+                _recentRows.Add(AddAppHostMenu(_recentMenu, host));
+            }
+            if (state.RecentAppHosts.Count == 0)
+            {
+                AddItem(_recentMenu, "No recently opened AppHosts", null, enabled: false);
+            }
+            AddSeparator(_recentMenu);
+            _clearRecent = AddItem(_recentMenu, "Clear Recently Opened\u2026", "clearRecent:", state.CanClearRecent);
+            AppKit.Set(recent, "setSubmenu:", _recentMenu);
+        }
+        finally
+        {
+            AppKit.Release(_recentMenu);
+        }
+        var documentation = AddItem(_menu, "Documentation", "openDocumentation:", enabled: true);
+        SetSymbol(documentation, "arrow.up.right.square", "Open documentation");
+        AddItem(_menu, "About Aspire", "showAbout:", enabled: true);
         AddSeparator(_menu);
         var quit = AddItem(_menu, "Quit Aspire", "quit:", enabled: true);
         AppKit.Set(quit, "setKeyEquivalent:", AppKit.String("q"));
         AppKit.Set(quit, "setKeyEquivalentModifierMask:", 1 << 20);
+    }
+
+    private NativeAppHostRow AddAppHostMenu(nint menu, AppHostMenuItem host)
+    {
+        var item = AddItem(menu, host.Title, null, enabled: true);
+        var submenu = CreateMenu();
+        try
+        {
+            var dashboard = AddItem(submenu, "Open Dashboard", "openDashboard:", host.CanOpenDashboard);
+            SetSymbol(dashboard, "arrow.up.right.square", "Open dashboard");
+            AddSeparator(submenu);
+            var stop = AddItem(submenu, "Stop AppHost\u2026", "stopAppHost:", host.CanStop);
+            SetSymbol(stop, "stop.circle", "Stop AppHost");
+            var start = AddItem(submenu, "Start AppHost", "startAppHost:", host.CanStart);
+            SetSymbol(start, "play", "Start AppHost");
+            // Visibility is structural: keep a removed live row's disabled actions in place
+            // until tracking ends rather than moving the item under the user's pointer.
+            AppKit.SendBool(start, AppKit.Selector("setHidden:"), host.IsRunning ? (byte)1 : (byte)0);
+            AppKit.SendBool(stop, AppKit.Selector("setHidden:"), host.IsRunning ? (byte)0 : (byte)1);
+            AppKit.SendBool(dashboard, AppKit.Selector("setHidden:"), host.IsRunning ? (byte)0 : (byte)1);
+            var pin = AddItem(submenu, "Pin AppHost", "pinAppHost:", enabled: true);
+            AttachPath(start, host.Id.AppHostPath);
+            AttachPath(pin, host.Id.AppHostPath);
+            AddSeparator(submenu);
+            AddOpenInMenu(submenu, host.Id.AppHostPath);
+            var finder = AddItem(submenu, "Show in Finder", "showInFinder:", enabled: true);
+            SetSymbol(finder, "folder", "Show in Finder");
+            AttachPath(finder, host.Id.AppHostPath);
+            AppKit.Set(item, "setSubmenu:", submenu);
+            AttachAppHostIdentity(host.Id, dashboard, stop);
+            return new(host.Id, host.Title, host.DisplayName, item, submenu, dashboard, stop, start, pin);
+        }
+        finally
+        {
+            AppKit.Release(submenu);
+        }
     }
 
     private nint CreateMenu()
@@ -369,6 +434,7 @@ internal sealed partial class MacTrayApplication
         var menu = AppKit.Get(AppKit.Class("NSMenu"), "new");
         AppKit.SendBool(menu, AppKit.Selector("setAutoenablesItems:"), 0);
         AppKit.Set(menu, "setDelegate:", _target);
+        _menus.Add(menu);
         return menu;
     }
 
@@ -400,7 +466,6 @@ internal sealed partial class MacTrayApplication
     {
         if (AppKit.Supports(item, "setSubtitle:"))
         {
-            // Avoid replacing the header's attributed title when only its status changed.
             if (AppKit.Text(AppKit.Get(item, "title")) != title)
             {
                 AppKit.Set(item, "setTitle:", AppKit.String(title));
@@ -425,44 +490,41 @@ internal sealed partial class MacTrayApplication
         AppKit.Set(item, "setImage:", image);
     }
 
-    private unsafe void SetIcon()
+    private void SetIcon()
     {
         if (_brandImage == 0)
         {
-            using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("aspire.png")
-                ?? throw new InvalidOperationException("The embedded Aspire icon is missing.");
-            using var memory = new MemoryStream();
-            stream.CopyTo(memory);
-            var bytes = memory.ToArray();
-            fixed (byte* address = bytes)
-            {
-                var data = AppKit.CreateData(AppKit.Class("NSData"), AppKit.Selector("dataWithBytes:length:"), address, (nuint)bytes.Length);
-                _brandImage = AppKit.Get(AppKit.Get(AppKit.Class("NSImage"), "alloc"), "initWithData:", data);
-            }
-            if (_brandImage == 0)
-            {
-                throw new InvalidOperationException("Could not decode the Aspire icon.");
-            }
+            _brandImage = LoadEmbeddedImage("aspire.png");
             AppKit.SendSize(_brandImage, AppKit.Selector("setSize:"), new(24, 24));
             AppKit.SendBool(_brandImage, AppKit.Selector("setTemplate:"), 0);
         }
-        var trayIcon = AppKit.Get(_brandImage, "copy");
-        try
+        if (_trayMarkImage == 0)
         {
-            AppKit.SendSize(trayIcon, AppKit.Selector("setSize:"), new(18, 18));
-            // Template rendering discards the colors of Aspire's layered mark.
-            AppKit.SendBool(trayIcon, AppKit.Selector("setTemplate:"), 0);
-            var button = AppKit.Get(_statusItem, "button");
-            AppKit.Set(button, "setImage:", trayIcon);
-            AppKit.Set(button, "setImagePosition:", 2);
-            var font = AppKit.SendTwoDoubles(AppKit.Class("NSFont"),
-                AppKit.Selector("monospacedDigitSystemFontOfSize:weight:"), 12, 0);
-            AppKit.Set(button, "setFont:", font);
+            _trayMarkImage = LoadTrayMark();
         }
-        finally
+        var button = AppKit.Get(_statusItem, "button");
+        AppKit.Set(button, "setImage:", GetTrayImage(_controller.State.HasActiveAppHosts));
+        AppKit.Set(button, "setImagePosition:", 2);
+    }
+
+    private static unsafe nint LoadEmbeddedImage(string resourceName)
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
+            ?? throw new InvalidOperationException($"The embedded icon '{resourceName}' is missing.");
+        using var memory = new MemoryStream();
+        stream.CopyTo(memory);
+        var bytes = memory.ToArray();
+        nint image;
+        fixed (byte* address = bytes)
         {
-            AppKit.Release(trayIcon);
+            var data = AppKit.CreateData(AppKit.Class("NSData"), AppKit.Selector("dataWithBytes:length:"), address, (nuint)bytes.Length);
+            image = AppKit.Get(AppKit.Get(AppKit.Class("NSImage"), "alloc"), "initWithData:", data);
         }
+        if (image == 0)
+        {
+            throw new InvalidOperationException($"Could not decode the embedded icon '{resourceName}'.");
+        }
+        return image;
     }
 
     private static void OpenDashboardInBrowser(Uri uri)
@@ -499,24 +561,24 @@ internal sealed partial class MacTrayApplication
             var stop = AppKit.Get(alert, "addButtonWithTitle:", AppKit.String("Stop AppHost"));
             AppKit.Set(cancel, "setKeyEquivalent:", AppKit.String("\u001b"));
             AppKit.Set(stop, "setKeyEquivalent:", AppKit.String(""));
-            if (AppKit.Supports(stop, "setHasDestructiveAction:"))
-            {
-                AppKit.SendBool(stop, AppKit.Selector("setHasDestructiveAction:"), 1);
-            }
+            // Keep the standard adaptive button text. AppKit's destructive red foreground
+            // has poor contrast on the non-default gray button, especially in dark mode.
             AppKit.SendVoid(alert, AppKit.Selector("layout"));
             var window = AppKit.Get(alert, "window");
             // AppKit assigns Return to the default button. Escape still cancels runModal.
             AppKit.Set(window, "setDefaultButtonCell:", AppKit.Get(cancel, "cell"));
             AppKit.Set(stop, "setKeyEquivalent:", AppKit.String(""));
 
-            if (_confirmStop is not null)
+            if (_confirmStop is not null && !_interactiveSmoke)
             {
                 return _confirmStop(new(host.Id, AppKit.Text(AppKit.Get(alert, "messageText")),
                     checked((int)AppKit.Get(AppKit.Get(alert, "buttons"), "count")),
                     AppKit.Get(window, "defaultButtonCell") == AppKit.Get(cancel, "cell")
                         && AppKit.Text(AppKit.Get(cancel, "keyEquivalent")) == "\r",
                     AppKit.Text(AppKit.Get(stop, "keyEquivalent")) == "",
-                    AppKit.Get(alert, "icon") != 0 && AppKit.GetBool(AppKit.Get(alert, "icon"), AppKit.Selector("isTemplate")) == 0));
+                    AppKit.Get(alert, "icon") != 0 && AppKit.GetBool(AppKit.Get(alert, "icon"), AppKit.Selector("isTemplate")) == 0,
+                    !AppKit.Supports(stop, "hasDestructiveAction")
+                        || AppKit.GetBool(stop, AppKit.Selector("hasDestructiveAction")) == 0));
             }
 
             AppKit.SendBool(_application, AppKit.Selector("activateIgnoringOtherApps:"), 1);
@@ -583,6 +645,7 @@ internal sealed partial class MacTrayApplication
     private void MenuWillOpen(nint menu)
     {
         _openMenus.Add(menu);
+        _controller.PruneMissingPinnedAppHosts();
         TraceSmokeTracking("menu-will-open");
         UpdateMenu(_controller.State);
     }
@@ -621,13 +684,9 @@ internal sealed partial class MacTrayApplication
 
     private void DetachMenuDelegates()
     {
-        foreach (var row in _rows)
+        foreach (var menu in _menus)
         {
-            AppKit.Set(row.Submenu, "setDelegate:", 0);
-        }
-        if (_menu != 0)
-        {
-            AppKit.Set(_menu, "setDelegate:", 0);
+            AppKit.Set(menu, "setDelegate:", 0);
         }
     }
 
@@ -645,6 +704,7 @@ internal sealed partial class MacTrayApplication
             _restoreRequest = null;
         }
         DisposeSmokeTimer();
+        DisposeContextMenuMonitor();
         if (_refreshSource != 0)
         {
             AppKit.CFRunLoopSourceInvalidate(_refreshSource);
@@ -666,8 +726,15 @@ internal sealed partial class MacTrayApplication
         RemoveStatusItem();
         AppKit.Release(_menu);
         AppKit.Release(_brandImage);
+        AppKit.Release(_trayMarkImage);
+        foreach (var image in _trayImages.Values.Concat(_healthImages.Values))
+        {
+            AppKit.Release(image);
+        }
         AppKit.Release(_target);
         _rows.Clear();
+        _recentRows.Clear();
+        _menus.Clear();
         Interlocked.CompareExchange(ref s_callbackRoot, null, this);
         if (_pool != 0)
         {
@@ -735,7 +802,7 @@ internal sealed partial class MacTrayApplication
         => Route(self, sender, static (app, _) => app._smokeTimeout?.Invoke());
 
     private sealed record NativeAppHostRow(
-        AppHostId Id, string Title, string DisplayName, nint Item, nint Submenu, nint Dashboard, nint Stop);
+        AppHostId Id, string Title, string DisplayName, nint Item, nint Submenu, nint Dashboard, nint Stop, nint Start, nint Pin);
 
     private sealed record RestoreRequest(CancellationToken CancellationToken)
     {

@@ -20,6 +20,19 @@ internal readonly record struct TrayProcessIdentity(int ProcessId, long StartTim
         }
         using (process)
         {
+            if (OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    // Pin the kernel process object before checking creation time. Otherwise
+                    // Process can reopen the PID for the wait after Windows has reused it.
+                    _ = process.SafeHandle;
+                }
+                catch (InvalidOperationException) when (process.HasExited)
+                {
+                    return;
+                }
+            }
             if (process.HasExited)
             {
                 return;

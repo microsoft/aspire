@@ -162,7 +162,7 @@ including an empty list when there are no AppHosts:
 
 ```json
 {"version":1,"type":"snapshot","appHosts":[]}
-{"version":1,"type":"snapshot","appHosts":[{"appHostPath":"/absolute/path/apphost.cs","appHostPid":12345,"processStartTimeUnixMilliseconds":1789250000000,"dashboardUrl":"http://localhost:18888/login?t=token"}]}
+{"version":1,"type":"snapshot","appHosts":[{"appHostPath":"/absolute/path/apphost.cs","appHostPid":12345,"processStartTimeUnixMilliseconds":1789250000000,"dashboardUrl":"http://localhost:18888/login?t=token","health":"healthy"}]}
 {"version":1,"type":"heartbeat"}
 {"version":1,"type":"snapshot","appHosts":[]}
 ```
@@ -185,6 +185,34 @@ it does not disconnect or stop AppHosts. An RPC that has not acknowledged cancel
 retains its concurrency slot across snapshots, and is not retried while outstanding.
 Paths and PIDs identify AppHosts, not launcher CLI
 processes. Dashboard URLs may contain login tokens and should not be logged.
+
+`health` is an additive, optional field in protocol version 1. Known values are
+`healthy`, `warning`, and `unhealthy`. Missing or unrecognized values mean **unknown**,
+not healthy, so older producers remain compatible. Health does not change the
+AppHost's process identity.
+
+The CLI maintains one resource snapshot subscription per discovered AppHost
+lifetime, using the existing backchannel snapshot watcher and its version
+reconciliation. Resource transitions publish complete snapshots without waiting
+for discovery changes. They use the same latest-wins output queue, and do not
+initiate dashboard URL lookups or poll individual AppHosts for resource health.
+
+The aggregate uses visible resources, excluding both the hidden flag and legacy
+`Hidden` state. Successfully completed jobs and resources without a lifetime
+(no state or `Active`, with no health reports) are neutral. Failed starts, unhealthy
+runtimes, nonzero terminal exit codes, error state styles, and failed health checks
+produce `unhealthy`. Waiting, starting, building, stopping, not-started resources,
+missing parameter values, degraded health, and pending initial checks produce
+`warning`. A failed check takes precedence over another pending check. Running
+resources with healthy checks, or no registered checks as in the dashboard, are
+healthy; all applicable resources must be healthy for the aggregate to be healthy.
+An empty or entirely non-applicable resource set is unknown.
+
+Health is unknown until the initial resource load completes, and becomes unknown
+again if the resource stream ends or fails. Resource-stream failures are logged
+without removing a still-discovered AppHost or failing discovery. Removed or
+replaced AppHosts cancel their subscriptions; a new connection never inherits
+the previous lifetime's health.
 
 A discovery failure is not an empty snapshot. It emits a terminal error and exits
 nonzero. Exceeding 1,000 AppHosts or 1,048,576 UTF-16 characters per serialized

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
@@ -31,6 +32,74 @@ internal sealed class CliAppHostCommands(string cliPath, TimeSpan timeout)
             "--pid", target.AppHostPid.ToString(CultureInfo.InvariantCulture),
             "--started-at", target.ProcessStartTimeUnixMilliseconds.Value.ToString(CultureInfo.InvariantCulture),
             "--format", "json", "--protocol-version", "1", "--non-interactive", "--nologo");
+    }
+
+    internal static ProcessStartInfo CreateStartStartInfo(string executable, string appHostPath)
+    {
+        var path = TrayAppHostPath.RequireExistingFile(appHostPath);
+        var startInfo = CliProcess.CreateStartInfo(executable, "start", "--apphost", path, "--non-interactive", "--nologo");
+        startInfo.WorkingDirectory = Path.GetDirectoryName(path)!;
+        return startInfo;
+    }
+
+    public async Task<StartResult> StartAsync(string appHostPath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ProcessStartInfo startInfo;
+        try
+        {
+            startInfo = CreateStartStartInfo(cliPath, appHostPath);
+        }
+        catch (FileNotFoundException)
+        {
+            return new(StartOutcome.NotFound, null);
+        }
+
+        using var deadline = new CancellationTokenSource(_timeout);
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        Process process;
+        try
+        {
+            process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start the Aspire CLI.");
+        }
+        catch (Exception ex) when (ex is Win32Exception or IOException or InvalidOperationException)
+        {
+            Console.Error.WriteLine($"The Aspire start command could not launch ({ex.GetType().Name}).");
+            return new(StartOutcome.Failed, null);
+        }
+        using (process)
+        {
+            var output = Task.CompletedTask;
+            try
+            {
+                process.StandardInput.Close();
+                // Both streams are bounded-memory drains, not diagnostic text to display:
+                // the ordinary start command can emit authenticated dashboard URLs.
+                output = Task.WhenAll(CliProcess.DrainAsync(process.StandardOutput, lifetime.Token),
+                    CliProcess.DrainAsync(process.StandardError, lifetime.Token));
+                await process.WaitForExitAsync(lifetime.Token).ConfigureAwait(false);
+                await output.ConfigureAwait(false);
+                return new(process.ExitCode == 0 ? StartOutcome.Started : StartOutcome.Failed, process.ExitCode);
+            }
+            catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                return new(StartOutcome.TimedOut, null);
+            }
+            finally
+            {
+                await lifetime.CancelAsync().ConfigureAwait(false);
+                // Never kill a process tree: start launches a detached AppHost that belongs
+                // to the user even if the tray closes or stops waiting for CLI completion.
+                await CliProcess.TerminateOwnedChildAsync(process).ConfigureAwait(false);
+                try
+                {
+                    await output.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+                {
+                }
+            }
+        }
     }
 
     public async Task<StopResult> StopAsync(AppHostId target, CancellationToken cancellationToken)
