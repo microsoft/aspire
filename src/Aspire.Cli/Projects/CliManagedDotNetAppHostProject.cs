@@ -143,36 +143,45 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
     protected override bool IsSingleFileAppHost(FileInfo appHostFile)
         => IsCliManagedSingleFileAppHost(appHostFile, _features);
 
-    protected override async Task PrepareForRunAsync(FileInfo appHostFile, CancellationToken cancellationToken)
-        => await PrepareModuleAndClosureAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+    protected override async Task<bool> PrepareForRunAsync(
+        FileInfo appHostFile,
+        OutputCollector buildOutputCollector,
+        CancellationToken cancellationToken)
+        => await PrepareModuleAndClosureAsync(appHostFile, buildOutputCollector, cancellationToken).ConfigureAwait(false);
 
-    protected override async Task PrepareForPublishAsync(FileInfo appHostFile, CancellationToken cancellationToken)
-        => await PrepareModuleAndClosureAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+    protected override async Task<bool> PrepareForPublishAsync(
+        FileInfo appHostFile,
+        OutputCollector buildOutputCollector,
+        CancellationToken cancellationToken)
+        => await PrepareModuleAndClosureAsync(appHostFile, buildOutputCollector, cancellationToken).ConfigureAwait(false);
 
-    private async Task PrepareModuleAndClosureAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    private async Task<bool> PrepareModuleAndClosureAsync(
+        FileInfo appHostFile,
+        OutputCollector buildOutputCollector,
+        CancellationToken cancellationToken)
     {
         _moduleGenerationResult = null;
         var generationResult = await _cliManagedModuleGenerator.TryGenerateWithRestoreConfigurationAsync(appHostFile, cancellationToken).ConfigureAwait(false);
         if (generationResult is null)
         {
-            throw new InvalidOperationException($"Failed to generate CLI-managed AppHost module for '{appHostFile.FullName}'.");
+            return false;
         }
 
-        var outputCollector = new OutputCollector();
         var restoreSucceeded = await RestoreIntegrationClosureAsync(
             appHostFile,
             generationResult.ModuleProjectFile,
             CreateModuleBuildInvocationOptions(generationResult),
-            outputCollector,
+            buildOutputCollector,
             generationResult.SensitiveSources,
             cancellationToken).ConfigureAwait(false);
 
         if (!restoreSucceeded)
         {
-            throw new InvalidOperationException($"Failed to restore CLI-managed AppHost integration closure for '{appHostFile.FullName}'.");
+            return false;
         }
 
         _moduleGenerationResult = generationResult;
+        return true;
     }
 
     protected override void ConfigureAppHostInvocationOptions(FileInfo appHostFile, ProcessInvocationOptions options)

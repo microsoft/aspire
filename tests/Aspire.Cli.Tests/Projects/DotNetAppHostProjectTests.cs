@@ -484,6 +484,46 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task RunAsync_CliManagedSingleFileAppHostReturnsBuildFailureWithRestoreDiagnostics()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        var runner = new TestDotNetCliRunner();
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
+        });
+        const string restoreError = "error NU1101: Unable to find package Aspire.Hosting.Missing.";
+
+        runner.BuildAsyncCallback = (_, _, options, _) =>
+        {
+            options.StandardErrorCallback?.Invoke(restoreError);
+            return 1;
+        };
+        runner.RunAsyncCallback = (_, _, _, _, _, _, _, _, _) =>
+            throw new InvalidOperationException("The AppHost should not be launched when preparation fails.");
+
+        var buildCompletionSource = new TaskCompletionSource<bool>();
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>(),
+            BuildCompletionSource = buildCompletionSource
+        };
+
+        var exitCode = await project.RunAsync(context, CancellationToken.None);
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.False(await buildCompletionSource.Task.DefaultTimeout());
+        Assert.NotNull(context.OutputCollector);
+        var outputLine = Assert.Single(context.OutputCollector.GetLines());
+        Assert.Equal(OutputLineStream.StdErr, outputLine.Stream);
+        Assert.Equal(restoreError, outputLine.Line);
+    }
+
+    [Fact]
     public async Task RunAsync_CliManagedSingleFileAppHostClearsStaleIntegrationEnvironmentVariables()
     {
         var appHostFile = CreateCliManagedSingleFileAppHost();
@@ -689,6 +729,64 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             AppHostFile = appHostFile,
             WorkingDirectory = _workspace.WorkspaceRoot,
             Arguments = ["--operation", "publish", "--step", "publish"],
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task PublishAsync_CliManagedSingleFileAppHostLoadsClosureEnvironmentAfterPreparation()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        var integrationProjectDirectory = _workspace.CreateDirectory("IntegrationProject");
+        var integrationProjectPath = Path.Combine(integrationProjectDirectory.FullName, "IntegrationProject.csproj");
+        File.WriteAllText(integrationProjectPath, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        WriteAspireConfigJson(_workspace.WorkspaceRoot.FullName, $$"""
+            {
+              "packages": {
+                "IntegrationProject": "{{integrationProjectPath.Replace("\\", "\\\\", StringComparison.Ordinal)}}"
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner();
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
+        });
+
+        runner.BuildAsyncCallback = (projectFile, _, _, _) =>
+        {
+            if (projectFile.Name == CSharpCliManagedAppHostModuleGenerator.ModuleProjectFileName)
+            {
+                var integrationAssemblyPath = Path.Combine(integrationProjectDirectory.FullName, "IntegrationProject.dll");
+                File.WriteAllText(integrationAssemblyPath, "integration assembly");
+                var workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostFile.Directory!);
+                var restoreDirectory = Path.Combine(workingDirectory.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
+                Directory.CreateDirectory(restoreDirectory);
+                File.WriteAllText(Path.Combine(restoreDirectory, IntegrationClosureBuilder.ClosureSourcesFileName), integrationAssemblyPath);
+                File.WriteAllText(Path.Combine(restoreDirectory, IntegrationClosureBuilder.ClosureMetadataFileName), "|||");
+                File.WriteAllText(Path.Combine(restoreDirectory, IntegrationClosureBuilder.ClosureTargetsFileName), "IntegrationProject.dll");
+                File.WriteAllText(Path.Combine(restoreDirectory, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName), "IntegrationProject");
+            }
+
+            return 0;
+        };
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.NotNull(env);
+            var integrationLibsPath = Assert.Contains(KnownConfigNames.IntegrationLibsPath, env);
+            Assert.True(Directory.Exists(integrationLibsPath));
+            Assert.True(File.Exists(Path.Combine(integrationLibsPath, "IntegrationProject.dll")));
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.PublishAsync(new PublishContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Arguments = ["--operation", "publish"],
             EnvironmentVariables = new Dictionary<string, string>()
         }, CancellationToken.None);
 
