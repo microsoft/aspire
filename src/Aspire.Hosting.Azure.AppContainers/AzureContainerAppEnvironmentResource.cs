@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
@@ -247,9 +248,43 @@ public class AzureContainerAppEnvironmentResource :
 
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
-    /// Default is true.
+    /// Defaults to enabled for standard environments and disabled for Express environments.
     /// </summary>
-    internal bool EnableDashboard { get; set; } = true;
+    internal bool EnableDashboard
+    {
+        get => _enableDashboard ?? !IsExpress;
+        set => _enableDashboard = value;
+    }
+
+    private bool? _enableDashboard;
+
+    internal bool IsExpress { get; set; }
+
+    private readonly ConcurrentDictionary<IResource, AzureContainerAppResource> _expressContainerApps = new(new ResourceNameComparer());
+
+    internal AzureContainerAppResource GetOrCreateExpressContainerAppResource(IResource resource)
+        => _expressContainerApps.GetOrAdd(resource, static r => new AzureContainerAppResource(r));
+
+    internal void ValidatePublicEndpointReference(EndpointReference endpointReference)
+    {
+        if (!endpointReference.EndpointAnnotation.IsExternal)
+        {
+            throw new InvalidOperationException(
+                $"Azure Container Apps Express environment '{Name}' cannot reference internal endpoint " +
+                $"'{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}'. " +
+                "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.");
+        }
+    }
+
+    internal BicepOutputReference GetIngressFqdnReference(EndpointReference endpointReference)
+    {
+        ValidatePublicEndpointReference(endpointReference);
+
+        // Endpoint expressions can be created before the prepare steps have materialized deployment
+        // annotations (including by other compute environments). Retain the same target object and
+        // bind its provisioning context during preparation, rather than resolving a local run URL.
+        return GetOrCreateExpressContainerAppResource(endpointReference.Resource).IngressFqdn;
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether HTTP endpoints should be preserved as HTTP instead of being upgraded to HTTPS.
@@ -346,6 +381,13 @@ public class AzureContainerAppEnvironmentResource :
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
+        ArgumentNullException.ThrowIfNull(endpointReference);
+
+        if (IsExpress)
+        {
+            return ReferenceExpression.Create($"{GetIngressFqdnReference(endpointReference)}");
+        }
+
         var resource = endpointReference.Resource;
 
         var builder = new ReferenceExpressionBuilder();
@@ -371,18 +413,19 @@ public class AzureContainerAppEnvironmentResource :
         var scheme = PreserveHttpEndpoints ? endpoint.UriScheme : "https";
         var port = string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? 80 : 443;
         var tlsEnabled = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || endpoint.TlsEnabled;
-        var host = GetHostAddressExpression(endpointReference);
 
+        // Only hostname-bearing properties require the post-deployment Express output. In
+        // particular, project-generated HTTP_PORTS must not depend on the app's own deployment.
         return property switch
         {
-            EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
-            EndpointProperty.Host or EndpointProperty.IPV4Host => host,
+            EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{GetHostAddressExpression(endpointReference)}"),
+            EndpointProperty.Host or EndpointProperty.IPV4Host => GetHostAddressExpression(endpointReference),
             EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),
             EndpointProperty.TargetPort => endpoint.TargetPort is int targetPort
                 ? ReferenceExpression.Create($"{targetPort.ToString(CultureInfo.InvariantCulture)}")
                 : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
             EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
-            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host}:{port.ToString(CultureInfo.InvariantCulture)}"),
+            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{GetHostAddressExpression(endpointReference)}:{port.ToString(CultureInfo.InvariantCulture)}"),
             EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(tlsEnabled ? bool.TrueString : bool.FalseString)}"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
         };
@@ -428,7 +471,8 @@ public class AzureContainerAppEnvironmentResource :
 
         // Create and add new resource if it doesn't exist
         // Even though it's a compound resource, we'll only expose the managed environment
-        var cae = ContainerAppManagedEnvironment.FromExisting(bicepIdentifier);
+        var cae = ContainerAppManagedEnvironment.FromExisting(bicepIdentifier,
+            IsExpress ? AzureContainerAppExpressSupport.ResourceVersion : null);
 
         if (!TryApplyExistingResourceAnnotation(
             this,

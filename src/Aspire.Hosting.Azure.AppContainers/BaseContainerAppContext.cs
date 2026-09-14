@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.AppContainers;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Expressions;
@@ -184,12 +185,20 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
         }
     }
 
-    private BicepValue<string> GetEndpointValue(EndpointMapping mapping, EndpointProperty property)
+    private BicepValue<string> GetEndpointValue(EndpointMapping mapping, EndpointProperty property, EndpointReference endpointReference)
     {
         var (scheme, host, port, targetPort, isHttpIngress, external, tlsEnabled) = mapping;
 
         BicepValue<string> GetHostValue(string? prefix = null, string? suffix = null)
         {
+            if (_containerAppEnvironmentContext.Environment.IsExpress)
+            {
+                var output = _containerAppEnvironmentContext.Environment.GetIngressFqdnReference(endpointReference);
+                ValidateIngressFqdnDependency(output);
+                var fqdn = AllocateParameter(output);
+                return BicepFunction.Interpolate($"{prefix}{fqdn}{suffix}");
+            }
+
             if (isHttpIngress)
             {
                 var domain = AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppDomain);
@@ -206,11 +215,50 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             EndpointProperty.Host or EndpointProperty.IPV4Host => GetHostValue(),
             EndpointProperty.Port => port.ToString(CultureInfo.InvariantCulture),
             EndpointProperty.HostAndPort => GetHostValue(suffix: $":{port}"),
-            EndpointProperty.TargetPort => targetPort is null ? AllocateContainerPortParameter() : $"{targetPort}",
+            EndpointProperty.TargetPort => targetPort is null
+                ? _containerAppEnvironmentContext.Environment.IsExpress
+                    ? AllocateParameter(new ContainerPortReference(endpointReference.Resource))
+                    : AllocateContainerPortParameter()
+                : $"{targetPort}",
             EndpointProperty.Scheme => scheme,
             EndpointProperty.TlsEnabled => tlsEnabled ? bool.TrueString : bool.FalseString,
             _ => throw new NotSupportedException(),
         };
+    }
+
+    private void ValidateIngressFqdnDependency(BicepOutputReference output)
+    {
+        if (_containerAppEnvironmentContext.Environment.IsExpress &&
+            output is { Name: AzureContainerAppResource.IngressFqdnOutputName, Resource: AzureContainerAppResource app } &&
+            app.TargetResource == resource)
+        {
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' in Azure Container Apps Express environment '{_containerAppEnvironmentContext.Environment.Name}' " +
+                "cannot use its own public endpoint URL or hostname during deployment. Express assigns the ingress FQDN after the app is deployed. " +
+                "Remove the self-reference, use TargetPort for the application's listening port, or use a standard Azure Container Apps environment. " +
+                "Public endpoint references must form an acyclic deployment dependency graph.");
+        }
+    }
+
+    private void ValidateExpressEndpointReference(EndpointReference endpoint)
+    {
+        var environment = _containerAppEnvironmentContext.Environment;
+        if (!environment.IsExpress)
+        {
+            return;
+        }
+
+        environment.ValidatePublicEndpointReference(endpoint);
+
+        if (endpoint.EndpointAnnotation.UriScheme is "http" &&
+            ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(endpoint.Resource, out var producer) &&
+            producer is AzureContainerAppEnvironmentResource { IsExpress: false, PreserveHttpEndpoints: true } standard)
+        {
+            throw new InvalidOperationException(
+                $"Azure Container Apps Express environment '{environment.Name}' cannot reference endpoint '{endpoint.EndpointName}' " +
+                $"on resource '{endpoint.Resource.Name}' using HTTP. Environment '{standard.Name}' preserves HTTP endpoints. " +
+                "Enable HTTPS upgrade with WithHttpsUpgrade(true), reference an HTTPS endpoint, or use a standard Azure Container Apps environment.");
+        }
     }
 
     private (object, SecretType) ProcessValue(object value, SecretType secretType = SecretType.None, object? parent = null)
@@ -222,6 +270,8 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReference ep)
         {
+            ValidateExpressEndpointReference(ep);
+
             // The referenced endpoint may belong to a resource deployed to a different compute
             // environment (for example a Foundry hosted agent). In that case delegate to the owning
             // compute environment instead of looking it up in this environment's local endpoint map.
@@ -237,7 +287,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
             var mapping = context._endpointMapping[ep.EndpointName];
 
-            var url = GetEndpointValue(mapping, EndpointProperty.Url);
+            var url = GetEndpointValue(mapping, EndpointProperty.Url, ep);
 
             return (url, secretType);
         }
@@ -261,6 +311,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is BicepOutputReference output)
         {
+            ValidateIngressFqdnDependency(output);
             return (AllocateParameter(output, secretType: secretType), secretType);
         }
 
@@ -283,6 +334,13 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReferenceExpression epExpr)
         {
+            // Express cannot use a standard environment's private DNS either. Check visibility
+            // before delegating, while the original endpoint metadata is still available.
+            if (epExpr.Property is EndpointProperty.Url or EndpointProperty.Host or EndpointProperty.IPV4Host or EndpointProperty.HostAndPort)
+            {
+                ValidateExpressEndpointReference(epExpr.Endpoint);
+            }
+
             if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
                 epExpr, [_containerAppEnvironmentContext.Environment], out var crossExpr))
             {
@@ -295,7 +353,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
             var mapping = context._endpointMapping[epExpr.Endpoint.EndpointName];
 
-            var val = GetEndpointValue(mapping, epExpr.Property);
+            var val = GetEndpointValue(mapping, epExpr.Property, epExpr.Endpoint);
 
             return (val, secretType);
         }
@@ -557,7 +615,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
                     HttpGet = new()
                     {
                         Path = endpointProbeAnnotation.Path,
-                        Port = AsInt(GetEndpointValue(endpointMapping, EndpointProperty.TargetPort)),
+                        Port = AsInt(GetEndpointValue(endpointMapping, EndpointProperty.TargetPort, endpointProbeAnnotation.EndpointReference)),
                         Scheme = scheme is "https" ? ContainerAppHttpScheme.Https : ContainerAppHttpScheme.Http,
                     },
                 };

@@ -9,6 +9,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TypeSystem;
@@ -1552,6 +1553,31 @@ public class AtsTypeScriptCodeGeneratorTests
         AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppService/configureWebSiteSlotSiteConfig", "configureSlotSiteConfig", typeof(WebSiteSlot), GetRequiredType("Aspire.Hosting.Azure.AzureAppServiceSiteConfig, Aspire.Hosting.Azure.AppService"));
 
         AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppContainers/configureContainerAppScale", "configureScale", typeof(ContainerApp), GetRequiredType("Aspire.Hosting.Azure.AzureContainerAppScaleConfig, Aspire.Hosting.Azure.AppContainers"));
+    }
+
+    [Fact]
+    public async Task Scanner_AzureContainerAppExpress_EmitsTypedFluentMethod()
+    {
+        var result = AtsCapabilityScanner.ScanAssemblies(LoadAzureAssemblies());
+        var capability = Assert.Single(result.Capabilities, c => c.CapabilityId == "Aspire.Hosting.Azure.AppContainers/asExpress");
+        var environmentTypeId = GetAtsTypeId(typeof(AzureContainerAppEnvironmentResource));
+
+        Assert.Equal("asExpress", capability.MethodName);
+        Assert.Equal(environmentTypeId, capability.TargetTypeId);
+        Assert.Equal(environmentTypeId, capability.ReturnType.TypeId);
+        Assert.True(capability.ReturnsBuilder);
+        Assert.Empty(capability.Parameters);
+
+        var context = new AtsContext
+        {
+            Capabilities = [capability],
+            HandleTypes = [Assert.Single(result.HandleTypes, t => t.AtsTypeId == environmentTypeId)],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+        var files = _generator.GenerateDistributedApplication(context);
+
+        await Verify(files["aspire.mts"], "ts").UseFileName("AzureContainerAppExpressGeneratedAspire");
     }
 
     [Fact]

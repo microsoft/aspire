@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.AppContainers;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Expressions;
@@ -21,10 +22,14 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
     public override void BuildContainerApp(AzureResourceInfrastructure infra)
     {
         _infrastructure = infra;
+
         // Write a fake parameter for the container app environment
         // so azd knows the Dashboard URL - see https://github.com/microsoft/aspire/issues/8449.
         // This is temporary until a real fix can be made in azd.
-        AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppDomain);
+        if (!_containerAppEnvironmentContext.Environment.IsExpress)
+        {
+            AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppDomain);
+        }
 
         var containerAppIdParam = AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppEnvironmentId);
 
@@ -68,7 +73,9 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
 
         template.Scale = new ContainerAppScale()
         {
-            MinReplicas = Resource.GetReplicaCount()
+            MinReplicas = _containerAppEnvironmentContext.Environment.IsExpress && !Resource.HasAnnotationOfType<ReplicaAnnotation>()
+                ? 0
+                : Resource.GetReplicaCount()
         };
 
         var containerAppContainer = new ContainerAppContainer();
@@ -95,6 +102,14 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
                 a.Configure(infra, containerAppResource);
             }
         }
+
+        if (_containerAppEnvironmentContext.Environment.IsExpress)
+        {
+            infra.Add(new ProvisioningOutput(AzureContainerAppResource.IngressFqdnOutputName, typeof(string))
+            {
+                Value = containerAppResource.Configuration.Ingress.Fqdn
+            });
+        }
     }
 
     private ContainerApp CreateContainerApp()
@@ -110,8 +125,12 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         };
         containerApp.Configuration = configuration;
 
-        // default autoConfigureDataProtection to true for .NET projects
-        if (Resource is ProjectResource)
+        if (_containerAppEnvironmentContext.Environment.IsExpress)
+        {
+            containerApp.ResourceVersion = AzureContainerAppExpressSupport.ResourceVersion;
+        }
+        // Express does not support platform language-stack configuration.
+        else if (Resource is ProjectResource)
         {
             const string latestPreview = "2025-10-02-preview"; // this property is currently only available in preview
             containerApp.ResourceVersion = latestPreview;
@@ -228,7 +247,8 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
                 var scheme = preserveHttp ? endpoint.UriScheme : "https";
                 var port = scheme is "http" ? 80 : 443;
 
-                _endpointMapping[endpoint.Name] = new(scheme, NormalizedContainerAppName, port, targetPort, true, httpIngress.External, endpoint.TlsEnabled);
+                _endpointMapping[endpoint.Name] = new(scheme, NormalizedContainerAppName, port, targetPort, true, httpIngress.External,
+                    _containerAppEnvironmentContext.Environment.IsExpress || endpoint.TlsEnabled);
             }
 
             // Record HTTP endpoints being upgraded (logged once at environment level)

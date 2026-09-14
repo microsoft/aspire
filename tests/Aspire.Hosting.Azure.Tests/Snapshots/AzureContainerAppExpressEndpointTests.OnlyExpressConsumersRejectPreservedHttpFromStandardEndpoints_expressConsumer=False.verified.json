@@ -1,0 +1,9 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "web-containerapp.module.bicep",
+  "params": {
+    "consumer_outputs_azure_container_apps_environment_default_domain": "{consumer.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
+    "consumer_outputs_azure_container_apps_environment_id": "{consumer.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
+    "producer_outputs_azure_container_apps_environment_default_domain": "{producer.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}"
+  }
+}
