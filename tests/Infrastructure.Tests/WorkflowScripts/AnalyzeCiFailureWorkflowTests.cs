@@ -328,6 +328,44 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [RequiresTools(["node"])]
+    public async Task FormatJobLogPreservesHttpErrorsAndSanitizesFetchDiagnostics(int exitCode)
+    {
+        const string httpError = "curl: (22) The requested URL returned error: 504";
+        var output = await InvokeScriptAsync("format-job-log", new
+        {
+            job_id = 42,
+            exit_code = exitCode,
+            stdout = $"\u001b[31m{httpError}\u001b[0m\n",
+            stderr = "\u001b[31mgh: accessToken=fake-token\u001b[0m"
+        });
+
+        var expected = exitCode == 0
+            ? httpError
+            : $"{httpError}\n\nFailed to fetch complete logs for job 42: gh exited with code 1.\ngh: accessToken=[REDACTED]";
+        Assert.Equal(expected, output.TrimEnd('\n'));
+    }
+
+    [Theory]
+    [InlineData("analyze-ci-failure.md")]
+    [InlineData("analyze-ci-failure.lock.yml")]
+    public void CollectStepPreservesDiagnosticsAndSkippedSteps(string workflowName)
+    {
+        var workflow = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", workflowName));
+        var normalization = workflow.IndexOf("node .github/workflows/analyze-ci-failure.js format-job-log -", StringComparison.Ordinal);
+        var extraction = workflow.IndexOf("# Extract error-relevant lines", StringComparison.Ordinal);
+
+        Assert.Contains("--allow-escape-sequences", workflow);
+        Assert.Contains("2> \"ci-failure-data/job-${JOB_ID}-fetch-error.log\" || LOG_EXIT_CODE=$?", workflow);
+        Assert.True(normalization >= 0 && extraction > normalization);
+        Assert.Contains("-e 'The requested URL returned error'", workflow);
+        Assert.Contains("**Skipped Steps**", workflow);
+        Assert.Contains("select(.conclusion == \"skipped\")", workflow);
+    }
+
+    [Theory]
     [InlineData("https://opaque-credential@example.com/path", "https://[REDACTED]@example.com/path")]
     [InlineData("https://user:pass@example.com/path", "https://[REDACTED]:[REDACTED]@example.com/path")]
     [InlineData("postgresql://dbuser:dbpass@postgres.example/db", "postgresql://[REDACTED]:[REDACTED]@postgres.example/db")]

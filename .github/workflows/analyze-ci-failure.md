@@ -154,11 +154,31 @@ jobs:
           # Fetch logs for each failed job and extract only error-relevant lines.
           # Raw logs are huge (64KB+). Instead of blindly taking the last N lines,
           # we grep for error indicators with context to produce a focused extract.
+          # Newer gh versions reject terminal escapes even when stdout is redirected.
+          # Allow them only in the captured file, then strip them before using the log.
+          GH_LOG_FLAGS=()
+          GH_API_HELP=$(gh api --help)
+          if grep -q -- '--allow-escape-sequences' <<< "$GH_API_HELP"; then
+            GH_LOG_FLAGS+=(--allow-escape-sequences)
+          fi
           jq -r '.[].id' ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
             JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" ci-failure-data/failed-jobs.json)
             echo "Fetching logs for job: ${JOB_NAME} (${JOB_ID})"
-            gh api "repos/${REPO}/actions/jobs/${JOB_ID}/logs" > "ci-failure-data/job-${JOB_ID}-raw.log" 2>/dev/null || \
-              echo "(Failed to fetch logs for job ${JOB_ID})" > "ci-failure-data/job-${JOB_ID}-raw.log"
+            LOG_EXIT_CODE=0
+            gh api "${GH_LOG_FLAGS[@]}" "repos/${REPO}/actions/jobs/${JOB_ID}/logs" \
+              > "ci-failure-data/job-${JOB_ID}-raw.log" \
+              2> "ci-failure-data/job-${JOB_ID}-fetch-error.log" || LOG_EXIT_CODE=$?
+            jq -n --arg job_id "$JOB_ID" --argjson exit_code "$LOG_EXIT_CODE" \
+              --rawfile stdout "ci-failure-data/job-${JOB_ID}-raw.log" \
+              --rawfile stderr "ci-failure-data/job-${JOB_ID}-fetch-error.log" \
+              '{job_id: $job_id, exit_code: $exit_code, stdout: $stdout, stderr: $stderr}' \
+              | node .github/workflows/analyze-ci-failure.js format-job-log - \
+              > "ci-failure-data/job-${JOB_ID}-normalized.log"
+            mv "ci-failure-data/job-${JOB_ID}-normalized.log" "ci-failure-data/job-${JOB_ID}-raw.log"
+            rm -f "ci-failure-data/job-${JOB_ID}-fetch-error.log"
+            if [ "$LOG_EXIT_CODE" -ne 0 ]; then
+              echo "::warning::Job ${JOB_ID} log collection failed with exit code ${LOG_EXIT_CODE}; sanitized diagnostics are retained."
+            fi
 
             # Extract error-relevant lines with 3 lines of context before and 5 after.
             # Patterns: compiler errors, build failures, test failures, runtime errors,
@@ -177,6 +197,10 @@ jobs:
               -e '403 Forbidden' \
               -e 'exit code [1-9]' \
               -e 'Process completed with exit code' \
+              -e 'curl: ([0-9]\+)' \
+              -e 'HTTP[/ ][0-9. ]*[45][0-9][0-9]' \
+              -e 'The requested URL returned error' \
+              -e 'Failed to fetch complete logs' \
               "ci-failure-data/job-${JOB_ID}-raw.log" 2>/dev/null \
               | head -150 > "ci-failure-data/job-${JOB_ID}.log" || true
 
@@ -348,7 +372,7 @@ jobs:
 
             echo "## Failed Jobs"
             echo ""
-            jq -r '.[] | "### Job: \(.name)\n- **ID**: \(.id)\n- **Conclusion**: \(.conclusion)\n- **URL**: \(.html_url // "N/A")\n- **Failed Steps**: \([.steps[]? | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | .name] | join(", "))\n"' \
+            jq -r '.[] | "### Job: \(.name)\n- **ID**: \(.id)\n- **Conclusion**: \(.conclusion)\n- **URL**: \(.html_url // "N/A")\n- **Failed Steps**: \([.steps[]? | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | .name] | join(", "))\n- **Skipped Steps**: \([.steps[]? | select(.conclusion == "skipped") | .name] | join(", "))\n"' \
               ci-failure-data/failed-jobs.json
 
             echo "## Job Logs (Error-Focused)"
@@ -931,19 +955,26 @@ Read `ci-failure-data/analysis-summary.md`. It contains the run information, PR 
 
 ### Step 2: Analyze
 
-Analyze all of the data to classify each failed job (see **Classification Rules** below).
+Classify each failed job from its current failed step and diagnostic before comparing it to prior causes (see **Classification Rules** below). A job's name describes what it was intended to run, not what actually failed.
+
+Read the step conclusions in `ci-failure-data/failed-jobs.json`, including skipped steps. Distinguish setup, restore/build, test execution, and artifact-upload failures. For example, a prerequisite download that returns HTTP 504 with curl exit code 22 while `Run extension E2E tests` is skipped is an infrastructure/download failure, not a flaky test or a recurrence of an E2E assertion failure.
+
+Missing logs are a collection problem, not a reason to infer a known test failure. Use the saved fetch diagnostics, annotations, and test-result artifacts to establish what happened; do not substitute a prior cause's error for missing current evidence.
 
 #### Matching against prior causes (transient failures only)
 
-When a failure is classified as `flaky-test` or `infra-failure` (NOT `code-issue`), check the **Prior Causes** section in the summary for a match. Prior causes are loaded from JSON files in the `ci-failure-data/prior-causes/` directory (one file per cause, e.g. `ci-failure-data/prior-causes/nuget-feed-timeout.json`). These files are fetched by the `collect-data` job from the `memory/ci-failure-analysis` branch's `causes/` directory and rendered into the summary under the "Prior Causes (from memory branch)" heading.
+When a job is classified as `flaky-test` or `transient-infra` (NOT `code-issue`), check the **Prior Causes** section in the summary for a match. Prior causes are loaded from JSON files in the `ci-failure-data/prior-causes/` directory (one file per cause, e.g. `ci-failure-data/prior-causes/nuget-feed-timeout.json`). These files are fetched by the `collect-data` job from the `memory/ci-failure-analysis` branch's `causes/` directory and rendered into the summary under the "Prior Causes (from memory branch)" heading.
 
 If any of this run's transient failures match an existing cause, you MUST reuse that cause's `id` when writing the cause file in Step 3b. This allows the publish job to merge occurrences into the existing cause rather than creating duplicates. Do NOT attempt to match code-issue failures against prior causes — those are not tracked.
 
-A failure matches an existing cause when:
-- For flaky tests: the failing test name matches `test_name` in a prior cause, OR the error message/stack trace substantially matches the `error_pattern`
-- For infra failures: the error message substantially matches the `error_pattern` of a prior infra-failure cause
+A failure matches an existing cause only when the failure category, failing phase, and diagnostic agree:
+- For flaky tests: the test actually ran and failed, its full test name matches `test_name`, and its observed error/stack trace matches the prior cause's `error_pattern`.
+- For infra failures: the current failed operation and diagnostic match the prior infra-failure cause, including relevant HTTP status or exit codes.
+- A job/shard name is not a test name. A failed prerequisite and a skipped test cannot match a test failure, even if the job name is identical.
 
-When reusing an existing cause, keep the same `id`, `type`, `title`, `test_name`, and `error_pattern` fields (you may improve the `title` or `error_pattern` if the new failure provides better detail). Also add the cause ID to the `causes` array in the run summary.
+When reusing an existing cause, keep the same `id`, `type`, `test_name`, and `error_pattern` fields. You may improve the `title` without changing the failure identity. Also add the cause ID to the `causes` array in the run summary.
+
+If the failed phase, test, or diagnostic differs, report the current failure under its own cause instead of reusing the old ID. A legacy record naming only a shard does not identify a specific test failure. Neither a shared job name nor the fact that the PR changes are unrelated is evidence that a resolved cause has returned.
 
 ### Step 3: Write the analysis JSON files
 
@@ -1049,7 +1080,7 @@ Determine the overall verdict and proceed to the **Actions** section.
 The file `ci-failure-data/analysis-summary.md` contains the full failure data:
 - The failed workflow run information
 - PR metadata (number, title, author, state, branch)
-- Failed jobs and their failed steps
+- Failed jobs and their failed and skipped steps
 - Job logs (error-focused extracts)
 - Job annotations
 - Test failures extracted from result artifacts (test name, job, error message, and stack trace when available)
@@ -1065,6 +1096,7 @@ Classify each failed job into one of these categories:
 
 The failure was caused by infrastructure issues outside the PR author's control. Indicators:
 - Network errors: `ECONNRESET`, `ECONNREFUSED`, `ENOTFOUND`, `Could not resolve host`, `Connection reset by peer`
+- Prerequisite/tool download failures: HTTP 5xx responses, such as `curl: (22) The requested URL returned error: 504`
 - SSL/TLS failures: `The SSL connection could not be established`
 - Timeout errors not caused by test code: `Operation timed out`, `A connection attempt failed`
 - Container registry rate limiting: `403 Forbidden` from `mcr.microsoft.com`, `The request is blocked`
@@ -1076,7 +1108,9 @@ The failure was caused by infrastructure issues outside the PR author's control.
 
 ### 2. Transient Test Failure (Flaky Test)
 
-A test failed, but the failure is NOT related to PR changes. Indicators:
+A test actually ran and failed, but the failure is NOT related to PR changes. Establish the failing test and its diagnostic from the current job log or test results first. Missing logs, an exit code, a matching job name, or unrelated PR files do not establish a test failure. In particular, HTTP/curl failures in prerequisite downloads are setup failures, not flaky tests.
+
+After establishing a real test failure, indicators of flakiness include:
 - The test failure message matches a known transient pattern from `eng/test-retry-patterns.json`
 - The failing test is in a code area NOT modified by the PR (check the PR changed files)
 - The failure shows intermittent/timing-related errors (race conditions, port conflicts, timeout in integration tests)

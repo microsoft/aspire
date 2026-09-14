@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { stripVTControlCharacters } = require('node:util');
 
 const redactedFieldLimits = {
     error: 1000,
@@ -139,6 +140,19 @@ function formatTestFailures(failures) {
     }).join('\n');
 
     return output ? `${output}\n` : '';
+}
+
+function formatJobLog({ stdout, stderr, exit_code, job_id }) {
+    if (typeof stdout !== 'string' || typeof stderr !== 'string' || !Number.isInteger(exit_code)) {
+        throw new TypeError('Job-log formatting requires captured stdout, stderr, and a numeric exit code.');
+    }
+
+    const output = [redactSensitiveData(stripVTControlCharacters(stdout))];
+    if (exit_code !== 0) {
+        output.push(`Failed to fetch complete logs for job ${job_id}: gh exited with code ${exit_code}.`);
+        output.push(redactSensitiveData(stripVTControlCharacters(stderr || 'No GitHub CLI error output was captured.')));
+    }
+    return `${output.filter(value => value.trim()).join('\n')}\n`;
 }
 
 function getCauseJobName(analysis, cause) {
@@ -326,6 +340,9 @@ function main(args) {
     const getCause = () => cause ??= readJson(causePath);
 
     switch (operation) {
+        case 'format-job-log':
+            process.stdout.write(formatJobLog(analysis));
+            break;
         case 'redact':
             process.stdout.write(JSON.stringify(redactJson(analysis)));
             break;
@@ -383,6 +400,7 @@ module.exports = {
     extractMochaFailures,
     extractTestFailures,
     formatTestFailures,
+    formatJobLog,
     getCauseJobName,
     getObservedAt,
     normalizeIssueTitle,
