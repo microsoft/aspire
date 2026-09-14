@@ -10,13 +10,6 @@ resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
   location: location
   properties: {
     configuration: {
-      secrets: [
-        {
-          name: 'external-secret'
-          identity: '/subscriptions/example/resourceGroups/example/providers/Microsoft.ManagedIdentity/userAssignedIdentities/example'
-          keyVaultUrl: 'https://example.vault.azure.net/secrets/example'
-        }
-      ]
       activeRevisionsMode: 'Single'
       ingress: {
         external: true
@@ -30,6 +23,12 @@ resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
         {
           image: 'myimage:latest'
           name: 'api'
+          env: [
+            {
+              name: 'SELF_URL'
+              value: 'prefix/https://api.${env_outputs_azure_container_apps_environment_default_domain}'
+            }
+          ]
         }
       ]
       scale: {

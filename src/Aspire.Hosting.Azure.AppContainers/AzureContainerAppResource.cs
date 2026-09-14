@@ -16,23 +16,6 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 public class AzureContainerAppResource : AzureProvisioningResource
 {
-    internal const string IngressFqdnOutputName = "AZURE_CONTAINER_APP_INGRESS_FQDN";
-
-    internal BicepOutputReference IngressFqdn => new(IngressFqdnOutputName, this);
-
-    internal BaseContainerAppContext? ContainerAppContext { get; set; }
-
-    internal AzureContainerAppResource(IResource targetResource)
-        : this(targetResource.Name + "-containerapp", static infra =>
-        {
-            var resource = (AzureContainerAppResource)infra.AspireResource;
-            var context = resource.ContainerAppContext ?? throw new InvalidOperationException(
-                $"The Azure Container App deployment target for '{resource.TargetResource.Name}' has not been prepared.");
-            context.BuildContainerApp(infra);
-        }, targetResource)
-    {
-    }
-
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppResource"/> class.
     /// </summary>
@@ -64,15 +47,12 @@ public class AzureContainerAppResource : AzureProvisioningResource
                 {
                     var containerAppEnv = (AzureContainerAppEnvironmentResource)deploymentTargetAnnotation.ComputeEnvironment!;
 
+                    var domainValue = await containerAppEnv.ContainerAppDomain.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
                     var portalLink = await ContainerAppUrls.GetPortalLinkAsync(containerAppEnv, targetResource.Name.ToLowerInvariant(), ctx.CancellationToken).ConfigureAwait(false);
 
                     if (targetResource.TryGetEndpoints(out var endpoints) && endpoints.Any(e => e.IsExternal))
                     {
-                        var host = containerAppEnv.IsExpress
-                            ? await IngressFqdn.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false)
-                                ?? throw new InvalidOperationException($"Missing ingress FQDN output for Azure Container App '{targetResource.Name}'.")
-                            : $"{targetResource.Name.ToLowerInvariant()}.{await containerAppEnv.ContainerAppDomain.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false)}";
-                        var endpoint = $"https://{host}";
+                        var endpoint = $"https://{targetResource.Name.ToLowerInvariant()}.{domainValue}";
                         var summaryValue = $"[{endpoint}]({endpoint}) ({portalLink})";
 
                         ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to {summaryValue}"));

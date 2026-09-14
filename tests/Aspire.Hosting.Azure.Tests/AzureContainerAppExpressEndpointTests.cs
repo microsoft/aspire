@@ -19,13 +19,13 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelper)
 {
-    private const string FqdnOutputName = "AZURE_CONTAINER_APP_INGRESS_FQDN";
+    private const string DomainOutputName = "AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN";
 
     [Fact]
-    public async Task PublicReferencesUseIngressFqdnAndPreserveSelfTargetPort()
+    public async Task PublicReferencesUseEnvironmentDomainAndPreserveSelfTargetPort()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddAzureContainerAppEnvironment("env").AsExpress();
+        var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var enabled = builder.AddParameter("enabled");
         var api = builder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpEndpoint(targetPort: 8080)
@@ -60,8 +60,12 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         var webTarget = GetTarget(web.Resource);
         var (manifest, bicep) = await GetManifestWithBicep(webTarget, skipPreparer: true);
         var (_, apiBicep) = await GetManifestWithBicep(apiTarget, skipPreparer: true);
-        var reference = Assert.Single(webTarget.Parameters.Values.OfType<BicepOutputReference>(), output => output.Name == FqdnOutputName);
-        Assert.Same(apiTarget, reference.Resource);
+
+        // The public hostname comes from the environment's default domain, so a consumer never
+        // depends on the producing app's own deployment outputs.
+        var domain = Assert.Single(webTarget.Parameters.Values.OfType<BicepOutputReference>(), output => output.Name == DomainOutputName);
+        Assert.Same(environment.Resource, domain.Resource);
+        Assert.DoesNotContain(webTarget.Parameters.Values.OfType<BicepOutputReference>(), output => output.Resource == apiTarget);
         Assert.False(endpoint.IsAllocated);
 
         await Verify(manifest.ToString(), "json")
@@ -70,7 +74,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task EndpointExpressionsCreatedBeforePreparationUseTheFinalTarget()
+    public async Task EndpointPropertyExpressionsResolveFromTheEnvironmentDomain()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
@@ -80,25 +84,25 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         var endpoint = api.GetEndpoint("http");
         var host = environment.Resource.GetHostAddressExpression(endpoint);
         var output = Assert.IsType<BicepOutputReference>(Assert.Single(host.ValueProviders));
-        Assert.Equal(FqdnOutputName, output.Name);
+        Assert.Equal(DomainOutputName, output.Name);
+        Assert.Same(environment.Resource, output.Resource);
         Assert.Null(api.Resource.GetDeploymentTargetAnnotation());
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
         var target = GetTarget(api.Resource);
-        Assert.Same(target, output.Resource);
         await ExecuteBeforeStartHooksAsync(app, default);
         Assert.Same(target, GetTarget(api.Resource));
         Assert.Single(api.Resource.Annotations.OfType<DeploymentTargetAnnotation>());
 
-        target.Outputs[FqdnOutputName] = "provider-assigned.example";
-        target.ProvisioningTaskCompletionSource?.TrySetResult();
+        environment.Resource.Outputs[DomainOutputName] = "salmonisland-e9e6a567.westus3.azurecontainerapps.io";
+        environment.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
         var expectedValues = new Dictionary<EndpointProperty, string>
         {
-            [EndpointProperty.Url] = "https://provider-assigned.example",
-            [EndpointProperty.Host] = "provider-assigned.example",
-            [EndpointProperty.IPV4Host] = "provider-assigned.example",
-            [EndpointProperty.HostAndPort] = "provider-assigned.example:443",
+            [EndpointProperty.Url] = "https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
+            [EndpointProperty.Host] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
+            [EndpointProperty.IPV4Host] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
+            [EndpointProperty.HostAndPort] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io:443",
             [EndpointProperty.Port] = "443",
             [EndpointProperty.TargetPort] = "8080",
             [EndpointProperty.Scheme] = "https",
@@ -190,7 +194,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CrossEnvironmentReferencesRequireNativeDeployment(bool expressConsumer)
+    public async Task CrossEnvironmentReferencesPublishUsingTheProducerDomain(bool expressConsumer)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
@@ -216,25 +220,19 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        var apiTarget = GetTarget(api.Resource);
         var webTarget = GetTarget(web.Resource);
         var (manifest, bicep) = await GetManifestWithBicep(webTarget, skipPreparer: true);
-        var reference = Assert.Single(webTarget.Parameters.Values.OfType<BicepOutputReference>(),
-            output => output.Name == FqdnOutputName);
-        Assert.Same(apiTarget, reference.Resource);
+
+        // The hostname resolves through the producing environment's default domain, which is a
+        // normal infrastructure module, so standalone publishing can bind it.
+        var domain = Assert.Single(webTarget.Parameters.Values.OfType<BicepOutputReference>(),
+            output => output.Name == DomainOutputName && output.Resource == producerEnvironment.Resource);
+        Assert.Same(producerEnvironment.Resource, domain.Resource);
 
         await app.RunAsync();
 
-        const string expectedError =
-            "Publishing output 'AZURE_CONTAINER_APP_INGRESS_FQDN' from standalone deployment target 'api-containerapp' is not supported. " +
-            "The generated infrastructure template cannot bind outputs between separately deployed applications. " +
-            "Use native 'aspire deploy' to resolve these dependencies, or remove the application-output reference before publishing.";
-        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
-        Assert.Contains(reporter.CompletedTasks, task =>
-            task.TaskStatusText == "Writing Azure Bicep templates" &&
-            task.CompletionState == CompletionState.CompletedWithError &&
-            task.CompletionMessage == $"Failed to write Azure Bicep templates: {expectedError}");
-        Assert.False(File.Exists(Path.Combine(workspace.Path, "main.bicep")));
+        Assert.NotEqual(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.True(File.Exists(Path.Combine(workspace.Path, "main.bicep")));
         await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
     }
 
@@ -261,7 +259,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         var target = GetTarget(web.Resource);
         var (manifest, bicep) = await GetManifestWithBicep(target, skipPreparer: true);
         var domain = Assert.Single(target.Parameters.Values.OfType<BicepOutputReference>(),
-            output => output.Name == "AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN");
+            output => output.Name == DomainOutputName && output.Resource == standard.Resource);
         Assert.Same(standard.Resource, domain.Resource);
         await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
     }
@@ -346,7 +344,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SelfPublicUrlDependenciesHaveExpressGuidance(bool environmentExpression)
+    public async Task SelfPublicUrlReferencesUseTheEnvironmentDomain(bool environmentExpression)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
@@ -361,88 +359,45 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
-        var exception = Assert.Throws<InvalidOperationException>(GetTarget(api.Resource).GetBicepTemplateString);
+        var target = GetTarget(api.Resource);
+        var (manifest, bicep) = await GetManifestWithBicep(target, skipPreparer: true);
 
-        Assert.Equal(
-            "Resource 'api' in Azure Container Apps Express environment 'env' cannot use its own public endpoint URL or hostname during deployment. " +
-            "Express assigns the ingress FQDN after the app is deployed. Remove the self-reference, use TargetPort for the application's listening port, " +
-            "or use a standard Azure Container Apps environment. Public endpoint references must form an acyclic deployment dependency graph.",
-            exception.Message);
+        // An app can reference its own public URL because the hostname is known before deployment.
+        var domain = Assert.Single(target.Parameters.Values.OfType<BicepOutputReference>(), output => output.Name == DomainOutputName);
+        Assert.Same(environment.Resource, domain.Resource);
+
+        await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task OutputDependenciesUsePipelineCycleValidationBeforeProvisioning(bool circular)
+    [Fact]
+    public async Task MutualPublicUrlReferencesAreSupported()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Deploy);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var first = builder.AddContainer("first", "myimage").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
         var second = builder.AddContainer("second", "myimage").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
         first.WithReference(second.GetEndpoint("http"));
-        if (circular)
-        {
-            second.WithReference(first.GetEndpoint("http"));
-        }
+        second.WithReference(first.GetEndpoint("http"));
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
-        var targets = new[] { GetTarget(first.Resource), GetTarget(second.Resource) };
-        var provisioned = 0;
-        var steps = targets.Select(target => new PipelineStep
+        var firstTarget = GetTarget(first.Resource);
+        var secondTarget = GetTarget(second.Resource);
+
+        // Hostnames are derived from the environment domain, so mutual references introduce no
+        // deployment-order dependency between the two apps.
+        foreach (var target in new[] { firstTarget, secondTarget })
         {
-            Name = $"provision-{target.Name}",
-            Resource = target,
-            Tags = [WellKnownPipelineTags.ProvisionInfrastructure],
-            RequiredBySteps = [WellKnownPipelineSteps.Deploy],
-            Action = _ =>
-            {
-                Interlocked.Increment(ref provisioned);
-                return Task.CompletedTask;
-            }
-        }).ToList();
-        var configuration = new PipelineConfigurationContext
-        {
-            Model = app.Services.GetRequiredService<DistributedApplicationModel>(),
-            Services = app.Services,
-            Steps = steps
-        };
-        foreach (var target in targets)
-        {
-            foreach (var annotation in target.Annotations.OfType<PipelineConfigurationAnnotation>())
-            {
-                await annotation.Callback(configuration);
-            }
+            Assert.DoesNotContain(target.Parameters.Values.OfType<BicepOutputReference>(),
+                output => output.Resource == firstTarget || output.Resource == secondTarget);
         }
 
-        Assert.Equal(["provision-second-containerapp"], steps[0].DependsOnSteps);
-        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
-        pipeline.AddStep(AzureEnvironmentResource.PrepareResourcesStepName, static _ => Task.CompletedTask);
-        foreach (var step in steps)
-        {
-            pipeline.AddStep(step);
-        }
-        // Execute the real dependency graph with inert provisioning actions and no Azure resources
-        // in the execution model. Even a regression in cycle validation cannot call a provider.
-        var context = new PipelineContext(new DistributedApplicationModel([]), builder.ExecutionContext,
-            app.Services, NullLogger.Instance, TestContext.Current.CancellationToken);
-        if (circular)
-        {
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pipeline.ExecuteAsync(context));
-            Assert.Contains("Circular dependency detected in pipeline steps:", exception.Message);
-            Assert.Contains("provision-first-containerapp", exception.Message);
-            Assert.Contains("provision-second-containerapp", exception.Message);
-            Assert.Equal(0, provisioned);
-        }
-        else
-        {
-            await pipeline.ExecuteAsync(context);
-            Assert.Equal(2, provisioned);
-        }
+        Assert.Empty(firstTarget.GetAzureReferences().OfType<AzureContainerAppResource>());
+        Assert.Empty(secondTarget.GetAzureReferences().OfType<AzureContainerAppResource>());
     }
 
     [Fact]
-    public async Task DeploymentSummaryUsesActualFqdnWithoutEnvironmentDomainOrDashboard()
+    public async Task DeploymentSummaryUsesEnvironmentDomainWithoutDashboard()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
@@ -450,7 +405,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
         var target = GetTarget(api.Resource);
-        target.Outputs[FqdnOutputName] = "provider-assigned.example";
+        environment.Resource.Outputs[DomainOutputName] = "salmonisland-e9e6a567.westus3.azurecontainerapps.io";
         environment.Resource.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_ID"] =
             "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/example-rg/providers/Microsoft.App/managedEnvironments/env";
         var context = new PipelineContext(

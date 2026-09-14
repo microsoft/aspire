@@ -28,10 +28,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         // Write a fake parameter for the container app environment
         // so azd knows the Dashboard URL - see https://github.com/microsoft/aspire/issues/8449.
         // This is temporary until a real fix can be made in azd.
-        if (!_containerAppEnvironmentContext.Environment.IsExpress)
-        {
-            AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppDomain);
-        }
+        AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppDomain);
 
         var containerAppIdParam = AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppEnvironmentId);
 
@@ -103,14 +100,6 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
             {
                 a.Configure(infra, containerAppResource);
             }
-        }
-
-        if (_containerAppEnvironmentContext.Environment.IsExpress)
-        {
-            infra.Add(new ProvisioningOutput(AzureContainerAppResource.IngressFqdnOutputName, typeof(string))
-            {
-                Value = containerAppResource.Configuration.Ingress.Fqdn
-            });
         }
     }
 

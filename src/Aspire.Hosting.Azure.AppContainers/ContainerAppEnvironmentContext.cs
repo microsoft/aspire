@@ -87,12 +87,10 @@ internal sealed class ContainerAppEnvironmentContext(
             await context.ProcessResourceAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        var provisioningResource = Environment.IsExpress
-            ? Environment.GetOrCreateExpressContainerAppResource(resource)
-            : new AzureContainerAppResource(resource.Name + "-containerapp", context.BuildContainerApp, resource);
-
-        provisioningResource.ContainerAppContext = context;
-        provisioningResource.ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions;
+        var provisioningResource = new AzureContainerAppResource(resource.Name + "-containerapp", context.BuildContainerApp, resource)
+        {
+            ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions
+        };
 
         // Add references to any prerequisite resources to ensure they are provisioned first
         if (resource.TryGetAnnotationsOfType<DeploymentPrerequisitesAnnotation>(out var prereqs))

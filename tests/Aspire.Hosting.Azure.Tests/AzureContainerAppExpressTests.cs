@@ -136,6 +136,20 @@ public class AzureContainerAppExpressTests
     }
 
     [Fact]
+    public async Task AsExpressSupportsResourcesWithoutEndpoints()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env").AsExpress();
+        var worker = builder.AddContainer("worker", "myimage");
+
+        using var application = builder.Build();
+        await ExecuteBeforeStartHooksAsync(application, default);
+        var target = Assert.IsType<AzureContainerAppResource>(worker.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+
+        await Verify(target.GetBicepTemplateString(), "bicep");
+    }
+
+    [Fact]
     public async Task AsExpressPreservesEnvironmentCustomization()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

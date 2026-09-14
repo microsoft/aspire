@@ -5,7 +5,7 @@ param consumer_outputs_azure_container_apps_environment_default_domain string
 
 param consumer_outputs_azure_container_apps_environment_id string
 
-param api_containerapp_outputs_azure_container_app_ingress_fqdn string
+param producer_outputs_azure_container_apps_environment_default_domain string
 
 resource web 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'web'
@@ -28,19 +28,19 @@ resource web 'Microsoft.App/containerApps@2025-07-01' = {
           env: [
             {
               name: 'API_HTTP'
-              value: 'https://${api_containerapp_outputs_azure_container_app_ingress_fqdn}'
+              value: 'https://api.${producer_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'services__api__http__0'
-              value: 'https://${api_containerapp_outputs_azure_container_app_ingress_fqdn}'
+              value: 'https://api.${producer_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'HOST'
-              value: api_containerapp_outputs_azure_container_app_ingress_fqdn
+              value: 'api.${producer_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'EARLY_HOST'
-              value: api_containerapp_outputs_azure_container_app_ingress_fqdn
+              value: 'api.${producer_outputs_azure_container_apps_environment_default_domain}'
             }
           ]
         }

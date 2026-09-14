@@ -5,7 +5,6 @@
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
-using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
@@ -260,11 +259,6 @@ public class AzureContainerAppEnvironmentResource :
 
     internal bool IsExpress { get; set; }
 
-    private readonly ConcurrentDictionary<IResource, AzureContainerAppResource> _expressContainerApps = new(new ResourceNameComparer());
-
-    internal AzureContainerAppResource GetOrCreateExpressContainerAppResource(IResource resource)
-        => _expressContainerApps.GetOrAdd(resource, static r => new AzureContainerAppResource(r));
-
     internal void ValidatePublicEndpointReference(EndpointReference endpointReference)
     {
         if (!endpointReference.EndpointAnnotation.IsExternal)
@@ -274,16 +268,6 @@ public class AzureContainerAppEnvironmentResource :
                 $"'{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}'. " +
                 "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.");
         }
-    }
-
-    internal BicepOutputReference GetIngressFqdnReference(EndpointReference endpointReference)
-    {
-        ValidatePublicEndpointReference(endpointReference);
-
-        // Endpoint expressions can be created before the prepare steps have materialized deployment
-        // annotations (including by other compute environments). Retain the same target object and
-        // bind its provisioning context during preparation, rather than resolving a local run URL.
-        return GetOrCreateExpressContainerAppResource(endpointReference.Resource).IngressFqdn;
     }
 
     /// <summary>
@@ -385,7 +369,10 @@ public class AzureContainerAppEnvironmentResource :
 
         if (IsExpress)
         {
-            return ReferenceExpression.Create($"{GetIngressFqdnReference(endpointReference)}");
+            // Express apps are reachable only over public ingress, so there is no ".internal"
+            // hostname to fall back to. Reject the reference instead of emitting a private
+            // hostname that would not resolve.
+            ValidatePublicEndpointReference(endpointReference);
         }
 
         var resource = endpointReference.Resource;
