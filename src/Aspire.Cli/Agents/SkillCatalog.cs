@@ -15,19 +15,15 @@ internal sealed class SkillCatalog : IAgentAssetCatalog
     private readonly IAgentAssetSource _assetSource;
 
     public static readonly AgentAssetDefinition PlaywrightCli = new(
-        AgentAssetKind.Skill,
         "playwright-cli",
         AgentCommandStrings.SkillDescription_PlaywrightCli,
-        AgentAssetSourceKind.ExternalInstaller,
         files: [],
         installExcludedRelativePaths: [],
         isDefault: false);
 
     public static readonly AgentAssetDefinition DotnetInspect = new(
-        AgentAssetKind.Skill,
         CommonAgentApplicators.DotnetInspectSkillName,
         AgentCommandStrings.SkillDescription_DotnetInspect,
-        AgentAssetSourceKind.Static,
         files: [new AgentAssetFile("SKILL.md", CommonAgentApplicators.DotnetInspectSkillFileContent)],
         installExcludedRelativePaths: [],
         isDefault: false,
@@ -92,8 +88,6 @@ internal sealed class SkillCatalog : IAgentAssetCatalog
     public IReadOnlyList<AgentAssetLocation> Locations => KnownLocations;
 
     public AgentAssetFileInstaller FileInstaller => AgentAssetFileInstaller.Additive;
-
-    public bool IsCompatibleWith(IReadOnlyCollection<AgentClientKind> detectedClients) => true;
 
     public async Task<AgentAssetCatalogResult> ResolveAsync(string? requestedAssets, CancellationToken cancellationToken)
     {

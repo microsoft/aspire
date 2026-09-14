@@ -14,11 +14,6 @@ internal interface IAgentAssetCatalog
 
     AgentAssetFileInstaller FileInstaller { get; }
 
-    /// <summary>
-    /// Determines whether this catalog supports the detected agent clients.
-    /// </summary>
-    bool IsCompatibleWith(IReadOnlyCollection<AgentClientKind> detectedClients);
-
     Task<AgentAssetCatalogResult> ResolveAsync(string? requestedAssets, CancellationToken cancellationToken);
 
     /// <summary>

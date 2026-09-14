@@ -50,9 +50,6 @@ internal sealed class ExtensionCatalog : IAgentAssetCatalog
 
     public AgentAssetFileInstaller FileInstaller => AgentAssetFileInstaller.ManagedDirectory;
 
-    public bool IsCompatibleWith(IReadOnlyCollection<AgentClientKind> detectedClients)
-        => detectedClients.Contains(AgentClientKind.CopilotApp);
-
     public async Task<AgentAssetCatalogResult> ResolveAsync(string? requestedAssets, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

@@ -142,7 +142,6 @@ public class AspireSkillsInstallerTests
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             var extension = Assert.Single(result.Bundle!.Assets);
             Assert.Equal("aspire-doctor", extension.Name);
-            Assert.Equal(AgentAssetSourceKind.Bundled, extension.SourceKind);
             var extensionFiles = extension.Files;
             Assert.Collection(
                 extensionFiles,

@@ -30,8 +30,6 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         Assert.Equal(AgentAssetKind.Skill, skills.AssetKind);
         Assert.Equal(SkillCatalog.KnownLocations, skills.Locations);
         Assert.Same(AgentAssetFileInstaller.Additive, skills.FileInstaller);
-        Assert.True(skills.IsCompatibleWith([]));
-        Assert.True(skills.IsCompatibleWith(Enum.GetValues<AgentClientKind>()));
 
         var extensions = provider.GetCatalog(AgentAssetKind.Extension);
         Assert.Same(extensions, provider.GetCatalog(AgentAssetKind.Extension));
@@ -39,9 +37,6 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         Assert.Equal(AgentAssetKind.Extension, extensions.AssetKind);
         Assert.Equal(ExtensionCatalog.KnownLocations, extensions.Locations);
         Assert.Same(AgentAssetFileInstaller.ManagedDirectory, extensions.FileInstaller);
-        Assert.False(extensions.IsCompatibleWith([]));
-        Assert.False(extensions.IsCompatibleWith([AgentClientKind.VsCode, AgentClientKind.CopilotCli]));
-        Assert.True(extensions.IsCompatibleWith([AgentClientKind.CopilotApp]));
         Assert.Empty(source.RequestedKinds);
     }
 
@@ -70,12 +65,14 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         Assert.Equal("Multiple agent asset catalogs are registered for asset kind 'Skill'.", exception.Message);
     }
 
-    [Fact]
-    public async Task Registration_RejectsUnknownKindsWithoutAcquisition()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(int.MaxValue)]
+    public async Task Registration_RejectsUnknownKindsWithoutAcquisition(int kind)
     {
         var source = CreateUnavailableSource();
         var provider = CreateProvider(source);
-        var unknownKind = (AgentAssetKind)int.MaxValue;
+        var unknownKind = (AgentAssetKind)kind;
         Assert.Throws<InvalidOperationException>(() => provider.GetCatalog(unknownKind));
         await Assert.ThrowsAsync<InvalidOperationException>(() => provider.ResolveAsync(
             unknownKind, requestedAssets: null, detectedLanguage: null, TestContext.Current.CancellationToken));
@@ -219,10 +216,10 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         {
             Skills = AgentAssetSourceResult.Available(
             [
-                CreateAsset(AgentAssetKind.Skill, "zeta", []),
-                CreateAsset(AgentAssetKind.Skill, "PLAYWRIGHT-CLI", []),
-                CreateAsset(AgentAssetKind.Skill, "alpha", [KnownLanguageId.CSharp]),
-                CreateAsset(AgentAssetKind.Skill, "DOTNET-INSPECT", [])
+                CreateAsset("zeta", []),
+                CreateAsset("PLAYWRIGHT-CLI", []),
+                CreateAsset("alpha", [KnownLanguageId.CSharp]),
+                CreateAsset("DOTNET-INSPECT", [])
             ])
         };
         var provider = CreateProvider(source);
@@ -313,10 +310,10 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task Resolution_UsesEachRequestsKindLanguageAndSelection()
     {
-        var skill = CreateAsset(AgentAssetKind.Skill, "bundled-skill", []);
-        var alpha = CreateAsset(AgentAssetKind.Extension, "alpha", []);
-        var zeta = CreateAsset(AgentAssetKind.Extension, "zeta", []);
-        var restricted = CreateAsset(AgentAssetKind.Extension, "restricted", [KnownLanguageId.CSharp]);
+        var skill = CreateAsset("bundled-skill", []);
+        var alpha = CreateAsset("alpha", []);
+        var zeta = CreateAsset("zeta", []);
+        var restricted = CreateAsset("restricted", [KnownLanguageId.CSharp]);
         var source = new FakeAgentAssetSource
         {
             Skills = AgentAssetSourceResult.Available([skill]),
@@ -338,19 +335,6 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task Resolution_RejectsAssetsOfAnotherKind()
-    {
-        var source = new FakeAgentAssetSource
-        {
-            Extensions = AgentAssetSourceResult.Available([CreateAsset(AgentAssetKind.Skill, "wrong-kind", [])])
-        };
-        var provider = CreateProvider(source);
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.ResolveAsync(
-            AgentAssetKind.Extension, "all", detectedLanguage: null, TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
     public async Task Resolution_CancellationDoesNotStartAcquisition()
     {
         var source = CreateUnavailableSource();
@@ -366,10 +350,10 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
     [Fact]
     public void SourceResult_CopiesResolvedAssets()
     {
-        var asset = CreateAsset(AgentAssetKind.Skill, "original", []);
+        var asset = CreateAsset("original", []);
         AgentAssetDefinition[] assets = [asset];
         var result = AgentAssetSourceResult.Available(assets);
-        assets[0] = CreateAsset(AgentAssetKind.Skill, "replacement", []);
+        assets[0] = CreateAsset("replacement", []);
 
         Assert.True(result.IsAvailable);
         Assert.Null(result.Message);
@@ -394,9 +378,9 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
             Extensions = AgentAssetSourceResult.Unavailable(FailureMessage)
         };
 
-    private static AgentAssetDefinition CreateAsset(AgentAssetKind kind, string name, IReadOnlyList<string> languages)
+    private static AgentAssetDefinition CreateAsset(string name, IReadOnlyList<string> languages)
         => new(
-            kind, name, $"{name} description", AgentAssetSourceKind.Static,
+            name, $"{name} description",
             [new AgentAssetFile("content.txt", "Asset content")],
             installExcludedRelativePaths: [], isDefault: true, applicableLanguages: languages);
 }

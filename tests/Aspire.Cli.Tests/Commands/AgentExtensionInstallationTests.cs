@@ -35,7 +35,11 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
                             Assert.Contains(location, expectedKind is AgentAssetKind.Skill ? SkillCatalog.KnownLocations : ExtensionCatalog.KnownLocations);
                             return location.IsDefault;
                         case AgentAssetDefinition asset:
-                            Assert.Equal(expectedKind, asset.AssetKind);
+                            if (asset.HasInstallableFiles)
+                            {
+                                var requiredFile = expectedKind is AgentAssetKind.Skill ? "SKILL.md" : "extension.mjs";
+                                Assert.Contains(asset.Files, file => file.RelativePath == requiredFile);
+                            }
                             return asset.IsDefault;
                         default:
                             throw new InvalidOperationException($"Unexpected choice: {choice}");
@@ -47,7 +51,7 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedClients = [AgentClientKind.CopilotApp] };
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedClients = [AgentClient.CopilotApp] };
         });
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
@@ -75,6 +79,7 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
         var home = workspace.CreateDirectory("home");
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector();
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: home);
         });
         using var provider = services.BuildServiceProvider();
@@ -97,12 +102,13 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(nameof(AgentClientKind.CopilotApp), true)]
-    [InlineData(nameof(AgentClientKind.CopilotCli), false)]
-    [InlineData(nameof(AgentClientKind.VsCode), false)]
-    [InlineData(nameof(AgentClientKind.ClaudeCode), false)]
-    [InlineData(nameof(AgentClientKind.OpenCode), false)]
-    public async Task DefaultExtensions_AreOnlyOfferedToSupportedClient(string clientName, bool installed)
+    [InlineData(null, false)]
+    [InlineData(nameof(AgentClient.CopilotApp), true)]
+    [InlineData(nameof(AgentClient.CopilotCli), false)]
+    [InlineData(nameof(AgentClient.VsCode), false)]
+    [InlineData(nameof(AgentClient.ClaudeCode), false)]
+    [InlineData(nameof(AgentClient.OpenCode), false)]
+    public async Task DefaultExtensions_AreOnlyOfferedToSupportedClient(string? clientName, bool installed)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
@@ -111,7 +117,7 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: home);
             options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector
             {
-                DetectedClients = [Enum.Parse<AgentClientKind>(clientName)]
+                DetectedClients = clientName is null ? [] : [AgentClient.All.Single(client => client.Name == clientName)]
             };
         });
         using var provider = services.BuildServiceProvider();
@@ -244,7 +250,7 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedClients = [AgentClientKind.CopilotApp] };
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedClients = [AgentClient.CopilotApp] };
         });
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();

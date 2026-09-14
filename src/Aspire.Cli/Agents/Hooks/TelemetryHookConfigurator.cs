@@ -54,30 +54,30 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
     /// <inheritdoc />
     public async Task<TelemetryHookConfigurationResult> ConfigureAsync(
-        IReadOnlyCollection<AgentClientKind> detectedClients,
+        IReadOnlyCollection<AgentClient> detectedClients,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(detectedClients);
 
-        var configured = new List<AgentClientKind>();
+        var configured = new List<AgentClient>();
         var skipped = new List<TelemetryHookSkip>();
 
         // VS Code and OpenCode hook schemas are not yet verified, so they are intentionally not
         // configured here even though they are detected/marked. The Copilot App and CLI share the
         // same ~/.copilot hook location, so prefer the App identity when both are detected.
-        var supported = new List<AgentClientKind>();
-        if (detectedClients.Contains(AgentClientKind.CopilotApp))
+        var supported = new List<AgentClient>();
+        if (detectedClients.Contains(AgentClient.CopilotApp))
         {
-            supported.Add(AgentClientKind.CopilotApp);
+            supported.Add(AgentClient.CopilotApp);
         }
-        else if (detectedClients.Contains(AgentClientKind.CopilotCli))
+        else if (detectedClients.Contains(AgentClient.CopilotCli))
         {
-            supported.Add(AgentClientKind.CopilotCli);
+            supported.Add(AgentClient.CopilotCli);
         }
 
-        if (detectedClients.Contains(AgentClientKind.ClaudeCode))
+        if (detectedClients.Contains(AgentClient.ClaudeCode))
         {
-            supported.Add(AgentClientKind.ClaudeCode);
+            supported.Add(AgentClient.ClaudeCode);
         }
 
         if (supported.Count == 0)
@@ -90,31 +90,28 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
         foreach (var client in supported)
         {
-            switch (client)
+            if (client == AgentClient.CopilotApp || client == AgentClient.CopilotCli)
             {
-                case AgentClientKind.CopilotApp:
-                case AgentClientKind.CopilotCli:
-                    if (await TryConfigureCopilotAsync(scripts, cancellationToken))
-                    {
-                        configured.Add(client);
-                    }
-                    else
-                    {
-                        skipped.Add(new TelemetryHookSkip(client, TelemetryHookSkipReason.WriteFailed));
-                    }
-                    break;
-
-                case AgentClientKind.ClaudeCode:
-                    var claudeSkipReason = await ConfigureClaudeAsync(scripts, cancellationToken);
-                    if (claudeSkipReason is { } reason)
-                    {
-                        skipped.Add(new TelemetryHookSkip(client, reason));
-                    }
-                    else
-                    {
-                        configured.Add(client);
-                    }
-                    break;
+                if (await TryConfigureCopilotAsync(scripts, cancellationToken))
+                {
+                    configured.Add(client);
+                }
+                else
+                {
+                    skipped.Add(new TelemetryHookSkip(client, TelemetryHookSkipReason.WriteFailed));
+                }
+            }
+            else if (client == AgentClient.ClaudeCode)
+            {
+                var claudeSkipReason = await ConfigureClaudeAsync(scripts, cancellationToken);
+                if (claudeSkipReason is { } reason)
+                {
+                    skipped.Add(new TelemetryHookSkip(client, reason));
+                }
+                else
+                {
+                    configured.Add(client);
+                }
             }
         }
 

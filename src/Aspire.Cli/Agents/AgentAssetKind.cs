@@ -4,17 +4,23 @@
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Identifies an agent asset kind.
+/// Identifies agent asset kinds.
 /// </summary>
+[Flags]
 internal enum AgentAssetKind
 {
     /// <summary>
     /// Agent skills.
     /// </summary>
-    Skill,
+    Skill = 1,
 
     /// <summary>
     /// Agent extensions.
     /// </summary>
-    Extension,
+    Extension = 2,
+
+    /// <summary>
+    /// All supported agent asset kinds.
+    /// </summary>
+    All = Skill | Extension,
 }

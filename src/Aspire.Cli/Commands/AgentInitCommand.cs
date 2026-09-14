@@ -400,7 +400,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (result.ConfiguredClients.Count > 0)
         {
-            var clientNames = string.Join(", ", result.ConfiguredClients.Select(GetClientDisplayName));
+            var clientNames = string.Join(", ", result.ConfiguredClients.Select(static client => client.DisplayName));
             InteractionService.DisplayMessage(
                 KnownEmojis.BarChart,
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, clientNames));
@@ -408,7 +408,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         foreach (var skip in result.Skipped)
         {
-            var clientName = GetClientDisplayName(skip.Client);
+            var clientName = skip.Client.DisplayName;
             var message = skip.Reason switch
             {
                 TelemetryHookSkipReason.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, clientName),
@@ -421,17 +421,6 @@ internal sealed class AgentInitCommand : BaseCommand
             InteractionService.DisplaySubtleMessage(message);
         }
     }
-
-    private static string GetClientDisplayName(AgentClientKind client)
-        => client switch
-        {
-            AgentClientKind.CopilotCli => "GitHub Copilot CLI",
-            AgentClientKind.CopilotApp => "GitHub Copilot App",
-            AgentClientKind.ClaudeCode => "Claude Code",
-            AgentClientKind.VsCode => "VS Code",
-            AgentClientKind.OpenCode => "OpenCode",
-            _ => client.ToString(),
-        };
 
     private async Task<AgentAssetSelection> SelectAssetsAsync(
         AgentAssetKind assetKind,
@@ -644,7 +633,7 @@ internal sealed class AgentInitCommand : BaseCommand
         // Explicit options allow provisioning a workspace for another machine without
         // requiring a compatible client locally.
         var catalog = _assetCatalogProvider.GetCatalog(AgentAssetKind.Extension);
-        if (!catalog.IsCompatibleWith(context.DetectedClients))
+        if (!context.DetectedClients.Any(client => client.SupportedAssetKinds.HasFlag(catalog.AssetKind)))
         {
             if (!locationsProvided && !extensionsProvided)
             {

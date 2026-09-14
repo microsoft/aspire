@@ -13,11 +13,6 @@ internal sealed class AspireSkillsBundle
         AgentAssetKind assetKind,
         IReadOnlyList<AgentAssetDefinition> assets)
     {
-        if (assets.Any(asset => asset.AssetKind != assetKind))
-        {
-            throw new ArgumentException("All bundle assets must have the bundle's asset kind.", nameof(assets));
-        }
-
         Version = version;
         AssetKind = assetKind;
         Assets = [.. assets];

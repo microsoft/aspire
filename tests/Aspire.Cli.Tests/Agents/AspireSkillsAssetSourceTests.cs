@@ -62,7 +62,8 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var kind = extensions ? AgentAssetKind.Extension : AgentAssetKind.Skill;
-        var asset = AgentAssetDefinition.CreateBundled(kind, "test-asset", "Test asset", [new AgentAssetFile("payload.txt", "Payload")]);
+        var asset = new AgentAssetDefinition(
+            "test-asset", "Test asset", [new AgentAssetFile("payload.txt", "Payload")], installExcludedRelativePaths: [], isDefault: true);
         var bundle = new AspireSkillsBundle(AspireSkillsInstaller.Version, kind, [asset]);
         var (source, installer) = CreateSource(workspace.CreateExecutionContext(), AspireSkillsInstallResult.Installed(bundle));
 
@@ -132,7 +133,8 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var bundle = new AspireSkillsBundle(AspireSkillsInstaller.Version, AgentAssetKind.Skill, empty
             ? []
-            : [AgentAssetDefinition.CreateBundled(AgentAssetKind.Skill, "test-skill", "Test skill", [new AgentAssetFile("SKILL.md", "Content")])]);
+            : [new AgentAssetDefinition(
+                "test-skill", "Test skill", [new AgentAssetFile("SKILL.md", "Content")], installExcludedRelativePaths: [], isDefault: true)]);
         var (source, _) = CreateSource(workspace.CreateExecutionContext(), AspireSkillsInstallResult.Installed(bundle));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => source.GetAssetsAsync(
@@ -141,14 +143,16 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
         Assert.Equal("Aspire bundle acquisition returned a bundle of another kind for 'Extension'.", exception.Message);
     }
 
-    [Fact]
-    public async Task Resolution_RejectsUnknownKindWithoutAcquisition()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(int.MaxValue)]
+    public async Task Resolution_RejectsUnknownKindWithoutAcquisition(int kind)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (source, installer) = CreateSource(workspace.CreateExecutionContext(), AspireSkillsInstallResult.Unavailable);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => source.GetAssetsAsync(
-            (AgentAssetKind)int.MaxValue, TestContext.Current.CancellationToken));
+            (AgentAssetKind)kind, TestContext.Current.CancellationToken));
 
         Assert.Empty(installer.RequestedProviders);
     }

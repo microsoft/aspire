@@ -106,8 +106,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         {
             Skills = AgentAssetSourceResult.Available(
             [
-                AgentAssetDefinition.CreateBundled(AgentAssetKind.Skill, "aspire", "Aspire", [new AgentAssetFile("SKILL.md", aspireContent)]),
-                AgentAssetDefinition.CreateBundled(AgentAssetKind.Skill, "aspire-deployment", "Deployment", [new AgentAssetFile("SKILL.md", deploymentContent)])
+                new AgentAssetDefinition("aspire", "Aspire", [new AgentAssetFile("SKILL.md", aspireContent)], installExcludedRelativePaths: [], isDefault: true),
+                new AgentAssetDefinition("aspire-deployment", "Deployment", [new AgentAssetFile("SKILL.md", deploymentContent)], installExcludedRelativePaths: [], isDefault: true)
             ])
         };
         var existingWorkspaceSkill = workspace.WorkspaceRoot.CreateSubdirectory(Path.Combine(".agents", "skills", "aspire"));
@@ -967,14 +967,14 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(nameof(AgentClientKind.CopilotCli), "GitHub Copilot CLI")]
-    [InlineData(nameof(AgentClientKind.CopilotApp), "GitHub Copilot App")]
+    [InlineData(nameof(AgentClient.CopilotCli), "GitHub Copilot CLI")]
+    [InlineData(nameof(AgentClient.CopilotApp), "GitHub Copilot App")]
     public async Task AgentInitCommand_DefaultOn_InstallsTelemetryHook_ForDetectedClient(string clientKind, string displayName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
-        var client = Enum.Parse<AgentClientKind>(clientKind);
+        var client = AgentClient.All.Single(client => client.Name == clientKind);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
@@ -1011,7 +1011,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-            options.AgentEnvironmentDetectorFactory = _ => new FakeDetectingDetector(AgentClientKind.CopilotCli);
+            options.AgentEnvironmentDetectorFactory = _ => new FakeDetectingDetector(AgentClient.CopilotCli);
             options.InteractionServiceFactory = _ => interactionService;
             options.TelemetryHookConfiguratorFactory = _ => new ThrowingTelemetryHookConfigurator(failureMessage);
         });
@@ -1037,7 +1037,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     /// A detector that marks a single client as detected without contributing applicators, so the
     /// telemetry hook wiring in <c>agent init</c> can be exercised without real client installations.
     /// </summary>
-    private sealed class FakeDetectingDetector(AgentClientKind client) : IAgentEnvironmentDetector
+    private sealed class FakeDetectingDetector(AgentClient client) : IAgentEnvironmentDetector
     {
         public Task<AgentEnvironmentApplicator[]> DetectAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
         {
@@ -1054,7 +1054,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     private sealed class ThrowingTelemetryHookConfigurator(string message) : ITelemetryHookConfigurator
     {
         public Task<TelemetryHookConfigurationResult> ConfigureAsync(
-            IReadOnlyCollection<AgentClientKind> detectedClients,
+            IReadOnlyCollection<AgentClient> detectedClients,
             CancellationToken cancellationToken)
             => throw new InvalidOperationException(message);
     }

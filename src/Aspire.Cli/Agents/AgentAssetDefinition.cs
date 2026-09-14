@@ -9,14 +9,12 @@ namespace Aspire.Cli.Agents;
 /// <summary>
 /// Represents an agent skill or extension and its installable files.
 /// </summary>
-[DebuggerDisplay("AssetKind = {AssetKind}, Name = {Name}, IsDefault = {IsDefault}")]
+[DebuggerDisplay("Name = {Name}, IsDefault = {IsDefault}")]
 internal sealed class AgentAssetDefinition
 {
     internal AgentAssetDefinition(
-        AgentAssetKind assetKind,
         string name,
         string description,
-        AgentAssetSourceKind sourceKind,
         IReadOnlyList<AgentAssetFile> files,
         IReadOnlyList<string> installExcludedRelativePaths,
         bool isDefault,
@@ -25,48 +23,24 @@ internal sealed class AgentAssetDefinition
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
 
-        AssetKind = assetKind;
         Name = name;
         Description = description;
-        SourceKind = sourceKind;
-        InstallExcludedRelativePaths = [.. installExcludedRelativePaths];
+        var excludedPaths = installExcludedRelativePaths.ToArray();
         Files = files
-            .Where(file => ShouldInstallFile(file.RelativePath))
+            .Where(file => !excludedPaths.Any(excludedPath =>
+                string.Equals(file.RelativePath, excludedPath, StringComparison.Ordinal) ||
+                (file.RelativePath.StartsWith(excludedPath, StringComparison.Ordinal) &&
+                 file.RelativePath.Length > excludedPath.Length &&
+                 file.RelativePath[excludedPath.Length] == Path.DirectorySeparatorChar)))
             .OrderBy(static file => file.RelativePath, StringComparer.Ordinal)
             .ToArray();
         IsDefault = isDefault;
         ApplicableLanguages = applicableLanguages is null ? [] : [.. applicableLanguages];
     }
 
-    /// <summary>
-    /// Creates a bundle-sourced asset, selected by default in all installation flows.
-    /// </summary>
-    internal static AgentAssetDefinition CreateBundled(
-        AgentAssetKind assetKind,
-        string name,
-        string description,
-        IReadOnlyList<AgentAssetFile> files,
-        IReadOnlyList<string>? installExcludedRelativePaths = null,
-        IReadOnlyList<string>? applicableLanguages = null)
-    {
-        return new(
-            assetKind,
-            name,
-            description,
-            AgentAssetSourceKind.Bundled,
-            files,
-            installExcludedRelativePaths: installExcludedRelativePaths ?? [],
-            isDefault: true,
-            applicableLanguages);
-    }
-
-    public AgentAssetKind AssetKind { get; }
-
     public string Name { get; }
 
     public string Description { get; }
-
-    public AgentAssetSourceKind SourceKind { get; }
 
     /// <summary>
     /// Gets the resolved installable payload, with exclusions applied and paths ordered.
@@ -75,30 +49,9 @@ internal sealed class AgentAssetDefinition
 
     public bool HasInstallableFiles => Files.Count > 0;
 
-    public IReadOnlyList<string> InstallExcludedRelativePaths { get; }
-
     public bool IsDefault { get; }
 
     public IReadOnlyList<string> ApplicableLanguages { get; }
-
-    /// <summary>
-    /// Gets whether a file should be installed.
-    /// </summary>
-    private bool ShouldInstallFile(string relativePath)
-    {
-        foreach (var excludedPath in InstallExcludedRelativePaths)
-        {
-            if (string.Equals(relativePath, excludedPath, StringComparison.Ordinal) ||
-                (relativePath.StartsWith(excludedPath, StringComparison.Ordinal) &&
-                 relativePath.Length > excludedPath.Length &&
-                 relativePath[excludedPath.Length] == Path.DirectorySeparatorChar))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
 
     /// <summary>
     /// Gets whether this asset applies to the detected language.
@@ -115,14 +68,4 @@ internal sealed class AgentAssetDefinition
 
     /// <inheritdoc />
     public override string ToString() => Name;
-}
-
-/// <summary>
-/// Identifies where an agent asset's files are sourced.
-/// </summary>
-internal enum AgentAssetSourceKind
-{
-    Static,
-    Bundled,
-    ExternalInstaller,
 }

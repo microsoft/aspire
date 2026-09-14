@@ -11,9 +11,28 @@ namespace Aspire.Cli.Tests.Agents;
 public class CommonAgentApplicatorsTests
 {
     [Fact]
-    public void AgentAssetKind_ContainsSkillsAndExtensions()
+    public void AgentAssetKind_ContainsSkillsAndExtensionsWithoutZero()
     {
-        Assert.Equal([AgentAssetKind.Skill, AgentAssetKind.Extension], Enum.GetValues<AgentAssetKind>());
+        Assert.Equal([AgentAssetKind.Skill, AgentAssetKind.Extension, AgentAssetKind.All], Enum.GetValues<AgentAssetKind>());
+        Assert.False(Enum.IsDefined((AgentAssetKind)0));
+        Assert.Equal(AgentAssetKind.Skill | AgentAssetKind.Extension, AgentAssetKind.All);
+    }
+
+    [Fact]
+    public void CopilotApp_SupportsAllAssetKinds()
+    {
+        Assert.Equal(AgentAssetKind.All, AgentClient.CopilotApp.SupportedAssetKinds);
+    }
+
+    [Theory]
+    [InlineData(nameof(AgentClient.CopilotCli))]
+    [InlineData(nameof(AgentClient.ClaudeCode))]
+    [InlineData(nameof(AgentClient.VsCode))]
+    [InlineData(nameof(AgentClient.OpenCode))]
+    public void OtherClients_SupportOnlySkills(string clientName)
+    {
+        var client = AgentClient.All.Single(client => client.Name == clientName);
+        Assert.Equal(AgentAssetKind.Skill, client.SupportedAssetKinds);
     }
 
     [Fact]
@@ -93,11 +112,12 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void AgentAssetDefinition_IsApplicableToLanguage_EmptyApplicableLanguages_AlwaysTrue()
     {
-        var skill = AgentAssetDefinition.CreateBundled(
-            AgentAssetKind.Skill,
+        var skill = new AgentAssetDefinition(
             "aspire-monitoring",
             "Observe Aspire apps with logs, traces, metrics, and resource state",
-            [new AgentAssetFile("SKILL.md", "Skill content")]);
+            [new AgentAssetFile("SKILL.md", "Skill content")],
+            installExcludedRelativePaths: [],
+            isDefault: true);
 
         Assert.True(skill.IsApplicableToLanguage(null));
         Assert.True(skill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
@@ -108,26 +128,7 @@ public class CommonAgentApplicatorsTests
     public void SkillCatalog_PlaywrightCli_HasNoInstallableFiles()
     {
         Assert.Empty(SkillCatalog.PlaywrightCli.Files);
-        Assert.Equal(AgentAssetSourceKind.ExternalInstaller, SkillCatalog.PlaywrightCli.SourceKind);
         Assert.False(SkillCatalog.PlaywrightCli.HasInstallableFiles);
-    }
-
-    [Theory]
-    [InlineData(false, "aspire")]
-    [InlineData(false, "aspireify")]
-    [InlineData(false, "aspire-deployment")]
-    [InlineData(true, "aspire-doctor")]
-    public void AgentAssetDefinition_BundleAssets_AreDefaultAndExternallySourced(bool isExtension, string name)
-    {
-        var kind = isExtension ? AgentAssetKind.Extension : AgentAssetKind.Skill;
-        var file = new AgentAssetFile(isExtension ? "extension.mjs" : "SKILL.md", "Asset content");
-        var asset = AgentAssetDefinition.CreateBundled(kind, name, "An Aspire asset", [file]);
-
-        Assert.Equal(kind, asset.AssetKind);
-        Assert.Same(file, Assert.Single(asset.Files));
-        Assert.Equal(AgentAssetSourceKind.Bundled, asset.SourceKind);
-        Assert.True(asset.HasInstallableFiles);
-        Assert.True(asset.IsDefault);
     }
 
     [Fact]
@@ -143,8 +144,7 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void AgentAssetDefinition_BundleSkill_ExcludesManifestPathsFromInstall()
     {
-        var skill = AgentAssetDefinition.CreateBundled(
-            AgentAssetKind.Skill,
+        var skill = new AgentAssetDefinition(
             CommonAgentApplicators.AspireSkillName,
             "Aspire CLI commands and workflows for distributed apps",
             [
@@ -153,9 +153,9 @@ public class CommonAgentApplicatorsTests
                 new AgentAssetFile(Path.Combine("evals", "evals.json"), "{}"),
                 new AgentAssetFile("SKILL.md", "Skill content")
             ],
-            installExcludedRelativePaths: ["evals"]);
+            installExcludedRelativePaths: ["evals"],
+            isDefault: true);
 
-        Assert.Equal(["evals"], skill.InstallExcludedRelativePaths);
         Assert.Equal(
             ["SKILL.md", Path.Combine("evals-extra", "evals.json")],
             skill.Files.Select(file => file.RelativePath));
@@ -166,7 +166,6 @@ public class CommonAgentApplicatorsTests
     {
         var skillFile = Assert.Single(SkillCatalog.DotnetInspect.Files);
 
-        Assert.Equal(AgentAssetSourceKind.Static, SkillCatalog.DotnetInspect.SourceKind);
         Assert.True(SkillCatalog.DotnetInspect.HasInstallableFiles);
         Assert.Equal("SKILL.md", skillFile.RelativePath);
         Assert.Contains("# dotnet-inspect", skillFile.Content);

@@ -37,11 +37,6 @@ internal sealed class AgentAssetCatalogProvider : IAgentAssetCatalogProvider
     {
         cancellationToken.ThrowIfCancellationRequested();
         var result = await GetCatalog(assetKind).ResolveAsync(requestedAssets, cancellationToken);
-        if (result.Assets.Any(asset => asset.AssetKind != assetKind))
-        {
-            throw new InvalidOperationException($"The '{assetKind}' catalog returned an asset of another kind.");
-        }
-
         // Keep prompts stable regardless of source order, using the same case-insensitive
         // names accepted by command-line selection.
         return result with

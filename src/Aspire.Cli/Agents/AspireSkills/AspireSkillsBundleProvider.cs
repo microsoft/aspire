@@ -416,12 +416,12 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                     Descriptor.RequiredFileName));
             }
 
-            validatedAssets.Add(AgentAssetDefinition.CreateBundled(
-                Descriptor.AssetKind,
+            validatedAssets.Add(new AgentAssetDefinition(
                 assetName,
                 asset.Description,
                 files,
                 installExcludedRelativePaths,
+                isDefault: true,
                 asset.ApplicableLanguages ?? []));
         }
 
