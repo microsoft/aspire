@@ -80,9 +80,9 @@ async function waitForCSharpProjectLoad(filePath: string, timeoutMs: number): Pr
     const deadline = Date.now() + timeoutMs;
     let lastDefinitions: readonly DefinitionInfo[] = [];
 
-    // Roslyn's design-time build and the Aspire CLI build both invoke XamlCompiler.exe against
-    // obj\...\input.json. Resolving this generated method proves the design-time XAML pass has
-    // released those files before the CLI starts. See https://github.com/microsoft/aspire/issues/19935.
+    // Verify Roslyn uses the fixture's isolated intermediate directory. Initial project-load
+    // readiness alone cannot prevent a later watched-file reload from racing Aspire's build.
+    // See https://github.com/microsoft/aspire/issues/19935.
     while (Date.now() < deadline) {
         const status = await executeE2eControlCommand({
             name: 'getDefinitions',
@@ -100,14 +100,17 @@ async function waitForCSharpProjectLoad(filePath: string, timeoutMs: number): Pr
         }
 
         lastDefinitions = definitions as DefinitionInfo[];
-        if (lastDefinitions.some(definition => path.relative(projectDirectory, definition.filePath).split(path.sep)[0].toLowerCase() === 'obj')) {
+        if (lastDefinitions.some(definition => {
+            const [outputRoot, buildKind] = path.relative(projectDirectory, definition.filePath).split(path.sep);
+            return outputRoot?.toLowerCase() === 'obj' && buildKind?.toLowerCase() === 'design-time';
+        })) {
             return;
         }
 
         await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    throw new Error(`Timed out after ${timeoutMs}ms waiting for the C# language server to resolve generated ${symbol} in ${filePath}. Last definitions: ${JSON.stringify(lastDefinitions)}`);
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for the C# language server to resolve generated ${symbol} in the isolated design-time output for ${filePath}. Last definitions: ${JSON.stringify(lastDefinitions)}`);
 }
 
 async function waitForReadyMarker(markerPath: string, timeoutMs: number): Promise<string> {
