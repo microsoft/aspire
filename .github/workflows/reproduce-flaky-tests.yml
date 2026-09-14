@@ -42,7 +42,7 @@ env:
   ITERATIONS_PER_RUNNER: "3"
 
   # Investigation only: change this immutable generator source, not the probe, between phases.
-  WINUI_PROBE_SOURCE_REF: "e4799ef9c44d5203f58cd193e41c4516fe433c83"
+  WINUI_PROBE_SOURCE_REF: "fbeab54212f092052a3f752ab50d30aef8486475"
 
 jobs:
 
