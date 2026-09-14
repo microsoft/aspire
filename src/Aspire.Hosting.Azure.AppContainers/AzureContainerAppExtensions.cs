@@ -379,13 +379,6 @@ public static class AzureContainerAppExtensions
 
             var containerAppEnvironment = new ContainerAppManagedEnvironment(appEnvResource.GetBicepIdentifier())
             {
-                WorkloadProfiles = [
-                    new ContainerAppWorkloadProfile()
-                    {
-                        WorkloadProfileType = "Consumption",
-                        Name = "consumption"
-                    }
-                ],
                 AppLogsConfiguration = new()
                 {
                     Destination = "log-analytics",
@@ -397,6 +390,21 @@ public static class AzureContainerAppExtensions
                 },
                 Tags = tags
             };
+
+            if (appEnvResource.IsExpress)
+            {
+                AzureContainerAppExpressSupport.ConfigureEnvironment(containerAppEnvironment);
+            }
+            else
+            {
+                containerAppEnvironment.WorkloadProfiles = [
+                    new ContainerAppWorkloadProfile()
+                    {
+                        WorkloadProfileType = "Consumption",
+                        Name = "consumption"
+                    }
+                ];
+            }
 
             // Configure VNet integration if a subnet is specified
             if (appEnvResource.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var subnetAnnotation))
@@ -1001,6 +1009,36 @@ public static class AzureContainerAppExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Resource.UseUniqueResourceNaming = true;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the container app environment to publish and deploy HTTP applications using Azure Container Apps Express.
+    /// </summary>
+    /// <param name="builder">The container app environment to configure.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// Express defaults to zero minimum replicas and does not provision the managed Aspire dashboard.
+    /// Explicit replica settings and infrastructure customization are preserved. Azure validates service compatibility.
+    /// App-to-app references require explicitly public HTTP endpoints and use their HTTPS URLs with <c>aspire deploy</c>.
+    /// Standalone Azure artifact publishing does not support dependencies on deployed app hostname outputs.
+    /// Circular public-URL dependencies are not supported. Local execution is unchanged.
+    /// When combined with existing-resource configuration, the existing environment must already use Express.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddAzureContainerAppEnvironment("env").AsExpress();
+    /// </code>
+    /// </example>
+    /// <seealso href="https://learn.microsoft.com/azure/container-apps/express-overview">Azure Container Apps Express preview</seealso>
+    [AspireExport]
+    [Experimental("ASPIREACAEXPRESS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<AzureContainerAppEnvironmentResource> AsExpress(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.IsExpress = true;
         return builder;
     }
 

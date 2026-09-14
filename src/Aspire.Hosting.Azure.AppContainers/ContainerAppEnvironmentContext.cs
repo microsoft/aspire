@@ -53,10 +53,20 @@ internal sealed class ContainerAppEnvironmentContext(
                 ? $"{x.ResourceName}:{x.EndpointNames[0]}"
                 : $"{x.ResourceName}:{{{string.Join(", ", x.EndpointNames)}}}"));
 
-        Logger.LogInformation(
-            "HTTP endpoints will use HTTPS (port 443) in Azure Container Apps: {Details}. " +
-            "To opt out, use .WithHttpsUpgrade(false) on the container app environment.",
-            details);
+        if (Environment.IsExpress)
+        {
+            Logger.LogInformation(
+                "HTTP endpoints will use HTTPS (port 443) in Azure Container Apps Express: {Details}. " +
+                "Express requires HTTPS ingress.",
+                details);
+        }
+        else
+        {
+            Logger.LogInformation(
+                "HTTP endpoints will use HTTPS (port 443) in Azure Container Apps: {Details}. " +
+                "To opt out, use .WithHttpsUpgrade(false) on the container app environment.",
+                details);
+        }
     }
 
     public BaseContainerAppContext GetContainerAppContext(IResource resource)
@@ -77,10 +87,12 @@ internal sealed class ContainerAppEnvironmentContext(
             await context.ProcessResourceAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        var provisioningResource = new AzureContainerAppResource(resource.Name + "-containerapp", context.BuildContainerApp, resource)
-        {
-            ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions
-        };
+        var provisioningResource = Environment.IsExpress
+            ? Environment.GetOrCreateExpressContainerAppResource(resource)
+            : new AzureContainerAppResource(resource.Name + "-containerapp", context.BuildContainerApp, resource);
+
+        provisioningResource.ContainerAppContext = context;
+        provisioningResource.ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions;
 
         // Add references to any prerequisite resources to ensure they are provisioned first
         if (resource.TryGetAnnotationsOfType<DeploymentPrerequisitesAnnotation>(out var prereqs))

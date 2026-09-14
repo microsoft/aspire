@@ -8,7 +8,9 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECONTAINERRUNTIME001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREACAEXPRESS001
 
+using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 using Azure.Core;
 using Aspire.Hosting.ApplicationModel;
@@ -497,6 +499,85 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
             "api",
             $"[https://api.test.westus.azurecontainerapps.io](https://api.test.westus.azurecontainerapps.io) ([Azure Portal]({AzurePortalUrls.GetResourceUrl($"/subscriptions/{containerAppSubscriptionId}/resourceGroups/{containerAppResourceGroupName}/providers/Microsoft.App/containerApps/api")}))");
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeployAsync_WithExpressPublicReferences_UsesActualFqdnsAndDependencyOrder(bool existing)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Deploy);
+        var reporter = new TestPipelineActivityReporter(testOutputHelper);
+        var appDeployments = new ConcurrentQueue<string>();
+        var resourceGroup = new TestResourceGroupResource(TestResourceGroupName, name =>
+        {
+            if (name.StartsWith("api-containerapp-", StringComparison.Ordinal))
+            {
+                appDeployments.Enqueue("api");
+                return new Dictionary<string, object>
+                {
+                    ["AZURE_CONTAINER_APP_INGRESS_FQDN"] = new { type = "String", value = "actual-api.express.example" }
+                };
+            }
+            if (name.StartsWith("web-containerapp-", StringComparison.Ordinal))
+            {
+                appDeployments.Enqueue("web");
+                return new Dictionary<string, object>
+                {
+                    ["AZURE_CONTAINER_APP_INGRESS_FQDN"] = new { type = "String", value = "actual-web.express.example" }
+                };
+            }
+
+            return CreateExpressDeploymentOutputs(name);
+        });
+        ConfigureTestServices(builder, armClientProvider: new TestArmClientProvider(resourceGroup), activityReporter: reporter);
+        var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
+        if (existing)
+        {
+            environment.AsExisting(builder.AddParameter("existing-name", "shared-env"), resourceGroupParameter: null);
+        }
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var web = builder.AddProject<Project>("web", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints()
+            .WithReference(api);
+
+        using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.NotEqual(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Equal(["api", "web"], appDeployments.Distinct());
+
+        var apiTarget = Assert.IsAssignableFrom<AzureBicepResource>(api.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        var webTarget = Assert.IsAssignableFrom<AzureBicepResource>(web.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        var reference = Assert.Single(webTarget.Parameters, parameter => parameter.Value is BicepOutputReference output && output.Resource == apiTarget);
+        var parameters = JsonNode.Parse(resourceGroup.Deployments.Content!.Properties.Parameters.ToString())!;
+        Assert.Equal("actual-api.express.example", parameters[reference.Key]!["value"]!.GetValue<string>());
+
+        AssertSummaryItem(reporter.PipelineSummary!, "api",
+            $"[https://actual-api.express.example](https://actual-api.express.example) ([Azure Portal]({AzurePortalUrls.GetResourceUrl(GetTestResourceId("/providers/Microsoft.App/containerApps/api"))}))");
+        AssertSummaryItem(reporter.PipelineSummary!, "web",
+            $"[https://actual-web.express.example](https://actual-web.express.example) ([Azure Portal]({AzurePortalUrls.GetResourceUrl(GetTestResourceId("/providers/Microsoft.App/containerApps/web"))}))");
+        await Verify(reporter.PipelineSummary!.OrderBy(item => item.Key, StringComparer.Ordinal));
+    }
+
+    private static Dictionary<string, object> CreateExpressDeploymentOutputs(string deploymentName) =>
+        deploymentName switch
+        {
+            string name when name.StartsWith("env-acr", StringComparison.Ordinal) => new()
+            {
+                ["name"] = new { type = "String", value = "testregistry" },
+                ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
+            },
+            string name when name.StartsWith("env", StringComparison.Ordinal) => new()
+            {
+                ["AZURE_CONTAINER_REGISTRY_NAME"] = new { type = "String", value = "testregistry" },
+                ["AZURE_CONTAINER_REGISTRY_ENDPOINT"] = new { type = "String", value = "testregistry.azurecr.io" },
+                ["AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                ["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = new { type = "String", value = "not-the-public-app-host.example" },
+                ["AZURE_CONTAINER_APPS_ENVIRONMENT_ID"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.App/managedEnvironments/shared-env") }
+            },
+            _ => []
+        };
 
     [Fact]
     public async Task DeployAsync_WithAppServiceExternalEndpoint_IncludesPortalLinksInSummary()
