@@ -300,8 +300,10 @@ jobs:
             if gh run download "${RUN_ID}" --repo "${REPO}" --name "${E2E_ARTIFACT_NAME}" --dir "${E2E_RESULTS_DIR}"; then
               find "${E2E_RESULTS_DIR}" -name "mocha.json" -type f 2>/dev/null | while IFS= read -r MOCHA_FILE; do
                 echo "Processing extension E2E results: ${E2E_ARTIFACT_NAME}/$(basename "${MOCHA_FILE}")"
-                node .github/workflows/analyze-ci-failure.js extract-mocha-failures "${MOCHA_FILE}" "${E2E_JOB_NAME}" \
-                  >> ci-failure-data/test-failures.jsonl
+                if ! node .github/workflows/analyze-ci-failure.js extract-mocha-failures "${MOCHA_FILE}" "${E2E_JOB_NAME}" \
+                    >> ci-failure-data/test-failures.jsonl; then
+                  echo "::warning::Failed to parse extension E2E results: ${E2E_ARTIFACT_NAME}/$(basename "${MOCHA_FILE}")"
+                fi
               done
             else
               echo "Warning: Failed to download extension E2E diagnostics: ${E2E_ARTIFACT_NAME}"
@@ -548,6 +550,7 @@ safe-outputs:
                 [ -f "$CAUSE_FILE" ] || continue
                 if ! jq empty "$CAUSE_FILE" 2>/dev/null; then
                   echo "::warning::Invalid JSON in cause file: $(basename "$CAUSE_FILE")"
+                  rm -f "$CAUSE_FILE"
                   continue
                 fi
                 node .github/workflows/analyze-ci-failure.js redact "$CAUSE_FILE" \

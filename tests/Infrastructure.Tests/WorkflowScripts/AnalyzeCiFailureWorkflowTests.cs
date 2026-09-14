@@ -373,6 +373,9 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("command --password \"secret;tail\" --verbose", "command --password \"[REDACTED]\" --verbose")]
     [InlineData("command --password \"prefix\\\"secret-suffix\" --verbose", "command --password \"[REDACTED]\" --verbose")]
     [InlineData("command --client-secret 'secret;tail'", "command --client-secret '[REDACTED]'")]
+    [InlineData("{\"auth\":\"dXNlcjpwYXNzd29yZA==\"}", "{\"auth\":\"[REDACTED]\"}")]
+    [InlineData("{'_auth':'dXNlcjpwYXNzd29yZA=='}", "{'_auth':'[REDACTED]'}")]
+    [InlineData("_auth=dXNlcjpwYXNzd29yZA==", "_auth=[REDACTED]")]
     [RequiresTools(["node"])]
     public async Task RedactOperationRemovesTokenValues(string value, string expected)
     {
@@ -416,6 +419,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.True(persistenceReadIndex > causeRedactionIndex, $"{workflowName} must sanitize causes before persistence reads.");
         Assert.True(issueReadIndex > causeRedactionIndex, $"{workflowName} must sanitize causes before issue rendering reads.");
         Assert.True(commentRenderIndex > analysisRedactionIndex, $"{workflowName} must render the PR comment from sanitized analysis.");
+        Assert.Contains("rm -f \"$CAUSE_FILE\"", publishStep);
     }
 
     [Theory]
@@ -426,7 +430,8 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var workflow = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", workflowName));
 
         Assert.Contains("extension-e2e-diagnostics-", workflow);
-        Assert.Contains("extract-mocha-failures \"${MOCHA_FILE}\" \"${E2E_JOB_NAME}\"", workflow);
+        Assert.Contains("if ! node .github/workflows/analyze-ci-failure.js extract-mocha-failures \"${MOCHA_FILE}\" \"${E2E_JOB_NAME}\"", workflow);
+        Assert.Contains("::warning::Failed to parse extension E2E results:", workflow);
     }
 
     [Fact]
