@@ -4,9 +4,9 @@
   "title": "Flaky: VS Code extension E2E (Windows, dynamic-debug-configuration) shard fails with generic exit code 1, unrelated to PR changes",
   "test_name": "VS Code extension E2E (Windows, dynamic-debug-configuration)",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
-  "error_pattern": "Process completed with exit code 1. Dynamic debug configuration E2E teardown failed with EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-*\\workspace\\.e2e-dynamic-debug\\ambiguous' at runE2eTeardown (fixtures.js:217:15).",
-  "analysis": "The 'after each' teardown hook for the 'duplicate-alias workspaces' dynamic debug configuration test fails with EBUSY (resource busy or locked) while attempting to rmdir a temp workspace directory on Windows. This is a Windows file-locking race condition during cleanup, consistent with the previously identified recurring flaky pattern for this shard (issue #19576, 21 prior occurrences, most recently seen 2026-09-14). The PR only modifies interactionService.ts, ExtensionBackchannel.cs, and ExtensionInteractionService.cs, unrelated to dynamic debug configuration E2E code.",
-  "failure_details": "Test: Aspire dynamic debug configuration E2E \"after each\" hook for \"re-resolves the selected AppHost by dynamic configuration name in duplicate-alias workspaces\"\nError:\nDynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-ko70An\\workspace\\.e2e-dynamic-debug\\first'\nStack Trace:\nAggregateError: Dynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-ko70An\\workspace\\.e2e-dynamic-debug\\first'\n    at runE2eTeardown (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:217:15)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\dynamicDebugConfiguration.e2e.test.js:62:9)",
+  "error_pattern": "Process completed with exit code 1. Dynamic debug configuration E2E teardown failed with EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-*\\workspace\\.e2e-dynamic-debug\\first' at runE2eTeardown (fixtures.js:217:15).",
+  "analysis": "The failure is an EBUSY 'resource busy or locked' error while removing a temp directory during the dynamic debug configuration E2E 'after each' teardown hook. This is a well-known Windows file-locking race condition (a file handle isn't released yet when rmdir is attempted) and is unrelated to the PR, which only modifies generated Foundry model data files (FoundryModel.Generated.cs, FoundryModel.Local.Generated.cs).",
+  "failure_details": "Test: Aspire dynamic debug configuration E2E \"after each\" hook for \"re-resolves the selected AppHost by dynamic configuration name in duplicate-alias workspaces\"\nError:\nDynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-GQSa0Y\\workspace\\.e2e-dynamic-debug\\first'\n\nStack Trace:\nAggregateError: Dynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-GQSa0Y\\workspace\\.e2e-dynamic-debug\\first'\n    at runE2eTeardown (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:217:15)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\dynamicDebugConfiguration.e2e.test.js:62:9)\n\nAnnotation: 'Process completed with exit code 1.'",
   "occurrences": [
     {
       "run_id": 32505042756,
@@ -161,6 +161,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
       "pr_number": 19996,
       "observed_at": "2026-09-14T15:27:45Z"
+    },
+    {
+      "run_id": 34863279227,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34863279227",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 19814,
+      "observed_at": "2026-09-14T16:19:55Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19576"

@@ -3,10 +3,10 @@
   "type": "flaky-test",
   "title": "Flaky: VS Code extension E2E (browser-debugger) times out waiting for pwa-msedge child debug session to attach to Blazor WASM",
   "test_name": "VS Code extension E2E (matrix shards, e.g. browser-debugger / workspace-target-proof / edge-cases)",
-  "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
-  "error_pattern": "Failed to apply E2E control revision ...: Error: Timed out after 288488ms waiting for pwa-msedge child session for Blazor WASM root '...'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"...\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\", ...}]}",
-  "analysis": "The test 'hits a managed breakpoint for standalone' times out after ~288 seconds waiting for the pwa-msedge child debug session to attach to a Blazor WASM root. This matches the previously identified recurring flaky pattern for this shard (issue #19618, 10 prior occurrences, most recently seen 2026-09-14). The PR under test only modifies interaction service and CLI backchannel code, unrelated to Blazor WASM browser debugging.",
-  "failure_details": "Test: Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone\nError:\nFailed to apply E2E control revision 1789398549646: Error: Timed out after 288412ms waiting for pwa-msedge child session for Blazor WASM root 'ad39feac-7f9a-49fa-a9ef-1f0a863ac6f8'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"cbb05917-ecd9-4da6-b907-00ffa68dd602\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-BMPcod\\\\workspace\",\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":64517,\"platform\":\"browser\",\"isServer\":true}}}]}",
+  "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+  "error_pattern": "Failed to apply E2E control revision ...: Error: Timed out after ~299700ms waiting for Blazor WASM root session for resource '<resource>'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"...\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\", ...}]}",
+  "analysis": "Both failing tests ('hits a managed breakpoint for hosted-global' and 'hosted-per-page') time out after ~300 seconds waiting for the Blazor WASM debug session to attach. This is a known intermittent timing issue in the browser-debugger E2E shard and is unrelated to the PR, which only modifies generated Foundry model data files (FoundryModel.Generated.cs, FoundryModel.Local.Generated.cs) with no relation to the VS Code extension debugger.",
+  "failure_details": "Test: Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-global\nError: Failed to apply E2E control revision 1789401344106: Error: Timed out after 299705ms waiting for Blazor WASM root session for resource 'hosted-global'. Last error: <none>.\n\nTest: Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-per-page\nError: Failed to apply E2E control revision 1789401344109: Error: Timed out after 299748ms waiting for Blazor WASM root session for resource 'hosted-per-page'. Last error: <none>.\n\nBoth occurred in job: VS Code extension E2E (Linux, browser-debugger), annotation: 'Process completed with exit code 1.'",
   "occurrences": [
     {
       "run_id": 32704259463,
@@ -84,6 +84,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
       "pr_number": 19996,
       "observed_at": "2026-09-14T15:27:45Z"
+    },
+    {
+      "run_id": 34863279227,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34863279227",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "pr_number": 19814,
+      "observed_at": "2026-09-14T16:19:55Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19618"
