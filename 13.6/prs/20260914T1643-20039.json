@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Internal release-engineering automation to sync main into release/14.0; no user-visible product effect",
+  "mergedAt": "2026-09-14T16:43:49Z",
+  "number": 20039,
+  "runDate": "2026-09-14T18:06:41Z",
+  "status": "excluded",
+  "title": "Add daily main to release/14.0 synchronization"
+}

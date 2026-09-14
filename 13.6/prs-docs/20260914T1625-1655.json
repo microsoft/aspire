@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs-site UI fix (mobile TOC overlap); not documenting a product PR, no matching changelog entry",
+  "mergedAt": "2026-09-14T16:25:36Z",
+  "number": 1655,
+  "runDate": "2026-09-14T18:06:41Z",
+  "status": "excluded",
+  "title": "Hide the right TOC when the mobile TOC is visible"
+}

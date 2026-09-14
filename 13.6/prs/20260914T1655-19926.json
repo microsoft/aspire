@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI test-trigger-selection tooling improvement; no user-visible product effect",
+  "mergedAt": "2026-09-14T16:55:08Z",
+  "number": 19926,
+  "runDate": "2026-09-14T18:06:41Z",
+  "status": "excluded",
+  "title": "test(ci): enforce selective test trigger dependencies"
+}

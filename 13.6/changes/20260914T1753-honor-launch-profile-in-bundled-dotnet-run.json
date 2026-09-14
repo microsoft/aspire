@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@gabisonia"
+  ],
+  "description": "`dotnet run --launch-profile <name>` now honors the selected profile when it delegates to `aspire run` with CLI bundles enabled, instead of always falling back to the first profile.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚀",
+  "firstMergedAt": "2026-09-14T17:53:25Z",
+  "lastMergedAt": "2026-09-14T17:53:25Z",
+  "name": "Honor selected launch profile in bundled dotnet run",
+  "owner": "karolz-ms",
+  "prs": [
+    19958
+  ]
+}

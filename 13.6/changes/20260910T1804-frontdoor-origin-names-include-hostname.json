@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Azure Front Door origin names now include the backend hostname, so switching a compute resource's backend creates a distinct origin instead of silently reusing the previous origin's Azure identity. Existing deployments receive new origin names the first time this ships; use `ConfigureInfrastructure` to restore the previous naming if needed.",
-  "docsPrs": [],
+  "docsPrs": [
+    1646
+  ],
   "docsRequired": true,
   "emoji": "🪪",
   "firstMergedAt": "2026-09-10T18:04:26Z",

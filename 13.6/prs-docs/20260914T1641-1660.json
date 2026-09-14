@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #19996 (VS Code agent asset preselection)",
+  "mergedAt": "2026-09-14T16:41:45Z",
+  "number": 1660,
+  "runDate": "2026-09-14T18:06:41Z",
+  "status": "included",
+  "title": "[docs] Document CLI-default agent asset preselection in VS Code"
+}

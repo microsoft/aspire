@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code Quick Pick for AI agent skills during `aspire new` and `aspire init` now preselects the same skill location and bundled skills that the Aspire CLI terminal prompt already defaults to, instead of opening with nothing checked.",
+  "docsPrs": [
+    1660
+  ],
+  "docsRequired": true,
+  "emoji": "🎯",
+  "firstMergedAt": "2026-09-14T14:48:42Z",
+  "lastMergedAt": "2026-09-14T14:48:42Z",
+  "name": "VS Code now preselects CLI-default agent assets",
+  "owner": "ellahathaway",
+  "prs": [
+    19996
+  ]
+}

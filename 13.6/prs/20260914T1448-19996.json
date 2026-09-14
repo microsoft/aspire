@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "VS Code Quick Pick for agent asset selection now preselects CLI-computed defaults",
+  "mergedAt": "2026-09-14T14:48:42Z",
+  "number": 19996,
+  "runDate": "2026-09-14T18:06:41Z",
+  "status": "included",
+  "title": "Preselect CLI-default Aspire agent assets in VS Code"
+}

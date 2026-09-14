@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Security fix: pins CLI's transitive MessagePack dependency to remediate CVE-2026-48109 / CVE-2026-48506",
+  "mergedAt": "2026-09-14T16:45:27Z",
+  "number": 20071,
+  "runDate": "2026-09-14T18:06:41Z",
+  "status": "included",
+  "title": "Fix CLI transitive MessagePack dependency without changing the NativeAOT RPC preview"
+}

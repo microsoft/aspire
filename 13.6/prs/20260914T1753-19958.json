@@ -1,0 +1,9 @@
+{
+  "author": "gabisonia",
+  "comment": "Fixes launch profile not being honored when dotnet run delegates to aspire run with CLI bundles",
+  "mergedAt": "2026-09-14T17:53:25Z",
+  "number": 19958,
+  "runDate": "2026-09-14T18:06:41Z",
+  "status": "included",
+  "title": "Honor selected launch profile in bundled dotnet run"
+}

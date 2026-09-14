@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Playground-only dependency change (Rust sample app), not user-facing",
+  "mergedAt": "2026-09-14T16:52:44Z",
+  "number": 20073,
+  "runDate": "2026-09-14T18:06:41Z",
+  "status": "excluded",
+  "title": "Use AWS-LC for Rust playground OTLP TLS"
+}

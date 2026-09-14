@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The CLI's transitive MessagePack dependency is pinned to 2.5.302, removing two known vulnerabilities (CVE-2026-48109 and CVE-2026-48506) without changing RPC contracts, serializers, or the NativeAOT StreamJsonRpc preview.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-09-14T16:45:27Z",
+  "lastMergedAt": "2026-09-14T16:45:27Z",
+  "name": "CLI MessagePack dependency vulnerability fix",
+  "owner": "joperezr",
+  "prs": [
+    20071
+  ]
+}
