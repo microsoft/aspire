@@ -1,12 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Layout;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -46,9 +51,7 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
             }
         };
 
-        var generator = new CSharpCliManagedAppHostModuleGenerator(
-            new TestPackagingService(),
-            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance);
+        var generator = CreateGenerator(workspace);
 
         var moduleProjectFile = await generator.TryGenerateAsync(appHostFile, config, workspace.WorkspaceRoot, packageSourceOverride: null, CancellationToken.None);
 
@@ -150,10 +153,7 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
                 ["Example.Package"] = ""
             }
         };
-        var generator = new CSharpCliManagedAppHostModuleGenerator(
-            new TestPackagingService(),
-            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance,
-            identitySdkVersion: "42.0.0-dev");
+        var generator = CreateGenerator(workspace, identitySdkVersion: "42.0.0-dev");
 
         var moduleProjectFile = await generator.TryGenerateAsync(appHostFile, config, workspace.WorkspaceRoot, packageSourceOverride: null, CancellationToken.None);
 
@@ -165,12 +165,13 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
     }
 
     [Fact]
-    public async Task TryGenerateAsyncPreservesExistingModuleNuGetConfigWhenNoExplicitMappingIsResolved()
+    public async Task TryGenerateAsyncRemovesStaleGeneratedNuGetConfigsWhenNoMappingIsResolved()
     {
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
         var appHostFile = CreateCliManagedAppHost(workspace.WorkspaceRoot);
         var modulesDirectory = workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("modules");
         var nuGetConfigPath = Path.Combine(modulesDirectory.FullName, "nuget.config");
+        var policyConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "NuGet.Config");
         await File.WriteAllTextAsync(nuGetConfigPath, """
             <configuration>
               <packageSources>
@@ -178,16 +179,17 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
               </packageSources>
             </configuration>
             """);
-        var generator = new CSharpCliManagedAppHostModuleGenerator(
-            new TestPackagingService(),
-            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance);
+        await File.WriteAllTextAsync(policyConfigPath, "<configuration />");
+        var generator = CreateGenerator(workspace);
 
         var moduleProjectFile = await generator.TryGenerateAsync(appHostFile, new AspireConfigFile(), workspace.WorkspaceRoot, packageSourceOverride: null, CancellationToken.None);
 
         Assert.NotNull(moduleProjectFile);
-        Assert.True(File.Exists(nuGetConfigPath));
-        var moduleProject = XDocument.Load(moduleProjectFile.FullName);
-        Assert.Equal(nuGetConfigPath, moduleProject.Root!.Element("PropertyGroup")!.Element("RestoreConfigFile")!.Value);
+        Assert.False(File.Exists(nuGetConfigPath));
+        Assert.False(File.Exists(policyConfigPath));
+        var directoryBuildProps = XDocument.Load(Path.Combine(modulesDirectory.FullName, "Directory.Build.props"));
+        Assert.Equal(workspace.WorkspaceRoot.FullName, directoryBuildProps.Descendants("RestoreRootConfigDirectory").Single().Value);
+        Assert.Equal(string.Empty, directoryBuildProps.Descendants("RestoreConfigFile").Single().Value);
     }
 
     [Fact]
@@ -217,25 +219,28 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
                 return Task.FromResult<IEnumerable<PackageChannel>>([staging]);
             }
         };
-        var generator = new CSharpCliManagedAppHostModuleGenerator(
+        var generator = CreateGenerator(
+            workspace,
             packagingService,
-            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance,
             aspireHomeDirectory: aspireHomeDirectory);
 
         var moduleProjectFile = await generator.TryGenerateAsync(appHostFile, config, workspace.WorkspaceRoot, packageSourceOverride: null, CancellationToken.None);
 
         Assert.NotNull(moduleProjectFile);
-        var restoreConfigFile = XDocument.Load(moduleProjectFile.FullName).Root!
-            .Element("PropertyGroup")!
-            .Element("RestoreConfigFile")!
-            .Value;
-        var nugetConfig = XDocument.Load(restoreConfigFile);
-        using var expectedConfig = await TemporaryNuGetConfig.CreateAsync(
-            [new PackageMapping("Aspire*", stagingSource)],
-            configureGlobalPackagesFolder: true);
+        var directoryBuildProps = XDocument.Load(Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ".aspire",
+            "modules",
+            "Directory.Build.props"));
+        var globalPackagesFolder = directoryBuildProps.Descendants("RestorePackagesPath").Single().Value;
+        Assert.StartsWith(
+            CliPathHelper.GetStagingNuGetPackagesDirectory(aspireHomeDirectory),
+            globalPackagesFolder,
+            StringComparison.Ordinal);
+        var policyConfig = XDocument.Load(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "NuGet.Config"));
         Assert.Equal(
-            CliPathHelper.GetStagingNuGetPackagesFeedDirectory(aspireHomeDirectory, expectedConfig.CacheIdentity),
-            nugetConfig.Root!.Element("config")!.Elements("add").Single(e => e.Attribute("key")?.Value == "globalPackagesFolder").Attribute("value")!.Value);
+            globalPackagesFolder,
+            policyConfig.Root!.Element("config")!.Elements("add").Single(e => e.Attribute("key")?.Value == "globalPackagesFolder").Attribute("value")!.Value);
     }
 
     [Fact]
@@ -244,9 +249,7 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("O'Brien");
         var appHostFile = CreateCliManagedAppHost(appHostDirectory);
-        var generator = new CSharpCliManagedAppHostModuleGenerator(
-            new TestPackagingService(),
-            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance);
+        var generator = CreateGenerator(workspace);
 
         await generator.TryGenerateAsync(appHostFile, new AspireConfigFile(), appHostDirectory, packageSourceOverride: null, CancellationToken.None);
 
@@ -278,9 +281,7 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
                 ["Aspire.Hosting.Redis"] = "13.2.1"
             }
         };
-        var generator = new CSharpCliManagedAppHostModuleGenerator(
-            new TestPackagingService(),
-            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance);
+        var generator = CreateGenerator(workspace);
 
         await generator.TryGenerateAsync(appHostFile, config, appHostDirectory, packageSourceOverride: null, CancellationToken.None);
 
@@ -324,9 +325,7 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
                 return Task.FromResult<IEnumerable<PackageChannel>>([daily]);
             }
         };
-        var generator = new CSharpCliManagedAppHostModuleGenerator(
-            packagingService,
-            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance);
+        var generator = CreateGenerator(workspace, packagingService);
 
         var moduleProjectFile = await generator.TryGenerateAsync(appHostFile, config, workspace.WorkspaceRoot, packageSourceOverride: "/tmp/aspire-pr-hive/packages", CancellationToken.None);
 
@@ -334,19 +333,17 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         Assert.Equal("daily", packagingService.LastRequestedChannelName);
 
         var moduleProject = XDocument.Load(moduleProjectFile.FullName);
-        Assert.Null(moduleProject.Root!
+        Assert.Equal(string.Empty, moduleProject.Root!
             .Element("PropertyGroup")!
-            .Element("RestoreAdditionalProjectSources"));
-        var restoreConfigFile = moduleProject.Root!
-            .Element("PropertyGroup")!
-            .Element("RestoreConfigFile")!
-            .Value;
-
-        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "nuget.config"), restoreConfigFile);
+            .Element("RestoreAdditionalProjectSources")!
+            .Value);
+        var restoreConfigFile = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "NuGet.Config");
 
         var appHostBuildPropsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.props");
         var appHostBuildProps = XDocument.Load(appHostBuildPropsPath);
-        Assert.Equal(restoreConfigFile, appHostBuildProps.Descendants("RestoreConfigFile").Single().Value);
+        Assert.Equal(
+            Path.GetDirectoryName(restoreConfigFile),
+            appHostBuildProps.Descendants("RestoreRootConfigDirectory").Single().Value);
 
         var nugetConfig = XDocument.Load(restoreConfigFile);
         Assert.Equal(["/tmp/aspire-pr-hive/packages", "https://example.invalid/daily/all"], GetPackageSources(nugetConfig));
@@ -367,22 +364,18 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         {
             GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Channels should not be resolved.")
         };
-        var generator = new CSharpCliManagedAppHostModuleGenerator(
-            packagingService,
-            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance);
+        var generator = CreateGenerator(workspace, packagingService);
 
         var moduleProjectFile = await generator.TryGenerateAsync(appHostFile, config, workspace.WorkspaceRoot, packageSourceOverride: "/tmp/aspire-pr-hive/packages", CancellationToken.None);
 
         Assert.NotNull(moduleProjectFile);
 
         var moduleProject = XDocument.Load(moduleProjectFile.FullName);
-        Assert.Null(moduleProject.Root!
+        Assert.Equal(string.Empty, moduleProject.Root!
             .Element("PropertyGroup")!
-            .Element("RestoreAdditionalProjectSources"));
-        var restoreConfigFile = moduleProject.Root!
-            .Element("PropertyGroup")!
-            .Element("RestoreConfigFile")!
-            .Value;
+            .Element("RestoreAdditionalProjectSources")!
+            .Value);
+        var restoreConfigFile = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "NuGet.Config");
 
         var nugetConfig = XDocument.Load(restoreConfigFile);
         Assert.Equal(["/tmp/aspire-pr-hive/packages", PackageSources.NuGetOrg], GetPackageSources(nugetConfig));
@@ -403,20 +396,16 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         {
             GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Channels should not be resolved.")
         };
-        var generator = new CSharpCliManagedAppHostModuleGenerator(
+        var generator = CreateGenerator(
+            workspace,
             packagingService,
-            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance,
             nugetServiceIndexOverride: "http://localhost:5400/v3/index.json");
 
         var moduleProjectFile = await generator.TryGenerateAsync(appHostFile, config, workspace.WorkspaceRoot, packageSourceOverride: "/tmp/aspire-pr-hive/packages", CancellationToken.None);
 
         Assert.NotNull(moduleProjectFile);
 
-        var moduleProject = XDocument.Load(moduleProjectFile.FullName);
-        var restoreConfigFile = moduleProject.Root!
-            .Element("PropertyGroup")!
-            .Element("RestoreConfigFile")!
-            .Value;
+        var restoreConfigFile = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "NuGet.Config");
 
         var nugetConfig = XDocument.Load(restoreConfigFile);
         Assert.Equal(["/tmp/aspire-pr-hive/packages", "http://localhost:5400/v3/index.json"], GetPackageSources(nugetConfig));
@@ -438,14 +427,41 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         {
             GetStagingChannelUnavailableReasonCallback = () => "Staging is not available."
         };
-        var generator = new CSharpCliManagedAppHostModuleGenerator(
-            packagingService,
-            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance);
+        var generator = CreateGenerator(workspace, packagingService);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             generator.TryGenerateAsync(appHostFile, config, workspace.WorkspaceRoot, packageSourceOverride: null, CancellationToken.None));
 
         Assert.Equal("Staging is not available.", exception.Message);
+    }
+
+    [Fact]
+    public async Task TryGenerateWithRestoreConfigurationAsyncReturnsSensitiveSourcesWithoutPersistingPackageSourceHints()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var appHostFile = CreateCliManagedAppHost(workspace.WorkspaceRoot);
+        var sensitiveSource = "https://user:password@example.test/v3/index.json";
+        var packageSourceOverride = "https://packages.example.test/v3/index.json";
+        var generator = CreateGenerator(
+            workspace,
+            nugetSettings: CreateNuGetSettings(sensitiveSourceValues: [sensitiveSource]));
+
+        var result = await generator.TryGenerateWithRestoreConfigurationAsync(
+            appHostFile,
+            new AspireConfigFile(),
+            workspace.WorkspaceRoot,
+            packageSourceOverride,
+            CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Contains(sensitiveSource, result.SensitiveSources);
+        Assert.Contains(packageSourceOverride, Assert.IsType<string>(result.IntegrationPackageSources));
+        var appHostBuildProps = XDocument.Load(Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ".aspire",
+            "modules",
+            CSharpCliManagedAppHostModuleGenerator.AppHostBuildPropsFileName));
+        Assert.Empty(appHostBuildProps.Descendants(PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName));
     }
 
     private static FileInfo CreateCliManagedAppHost(DirectoryInfo directory)
@@ -468,6 +484,135 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         File.WriteAllText(projectFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
 
         return projectFile;
+    }
+
+    private static CSharpCliManagedAppHostModuleGenerator CreateGenerator(
+        TemporaryWorkspace workspace,
+        IPackagingService? packagingService = null,
+        string identitySdkVersion = "13.4.0",
+        DirectoryInfo? aspireHomeDirectory = null,
+        string? nugetServiceIndexOverride = null,
+        NuGetSettingsInfo? nugetSettings = null)
+    {
+        var layoutRoot = workspace.WorkspaceRoot.CreateSubdirectory(
+            $".bundle-{Guid.NewGuid():N}");
+        var layout = new LayoutConfiguration
+        {
+            LayoutPath = layoutRoot.FullName
+        };
+        var managedPath = layout.GetManagedPath()!;
+        Directory.CreateDirectory(Path.GetDirectoryName(managedPath)!);
+        File.WriteAllText(managedPath, "test");
+
+        var processExecutionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (args, _, _, _) =>
+            {
+                if (args.Length >= 2 && args[0] == "nuget" && args[1] == "write-config")
+                {
+                    WriteNuGetConfigOverlay(args);
+                }
+            },
+            AttemptCallback = (_, _) => (
+                0,
+                JsonSerializer.Serialize(nugetSettings ?? CreateNuGetSettings()))
+        };
+        var bundleNuGetService = new BundleNuGetService(
+            new FixedLayoutDiscovery(layout),
+            new LayoutProcessRunner(processExecutionFactory),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance)
+        {
+            SourceIdentityKeyFactory = static () => new byte[NuGetSourceIdentity.KeySizeInBytes]
+        };
+        var executionContext = new CliExecutionContext(
+            workspace.WorkspaceRoot,
+            workspace.WorkspaceRoot,
+            workspace.WorkspaceRoot,
+            workspace.WorkspaceRoot,
+            workspace.WorkspaceRoot,
+            Path.Combine(workspace.WorkspaceRoot.FullName, "test.log"),
+            PackageChannelNames.Stable,
+            aspireHomeDirectory: aspireHomeDirectory ?? workspace.WorkspaceRoot.CreateSubdirectory(".aspire-home"),
+            identityVersion: identitySdkVersion,
+            nugetServiceIndexOverride: nugetServiceIndexOverride);
+
+        return new CSharpCliManagedAppHostModuleGenerator(
+            packagingService ?? new TestPackagingService(),
+            bundleNuGetService,
+            executionContext,
+            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance);
+    }
+
+    private static NuGetSettingsInfo CreateNuGetSettings(string[]? sensitiveSourceValues = null)
+    {
+        return new NuGetSettingsInfo(
+            ConfigPaths: [],
+            CacheIdentity: "test-cache",
+            Sources: [],
+            SensitiveSourceValues: sensitiveSourceValues ?? [],
+            PackageSourceMappingEnabled: false,
+            PackageSourceMappings: [],
+            DisabledPackageSourceKeys: [],
+            ReservedPackageSourceKeys: [],
+            SourceIdentityKey: new byte[NuGetSourceIdentity.KeySizeInBytes]);
+    }
+
+    private static void WriteNuGetConfigOverlay(string[] args)
+    {
+        static string GetArgumentValue(string[] values, string name)
+        {
+            var index = Array.IndexOf(values, name);
+            return index >= 0 && index + 1 < values.Length
+                ? values[index + 1]
+                : throw new InvalidDataException($"Missing '{name}'.");
+        }
+
+        var request = JsonSerializer.Deserialize<NuGetConfigOverlayRequest>(
+            File.ReadAllText(GetArgumentValue(args, "--request")))
+            ?? throw new InvalidDataException("The NuGet configuration request was empty.");
+        var configuration = new XElement("configuration");
+        if (request.Sources.Length > 0)
+        {
+            configuration.Add(new XElement(
+                "packageSources",
+                request.Sources.Select(source => new XElement(
+                    "add",
+                    new XAttribute("key", source.Key),
+                    new XAttribute("value", source.Source)))));
+        }
+        if (request.PackageSourceMappings.Length > 0)
+        {
+            configuration.Add(new XElement(
+                "packageSourceMapping",
+                request.PackageSourceMappings.Select(mapping => new XElement(
+                    "packageSource",
+                    new XAttribute("key", mapping.SourceKey),
+                    mapping.Patterns.Select(pattern => new XElement(
+                        "package",
+                        new XAttribute("pattern", pattern)))))));
+        }
+        if (request.GlobalPackagesFolder is not null)
+        {
+            configuration.Add(new XElement(
+                "config",
+                new XElement(
+                    "add",
+                    new XAttribute("key", "globalPackagesFolder"),
+                    new XAttribute("value", request.GlobalPackagesFolder))));
+        }
+
+        new XDocument(configuration).Save(GetArgumentValue(args, "--output"));
+    }
+
+    private sealed class FixedLayoutDiscovery(LayoutConfiguration layout) : ILayoutDiscovery
+    {
+        public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null) => layout;
+
+        public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null) => layout.GetComponentPath(component);
+
+        public bool IsBundleModeAvailable(string? projectDirectory = null) => true;
     }
 
     private static string[] GetPackageSources(XDocument doc)

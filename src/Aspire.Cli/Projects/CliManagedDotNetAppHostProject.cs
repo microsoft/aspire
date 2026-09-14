@@ -7,6 +7,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Telemetry;
@@ -29,6 +30,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
     private readonly ILogger<DotNetAppHostProject> _logger;
     private readonly IEnvironment _environment;
     private readonly CSharpCliManagedAppHostModuleGenerator _cliManagedModuleGenerator;
+    private CliManagedAppHostModuleGenerationResult? _moduleGenerationResult;
 
     public CliManagedDotNetAppHostProject(
         IDotNetCliRunner runner,
@@ -46,6 +48,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         IAppHostInfoResolver appHostInfoResolver,
         IConfigurationService configurationService,
         IPackagingService packagingService,
+        BundleNuGetService nugetService,
         ILogger<CSharpCliManagedAppHostModuleGenerator> cliManagedModuleGeneratorLogger,
         IGracefulShutdownWindow shutdownService,
         IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
@@ -79,10 +82,9 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         _environment = environment;
         _cliManagedModuleGenerator = new CSharpCliManagedAppHostModuleGenerator(
             packagingService,
-            cliManagedModuleGeneratorLogger,
-            executionContext.NuGetServiceIndexOverride,
-            executionContext.IdentitySdkVersion,
-            executionContext.AspireHomeDirectory);
+            nugetService,
+            executionContext,
+            cliManagedModuleGeneratorLogger);
     }
 
     public override bool CanHandle(FileInfo appHostFile)
@@ -112,17 +114,18 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
             return CliExitCodes.SdkNotInstalled;
         }
 
-        var moduleProjectFile = await _cliManagedModuleGenerator.TryGenerateAsync(appHostFile, cancellationToken);
-        if (moduleProjectFile is null)
+        var generationResult = await _cliManagedModuleGenerator.TryGenerateWithRestoreConfigurationAsync(appHostFile, cancellationToken);
+        if (generationResult is null)
         {
             return CliExitCodes.FailedToBuildArtifacts;
         }
 
         var restoreSucceeded = await RestoreIntegrationClosureAsync(
             appHostFile,
-            moduleProjectFile,
-            CreateModuleBuildInvocationOptions(appHostFile),
+            generationResult.ModuleProjectFile,
+            CreateModuleBuildInvocationOptions(generationResult),
             outputCollector,
+            generationResult.SensitiveSources,
             cancellationToken);
 
         return restoreSucceeded
@@ -148,8 +151,9 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
 
     private async Task PrepareModuleAndClosureAsync(FileInfo appHostFile, CancellationToken cancellationToken)
     {
-        var moduleProjectFile = await _cliManagedModuleGenerator.TryGenerateAsync(appHostFile, cancellationToken).ConfigureAwait(false);
-        if (moduleProjectFile is null)
+        _moduleGenerationResult = null;
+        var generationResult = await _cliManagedModuleGenerator.TryGenerateWithRestoreConfigurationAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        if (generationResult is null)
         {
             throw new InvalidOperationException($"Failed to generate CLI-managed AppHost module for '{appHostFile.FullName}'.");
         }
@@ -157,20 +161,27 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         var outputCollector = new OutputCollector();
         var restoreSucceeded = await RestoreIntegrationClosureAsync(
             appHostFile,
-            moduleProjectFile,
-            CreateModuleBuildInvocationOptions(appHostFile),
+            generationResult.ModuleProjectFile,
+            CreateModuleBuildInvocationOptions(generationResult),
             outputCollector,
+            generationResult.SensitiveSources,
             cancellationToken).ConfigureAwait(false);
 
         if (!restoreSucceeded)
         {
             throw new InvalidOperationException($"Failed to restore CLI-managed AppHost integration closure for '{appHostFile.FullName}'.");
         }
+
+        _moduleGenerationResult = generationResult;
     }
 
     protected override void ConfigureAppHostInvocationOptions(FileInfo appHostFile, ProcessInvocationOptions options)
     {
         CSharpCliManagedAppHostModuleGenerator.AddAppHostBuildProperties(appHostFile, options);
+        if (_moduleGenerationResult is not null)
+        {
+            ApplyRestoreInvocationConfiguration(options, _moduleGenerationResult);
+        }
         options.EnvironmentVariablesToRemove.Add(KnownConfigNames.IntegrationProbeManifestPath);
         options.EnvironmentVariablesToRemove.Add(KnownConfigNames.IntegrationLibsPath);
     }
@@ -208,8 +219,13 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         var packageSourceOverride = PackageSourceOverrideMappings.HasCredentialMaterial(context.Source ?? string.Empty)
             ? null
             : context.Source;
-        var moduleProjectFile = await _cliManagedModuleGenerator.TryGenerateAsync(context.AppHostFile, config, configDirectory, packageSourceOverride, cancellationToken);
-        if (moduleProjectFile is null)
+        var generationResult = await _cliManagedModuleGenerator.TryGenerateWithRestoreConfigurationAsync(
+            context.AppHostFile,
+            config,
+            configDirectory,
+            packageSourceOverride,
+            cancellationToken);
+        if (generationResult is null)
         {
             return false;
         }
@@ -222,19 +238,62 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         // `aspire run` resolves the newly added package without requiring an explicit `aspire restore`.
         var restoreSucceeded = await RestoreIntegrationClosureAsync(
             context.AppHostFile,
-            moduleProjectFile,
-            CreateModuleBuildInvocationOptions(context.AppHostFile),
+            generationResult.ModuleProjectFile,
+            CreateModuleBuildInvocationOptions(generationResult),
             outputCollector,
+            generationResult.SensitiveSources,
             cancellationToken);
         return restoreSucceeded;
     }
 
-    private static ProcessInvocationOptions CreateModuleBuildInvocationOptions(FileInfo appHostFile)
+    private static ProcessInvocationOptions CreateModuleBuildInvocationOptions(
+        CliManagedAppHostModuleGenerationResult generationResult)
     {
         var options = new ProcessInvocationOptions();
         CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(options);
-        CSharpCliManagedAppHostModuleGenerator.AddRestoreConfigFilePropertyIfExists(appHostFile, options);
+        ApplyRestoreInvocationConfiguration(options, generationResult);
         return options;
+    }
+
+    private static void ApplyRestoreInvocationConfiguration(
+        ProcessInvocationOptions options,
+        CliManagedAppHostModuleGenerationResult generationResult)
+    {
+        var environmentVariables = options.EnvironmentVariables is null
+            ? new Dictionary<string, string>()
+            : new Dictionary<string, string>(options.EnvironmentVariables);
+
+        if (generationResult.IntegrationPackageSources is not null)
+        {
+            environmentVariables[PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName] =
+                generationResult.IntegrationPackageSources;
+        }
+
+        if (generationResult.GlobalPackagesFolder is not null)
+        {
+            environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] =
+                generationResult.GlobalPackagesFolder;
+        }
+
+        if (environmentVariables.Count > 0)
+        {
+            options.EnvironmentVariables = environmentVariables;
+        }
+
+        if (generationResult.SensitiveSources.Length == 0)
+        {
+            return;
+        }
+
+        var standardOutputCallback = options.StandardOutputCallback;
+        var standardErrorCallback = options.StandardErrorCallback;
+        options.StandardOutputCallback = standardOutputCallback is null
+            ? null
+            : line => standardOutputCallback(PackageSourceRedactor.RedactOccurrences(line, generationResult.SensitiveSources));
+        options.StandardErrorCallback = standardErrorCallback is null
+            ? null
+            : line => standardErrorCallback(PackageSourceRedactor.RedactOccurrences(line, generationResult.SensitiveSources));
+        options.SuppressLogging = true;
     }
 
     private static bool IsExperimentalCliManagedAppHostEnabled(FileInfo candidateFile, IFeatures features)
@@ -353,6 +412,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         FileInfo moduleProjectFile,
         ProcessInvocationOptions buildOptions,
         OutputCollector buildOutputCollector,
+        IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
     {
         var appHostDirectory = appHostFile.Directory
@@ -368,12 +428,16 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         buildOptions.StandardOutputCallback = line =>
         {
             existingStandardOutputCallback?.Invoke(line);
-            buildOutputCollector.AppendOutput(line);
+            buildOutputCollector.AppendOutput(PackageSourceRedactor.RedactOccurrences(
+                line,
+                sensitiveSources));
         };
         buildOptions.StandardErrorCallback = line =>
         {
             existingStandardErrorCallback?.Invoke(line);
-            buildOutputCollector.AppendError(line);
+            buildOutputCollector.AppendError(PackageSourceRedactor.RedactOccurrences(
+                line,
+                sensitiveSources));
         };
 
         var exitCode = await _runner.BuildAsync(moduleProjectFile, noRestore: false, buildOptions, cancellationToken).ConfigureAwait(false);
