@@ -2,7 +2,10 @@
   "id": "artifact-upload-econnreset",
   "type": "infra-failure",
   "title": "GitHub artifact upload fails with ECONNRESET network error",
+  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Orleans.Tests, Hosting.Orleans, Hosting.Orleans, tests/... / Hosting.Orleans (ubuntu-latest)",
   "error_pattern": "Failed to CreateArtifact: Unable to make request: ECONNRESET",
+  "analysis": "The job failed on the 'Upload logs, and test results' step with an annotation showing 'Failed to CreateArtifact: Unable to make request: ECONNRESET', which is a transient network error uploading artifacts to GitHub Actions, unrelated to the PR's changes (workflow files and infra test additions). This matches a known prior infrastructure cause.",
+  "failure_details": "### Annotations: Tests / No-package tests (regular, Aspire.Hosting.Orleans.Tests, Hosting.Orleans, Hosting.Orleans, tests/... / Hosting.Orleans (ubuntu-latest) (104065400225)\n- **failure**: Failed to CreateArtifact: Unable to make request: ECONNRESET\nIf you are using self-hosted runners, please make sure your runner has access to all GitHub endpoints: https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#communication-between-self-hosted-runners-and-github",
   "occurrences": [
     {
       "run_id": 30957939475,
@@ -10,6 +13,13 @@
       "job": "Tests / RabbitMQ.Client / RabbitMQ.Client (ubuntu-latest)",
       "pr_number": 18987,
       "observed_at": "2026-08-04T23:37:14Z"
+    },
+    {
+      "run_id": 34870408493,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34870408493",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Orleans.Tests, Hosting.Orleans, Hosting.Orleans, tests/... / Hosting.Orleans (ubuntu-latest)",
+      "pr_number": 20039,
+      "observed_at": "2026-09-14T17:20:10Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19005"

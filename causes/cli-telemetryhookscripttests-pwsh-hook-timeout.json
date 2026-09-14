@@ -1,0 +1,20 @@
+{
+  "id": "cli-telemetryhookscripttests-pwsh-hook-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: TelemetryHookScriptTests pwsh hook process does not exit within 30 seconds on Windows",
+  "test_name": "Aspire.Cli.Tests.Agents.TelemetryHookScriptTests.Pwsh_ReferenceFileRead_CopilotStringArgs_ForwardsRelativePath",
+  "job_name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+  "error_pattern": "System.TimeoutException : Hook process 'pwsh' did not exit within 30 seconds.",
+  "analysis": "The test spawns an external pwsh process and waits up to 30 seconds for it to exit; the failure is a timeout waiting on an external process rather than an assertion on behavior changed by the PR. The PR under test (#20039) only adds a new sync workflow and its infrastructure test/harness files, and does not touch Aspire.Cli or the TelemetryHookScriptTests area, so this timeout is unrelated to the PR changes and indicates environment/process-launch flakiness on the Windows runner.",
+  "failure_details": "**Error:**\n```\nSystem.TimeoutException : Hook process 'pwsh' did not exit within 30 seconds.\n```\n**Stack Trace:**\n```\nat Aspire.Cli.Tests.Agents.TelemetryHookScriptTests.RunProcess(String fileName, IReadOnlyList`1 arguments, String stdinPayload, Dictionary`2 environment) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Agents\\TelemetryHookScriptTests.cs:line 593\n   at Aspire.Cli.Tests.Agents.TelemetryHookScriptTests.RunPwshHookAsync(String payload, Dictionary`2 extraEnv) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Agents\\TelemetryHookScriptTests.cs:line 450\n   at Aspire.Cli.Tests.Agents.TelemetryHookScriptTests.Pwsh_ReferenceFileRead_CopilotStringArgs_ForwardsRelativePath() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Agents\\TelemetryHookScriptTests.cs:line 420\n--- End of stack trace from previous location ---\n```\n**Standard Output (sensitive values redacted):**\n```\nTemporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\14114af0.bpa\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\14114af0.bpa\n```",
+  "occurrences": [
+    {
+      "run_id": 34870408493,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34870408493",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "pr_number": 20039,
+      "observed_at": "2026-09-14T17:20:10Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20121"
+}
