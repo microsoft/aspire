@@ -3,8 +3,10 @@
 
 using System.Buffers;
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Dashboard.Utils;
@@ -24,6 +26,7 @@ namespace Aspire.Hosting.Dcp;
 
 internal sealed class DcpHost
 {
+    private const string DcpConPtyPathEnvironmentVariable = "DCP_CONPTY_PATH";
     private const int LoggingSocketConnectionBacklog = 3;
 
     private readonly DistributedApplicationModel _applicationModel;
@@ -346,6 +349,8 @@ internal sealed class DcpHost
             }
         }
 
+        ConfigureBundledConPty(dcpProcessSpec.EnvironmentVariables);
+
         // DCP intentionally owns DCP_OTEL_* names instead of reading Aspire's ASPIRE_* profiling
         // names. Apply the mapping after copying the AppHost environment so this capture's
         // profiling settings win over any inherited DCP_OTEL_* values.
@@ -370,6 +375,57 @@ internal sealed class DcpHost
         }
 
         return dcpProcessSpec;
+    }
+
+    private void ConfigureBundledConPty(IDictionary<string, string> environmentVariables)
+    {
+        if (!OperatingSystem.IsWindows() ||
+            environmentVariables.Keys.Any(key => string.Equals(key, DcpConPtyPathEnvironmentVariable, StringComparison.OrdinalIgnoreCase)))
+        {
+            // An explicitly inherited value, including an empty value, is authoritative. DCP treats an empty
+            // value as a request to use the inbox provider and reports invalid nonempty paths itself.
+            return;
+        }
+
+        if (TryGetBundledConPtyPath(_dcpOptions.TerminalHostPath, RuntimeInformation.OSArchitecture, out var conPtyPath))
+        {
+            environmentVariables[DcpConPtyPathEnvironmentVariable] = conPtyPath;
+            _logger.LogDebug("Configured DCP to use the bundled ConPTY provider at '{ConPtyPath}'.", conPtyPath);
+        }
+        else
+        {
+            // Older or customized layouts may not contain Hex1b's native payload. Leaving the variable unset
+            // preserves DCP's inbox CreatePseudoConsole behavior instead of turning an optional enhancement into
+            // an application startup failure.
+            _logger.LogDebug("A complete bundled ConPTY provider was not found; DCP will use the inbox Windows provider.");
+        }
+    }
+
+    internal static bool TryGetBundledConPtyPath(string? terminalHostPath, Architecture osArchitecture, [NotNullWhen(true)] out string? conPtyPath)
+    {
+        conPtyPath = null;
+        if (string.IsNullOrWhiteSpace(terminalHostPath) ||
+            Path.GetDirectoryName(Path.GetFullPath(terminalHostPath)) is not { } directory)
+        {
+            return false;
+        }
+
+        var architectureDirectory = osArchitecture switch
+        {
+            Architecture.X64 => "x64",
+            Architecture.Arm64 => "arm64",
+            _ => null
+        };
+
+        if (architectureDirectory is null ||
+            !File.Exists(Path.Combine(directory, "conpty.dll")) ||
+            !File.Exists(Path.Combine(directory, architectureDirectory, "OpenConsole.exe")))
+        {
+            return false;
+        }
+
+        conPtyPath = directory;
+        return true;
     }
 
     private void SetDcpProfilingEnvironment(IDictionary<string, string> environmentVariables)

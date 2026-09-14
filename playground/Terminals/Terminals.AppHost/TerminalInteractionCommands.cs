@@ -227,6 +227,40 @@ internal static class TerminalInteractionCommands
     }
 
     /// <summary>
+    /// Adds a command that opens a local PowerShell session in the terminal dock.
+    /// </summary>
+    /// <remarks>
+    /// The PowerShell process is launched directly by the AppHost-owned Hex1b terminal, so this command provides a
+    /// debugging control that does not depend on Docker or DCP's PTY implementation.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Uses TerminalService and command handlers that are not ATS-compatible.")]
+    public static IResourceBuilder<ContainerResource> WithPowerShellDockCommand(this IResourceBuilder<ContainerResource> container)
+    {
+        return container.WithCommand(
+            "terminal-dock-powershell",
+            "Open PowerShell (terminal dock)",
+            executeCommand: commandContext =>
+            {
+                var terminalService = commandContext.Services.GetRequiredService<TerminalService>();
+
+                // The terminal remains open until the user closes its dock tab or the AppHost shuts down.
+                var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+                {
+                    Title = "PowerShell",
+                    Command = new TerminalCommand("pwsh.exe")
+                    {
+                        Arguments = ["-NoLogo"]
+                    }
+                });
+
+                terminal.Start();
+                terminal.Show();
+
+                return Task.FromResult(CommandResults.Success());
+            });
+    }
+
+    /// <summary>
     /// Adds a command that plays a terminal-based guessing game by driving the process from AppHost code.
     /// </summary>
     /// <remarks>

@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.Dcp;
@@ -568,6 +569,64 @@ public sealed class DcpHostNotificationTests
 
         // Assert
         Assert.Contains("--container-runtime \"podman\"", processSpec.Arguments);
+    }
+
+    [Theory]
+    [InlineData(Architecture.X64, "x64")]
+    [InlineData(Architecture.Arm64, "arm64")]
+    public void TryGetBundledConPtyPath_WithCompletePayload_ReturnsTerminalHostDirectory(Architecture architecture, string architectureDirectory)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var terminalHostPath = Path.Combine(directory.FullName, "aspire-managed.exe");
+            File.WriteAllText(terminalHostPath, "");
+            File.WriteAllText(Path.Combine(directory.FullName, "conpty.dll"), "");
+            Directory.CreateDirectory(Path.Combine(directory.FullName, architectureDirectory));
+            File.WriteAllText(Path.Combine(directory.FullName, architectureDirectory, "OpenConsole.exe"), "");
+
+            var found = DcpHost.TryGetBundledConPtyPath(terminalHostPath, architecture, out var conPtyPath);
+
+            Assert.True(found);
+            Assert.Equal(directory.FullName, conPtyPath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void TryGetBundledConPtyPath_WithIncompletePayload_ReturnsFalse(bool includeConPty, bool includeOpenConsole)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var terminalHostPath = Path.Combine(directory.FullName, "aspire-managed.exe");
+            File.WriteAllText(terminalHostPath, "");
+            if (includeConPty)
+            {
+                File.WriteAllText(Path.Combine(directory.FullName, "conpty.dll"), "");
+            }
+
+            if (includeOpenConsole)
+            {
+                var architectureDirectory = RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "arm64" : "x64";
+                Directory.CreateDirectory(Path.Combine(directory.FullName, architectureDirectory));
+                File.WriteAllText(Path.Combine(directory.FullName, architectureDirectory, "OpenConsole.exe"), "");
+            }
+
+            var found = DcpHost.TryGetBundledConPtyPath(terminalHostPath, RuntimeInformation.OSArchitecture, out var conPtyPath);
+
+            Assert.False(found);
+            Assert.Null(conPtyPath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     [Fact]

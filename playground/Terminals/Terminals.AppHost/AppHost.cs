@@ -34,7 +34,7 @@ builder.AddProject<Projects.Terminals_Repl>("repl")
 
 // Long-running container that the "Shell into container" interaction command execs into. Aspire is not orchestrating
 // the exec — the AppHost shells out to `docker exec` — so the container needs a stable, predictable name.
-builder.AddContainer("shellbox", "alpine")
+var shellbox = builder.AddContainer("shellbox", "alpine")
     .WithContainerName("terminals-playground-shellbox")
     .WithArgs("sleep", "infinity")
     .WithContainerShellCommand()
@@ -52,6 +52,9 @@ builder.AddContainer("noderepl", "node", "latest")
 
 if (OperatingSystem.IsWindows())
 {
+    // Local PowerShell launched directly by Hex1b, providing a Docker- and DCP-independent PTY debugging path.
+    shellbox.WithPowerShellDockCommand();
+
     // Single-replica executable wrapping cmd.exe to demonstrate that
     // WithTerminal() also works for arbitrary executables, not just projects.
     builder.AddExecutable("shell", "cmd.exe", ".")
