@@ -900,6 +900,19 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     }
 
     [Fact]
+    public void RealMapApiManagementProjectChangeRunsPolyglotValidation()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var result = selector.Select([], ["Aspire.Hosting.Azure.ApiManagement"], new SelectorOptions());
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("job:polyglot", result.Jobs);
+        Assert.Contains("job:typescript-api-compat", result.Jobs);
+    }
+
+    [Fact]
     public void RealMapBlazorRuntimeAssetChangeRunsPackageAndPolyglotRegressions()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");

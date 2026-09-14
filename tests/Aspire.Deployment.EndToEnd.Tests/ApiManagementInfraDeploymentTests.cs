@@ -128,17 +128,17 @@ builder.Build().Run();
                 $"SERVICE=$(az apim list -g \"{resourceGroupName}\" --subscription \"{subscriptionId}\" " +
                 "--query \"[?sku.name == 'Consumption' && provisioningState == 'Succeeded'].name | [0]\" -o tsv) && " +
                 "[ -n \"$SERVICE\" ] && " +
-                $"[ \"$(az apim api show -g \"{resourceGroupName}\" -n \"$SERVICE\" --subscription \"{subscriptionId}\" " +
+                $"[ \"$(az apim api show -g \"{resourceGroupName}\" --service-name \"$SERVICE\" --subscription \"{subscriptionId}\" " +
                 "--api-id catalog-api --query path -o tsv)\" = \"catalog\" ] && " +
-                $"[ \"$(az apim api operation show -g \"{resourceGroupName}\" -n \"$SERVICE\" --subscription \"{subscriptionId}\" " +
+                $"[ \"$(az apim api operation show -g \"{resourceGroupName}\" --service-name \"$SERVICE\" --subscription \"{subscriptionId}\" " +
                 "--api-id catalog-api --operation-id get-items --query method -o tsv)\" = \"GET\" ] && " +
-                $"[ \"$(az apim nv show -g \"{resourceGroupName}\" -n \"$SERVICE\" --subscription \"{subscriptionId}\" " +
+                $"[ \"$(az apim nv show -g \"{resourceGroupName}\" --service-name \"$SERVICE\" --subscription \"{subscriptionId}\" " +
                 "--named-value-id environment --query value -o tsv)\" = \"infra-test\" ] && " +
-                $"[ \"$(az apim product show -g \"{resourceGroupName}\" -n \"$SERVICE\" --subscription \"{subscriptionId}\" " +
+                $"[ \"$(az apim product show -g \"{resourceGroupName}\" --service-name \"$SERVICE\" --subscription \"{subscriptionId}\" " +
                 "--product-id catalog-product --query state -o tsv)\" = \"published\" ] && " +
-                $"az apim product api check -g \"{resourceGroupName}\" -n \"$SERVICE\" --subscription \"{subscriptionId}\" " +
+                $"az apim product api check -g \"{resourceGroupName}\" --service-name \"$SERVICE\" --subscription \"{subscriptionId}\" " +
                 "--product-id catalog-product --api-id catalog-api --output none && " +
-                $"SERVICE_ID=$(az apim show -g \"{resourceGroupName}\" -n \"$SERVICE\" --subscription \"{subscriptionId}\" --query id -o tsv) && " +
+                $"SERVICE_ID=$(az apim show -g \"{resourceGroupName}\" --name \"$SERVICE\" --subscription \"{subscriptionId}\" --query id -o tsv) && " +
                 "[ \"$(az rest --method get " +
                 "--url \"https://management.azure.com${SERVICE_ID}/backends/catalog-backend?api-version=2024-05-01\" " +
                 "--query properties.url -o tsv)\" = \"https://example.com\" ] && " +

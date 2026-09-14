@@ -350,6 +350,9 @@ affected_project_rules:
       - Aspire.Hosting.Rust
     targets: [job:polyglot]
     reason: ATS typesystem -> per-language SDK generators -> RemoteHost server + CLI run + fixtures
+  - projects: [Aspire.Hosting.Azure.ApiManagement]
+    targets: [job:polyglot]
+    reason: APIM exports are consumed by the TypeScript fixture under tests/PolyglotAppHosts
   - projects: [Aspire.Hosting.CodeGeneration.TypeScript]
     targets: [job:typescript-sdk]
     reason: vitest unit tests over generated TS SDK (@aspire/transport, @aspire/base)
