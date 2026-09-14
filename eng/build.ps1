@@ -11,9 +11,14 @@ Param(
   [switch]$mauirestore,
   [switch]$bundle,
   [string]$runtimeVersion,
+  [switch]$ci,
+  [ValidateSet('true','false')][string]$warnAsError = 'true',
+  [string]$warnNotAsError = '',
 
-  [Parameter(ValueFromRemainingArguments=$true)][String[]]$properties
+  [Parameter(ValueFromRemainingArguments=$true)][String[]]$remainingArguments
 )
+
+$ErrorActionPreference = 'Stop'
 
 function Get-Help() {
   Write-Host "Common settings:"
@@ -27,6 +32,7 @@ function Get-Help() {
   Write-Host "                                 [Default: Your machine's OS.]"
   Write-Host "  -verbosity (-v)                MSBuild verbosity: q[uiet], m[inimal], n[ormal], d[etailed], and diag[nostic]."
   Write-Host "                                 [Default: Minimal]"
+  Write-Host "  -warnNotAsError <codes>         Additional warning exemptions, merged with the evaluated repository policy."
   Write-Host "  -vs                            Open the solution with Visual Studio using the locally acquired SDK."
   Write-Host ""
 
@@ -66,6 +72,7 @@ if ($help) {
 if ($vs) {
   $solution = Split-Path $PSScriptRoot -Parent | Join-Path -ChildPath "Aspire.slnx"
 
+  [bool]$warnAsError = [bool]::Parse($warnAsError)
   . $PSScriptRoot\common\tools.ps1
 
   # This tells .NET Core to use the bootstrapped runtime
@@ -83,32 +90,51 @@ if ($vs) {
   exit 0
 }
 
+# PowerShell can deliver "-property:Name=Value" as two arguments ("-property", "Name=Value")
+# for a remaining-arguments parameter. Recombine it before evaluating the policy.
+$normalizedArguments = @()
+for ($i = 0; $i -lt $remainingArguments.Count; $i++) {
+  if ($remainingArguments[$i] -eq '-property') {
+    if ($i + 1 -ge $remainingArguments.Count) {
+      throw "No property value supplied for $($remainingArguments[$i])."
+    }
+    $normalizedArguments += "/p:$($remainingArguments[++$i])"
+  } else {
+    $normalizedArguments += $remainingArguments[$i]
+  }
+}
+$remainingArguments = $normalizedArguments
+
 # Check if an action is passed in
 $actions = "b","build","r","restore","rebuild","sign","testnobuild","publish","clean","t","test"
 $actionPassedIn = @(Compare-Object -ReferenceObject @($PSBoundParameters.Keys) -DifferenceObject $actions -ExcludeDifferent -IncludeEqual).Length -ne 0
-if ($null -ne $properties -and $actionPassedIn -ne $true) {
-  $actionPassedIn = @(Compare-Object -ReferenceObject $properties -DifferenceObject $actions.ForEach({ "-" + $_ }) -ExcludeDifferent -IncludeEqual).Length -ne 0
+if ($null -ne $remainingArguments -and $actionPassedIn -ne $true) {
+  $actionPassedIn = @(Compare-Object -ReferenceObject $remainingArguments -DifferenceObject $actions.ForEach({ "-" + $_ }) -ExcludeDifferent -IncludeEqual).Length -ne 0
 }
 
+$arguments = @()
 if (!$actionPassedIn) {
-  $arguments = "-restore -build"
+  $arguments += '-restore', '-build'
 }
 
 foreach ($argument in $PSBoundParameters.Keys)
 {
   switch($argument)
   {
-    "os"                     { $arguments += " /p:TargetOS=$($PSBoundParameters[$argument])" }
-    "properties"             { $arguments += " " + $properties }
-    "verbosity"              { $arguments += " -$argument " + $($PSBoundParameters[$argument]) }
-    "configuration"          { $configuration = (Get-Culture).TextInfo.ToTitleCase($($PSBoundParameters[$argument])); $arguments += " -configuration $configuration" }
-    "arch"                   { $arguments += " /p:TargetArchitecture=$($PSBoundParameters[$argument])" }
-    "testnobuild"            { $arguments += " /p:VSTestNoBuild=true" }
-    "buildExtension"         { $arguments += " /p:BuildExtension=true" }
-    "mauirestore"            { $arguments += " -restoreMaui" }
+    "os"                     { $arguments += "/p:TargetOS=$($PSBoundParameters[$argument])" }
+    "remainingArguments"     { $arguments += $remainingArguments }
+    "verbosity"              { $arguments += "-$argument", $PSBoundParameters[$argument] }
+    "configuration"          { $configuration = (Get-Culture).TextInfo.ToTitleCase($($PSBoundParameters[$argument])); $arguments += '-configuration', $configuration }
+    "arch"                   { $arguments += "/p:TargetArchitecture=$($PSBoundParameters[$argument])" }
+    "testnobuild"            { $arguments += "/p:VSTestNoBuild=true" }
+    "buildExtension"         { $arguments += "/p:BuildExtension=true" }
+    "mauirestore"            { $arguments += '-restoreMaui' }
+    "ci"                    { $arguments += '-ci' }
+    "warnAsError"            { } # Passed as a boolean below.
+    "warnNotAsError"         { } # Merged with the repository policy below.
     "bundle"                 { } # Handled after main build
     "runtimeVersion"         { } # Handled after main build
-    default                  { $arguments += " /p:$argument=$($PSBoundParameters[$argument])" }
+    default                  { $arguments += "/p:$argument=$($PSBoundParameters[$argument])" }
   }
 }
 
@@ -118,11 +144,56 @@ if ($env:TreatWarningsAsErrors -eq 'false') {
   # earlier '0' worked as a shell-truthy switch but produced
   # 'MSB4030: "0" is an invalid value for the "TreatWarningsAsErrors"
   # parameter' once it reached the inner MSBuild call.
-  $arguments += " -warnAsError false"
+  $warnAsError = 'false'
 }
 
-Write-Host "& `"$PSScriptRoot/common/build.ps1`" $arguments"
-Invoke-Expression "& `"$PSScriptRoot/common/build.ps1`" $arguments"
+if ([bool]::Parse($warnAsError)) {
+  # Arcade restores through a standalone NuGet.targets project that never imports
+  # Directory.Build.props. Forward its evaluated policy to the command-line logger too.
+  # See https://github.com/dotnet/msbuild/issues/10801.
+  $evaluationProperties = @("/p:Configuration=$configuration", "/p:ContinuousIntegrationBuild=$($ci.IsPresent)")
+  $evaluationProperties += @($arguments | Where-Object { $_ -match '^[-/](p|property):' })
+  $repositoryWarnings = & {
+    $ErrorActionPreference = 'Stop'
+    [bool]$warnAsError = [bool]::Parse($warnAsError)
+    . $PSScriptRoot\common\tools.ps1
+    $dotnetRoot = InitializeDotNetCli -install:$true
+    $dotnet = Join-Path $dotnetRoot (GetExecutableFileName 'dotnet')
+    $output = & $dotnet msbuild "$PSScriptRoot\WarningPolicy.proj" -nologo -getProperty:WarningsNotAsErrors @evaluationProperties
+    if ($LASTEXITCODE -ne 0) {
+      throw "Could not evaluate the repository warning policy (exit code $LASTEXITCODE).`n$($output -join [Environment]::NewLine)"
+    }
+    # A single-property query prints a semicolon-delimited value, e.g. ";CS1591;NU1901".
+    # Reject unexpected diagnostic output rather than treating it as warning codes.
+    if (@($output).Count -gt 1) {
+      throw "Unexpected output while evaluating the repository warning policy:`n$($output -join [Environment]::NewLine)"
+    }
+    "$output".Trim()
+  }
+  $warnNotAsError = (@("$repositoryWarnings;$warnNotAsError" -split ';') |
+    ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique) -join ';'
+}
+
+$arguments += '-warnAsError', [bool]::Parse($warnAsError)
+if ($warnNotAsError) {
+  $arguments += '-warnNotAsError', $warnNotAsError
+}
+
+# Array splatting treats dynamically supplied parameter names as positional values
+# for PowerShell scripts. Quote all values when forming the invocation so paths with
+# spaces and semicolon-delimited warning lists remain single arguments.
+$quotedArguments = foreach ($argument in $arguments) {
+  if ($argument -is [bool]) {
+    if ($argument) { '$true' } else { '$false' }
+  } elseif ($argument -match '^-[a-zA-Z][a-zA-Z0-9]*$') {
+    $argument
+  } else {
+    "'$(([string]$argument).Replace("'", "''"))'"
+  }
+}
+$invocation = "& '$($PSScriptRoot.Replace("'", "''"))/common/build.ps1' $($quotedArguments -join ' ')"
+Write-Host $invocation
+Invoke-Expression $invocation
 $buildExitCode = $LASTEXITCODE
 
 if ($buildExitCode -ne 0) {
@@ -161,7 +232,7 @@ if ($bundle) {
   )
   
   # Pass through SkipNativeBuild if set
-  if ($properties -contains "/p:SkipNativeBuild=true") {
+  if ($remainingArguments -contains "/p:SkipNativeBuild=true") {
     $bundleArgs += "/p:SkipNativeBuild=true"
   }
   

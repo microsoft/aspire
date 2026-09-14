@@ -27,6 +27,7 @@ usage()
   echo "                                  [Default: Your machine's OS.]"
   echo "  --verbosity (-v)                MSBuild verbosity: q[uiet], m[inimal], n[ormal], d[etailed], and diag[nostic]."
   echo "                                  [Default: Minimal]"
+  echo "  --warnNotAsError <codes>         Additional warning exemptions, merged with the evaluated repository policy."
   echo ""
 
   echo "Actions (defaults to --restore --build):"
@@ -56,8 +57,11 @@ usage()
   echo ""
 }
 
-arguments=''
-extraargs=''
+arguments=()
+extraargs=()
+warn_as_error=true
+explicit_warning_exemptions=''
+ci=false
 build_bundle=false
 runtime_version=""
 config="Debug"
@@ -91,7 +95,7 @@ while [[ $# > 0 ]]; do
           exit 1
           ;;
       esac
-      arguments="$arguments /p:TargetArchitecture=$arch"
+      arguments+=("/p:TargetArchitecture=$arch")
       shift 2
       ;;
 
@@ -112,7 +116,7 @@ while [[ $# > 0 ]]; do
           exit 1
           ;;
       esac
-      arguments="$arguments -configuration $val"
+      arguments+=("-configuration" "$val")
       shift 2
       ;;
 
@@ -135,17 +139,17 @@ while [[ $# > 0 ]]; do
           exit 1
           ;;
       esac
-      arguments="$arguments /p:TargetOS=$os"
+      arguments+=("/p:TargetOS=$os")
       shift 2
       ;;
 
      -testnobuild)
-      arguments="$arguments /p:VSTestNoBuild=true"
+      arguments+=("/p:VSTestNoBuild=true")
       shift 1
       ;;
 
      -build-extension)
-      extraargs="$extraargs /p:BuildExtension=true"
+      extraargs+=("/p:BuildExtension=true")
       shift 1
       ;;
 
@@ -168,15 +172,38 @@ while [[ $# > 0 ]]; do
       shift 2
       ;;
 
+     -ci)
+      ci=true
+      arguments+=("-ci")
+      shift
+      ;;
+
+     -warnaserror|-warnnotaserror)
+      if [[ $# -lt 2 ]]; then
+        echo "No value supplied for $1." >&2
+        exit 1
+      fi
+      if [[ "$opt" == "-warnaserror" ]]; then
+        warn_as_error="$(echo "$2" | tr "[:upper:]" "[:lower:]")"
+        if [[ "$warn_as_error" != "true" && "$warn_as_error" != "false" ]]; then
+          echo "Expected true or false for $1." >&2
+          exit 1
+        fi
+      else
+        explicit_warning_exemptions="$2"
+      fi
+      shift 2
+      ;;
+
      *)
-      extraargs="$extraargs $1"
+      extraargs+=("$1")
       shift 1
       ;;
   esac
 done
 
 if [ ${#actInt[@]} -eq 0 ]; then
-    arguments="-restore -build $arguments"
+    arguments=("-restore" "-build" ${arguments[@]+"${arguments[@]}"})
 fi
 
 if [[ "${TreatWarningsAsErrors:-}" == "false" ]]; then
@@ -185,11 +212,58 @@ if [[ "${TreatWarningsAsErrors:-}" == "false" ]]; then
     # earlier '0' worked as a shell-truthy switch but produced
     # 'MSB4030: "0" is an invalid value for the "TreatWarningsAsErrors"
     # parameter' once it reached the inner MSBuild call.
-    arguments="$arguments -warnAsError false"
+    warn_as_error=false
 fi
 
-arguments="$arguments $extraargs"
-"$scriptroot/common/build.sh" $arguments
+if [[ "$warn_as_error" == "true" ]]; then
+    evaluation_properties=()
+    # The guarded expansions also work with empty arrays under macOS Bash 3.2's nounset.
+    for argument in ${arguments[@]+"${arguments[@]}"} ${extraargs[@]+"${extraargs[@]}"}; do
+        case "$(echo "$argument" | tr "[:upper:]" "[:lower:]")" in
+            /p:*|-p:*|/property:*|-property:*) evaluation_properties+=("$argument") ;;
+        esac
+    done
+
+    # Arcade's standalone NuGet.targets restore does not import Directory.Build.props.
+    # Evaluate that policy once and forward it to the command-line warning logger too.
+    # See https://github.com/dotnet/msbuild/issues/10801.
+    if repository_warnings="$(
+        source "$scriptroot/common/tools.sh" >&2
+        InitializeDotNetCli true >&2
+        "$_InitializeDotNetCli/dotnet" msbuild "$eng_root/WarningPolicy.proj" -nologo \
+          -getProperty:WarningsNotAsErrors "/p:Configuration=$config" "/p:ContinuousIntegrationBuild=$ci" \
+          ${evaluation_properties[@]+"${evaluation_properties[@]}"}
+    )"; then
+        # Single-property output is a semicolon list, e.g. ";CS1591;NU1901".
+        repository_warnings="${repository_warnings//$'\r'/}"
+        if [[ "$repository_warnings" == *$'\n'* ]]; then
+            printf 'Unexpected output while evaluating the repository warning policy:\n%s\n' "$repository_warnings" >&2
+            exit 1
+        fi
+    else
+        printf 'Could not evaluate the repository warning policy:\n%s\n' "$repository_warnings" >&2
+        exit 1
+    fi
+    if [[ -n "$repository_warnings" ]]; then
+        explicit_warning_exemptions="$repository_warnings${explicit_warning_exemptions:+;$explicit_warning_exemptions}"
+    fi
+fi
+
+# Empty entries from property appends (e.g. ";CS1591;;TST1001") are valid in
+# MSBuild properties but rejected by its command-line warning switch.
+IFS=';' read -r -a warning_codes <<< "${explicit_warning_exemptions//[[:space:]]/}"
+explicit_warning_exemptions=''
+for code in ${warning_codes[@]+"${warning_codes[@]}"}; do
+    if [[ -n "$code" && ";$explicit_warning_exemptions;" != *";$code;"* ]]; then
+        explicit_warning_exemptions="${explicit_warning_exemptions:+$explicit_warning_exemptions;}$code"
+    fi
+done
+
+arguments+=(${extraargs[@]+"${extraargs[@]}"} "-warnAsError" "$warn_as_error")
+if [[ -n "$explicit_warning_exemptions" ]]; then
+    arguments+=("-warnNotAsError" "$explicit_warning_exemptions")
+fi
+"$scriptroot/common/build.sh" "${arguments[@]}"
 build_exit_code=$?
 
 if [ $build_exit_code -ne 0 ]; then

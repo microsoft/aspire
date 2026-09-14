@@ -42,6 +42,21 @@ public sealed class TestTriggerMapTests
         Assert.Equal(1, s_map.Version);
     }
 
+    [Theory]
+    [InlineData("eng/WarningPolicy.proj")]
+    [InlineData("eng/build.ps1")]
+    [InlineData("eng/build.sh")]
+    public void WarningPolicyChangesSelectAllTests(string path)
+    {
+        var targets = s_map.PathRules
+            .Where(rule => rule.Paths.Any(glob => TestTriggerMap.GlobMatches(glob, path)))
+            .SelectMany(rule => rule.Targets)
+            .Distinct()
+            .ToArray();
+
+        Assert.Equal(["ALL"], targets);
+    }
+
     [Fact]
     public void ExtensionUnitWorkflowChangesSelectUnitAndE2eJobs()
     {
