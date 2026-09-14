@@ -175,8 +175,7 @@ internal static class Selection
         // selector now runs BEFORE enumerate-tests. Maps each test project name to its repo-relative
         // .csproj path so a selected name can be written as an OverrideProjectToBuild item.
         trace.EnterStage("load test projects from slnx");
-        var testProjectSets = LoadTestProjectSets(options.SlnxPath);
-        var testProjectsByName = testProjectSets.MatrixProjects;
+        var testProjectsByName = LoadTestProjects(options.SlnxPath);
         var allTestProjects = testProjectsByName.Keys.ToHashSet(StringComparer.Ordinal);
 
         // The prefilter (the map's `prefilter` block): read the CI skip-gate patterns file at runtime
@@ -251,7 +250,7 @@ internal static class Selection
             : LoadProjectDirectories(options.SlnxPath);
 
         trace.EnterStage("select (Layer 2 trigger map + Layer 1 union)");
-        var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories, testProjectSets.AllProjects);
+        var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories, layer1.AffectedTestProjects);
         var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll, options.ForceAllReason), layer1.AttributedPaths, layer1.Paths);
 
         trace.EnterStage("write summary and outputs");
@@ -292,17 +291,7 @@ internal static class Selection
         return 0;
     }
 
-    // Repo-relative, '/'-separated paths of the test projects in Aspire.slnx, keyed by project name
-    // (the .csproj base name == the matrix projectName == the map's test: target). The universe is
-    private sealed record TestProjectSets(
-        IReadOnlyDictionary<string, string> MatrixProjects,
-        IReadOnlySet<string> AllProjects);
-
-    // The matrix contains tests/<Name>/<Name>.csproj projects whose name ends in ".Tests"; the other
-    // tests/ projects (Aspire.TestUtilities, TestingAppHost1, testproject, ...) are shared
-    // fixtures/helpers. Keep those names in AllProjects so affected-project rules cannot mistake a
-    // test-only fixture for a production project.
-    private static TestProjectSets LoadTestProjectSets(string slnxPath)
+    private static IReadOnlyDictionary<string, string> LoadTestProjects(string slnxPath)
     {
         if (!File.Exists(slnxPath))
         {
@@ -311,7 +300,6 @@ internal static class Selection
 
         var slnx = File.ReadAllText(slnxPath);
         var matrixProjects = new Dictionary<string, string>(StringComparer.Ordinal);
-        var allProjects = new HashSet<string>(StringComparer.Ordinal);
         // <Project Path="tests/Foo.Tests/Foo.Tests.csproj" /> -- normalize separators, keep tests/ + .Tests.
         foreach (System.Text.RegularExpressions.Match m in
                  System.Text.RegularExpressions.Regex.Matches(slnx, "Path=\"([^\"]+\\.csproj)\""))
@@ -323,14 +311,13 @@ internal static class Selection
             }
 
             var name = Path.GetFileNameWithoutExtension(relPath);
-            allProjects.Add(name);
             if (name.EndsWith(".Tests", StringComparison.Ordinal))
             {
                 matrixProjects[name] = relPath;
             }
         }
 
-        return new TestProjectSets(matrixProjects, allProjects);
+        return matrixProjects;
     }
 
     // Writes the MSBuild props file that eng/Build.props imports via $(BeforeBuildPropsPath): an

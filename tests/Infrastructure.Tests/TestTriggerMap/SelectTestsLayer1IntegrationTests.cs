@@ -58,9 +58,9 @@ public sealed class SelectTestsLayer1IntegrationTests
         });
     }
 
-    // Failure mode: LoadTestProjectSets forgets to include non-matrix tests/ projects in AllProjects, so
-    // affected_project_rules treats a test-only support project as production code and turns on a
-    // broad matching job.
+    // Failure mode: ProjectGraph includes ProjectReference nodes omitted from Aspire.slnx, so
+    // classification must use path containment under tests/ (not solution entries) so an unlisted
+    // test-support project does not match production affected_project_rules.
     [Fact]
     public void NonMatrixTestProjectDoesNotDriveAffectedProjectRules()
     {
@@ -93,7 +93,8 @@ public sealed class SelectTestsLayer1IntegrationTests
                 BeforeBuildProps: propsPath));
 
             Assert.Equal(0, exit);
-            Assert.Equal("false", output()["has_dotnet_tests"]);
+            Assert.Equal("true", output()["has_dotnet_tests"]);
+            Assert.Contains("tests/Core.Tests/Core.Tests.csproj", File.ReadAllText(propsPath));
 
             using var selection = System.Text.Json.JsonDocument.Parse(output()["selection"]);
             Assert.False(selection.RootElement.GetProperty("run_prodjob").GetBoolean());
@@ -321,24 +322,26 @@ public sealed class SelectTestsLayer1IntegrationTests
                 return;
             }
 
-            Write("tests/Core.Tests/Core.Tests.cs", "namespace Core.Tests; public class T(ITestOutputHelper outputHelper) { }");
-            WriteProject("tests/Core.Tests/Core.Tests.csproj", compiles: ["Core.Tests.cs"], references: [@"..\..\src\Core\Core.csproj"]);
-
             if (withTestSupportProject)
             {
                 Write("tests/Aspire.TestUtilities/Aspire.TestUtilities.cs", "namespace Aspire.TestUtilities; public class Helper { }");
                 WriteProject("tests/Aspire.TestUtilities/Aspire.TestUtilities.csproj", compiles: ["Aspire.TestUtilities.cs"], references: []);
+
+                Write("tests/Core.Tests/Core.Tests.cs", "namespace Core.Tests; public class T(ITestOutputHelper outputHelper) { }");
+                WriteProject("tests/Core.Tests/Core.Tests.csproj", compiles: ["Core.Tests.cs"], references: [@"..\..\src\Core\Core.csproj", @"..\Aspire.TestUtilities\Aspire.TestUtilities.csproj"]);
 
                 Write("Aspire.slnx",
                     """
                     <Solution>
                       <Project Path="src/Core/Core.csproj" />
                       <Project Path="tests/Core.Tests/Core.Tests.csproj" />
-                      <Project Path="tests/Aspire.TestUtilities/Aspire.TestUtilities.csproj" />
                     </Solution>
                     """);
                 return;
             }
+
+            Write("tests/Core.Tests/Core.Tests.cs", "namespace Core.Tests; public class T(ITestOutputHelper outputHelper) { }");
+            WriteProject("tests/Core.Tests/Core.Tests.csproj", compiles: ["Core.Tests.cs"], references: [@"..\..\src\Core\Core.csproj"]);
 
             if (withSecondProject)
             {
