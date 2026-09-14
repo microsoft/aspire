@@ -26,15 +26,62 @@ public class AzureContainerAppExpressTests
     }
 
     [Fact]
-    public void AsExpressIsIdempotentAndDoesNotChangeRunResources()
+    public async Task AsExpressIsIdempotentAndDoesNotChangeRunResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var environment = builder.AddAzureContainerAppEnvironment("env").WithHttpsUpgrade(false);
         var resources = builder.Resources.ToArray();
 
         Assert.Same(environment, environment.AsExpress());
         Assert.Same(environment, environment.AsExpress());
+
+        using var application = builder.Build();
+        await ExecuteBeforeStartHooksAsync(application, default);
+
         Assert.Equal(resources, builder.Resources);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AsExpressRejectsDisabledHttpsUpgradeWhenGeneratingBicep(bool expressFirst, bool existing)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        if (expressFirst)
+        {
+            environment.AsExpress().WithHttpsUpgrade(false);
+        }
+        else
+        {
+            environment.WithHttpsUpgrade(false).AsExpress();
+        }
+        if (existing)
+        {
+            environment.AsExisting(builder.AddParameter("existing-name"), builder.AddParameter("existing-resource-group"));
+        }
+
+        var api = builder.AddContainer("api", "myimage")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+        builder.AddContainer("web", "myimage")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithReference(api.GetEndpoint("http"));
+
+        var exception = Assert.Throws<InvalidOperationException>(environment.Resource.GetBicepTemplateString);
+
+        Assert.Equal(
+            "Azure Container Apps Express environment 'env' cannot use WithHttpsUpgrade(false) because Express requires HTTPS ingress. " +
+            "Remove WithHttpsUpgrade(false) or use WithHttpsUpgrade(true).",
+            exception.Message);
+
+        using var application = builder.Build();
+        var pipelineException = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ExecuteBeforeStartHooksAsync(application, default));
+
+        Assert.Equal(exception.Message, pipelineException.Message);
     }
 
     [Fact]
@@ -56,7 +103,9 @@ public class AzureContainerAppExpressTests
     public async Task AsExpressPublishesEnvironment(bool existing)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
+        var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress()
+            .WithHttpsUpgrade(false)
+            .WithHttpsUpgrade(true);
         if (existing)
         {
             environment.AsExisting(builder.AddParameter("existing-name"), builder.AddParameter("existing-resource-group"));

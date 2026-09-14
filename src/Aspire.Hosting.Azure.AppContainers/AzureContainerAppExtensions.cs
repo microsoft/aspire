@@ -279,6 +279,13 @@ public static class AzureContainerAppExtensions
         {
             var appEnvResource = (AzureContainerAppEnvironmentResource)infra.AspireResource;
 
+            if (appEnvResource.IsExpress && appEnvResource.PreserveHttpEndpoints)
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container Apps Express environment '{appEnvResource.Name}' cannot use {nameof(WithHttpsUpgrade)}(false) because Express requires HTTPS ingress. " +
+                    $"Remove {nameof(WithHttpsUpgrade)}(false) or use {nameof(WithHttpsUpgrade)}(true).");
+            }
+
             // When the user has marked this environment as existing (via AsExisting / PublishAsExisting),
             // we must not generate a brand-new managed environment + Log Analytics + Dashboard. Instead,
             // emit a thin module that references the existing environment and still wires up the ACR pull
@@ -1068,6 +1075,7 @@ public static class AzureContainerAppExtensions
     /// When disabled (<c>false</c>), HTTP endpoints will use HTTP scheme and port 80 in Azure Container Apps.
     /// Note that explicit ports specified for development (e.g., port 8080) are still normalized
     /// to standard ports (80/443) as required by Azure Container Apps.
+    /// Disabling HTTPS upgrade for an Express environment is rejected during publishing or deployment.
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, bool upgrade = true)
