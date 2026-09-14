@@ -51,7 +51,7 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedClients = [AgentClient.CopilotApp] };
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedClients = [AgentClientKind.CopilotApp] };
         });
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
@@ -99,16 +99,16 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
             Assert.Equal(new byte[] { 0x00, 0xff, 0x80, 0x0a }, await File.ReadAllBytesAsync(Path.Combine(directory, "ui", "icon.bin")));
         }
         var bundleProvider = Assert.Single(Assert.IsType<FakeAspireSkillsInstaller>(provider.GetRequiredService<IAspireSkillsInstaller>()).RequestedProviders);
-        Assert.Same(AspireSkillsBundleDescriptor.Extensions, bundleProvider.Descriptor);
+        Assert.Same(ExtensionCatalog.AspireExtensionsBundle, bundleProvider.Descriptor);
     }
 
     [Theory]
     [InlineData(null, false)]
-    [InlineData(nameof(AgentClient.CopilotApp), true)]
-    [InlineData(nameof(AgentClient.CopilotCli), false)]
-    [InlineData(nameof(AgentClient.VsCode), false)]
-    [InlineData(nameof(AgentClient.ClaudeCode), false)]
-    [InlineData(nameof(AgentClient.OpenCode), false)]
+    [InlineData(nameof(AgentClientKind.CopilotApp), true)]
+    [InlineData(nameof(AgentClientKind.CopilotCli), false)]
+    [InlineData(nameof(AgentClientKind.VsCode), false)]
+    [InlineData(nameof(AgentClientKind.ClaudeCode), false)]
+    [InlineData(nameof(AgentClientKind.OpenCode), false)]
     public async Task DefaultExtensions_AreOnlyOfferedToSupportedClient(string? clientName, bool installed)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -118,7 +118,7 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: home);
             options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector
             {
-                DetectedClients = clientName is null ? [] : [AgentClient.All.Single(client => client.Name == clientName)]
+                DetectedClients = clientName is null ? [] : [Enum.Parse<AgentClientKind>(clientName)]
             };
         });
         using var provider = services.BuildServiceProvider();
@@ -129,7 +129,7 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(installed, File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "extensions", "aspire-doctor", "extension.mjs")));
         Assert.False(Directory.Exists(Path.Combine(home.FullName, ".copilot", "extensions")));
-        Assert.Equal(installed ? [AspireSkillsBundleDescriptor.Extensions] : [],
+        Assert.Equal(installed ? [ExtensionCatalog.AspireExtensionsBundle] : [],
             Assert.IsType<FakeAspireSkillsInstaller>(provider.GetRequiredService<IAspireSkillsInstaller>()).RequestedProviders.Select(provider => provider.Descriptor));
     }
 
@@ -247,7 +247,7 @@ public class AgentExtensionInstallationTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedClients = [AgentClient.CopilotApp] };
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedClients = [AgentClientKind.CopilotApp] };
         });
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();

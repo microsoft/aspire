@@ -6,42 +6,23 @@ using Aspire.Hosting.Utils;
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Applies the catalog's additive or managed-directory file installation policy.
+/// Shares file writing and managed-directory synchronization for agent asset catalogs.
 /// </summary>
-internal sealed class AgentAssetFileInstaller
+internal static class AgentAssetFileInstaller
 {
-    private readonly bool _manageDirectory;
-
-    private AgentAssetFileInstaller(bool manageDirectory)
-    {
-        _manageDirectory = manageDirectory;
-    }
-
     /// <summary>
     /// Adds or updates supplied files in place without removing user-authored files.
     /// </summary>
-    public static AgentAssetFileInstaller Additive { get; } = new(manageDirectory: false);
-
-    /// <summary>
-    /// Updates package-owned files and removes stale files after successful writes.
-    /// </summary>
-    public static AgentAssetFileInstaller ManagedDirectory { get; } = new(manageDirectory: true);
-
-    /// <summary>
-    /// Installs an asset's files, returning whether any files were updated or removed.
-    /// </summary>
-    public Task<bool> InstallAsync(
+    public static Task<bool> InstallAsync(
         DirectoryInfo rootDirectory,
         string relativeAssetDirectory,
         string assetName,
         IReadOnlyList<AgentAssetFile> files,
         CancellationToken cancellationToken)
-        => _manageDirectory
-            ? SynchronizeFilesAsync(rootDirectory, relativeAssetDirectory, assetName, files, cancellationToken)
-            : WriteFilesAsync(
-                files.Select(file => (Path.Combine(rootDirectory.FullName, relativeAssetDirectory, assetName, file.RelativePath), file)),
-                managedRoot: null,
-                cancellationToken);
+        => WriteFilesAsync(
+            files.Select(file => (Path.Combine(rootDirectory.FullName, relativeAssetDirectory, assetName, file.RelativePath), file)),
+            managedRoot: null,
+            cancellationToken);
 
     private static async Task<bool> WriteFilesAsync(
         IEnumerable<(string DestinationPath, AgentAssetFile File)> files,
@@ -85,7 +66,10 @@ internal sealed class AgentAssetFileInstaller
         return hasChanges;
     }
 
-    private static async Task<bool> SynchronizeFilesAsync(
+    /// <summary>
+    /// Updates package-owned files and removes stale files after successful writes.
+    /// </summary>
+    public static async Task<bool> SynchronizeAsync(
         DirectoryInfo rootDirectory,
         string relativeAssetDirectory,
         string assetName,

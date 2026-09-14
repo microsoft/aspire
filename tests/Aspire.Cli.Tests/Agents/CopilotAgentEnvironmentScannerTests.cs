@@ -211,7 +211,7 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal([AgentClient.CopilotApp], context.DetectedClients);
+        Assert.Equal([AgentClientKind.CopilotApp], context.DetectedClients);
         Assert.Contains(context.Applicators, applicator => applicator.Description.Contains("Aspire MCP"));
         Assert.Contains(context.Applicators, applicator => applicator.Description.Contains("Playwright CLI"));
     }
@@ -226,8 +226,8 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(
-            [AgentClient.CopilotApp, AgentClient.CopilotCli],
-            context.DetectedClients.OrderBy(static client => client.Name, StringComparer.Ordinal));
+            [AgentClientKind.CopilotCli, AgentClientKind.CopilotApp],
+            context.DetectedClients.OrderBy(static client => client));
         Assert.Single(context.Applicators, applicator => applicator.Description.Contains("Aspire MCP"));
         Assert.Single(context.Applicators, applicator => applicator.Description.Contains("Playwright CLI"));
     }

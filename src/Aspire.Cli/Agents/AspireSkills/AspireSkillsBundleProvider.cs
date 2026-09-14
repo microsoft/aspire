@@ -15,7 +15,7 @@ using Semver;
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Provides one kind of Aspire Skills bundle.
+/// Creates and loads a configured Aspire bundle.
 /// </summary>
 internal interface IAspireSkillsBundleProvider
 {
@@ -50,7 +50,7 @@ internal interface IAspireSkillsBundleProvider
 /// <summary>
 /// Creates and loads bundles using their descriptor's layout and required-file validation.
 /// </summary>
-internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
+internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 {
     private const int MaxAssetNameLength = 64;
 
@@ -105,7 +105,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     /// </summary>
     public AspireSkillsBundleDescriptor Descriptor { get; }
 
-    public virtual async Task<AspireSkillsBundle> CreateAsync(
+    public async Task<AspireSkillsBundle> CreateAsync(
         FileInfo archive,
         DirectoryInfo bundleDirectory,
         string expectedArchiveSha512,

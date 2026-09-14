@@ -546,9 +546,9 @@ public class Program
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<IAgentAssetCatalog>(sp => new SkillCatalog(
-            ActivatorUtilities.CreateInstance<AspireSkillsAssetSource>(sp, AspireSkillsBundleDescriptor.Skills)));
+            ActivatorUtilities.CreateInstance<AspireSkillsAssetSource>(sp, SkillCatalog.AspireSkillsBundle)));
         builder.Services.AddSingleton<IAgentAssetCatalog>(sp => new ExtensionCatalog(
-            ActivatorUtilities.CreateInstance<AspireSkillsAssetSource>(sp, AspireSkillsBundleDescriptor.Extensions)));
+            ActivatorUtilities.CreateInstance<AspireSkillsAssetSource>(sp, ExtensionCatalog.AspireExtensionsBundle)));
         builder.Services.AddSingleton<IAgentAssetCatalogProvider, AgentAssetCatalogProvider>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
         builder.Services.AddSingleton<PlaywrightCliInstaller>();

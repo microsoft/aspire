@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -13,6 +15,24 @@ namespace Aspire.Cli.Agents;
 internal sealed class SkillCatalog : IAgentAssetCatalog
 {
     private readonly IAgentAssetSource _assetSource;
+
+    public static AspireSkillsBundleDescriptor AspireSkillsBundle { get; } = new()
+    {
+        TelemetryName = "skills",
+        AssetPrefix = "aspire-skills",
+        CacheDirectoryName = "aspire-skills",
+        DisplayName = "Aspire skills",
+        ManifestFileName = "skill-manifest.json",
+        ManifestAssetsPropertyName = "skills",
+        ContentRootDirectoryName = "skills",
+        RequiredFileName = "SKILL.md",
+        ValidateRequiredFile = SkillFileValidator.Validate,
+        DecodeFilesAsText = true,
+        RequirePortablePaths = false,
+        UnavailableMessage = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable, "Aspire skills"),
+        EmbeddedArchiveResourceName = "aspire-skills.bundle.tgz",
+        EmbeddedMetadataResourceName = "aspire-skills.metadata.json",
+    };
 
     public static readonly AgentAssetDefinition PlaywrightCli = new(
         "playwright-cli",
@@ -85,11 +105,9 @@ internal sealed class SkillCatalog : IAgentAssetCatalog
 
     public string Name => "skills";
 
-    public IReadOnlyList<AgentClient> SupportedClients => AgentClient.All;
+    public IReadOnlyList<AgentClientKind> SupportedClients { get; } = Enum.GetValues<AgentClientKind>();
 
     public IReadOnlyList<AgentAssetLocation> Locations => KnownLocations;
-
-    public AgentAssetFileInstaller FileInstaller => AgentAssetFileInstaller.Additive;
 
     public async Task<AgentAssetCatalogResult> ResolveAsync(string? requestedAssets, CancellationToken cancellationToken)
     {
@@ -124,6 +142,10 @@ internal sealed class SkillCatalog : IAgentAssetCatalog
         DirectoryInfo homeDirectory,
         IEnvironment environment)
         => location.ResolveInstallTargets(workspaceDirectory, homeDirectory);
+
+    public Task<bool> InstallAsync(AgentAssetInstallTarget target, AgentAssetDefinition asset, CancellationToken cancellationToken)
+        => AgentAssetFileInstaller.InstallAsync(
+            target.RootDirectory, target.RelativeAssetDirectory, asset.Name, asset.Files, cancellationToken);
 
     private static bool IsCliDefinedSkillName(string name)
         => CliDefined.Any(skill => skill.HasName(name, StringComparison.OrdinalIgnoreCase));

@@ -400,7 +400,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (result.ConfiguredClients.Count > 0)
         {
-            var clientNames = string.Join(", ", result.ConfiguredClients.Select(static client => client.DisplayName));
+            var clientNames = string.Join(", ", result.ConfiguredClients.Select(GetClientDisplayName));
             InteractionService.DisplayMessage(
                 KnownEmojis.BarChart,
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, clientNames));
@@ -408,7 +408,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         foreach (var skip in result.Skipped)
         {
-            var clientName = skip.Client.DisplayName;
+            var clientName = GetClientDisplayName(skip.Client);
             var message = skip.Reason switch
             {
                 TelemetryHookSkipReason.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, clientName),
@@ -421,6 +421,17 @@ internal sealed class AgentInitCommand : BaseCommand
             InteractionService.DisplaySubtleMessage(message);
         }
     }
+
+    private static string GetClientDisplayName(AgentClientKind client)
+        => client switch
+        {
+            AgentClientKind.CopilotCli => "GitHub Copilot CLI",
+            AgentClientKind.CopilotApp => "GitHub Copilot App",
+            AgentClientKind.ClaudeCode => "Claude Code",
+            AgentClientKind.VsCode => "VS Code",
+            AgentClientKind.OpenCode => "OpenCode",
+            _ => client.ToString(),
+        };
 
     private async Task<AgentAssetSelection> SelectAssetsAsync(
         IAgentAssetCatalog catalog,
@@ -557,8 +568,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 {
                     try
                     {
-                        if (await selection.Catalog.FileInstaller.InstallAsync(
-                            target.RootDirectory, target.RelativeAssetDirectory, asset.Name, asset.Files, cancellationToken))
+                        if (await selection.Catalog.InstallAsync(target, asset, cancellationToken))
                         {
                             installedAssets.Add(new(asset.Name, target.DisplayDirectory));
                         }

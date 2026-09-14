@@ -1664,16 +1664,35 @@ public class AspireSkillsInstallerTests
         Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates Windows delete-sharing behavior.");
 
         var rootDirectory = CreateTempDirectory();
-        ArchiveLockingAspireSkillsBundleProvider? lockingBundleProvider = null;
+        FileStream? archiveLock = null;
 
         try
         {
             var stageDirectory = new DirectoryInfo(Path.Combine(rootDirectory, ".stage-test"));
             var targetDirectory = Path.Combine(rootDirectory, "cached");
-            lockingBundleProvider = new ArchiveLockingAspireSkillsBundleProvider(
-                TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory)));
+            var descriptor = SkillCatalog.AspireSkillsBundle with
+            {
+                ValidateRequiredFile = (assetName, content) =>
+                {
+                    SkillCatalog.AspireSkillsBundle.ValidateRequiredFile(assetName, content);
+                    if (archiveLock is null)
+                    {
+                        // Validation runs after the temporary archive is closed but before cleanup.
+                        // Hold a no-delete-sharing handle to simulate antivirus without overriding the reader.
+                        var archiveDirectory = Assert.Single(Directory.GetDirectories(rootDirectory, ".embedded-*"));
+                        archiveLock = new FileStream(
+                            Path.Combine(archiveDirectory, "bundle.tgz"),
+                            FileMode.Open,
+                            FileAccess.Read,
+                            FileShare.Read);
+                    }
+                }
+            };
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var provider = new AspireSkillsBundleProvider(
+                descriptor, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance);
 
-            var bundle = await lockingBundleProvider.CreateEmbeddedBundleAsync(stageDirectory, CancellationToken.None);
+            var bundle = await provider.CreateEmbeddedBundleAsync(stageDirectory, CancellationToken.None);
 
             Assert.NotNull(bundle);
             Assert.NotEmpty(Directory.GetDirectories(rootDirectory, ".embedded-*"));
@@ -1682,7 +1701,7 @@ public class AspireSkillsInstallerTests
         }
         finally
         {
-            lockingBundleProvider?.Dispose();
+            archiveLock?.Dispose();
             Directory.Delete(rootDirectory, recursive: true);
         }
     }
@@ -2226,10 +2245,10 @@ public class AspireSkillsInstallerTests
         ILogger<AspireSkillsInstaller>? logger = null)
     {
         var skillProvider = new TestBundleProvider(
-            new AspireSkillsBundleProvider(AspireSkillsBundleDescriptor.Skills, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance),
+            new AspireSkillsBundleProvider(SkillCatalog.AspireSkillsBundle, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance),
             embeddedBundleProvider ?? new TestEmbeddedBundleProvider());
         var extensionProvider = new TestBundleProvider(
-            new AspireSkillsBundleProvider(AspireSkillsBundleDescriptor.Extensions, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance),
+            new AspireSkillsBundleProvider(ExtensionCatalog.AspireExtensionsBundle, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, NullLogger.Instance),
             embeddedExtensionBundleProvider ?? new TestEmbeddedBundleProvider(TestBundleProviderFactory.CreateExtensions()));
 
         var installer = new AspireSkillsInstaller(
@@ -2648,41 +2667,6 @@ public class AspireSkillsInstallerTests
 
         public Task<AspireSkillsBundle?> CreateEmbeddedBundleAsync(DirectoryInfo bundleDirectory, CancellationToken cancellationToken)
             => embeddedProvider.CreateBundleAsync(bundleDirectory, cancellationToken);
-    }
-
-    private sealed class ArchiveLockingAspireSkillsBundleProvider(CliExecutionContext executionContext) : AspireSkillsBundleProvider(
-        TestBundleProviderFactory.CreateSkills().Descriptor,
-        executionContext.IdentitySdkVersion,
-        executionContext.IdentitySdkVersion,
-        NullLogger.Instance), IDisposable
-    {
-        private FileStream? _archiveLock;
-
-        public override async Task<AspireSkillsBundle> CreateAsync(
-            FileInfo archive,
-            DirectoryInfo bundleDirectory,
-            string expectedArchiveSha512,
-            CancellationToken cancellationToken,
-            bool skipCompatibilityCheck = false)
-        {
-            _archiveLock = new FileStream(
-                archive.FullName,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read);
-
-            return await base.CreateAsync(
-                archive,
-                bundleDirectory,
-                expectedArchiveSha512,
-                cancellationToken,
-                skipCompatibilityCheck);
-        }
-
-        public void Dispose()
-        {
-            _archiveLock?.Dispose();
-        }
     }
 
 }

@@ -18,7 +18,7 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (_, installer) = CreateSource(
-            workspace.CreateExecutionContext(), AspireSkillsInstallResult.Unavailable, AspireSkillsBundleDescriptor.Skills);
+            workspace.CreateExecutionContext(), AspireSkillsInstallResult.Unavailable, SkillCatalog.AspireSkillsBundle);
         Assert.Empty(installer.RequestedProviders);
     }
 
@@ -28,9 +28,9 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = workspace.CreateExecutionContext();
         var (skills, installer) = CreateSource(
-            executionContext, AspireSkillsInstallResult.Unavailable, AspireSkillsBundleDescriptor.Skills);
+            executionContext, AspireSkillsInstallResult.Unavailable, SkillCatalog.AspireSkillsBundle);
         var extensions = new AspireSkillsAssetSource(
-            installer, AspireSkillsBundleDescriptor.Extensions, executionContext, NullLogger<AspireSkillsBundleProvider>.Instance);
+            installer, ExtensionCatalog.AspireExtensionsBundle, executionContext, NullLogger<AspireSkillsBundleProvider>.Instance);
 
         foreach (var source in new[] { skills, extensions, skills, extensions })
         {
@@ -39,7 +39,7 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
 
         var providers = installer.RequestedProviders;
         Assert.Equal(
-            [AspireSkillsBundleDescriptor.Skills, AspireSkillsBundleDescriptor.Extensions, AspireSkillsBundleDescriptor.Skills, AspireSkillsBundleDescriptor.Extensions],
+            [SkillCatalog.AspireSkillsBundle, ExtensionCatalog.AspireExtensionsBundle, SkillCatalog.AspireSkillsBundle, ExtensionCatalog.AspireExtensionsBundle],
             providers.Select(provider => provider.Descriptor));
         Assert.All(providers, provider => Assert.IsType<AspireSkillsBundleProvider>(provider));
         Assert.Same(providers[0], providers[2]);
@@ -61,7 +61,7 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
     public async Task Resolution_ReturnsResolvedAssetsWithoutExposingBundle(bool extensions)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var descriptor = extensions ? AspireSkillsBundleDescriptor.Extensions : AspireSkillsBundleDescriptor.Skills;
+        var descriptor = extensions ? ExtensionCatalog.AspireExtensionsBundle : SkillCatalog.AspireSkillsBundle;
         var asset = new AgentAssetDefinition(
             "test-asset", "Test asset", [new AgentAssetFile("payload.txt", "Payload")], installExcludedRelativePaths: [], isDefault: true);
         var bundle = new AspireSkillsBundle(AspireSkillsInstaller.Version, [asset]);
@@ -84,7 +84,7 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string message = "Bundle verification failed.";
         var (source, _) = CreateSource(workspace.CreateExecutionContext(), AspireSkillsInstallResult.Failed(message),
-            extensions ? AspireSkillsBundleDescriptor.Extensions : AspireSkillsBundleDescriptor.Skills);
+            extensions ? ExtensionCatalog.AspireExtensionsBundle : SkillCatalog.AspireSkillsBundle);
 
         var result = await source.GetAssetsAsync(TestContext.Current.CancellationToken);
 
@@ -100,7 +100,7 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (source, _) = CreateSource(workspace.CreateExecutionContext(), AspireSkillsInstallResult.Unavailable,
-            extensions ? AspireSkillsBundleDescriptor.Extensions : AspireSkillsBundleDescriptor.Skills);
+            extensions ? ExtensionCatalog.AspireExtensionsBundle : SkillCatalog.AspireSkillsBundle);
 
         var result = await source.GetAssetsAsync(TestContext.Current.CancellationToken);
 
@@ -118,7 +118,7 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (source, _) = CreateSource(workspace.CreateExecutionContext(),
-            new(AspireSkillsInstallStatus.Installed, Bundle: null, Message: null), AspireSkillsBundleDescriptor.Skills);
+            new(AspireSkillsInstallStatus.Installed, Bundle: null, Message: null), SkillCatalog.AspireSkillsBundle);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => source.GetAssetsAsync(TestContext.Current.CancellationToken));
 
@@ -130,7 +130,7 @@ public class AspireSkillsAssetSourceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (source, installer) = CreateSource(
-            workspace.CreateExecutionContext(), AspireSkillsInstallResult.Unavailable, AspireSkillsBundleDescriptor.Skills);
+            workspace.CreateExecutionContext(), AspireSkillsInstallResult.Unavailable, SkillCatalog.AspireSkillsBundle);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         cancellation.Cancel();
 

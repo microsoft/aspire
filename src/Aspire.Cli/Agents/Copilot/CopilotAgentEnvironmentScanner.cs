@@ -67,7 +67,7 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
         if (_copilotAppInstallationDetector.GetInstallationMarker() is { } installationMarker)
         {
             _logger.LogDebug("Detected GitHub Copilot App using installation marker {Marker}", installationMarker);
-            context.AddDetectedClient(AgentClient.CopilotApp);
+            context.AddDetectedClient(AgentClientKind.CopilotApp);
             copilotAppDetected = true;
         }
 
@@ -78,7 +78,7 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
         if (isVSCode)
         {
             _logger.LogDebug("Detected VSCode terminal environment. Assuming GitHub Copilot CLI is available to avoid potential hangs from interactive installation prompts.");
-            context.AddDetectedClient(AgentClient.CopilotCli);
+            context.AddDetectedClient(AgentClientKind.CopilotCli);
             copilotCliDetected = true;
         }
         else
@@ -88,7 +88,7 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
             if (copilotVersion is not null)
             {
                 _logger.LogDebug("Found GitHub Copilot CLI version: {Version}", copilotVersion);
-                context.AddDetectedClient(AgentClient.CopilotCli);
+                context.AddDetectedClient(AgentClientKind.CopilotCli);
                 copilotCliDetected = true;
             }
             else

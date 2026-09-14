@@ -18,7 +18,7 @@ internal interface ITelemetryHookConfigurator
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A summary of which clients were configured and which were skipped (and why).</returns>
     Task<TelemetryHookConfigurationResult> ConfigureAsync(
-        IReadOnlyCollection<AgentClient> detectedClients,
+        IReadOnlyCollection<AgentClientKind> detectedClients,
         CancellationToken cancellationToken);
 }
 
@@ -42,7 +42,7 @@ internal enum TelemetryHookSkipReason
 /// </summary>
 /// <param name="Client">The client that was skipped.</param>
 /// <param name="Reason">Why registration was skipped.</param>
-internal sealed record TelemetryHookSkip(AgentClient Client, TelemetryHookSkipReason Reason);
+internal sealed record TelemetryHookSkip(AgentClientKind Client, TelemetryHookSkipReason Reason);
 
 /// <summary>
 /// The outcome of <see cref="ITelemetryHookConfigurator.ConfigureAsync"/>.
@@ -50,5 +50,5 @@ internal sealed record TelemetryHookSkip(AgentClient Client, TelemetryHookSkipRe
 /// <param name="ConfiguredClients">Clients whose telemetry hook was registered or refreshed.</param>
 /// <param name="Skipped">Clients whose registration was skipped, with the reason.</param>
 internal sealed record TelemetryHookConfigurationResult(
-    IReadOnlyList<AgentClient> ConfiguredClients,
+    IReadOnlyList<AgentClientKind> ConfiguredClients,
     IReadOnlyList<TelemetryHookSkip> Skipped);

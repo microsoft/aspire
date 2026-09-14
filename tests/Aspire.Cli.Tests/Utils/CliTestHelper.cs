@@ -178,9 +178,9 @@ internal static class CliTestHelper
         services.AddSingleton(options.NpmProvenanceCheckerFactory);
         services.AddSingleton(options.AspireSkillsInstallerFactory);
         services.AddSingleton<IAgentAssetCatalog>(sp => new SkillCatalog(
-            ActivatorUtilities.CreateInstance<AspireSkillsAssetSource>(sp, AspireSkillsBundleDescriptor.Skills)));
+            ActivatorUtilities.CreateInstance<AspireSkillsAssetSource>(sp, SkillCatalog.AspireSkillsBundle)));
         services.AddSingleton<IAgentAssetCatalog>(sp => new ExtensionCatalog(
-            ActivatorUtilities.CreateInstance<AspireSkillsAssetSource>(sp, AspireSkillsBundleDescriptor.Extensions)));
+            ActivatorUtilities.CreateInstance<AspireSkillsAssetSource>(sp, ExtensionCatalog.AspireExtensionsBundle)));
         services.AddSingleton<IAgentAssetCatalogProvider, AgentAssetCatalogProvider>();
         services.AddSingleton(options.PlaywrightCliRunnerFactory);
         services.AddSingleton<PlaywrightCliInstaller>();

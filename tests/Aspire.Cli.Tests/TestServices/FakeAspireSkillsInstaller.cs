@@ -54,7 +54,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             _requestedProviders.Add(provider);
         }
 
-        var configuredResult = provider.Descriptor == AspireSkillsBundleDescriptor.Extensions
+        var configuredResult = provider.Descriptor == ExtensionCatalog.AspireExtensionsBundle
             ? ExtensionResult
             : _skillResult;
         if (configuredResult is not null)
@@ -78,7 +78,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             return;
         }
 
-        if (provider.Descriptor == AspireSkillsBundleDescriptor.Extensions)
+        if (provider.Descriptor == ExtensionCatalog.AspireExtensionsBundle)
         {
             const string extensionName = "aspire-doctor";
             const string extensionContent = "export default {};";

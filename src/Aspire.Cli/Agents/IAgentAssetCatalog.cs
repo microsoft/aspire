@@ -10,11 +10,9 @@ internal interface IAgentAssetCatalog
 {
     string Name { get; }
 
-    IReadOnlyList<AgentClient> SupportedClients { get; }
+    IReadOnlyList<AgentClientKind> SupportedClients { get; }
 
     IReadOnlyList<AgentAssetLocation> Locations { get; }
-
-    AgentAssetFileInstaller FileInstaller { get; }
 
     Task<AgentAssetCatalogResult> ResolveAsync(string? requestedAssets, CancellationToken cancellationToken);
 
@@ -26,6 +24,11 @@ internal interface IAgentAssetCatalog
         DirectoryInfo workspaceDirectory,
         DirectoryInfo homeDirectory,
         IEnvironment environment);
+
+    /// <summary>
+    /// Installs a file-backed asset, returning whether any files were updated or removed.
+    /// </summary>
+    Task<bool> InstallAsync(AgentAssetInstallTarget target, AgentAssetDefinition asset, CancellationToken cancellationToken);
 }
 
 /// <summary>

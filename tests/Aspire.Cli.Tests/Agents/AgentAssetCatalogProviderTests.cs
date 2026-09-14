@@ -15,7 +15,7 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
     private const string FailureMessage = "The requested assets are unavailable.";
 
     [Fact]
-    public void Registration_AssociatesEachCatalogWithItsLocationsAndPolicy()
+    public void Registration_RetainsCatalogsAndLocationsWithoutAcquisition()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
@@ -27,11 +27,9 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
 
         var skills = Assert.IsType<SkillCatalog>(catalogs[0]);
         Assert.Equal(SkillCatalog.KnownLocations, skills.Locations);
-        Assert.Same(AgentAssetFileInstaller.Additive, skills.FileInstaller);
 
         var extensions = Assert.IsType<ExtensionCatalog>(catalogs[1]);
         Assert.Equal(ExtensionCatalog.KnownLocations, extensions.Locations);
-        Assert.Same(AgentAssetFileInstaller.ManagedDirectory, extensions.FileInstaller);
         Assert.Empty(Assert.IsType<FakeAspireSkillsInstaller>(serviceProvider.GetRequiredService<IAspireSkillsInstaller>()).RequestedProviders);
     }
 
@@ -59,6 +57,29 @@ public class AgentAssetCatalogProviderTests(ITestOutputHelper outputHelper)
         Assert.Equal([secondAsset], second.Assets);
         Assert.Equal(1, firstSource.RequestCount);
         Assert.Equal(1, secondSource.RequestCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Installation_UsesCatalogPolicyAndIsIdempotent(bool extensions)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = workspace.CreateDirectory("root");
+        var assetDirectory = root.CreateSubdirectory(Path.Combine("assets", "example"));
+        var stalePath = Path.Combine(assetDirectory.FullName, "extra.txt");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await File.WriteAllTextAsync(stalePath, "Existing file", cancellationToken);
+        var source = CreateUnavailableSource();
+        IAgentAssetCatalog catalog = extensions ? new ExtensionCatalog(source) : new SkillCatalog(source);
+        var asset = CreateAsset("example", []);
+        var target = new AgentAssetInstallTarget(root, "assets", "assets");
+
+        Assert.True(await catalog.InstallAsync(target, asset, cancellationToken));
+        Assert.Equal(!extensions, File.Exists(stalePath));
+        Assert.Equal("Asset content", await File.ReadAllTextAsync(Path.Combine(assetDirectory.FullName, "content.txt"), cancellationToken));
+        Assert.False(await catalog.InstallAsync(target, asset, cancellationToken));
+        Assert.Equal(0, source.RequestCount);
     }
 
     [Theory]

@@ -15,8 +15,8 @@ public class CommonAgentApplicatorsTests
     public void Catalogs_DeclareTheirSupportedClients()
     {
         var source = new FakeAgentAssetSource();
-        Assert.Equal(AgentClient.All, new SkillCatalog(source).SupportedClients);
-        Assert.Equal([AgentClient.CopilotApp], new ExtensionCatalog(source).SupportedClients);
+        Assert.Equal(Enum.GetValues<AgentClientKind>(), new SkillCatalog(source).SupportedClients);
+        Assert.Equal([AgentClientKind.CopilotApp], new ExtensionCatalog(source).SupportedClients);
     }
 
     [Fact]

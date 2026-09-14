@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
@@ -13,6 +14,24 @@ namespace Aspire.Cli.Agents;
 internal sealed class ExtensionCatalog : IAgentAssetCatalog
 {
     private readonly IAgentAssetSource _assetSource;
+
+    public static AspireSkillsBundleDescriptor AspireExtensionsBundle { get; } = new()
+    {
+        TelemetryName = "extensions",
+        AssetPrefix = "aspire-extensions",
+        CacheDirectoryName = "aspire-extensions",
+        DisplayName = "Aspire extensions",
+        ManifestFileName = "extension-manifest.json",
+        ManifestAssetsPropertyName = "extensions",
+        ContentRootDirectoryName = "extensions",
+        RequiredFileName = "extension.mjs",
+        ValidateRequiredFile = static (_, _) => { },
+        DecodeFilesAsText = false,
+        RequirePortablePaths = true,
+        UnavailableMessage = AgentCommandStrings.InitCommand_ExtensionBundleUnavailable,
+        EmbeddedArchiveResourceName = "aspire-extensions.bundle.tgz",
+        EmbeddedMetadataResourceName = "aspire-extensions.metadata.json",
+    };
 
     /// <summary>
     /// Project-level <c>.github/extensions/</c> location.
@@ -46,11 +65,9 @@ internal sealed class ExtensionCatalog : IAgentAssetCatalog
 
     public string Name => "extensions";
 
-    public IReadOnlyList<AgentClient> SupportedClients { get; } = [AgentClient.CopilotApp];
+    public IReadOnlyList<AgentClientKind> SupportedClients { get; } = [AgentClientKind.CopilotApp];
 
     public IReadOnlyList<AgentAssetLocation> Locations => KnownLocations;
-
-    public AgentAssetFileInstaller FileInstaller => AgentAssetFileInstaller.ManagedDirectory;
 
     public async Task<AgentAssetCatalogResult> ResolveAsync(string? requestedAssets, CancellationToken cancellationToken)
     {
@@ -89,6 +106,10 @@ internal sealed class ExtensionCatalog : IAgentAssetCatalog
             yield return target;
         }
     }
+
+    public Task<bool> InstallAsync(AgentAssetInstallTarget target, AgentAssetDefinition asset, CancellationToken cancellationToken)
+        => AgentAssetFileInstaller.SynchronizeAsync(
+            target.RootDirectory, target.RelativeAssetDirectory, asset.Name, asset.Files, cancellationToken);
 
     private static AgentAssetInstallTarget ResolveCopilotExtensionsInstallTarget(DirectoryInfo homeDirectory, IEnvironment environment)
     {
