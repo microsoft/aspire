@@ -53,6 +53,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
       "pr_number": 20099,
       "observed_at": "2026-09-14T00:51:58Z"
+    },
+    {
+      "run_id": 34806422379,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34806422379",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
+      "pr_number": 19882,
+      "observed_at": "2026-09-14T05:10:25Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19618"

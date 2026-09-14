@@ -1,0 +1,51 @@
+{
+  "run_id": 34806422379,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/34806422379",
+  "analyzed_at": "2026-09-14T05:10:25Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19882,
+    "title": "ci: Run extension and CLI E2E only for actual consumers",
+    "author": "radical",
+    "state": "closed",
+    "head_branch": "ankj/audit-heavy-ci-jobs",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19882"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
+      "id": 103861162246,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34806422379/job/103861162246",
+      "classification": "flaky-test",
+      "reason": "Matches prior recurring cause 'vscode-e2e-windows-winui-debug-flaky' (3 prior occurrences). Job logs were unavailable and only 'Process completed with exit code 1' was reported. PR only changes CI test-trigger-map/tooling and docs, not VS Code extension code, so this shard failure is unrelated to the PR.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 103861162258,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34806422379/job/103861162258",
+      "classification": "flaky-test",
+      "reason": "Matches prior recurring cause 'vscode-e2e-windows-dynamic-debug-configuration-flaky' (20 prior occurrences, very frequent). Job logs unavailable, generic exit code 1. PR changes are limited to CI test-selection tooling/docs, unrelated to VS Code extension debug-configuration behavior.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 103861162301,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/34806422379/job/103861162301",
+      "classification": "flaky-test",
+      "reason": "Matches prior recurring cause 'vscode-extension-e2e-unrelated-logs-unavailable' which explicitly covers the browser-debugger shard (7 prior occurrences). Job logs unavailable, generic exit code 1. PR does not touch VS Code extension or browser-debugger related code.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-e2e-windows-winui-debug-flaky",
+    "vscode-e2e-windows-dynamic-debug-configuration-flaky",
+    "vscode-extension-e2e-unrelated-logs-unavailable"
+  ]
+}
