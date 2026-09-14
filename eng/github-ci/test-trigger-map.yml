@@ -446,11 +446,13 @@ affected_project_rules:
       - Aspire.Hosting.Azure.AppService
       - Aspire.Hosting.Azure.ApplicationInsights
       - Aspire.Hosting.Azure.CognitiveServices
+      - Aspire.Hosting.Azure.ConnectorNamespace
       - Aspire.Hosting.Azure.ContainerRegistry
       - Aspire.Hosting.Azure.CosmosDB
       - Aspire.Hosting.Azure.EventHubs
       - Aspire.Hosting.Azure.Functions
       - Aspire.Hosting.Azure.KeyVault
+      - Aspire.Hosting.Azure.Kubernetes
       - Aspire.Hosting.Azure.Kusto
       - Aspire.Hosting.Azure.Network
       - Aspire.Hosting.Azure.OperationalInsights

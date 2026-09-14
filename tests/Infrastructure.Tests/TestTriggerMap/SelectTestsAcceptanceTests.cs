@@ -834,6 +834,8 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.True(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.ats.txt"));
         Assert.True(filter.IsExcluded("src/Aspire.Hosting.Redis/api/Aspire.Hosting.Redis.cs"));
         Assert.True(filter.IsExcluded("src/Components/Aspire.Azure.AI.Inference/api/Aspire.Azure.AI.Inference.cs"));
+        Assert.False(filter.IsExcluded("src/Aspire.Hosting/api/Helper.cs"));
+        Assert.False(filter.IsExcluded("src/Aspire.Dashboard/api/ApiAuthenticationHandler.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.tscompat.suppression.txt"));
         Assert.False(filter.IsExcluded("src/Aspire.Cli/Templating/Templates/java-starter/api/Program.cs"));
 
@@ -1105,6 +1107,27 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     }
 
     [Fact]
+    public void RealMapEveryPolyglotFixtureConsumerRunsPolyglotValidation()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(
+            mapPath,
+            EnumerateMatrixTestProjects(),
+            LoadProjectDirectories(),
+            new HashSet<string>(StringComparer.Ordinal));
+        var consumers = EnumeratePolyglotConsumerProjects();
+
+        Assert.NotEmpty(consumers);
+
+        var missing = consumers
+            .Where(project => !selector.Select([], [project], new SelectorOptions()).Jobs.Contains("job:polyglot"))
+            .ToList();
+
+        Assert.True(missing.Count == 0,
+            $"polyglot fixture consumers missing job:polyglot routing: {string.Join(", ", missing)}");
+    }
+
+    [Fact]
     public void RealMapBlazorRuntimeAssetChangeRunsPackageExtensionAndPolyglotRegressions()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
@@ -1155,6 +1178,35 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         }
 
         throw new InvalidOperationException("No integration src/Aspire.Hosting*/api/<name>.ats.txt with a matching tests/PolyglotAppHosts/<name> fixture was found.");
+    }
+
+    private static IReadOnlyList<string> EnumeratePolyglotConsumerProjects()
+    {
+        var polyglotRoot = Path.Combine(RepoRoot.Path, "tests", "PolyglotAppHosts");
+        var consumers = Directory.EnumerateDirectories(polyglotRoot, "Aspire.Hosting*")
+            .Select(Path.GetFileName)
+            .Where(name => name is not null)
+            .Select(name => name!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var configPath in Directory.EnumerateFiles(polyglotRoot, "aspire.config.json", SearchOption.AllDirectories))
+        {
+            using var config = System.Text.Json.JsonDocument.Parse(File.ReadAllText(configPath));
+            if (!config.RootElement.TryGetProperty("packages", out var packages))
+            {
+                continue;
+            }
+
+            foreach (var package in packages.EnumerateObject())
+            {
+                if (package.Name.StartsWith("Aspire.Hosting", StringComparison.Ordinal))
+                {
+                    consumers.Add(package.Name);
+                }
+            }
+        }
+
+        return consumers.Order(StringComparer.Ordinal).ToList();
     }
 
     private static (string Dir, string Test) FirstComponentWithSameNamedTest(IReadOnlyCollection<string> matrix)
