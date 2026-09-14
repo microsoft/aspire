@@ -95,7 +95,7 @@ resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
           volumeMounts: [
             {
               volumeName: 'scratch'
-              mountPath: '/tmp/scratch'
+              mountPath: '/scratch'
             }
           ]
         }
