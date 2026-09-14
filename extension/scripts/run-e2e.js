@@ -2488,7 +2488,7 @@ function isPartialDownloadArchiveName(name) {
 
 function copyStorageDiagnostics() {
   removePath(storageDiagnosticsDir, { recursive: true, force: true });
-  copyIfExists(isolatedAspireHome, path.join(storageDiagnosticsDir, 'aspire-home'), skipAspireLeaseFiles);
+  copyIfExists(isolatedAspireHome, path.join(storageDiagnosticsDir, 'aspire-home'), shouldCopyAspireHomeDiagnostics);
   copyIfExists(path.join(storageDir, 'screenshots'), path.join(storageDiagnosticsDir, 'screenshots'));
   copyIfExists(path.join(storageDir, 'settings', 'CrashpadMetrics-active.pma'), path.join(storageDiagnosticsDir, 'settings', 'CrashpadMetrics-active.pma'));
   copyIfExists(path.join(storageDir, 'settings', 'logs'), path.join(storageDiagnosticsDir, 'settings', 'logs'));
@@ -2513,11 +2513,17 @@ function copyIfExists(sourcePath, destinationPath, filter) {
   fs.cpSync(sourcePath, destinationPath, { recursive: true, force: true, filter });
 }
 
-function skipAspireLeaseFiles(sourcePath) {
-  // Aspire CLI lease files can remain locked briefly on Windows after the test
-  // process exits. They are not useful diagnostics, and failing to copy them can
-  // mask the actual E2E failure or prevent artifact upload.
-  return !sourcePath.split(/[\\/]/).includes('.leases') && !sourcePath.endsWith('.lease');
+function shouldCopyAspireHomeDiagnostics(sourcePath) {
+  const relativePath = path.relative(isolatedAspireHome, sourcePath);
+  const normalizedPath = isWindows ? relativePath.toLowerCase() : relativePath;
+  const segments = normalizedPath.split(path.sep);
+
+  // DashboardRunStore holds dashboard/runs/<id>.lock and dashboard/resumes/<app>.lock
+  // exclusively and deletes them on close. Skip the persistence subtree before traversal:
+  // locks, SQLite sidecars and expired runs can disappear while diagnostics are copied.
+  // These payloads are not in extension-e2e-tests.yml's upload allowlist; logs/ is retained.
+  // CLI lease files can also remain locked briefly after the test process exits.
+  return segments[0] !== 'dashboard' && !segments.includes('.leases') && !normalizedPath.endsWith('.lease');
 }
 
 function copyWorkspaceProjectSources() {

@@ -515,7 +515,7 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('sanitizeDashboardUrlForDiagnostics'));
         assert.ok(runner.includes('redactTextFilesForArtifacts(resultsDir)'));
         assert.ok(runner.includes('redactTextFilesForArtifacts(storageDiagnosticsDir)'));
-        assert.ok(runner.includes('skipAspireLeaseFiles'));
+        assert.ok(runner.includes('shouldCopyAspireHomeDiagnostics'));
         assert.ok(runner.includes('/login?t=<redacted>'));
         assert.ok(runner.includes('new URL(stripResourceSuffix(url)).origin'));
     });
