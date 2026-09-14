@@ -1,4 +1,4 @@
-# TEMPORARY diagnostics-only investigation. Do not merge this workflow or ci.yml's trigger change.
+# TEMPORARY diagnostics-only investigation. Do not merge this workflow into the clean fix PR.
 # Reuse the default-branch-known workflow filename so dispatch works without an investigation PR:
 # gh workflow run reproduce-flaky-tests.yml --repo microsoft/aspire --ref ellahathaway-diagnostics-lock-workflow-repro
 # This does not launch VS Code, build AppHosts, run WinUI probes, or build the .NET product.
