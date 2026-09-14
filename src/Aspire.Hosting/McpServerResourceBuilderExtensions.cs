@@ -440,32 +440,35 @@ public static class McpServerResourceBuilderExtensions
                         CommandResultFormat.Json);
                 }
 
-                if (responseJson["result"]?["isError"]?.GetValue<bool>() is true)
+                if (responseJson["result"] is JsonObject toolResult &&
+                    (toolResult["isError"] is null || toolResult["isError"] is JsonValue isErrorValue && isErrorValue.TryGetValue<bool>(out _)))
                 {
-                    return CommandResults.Failure(
-                        "MCP tool reported an error.",
-                        JsonSerializer.Serialize(responseJson["result"], s_indentedJsonOptions),
-                        CommandResultFormat.Json);
-                }
+                    if (toolResult["isError"]?.GetValue<bool>() is true)
+                    {
+                        return CommandResults.Failure(
+                            "MCP tool reported an error.",
+                            JsonSerializer.Serialize(toolResult, s_indentedJsonOptions),
+                            CommandResultFormat.Json);
+                    }
 
-                return CommandResults.Success(
-                    message: "MCP tool response received.",
-                    result: JsonSerializer.Serialize(responseJson, s_indentedJsonOptions),
-                    resultFormat: CommandResultFormat.Json,
-                    displayImmediately: true);
+                    return CommandResults.Success(
+                        message: "MCP tool response received.",
+                        result: JsonSerializer.Serialize(responseJson, s_indentedJsonOptions),
+                        resultFormat: CommandResultFormat.Json,
+                        displayImmediately: true);
+                }
             }
         }
         catch (JsonException)
         {
-            // Some MCP servers can return plain text transport errors. Surface the response as-is
-            // instead of failing result processing after the HTTP request succeeded.
+            // A proxy error page or truncated JSON body can arrive with a successful HTTP status.
+            // Preserve the original body (including SSE framing) in the failure for diagnostics.
         }
 
-        return CommandResults.Success(
-            message: "MCP tool response received.",
-            result: result,
-            resultFormat: CommandResultFormat.Text,
-            displayImmediately: true);
+        return CommandResults.Failure(
+            "MCP server returned an empty or invalid JSON-RPC tool response.",
+            responseBody,
+            CommandResultFormat.Text);
     }
 
     private static JsonObject CreateMcpInitializeRequest()

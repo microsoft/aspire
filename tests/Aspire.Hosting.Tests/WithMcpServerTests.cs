@@ -450,6 +450,49 @@ public class WithMcpServerTests
         Assert.NotNull(handler.ToolCallRequest);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("<html>Proxy error</html>")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":""")]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("\"plain text\"")]
+    [InlineData("{}")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call"}""")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":null,"error":null}""")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":"invalid"}""")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":{"isError":"invalid"}}""")]
+    [InlineData("event: message\ndata: invalid-json\n\n")]
+    [InlineData("event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":\"tool-call\"}\n\n")]
+    public async Task WithMcpServer_InvokeCommandRejectsMalformedResponseAndPreservesBody(string responseBody)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        var invalidResponse = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(responseBody)
+        };
+        var handler = new McpCommandHandler
+        {
+            OverrideResponse = (method, _) => Task.FromResult(method == "tools/call" ? invalidResponse : null)
+        };
+        appBuilder.Services.AddHttpClient(string.Empty).ConfigurePrimaryHttpMessageHandler(() => handler);
+        var container = AddMcpContainer(appBuilder);
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource, "app-mcp-call-tool", CreateMcpArguments("get_weather", "{}")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal("MCP server returned an empty or invalid JSON-RPC tool response.", result.Message);
+        Assert.NotNull(result.Data);
+        Assert.Equal(responseBody, result.Data.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Data.Format);
+        Assert.Equal(["session-1"], handler.TerminatedSessions);
+        await Assert.ThrowsAsync<ObjectDisposedException>(invalidResponse.Content.ReadAsStringAsync);
+    }
+
     [Fact]
     public async Task WithMcpServer_InteractiveCommandOmitsOptionalParametersWithoutDefaults()
     {

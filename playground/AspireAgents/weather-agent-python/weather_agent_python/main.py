@@ -1,7 +1,9 @@
 """A2A JSON-RPC agent served with FastAPI, LangChain, and the official A2A SDK."""
 
+import asyncio
 import logging
 import os
+from contextlib import suppress
 
 from a2a.server.agent_execution.agent_executor import AgentExecutor
 from a2a.server.agent_execution.context import RequestContext
@@ -21,6 +23,7 @@ from a2a.types import (
     TaskState,
     TaskStatus,
 )
+from a2a.utils.errors import TaskNotCancelableError
 from azure.identity import DefaultAzureCredential
 from fastapi import FastAPI
 from langchain.agents import create_agent
@@ -125,14 +128,21 @@ class AspireAgentExecutor(AgentExecutor):
     """Small A2A SDK executor used by the Aspire playground."""
 
     def __init__(self) -> None:
-        self._running_tasks: set[str] = set()
+        self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._agent: LangChainAgent | None = None
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         """Cancel the running task if it is still active."""
         task_id = context.task_id
-        if task_id is not None:
-            self._running_tasks.discard(task_id)
+        execution = self._running_tasks.pop(task_id, None) if task_id is not None else None
+        if execution is None or execution.done():
+            raise TaskNotCancelableError(message="Task is no longer running.")
+
+        # Stop and join the producer before publishing cancellation, including when
+        # it is suspended while adding an artifact, so completion cannot follow it.
+        execution.cancel()
+        with suppress(asyncio.CancelledError):
+            await execution
 
         updater = TaskUpdater(
             event_queue=event_queue,
@@ -150,7 +160,10 @@ class AspireAgentExecutor(AgentExecutor):
         if user_message is None or task_id is None or context_id is None:
             return
 
-        self._running_tasks.add(task_id)
+        execution = asyncio.current_task()
+        if execution is None:
+            raise RuntimeError("Agent execution requires an asyncio task.")
+        self._running_tasks[task_id] = execution
         logger.info("Processing A2A message %s for task %s.", user_message.message_id, task_id)
 
         try:
@@ -171,9 +184,6 @@ class AspireAgentExecutor(AgentExecutor):
             query = context.get_user_input()
             agent = self._get_agent()
             response_text = await agent.answer(query)
-            if task_id not in self._running_tasks:
-                return
-
             await updater.add_artifact(
                 parts=[Part(text=response_text)],
                 name="response",
@@ -181,7 +191,7 @@ class AspireAgentExecutor(AgentExecutor):
             )
             await updater.complete()
         finally:
-            self._running_tasks.discard(task_id)
+            self._running_tasks.pop(task_id, None)
 
     def _get_agent(self) -> LangChainAgent:
         if self._agent is None:

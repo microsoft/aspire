@@ -797,6 +797,14 @@ public static class AgentResourceBuilderExtensions
             return CreateA2ATaskFailure(responseJson, taskState);
         }
 
+        if (validateA2ATaskState && !IsA2ASendMessageResponse(responseJson))
+        {
+            return CommandResults.Failure(
+                "Agent returned an invalid A2A task or message response.",
+                JsonSerializer.Serialize(responseJson, s_indentedJsonOptions),
+                CommandResultFormat.Json);
+        }
+
         return CommandResults.Success(
             message: "Agent response received.",
             result: JsonSerializer.Serialize(responseJson, s_indentedJsonOptions),
@@ -921,12 +929,16 @@ public static class AgentResourceBuilderExtensions
 
     private static Task<ExecuteCommandResult> GetA2ACommandResultAsync(HttpCommandResultContext ctx)
     {
-        return ctx.Response.Content.Headers.ContentType?.MediaType switch
+        var mediaType = ctx.Response.Content.Headers.ContentType?.MediaType;
+        if (string.Equals(mediaType, "application/json", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(mediaType, "application/a2a+json", StringComparison.OrdinalIgnoreCase))
         {
-            "application/json" or "application/a2a+json" => GetAgentCommandJsonResultAsync(ctx, validateA2ATaskState: true, validateAcpRunStatus: false),
-            "text/event-stream" => GetA2ACommandSseResultAsync(ctx),
-            _ => GetAgentCommandTextResultAsync(ctx)
-        };
+            return GetAgentCommandJsonResultAsync(ctx, validateA2ATaskState: true, validateAcpRunStatus: false);
+        }
+
+        return string.Equals(mediaType, "text/event-stream", StringComparison.OrdinalIgnoreCase)
+            ? GetA2ACommandSseResultAsync(ctx)
+            : GetAgentCommandTextResultAsync(ctx);
     }
 
     private static Task<ExecuteCommandResult> GetAcpCommandResultAsync(HttpCommandResultContext ctx)
@@ -940,6 +952,45 @@ public static class AgentResourceBuilderExtensions
             $"Agent task ended in the '{taskState}' state.",
             JsonSerializer.Serialize(responseJson, s_indentedJsonOptions),
             CommandResultFormat.Json);
+    }
+
+    private static bool IsA2ASendMessageResponse(JsonObject responseJson)
+    {
+        // SendMessage returns exactly one Task or Message. JSON-RPC adds a "result" envelope;
+        // v0.3 discriminates with "kind", while v1 and HTTP+JSON use named payloads.
+        // See https://a2a-protocol.org/v1.0.0/specification/ and https://a2a-protocol.org/v0.3.0/specification/.
+        var result = responseJson.ContainsKey("result") ? responseJson["result"] as JsonObject : responseJson;
+        if (result is null)
+        {
+            return false;
+        }
+
+        JsonObject? task;
+        JsonObject? message;
+        if (result.ContainsKey("task") || result.ContainsKey("message"))
+        {
+            if (result.ContainsKey("task") && result.ContainsKey("message"))
+            {
+                return false;
+            }
+
+            task = result["task"] as JsonObject;
+            message = result["message"] as JsonObject;
+        }
+        else
+        {
+            task = GetJsonString(result["kind"]) is "task" ? result : null;
+            message = GetJsonString(result["kind"]) is "message" ? result : null;
+        }
+
+        return task is not null
+            ? !string.IsNullOrWhiteSpace(GetJsonString(task["id"]))
+                && task["status"] is JsonObject status
+                && !string.IsNullOrWhiteSpace(GetJsonString(status["state"]))
+            : message is not null
+                && !string.IsNullOrWhiteSpace(GetJsonString(message["messageId"]))
+                && !string.IsNullOrWhiteSpace(GetJsonString(message["role"]))
+                && message["parts"] is JsonArray;
     }
 
     private static bool TryGetA2ATerminalFailureState(JsonObject responseJson, [NotNullWhen(true)] out string? taskState)

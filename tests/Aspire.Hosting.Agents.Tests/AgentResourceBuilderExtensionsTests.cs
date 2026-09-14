@@ -463,6 +463,47 @@ public class AgentResourceBuilderExtensionsTests
     }
 
     [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"ok":true}""")]
+    [InlineData("""{"result":{}}""")]
+    [InlineData("""{"result":null}""")]
+    [InlineData("""{"result":[]}""")]
+    [InlineData("""{"task":{}}""")]
+    [InlineData("""{"message":{}}""")]
+    [InlineData("""{"kind":"message"}""")]
+    [InlineData("""{"kind":"task","status":{"state":"completed"}}""")]
+    [InlineData("""{"task":{"id":"task-id","status":{"state":"completed"}},"message":{"messageId":"message-id","role":"agent","parts":[]}}""")]
+    [InlineData("""{"statusUpdate":{"taskId":"task-id","status":{"state":"TASK_STATE_COMPLETED"}}}""")]
+    public async Task InvokeA2ARejectsMalformedJsonResponse(string response)
+    {
+        var result = await InvokeA2AResponseAsync("JSONRPC", "1.0", false, response, "application/json");
+
+        Assert.False(result.Success);
+        Assert.Equal("Agent returned an invalid A2A task or message response.", result.Message);
+        Assert.NotNull(result.Data);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(response), JsonNode.Parse(result.Data.Value)));
+    }
+
+    [Theory]
+    [InlineData("Application/JSON", false)]
+    [InlineData("Application/A2A+JSON", false)]
+    [InlineData("Text/Event-Stream", true)]
+    public async Task InvokeA2ARecognizesMixedCaseMediaTypes(string mediaType, bool streaming)
+    {
+        var error = """{"jsonrpc":"2.0","id":"request-id","error":{"code":-32603,"message":"Agent failed."}}""";
+        var result = await InvokeA2AResponseAsync("JSONRPC", "1.0", streaming, streaming ? $"data: {error}\n\n" : error, mediaType);
+
+        Assert.False(result.Success);
+        Assert.Equal("Agent request returned a JSON-RPC error.", result.Message);
+
+        var task = CreateA2ATaskResponse("JSONRPC", "1.0", false, "TASK_STATE_FAILED");
+        result = await InvokeA2AResponseAsync("JSONRPC", "1.0", streaming, streaming ? $"data: {task}\n\n" : task, mediaType);
+
+        Assert.False(result.Success);
+        Assert.Equal("Agent task ended in the 'TASK_STATE_FAILED' state.", result.Message);
+    }
+
+    [Theory]
     [InlineData("JSONRPC", "0.3")]
     [InlineData("JSONRPC", "1.0")]
     [InlineData("HTTP+JSON", "0.3")]
@@ -486,6 +527,11 @@ public class AgentResourceBuilderExtensionsTests
         var response = WrapA2AResponse(protocolBinding, payload);
 
         var result = await InvokeA2AStreamAsync(protocolBinding, protocolVersion, $"data: {response}\n\n");
+
+        Assert.True(result.Success);
+        Assert.Equal("Agent response received.", result.Message);
+
+        result = await InvokeA2AResponseAsync(protocolBinding, protocolVersion, false, response, "application/json");
 
         Assert.True(result.Success);
         Assert.Equal("Agent response received.", result.Message);
@@ -983,15 +1029,24 @@ public class AgentResourceBuilderExtensionsTests
             : payload).ToJsonString();
     }
 
-    private static async Task<ExecuteCommandResult> InvokeA2AStreamAsync(string protocolBinding, string protocolVersion, string response)
+    private static Task<ExecuteCommandResult> InvokeA2AStreamAsync(string protocolBinding, string protocolVersion, string response)
+    {
+        return InvokeA2AResponseAsync(protocolBinding, protocolVersion, true, response, "text/event-stream");
+    }
+
+    private static async Task<ExecuteCommandResult> InvokeA2AResponseAsync(string protocolBinding, string protocolVersion, bool streaming, string response, string mediaType)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var handler = new A2ACommandHandler(protocolBinding, protocolVersion, supportsStreaming: true, "http://localhost:8080/a2a", streamingResponse: response);
+        var handler = new A2ACommandHandler(protocolBinding, protocolVersion, supportsStreaming: streaming, "http://localhost:8080/a2a",
+            invocationResponse: response, streamingResponse: response)
+        {
+            ResponseMediaType = mediaType
+        };
         builder.Services.AddHttpClient(string.Empty)
             .ConfigurePrimaryHttpMessageHandler(() => handler);
 
         var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
-            .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+            .AsAgent(AgentProtocol.A2A, streaming ? A2AInvocationMode.Streaming : A2AInvocationMode.NonStreaming);
         using var app = builder.Build();
         await app.StartAsync().DefaultTimeout();
         await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-a2a-send-message");
@@ -1010,6 +1065,8 @@ public class AgentResourceBuilderExtensionsTests
         public HttpRequestMessage? InvocationRequest { get; private set; }
 
         public string? InvocationBody { get; private set; }
+
+        public string? ResponseMediaType { get; init; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -1050,8 +1107,8 @@ public class AgentResourceBuilderExtensionsTests
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = request.Headers.Accept.Any(h => h.MediaType == "text/event-stream")
-                    ? new StringContent(streamingResponse ?? $"event: message\ndata: {response}\n\n", Encoding.UTF8, "text/event-stream")
-                    : new StringContent(response, Encoding.UTF8, "application/json")
+                    ? new StringContent(streamingResponse ?? $"event: message\ndata: {response}\n\n", Encoding.UTF8, ResponseMediaType ?? "text/event-stream")
+                    : new StringContent(response, Encoding.UTF8, ResponseMediaType ?? "application/json")
             };
         }
     }
