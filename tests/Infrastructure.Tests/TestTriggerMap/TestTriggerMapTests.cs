@@ -1105,17 +1105,20 @@ public sealed class TestTriggerMapTests
             .Select(projectPath => Path.GetFileNameWithoutExtension(projectPath)!)
             .Where(name => name.EndsWith(".Tests", StringComparison.Ordinal))
             .ToHashSet(StringComparer.Ordinal);
-        var allTestProjectNames = Directory.EnumerateFiles(
+        var testProjectNames = Directory.EnumerateFiles(
                 Path.Combine(RepoRoot.Path, "tests"), "*.csproj", SearchOption.AllDirectories)
             .Select(Path.GetFileNameWithoutExtension)
-        .Where(name => name is not null)
-        .Select(name => name!)
-        .ToHashSet(StringComparer.Ordinal);
+            .Where(name => name is not null)
+            .Select(name => name!)
+            .ToHashSet(StringComparer.Ordinal);
+        var affectedTestProjectNames = layer1Affected
+            .Where(testProjectNames.Contains)
+            .ToHashSet(StringComparer.Ordinal);
         var projectDirectories = projectPaths
             .Select(projectPath => Path.GetDirectoryName(projectPath)!.Replace('\\', '/'))
             .ToHashSet(StringComparer.Ordinal);
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, testProjects, projectDirectories, allTestProjectNames);
+        var selector = new TestSelector(mapPath, testProjects, projectDirectories, affectedTestProjectNames);
 
         return selector.Select([path], layer1Affected, new SelectorOptions());
     }

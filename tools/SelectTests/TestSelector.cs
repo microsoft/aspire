@@ -110,7 +110,7 @@ public sealed class TestSelector
     private readonly string _mapPath;
     private readonly IReadOnlyCollection<string> _allTestProjects;
     private readonly IReadOnlyCollection<string> _projectDirectories;
-    private readonly IReadOnlySet<string> _allTestProjectNames;
+    private readonly IReadOnlySet<string> _affectedTestProjectNames;
 
     /// <param name="mapPath">Path to <c>eng/github-ci/test-trigger-map.yml</c>.</param>
     /// <param name="allTestProjects">All matrix test project names — the universe an <c>ALL</c> selection expands to.</param>
@@ -120,7 +120,7 @@ public sealed class TestSelector
     /// under one of these dirs is attributed by the graph, so it never triggers the run-all
     /// fallback. May be empty (then no file is treated as owned).
     /// </param>
-    /// <param name="allTestProjectNames">
+    /// <param name="affectedTestProjectNames">
     /// Affected test project names from the current Layer 1 graph result (graph projects under <c>tests/</c>).
     /// These names are excluded from affected production-project rules.
     /// </param>
@@ -128,12 +128,12 @@ public sealed class TestSelector
         string mapPath,
         IReadOnlyCollection<string> allTestProjects,
         IReadOnlyCollection<string> projectDirectories,
-        IReadOnlySet<string> allTestProjectNames)
+        IReadOnlySet<string> affectedTestProjectNames)
     {
         _mapPath = mapPath;
         _allTestProjects = allTestProjects;
         _projectDirectories = projectDirectories;
-        _allTestProjectNames = allTestProjectNames;
+        _affectedTestProjectNames = affectedTestProjectNames;
     }
 
     /// <param name="changedFiles">Repo-relative, '/'-separated paths changed in the PR.</param>
@@ -277,7 +277,7 @@ public sealed class TestSelector
         // typescript-api-compat / deployment-e2e) for a TEST-ONLY change. See test-trigger-map.yml's
         // affected_project_rules comment ("matched against the affected PRODUCTION projects").
         var affectedProductionProjects = layer1Affected
-            .Where(name => !_allTestProjectNames.Contains(name))
+            .Where(name => !_affectedTestProjectNames.Contains(name))
             .ToList();
         foreach (var rule in map.AffectedProjectRules)
         {
