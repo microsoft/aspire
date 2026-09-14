@@ -2662,7 +2662,6 @@ public class AspireSkillsInstallerTests
 
     private sealed class ArchiveLockingAspireSkillsBundleProvider(CliExecutionContext executionContext) : AspireSkillsBundleProvider(
         TestBundleProviderFactory.CreateSkills().Descriptor,
-        SkillFileValidator.Validate,
         executionContext.IdentitySdkVersion,
         executionContext.IdentitySdkVersion,
         NullLogger.Instance), IDisposable

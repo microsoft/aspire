@@ -41,7 +41,7 @@ internal interface IAspireSkillsBundleProvider
 }
 
 /// <summary>
-/// Creates and loads bundles using a catalog's layout and required-file validation.
+/// Creates and loads bundles using their descriptor's layout and required-file validation.
 /// </summary>
 internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 {
@@ -74,23 +74,19 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     private readonly string _currentSdkVersion;
     private readonly ILogger _logger;
     private readonly Lazy<EmbeddedAspireSkillsBundleMetadata?> _embeddedMetadata;
-    private readonly Action<string, ReadOnlySpan<byte>> _validateRequiredFile;
 
     public AspireSkillsBundleProvider(
         AspireSkillsBundleDescriptor descriptor,
-        Action<string, ReadOnlySpan<byte>> validateRequiredFile,
         string currentCliVersion,
         string currentSdkVersion,
         ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
-        ArgumentNullException.ThrowIfNull(validateRequiredFile);
         ArgumentException.ThrowIfNullOrWhiteSpace(currentCliVersion);
         ArgumentException.ThrowIfNullOrWhiteSpace(currentSdkVersion);
         ArgumentNullException.ThrowIfNull(logger);
 
         Descriptor = descriptor;
-        _validateRequiredFile = validateRequiredFile;
         _currentCliVersion = currentCliVersion;
         _currentSdkVersion = currentSdkVersion;
         _logger = logger;
@@ -98,7 +94,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     }
 
     /// <summary>
-    /// Gets the fixed identity and layout used throughout this provider's lifetime.
+    /// Gets the fixed bundle definition used throughout this provider's lifetime.
     /// </summary>
     public AspireSkillsBundleDescriptor Descriptor { get; }
 
@@ -523,7 +519,7 @@ internal class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
         if (string.Equals(relativePath, Descriptor.RequiredFileName, StringComparison.Ordinal))
         {
-            _validateRequiredFile(assetName, bytes);
+            Descriptor.ValidateRequiredFile(assetName, bytes);
         }
 
         return CreateAssetFile(relativePath, bytes);

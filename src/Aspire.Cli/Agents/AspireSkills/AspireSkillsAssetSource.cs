@@ -12,9 +12,9 @@ namespace Aspire.Cli.Agents.AspireSkills;
 /// </summary>
 internal sealed class AspireSkillsAssetSource : IAgentAssetSource
 {
-    private static readonly BundleConfiguration[] s_configurations =
+    private static readonly AspireSkillsBundleDescriptor[] s_descriptors =
     [
-        new(new()
+        new()
         {
             AssetKind = AgentAssetKind.Skill,
             AssetKindName = "skills",
@@ -25,10 +25,11 @@ internal sealed class AspireSkillsAssetSource : IAgentAssetSource
             ManifestAssetsPropertyName = "skills",
             ContentRootDirectoryName = "skills",
             RequiredFileName = "SKILL.md",
+            ValidateRequiredFile = SkillFileValidator.Validate,
             EmbeddedArchiveResourceName = "aspire-skills.bundle.tgz",
             EmbeddedMetadataResourceName = "aspire-skills.metadata.json",
-        }, SkillFileValidator.Validate),
-        new(new()
+        },
+        new()
         {
             AssetKind = AgentAssetKind.Extension,
             AssetKindName = "extensions",
@@ -39,9 +40,10 @@ internal sealed class AspireSkillsAssetSource : IAgentAssetSource
             ManifestAssetsPropertyName = "extensions",
             ContentRootDirectoryName = "extensions",
             RequiredFileName = "extension.mjs",
+            ValidateRequiredFile = static (_, _) => { },
             EmbeddedArchiveResourceName = "aspire-extensions.bundle.tgz",
             EmbeddedMetadataResourceName = "aspire-extensions.metadata.json",
-        }, static (_, _) => { }),
+        },
     ];
 
     private readonly IAspireSkillsInstaller _installer;
@@ -53,11 +55,12 @@ internal sealed class AspireSkillsAssetSource : IAgentAssetSource
         ILogger<AspireSkillsBundleProvider> logger)
     {
         _installer = installer;
-        // Retain one reader per configuration, including its lazy embedded metadata, across
+        // Retain one reader per descriptor, including its lazy embedded metadata, across
         // catalog resolutions. The effective CLI identity also supplies the SDK version.
-        _providers = s_configurations.ToDictionary(
-            configuration => configuration.Descriptor.AssetKind,
-            configuration => configuration.CreateProvider(executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, logger));
+        _providers = s_descriptors.ToDictionary(
+            descriptor => descriptor.AssetKind,
+            descriptor => new AspireSkillsBundleProvider(
+                descriptor, executionContext.IdentitySdkVersion, executionContext.IdentitySdkVersion, logger));
     }
 
     public async Task<AgentAssetSourceResult> GetAssetsAsync(AgentAssetKind assetKind, CancellationToken cancellationToken)
@@ -90,15 +93,7 @@ internal sealed class AspireSkillsAssetSource : IAgentAssetSource
     internal static AspireSkillsBundleProvider CreateBundleProvider(
         AgentAssetKind assetKind, string currentCliVersion, string currentSdkVersion, ILogger logger)
     {
-        var configuration = s_configurations.Single(configuration => configuration.Descriptor.AssetKind == assetKind);
-        return configuration.CreateProvider(currentCliVersion, currentSdkVersion, logger);
-    }
-
-    private sealed record BundleConfiguration(
-        AspireSkillsBundleDescriptor Descriptor,
-        Action<string, ReadOnlySpan<byte>> ValidateRequiredFile)
-    {
-        public AspireSkillsBundleProvider CreateProvider(string currentCliVersion, string currentSdkVersion, ILogger logger)
-            => new(Descriptor, ValidateRequiredFile, currentCliVersion, currentSdkVersion, logger);
+        var descriptor = s_descriptors.Single(descriptor => descriptor.AssetKind == assetKind);
+        return new(descriptor, currentCliVersion, currentSdkVersion, logger);
     }
 }

@@ -4,7 +4,7 @@
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Defines immutable bundle identity and layout metadata, separate from validation behavior.
+/// Defines immutable bundle identity, layout, and required-file validation.
 /// </summary>
 internal sealed class AspireSkillsBundleDescriptor
 {
@@ -25,6 +25,11 @@ internal sealed class AspireSkillsBundleDescriptor
     public required string ContentRootDirectoryName { get; init; }
 
     public required string RequiredFileName { get; init; }
+
+    /// <summary>
+    /// Validates an asset's required file using its name and file contents.
+    /// </summary>
+    public required Action<string, ReadOnlySpan<byte>> ValidateRequiredFile { get; init; }
 
     public required string EmbeddedArchiveResourceName { get; init; }
 
