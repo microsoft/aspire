@@ -372,8 +372,17 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
                     if (result.GetProperty("message").GetString() == expectedVersion)
                     {
                         Assert.Equal(urls["api"].GetLeftPart(UriPartial.Authority), result.GetProperty("backend").GetString());
+
+                        // The frontend call above proves the correct secret is accepted. Probe both
+                        // an absent and a deliberately wrong header so a comparison that accidentally
+                        // accepts any value cannot pass.
                         using var unauthenticated = await client.GetAsync(urls["api"], readiness.Token);
                         Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
+
+                        using var wrongSecretRequest = new HttpRequestMessage(HttpMethod.Get, urls["api"]);
+                        wrongSecretRequest.Headers.Add("X-Express-Test-Secret", "wrong-express-test-secret");
+                        using var wrongSecret = await client.SendAsync(wrongSecretRequest, readiness.Token);
+                        Assert.Equal(HttpStatusCode.Unauthorized, wrongSecret.StatusCode);
                         return;
                     }
                 }
