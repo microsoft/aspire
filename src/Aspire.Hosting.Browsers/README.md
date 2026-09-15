@@ -6,7 +6,7 @@ Use this integration to model, configure, and orchestrate tracked Chromium brows
 
 ### Prerequisites
 
-* Microsoft Edge or Google Chrome installed on the development machine.
+* A Chromium-based browser, such as Microsoft Edge, Google Chrome, or Chromium, installed on the development machine.
 * A resource that exposes an HTTP or HTTPS endpoint for a browser to open.
 
 ### Add the integration
