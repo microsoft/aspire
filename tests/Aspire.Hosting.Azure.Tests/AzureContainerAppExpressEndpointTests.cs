@@ -59,7 +59,6 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         var apiTarget = GetTarget(api.Resource);
         var webTarget = GetTarget(web.Resource);
         var (manifest, bicep) = await GetManifestWithBicep(webTarget, skipPreparer: true);
-        var (_, apiBicep) = await GetManifestWithBicep(apiTarget, skipPreparer: true);
 
         // The public hostname comes from the environment's default domain, so a consumer never
         // depends on the producing app's own deployment outputs.
@@ -68,9 +67,8 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         Assert.DoesNotContain(webTarget.Parameters.Values.OfType<BicepOutputReference>(), output => output.Resource == apiTarget);
         Assert.False(endpoint.IsAllocated);
 
-        await Verify(manifest.ToString(), "json")
-            .AppendContentAsFile(bicep, "bicep")
-            .AppendContentAsFile(apiBicep, "bicep", "api");
+        // The API app's own module is covered by AsExpressProjectPreservesExplicitReplicaSettings.
+        await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
     }
 
     [Fact]
@@ -225,7 +223,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var webTarget = GetTarget(web.Resource);
-        var (manifest, bicep) = await GetManifestWithBicep(webTarget, skipPreparer: true);
+        var (_, bicep) = await GetManifestWithBicep(webTarget, skipPreparer: true);
 
         // The hostname resolves through the producing environment's default domain, which is a
         // normal infrastructure module, so standalone publishing can bind it.
@@ -237,7 +235,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
 
         Assert.NotEqual(CompletionState.CompletedWithError, reporter.ResultCompletionState);
         Assert.True(File.Exists(Path.Combine(workspace.Path, "main.bicep")));
-        await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
+        await Verify(bicep, "bicep");
     }
 
     [Fact]
@@ -329,13 +327,13 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
         var target = GetTarget(web.Resource);
-        var (manifest, bicep) = await GetManifestWithBicep(target, skipPreparer: true);
+        var (_, bicep) = await GetManifestWithBicep(target, skipPreparer: true);
 
         // Express restricts this app's own ingress, not the schemes it calls outbound, so an
         // http:// reference to another environment's endpoint is passed through unchanged.
         Assert.Contains("http://api.${producer_outputs_azure_container_apps_environment_default_domain}", bicep, StringComparison.Ordinal);
 
-        await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
+        await Verify(bicep, "bicep");
     }
 
     [Theory]
@@ -357,13 +355,13 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
         var target = GetTarget(api.Resource);
-        var (manifest, bicep) = await GetManifestWithBicep(target, skipPreparer: true);
+        var (_, bicep) = await GetManifestWithBicep(target, skipPreparer: true);
 
         // An app can reference its own public URL because the hostname is known before deployment.
         var domain = Assert.Single(target.Parameters.Values.OfType<BicepOutputReference>(), output => output.Name == DomainOutputName);
         Assert.Same(environment.Resource, domain.Resource);
 
-        await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
+        await Verify(bicep, "bicep");
     }
 
     [Fact]

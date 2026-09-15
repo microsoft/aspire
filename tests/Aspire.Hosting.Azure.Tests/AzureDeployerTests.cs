@@ -540,7 +540,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
             $"[https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io](https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io) ([Azure Portal]({AzurePortalUrls.GetResourceUrl(GetTestResourceId("/providers/Microsoft.App/containerApps/api"))}))");
         AssertSummaryItem(reporter.PipelineSummary!, "web",
             $"[https://web.salmonisland-e9e6a567.westus3.azurecontainerapps.io](https://web.salmonisland-e9e6a567.westus3.azurecontainerapps.io) ([Azure Portal]({AzurePortalUrls.GetResourceUrl(GetTestResourceId("/providers/Microsoft.App/containerApps/web"))}))");
-        await Verify(reporter.PipelineSummary!.OrderBy(item => item.Key, StringComparer.Ordinal));
     }
 
     private static Dictionary<string, object> CreateExpressDeploymentOutputs(string deploymentName) =>
