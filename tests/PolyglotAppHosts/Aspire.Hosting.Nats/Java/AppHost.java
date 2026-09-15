@@ -34,5 +34,19 @@ void main() throws Exception {
         var _uri = nats.uriExpression();
         var _userName = nats.userNameReference();
         var _cstr = nats.connectionStringExpression();
+        
+        var clusterMember1 = builder.addNats("cluster-member-1")
+            .withJetStream();
+        var clusterMember2 = builder.addNats("cluster-member-2")
+            .withJetStream();
+        var clusterMember3 = builder.addNats("cluster-member-3")
+            .withJetStream();
+
+        var cluster =  builder.addNatsCluster("nats-cluster")
+            .withMember(clusterMember1)
+            .withMember(clusterMember2)
+            .withMember(clusterMember3);
+
+        var _clusterCstr = cluster.connectionStringExpression();
         builder.build().run();
     }
