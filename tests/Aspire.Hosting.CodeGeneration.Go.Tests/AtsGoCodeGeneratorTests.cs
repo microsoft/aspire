@@ -241,6 +241,11 @@ public class AtsGoCodeGeneratorTests
 
         AssertAgentCapability(capabilities, "asAgent", hasCustomPath: false);
         AssertAgentCapability(capabilities, "asAgentWithPath", hasCustomPath: true);
+
+        var mcpCommands = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.Agents/withMcpToolCommands");
+        Assert.Equal("withMcpToolCommands", mcpCommands.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints", mcpCommands.TargetTypeId);
+        Assert.True(mcpCommands.ReturnsBuilder);
     }
 
     [Fact]

@@ -1,0 +1,1141 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+namespace Aspire.Hosting;
+
+#pragma warning disable ASPIREINTERACTION001 // IInteractionService is used to prompt for dashboard command input.
+
+/// <summary>
+/// Provides extension methods for invoking MCP (Model Context Protocol) tools on resources.
+/// </summary>
+public static class McpToolCommandResourceBuilderExtensions
+{
+    private const string McpToolArgumentName = "tool";
+    private const string McpToolArgumentsArgumentName = "arguments";
+
+    /// <summary>
+    /// Adds commands for invoking tools on the resource's configured MCP server.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// Configure the MCP endpoint with <c>WithMcpServer</c> before calling this method.
+    /// Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+    /// and an MCP endpoint URL. The interactive command is highlighted only if the resource
+    /// does not already have a highlighted command. Endpoint resolution uses the existing
+    /// <see cref="McpServerEndpointAnnotation"/> without changing its configuration.
+    /// This method has no effect in publish mode.
+    /// </remarks>
+    /// <example>
+    /// Enable tool invocation on a resource hosting an MCP server:
+    /// <code>
+    /// var api = builder.AddProject&lt;Projects.MyApi&gt;("api")
+    ///     .WithMcpServer("/mcp", endpointName: "https")
+    ///     .WithMcpToolCommands();
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">The resource has no configured MCP server endpoint.</exception>
+    [Experimental("ASPIREAGENTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
+    public static IResourceBuilder<T> WithMcpToolCommands<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEndpoints
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
+
+        if (!builder.Resource.TryGetLastAnnotation<McpServerEndpointAnnotation>(out var annotation))
+        {
+            throw new InvalidOperationException(
+                $"Resource '{builder.Resource.Name}' has no MCP server endpoint. Call WithMcpServer before WithMcpToolCommands.");
+        }
+
+        var interactiveCommandName = $"{builder.Resource.Name}-mcp-call-tool-interactive";
+        if (builder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Any(c => string.Equals(c.Name, interactiveCommandName, StringComparison.Ordinal)))
+        {
+            return builder;
+        }
+
+        var isHighlighted = !builder.Resource.Annotations
+            .OfType<ResourceCommandAnnotation>()
+            .Any(command => command.IsHighlighted);
+
+        AddMcpEndpointUrl(builder, annotation);
+        AddMcpInvokeCommandIfMissing(builder, annotation, isHighlighted);
+
+        return builder;
+    }
+
+    private static void AddMcpEndpointUrl<T>(IResourceBuilder<T> builder, McpServerEndpointAnnotation annotation)
+        where T : IResourceWithEndpoints
+    {
+        builder.WithUrls(async context =>
+        {
+            if (context.ExecutionContext.IsPublishMode)
+            {
+                return;
+            }
+
+            Uri? uri;
+            try
+            {
+                uri = await annotation.EndpointUrlResolver(builder.Resource, context.CancellationToken).ConfigureAwait(false);
+            }
+            catch (DistributedApplicationException ex)
+            {
+                context.Logger.LogWarning(ex, "Could not add MCP endpoint URL for resource '{ResourceName}'.", builder.Resource.Name);
+                return;
+            }
+
+            if (uri is null)
+            {
+                return;
+            }
+
+            context.Urls.Add(new ResourceUrlAnnotation
+            {
+                Url = uri.AbsoluteUri,
+                DisplayText = "MCP Endpoint"
+            });
+        });
+    }
+
+    private static void AddMcpInvokeCommandIfMissing<T>(IResourceBuilder<T> builder, McpServerEndpointAnnotation annotation, bool isHighlighted)
+        where T : IResourceWithEndpoints
+    {
+        var interactiveCommandName = $"{builder.Resource.Name}-mcp-call-tool-interactive";
+        if (builder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Any(c => string.Equals(c.Name, interactiveCommandName, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        builder.ApplicationBuilder.Services.AddHttpClient();
+
+        builder.WithCommand(
+            interactiveCommandName,
+            "Invoke MCP",
+            context => ExecuteMcpToolCallAsync(context, builder.Resource, annotation),
+            new CommandOptions
+            {
+                IconName = "ChatSparkle",
+                IconVariant = IconVariant.Regular,
+                IsHighlighted = isHighlighted,
+                UpdateState = GetMcpCommandState,
+                Visibility = ResourceCommandVisibility.UI
+            });
+
+        var commandWithArgumentsName = $"{builder.Resource.Name}-mcp-call-tool";
+        if (builder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Any(c => string.Equals(c.Name, commandWithArgumentsName, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        builder.WithCommand(
+            commandWithArgumentsName,
+            "Invoke MCP",
+            context => ExecuteMcpToolCallAsync(context, builder.Resource, annotation),
+            new CommandOptions
+            {
+                Description = "Invoke an MCP tool by name with JSON arguments.",
+                IconName = "ChatSparkle",
+                IconVariant = IconVariant.Regular,
+                Arguments = [CreateMcpToolArgument(), CreateMcpArgumentsArgument()],
+                UpdateState = GetMcpCommandState,
+                Visibility = ResourceCommandVisibility.Api
+            });
+    }
+
+    private static ResourceCommandState GetMcpCommandState(UpdateCommandStateContext context)
+    {
+        var state = context.ResourceSnapshot.State?.Text;
+        return state == KnownResourceStates.Running || state == KnownResourceStates.RuntimeUnhealthy
+            ? ResourceCommandState.Enabled
+            : ResourceCommandState.Disabled;
+    }
+
+    private static async Task<ExecuteCommandResult> ExecuteMcpToolCallAsync(
+        ExecuteCommandContext context,
+        IResourceWithEndpoints resource,
+        McpServerEndpointAnnotation annotation)
+    {
+        try
+        {
+            var uri = await annotation.EndpointUrlResolver(resource, context.CancellationToken).ConfigureAwait(true);
+            if (uri is null)
+            {
+                return CommandResults.Failure("The MCP server endpoint URL is not available.");
+            }
+
+            if (!uri.IsAbsoluteUri || uri.Scheme is not ("http" or "https"))
+            {
+                return CommandResults.Failure($"Could not invoke MCP tools for resource '{resource.Name}' as the MCP server URL is not an absolute HTTP or HTTPS URL.");
+            }
+
+            using var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient(string.Empty);
+            httpClient.Timeout = Timeout.InfiniteTimeSpan;
+            using var request = new HttpRequestMessage(HttpMethod.Post, uri);
+            var requestContext = new McpToolCommandContext(
+                context.Services, context.ResourceName, context.CancellationToken, httpClient, context.Arguments, request);
+            var session = new McpSession();
+
+            // Own the entire invocation so preparation and transport failures also clean up the session.
+            try
+            {
+                await PrepareMcpToolCallRequestAsync(requestContext, session).ConfigureAwait(true);
+                using var response = await httpClient.SendAsync(request, context.CancellationToken).ConfigureAwait(true);
+                return await GetMcpCommandResultAsync(requestContext, response).ConfigureAwait(true);
+            }
+            finally
+            {
+                await TerminateMcpSessionAsync(requestContext, session).ConfigureAwait(true);
+            }
+        }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        {
+            return CommandResults.Canceled();
+        }
+        catch (Exception ex)
+        {
+            return CommandResults.Failure(ex);
+        }
+    }
+
+    private static async Task TerminateMcpSessionAsync(McpToolCommandContext ctx, McpSession session)
+    {
+        if (string.IsNullOrWhiteSpace(session.Id))
+        {
+            return;
+        }
+
+        try
+        {
+            // Cleanup must still run after a canceled command, but must not hang shutdown.
+            using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var request = new HttpRequestMessage(HttpMethod.Delete, ctx.Request.RequestUri);
+            request.Headers.Add("Mcp-Session-Id", session.Id);
+            if (!string.IsNullOrWhiteSpace(session.ProtocolVersion))
+            {
+                request.Headers.Add("MCP-Protocol-Version", session.ProtocolVersion);
+            }
+
+            using var response = await ctx.HttpClient.SendAsync(request, cancellation.Token).ConfigureAwait(true);
+            // Servers may decline explicit session termination with 405.
+            // https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#session-management
+            if (response.StatusCode != HttpStatusCode.MethodNotAllowed)
+            {
+                response.EnsureSuccessStatusCode();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            // Preserve the tool/preparation result; cleanup errors belong in the resource log.
+            ctx.Services.GetRequiredService<ResourceLoggerService>().GetLogger(ctx.ResourceName)
+                .LogWarning(ex, "Could not terminate the MCP session.");
+        }
+    }
+
+    private static async Task PrepareMcpToolCallRequestAsync(McpToolCommandContext ctx, McpSession session)
+    {
+        var initializeRequest = CreateMcpInitializeRequest();
+        using var initializeMessage = new HttpRequestMessage(HttpMethod.Post, ctx.Request.RequestUri);
+        ConfigureMcpRequest(initializeMessage, initializeRequest, sessionId: null, protocolVersion: null);
+        using var initializeHttpResponse = await ctx.HttpClient.SendAsync(initializeMessage, ctx.CancellationToken).ConfigureAwait(true);
+        // Capture the assigned session before parsing so even an invalid initialize payload is cleaned up.
+        session.Id = initializeHttpResponse.Headers.TryGetValues("Mcp-Session-Id", out var sessionIds) ? sessionIds.FirstOrDefault() : null;
+        var initializePayload = await ReadMcpJsonRpcPayloadAsync(initializeHttpResponse, initializeRequest["id"], ctx.CancellationToken).ConfigureAwait(true);
+        var sessionId = session.Id;
+        var protocolVersion = session.ProtocolVersion = initializePayload["result"]?["protocolVersion"]?.GetValue<string>()
+            ?? throw new InvalidOperationException("MCP server did not return a negotiated protocol version.");
+
+        await SendMcpJsonRpcNotificationAsync(ctx, "notifications/initialized", sessionId, protocolVersion).ConfigureAwait(true);
+
+        var tools = await ReadAllMcpToolsAsync(ctx, sessionId, protocolVersion).ConfigureAwait(true);
+        if (tools.Count == 0)
+        {
+            throw new InvalidOperationException("MCP server did not return any tools.");
+        }
+
+        var (selectedTool, arguments) = await GetMcpToolCallAsync(ctx, tools).ConfigureAwait(true);
+
+        ConfigureMcpRequest(
+            ctx.Request,
+            CreateMcpJsonRpcRequest(
+                "tools/call",
+                new JsonObject
+                {
+                    ["name"] = selectedTool.Name,
+                    ["arguments"] = arguments
+                }),
+            sessionId,
+            protocolVersion);
+    }
+
+    private static async Task<IReadOnlyList<McpTool>> ReadAllMcpToolsAsync(
+        McpToolCommandContext ctx,
+        string? sessionId,
+        string protocolVersion)
+    {
+        var tools = new List<McpTool>();
+        var seenCursors = new HashSet<string>(StringComparer.Ordinal);
+        string? cursor = null;
+        do
+        {
+            var parameters = new JsonObject();
+            if (cursor is not null)
+            {
+                parameters["cursor"] = cursor;
+            }
+
+            var response = await SendMcpJsonRpcRequestAsync(
+                ctx,
+                CreateMcpJsonRpcRequest("tools/list", parameters),
+                sessionId,
+                protocolVersion).ConfigureAwait(true);
+            using (response.Response)
+            {
+                tools.AddRange(ReadMcpTools(response.Payload));
+                cursor = response.Payload["result"]?["nextCursor"]?.GetValue<string>() is { Length: > 0 } nextCursor
+                    ? nextCursor
+                    : null;
+            }
+
+            if (cursor is not null && !seenCursors.Add(cursor))
+            {
+                throw new InvalidOperationException($"MCP server returned the tools/list cursor '{cursor}' more than once.");
+            }
+        }
+        while (cursor is not null);
+
+        return tools;
+    }
+
+    private static InteractionInput CreateMcpToolArgument()
+    {
+        return new InteractionInput
+        {
+            Name = McpToolArgumentName,
+            Label = "Tool",
+            Description = "Name of the MCP tool to invoke.",
+            InputType = InputType.Text,
+            Required = true,
+            Placeholder = "get_weather"
+        };
+    }
+
+    private static InteractionInput CreateMcpArgumentsArgument()
+    {
+        return new InteractionInput
+        {
+            Name = McpToolArgumentsArgumentName,
+            Label = "Arguments JSON",
+            Description = "JSON object to pass as the MCP tool arguments.",
+            InputType = InputType.Text,
+            Required = false,
+            Value = "{}",
+            Placeholder = "{ \"location\": \"Seattle\" }"
+        };
+    }
+
+    private static async Task<ExecuteCommandResult> GetMcpCommandResultAsync(McpToolCommandContext ctx, HttpResponseMessage response)
+    {
+        ctx.CancellationToken.ThrowIfCancellationRequested();
+
+        var responseBody = await response.Content.ReadAsStringAsync(ctx.CancellationToken).ConfigureAwait(true);
+        if (!response.IsSuccessStatusCode)
+        {
+            return CommandResults.Failure(
+                $"MCP tool call failed with status code {(int)response.StatusCode} ({response.StatusCode}).",
+                responseBody,
+                CommandResultFormat.Text);
+        }
+
+        var result = TryExtractServerSentEventResponseData(responseBody, expectedId: null, out var sseData) ? sseData : responseBody;
+        try
+        {
+            if (JsonNode.Parse(result) is JsonObject responseJson)
+            {
+                if (responseJson["error"] is { } error)
+                {
+                    return CommandResults.Failure(
+                        "MCP tool call returned a JSON-RPC error.",
+                        JsonSerializer.Serialize(error, s_indentedJsonOptions),
+                        CommandResultFormat.Json);
+                }
+
+                if (responseJson["result"] is JsonObject toolResult &&
+                    (toolResult["isError"] is null || toolResult["isError"] is JsonValue isErrorValue && isErrorValue.TryGetValue<bool>(out _)))
+                {
+                    if (toolResult["isError"]?.GetValue<bool>() is true)
+                    {
+                        return CommandResults.Failure(
+                            "MCP tool reported an error.",
+                            JsonSerializer.Serialize(toolResult, s_indentedJsonOptions),
+                            CommandResultFormat.Json);
+                    }
+
+                    return CommandResults.Success(
+                        message: "MCP tool response received.",
+                        result: JsonSerializer.Serialize(responseJson, s_indentedJsonOptions),
+                        resultFormat: CommandResultFormat.Json,
+                        displayImmediately: true);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // A proxy error page or truncated JSON body can arrive with a successful HTTP status.
+            // Preserve the original body (including SSE framing) in the failure for diagnostics.
+        }
+
+        return CommandResults.Failure(
+            "MCP server returned an empty or invalid JSON-RPC tool response.",
+            responseBody,
+            CommandResultFormat.Text);
+    }
+
+    private static JsonObject CreateMcpInitializeRequest()
+    {
+        return CreateMcpJsonRpcRequest(
+            "initialize",
+            new JsonObject
+            {
+                ["protocolVersion"] = "2025-06-18",
+                ["capabilities"] = new JsonObject(),
+                ["clientInfo"] = new JsonObject
+                {
+                    ["name"] = "Aspire Dashboard",
+                    ["version"] = "1.0"
+                }
+            });
+    }
+
+    private static JsonObject CreateMcpJsonRpcRequest(string method, JsonObject parameters)
+    {
+        return new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = Guid.NewGuid().ToString("N"),
+            ["method"] = method,
+            ["params"] = parameters
+        };
+    }
+
+    private static JsonObject CreateMcpJsonRpcNotification(string method)
+    {
+        return new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["method"] = method
+        };
+    }
+
+    private static async Task<(HttpResponseMessage Response, JsonObject Payload)> SendMcpJsonRpcRequestAsync(
+        McpToolCommandContext ctx,
+        JsonObject request,
+        string? sessionId,
+        string? protocolVersion)
+    {
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, ctx.Request.RequestUri);
+        ConfigureMcpRequest(requestMessage, request, sessionId, protocolVersion);
+
+        var response = await ctx.HttpClient.SendAsync(requestMessage, ctx.CancellationToken).ConfigureAwait(true);
+        try
+        {
+            var payload = await ReadMcpJsonRpcPayloadAsync(response, request["id"], ctx.CancellationToken).ConfigureAwait(true);
+            return (response, payload);
+        }
+        catch
+        {
+            response.Dispose();
+            throw;
+        }
+    }
+
+    private static async Task SendMcpJsonRpcNotificationAsync(
+        McpToolCommandContext ctx,
+        string method,
+        string? sessionId,
+        string protocolVersion)
+    {
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, ctx.Request.RequestUri);
+        ConfigureMcpRequest(requestMessage, CreateMcpJsonRpcNotification(method), sessionId, protocolVersion);
+
+        using var response = await ctx.HttpClient.SendAsync(requestMessage, ctx.CancellationToken).ConfigureAwait(true);
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorPayload = await response.Content.ReadAsStringAsync(ctx.CancellationToken).ConfigureAwait(true);
+            throw new InvalidOperationException($"MCP notification '{method}' failed with status code {(int)response.StatusCode} ({response.StatusCode}): {errorPayload}");
+        }
+    }
+
+    private static void ConfigureMcpRequest(
+        HttpRequestMessage request,
+        JsonObject payload,
+        string? sessionId,
+        string? protocolVersion)
+    {
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.Accept.ParseAdd("text/event-stream");
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            request.Headers.Add("Mcp-Session-Id", sessionId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(protocolVersion))
+        {
+            request.Headers.Add("MCP-Protocol-Version", protocolVersion);
+        }
+
+        request.Content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
+    }
+
+    private static async Task<JsonObject> ReadMcpJsonRpcPayloadAsync(
+        HttpResponseMessage response,
+        JsonNode? expectedId,
+        CancellationToken cancellationToken)
+    {
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(true);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"MCP request failed with status code {(int)response.StatusCode} ({response.StatusCode}): {responseBody}");
+        }
+
+        var payload = TryExtractServerSentEventResponseData(responseBody, expectedId, out var sseData) ? sseData : responseBody;
+        var responseJson = JsonNode.Parse(payload) as JsonObject
+            ?? throw new InvalidOperationException("MCP server returned an empty or invalid JSON-RPC response.");
+        if (!JsonNode.DeepEquals(responseJson["id"], expectedId))
+        {
+            throw new InvalidOperationException("MCP server returned a JSON-RPC response with an unexpected id.");
+        }
+
+        if (responseJson["error"] is { } error)
+        {
+            throw new InvalidOperationException($"MCP server returned a JSON-RPC error: {error.ToJsonString()}");
+        }
+
+        return responseJson;
+    }
+
+    private static IReadOnlyList<McpTool> ReadMcpTools(JsonObject payload)
+    {
+        var tools = payload["result"]?["tools"] as JsonArray;
+        if (tools is null)
+        {
+            return [];
+        }
+
+        var result = new List<McpTool>();
+        foreach (var toolNode in tools)
+        {
+            if (toolNode is not JsonObject tool || tool["name"]?.GetValue<string>() is not { Length: > 0 } name)
+            {
+                continue;
+            }
+
+            result.Add(new McpTool(
+                name,
+                tool["description"]?.GetValue<string>(),
+                tool["inputSchema"] as JsonObject));
+        }
+
+        return result;
+    }
+
+    private static McpTool GetSelectedMcpTool(InteractionInputCollection arguments, IReadOnlyList<McpTool> tools)
+    {
+        var toolName = GetMcpArgumentValue(arguments, McpToolArgumentName)
+            ?? throw new InvalidOperationException("MCP tool argument is required.");
+        var selectedTool = tools.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal));
+        if (selectedTool is not null)
+        {
+            return selectedTool;
+        }
+
+        var availableTools = string.Join(", ", tools.Select(tool => tool.Name));
+        throw new InvalidOperationException($"MCP server did not return a tool named '{toolName}'. Available tools: {availableTools}.");
+    }
+
+    private static JsonObject GetMcpToolArguments(InteractionInputCollection arguments)
+    {
+        var value = GetMcpArgumentValue(arguments, McpToolArgumentsArgumentName);
+        return string.IsNullOrWhiteSpace(value)
+            ? []
+            : TryParseJsonObject(value, out var result)
+                ? result
+                : throw new InvalidOperationException("MCP tool arguments must be a valid JSON object.");
+    }
+
+    private static async Task<(McpTool Tool, JsonObject Arguments)> GetMcpToolCallAsync(McpToolCommandContext ctx, IReadOnlyList<McpTool> tools)
+    {
+        var interactionService = ctx.Services.GetRequiredService<IInteractionService>();
+        if (!string.IsNullOrWhiteSpace(GetMcpArgumentValue(ctx.Arguments, McpToolArgumentName)) || !interactionService.IsAvailable)
+        {
+            var selectedTool = GetSelectedMcpTool(ctx.Arguments, tools);
+            return (selectedTool, GetMcpToolArguments(ctx.Arguments));
+        }
+
+        var promptedTool = await PromptForMcpToolAsync(ctx, tools).ConfigureAwait(true);
+        return (promptedTool, await PromptForMcpToolArgumentsAsync(ctx, promptedTool).ConfigureAwait(true));
+    }
+
+    private static string? GetMcpArgumentValue(InteractionInputCollection arguments, string name)
+    {
+        return arguments.TryGetByName(name, out var input) ? input.Value : null;
+    }
+
+    private static async Task<McpTool> PromptForMcpToolAsync(McpToolCommandContext ctx, IReadOnlyList<McpTool> tools)
+    {
+        var interactionService = ctx.Services.GetRequiredService<IInteractionService>();
+        var toolInput = new InteractionInput
+        {
+            Name = McpToolArgumentName,
+            Label = "Tool",
+            InputType = InputType.Choice,
+            Required = true,
+            Options = tools.Select(tool => new KeyValuePair<string, string>(tool.Name, string.IsNullOrWhiteSpace(tool.Description) ? tool.Name : $"{tool.Name} - {tool.Description}")).ToArray()
+        };
+
+        var result = await interactionService.PromptInputAsync(
+            title: "MCP Tool",
+            message: "Choose the MCP tool to invoke.",
+            input: toolInput,
+            cancellationToken: ctx.CancellationToken).ConfigureAwait(true);
+
+        if (result.Canceled || string.IsNullOrWhiteSpace(result.Data.Value))
+        {
+            ctx.HttpClient.CancelPendingRequests();
+            throw new OperationCanceledException("User canceled the MCP tool prompt.");
+        }
+
+        return tools.First(tool => string.Equals(tool.Name, result.Data.Value, StringComparison.Ordinal));
+    }
+
+    private static async Task<JsonObject> PromptForMcpToolArgumentsAsync(McpToolCommandContext ctx, McpTool tool)
+    {
+        var parameterInputs = CreateMcpToolParameterInputs(tool);
+        if (parameterInputs.Count > 0)
+        {
+            return await PromptForMcpToolParameterInputsAsync(ctx, tool, parameterInputs).ConfigureAwait(true);
+        }
+
+        if (tool.InputSchema?["properties"] is JsonObject { Count: 0 })
+        {
+            return [];
+        }
+
+        return await PromptForMcpToolRawArgumentsAsync(ctx, tool).ConfigureAwait(true);
+    }
+
+    private static async Task<JsonObject> PromptForMcpToolParameterInputsAsync(McpToolCommandContext ctx, McpTool tool, IReadOnlyList<McpToolParameterInput> parameterInputs)
+    {
+        var interactionService = ctx.Services.GetRequiredService<IInteractionService>();
+        var result = await interactionService.PromptInputsAsync(
+            title: $"Invoke {tool.Name}",
+            message: "Enter the tool arguments.",
+            inputs: parameterInputs.Select(p => p.Input).ToArray(),
+            options: new InputsDialogInteractionOptions
+            {
+                ValidationCallback = context =>
+                {
+                    foreach (var parameterInput in parameterInputs)
+                    {
+                        var input = context.Inputs[parameterInput.Input.Name];
+                        if (string.IsNullOrWhiteSpace(input.Value) && !parameterInput.Input.Required)
+                        {
+                            continue;
+                        }
+
+                        if (!TryCreateMcpToolArgumentValue(parameterInput.Parameter, input.Value, out _, out var errorMessage))
+                        {
+                            context.AddValidationError(input, errorMessage);
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                }
+            },
+            cancellationToken: ctx.CancellationToken).ConfigureAwait(true);
+
+        if (result.Canceled)
+        {
+            ctx.HttpClient.CancelPendingRequests();
+            throw new OperationCanceledException("User canceled the MCP arguments prompt.");
+        }
+
+        var arguments = new JsonObject();
+        foreach (var parameterInput in parameterInputs)
+        {
+            var input = result.Data[parameterInput.Input.Name];
+            if (string.IsNullOrWhiteSpace(input.Value) && !parameterInput.Input.Required)
+            {
+                continue;
+            }
+
+            if (!TryCreateMcpToolArgumentValue(parameterInput.Parameter, input.Value, out var value, out var errorMessage))
+            {
+                throw new InvalidOperationException(errorMessage);
+            }
+
+            arguments[parameterInput.Parameter.Name] = value;
+        }
+
+        return arguments;
+    }
+
+    private static async Task<JsonObject> PromptForMcpToolRawArgumentsAsync(McpToolCommandContext ctx, McpTool tool)
+    {
+        var interactionService = ctx.Services.GetRequiredService<IInteractionService>();
+        var argumentsInput = new InteractionInput
+        {
+            Name = McpToolArgumentsArgumentName,
+            Label = "Arguments JSON",
+            InputType = InputType.Text,
+            Required = true,
+            Value = CreateMcpToolArgumentsTemplate(tool).ToString(),
+            Placeholder = "{ \"question\": \"What can you help with?\" }",
+            Description = CreateMcpToolArgumentsDescription(tool),
+            EnableDescriptionMarkdown = true
+        };
+
+        var result = await interactionService.PromptInputAsync(
+            title: $"Invoke {tool.Name}",
+            message: "Enter the JSON object to pass as the tool arguments.",
+            input: argumentsInput,
+            options: new InputsDialogInteractionOptions
+            {
+                ValidationCallback = context =>
+                {
+                    var arguments = context.Inputs[McpToolArgumentsArgumentName];
+                    if (!TryParseJsonObject(arguments.Value, out _))
+                    {
+                        context.AddValidationError(arguments, "Arguments must be a valid JSON object.");
+                    }
+
+                    return Task.CompletedTask;
+                }
+            },
+            cancellationToken: ctx.CancellationToken).ConfigureAwait(true);
+
+        if (result.Canceled || string.IsNullOrWhiteSpace(result.Data.Value))
+        {
+            ctx.HttpClient.CancelPendingRequests();
+            throw new OperationCanceledException("User canceled the MCP arguments prompt.");
+        }
+
+        return TryParseJsonObject(result.Data.Value, out var arguments)
+            ? arguments
+            : throw new InvalidOperationException("Arguments must be a valid JSON object.");
+    }
+
+    private static IReadOnlyList<McpToolParameterInput> CreateMcpToolParameterInputs(McpTool tool)
+    {
+        if (tool.InputSchema?["properties"] is not JsonObject properties || properties.Count == 0)
+        {
+            return [];
+        }
+
+        var requiredParameters = ReadMcpRequiredParameters(tool.InputSchema);
+        var inputs = new List<McpToolParameterInput>();
+        foreach (var property in properties)
+        {
+            if (property.Value is not JsonObject propertySchema)
+            {
+                return [];
+            }
+
+            var parameter = new McpToolParameter(
+                property.Key,
+                GetMcpJsonSchemaType(propertySchema),
+                propertySchema,
+                requiredParameters.Contains(property.Key));
+
+            inputs.Add(new McpToolParameterInput(parameter, CreateMcpToolParameterInput(parameter)));
+        }
+
+        return inputs;
+    }
+
+    private static InteractionInput CreateMcpToolParameterInput(McpToolParameter parameter)
+    {
+        var schema = parameter.Schema;
+        var inputType = parameter.Type switch
+        {
+            "boolean" => InputType.Boolean,
+            "integer" or "number" => InputType.Number,
+            _ when schema["enum"] is JsonArray enumValues && enumValues.All(value => value is not null) => InputType.Choice,
+            _ => InputType.Text
+        };
+
+        var input = new InteractionInput
+        {
+            Name = parameter.Name,
+            Label = parameter.Name,
+            InputType = inputType,
+            Required = parameter.Required,
+            Value = GetMcpToolParameterDefaultValue(parameter),
+            Placeholder = GetMcpToolParameterPlaceholder(parameter),
+            Description = schema["description"]?.GetValue<string>(),
+        };
+
+        if (inputType == InputType.Choice && schema["enum"] is JsonArray choices)
+        {
+            input.Options = choices
+                .Where(value => value is not null)
+                .Select(value =>
+                {
+                    var option = GetMcpJsonValueAsString(value!);
+                    return new KeyValuePair<string, string>(option, option);
+                })
+                .ToArray();
+        }
+
+        return input;
+    }
+
+    private static string? GetMcpToolParameterDefaultValue(McpToolParameter parameter)
+    {
+        if (parameter.Schema["default"] is { } defaultValue)
+        {
+            return defaultValue switch
+            {
+                JsonValue value when value.TryGetValue<string>(out var stringValue) => stringValue,
+                _ => defaultValue.ToJsonString()
+            };
+        }
+
+        return null;
+    }
+
+    private static string? GetMcpToolParameterPlaceholder(McpToolParameter parameter)
+    {
+        return parameter.Type switch
+        {
+            "boolean" => "true",
+            "integer" => "42",
+            "number" => "42.0",
+            "array" => "[\"value\"]",
+            "object" => "{ \"key\": \"value\" }",
+            _ => "value"
+        };
+    }
+
+    private static bool TryCreateMcpToolArgumentValue(McpToolParameter parameter, string? value, [NotNullWhen(true)] out JsonNode? result, [NotNullWhen(false)] out string? errorMessage)
+    {
+        result = null;
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            if (parameter.Required)
+            {
+                errorMessage = $"{parameter.Name} is required.";
+                return false;
+            }
+
+            result = JsonValue.Create(string.Empty);
+            return true;
+        }
+
+        switch (parameter.Type)
+        {
+            case "boolean":
+                if (bool.TryParse(value, out var boolValue))
+                {
+                    result = JsonValue.Create(boolValue);
+                    return true;
+                }
+
+                errorMessage = $"{parameter.Name} must be true or false.";
+                return false;
+
+            case "integer":
+                if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
+                {
+                    result = JsonValue.Create(longValue);
+                    return true;
+                }
+
+                errorMessage = $"{parameter.Name} must be an integer.";
+                return false;
+
+            case "number":
+                if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
+                {
+                    result = JsonValue.Create(doubleValue);
+                    return true;
+                }
+
+                errorMessage = $"{parameter.Name} must be a number.";
+                return false;
+
+            case "array":
+                return TryParseJsonNode(value, JsonValueKind.Array, parameter.Name, out result, out errorMessage);
+
+            case "object":
+                return TryParseJsonNode(value, JsonValueKind.Object, parameter.Name, out result, out errorMessage);
+
+            default:
+                result = JsonValue.Create(value);
+                return true;
+        }
+    }
+
+    private static bool TryParseJsonNode(string value, JsonValueKind expectedKind, string parameterName, [NotNullWhen(true)] out JsonNode? result, [NotNullWhen(false)] out string? errorMessage)
+    {
+        result = null;
+        errorMessage = null;
+
+        try
+        {
+            result = JsonNode.Parse(value);
+            if (result is null || result.GetValueKind() != expectedKind)
+            {
+                errorMessage = $"{parameterName} must be a JSON {expectedKind.ToString().ToLowerInvariant()}.";
+                return false;
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            errorMessage = $"{parameterName} must be valid JSON.";
+            return false;
+        }
+    }
+
+    private static HashSet<string> ReadMcpRequiredParameters(JsonObject schema)
+    {
+        var requiredParameters = new HashSet<string>(StringComparer.Ordinal);
+        if (schema["required"] is not JsonArray required)
+        {
+            return requiredParameters;
+        }
+
+        foreach (var requiredParameter in required)
+        {
+            if (requiredParameter?.GetValue<string>() is { } name)
+            {
+                requiredParameters.Add(name);
+            }
+        }
+
+        return requiredParameters;
+    }
+
+    private static string? GetMcpJsonSchemaType(JsonObject schema)
+    {
+        if (schema["type"] is JsonValue typeValue && typeValue.TryGetValue<string>(out var type))
+        {
+            return type;
+        }
+
+        return null;
+    }
+
+    private static string GetMcpJsonValueAsString(JsonNode value)
+    {
+        return value switch
+        {
+            JsonValue jsonValue when jsonValue.TryGetValue<string>(out var stringValue) => stringValue,
+            _ => value.ToJsonString()
+        };
+    }
+
+    private static JsonObject CreateMcpToolArgumentsTemplate(McpTool tool)
+    {
+        var result = new JsonObject();
+        if (tool.InputSchema?["properties"] is not JsonObject properties)
+        {
+            return result;
+        }
+
+        var requiredParameters = ReadMcpRequiredParameters(tool.InputSchema);
+        foreach (var property in properties)
+        {
+            var propertySchema = property.Value as JsonObject;
+            if (propertySchema?["default"] is { } defaultValue)
+            {
+                result[property.Key] = defaultValue.DeepClone();
+            }
+            else if (requiredParameters.Contains(property.Key))
+            {
+                result[property.Key] = GetMcpDefaultArgumentValue(propertySchema);
+            }
+        }
+
+        return result;
+    }
+
+    private static JsonNode? GetMcpDefaultArgumentValue(JsonObject? propertySchema)
+    {
+        var type = propertySchema?["type"]?.GetValue<string>();
+        return type switch
+        {
+            "boolean" => false,
+            "integer" or "number" => 0,
+            "array" => new JsonArray(),
+            "object" => new JsonObject(),
+            _ => ""
+        };
+    }
+
+    private static string CreateMcpToolArgumentsDescription(McpTool tool)
+    {
+        var builder = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(tool.Description))
+        {
+            builder.AppendLine(tool.Description);
+            builder.AppendLine();
+        }
+
+        if (tool.InputSchema is not null)
+        {
+            builder.AppendLine("Input schema:");
+            builder.AppendLine("```json");
+            builder.AppendLine(JsonSerializer.Serialize(tool.InputSchema, s_indentedJsonOptions));
+            builder.AppendLine("```");
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool TryParseJsonObject(string? value, [NotNullWhen(true)] out JsonObject? result)
+    {
+        result = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        try
+        {
+            result = JsonNode.Parse(value) as JsonObject;
+            return result is not null;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryExtractServerSentEventResponseData(string responseBody, JsonNode? expectedId, out string data)
+    {
+        // MCP Streamable HTTP can send notifications before the matching response:
+        //   event: message
+        //   data: {"jsonrpc":"2.0","method":"notifications/progress","params":{...}}
+        //
+        //   event: message
+        //   data: {"jsonrpc":"2.0","id":"...","result":{...}}
+        // Join consecutive data lines within each event and return only a JSON-RPC response
+        // whose id matches the request. When the caller does not have the request id, return
+        // the first response-shaped event and skip notifications without an id and server
+        // requests that contain both an id and a method.
+        using var reader = new StringReader(responseBody);
+        var builder = new StringBuilder();
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
+        {
+            if (line.Length == 0)
+            {
+                if (TryUseEventData(builder, expectedId, out data))
+                {
+                    return true;
+                }
+
+                builder.Clear();
+                continue;
+            }
+
+            if (!line.StartsWith("data:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var value = line["data:".Length..];
+            if (value.StartsWith(' '))
+            {
+                value = value[1..];
+            }
+
+            if (builder.Length > 0)
+            {
+                builder.Append('\n');
+            }
+
+            builder.Append(value);
+        }
+
+        return TryUseEventData(builder, expectedId, out data);
+    }
+
+    private static bool TryUseEventData(StringBuilder builder, JsonNode? expectedId, out string data)
+    {
+        data = string.Empty;
+        if (builder.Length == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(builder.ToString()) is not JsonObject payload ||
+                payload["id"] is null ||
+                payload["method"] is not null ||
+                expectedId is not null && !JsonNode.DeepEquals(payload["id"], expectedId))
+            {
+                return false;
+            }
+
+            data = builder.ToString();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private sealed record McpToolCommandContext(
+        IServiceProvider Services,
+        string ResourceName,
+        CancellationToken CancellationToken,
+        HttpClient HttpClient,
+        InteractionInputCollection Arguments,
+        HttpRequestMessage Request);
+
+    private sealed class McpSession
+    {
+        public string? Id { get; set; }
+
+        public string? ProtocolVersion { get; set; }
+    }
+
+    private sealed record McpTool(string Name, string? Description, JsonObject? InputSchema);
+
+    private sealed record McpToolParameter(string Name, string? Type, JsonObject Schema, bool Required);
+
+    private sealed record McpToolParameterInput(McpToolParameter Parameter, InteractionInput Input);
+
+    private static readonly JsonSerializerOptions s_indentedJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true
+    };
+}
+
+#pragma warning restore ASPIREINTERACTION001

@@ -7736,6 +7736,10 @@ class AbstractResourceWithEndpoints(AbstractResource):
         """Subscribes to the ResourceEndpointsAllocated event."""
 
     @abc.abstractmethod
+    def with_mcp_tool_commands(self) -> typing.Self:
+        """Adds commands for invoking tools on the resource's configured MCP server."""
+
+    @abc.abstractmethod
     def as_agent(self, protocol: AgentProtocol, *, agent_name: str | None = None) -> typing.Self:
         """Configures the resource as an agent that supports the specified protocol."""
 
@@ -9088,6 +9092,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     remote_image_tag: str
     volume: str | VolumeParameters
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
+    mcp_tool_commands: typing.Literal[True]
     as_agent: AgentProtocol | tuple[AgentProtocol, str]
     as_agent_with_invocation_mode: tuple[AgentProtocol, A2AInvocationMode]
     as_agent_with_path: tuple[str, AgentProtocol] | AsAgentWithPathParameters
@@ -9827,6 +9832,16 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_mcp_tool_commands(self) -> typing.Self:
+        """Adds commands for invoking tools on the resource's configured MCP server."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def as_agent(self, protocol: AgentProtocol, *, agent_name: str | None = None) -> typing.Self:
         """Configures the resource as an agent that supports the specified protocol."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -10440,6 +10455,12 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceEndpointsAllocated', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_endpoints_allocated'. Expected: Callable[[ResourceEndpointsAllocatedEvent], None]")
+        if _mcp_tool_commands := kwargs.pop("mcp_tool_commands", None):
+            if _mcp_tool_commands is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/withMcpToolCommands', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'mcp_tool_commands'. Expected: Literal[True]")
         if _as_agent := kwargs.pop("as_agent", None):
             if _validate_type(_as_agent, AgentProtocol):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10542,6 +10563,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     volume: tuple[str, str, str] | ProjectVolumeParameters
     endpoints_in_env: typing.Iterable[str]
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
+    mcp_tool_commands: typing.Literal[True]
     as_agent: AgentProtocol | tuple[AgentProtocol, str]
     as_agent_with_invocation_mode: tuple[AgentProtocol, A2AInvocationMode]
     as_agent_with_path: tuple[str, AgentProtocol] | AsAgentWithPathParameters
@@ -11080,6 +11102,16 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_mcp_tool_commands(self) -> typing.Self:
+        """Adds commands for invoking tools on the resource's configured MCP server."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def as_agent(self, protocol: AgentProtocol, *, agent_name: str | None = None) -> typing.Self:
         """Configures the resource as an agent that supports the specified protocol."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -11536,6 +11568,12 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceEndpointsAllocated', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_endpoints_allocated'. Expected: Callable[[ResourceEndpointsAllocatedEvent], None]")
+        if _mcp_tool_commands := kwargs.pop("mcp_tool_commands", None):
+            if _mcp_tool_commands is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/withMcpToolCommands', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'mcp_tool_commands'. Expected: Literal[True]")
         if _as_agent := kwargs.pop("as_agent", None):
             if _validate_type(_as_agent, AgentProtocol):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11650,6 +11688,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     remote_image_tag: str
     volume: tuple[str, str, str] | ExecutableVolumeParameters
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
+    mcp_tool_commands: typing.Literal[True]
     as_agent: AgentProtocol | tuple[AgentProtocol, str]
     as_agent_with_invocation_mode: tuple[AgentProtocol, A2AInvocationMode]
     as_agent_with_path: tuple[str, AgentProtocol] | AsAgentWithPathParameters
@@ -12165,6 +12204,16 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_mcp_tool_commands(self) -> typing.Self:
+        """Adds commands for invoking tools on the resource's configured MCP server."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def as_agent(self, protocol: AgentProtocol, *, agent_name: str | None = None) -> typing.Self:
         """Configures the resource as an agent that supports the specified protocol."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -12604,6 +12653,12 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceEndpointsAllocated', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_endpoints_allocated'. Expected: Callable[[ResourceEndpointsAllocatedEvent], None]")
+        if _mcp_tool_commands := kwargs.pop("mcp_tool_commands", None):
+            if _mcp_tool_commands is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/withMcpToolCommands', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'mcp_tool_commands'. Expected: Literal[True]")
         if _as_agent := kwargs.pop("as_agent", None):
             if _validate_type(_as_agent, AgentProtocol):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

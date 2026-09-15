@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Agents;
@@ -215,7 +216,7 @@ public static class AgentResourceBuilderExtensions
             .OfType<ResourceCommandAnnotation>()
             .Any(command => command.IsHighlighted);
 
-        if (IsA2AProtocol(protocol))
+        if (protocol is AgentProtocol.A2A)
         {
             ConfigureA2A(builder, normalizedPath ?? DefaultA2AAgentCardPath, invocationMode, ShouldHighlightCommand);
         }
@@ -249,27 +250,7 @@ public static class AgentResourceBuilderExtensions
         }
     }
 
-    internal static string GetAgentCardEnvironmentVariableName(string agentName)
-    {
-        return $"{EnvironmentVariableNameEncoder.Encode(agentName).ToUpperInvariant()}_AGENTCARD_URL";
-    }
-
-    internal static ReferenceExpression CreateA2AAgentCardUrl(EndpointReference endpoint, string agentCardPath)
-    {
-        return ReferenceExpression.Create($"{endpoint.Property(EndpointProperty.Url)}{NormalizePath(agentCardPath)}");
-    }
-
-    internal static string GetA2AAgentCardPath(AgentResourceAnnotation annotation)
-    {
-        return annotation.CustomPath ?? DefaultA2AAgentCardPath;
-    }
-
-    internal static bool IsA2AProtocol(AgentProtocol protocol)
-    {
-        return protocol is AgentProtocol.A2A;
-    }
-
-    internal static EndpointReference GetDefaultAgentEndpoint(IResourceWithEndpoints source, NetworkIdentifier network)
+    private static EndpointReference GetDefaultAgentEndpoint(IResourceWithEndpoints source, NetworkIdentifier network)
     {
         var endpointName = source.Annotations
             .OfType<EndpointAnnotation>()
@@ -314,7 +295,6 @@ public static class AgentResourceBuilderExtensions
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
                 Arguments = [CreateMessageArgument("What is the weather in Seattle?")],
-                EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
                 PrepareRequest = ctx => PrepareA2ARequestAsync(ctx, invocationMode),
                 GetCommandResult = GetA2ACommandResultAsync
             });
@@ -341,7 +321,6 @@ public static class AgentResourceBuilderExtensions
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
                 Arguments = CreateAgentCommandArguments(agentName, "Hello, what can you do?"),
-                EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
                 PrepareRequest = ctx => PrepareResponsesRequestAsync(ctx, agentName),
                 GetCommandResult = GetAgentCommandJsonResultAsync
             });
@@ -364,7 +343,6 @@ public static class AgentResourceBuilderExtensions
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
                 Arguments = [CreateMessageArgument("What is the weather in Seattle?")],
-                EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
                 PrepareRequest = PrepareAgUiRequestAsync,
                 GetCommandResult = GetAgUiCommandResultAsync
             });
@@ -391,7 +369,6 @@ public static class AgentResourceBuilderExtensions
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
                 Arguments = CreateAgentCommandArguments(agentName, "Hello, what can you do?"),
-                EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
                 PrepareRequest = ctx => PrepareAcpRunRequestAsync(ctx, agentName),
                 GetCommandResult = GetAcpCommandResultAsync
             });
@@ -400,6 +377,11 @@ public static class AgentResourceBuilderExtensions
     private static void AddProtocolEndpointUrl<T>(IResourceBuilder<T> builder, string path, string displayText)
         where T : IResourceWithEndpoints
     {
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return;
+        }
+
         builder.WithUrls(context =>
         {
             EndpointReference endpoint;
@@ -1153,15 +1135,65 @@ public static class AgentResourceBuilderExtensions
         string commandName,
         string path,
         string displayName,
-        HttpCommandOptions commandOptions)
+        AgentHttpCommandOptions commandOptions)
         where T : IResourceWithEndpoints
     {
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return;
+        }
+
         if (builder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Any(c => string.Equals(c.Name, commandName, StringComparison.Ordinal)))
         {
             return;
         }
 
-        builder.WithHttpCommand(path, displayName, endpointSelector: commandOptions.EndpointSelector, commandName, commandOptions);
+        builder.ApplicationBuilder.Services.AddHttpClient();
+        commandOptions.UpdateState = context =>
+        {
+            var state = context.ResourceSnapshot.State?.Text;
+            return state == KnownResourceStates.Running || state == KnownResourceStates.RuntimeUnhealthy
+                ? ResourceCommandState.Enabled
+                : ResourceCommandState.Disabled;
+        };
+
+        builder.WithCommand(commandName, displayName, async context =>
+        {
+            // Agent protocols choose their endpoint when invoked so AsAgent can precede endpoint configuration.
+            // Keep this policy local to the integration rather than changing generic HTTP command registration.
+            var endpoint = GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork);
+            if (!endpoint.IsAllocated)
+            {
+                return CommandResults.Failure("Endpoints are not yet allocated.");
+            }
+
+            using var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient();
+            // Agent runs are user-cancelable and can exceed HttpClient's default timeout.
+            httpClient.Timeout = Timeout.InfiniteTimeSpan;
+            using var request = new HttpRequestMessage(commandOptions.Method, new UriBuilder(endpoint.Url) { Path = path }.Uri);
+            await commandOptions.PrepareRequest(new HttpCommandRequestContext
+            {
+                Services = context.Services,
+                ResourceName = context.ResourceName,
+                Endpoint = endpoint,
+                CancellationToken = context.CancellationToken,
+                HttpClient = httpClient,
+                Arguments = context.Arguments,
+                Request = request
+            }).ConfigureAwait(false);
+
+            using var response = await httpClient.SendAsync(request, context.CancellationToken).ConfigureAwait(false);
+            return await commandOptions.GetCommandResult(new HttpCommandResultContext
+            {
+                Services = context.Services,
+                ResourceName = context.ResourceName,
+                Endpoint = endpoint,
+                CancellationToken = context.CancellationToken,
+                HttpClient = httpClient,
+                Arguments = context.Arguments,
+                Response = response
+            }).ConfigureAwait(false);
+        }, commandOptions);
     }
 
     private static string? NormalizePath(string? path)
@@ -1177,6 +1209,15 @@ public static class AgentResourceBuilderExtensions
     private sealed record A2AAgentInterface(Uri Url, string ProtocolBinding, string? ProtocolVersion);
 
     private sealed record A2AInvocation(Uri RequestUri, string ProtocolBinding, string? ProtocolVersion, bool IsStreaming);
+
+    private sealed class AgentHttpCommandOptions : CommandOptions
+    {
+        public required HttpMethod Method { get; init; }
+
+        public required Func<HttpCommandRequestContext, Task> PrepareRequest { get; init; }
+
+        public required Func<HttpCommandResultContext, Task<ExecuteCommandResult>> GetCommandResult { get; init; }
+    }
 
 }
 

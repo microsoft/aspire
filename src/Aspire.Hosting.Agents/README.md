@@ -14,7 +14,7 @@ aspire add Aspire.Hosting.Agents
 
 ## Usage example
 
-Then, in the AppHost, mark an application as an A2A agent and reference it from another resource with either C# or TypeScript:
+Then, in the AppHost, mark an application as an A2A agent and explicitly pass its agent-card URL to a consumer with either C# or TypeScript:
 
 **C#**
 
@@ -24,21 +24,36 @@ var weatherAgent = builder.AddProject<Projects.WeatherAgent>("weather-agent")
     .AsAgent(AgentProtocol.A2A);
 
 builder.AddProject<Projects.Frontend>("frontend")
-    .WithReference(weatherAgent);
+    .WithEnvironment("WEATHER_AGENT_AGENTCARD_URL",
+        ReferenceExpression.Create($"{weatherAgent.GetEndpoint("http")}/.well-known/agent-card.json"));
 ```
 
 **TypeScript**
 
 ```typescript
+import { refExpr } from "./.aspire/modules/aspire.mjs";
+
 const weatherAgent = await builder.addNodeApp("weather-agent", "../weather-agent", "server.js")
     .withHttpEndpoint()
     .asAgent(AgentProtocol.A2A);
+const weatherEndpoint = await weatherAgent.getEndpoint("http");
 
 await builder.addNodeApp("frontend", "../frontend", "server.js")
-    .withReference(weatherAgent);
+    .withEnvironment("WEATHER_AGENT_AGENTCARD_URL",
+        refExpr`${weatherEndpoint}/.well-known/agent-card.json`);
 ```
 
-The A2A resource receives `A2A_AGENT_BASE_URL`, which it can use as the URL advertised in its agent card. Referencing an A2A resource injects an environment variable named `<RESOURCE_NAME>_AGENTCARD_URL` into the consumer. For example, the preceding reference injects `WEATHER_AGENT_AGENTCARD_URL`.
+The A2A resource receives `A2A_AGENT_BASE_URL`, which it can use as the URL advertised in its agent card. The consumer chooses its environment variable name, endpoint, and agent-card path explicitly. Endpoint expressions retain Aspire's network-aware resolution in run mode and remain expressions when publishing.
+
+`AsAgent` does not change `WithReference` behavior. Use `WithReference` separately when the source resource supports standard service discovery or connection strings.
+
+## Scope and authentication
+
+The invocation commands are developer-productivity tools for sending a message or calling a tool and inspecting the response during local development. They run from the AppHost process, not from the browser, and require endpoints reachable by that process. Commands and their diagnostic URLs are not added in publish mode.
+
+This integration is not a general-purpose agent client or an authentication framework. It does not implement interactive sign-in, acquire or refresh access tokens, or forward the dashboard user's identity. For endpoints requiring those capabilities or application-specific authentication, use a driver application that manages the interaction and authentication; Aspire can orchestrate and observe that application. Do not disable endpoint authentication to use these commands.
+
+Authentication used by an agent to call a model provider, such as Foundry, remains the agent application's responsibility and is separate from authentication on the agent endpoint itself.
 
 ## Agent protocols
 
@@ -97,16 +112,19 @@ Use `asAgent(AgentProtocol.AgUi)` and `asAgent(AgentProtocol.Acp, { agentName: "
 
 ## MCP servers
 
-MCP is configured independently from agent protocols with `WithMcpServer`. The endpoint defaults to the first non-excluded HTTPS or HTTP endpoint, and the path defaults to `/mcp`.
+MCP discovery and proxying remain configured by the existing `WithMcpServer` API in `Aspire.Hosting`. That API alone does not add interactive tool-invocation commands.
+
+To opt into tool invocation from this integration, call `WithMcpToolCommands` after `WithMcpServer`. The commands use the endpoint resolver configured by `WithMcpServer`, including its custom path and endpoint selection.
 
 ```csharp
 var agent = builder.AddProject<Projects.WeatherAgent>("weather-agent")
     .WithHttpEndpoint()
     .AsAgent(AgentProtocol.Responses, agentName: "weather-agent")
-    .WithMcpServer();
+    .WithMcpServer()
+    .WithMcpToolCommands();
 ```
 
-Use `withMcpServer()` for the equivalent TypeScript configuration.
+Use `.withMcpServer().withMcpToolCommands()` for the equivalent TypeScript configuration. `WithMcpToolCommands` is experimental (`ASPIREAGENTS001`).
 
 ## Additional documentation
 

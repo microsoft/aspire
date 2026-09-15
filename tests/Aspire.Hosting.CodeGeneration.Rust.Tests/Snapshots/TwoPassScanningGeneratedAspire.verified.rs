@@ -3282,6 +3282,15 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds commands for invoking tools on the resource's configured MCP server.
+    pub fn with_mcp_tool_commands(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/withMcpToolCommands", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource as an agent that supports the specified protocol.
     pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -6180,6 +6189,15 @@ impl ContainerResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds commands for invoking tools on the resource's configured MCP server.
+    pub fn with_mcp_tool_commands(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/withMcpToolCommands", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource as an agent that supports the specified protocol.
     pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -8108,6 +8126,15 @@ impl DotnetToolResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds commands for invoking tools on the resource's configured MCP server.
+    pub fn with_mcp_tool_commands(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/withMcpToolCommands", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource as an agent that supports the specified protocol.
     pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -10007,6 +10034,15 @@ impl ExecutableResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds commands for invoking tools on the resource's configured MCP server.
+    pub fn with_mcp_tool_commands(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/withMcpToolCommands", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Configures the resource as an agent that supports the specified protocol.
@@ -16084,6 +16120,15 @@ impl ProjectResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds commands for invoking tools on the resource's configured MCP server.
+    pub fn with_mcp_tool_commands(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/withMcpToolCommands", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource as an agent that supports the specified protocol.
     pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -18404,6 +18449,15 @@ impl TestDatabaseResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds commands for invoking tools on the resource's configured MCP server.
+    pub fn with_mcp_tool_commands(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/withMcpToolCommands", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource as an agent that supports the specified protocol.
     pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -20060,6 +20114,15 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds commands for invoking tools on the resource's configured MCP server.
+    pub fn with_mcp_tool_commands(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/withMcpToolCommands", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Configures the resource as an agent that supports the specified protocol.
@@ -21794,6 +21857,15 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds commands for invoking tools on the resource's configured MCP server.
+    pub fn with_mcp_tool_commands(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/withMcpToolCommands", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Configures the resource as an agent that supports the specified protocol.

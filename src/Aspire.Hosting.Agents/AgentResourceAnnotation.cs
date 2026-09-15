@@ -5,8 +5,6 @@ using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Agents;
 
-#pragma warning disable ASPIREAGENTS001 // Agent annotations implement the experimental reference extension point.
-
 /// <summary>
 /// Describes agent-specific metadata for a resource.
 /// </summary>
@@ -14,7 +12,7 @@ namespace Aspire.Hosting.Agents;
 /// A resource can have multiple <see cref="AgentResourceAnnotation"/> instances when it exposes multiple agent protocols.
 /// Each annotation describes one protocol and its path configuration.
 /// </remarks>
-public sealed class AgentResourceAnnotation : IResourceWithReferenceAnnotation
+public sealed class AgentResourceAnnotation : IResourceAnnotation
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AgentResourceAnnotation"/> class.
@@ -54,36 +52,4 @@ public sealed class AgentResourceAnnotation : IResourceWithReferenceAnnotation
     /// Gets the protocol-specific registered agent name used by dashboard commands.
     /// </summary>
     public string? AgentName { get; }
-
-    bool IResourceWithReferenceAnnotation.CanApplyReference(IResource source)
-    {
-        return AgentResourceBuilderExtensions.IsA2AProtocol(Protocol) && source is IResourceWithEndpoints;
-    }
-
-    IResourceBuilder<TDestination> IResourceWithReferenceAnnotation.WithReference<TDestination>(
-        IResourceBuilder<TDestination> builder,
-        IResource source,
-        string referenceName)
-    {
-        return builder.WithEnvironment(context =>
-        {
-            context.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
-            var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
-            if (!flags.HasFlag(ReferenceEnvironmentInjectionFlags.Endpoints))
-            {
-                return;
-            }
-
-            var network = context.Resource.IsContainer()
-                ? KnownNetworkIdentifiers.DefaultAspireContainerNetwork
-                : KnownNetworkIdentifiers.LocalhostNetwork;
-            var endpoint = AgentResourceBuilderExtensions.GetDefaultAgentEndpoint((IResourceWithEndpoints)source, network);
-            var envVarName = AgentResourceBuilderExtensions.GetAgentCardEnvironmentVariableName(referenceName);
-            context.EnvironmentVariables[envVarName] = AgentResourceBuilderExtensions.CreateA2AAgentCardUrl(
-                endpoint,
-                AgentResourceBuilderExtensions.GetA2AAgentCardPath(this));
-        });
-    }
 }
-
-#pragma warning restore ASPIREAGENTS001

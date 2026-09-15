@@ -3687,6 +3687,14 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds commands for invoking tools on the resource's configured MCP server. */
+    public CSharpAppResource withMcpToolCommands() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.Agents/withMcpToolCommands", reqArgs);
+        return this;
+    }
+
     public CSharpAppResource asAgent(AgentProtocol protocol) {
         return asAgent(protocol, null);
     }
@@ -8007,6 +8015,14 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds commands for invoking tools on the resource's configured MCP server. */
+    public ContainerResource withMcpToolCommands() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.Agents/withMcpToolCommands", reqArgs);
+        return this;
+    }
+
     public ContainerResource asAgent(AgentProtocol protocol) {
         return asAgent(protocol, null);
     }
@@ -10762,6 +10778,14 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds commands for invoking tools on the resource's configured MCP server. */
+    public DotnetToolResource withMcpToolCommands() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.Agents/withMcpToolCommands", reqArgs);
+        return this;
+    }
+
     public DotnetToolResource asAgent(AgentProtocol protocol) {
         return asAgent(protocol, null);
     }
@@ -13205,6 +13229,14 @@ public class ExecutableResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
+    /** Adds commands for invoking tools on the resource's configured MCP server. */
+    public ExecutableResource withMcpToolCommands() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.Agents/withMcpToolCommands", reqArgs);
         return this;
     }
 
@@ -21482,6 +21514,14 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds commands for invoking tools on the resource's configured MCP server. */
+    public ProjectResource withMcpToolCommands() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.Agents/withMcpToolCommands", reqArgs);
+        return this;
+    }
+
     public ProjectResource asAgent(AgentProtocol protocol) {
         return asAgent(protocol, null);
     }
@@ -24978,6 +25018,14 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds commands for invoking tools on the resource's configured MCP server. */
+    public TestDatabaseResource withMcpToolCommands() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.Agents/withMcpToolCommands", reqArgs);
+        return this;
+    }
+
     public TestDatabaseResource asAgent(AgentProtocol protocol) {
         return asAgent(protocol, null);
     }
@@ -27289,6 +27337,14 @@ public class TestRedisResource extends ContainerResource {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
+    /** Adds commands for invoking tools on the resource's configured MCP server. */
+    public TestRedisResource withMcpToolCommands() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.Agents/withMcpToolCommands", reqArgs);
         return this;
     }
 
@@ -29638,6 +29694,14 @@ public class TestVaultResource extends ContainerResource {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
+    /** Adds commands for invoking tools on the resource's configured MCP server. */
+    public TestVaultResource withMcpToolCommands() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.Agents/withMcpToolCommands", reqArgs);
         return this;
     }
 

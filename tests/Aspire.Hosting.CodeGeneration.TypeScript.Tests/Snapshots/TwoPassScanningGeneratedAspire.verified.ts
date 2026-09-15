@@ -14790,7 +14790,7 @@ export interface ContainerResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -15309,6 +15309,18 @@ export interface ContainerResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ContainerResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -15638,7 +15650,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -16157,6 +16169,18 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ContainerResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -16836,7 +16860,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -18584,6 +18608,31 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withMcpToolCommandsInternal(): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withMcpToolCommandsInternal(), this._client);
+    }
+
+    /** @internal */
     private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
         if (agentName !== undefined) rpcArgs.agentName = agentName;
@@ -19181,6 +19230,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["onResourceReady"]: () => ContainerResourcePromiseImpl,
     ["createExecutionConfiguration"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withContainerBuildOptions"]: () => ContainerResourcePromiseImpl,
+    ["withMcpToolCommands"]: () => ContainerResourcePromiseImpl,
     ["asAgent"]: () => ContainerResourcePromiseImpl,
     ["asAgentWithInvocationMode"]: () => ContainerResourcePromiseImpl,
     ["asAgentWithPath"]: () => ContainerResourcePromiseImpl,
@@ -19248,7 +19298,7 @@ export interface CSharpAppResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -19787,6 +19837,18 @@ export interface CSharpAppResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): CSharpAppResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -19920,7 +19982,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -20459,6 +20521,18 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): CSharpAppResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -20643,7 +20717,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -22469,6 +22543,31 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withMcpToolCommandsInternal(): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withMcpToolCommandsInternal(), this._client);
+    }
+
+    /** @internal */
     private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
         if (agentName !== undefined) rpcArgs.agentName = agentName;
@@ -23050,6 +23149,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["onResourceReady"]: () => CSharpAppResourcePromiseImpl,
     ["createExecutionConfiguration"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withContainerBuildOptions"]: () => CSharpAppResourcePromiseImpl,
+    ["withMcpToolCommands"]: () => CSharpAppResourcePromiseImpl,
     ["asAgent"]: () => CSharpAppResourcePromiseImpl,
     ["asAgentWithInvocationMode"]: () => CSharpAppResourcePromiseImpl,
     ["asAgentWithPath"]: () => CSharpAppResourcePromiseImpl,
@@ -23172,7 +23272,7 @@ export interface DotnetToolResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -23678,6 +23778,18 @@ export interface DotnetToolResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): DotnetToolResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -23866,7 +23978,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -24372,6 +24484,18 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): DotnetToolResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -24733,7 +24857,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -26453,6 +26577,31 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withMcpToolCommandsInternal(): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withMcpToolCommandsInternal(), this._client);
+    }
+
+    /** @internal */
     private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
         if (agentName !== undefined) rpcArgs.agentName = agentName;
@@ -27038,6 +27187,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["onResourceReady"]: () => DotnetToolResourcePromiseImpl,
     ["createExecutionConfiguration"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withContainerBuildOptions"]: () => DotnetToolResourcePromiseImpl,
+    ["withMcpToolCommands"]: () => DotnetToolResourcePromiseImpl,
     ["asAgent"]: () => DotnetToolResourcePromiseImpl,
     ["asAgentWithInvocationMode"]: () => DotnetToolResourcePromiseImpl,
     ["asAgentWithPath"]: () => DotnetToolResourcePromiseImpl,
@@ -27134,7 +27284,7 @@ export interface ExecutableResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -27640,6 +27790,18 @@ export interface ExecutableResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ExecutableResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -27795,7 +27957,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -28301,6 +28463,18 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ExecutableResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -28558,7 +28732,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -30278,6 +30452,31 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withMcpToolCommandsInternal(): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withMcpToolCommandsInternal(), this._client);
+    }
+
+    /** @internal */
     private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
         if (agentName !== undefined) rpcArgs.agentName = agentName;
@@ -30857,6 +31056,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["onResourceReady"]: () => ExecutableResourcePromiseImpl,
     ["createExecutionConfiguration"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withContainerBuildOptions"]: () => ExecutableResourcePromiseImpl,
+    ["withMcpToolCommands"]: () => ExecutableResourcePromiseImpl,
     ["asAgent"]: () => ExecutableResourcePromiseImpl,
     ["asAgentWithInvocationMode"]: () => ExecutableResourcePromiseImpl,
     ["asAgentWithPath"]: () => ExecutableResourcePromiseImpl,
@@ -34975,7 +35175,7 @@ export interface ProjectResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -35514,6 +35714,18 @@ export interface ProjectResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ProjectResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -35647,7 +35859,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -36186,6 +36398,18 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ProjectResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -36371,7 +36595,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -38197,6 +38421,31 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withMcpToolCommandsInternal(): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withMcpToolCommandsInternal(), this._client);
+    }
+
+    /** @internal */
     private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
         if (agentName !== undefined) rpcArgs.agentName = agentName;
@@ -38778,6 +39027,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["onResourceReady"]: () => ProjectResourcePromiseImpl,
     ["createExecutionConfiguration"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withContainerBuildOptions"]: () => ProjectResourcePromiseImpl,
+    ["withMcpToolCommands"]: () => ProjectResourcePromiseImpl,
     ["asAgent"]: () => ProjectResourcePromiseImpl,
     ["asAgentWithInvocationMode"]: () => ProjectResourcePromiseImpl,
     ["asAgentWithPath"]: () => ProjectResourcePromiseImpl,
@@ -39041,7 +39291,7 @@ export interface TestDatabaseResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -39560,6 +39810,18 @@ export interface TestDatabaseResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): TestDatabaseResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -39889,7 +40151,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -40408,6 +40670,18 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): TestDatabaseResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -41086,7 +41360,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -42834,6 +43108,31 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withMcpToolCommandsInternal(): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withMcpToolCommandsInternal(), this._client);
+    }
+
+    /** @internal */
     private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
         if (agentName !== undefined) rpcArgs.agentName = agentName;
@@ -43431,6 +43730,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["onResourceReady"]: () => TestDatabaseResourcePromiseImpl,
     ["createExecutionConfiguration"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withContainerBuildOptions"]: () => TestDatabaseResourcePromiseImpl,
+    ["withMcpToolCommands"]: () => TestDatabaseResourcePromiseImpl,
     ["asAgent"]: () => TestDatabaseResourcePromiseImpl,
     ["asAgentWithInvocationMode"]: () => TestDatabaseResourcePromiseImpl,
     ["asAgentWithPath"]: () => TestDatabaseResourcePromiseImpl,
@@ -43694,7 +43994,7 @@ export interface TestRedisResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -44235,6 +44535,18 @@ export interface TestRedisResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): TestRedisResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -44626,7 +44938,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -45167,6 +45479,18 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): TestRedisResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -45907,7 +46231,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -47715,6 +48039,31 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withMcpToolCommandsInternal(): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withMcpToolCommandsInternal(), this._client);
+    }
+
+    /** @internal */
     private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
         if (agentName !== undefined) rpcArgs.agentName = agentName;
@@ -48566,6 +48915,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["onResourceReady"]: () => TestRedisResourcePromiseImpl,
     ["createExecutionConfiguration"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withContainerBuildOptions"]: () => TestRedisResourcePromiseImpl,
+    ["withMcpToolCommands"]: () => TestRedisResourcePromiseImpl,
     ["asAgent"]: () => TestRedisResourcePromiseImpl,
     ["asAgentWithInvocationMode"]: () => TestRedisResourcePromiseImpl,
     ["asAgentWithPath"]: () => TestRedisResourcePromiseImpl,
@@ -48844,7 +49194,7 @@ export interface TestVaultResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -49363,6 +49713,18 @@ export interface TestVaultResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): TestVaultResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -49694,7 +50056,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -50213,6 +50575,18 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): TestVaultResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -50893,7 +51267,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -52641,6 +53015,31 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withMcpToolCommandsInternal(): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withMcpToolCommandsInternal(), this._client);
+    }
+
+    /** @internal */
     private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
         if (agentName !== undefined) rpcArgs.agentName = agentName;
@@ -53253,6 +53652,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["onResourceReady"]: () => TestVaultResourcePromiseImpl,
     ["createExecutionConfiguration"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withContainerBuildOptions"]: () => TestVaultResourcePromiseImpl,
+    ["withMcpToolCommands"]: () => TestVaultResourcePromiseImpl,
     ["asAgent"]: () => TestVaultResourcePromiseImpl,
     ["asAgentWithInvocationMode"]: () => TestVaultResourcePromiseImpl,
     ["asAgentWithPath"]: () => TestVaultResourcePromiseImpl,
@@ -55902,7 +56302,7 @@ export interface ResourceWithEndpoints {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -55995,6 +56395,18 @@ export interface ResourceWithEndpoints {
      * @returns The resource builder.
      */
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ResourceWithEndpointsPromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -56041,7 +56453,7 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -56134,6 +56546,18 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      * @returns The resource builder.
      */
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise;
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ResourceWithEndpointsPromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
      *
@@ -56201,7 +56625,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover, proxy, and invoke the MCP server exposed by the resource.
+     * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -56604,6 +57028,31 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
+    private async _withMcpToolCommandsInternal(): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting.Agents/withMcpToolCommands',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /**
+     * Adds commands for invoking tools on the resource's configured MCP server.
+     *
+     * Configure the MCP endpoint with `WithMcpServer` before calling this method.
+     * Adds an interactive dashboard command, an API command accepting a tool name and JSON arguments,
+     * and an MCP endpoint URL. The interactive command is highlighted only if the resource
+     * does not already have a highlighted command. Endpoint resolution uses the existing
+     * `McpServerEndpointAnnotation` without changing its configuration.
+     * This method has no effect in publish mode.
+     * @returns The resource builder.
+     */
+    withMcpToolCommands(): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._withMcpToolCommandsInternal(), this._client);
+    }
+
+    /** @internal */
     private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
         if (agentName !== undefined) rpcArgs.agentName = agentName;
@@ -56717,6 +57166,7 @@ const ResourceWithEndpointsPromiseImpl = $aspireCreateFluentPromiseClass<Resourc
     ["withHttpCommand"]: () => ResourceWithEndpointsPromiseImpl,
     ["withHttpProbe"]: () => ResourceWithEndpointsPromiseImpl,
     ["onResourceEndpointsAllocated"]: () => ResourceWithEndpointsPromiseImpl,
+    ["withMcpToolCommands"]: () => ResourceWithEndpointsPromiseImpl,
     ["asAgent"]: () => ResourceWithEndpointsPromiseImpl,
     ["asAgentWithInvocationMode"]: () => ResourceWithEndpointsPromiseImpl,
     ["asAgentWithPath"]: () => ResourceWithEndpointsPromiseImpl,

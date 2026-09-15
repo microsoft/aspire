@@ -13,7 +13,6 @@ using System.Text.Json.Nodes;
 namespace Aspire.Hosting.Agents.Tests;
 
 #pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to test dashboard command arguments.
-#pragma warning disable ASPIREAGENTS001 // Generic agent reference dispatch is experimental.
 
 [Trait("Partition", "5")]
 public class AgentResourceBuilderExtensionsTests
@@ -784,7 +783,32 @@ public class AgentResourceBuilderExtensionsTests
     }
 
     [Fact]
-    public async Task WithReference_A2AAgentInjectsAgentCardUrl()
+    public async Task AsAgent_PublishPreservesEndpointExpressionsWithoutCommands()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var agent = builder.AddContainer("weather-agent", "image")
+            .WithHttpEndpoint(targetPort: 8080)
+            .AsAgent(AgentProtocol.A2A)
+            .AsAgent(AgentProtocol.Responses)
+            .AsAgent(AgentProtocol.AgUi)
+            .AsAgent(AgentProtocol.Acp);
+        var consumer = builder.AddContainer("consumer", "image")
+            .WithEnvironment("WEATHER_AGENT_AGENTCARD_URL",
+                ReferenceExpression.Create($"{agent.GetEndpoint("http")}/.well-known/agent-card.json"));
+
+        Assert.Equal(4, agent.Resource.Annotations.OfType<AgentResourceAnnotation>().Count());
+        Assert.Empty(agent.Resource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.Empty(agent.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
+        var agentEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            agent.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance).DefaultTimeout();
+        var consumerEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            consumer.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance).DefaultTimeout();
+
+        await VerifyXunit.Verifier.Verify(new { Agent = agentEnvironment, Consumer = consumerEnvironment }).UseDirectory("Snapshots");
+    }
+
+    [Fact]
+    public async Task WithEnvironment_A2AAgentCardUrlUsesConsumerNetwork()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -794,7 +818,8 @@ public class AgentResourceBuilderExtensionsTests
             .AsAgent(AgentProtocol.A2A);
 
         var consumer = builder.AddContainer("consumer", "image")
-            .WithReference(agent);
+            .WithEnvironment("WEATHER_AGENT_AGENTCARD_URL",
+                ReferenceExpression.Create($"{agent.GetEndpoint("http")}/.well-known/agent-card.json"));
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
@@ -802,7 +827,7 @@ public class AgentResourceBuilderExtensionsTests
     }
 
     [Fact]
-    public async Task WithReference_A2AAgentUsesCustomPathAndReferenceName()
+    public async Task WithEnvironment_A2AAgentCardUrlUsesExplicitPathAndName()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -812,7 +837,8 @@ public class AgentResourceBuilderExtensionsTests
             .AsAgent("agent-card.json", AgentProtocol.A2A);
 
         var consumer = builder.AddContainer("consumer", "image")
-            .WithReference(agent, name: "ski-agent");
+            .WithEnvironment("SKI_AGENT_AGENTCARD_URL",
+                ReferenceExpression.Create($"{agent.GetEndpoint("http")}/agent-card.json"));
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
@@ -820,7 +846,7 @@ public class AgentResourceBuilderExtensionsTests
     }
 
     [Fact]
-    public async Task WithReference_ProjectA2AAgentAlsoInjectsServiceDiscovery()
+    public async Task WithReference_ProjectA2AAgentKeepsStandardServiceDiscovery()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -836,7 +862,7 @@ public class AgentResourceBuilderExtensionsTests
 
         Assert.Equal("http://weather-agent.dev.internal:8080", config["services__weather-agent__http__0"]);
         Assert.Equal("http://weather-agent.dev.internal:8080", config["WEATHER_AGENT_HTTP"]);
-        Assert.Equal("http://weather-agent.dev.internal:8080/.well-known/agent-card.json", config["WEATHER_AGENT_AGENTCARD_URL"]);
+        Assert.Equal(["WEATHER_AGENT_HTTP", "services__weather-agent__http__0"], config.Keys.Order(StringComparer.Ordinal));
 
         var relationships = consumer.Resource.Annotations
             .OfType<ResourceRelationshipAnnotation>()
@@ -860,14 +886,9 @@ public class AgentResourceBuilderExtensionsTests
             .WithEndpoint("api", e => AllocateEndpoint(e, "weather-agent.dev.internal", 8080))
             .AsAgent(AgentProtocol.A2A);
 
-        var consumer = builder.AddContainer("consumer", "image")
-            .WithReference(agent);
-
         var agentConfig = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(agent.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
-        var consumerConfig = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
         Assert.Equal("http://weather-agent.dev.internal:8080", agentConfig[AgentResourceBuilderExtensions.A2AAgentBaseUrlEnvironmentVariableName]);
-        Assert.Equal("http://weather-agent.dev.internal:8080/.well-known/agent-card.json", consumerConfig["WEATHER_AGENT_AGENTCARD_URL"]);
     }
 
     [Fact]
@@ -887,38 +908,6 @@ public class AgentResourceBuilderExtensionsTests
                 TestServiceProvider.Instance));
 
         Assert.Contains("no non-excluded HTTP or HTTPS endpoint was found", ex.Message);
-    }
-
-    [Fact]
-    public void WithReference_MultipleAgentAnnotationsAddOneRelationship()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
-            .AsAgent(AgentProtocol.A2A)
-            .AsAgent("/alternate-agent-card.json", AgentProtocol.A2A);
-
-        var consumer = builder.AddContainer("consumer", "image")
-            .WithReference(agent);
-
-        var relationships = consumer.Resource.Annotations
-            .OfType<ResourceRelationshipAnnotation>()
-            .Where(r => ReferenceEquals(r.Resource, agent.Resource));
-        Assert.Single(relationships);
-    }
-
-    [Fact]
-    public void WithReference_NonAgentContainerUsesGenericValidation()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var source = builder.AddContainer("endpoint-only", "image")
-            .WithHttpEndpoint(targetPort: 8080);
-        var consumer = builder.AddContainer("consumer", "image");
-
-        var ex = Assert.Throws<InvalidOperationException>(() => consumer.WithReference(source));
-
-        Assert.Equal("The resource 'endpoint-only' can't be used with withReference because it doesn't provide a connection string, service discovery, or a custom withReference implementation.", ex.Message);
     }
 
     private sealed class ProjectA : IProjectMetadata
@@ -1143,4 +1132,3 @@ public class AgentResourceBuilderExtensionsTests
 }
 
 #pragma warning restore ASPIREINTERACTION001
-#pragma warning restore ASPIREAGENTS001

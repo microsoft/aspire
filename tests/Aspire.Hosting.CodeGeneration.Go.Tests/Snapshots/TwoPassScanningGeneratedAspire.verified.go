@@ -1534,6 +1534,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithLifetime(lifetime ContainerLifetime) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithLifetimeOf(sourceBuilder Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithMcpServer(options ...*WithMcpServerOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithMcpToolCommands() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithMergeEndpoint(endpointName string, port float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithMergeLabel(label string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -2946,6 +2947,17 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMcpServer(
 	return s
 }
 
+// WithMcpToolCommands adds commands for invoking tools on the resource's configured MCP server.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMcpToolCommands() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/withMcpToolCommands", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMergeEndpoint configures a named endpoint
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpoint(endpointName string, port float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -3814,6 +3826,7 @@ type CSharpAppResource interface {
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) CSharpAppResource
 	WithLifetimeOf(sourceBuilder Resource) CSharpAppResource
 	WithMcpServer(options ...*WithMcpServerOptions) CSharpAppResource
+	WithMcpToolCommands() CSharpAppResource
 	WithMergeEndpoint(endpointName string, port float64) CSharpAppResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) CSharpAppResource
 	WithMergeLabel(label string) CSharpAppResource
@@ -4945,6 +4958,17 @@ func (s *cSharpAppResource) WithMcpServer(options ...*WithMcpServerOptions) CSha
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withMcpServer", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithMcpToolCommands adds commands for invoking tools on the resource's configured MCP server.
+func (s *cSharpAppResource) WithMcpToolCommands() CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/withMcpToolCommands", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7800,6 +7824,7 @@ type ContainerResource interface {
 	WithLifetime(lifetime ContainerLifetime) ContainerResource
 	WithLifetimeOf(sourceBuilder Resource) ContainerResource
 	WithMcpServer(options ...*WithMcpServerOptions) ContainerResource
+	WithMcpToolCommands() ContainerResource
 	WithMergeEndpoint(endpointName string, port float64) ContainerResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ContainerResource
 	WithMergeLabel(label string) ContainerResource
@@ -9208,6 +9233,17 @@ func (s *containerResource) WithMcpServer(options ...*WithMcpServerOptions) Cont
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withMcpServer", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithMcpToolCommands adds commands for invoking tools on the resource's configured MCP server.
+func (s *containerResource) WithMcpToolCommands() ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/withMcpToolCommands", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11519,6 +11555,7 @@ type DotnetToolResource interface {
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) DotnetToolResource
 	WithLifetimeOf(sourceBuilder Resource) DotnetToolResource
 	WithMcpServer(options ...*WithMcpServerOptions) DotnetToolResource
+	WithMcpToolCommands() DotnetToolResource
 	WithMergeEndpoint(endpointName string, port float64) DotnetToolResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) DotnetToolResource
 	WithMergeLabel(label string) DotnetToolResource
@@ -12624,6 +12661,17 @@ func (s *dotnetToolResource) WithMcpServer(options ...*WithMcpServerOptions) Dot
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withMcpServer", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithMcpToolCommands adds commands for invoking tools on the resource's configured MCP server.
+func (s *dotnetToolResource) WithMcpToolCommands() DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/withMcpToolCommands", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14413,6 +14461,7 @@ type ExecutableResource interface {
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ExecutableResource
 	WithLifetimeOf(sourceBuilder Resource) ExecutableResource
 	WithMcpServer(options ...*WithMcpServerOptions) ExecutableResource
+	WithMcpToolCommands() ExecutableResource
 	WithMergeEndpoint(endpointName string, port float64) ExecutableResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ExecutableResource
 	WithMergeLabel(label string) ExecutableResource
@@ -15512,6 +15561,17 @@ func (s *executableResource) WithMcpServer(options ...*WithMcpServerOptions) Exe
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withMcpServer", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithMcpToolCommands adds commands for invoking tools on the resource's configured MCP server.
+func (s *executableResource) WithMcpToolCommands() ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/withMcpToolCommands", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20907,6 +20967,7 @@ type ProjectResource interface {
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ProjectResource
 	WithLifetimeOf(sourceBuilder Resource) ProjectResource
 	WithMcpServer(options ...*WithMcpServerOptions) ProjectResource
+	WithMcpToolCommands() ProjectResource
 	WithMergeEndpoint(endpointName string, port float64) ProjectResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ProjectResource
 	WithMergeLabel(label string) ProjectResource
@@ -22038,6 +22099,17 @@ func (s *projectResource) WithMcpServer(options ...*WithMcpServerOptions) Projec
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withMcpServer", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithMcpToolCommands adds commands for invoking tools on the resource's configured MCP server.
+func (s *projectResource) WithMcpToolCommands() ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/withMcpToolCommands", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24386,6 +24458,7 @@ type TestDatabaseResource interface {
 	WithLifetime(lifetime ContainerLifetime) TestDatabaseResource
 	WithLifetimeOf(sourceBuilder Resource) TestDatabaseResource
 	WithMcpServer(options ...*WithMcpServerOptions) TestDatabaseResource
+	WithMcpToolCommands() TestDatabaseResource
 	WithMergeEndpoint(endpointName string, port float64) TestDatabaseResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestDatabaseResource
 	WithMergeLabel(label string) TestDatabaseResource
@@ -25797,6 +25870,17 @@ func (s *testDatabaseResource) WithMcpServer(options ...*WithMcpServerOptions) T
 	return s
 }
 
+// WithMcpToolCommands adds commands for invoking tools on the resource's configured MCP server.
+func (s *testDatabaseResource) WithMcpToolCommands() TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/withMcpToolCommands", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMergeEndpoint configures a named endpoint
 func (s *testDatabaseResource) WithMergeEndpoint(endpointName string, port float64) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -26725,6 +26809,7 @@ type TestRedisResource interface {
 	WithLifetime(lifetime ContainerLifetime) TestRedisResource
 	WithLifetimeOf(sourceBuilder Resource) TestRedisResource
 	WithMcpServer(options ...*WithMcpServerOptions) TestRedisResource
+	WithMcpToolCommands() TestRedisResource
 	WithMergeEndpoint(endpointName string, port float64) TestRedisResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestRedisResource
 	WithMergeLabel(label string) TestRedisResource
@@ -28370,6 +28455,17 @@ func (s *testRedisResource) WithMcpServer(options ...*WithMcpServerOptions) Test
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withMcpServer", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithMcpToolCommands adds commands for invoking tools on the resource's configured MCP server.
+func (s *testRedisResource) WithMcpToolCommands() TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/withMcpToolCommands", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
