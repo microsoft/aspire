@@ -158,14 +158,27 @@ function validate(reportValue: unknown, mode: Variant, exitCode: number) {
             '[\n  "cache/workspace-config-locks"\n  "cache/workspace-config-locks/workspace.lock"\n  "dashboard"\n]');
         assert.equal(enumeration.expected, '[]');
 
-        for (const title of [titles[7], titles[8], titles[9], titles[12]]) {
+        const aggregateAssertionTitles = [titles[7], titles[8], titles[9]];
+        const missingRejectionTitles = [titles[10], titles[17]];
+        const symlinkError = failures.get(titles[12]);
+        assert.ok(symlinkError);
+        // This baseline junction case resolves on hosted Windows/Node 22 but rejects a
+        // non-AggregateError on local Windows/Node 25. Accept those two exact assertion
+        // signatures only for this title; every other failure retains its single contract.
+        if (symlinkError.operator === 'rejects') {
+            missingRejectionTitles.push(titles[12]);
+        } else {
+            aggregateAssertionTitles.push(titles[12]);
+        }
+
+        for (const title of aggregateAssertionTitles) {
             const error = assertion(failures.get(title), '==');
             assert.equal(error.actual, 'false');
             assert.equal(error.expected, 'true');
             assert.equal(text(error.message).replace(/\r\n/g, '\n'),
                 'The expression evaluated to a falsy value:\n\n  assert.ok(error instanceof AggregateError)\n');
         }
-        for (const title of [titles[10], titles[17]]) {
+        for (const title of missingRejectionTitles) {
             const error = assertion(failures.get(title), 'rejects');
             assert.equal(error.message, 'Missing expected rejection.');
             assert.equal(error.actual, undefined);
