@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Redis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -287,7 +288,7 @@ public static class RedisBuilderExtensions
 
             configureContainer?.Invoke(resourceBuilder);
 
-            resourceBuilder.WithRelationship(builder.Resource, "RedisCommander");
+            resourceBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             return builder;
         }
@@ -355,7 +356,7 @@ public static class RedisBuilderExtensions
                         counter++;
                     }
                 })
-                .WithRelationship(builder.Resource, "RedisInsight")
+                .WithRelationship(builder.Resource, KnownRelationshipTypes.Manages)
                 .WithCertificateTrustConfiguration(ctx =>
                 {
                     var redisInstances = builder.ApplicationBuilder.Resources.OfType<RedisResource>();
@@ -416,6 +417,11 @@ public static class RedisBuilderExtensions
         {
             foreach (var redisResource in @event.Model.Resources.OfType<RedisResource>())
             {
+                if (!resourceBuilder.Resource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(r => r.Type == KnownRelationshipTypes.Manages && r.Resource == redisResource))
+                {
+                    resourceBuilder.WithRelationship(redisResource, KnownRelationshipTypes.Manages);
+                }
+
 #pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
                 redisResource.Annotations.Add(new ResourceUrlAnnotation
                 {

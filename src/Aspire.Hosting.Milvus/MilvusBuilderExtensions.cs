@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Milvus;
+using Aspire.Dashboard.Model;
 
 namespace Aspire.Hosting;
 
@@ -153,6 +154,7 @@ public static class MilvusBuilderExtensions
                                                         .WithHttpEndpoint(targetPort: 3000, name: "http")
                                                         .WithEnvironment(context => ConfigureAttuContainer(context, builder.Resource))
                                                         .WithParentRelationship(builder)
+                                                        .WithRelationship(builder.Resource, KnownRelationshipTypes.Manages)
                                                         .ExcludeFromManifest();
 
         AddManagementLink(resourceBuilder, "http", "Manage", builder.Resource);

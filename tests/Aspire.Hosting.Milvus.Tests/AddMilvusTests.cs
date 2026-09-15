@@ -207,11 +207,13 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
     public void WithAttuHidesTheAttuResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        builder.AddMilvus("milvus").WithAttu();
+        var milvus = builder.AddMilvus("milvus").WithAttu();
 
         var attu = Assert.Single(builder.Resources.OfType<AttuResource>());
         var hidden = Assert.Single(attu.Annotations.OfType<HiddenAnnotation>());
         Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+        Assert.Single(attu.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Parent" && r.Resource == milvus.Resource);
+        Assert.Single(attu.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == milvus.Resource);
     }
 
     private sealed class ProjectA : IProjectMetadata

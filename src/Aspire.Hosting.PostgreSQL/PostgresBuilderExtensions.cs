@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Postgres;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -235,7 +236,7 @@ public static class PostgresBuilderExtensions
 
             configureContainer?.Invoke(pgAdminContainerBuilder);
 
-            pgAdminContainerBuilder.WithRelationship(builder.Resource, "PgAdmin");
+            pgAdminContainerBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             return builder;
         }
@@ -332,7 +333,7 @@ public static class PostgresBuilderExtensions
 
             configureContainer?.Invoke(pgwebContainerBuilder);
 
-            pgwebContainerBuilder.WithRelationship(builder.Resource, "PgWeb");
+            pgwebContainerBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             pgwebContainerBuilder.WithHttpHealthCheck();
 
@@ -429,6 +430,11 @@ public static class PostgresBuilderExtensions
         {
             foreach (var postgresResource in @event.Model.Resources.OfType<PostgresServerResource>())
             {
+                if (!resourceBuilder.Resource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(r => r.Type == KnownRelationshipTypes.Manages && r.Resource == postgresResource))
+                {
+                    resourceBuilder.WithRelationship(postgresResource, KnownRelationshipTypes.Manages);
+                }
+
 #pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
                 postgresResource.Annotations.Add(new ResourceUrlAnnotation
                 {

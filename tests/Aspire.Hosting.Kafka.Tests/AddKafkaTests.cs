@@ -241,8 +241,8 @@ public class AddKafkaTests(ITestOutputHelper testOutputHelper)
 
         // Both Kafka servers called WithKafkaUI() - kafka1 created the shared container, kafka2 reused it via the
         // early-return path - so both should show as related to it, not just the one that created it.
-        Assert.Single(kafkaUiResource.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "KafkaUI" && r.Resource == kafka1.Resource);
-        Assert.Single(kafkaUiResource.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "KafkaUI" && r.Resource == kafka2.Resource);
+        Assert.Single(kafkaUiResource.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == kafka1.Resource);
+        Assert.Single(kafkaUiResource.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == kafka2.Resource);
     }
 
     [Fact]

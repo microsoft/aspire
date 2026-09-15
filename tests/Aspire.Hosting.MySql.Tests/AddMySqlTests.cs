@@ -230,8 +230,8 @@ public class AddMySqlTests(ITestOutputHelper outputHelper)
 
         // Both MySql servers called WithPhpMyAdmin() - mySql created the shared container, mySql2 reused it via the
         // early-return path - so both should show as related to it, not just the one that created it.
-        Assert.Single(phpMyAdmin.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "PhpMyAdmin" && r.Resource == mySql1.Resource);
-        Assert.Single(phpMyAdmin.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "PhpMyAdmin" && r.Resource == mySql2.Resource);
+        Assert.Single(phpMyAdmin.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == mySql1.Resource);
+        Assert.Single(phpMyAdmin.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == mySql2.Resource);
     }
 
     [Fact]

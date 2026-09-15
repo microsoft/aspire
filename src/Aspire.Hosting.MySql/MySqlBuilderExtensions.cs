@@ -6,6 +6,7 @@
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MySql;
+using Aspire.Dashboard.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
@@ -247,7 +248,7 @@ public static class MySqlBuilderExtensions
         {
             var builderForExistingResource = builder.ApplicationBuilder.CreateResourceBuilder(existinghpMyAdminResource);
             configureContainer?.Invoke(builderForExistingResource);
-            builderForExistingResource.WithRelationship(builder.Resource, "PhpMyAdmin");
+            builderForExistingResource.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
             return builder;
         }
 
@@ -321,7 +322,7 @@ public static class MySqlBuilderExtensions
 
         configureContainer?.Invoke(phpMyAdminContainerBuilder);
 
-        phpMyAdminContainerBuilder.WithRelationship(builder.Resource, "PhpMyAdmin");
+        phpMyAdminContainerBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
         return builder;
     }
@@ -340,6 +341,11 @@ public static class MySqlBuilderExtensions
         {
             foreach (var mySqlResource in @event.Model.Resources.OfType<MySqlServerResource>())
             {
+                if (!resourceBuilder.Resource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(r => r.Type == KnownRelationshipTypes.Manages && r.Resource == mySqlResource))
+                {
+                    resourceBuilder.WithRelationship(mySqlResource, KnownRelationshipTypes.Manages);
+                }
+
 #pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
                 mySqlResource.Annotations.Add(new ResourceUrlAnnotation
                 {

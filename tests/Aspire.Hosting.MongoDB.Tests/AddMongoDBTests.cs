@@ -220,11 +220,13 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     public void WithMongoExpressHidesTheMongoExpressResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        builder.AddMongoDB("mongo").WithMongoExpress();
+        var mongo = builder.AddMongoDB("mongo").WithMongoExpress();
 
         var mongoExpress = Assert.Single(builder.Resources.OfType<MongoExpressContainerResource>());
         var hidden = Assert.Single(mongoExpress.Annotations.OfType<HiddenAnnotation>());
         Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+        Assert.Single(mongoExpress.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Parent" && r.Resource == mongo.Resource);
+        Assert.Single(mongoExpress.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == mongo.Resource);
     }
 
     [Fact]
