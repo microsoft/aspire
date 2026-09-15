@@ -279,6 +279,13 @@ public static class AzureContainerAppExtensions
         {
             var appEnvResource = (AzureContainerAppEnvironmentResource)infra.AspireResource;
 
+            if (appEnvResource.IsExpress && appEnvResource.PreserveHttpEndpoints)
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container Apps Express environment '{appEnvResource.Name}' cannot use {nameof(WithHttpsUpgrade)}(false) because Express requires HTTPS ingress. " +
+                    $"Remove {nameof(WithHttpsUpgrade)}(false) or use {nameof(WithHttpsUpgrade)}(true).");
+            }
+
             // When the user has marked this environment as existing (via AsExisting / PublishAsExisting),
             // we must not generate a brand-new managed environment + Log Analytics + Dashboard. Instead,
             // emit a thin module that references the existing environment and still wires up the ACR pull
@@ -379,13 +386,6 @@ public static class AzureContainerAppExtensions
 
             var containerAppEnvironment = new ContainerAppManagedEnvironment(appEnvResource.GetBicepIdentifier())
             {
-                WorkloadProfiles = [
-                    new ContainerAppWorkloadProfile()
-                    {
-                        WorkloadProfileType = "Consumption",
-                        Name = "consumption"
-                    }
-                ],
                 AppLogsConfiguration = new()
                 {
                     Destination = "log-analytics",
@@ -397,6 +397,21 @@ public static class AzureContainerAppExtensions
                 },
                 Tags = tags
             };
+
+            if (appEnvResource.IsExpress)
+            {
+                AzureContainerAppExpressSupport.ConfigureEnvironment(containerAppEnvironment);
+            }
+            else
+            {
+                containerAppEnvironment.WorkloadProfiles = [
+                    new ContainerAppWorkloadProfile()
+                    {
+                        WorkloadProfileType = "Consumption",
+                        Name = "consumption"
+                    }
+                ];
+            }
 
             // Configure VNet integration if a subnet is specified
             if (appEnvResource.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var subnetAnnotation))
@@ -1005,6 +1020,35 @@ public static class AzureContainerAppExtensions
     }
 
     /// <summary>
+    /// Configures the container app environment to publish and deploy HTTP applications using Azure Container Apps Express.
+    /// </summary>
+    /// <param name="builder">The container app environment to configure.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// Express defaults to zero minimum replicas and does not provision the managed Aspire dashboard.
+    /// Explicit replica settings and infrastructure customization are preserved. Azure validates service compatibility.
+    /// App-to-app references require explicitly public HTTP endpoints and use their HTTPS URLs.
+    /// Local execution is unchanged.
+    /// When combined with existing-resource configuration, the existing environment must already use Express.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddAzureContainerAppEnvironment("env").AsExpress();
+    /// </code>
+    /// </example>
+    /// <seealso href="https://learn.microsoft.com/azure/container-apps/express-overview">Azure Container Apps Express preview</seealso>
+    [AspireExport]
+    [Experimental("ASPIREACAEXPRESS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<AzureContainerAppEnvironmentResource> AsExpress(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.IsExpress = true;
+        return builder;
+    }
+
+    /// <summary>
     /// Configures whether the Aspire dashboard should be included in the container app environment.
     /// </summary>
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
@@ -1030,6 +1074,7 @@ public static class AzureContainerAppExtensions
     /// When disabled (<c>false</c>), HTTP endpoints will use HTTP scheme and port 80 in Azure Container Apps.
     /// Note that explicit ports specified for development (e.g., port 8080) are still normalized
     /// to standard ports (80/443) as required by Azure Container Apps.
+    /// Disabling HTTPS upgrade for an Express environment is rejected during publishing or deployment.
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, bool upgrade = true)

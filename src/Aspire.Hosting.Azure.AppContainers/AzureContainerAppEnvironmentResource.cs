@@ -247,9 +247,28 @@ public class AzureContainerAppEnvironmentResource :
 
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
-    /// Default is true.
+    /// Defaults to enabled for standard environments and disabled for Express environments.
     /// </summary>
-    internal bool EnableDashboard { get; set; } = true;
+    internal bool EnableDashboard
+    {
+        get => _enableDashboard ?? !IsExpress;
+        set => _enableDashboard = value;
+    }
+
+    private bool? _enableDashboard;
+
+    internal bool IsExpress { get; set; }
+
+    internal void ValidatePublicEndpointReference(EndpointReference endpointReference)
+    {
+        if (!endpointReference.EndpointAnnotation.IsExternal)
+        {
+            throw new InvalidOperationException(
+                $"Azure Container Apps Express environment '{Name}' cannot reference internal endpoint " +
+                $"'{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}'. " +
+                "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.");
+        }
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether HTTP endpoints should be preserved as HTTP instead of being upgraded to HTTPS.
@@ -346,6 +365,14 @@ public class AzureContainerAppEnvironmentResource :
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
+        if (IsExpress)
+        {
+            // Express apps are reachable only over public ingress, so there is no ".internal"
+            // hostname to fall back to. Reject the reference instead of emitting a private
+            // hostname that would not resolve.
+            ValidatePublicEndpointReference(endpointReference);
+        }
+
         var resource = endpointReference.Resource;
 
         var builder = new ReferenceExpressionBuilder();
@@ -428,7 +455,8 @@ public class AzureContainerAppEnvironmentResource :
 
         // Create and add new resource if it doesn't exist
         // Even though it's a compound resource, we'll only expose the managed environment
-        var cae = ContainerAppManagedEnvironment.FromExisting(bicepIdentifier);
+        var cae = ContainerAppManagedEnvironment.FromExisting(bicepIdentifier,
+            IsExpress ? AzureContainerAppExpressSupport.ResourceVersion : null);
 
         if (!TryApplyExistingResourceAnnotation(
             this,

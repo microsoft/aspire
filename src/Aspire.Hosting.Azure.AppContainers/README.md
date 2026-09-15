@@ -67,12 +67,60 @@ Local runs do not provision the Container Apps environment. Deployed apps pull i
 
 To clean up, use `aspire destroy`. **This deletes the entire deployment resource group, including resources not created by Aspire.**
 
+## Experimental Express support
+
+> **Experimental:** `AsExpress()` reports diagnostic `ASPIREACAEXPRESS001` and integrates with the Azure Container Apps Express preview. Azure's [Express overview](https://learn.microsoft.com/azure/container-apps/express-overview) currently lists Aspire as unsupported; this opt-in API does not change that support policy.
+
+Opt an environment into Express. Everything else about the AppHost, including local `aspire run`, is unchanged.
+
+**C#**
+
+```csharp
+#pragma warning disable ASPIREACAEXPRESS001
+builder.AddAzureContainerAppEnvironment("env").AsExpress();
+#pragma warning restore ASPIREACAEXPRESS001
+
+var api = builder.AddProject<Projects.Api>("api")
+    .WithExternalHttpEndpoints();
+
+builder.AddProject<Projects.Frontend>("frontend")
+    .WithExternalHttpEndpoints()
+    .WithReference(api);
+```
+
+**TypeScript**
+
+```typescript
+await builder.addAzureContainerAppEnvironment("env").asExpress();
+
+const api = await builder.addCSharpApp("api", "../Api/Api.csproj")
+    .withExternalHttpEndpoints();
+
+await builder.addCSharpApp("frontend", "../Frontend/Frontend.csproj")
+    .withExternalHttpEndpoints()
+    .withReference(api);
+```
+
+Express is emitted as `properties.environmentMode: "Express"` on the managed environment using API version `2026-03-02-preview`. It is not a separate environment type, package, or CLI command, and environments without `AsExpress()` are unaffected.
+
+What Express changes:
+
+- **Scale to zero.** Minimum replicas default to `0` when no replica count is specified. `WithReplicas(...)` and scale customizations still win, so apps must tolerate cold starts.
+- **Fewer implicit defaults.** Aspire omits the implicit Consumption workload profile, the managed Aspire dashboard, and automatic .NET data-protection configuration.
+- **Public references only.** Express apps have no private `.internal` hostname, so a referenced endpoint must be explicitly public. Referencing an internal endpoint fails with guidance rather than emitting an address that cannot resolve. `WithReference` never exposes a private endpoint and adds no authentication — enforce authorization in the app.
+- **HTTPS ingress is required.** Combining `AsExpress()` with `WithHttpsUpgrade(false)` is rejected while generating Bicep, in either call order.
+
+Explicit infrastructure customization is passed through for Azure to validate rather than checked against an Aspire-maintained feature matrix, so consult the [supported-features matrix](https://learn.microsoft.com/azure/container-apps/express-overview#supported-features) for current service limitations.
+
+`AsExpress()` can be combined with `AsExisting`/`PublishAsExisting` to declare that an existing environment is already Express. Aspire does not verify or convert its deployed mode.
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
 * https://aspire.dev/deployment/azure/container-apps/
 * https://aspire.dev/integrations/cloud/azure/configure-container-apps/
 * https://learn.microsoft.com/azure/container-apps/
+* https://learn.microsoft.com/azure/container-apps/express-overview
 
 ## Feedback & contributing
 

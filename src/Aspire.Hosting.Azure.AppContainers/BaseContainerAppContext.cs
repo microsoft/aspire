@@ -213,6 +213,19 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
         };
     }
 
+    private void ValidateExpressEndpointReference(EndpointReference endpoint)
+    {
+        var environment = _containerAppEnvironmentContext.Environment;
+        if (!environment.IsExpress)
+        {
+            return;
+        }
+
+        // Express constrains this app's own ingress, not the URLs it calls. A reference to an
+        // http:// producer is left alone; only an unreachable private hostname is rejected.
+        environment.ValidatePublicEndpointReference(endpoint);
+    }
+
     private (object, SecretType) ProcessValue(object value, SecretType secretType = SecretType.None, object? parent = null)
     {
         if (value is string s)
@@ -222,6 +235,8 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReference ep)
         {
+            ValidateExpressEndpointReference(ep);
+
             // The referenced endpoint may belong to a resource deployed to a different compute
             // environment (for example a Foundry hosted agent). In that case delegate to the owning
             // compute environment instead of looking it up in this environment's local endpoint map.
@@ -283,6 +298,13 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReferenceExpression epExpr)
         {
+            // Express cannot use a standard environment's private DNS either. Check visibility
+            // before delegating, while the original endpoint metadata is still available.
+            if (epExpr.Property is EndpointProperty.Url or EndpointProperty.Host or EndpointProperty.IPV4Host or EndpointProperty.HostAndPort)
+            {
+                ValidateExpressEndpointReference(epExpr.Endpoint);
+            }
+
             if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
                 epExpr, [_containerAppEnvironmentContext.Environment], out var crossExpr))
             {
