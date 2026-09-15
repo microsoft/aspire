@@ -196,6 +196,17 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Equal(hostInstallExitCode != 0 ? 0 : guestInstallExitCode != 0 ? 1 : 2, sessionCount);
         Assert.Equal(hostInstallExitCode == 0, hostRestoredBeforeBootstrap);
         Assert.Equal(installsSucceeded, bootstrapCompletedBeforeFinalServer);
+        var environments = sessionFactory.CreatedSessionEnvironments.ToArray();
+        Assert.Equal(sessionCount, environments.Length);
+        if (environments.Length > 0)
+        {
+            Assert.Equal("true", environments[0]![KnownConfigNames.IntegrationHostBootstrap]);
+        }
+        if (environments.Length > 1)
+        {
+            Assert.False(environments[1]?.ContainsKey(KnownConfigNames.IntegrationHostBootstrap) ?? false);
+        }
+
         if (operation == "restore" && installsSucceeded)
         {
             Assert.Equal(0, result);

@@ -23,7 +23,7 @@ namespace Aspire.Hosting.RemoteHost.Language;
 ///
 /// At <see cref="StartAsync"/> time the launcher reads the <c>IntegrationHosts</c> array
 /// from <see cref="IConfiguration"/> (populated by the CLI's csproj generation step),
-/// spawns the hosts, briefly waits for them to register, then drives the existing
+/// spawns the hosts, waits for them to register, then drives the existing
 /// <see cref="ExternalCapabilityRegistry.InitializeAllHostsAsync"/> phase so the
 /// projection context is populated before any guest connects.
 /// </summary>
@@ -35,6 +35,7 @@ internal sealed class IntegrationHostLauncher : IHostedService
     private readonly ILogger<IntegrationHostLauncher> _logger;
     private readonly ConcurrentBag<Process> _spawnedProcesses = new();
     private readonly TaskCompletionSource<bool> _readyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<Exception> _startupFailure = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public IntegrationHostLauncher(
         LanguageSupportResolver languageResolver,
@@ -65,63 +66,88 @@ internal sealed class IntegrationHostLauncher : IHostedService
     }
 
     /// <summary>
-    /// Per-host timeout for integration host registration. Bounds the worst case where a
-    /// spawned host fails to start or hangs before calling registerAsIntegrationHost — the
-    /// launcher logs a warning and proceeds with whatever did register, instead of blocking
-    /// server startup forever.
+    /// Allows cold language-runtime startup while bounding unresponsive integration hosts.
     /// </summary>
-    private static readonly TimeSpan s_perHostRegistrationTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan s_perHostDiscoveryTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan s_perHostRegistrationTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan s_perHostDiscoveryTimeout = TimeSpan.FromMinutes(2);
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
+            // The CLI first generates the managed SDK that integration hosts themselves import.
+            // Only that explicit bootstrap pass may omit configured integrations.
+            if (_configuration.GetValue<bool>(KnownConfigNames.IntegrationHostBootstrap))
+            {
+                _logger.LogDebug("Skipping integration hosts while bootstrapping the managed SDK.");
+                _readyTcs.TrySetResult(true);
+                return;
+            }
+
             var descriptors = ReadDescriptorsFromConfiguration();
             if (descriptors.Count == 0)
             {
+                _readyTcs.TrySetResult(true);
                 return;
             }
 
             _logger.LogInformation("Spawning {Count} integration host(s) from server config.", descriptors.Count);
             Launch(descriptors);
 
-            // Wait for each spawned host to call registerAsIntegrationHost. The signal is the
-            // ExternalCapabilityRegistry's per-registration semaphore release; we consume
-            // exactly `descriptors.Count` releases (the number of hosts we spawned), with a
-            // per-host timeout cap. Returns the moment the last expected host registers — no
-            // blind delay.
-            var registered = await _externalCapabilityRegistry
-                .WaitForHostsAsync(descriptors.Count, s_perHostRegistrationTimeout, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (registered < descriptors.Count)
+            using var initializationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            try
             {
-                _logger.LogError(
-                    "Only {Registered} of {Expected} integration host(s) registered within the per-host timeout " +
-                    "({TimeoutSeconds}s). Capabilities from the missing host(s) will be absent from the consumer's " +
-                    "generated SDK, which typically surfaces as 'builder.<method> is not a function' at runtime. " +
-                    "Look for `Spawning integration host` lines above to identify which hosts were launched, and " +
-                    "for `IntegrationHost[<name>]` lines for each host's own stdout/stderr — a host that crashes " +
-                    "during its own startup is the most common cause.",
-                    registered, descriptors.Count, s_perHostRegistrationTimeout.TotalSeconds);
+                var initialization = InitializeHostsAsync(
+                    descriptors.Count, s_perHostRegistrationTimeout, s_perHostDiscoveryTimeout, initializationCancellation.Token);
+                if (await Task.WhenAny(initialization, _startupFailure.Task).ConfigureAwait(false) == _startupFailure.Task)
+                {
+                    initializationCancellation.Cancel();
+                    // Observe the losing task; the child's startup failure is the error reported below.
+                    await initialization.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                    throw await _startupFailure.Task.ConfigureAwait(false);
+                }
+
+                await initialization.ConfigureAwait(false);
+                if (_startupFailure.Task.IsCompleted)
+                {
+                    throw await _startupFailure.Task.ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                // Cancel pending registration/discovery if a child exits before becoming ready.
+                initializationCancellation.Cancel();
             }
 
-            await _externalCapabilityRegistry.InitializeAllHostsAsync(s_perHostDiscoveryTimeout, cancellationToken).ConfigureAwait(false);
+            _readyTcs.TrySetResult(true);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Server shutting down before integration host metadata gather completed.
+            _readyTcs.TrySetCanceled(cancellationToken);
+            await StopAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to initialize integration hosts at server startup.");
+            _readyTcs.TrySetException(ex);
+            await StopAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
         }
-        finally
+    }
+
+    internal async Task InitializeHostsAsync(int expectedCount, TimeSpan registrationTimeout, TimeSpan discoveryTimeout, CancellationToken cancellationToken)
+    {
+        var registered = await _externalCapabilityRegistry
+            .WaitForHostsAsync(expectedCount, registrationTimeout, cancellationToken).ConfigureAwait(false);
+        if (registered != expectedCount)
         {
-            // Always release the readiness gate so downstream handlers do not deadlock.
-            _readyTcs.TrySetResult(true);
+            throw new TimeoutException(
+                $"Only {registered} of {expectedCount} integration hosts registered within the per-host timeout ({registrationTimeout}). " +
+                "SDK generation was stopped because required integrations are unavailable. Check the integration host startup logs.");
         }
+
+        await _externalCapabilityRegistry.InitializeAllHostsAsync(discoveryTimeout, cancellationToken).ConfigureAwait(false);
     }
 
     private List<IntegrationHostDescriptor> ReadDescriptorsFromConfiguration()
@@ -135,22 +161,15 @@ internal sealed class IntegrationHostLauncher : IHostedService
             var hostEntryPoint = entry["HostEntryPoint"];
             if (string.IsNullOrEmpty(language) || string.IsNullOrEmpty(packageName) || string.IsNullOrEmpty(hostEntryPoint))
             {
-                _logger.LogError(
-                    "Malformed IntegrationHosts entry in appsettings.json: Language='{Language}', " +
-                    "PackageName='{PackageName}', HostEntryPoint='{HostEntryPoint}'. Skipping. " +
-                    "All three fields are required. The CLI's csproj generation step writes this " +
-                    "section — if you see this, it is a bug in AppHostServerAppSettingsWriter.",
-                    language, packageName, hostEntryPoint);
-                continue;
+                throw new InvalidOperationException(
+                    $"Malformed IntegrationHosts entry: Language='{language}', PackageName='{packageName}', HostEntryPoint='{hostEntryPoint}'. " +
+                    "All three fields are required.");
             }
             if (!File.Exists(hostEntryPoint))
             {
-                _logger.LogError(
-                    "Integration host entry point '{HostEntryPoint}' for package '{PackageName}' [{Language}] " +
-                    "does not exist on disk. The host process cannot be spawned. " +
-                    "Verify the path in appsettings.json (under IntegrationHosts) is correct.",
-                    hostEntryPoint, packageName, language);
-                continue;
+                throw new FileNotFoundException(
+                    $"Integration host entry point for package '{packageName}' [{language}] does not exist. Verify the integration path.",
+                    hostEntryPoint);
             }
             result.Add(new IntegrationHostDescriptor
             {
@@ -190,11 +209,8 @@ internal sealed class IntegrationHostLauncher : IHostedService
             var hostSpec = languageSupport is null ? null : LanguageService.GetIntegrationHostSpec(languageSupport);
             if (hostSpec is null)
             {
-                _logger.LogWarning(
-                    "Language '{Language}' does not provide an integration host (integration '{Name}'). " +
-                    "The language support is either missing or returns null from GetIntegrationHostSpec. Skipping.",
-                    descriptor.Language, descriptor.PackageName);
-                continue;
+                throw new InvalidOperationException(
+                    $"Language '{descriptor.Language}' does not provide an integration host for '{descriptor.PackageName}'.");
             }
 
             // Note: dependency restore for the integration host (e.g. `npm install` for TS)
@@ -242,18 +258,13 @@ internal sealed class IntegrationHostLauncher : IHostedService
                     "and that '{HostEntryPoint}' exists. " +
                     "Did you run `aspire restore` after installing the integration?",
                     descriptor.PackageName, descriptor.Language, resolvedCommand, args, hostDir, descriptor.HostEntryPoint);
-                continue;
+                throw;
             }
 
             if (hostProcess is null)
             {
-                _logger.LogError(
-                    "Process.Start returned null for integration host '{Name}' [{Language}] " +
-                    "(command: '{Command}' args: '{Args}' cwd: '{HostDir}'). " +
-                    "This usually means the OS rejected the launch — check that the executable " +
-                    "is on PATH and the working directory exists.",
-                    descriptor.PackageName, descriptor.Language, resolvedCommand, args, hostDir);
-                continue;
+                throw new InvalidOperationException(
+                    $"Could not start integration host '{descriptor.PackageName}' [{descriptor.Language}] using '{resolvedCommand}'.");
             }
 
             _spawnedProcesses.Add(hostProcess);
@@ -263,8 +274,8 @@ internal sealed class IntegrationHostLauncher : IHostedService
 
             // Watch for unexpected early exit so users get an actionable diagnostic instead of
             // a silent missing-capability later. If the host exits during the registration
-            // window with a non-zero code, log it loud — that almost always means the host's
-            // own startup threw and the registerAsIntegrationHost call never happened, which
+            // window (even with exit code zero), fail startup — the host's
+            // registerAsIntegrationHost call may never have happened, which
             // would otherwise just look like a slow timeout from WaitForHostsAsync.
             var processId = hostProcess.Id;
             hostProcess.Exited += (_, _) => LogProcessExit(hostProcess, processId, descriptor.PackageName, descriptor.HostEntryPoint);
@@ -312,6 +323,13 @@ internal sealed class IntegrationHostLauncher : IHostedService
         try
         {
             var exitCode = process.ExitCode;
+            if (!_readyTcs.Task.IsCompleted)
+            {
+                _startupFailure.TrySetResult(new InvalidOperationException(
+                    $"Integration host '{packageName}' (PID {processId}, entry '{entryPoint}') exited with code {exitCode} during startup. " +
+                    "Check its stdout/stderr for the startup failure."));
+            }
+
             if (exitCode != 0)
             {
                 _logger.LogError(
@@ -359,7 +377,7 @@ internal sealed class IntegrationHostLauncher : IHostedService
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        foreach (var process in _spawnedProcesses)
+        while (_spawnedProcesses.TryTake(out var process))
         {
             try
             {

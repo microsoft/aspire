@@ -426,7 +426,9 @@ async function configureGeneratedDockerfile(
         .copy('.', '.', { chown: 'deno:deno' });
 
     if (state.cache) {
-        await build.run(shellJoin(['deno', 'cache', ...state.permissions, state.scriptPath]));
+        // Runtime permissions apply to `deno run`, not module caching.
+        // https://docs.deno.com/runtime/reference/cli/cache/
+        await build.run(shellJoin(['deno', 'cache', state.scriptPath]));
     }
 
     if (state.buildTask) {

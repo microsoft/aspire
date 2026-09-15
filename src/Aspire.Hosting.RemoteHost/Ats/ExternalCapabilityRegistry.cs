@@ -57,8 +57,8 @@ internal sealed class ExternalCapabilityRegistry
     /// <summary>
     /// Waits for the next <paramref name="expectedCount"/> integration host registrations
     /// (each via <see cref="AddIntegrationHost"/>), with a per-host timeout. Returns the
-    /// number of registrations actually consumed before the timeout fired or
-    /// <paramref name="cancellationToken"/> was triggered.
+    /// number of registrations actually consumed before the timeout fired.
+    /// Cancellation propagates to the caller.
     ///
     /// The signal is a counting semaphore released once per registration, so registrations
     /// that happened *before* this call are still consumable — the caller does not have to
@@ -78,15 +78,7 @@ internal sealed class ExternalCapabilityRegistry
         var registered = 0;
         while (registered < expectedCount)
         {
-            bool got;
-            try
-            {
-                got = await _hostRegisteredSignal.WaitAsync(timeoutPerHost, cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
+            var got = await _hostRegisteredSignal.WaitAsync(timeoutPerHost, cancellationToken).ConfigureAwait(false);
 
             if (!got)
             {
@@ -139,16 +131,18 @@ internal sealed class ExternalCapabilityRegistry
             {
                 // Bound the local wait even if the integration host ignores RPC cancellation.
                 discoveryCancellation.Cancel();
-                _logger.LogError(ex,
-                    "Timed out getting capabilities from integration host {RpcHash} after {Timeout}. " +
-                    "Capabilities from this host will be unavailable.",
-                    host.GetHashCode(), timeoutPerHost);
-                continue;
+                _initializationException = new InvalidOperationException(
+                    $"Timed out getting capabilities from integration host {host.GetHashCode()} after {timeoutPerHost}. " +
+                    "SDK generation cannot continue without all configured integrations.", ex);
+                _logger.LogError(_initializationException, "Integration host capability discovery failed.");
+                throw _initializationException;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to get capabilities from integration host {RpcHash}", host.GetHashCode());
-                continue;
+                _initializationException = new InvalidOperationException(
+                    $"Failed to get capabilities from integration host {host.GetHashCode()}.", ex);
+                _logger.LogError(_initializationException, "Integration host capability discovery failed.");
+                throw _initializationException;
             }
 
             foreach (var registration in registrations)
@@ -180,8 +174,7 @@ internal sealed class ExternalCapabilityRegistry
 
     public AtsContext AugmentContext(AtsContext context)
     {
-        // Startup logs initialization failures and releases its readiness gate. Keep
-        // collisions visible to codegen instead of returning a success-shaped partial SDK.
+        // Preserve discovery failures for every caller instead of returning a partial SDK.
         if (_initializationException is not null)
         {
             throw new InvalidOperationException("Integration host capability discovery failed.", _initializationException);

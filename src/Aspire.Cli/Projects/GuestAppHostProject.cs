@@ -398,11 +398,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         bool treatMissingJavaScriptToolAsWarning,
         CancellationToken cancellationToken)
     {
-        // Integration hosts may import the generated SDK and its dependencies from the AppHost.
-        // Dispose this bootstrap server before starting the server that loads their capabilities.
+        // Integration hosts import the SDK being generated here. Skip them explicitly in this
+        // core-only pass instead of treating failed host startup as successful discovery.
+        // Keep the caller's environment unchanged for the final server.
+        var bootstrapEnvironment = serverEnvironmentVariables;
+        if (integrations.Any(integration => integration.Source == IntegrationSource.Npm))
+        {
+            bootstrapEnvironment = serverEnvironmentVariables is null ? [] : new(serverEnvironmentVariables);
+            bootstrapEnvironment[KnownConfigNames.IntegrationHostBootstrap] = "true";
+        }
+
         await using var serverSession = _serverSessionFactory.Create(
             appHostServerProject,
-            serverEnvironmentVariables,
+            bootstrapEnvironment,
             debug: false,
             gracefulShutdownSignaler: null,
             shutdownService: null,

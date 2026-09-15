@@ -133,17 +133,39 @@ public class ExternalCapabilityRegistryTests
         {
             // An already-expired timeout makes this deterministic without a clock or
             // sleeps. The RPC response cannot win the race because its task stays pending.
-            await registry.InitializeAllHostsAsync(TimeSpan.Zero, TestContext.Current.CancellationToken)
-                .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                registry.InitializeAllHostsAsync(TimeSpan.Zero, TestContext.Current.CancellationToken)
+                    .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
 
+            Assert.IsType<TimeoutException>(exception.InnerException);
             Assert.False(registry.IsRegistered("test.external/pending"));
-            var context = CreateContext();
-            Assert.Same(context, registry.AugmentContext(context));
+            var augmentationException = Assert.Throws<InvalidOperationException>(() => registry.AugmentContext(CreateContext()));
+            Assert.Same(exception, augmentationException.InnerException);
         }
         finally
         {
             response.TrySetResult(CreateCapabilities("test.external/pending"));
         }
+    }
+
+    [Fact]
+    public async Task InitializeAllHostsAsync_FailedDiscoveryDoesNotExposePartialContext()
+    {
+        using var connection = new IntegrationHostTestConnection(_ =>
+            Task.FromException<JsonElement>(new InvalidOperationException("Host discovery failed.")));
+        using var successfulConnection = new IntegrationHostTestConnection(
+            JsonSerializer.SerializeToElement(new[] { new { id = "test.external/partial" } }));
+        var registry = new ExternalCapabilityRegistry(NullLogger<ExternalCapabilityRegistry>.Instance);
+        registry.AddIntegrationHost(connection.ServerRpc);
+        registry.AddIntegrationHost(successfulConnection.ServerRpc);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            registry.InitializeAllHostsAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+
+        Assert.IsType<RemoteInvocationException>(exception.InnerException);
+        Assert.False(registry.IsRegistered("test.external/partial"));
+        var augmentationException = Assert.Throws<InvalidOperationException>(() => registry.AugmentContext(CreateContext()));
+        Assert.Same(exception, augmentationException.InnerException);
     }
 
     [Theory]

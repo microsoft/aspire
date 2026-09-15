@@ -531,6 +531,10 @@ public sealed class TestTriggerMapTests
             ["test:Aspire.Playground.Tests", "job:extension-e2e"]
         },
         {
+            "playground/TsIntegrationSpike/deno-api/deno.json",
+            ["test:Aspire.Playground.Tests", "job:typescript-sdk"]
+        },
+        {
             "playground/TsIntegrationSpike/deno-integration/integration.ts",
             ["test:Aspire.Playground.Tests", "job:typescript-sdk"]
         },

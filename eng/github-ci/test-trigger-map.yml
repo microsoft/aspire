@@ -190,6 +190,7 @@ path_rules:
     reason: Blazor gateway runtime assets must work from both MSBuild output and package-loaded polyglot AppHosts
   - paths:
       - tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**
+      - playground/TsIntegrationSpike/deno-api/**
       - playground/TsIntegrationSpike/deno-integration/**
       - playground/TsIntegrationSpike/kafka-integration/**
       - src/Aspire.Cli/Templating/Templates/ts-starter/**

@@ -487,7 +487,9 @@ a stock CLI does not understand npm integration-host declarations.
 The CLI restores integration-host npm dependencies before starting an AppHost server.
 For npm integrations, `aspire restore`, `aspire run`, and `aspire publish` use
 two separately disposed `IAppHostServerSession` instances:
-the first generates the core SDK and installs the AppHost's dependencies. This
+the first explicitly disables integration-host startup using the internal
+`ASPIRE_INTEGRATION_HOST_BOOTSTRAP` environment flag, generates the core SDK, and
+installs the AppHost's dependencies. This
 must happen before the second session: the generated transport imports packages
 such as `vscode-jsonrpc` from the AppHost's `node_modules`, not the integration
 host's dependencies. The second session starts those hosts and generates the
@@ -507,10 +509,10 @@ integrations are restored from local projects or npm hosts.
 2. CLI writes the AppHost server's `appsettings.json` with two sections: `AtsAssemblies` (for CLR reflection) and `IntegrationHosts` (one entry per non-.NET integration, carrying `Language`, `PackageName`, `HostEntryPoint`).
 3. CLI starts the AppHost server process. The server reads `appsettings.json` and runs its integration-listing phase:
    - CLR assembly scanning populates `.NET` integrations into an in-process `AssemblyLoadContext`.
-   - For each `IntegrationHosts` entry, the server looks up the language via `LanguageSupportResolver.GetLanguageSupport(language)` and reflectively probes its optional JSON `GetIntegrationHostSpec()` hook for the `execute` command template. A provider without the hook, or returning JSON null, can't host integrations, and the entry is skipped with a clear diagnostic.
+   - For each `IntegrationHosts` entry, the server looks up the language via `LanguageSupportResolver.GetLanguageSupport(language)` and reflectively probes its optional JSON `GetIntegrationHostSpec()` hook for the `execute` command template. A provider without the hook, or returning JSON null, can't host integrations, and startup fails with a clear diagnostic.
 4. The server spawns each integration host process directly, substituting `{entryPoint}` into the command args, passing `REMOTE_APP_HOST_SOCKET_PATH` and the auth token via env vars. It captures stdout/stderr into its own logs and holds the `Process` handles in its internal registry — the same way it holds references to .NET integration load contexts.
-5. Each spawned host connects back over the socket, authenticates, and calls `registerAsIntegrationHost`. The server waits on a counting-semaphore signal released once per registration, with a per-host timeout.
-6. Phase 1 gather: the server calls `getCapabilities` on every registered host (and on the in-process .NET "host" directly) and merges the results into `AtsContext`.
+5. Each spawned host connects back over the socket, authenticates, and calls `registerAsIntegrationHost`. The server waits on a counting-semaphore signal released once per registration, allowing up to two minutes per host for cold runtime startup. A timeout or early process exit fails startup instead of freezing an incomplete SDK.
+6. Phase 1 gather: the server calls `getCapabilities` on every registered host (and on the in-process .NET "host" directly) and merges the results into `AtsContext`. Discovery has a two-minute per-host timeout; failed discovery also fails startup and blocks code generation.
 7. Phase 2 codegen runs over the merged context and produces the guest-language SDK (`.aspire/modules/`). The readiness gate ensures codegen never runs before every expected host has registered.
 8. The server signals ready. The CLI invokes the guest AppHost.
 9. Guest AppHost executes against the generated SDK. Every `builder.addX(...)` call becomes an `invokeCapability` RPC to the server.
@@ -591,6 +593,8 @@ A C# integration could write the same `spike.deno/state` annotation with `WithAn
 This flow is validated end-to-end by `aspire run`: the Deno resource launches with run args computed from annotation state read back at run time. The deferred Dockerfile/publish callbacks read annotation state through the same primitive and are covered by the same resource-target handle requirement, but warrant dedicated lower-level regression coverage.
 
 The Deno integration validates conflicts between an existing Dockerfile and Deno-specific publish settings only inside the publish callback. Those settings do not prevent local run mode from starting the executable.
+
+Generated Dockerfiles cache the script's module graph with `deno cache <scriptPath>` by default, then run the configured build task. Runtime permissions configured with `withDenoPermissions` apply to direct `deno run` execution, not to `deno cache`; task-based execution uses the permissions declared in that task. Set `cache: false` to omit only the cache layer without changing the build task or runtime entrypoint.
 
 ---
 

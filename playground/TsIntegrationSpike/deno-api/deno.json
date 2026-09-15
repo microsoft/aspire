@@ -2,6 +2,6 @@
     "tasks": {
         "serve": "deno run --allow-net --allow-env main.ts",
         "check": "deno check main.ts",
-        "cache": "deno cache --allow-net --allow-env main.ts"
+        "cache": "deno cache main.ts"
     }
 }
