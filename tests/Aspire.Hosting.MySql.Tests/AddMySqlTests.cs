@@ -223,10 +223,26 @@ public class AddMySqlTests(ITestOutputHelper outputHelper)
     public void WithMySqlTwiceEndsUpWithOneAdminContainer()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
-        builder.AddMySql("mySql").WithPhpMyAdmin();
-        builder.AddMySql("mySql2").WithPhpMyAdmin();
+        var mySql1 = builder.AddMySql("mySql").WithPhpMyAdmin();
+        var mySql2 = builder.AddMySql("mySql2").WithPhpMyAdmin();
 
-        Assert.Single(builder.Resources.OfType<ContainerResource>(), resource => resource.Name == "phpmyadmin");
+        var phpMyAdmin = Assert.Single(builder.Resources.OfType<ContainerResource>(), resource => resource.Name == "phpmyadmin");
+
+        // Both MySql servers called WithPhpMyAdmin() - mySql created the shared container, mySql2 reused it via the
+        // early-return path - so both should show as related to it, not just the one that created it.
+        Assert.Single(phpMyAdmin.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == mySql1.Resource);
+        Assert.Single(phpMyAdmin.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == mySql2.Resource);
+    }
+
+    [Fact]
+    public void WithPhpMyAdminHidesThePhpMyAdminResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.AddMySql("mysql").WithPhpMyAdmin();
+
+        var phpMyAdmin = Assert.Single(builder.Resources.OfType<PhpMyAdminContainerResource>());
+        var hidden = Assert.Single(phpMyAdmin.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
     }
 
     [Fact]

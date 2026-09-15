@@ -312,7 +312,6 @@
     <Compile Include="$(SharedDir)ConsoleLogs\LogPauseViewModel.cs" Link="Utils\ConsoleLogs\LogPauseViewModel.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="Utils\ConsoleLogs\TimestampParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="Utils\ConsoleLogs\UrlParser.cs" />
-    <Compile Include="$(SharedDir)KnownUrls.cs" Link="Utils\KnownUrls.cs" />
     <Compile Include="$(SharedDir)InteractionHelpers.cs" Link="Utils\InteractionHelpers.cs" />
     <Compile Include="$(SharedDir)Model\Serialization\ResourceJson.cs" Link="Model\Serialization\ResourceJson.cs" />
     <Compile Include="$(SharedDir)DashboardUrls.cs" Link="Utils\DashboardUrls.cs" />

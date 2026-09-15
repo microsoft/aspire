@@ -97,7 +97,9 @@ public static class QdrantBuilderExtensions
                 c.DisplayLocation = UrlDisplayLocation.DetailsOnly;
             })
             .WithUrlForEndpoint(QdrantServerResource.HttpEndpointName, c => c.DisplayText = "Qdrant (HTTP)")
-            .WithUrlForEndpoint(QdrantServerResource.HttpEndpointName, e => new ResourceUrlAnnotation() { Url = "/dashboard", DisplayText = "Qdrant Dashboard" });
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+            .WithUrlForEndpoint(QdrantServerResource.HttpEndpointName, e => new ResourceUrlAnnotation() { Url = "/dashboard", DisplayText = "Manage", DisplayOrder = 1 });
+#pragma warning restore CS0618
     }
 
     /// <summary>
