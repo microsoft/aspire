@@ -135,15 +135,20 @@ const POSIX_SHELL_INERT_PATH_PATTERN = /^[A-Za-z0-9._/+,=:@%-]+$/;
 // and space, `,`, `;` and `=`, every one of which terminates the command token.
 const WINDOWS_COMMAND_INERT_PATH_PATTERN = /^[A-Za-z0-9._\\/:+@~-]+$/;
 const isWindows = process.platform === 'win32';
+const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
+const enableWinUiE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';
+const enableBrowserDebuggerE2E = shardName === 'browser-debugger';
+const browserDebuggerTargetFramework = 'net11.0';
+const enableDebuggerExtensions = enableAzureFunctionsE2E || enableBrowserDebuggerE2E || enableWinUiE2E;
+const e2eBrowser = process.platform === 'win32' ? 'msedge' : 'chrome';
 const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTERN : POSIX_SHELL_INERT_PATH_PATTERN;
 const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
 const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
-const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
+const primaryAppHostProjectName = enableBrowserDebuggerE2E ? 'AspireE2E.Blazor.AppHost' : 'AspireE2E.AppHost';
+const primaryAppHostProject = path.join(workspaceRoot, primaryAppHostProjectName, `${primaryAppHostProjectName}.csproj`);
 const winUiReadyMarkerPath = path.join(workspaceRoot, 'winui-e2e-ready.txt');
 const runRootNuGetConfigPath = path.join(shortRunRoot, 'NuGet.config');
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
-const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
-const enableWinUiE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';
 const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';
 let cliPathForCleanup;
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
@@ -164,6 +169,11 @@ function prepareRunDirectories() {
   removePath(recordingsDir, { recursive: true, force: true });
   for (const directory of [artifactsDir, resultsDir, diagnosticsStorageRoot, isolatedAspireHome, storageDir, extensionsDir]) {
     fs.mkdirSync(directory, { recursive: true });
+  }
+  // A repository-local E2E temp root must behave like an external consumer, not
+  // inherit Arcade targets or central package versions from the Aspire checkout.
+  for (const fileName of ['Directory.Build.props', 'Directory.Build.targets', 'Directory.Packages.props']) {
+    fs.writeFileSync(path.join(shortRunRoot, fileName), '<Project />\n');
   }
 }
 
@@ -337,6 +347,7 @@ function logE2eConfiguration() {
   console.log(`  download cache: ${downloadCacheRoot}`);
   console.log(`  current CLI regressions: ${process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'skipped' : 'included'}`);
   console.log(`  Azure Functions: ${enableAzureFunctionsE2E ? 'enabled' : 'disabled'}`);
+  console.log(`  browser debugger: ${enableBrowserDebuggerE2E ? `enabled (${e2eBrowser})` : 'disabled'}`);
   console.log(`  Java: ${enableJavaE2E ? 'enabled' : 'disabled'}`);
   console.log(`  WinUI: ${enableWinUiE2E ? 'enabled' : 'disabled'}`);
   console.log(`  results: ${path.relative(extensionRoot, resultsDir)}`);
@@ -675,6 +686,7 @@ async function main() {
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
       ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
+      ...(enableBrowserDebuggerE2E ? { ASPIRE_EXTENSION_E2E_BROWSER: e2eBrowser } : {}),
       ASPIRE_EXTENSION_E2E_ENABLE_WINUI: enableWinUiE2E ? 'true' : 'false',
       VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
       LANG: 'C.UTF-8',
@@ -871,7 +883,7 @@ function validateCliPath(resolvedCliPath) {
 }
 
 function resolveDebuggerVsixPaths() {
-  if (!enableAzureFunctionsE2E && !enableWinUiE2E) {
+  if (!enableDebuggerExtensions) {
     return [];
   }
 
@@ -1401,17 +1413,23 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   fs.rmSync(workspaceRoot, { recursive: true, force: true });
   fs.mkdirSync(workspaceRoot, { recursive: true });
   fs.writeFileSync(workspaceMarkerFile, `${runId}\n`);
-  writeWorkerProject('AspireE2E.Worker');
-  if (enableAzureFunctionsE2E) {
-    writeAzureFunctionsProject('AspireE2E.Functions');
+  if (enableBrowserDebuggerE2E) {
+    generateBrowserDebuggerProjects();
+    writeBrowserDebuggerAppHostProject('AspireE2E.Blazor.AppHost', resolvedAppHostSdkVersion);
   }
-  if (enableWinUiE2E) {
-    if (!isWindows) {
-      throw new Error('The WinUI extension E2E fixture can only run on Windows.');
+  else {
+    writeWorkerProject('AspireE2E.Worker');
+    if (enableAzureFunctionsE2E) {
+      writeAzureFunctionsProject('AspireE2E.Functions');
     }
-    writeWinUiProject('AspireE2E.WinUI');
+    if (enableWinUiE2E) {
+      if (!isWindows) {
+        throw new Error('The WinUI extension E2E fixture can only run on Windows.');
+      }
+      writeWinUiProject('AspireE2E.WinUI');
+    }
+    writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableWinUiE2E);
   }
-  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableWinUiE2E);
   writeNuGetConfigIfLocalPackageSourcesExist();
 
   const vscodeDirectory = path.join(workspaceRoot, '.vscode');
@@ -1427,13 +1445,15 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
 
   fs.writeFileSync(path.join(workspaceRoot, 'aspire.config.json'), JSON.stringify({
     appHost: {
-      path: path.join('AspireE2E.AppHost', 'AspireE2E.AppHost.csproj'),
+      path: path.relative(workspaceRoot, primaryAppHostProject),
     },
   }, undefined, 2));
 }
 
 function restoreWorkspaceFixture() {
-  if (process.env.ASPIRE_EXTENSION_E2E_SKIP_RESTORE_PREWARM === 'true') {
+  // Browser templates are generated with --no-restore, so their AppHost graph must always be
+  // restored here even when another shard opts out of prewarming.
+  if (process.env.ASPIRE_EXTENSION_E2E_SKIP_RESTORE_PREWARM === 'true' && !enableBrowserDebuggerE2E) {
     return;
   }
 
@@ -1442,12 +1462,16 @@ function restoreWorkspaceFixture() {
     return;
   }
 
-  if (!fs.existsSync(workspaceNuGetConfigPath)) {
+  if (!fs.existsSync(workspaceNuGetConfigPath) && !enableBrowserDebuggerE2E) {
     console.warn('Skipping Aspire E2E fixture restore prewarm because no local NuGet package source was found.');
     return;
   }
 
-  const result = spawnSync('dotnet', ['restore', primaryAppHostProject, '--configfile', workspaceNuGetConfigPath], {
+  const restoreArgs = ['restore', primaryAppHostProject];
+  if (fs.existsSync(workspaceNuGetConfigPath)) {
+    restoreArgs.push('--configfile', workspaceNuGetConfigPath);
+  }
+  const result = spawnSync('dotnet', restoreArgs, {
     cwd: workspaceRoot,
     env: getAspireCliEnvironment(),
     shell: false,
@@ -1462,6 +1486,174 @@ function restoreWorkspaceFixture() {
   if (result.status !== 0) {
     throw new Error(`Restoring the Aspire E2E fixture failed with code ${result.status ?? `signal ${result.signal ?? 'unknown'}`}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   }
+
+  if (enableBrowserDebuggerE2E) {
+    // Build before opening VS Code: otherwise C#'s initial design-time build races
+    // the AppHost build writing AssemblyInfo.cs on Windows. A failed project load
+    // leaves that client's output out of the managed debugger's assetsPath.
+    runDotnetForFixture(['build', primaryAppHostProject, '--no-restore', '--disable-build-servers']);
+  }
+}
+
+function generateBrowserDebuggerProjects() {
+  const standaloneDirectory = path.join(workspaceRoot, 'StandaloneClient');
+  const hostedGlobalDirectory = path.join(workspaceRoot, 'HostedGlobal');
+  const hostedPerPageDirectory = path.join(workspaceRoot, 'HostedPerPage');
+
+  // Pin the TFM so a future SDK update fails the source-level regression test instead of
+  // silently changing the fixture generated by these commands.
+  runDotnetForFixture(['new', 'blazorwasm', '--name', 'StandaloneClient', '--output', standaloneDirectory, '--framework', browserDebuggerTargetFramework, '--no-https', '--no-restore']);
+  runDotnetForFixture(['new', 'blazor', '--name', 'HostedGlobal', '--output', hostedGlobalDirectory, '--framework', browserDebuggerTargetFramework, '--interactivity', 'WebAssembly', '--all-interactive', '--no-https', '--no-restore']);
+  runDotnetForFixture(['new', 'blazor', '--name', 'HostedPerPage', '--output', hostedPerPageDirectory, '--framework', browserDebuggerTargetFramework, '--interactivity', 'WebAssembly', '--no-https', '--no-restore']);
+  configureStandaloneBasePath(standaloneDirectory);
+
+  const generatedProjects = [
+    path.join(standaloneDirectory, 'StandaloneClient.csproj'),
+    path.join(hostedGlobalDirectory, 'HostedGlobal', 'HostedGlobal.csproj'),
+    path.join(hostedGlobalDirectory, 'HostedGlobal.Client', 'HostedGlobal.Client.csproj'),
+    path.join(hostedPerPageDirectory, 'HostedPerPage', 'HostedPerPage.csproj'),
+    path.join(hostedPerPageDirectory, 'HostedPerPage.Client', 'HostedPerPage.Client.csproj'),
+  ];
+  for (const projectPath of generatedProjects) {
+    assertGeneratedProjectTargetsFramework(projectPath);
+  }
+
+  const standaloneCounterPath = path.join(standaloneDirectory, 'Pages', 'Counter.razor');
+  const hostedGlobalCounterPath = path.join(hostedGlobalDirectory, 'HostedGlobal.Client', 'Pages', 'Counter.razor');
+  const hostedPerPageCounterPath = path.join(hostedPerPageDirectory, 'HostedPerPage.Client', 'Pages', 'Counter.razor');
+  replaceCounterHandler(standaloneCounterPath);
+  replaceCounterHandler(hostedGlobalCounterPath);
+  replaceCounterHandler(hostedPerPageCounterPath);
+
+  const hostedGlobalAppPath = path.join(hostedGlobalDirectory, 'HostedGlobal', 'Components', 'App.razor');
+  const hostedGlobalApp = fs.readFileSync(hostedGlobalAppPath, 'utf8');
+  if (!/<Routes\s+@rendermode\s*=\s*["']InteractiveWebAssembly["']\s*\/>/.test(hostedGlobalApp)) {
+    throw new Error(`The HostedGlobal template did not configure global InteractiveWebAssembly in ${hostedGlobalAppPath}.`);
+  }
+
+  const hostedPerPageCounter = fs.readFileSync(hostedPerPageCounterPath, 'utf8');
+  if (!/^\s*@rendermode\s+InteractiveWebAssembly\s*$/m.test(hostedPerPageCounter)) {
+    throw new Error(`The HostedPerPage template did not preserve @rendermode InteractiveWebAssembly in ${hostedPerPageCounterPath}.`);
+  }
+}
+
+function runDotnetForFixture(args) {
+  const result = spawnSync('dotnet', args, {
+    cwd: workspaceRoot,
+    env: getAspireCliEnvironment(),
+    shell: false,
+    encoding: 'utf8',
+    timeout: 300000,
+  });
+
+  if (result.error) {
+    throw new Error(`Unable to run 'dotnet ${args.join(' ')}': ${result.error.message}\nstdout:\n${result.stdout ?? ''}\nstderr:\n${result.stderr ?? ''}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`'dotnet ${args.join(' ')}' failed with code ${result.status ?? `signal ${result.signal ?? 'unknown'}`}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+}
+
+function assertGeneratedProjectTargetsFramework(projectPath) {
+  const project = fs.readFileSync(projectPath, 'utf8');
+  const targetFramework = project.match(/<TargetFramework>([^<]+)<\/TargetFramework>/)?.[1];
+  if (targetFramework !== browserDebuggerTargetFramework) {
+    throw new Error(`The installed .NET template generated ${projectPath} with target framework '${targetFramework ?? '<missing>'}', but the browser debugger E2E fixture requires ${browserDebuggerTargetFramework}.`);
+  }
+}
+
+function configureStandaloneBasePath(standaloneDirectory) {
+  const indexPath = path.join(standaloneDirectory, 'wwwroot', 'index.html');
+  const index = fs.readFileSync(indexPath, 'utf8');
+  // The template has <base href="/" />, but WithBlazorClientApp mounts this
+  // resource at /standalone/. Both framework assets and client routes need that base.
+  const basePattern = /<base\s+href=["']\/["']\s*\/?>/;
+  if (!basePattern.test(index)) {
+    throw new Error(`The installed .NET template generated an unsupported base href in ${indexPath}.`);
+  }
+  fs.writeFileSync(indexPath, index.replace(basePattern, '<base href="/standalone/" />'));
+}
+
+function replaceCounterHandler(counterPath) {
+  const source = fs.readFileSync(counterPath, 'utf8');
+  const handlerPattern = /private\s+void\s+IncrementCount\(\)\s*\{\s*currentCount\+\+;\s*\}/;
+  const buttonPattern = /<button\b([^>]*@onclick="IncrementCount"[^>]*)>/;
+  if (!handlerPattern.test(source) || !buttonPattern.test(source)) {
+    throw new Error(`The installed .NET template generated an unsupported Counter handler in ${counterPath}.`);
+  }
+
+  // Static SSR already renders the Counter button before WASM is interactive.
+  // OnAfterRender is not called during prerendering, so this marker proves the
+  // client has taken over before the test clicks, rather than accepting a no-op.
+  // https://learn.microsoft.com/aspnet/core/blazor/components/lifecycle#after-component-render-onafterrenderasync
+  const replacement = `private bool isInteractive;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            isInteractive = true;
+            StateHasChanged();
+        }
+    }
+
+    private void IncrementCount()
+    {
+        currentCount = 42; // ASPIRE_E2E_MANAGED_BREAKPOINT
+    }`;
+  fs.writeFileSync(counterPath, source
+    .replace(handlerPattern, replacement)
+    .replace(buttonPattern, '<button$1 data-aspire-e2e-interactive="@(isInteractive ? "true" : "false")">'));
+}
+
+function writeBrowserDebuggerAppHostProject(projectName, resolvedAppHostSdkVersion) {
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  fs.mkdirSync(projectDirectory, { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../StandaloneClient/StandaloneClient.csproj" />
+    <ProjectReference Include="../HostedGlobal/HostedGlobal/HostedGlobal.csproj" />
+    <ProjectReference Include="../HostedGlobal/HostedGlobal.Client/HostedGlobal.Client.csproj" />
+    <ProjectReference Include="../HostedPerPage/HostedPerPage/HostedPerPage.csproj" />
+    <ProjectReference Include="../HostedPerPage/HostedPerPage.Client/HostedPerPage.Client.csproj" />
+    <PackageReference Include="Aspire.Hosting.Blazor" Version="${resolvedAppHostSdkVersion}" />
+  </ItemGroup>
+
+</Project>
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREBLAZOR001
+using Aspire.Hosting.ApplicationModel;
+
+var builder = DistributedApplication.CreateBuilder(args);
+var browser = Environment.GetEnvironmentVariable("ASPIRE_EXTENSION_E2E_BROWSER") ?? "chrome";
+var standalone = builder.AddBlazorWasmProject<Projects.StandaloneClient>("standalone")
+    .WithBlazorDebuggerBrowser(browser);
+var gateway = builder.AddBlazorGateway("standalone-gateway");
+// Match the HTTP-only client fixtures without depending on machine-wide browser certificate trust.
+gateway.Resource.Annotations.Remove(gateway.Resource.Annotations.OfType<EndpointAnnotation>().Single(endpoint => endpoint.UriScheme == "https"));
+gateway.WithExternalHttpEndpoints()
+    .WithBlazorClientApp(standalone);
+// Launch one server per scenario rather than competing for C# run-api startup timeouts.
+builder.AddProject<Projects.HostedGlobal>("hosted-global")
+    .WithExplicitStart()
+    .WithBlazorDebuggerBrowser(browser)
+    .ProxyBlazorTelemetry();
+builder.AddProject<Projects.HostedPerPage>("hosted-per-page")
+    .WithExplicitStart()
+    .WithBlazorDebuggerBrowser(browser)
+    .ProxyBlazorTelemetry();
+builder.Build().Run();
+`);
 }
 
 function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeWinUi) {
@@ -1947,6 +2139,9 @@ function writeNuGetConfigIfLocalPackageSourcesExist() {
 ${sourceEntries}
 ${fallbackSourceEntries}
   </packageSources>
+  <packageSourceMapping>
+    <clear />
+  </packageSourceMapping>
 </configuration>
 `;
   // External AppHost fixtures are siblings of the workspace, while an explicitly supplied

@@ -8,10 +8,10 @@ resource myenv 'Applications.Core/environments@2023-10-01-preview' = {
       namespace: 'default'
     }
     recipes: {
-      'Applications.Datastores/redisCaches': {
+      'Applications.Datastores/mongoDatabases': {
         default: {
           templateKind: 'bicep'
-          templatePath: 'ghcr.io/radius-project/recipes/local-dev/rediscaches:latest'
+          templatePath: 'ghcr.io/radius-project/recipes/local-dev/mongodatabases:latest'
         }
       }
     }
@@ -25,8 +25,8 @@ resource app 'Applications.Core/applications@2023-10-01-preview' = {
   }
 }
 
-resource cache 'Applications.Datastores/redisCaches@2023-10-01-preview' = {
-  name: 'cache'
+resource mongo 'Applications.Datastores/mongoDatabases@2023-10-01-preview' = {
+  name: 'mongo'
   properties: {
     application: app.id
     environment: myenv.id

@@ -52,21 +52,20 @@ public static class KafkaBuilderExtensions
 
         var healthCheckKey = $"{name}_check";
 
-        // NOTE: We cannot use AddKafka here because it registers the health check as a singleton
-        //       which means if you have multiple Kafka resources the factory callback will end
-        //       up using the connection string of the last Kafka resource that was added. The
-        //       client packages also have to work around this issue.
-        //
-        //       SEE: https://github.com/Xabaril/AspNetCore.Diagnostics.HealthChecks/issues/2298
+        // DI must own the check so its producer is reused and disposed with the AppHost.
+        // Key it per resource to avoid sharing the last resource's connection string:
+        // https://github.com/Xabaril/AspNetCore.Diagnostics.HealthChecks/issues/2298
+        builder.Services.AddKeyedSingleton<KafkaHealthCheck>(healthCheckKey, (sp, _) =>
+        {
+            var options = new KafkaHealthCheckOptions();
+            options.Configuration = new ProducerConfig();
+            options.Configuration.BootstrapServers = connectionString ?? throw new InvalidOperationException("Connection string is unavailable");
+            return new KafkaHealthCheck(options);
+        });
+
         var healthCheckRegistration = new HealthCheckRegistration(
             healthCheckKey,
-            sp =>
-            {
-                var options = new KafkaHealthCheckOptions();
-                options.Configuration = new ProducerConfig();
-                options.Configuration.BootstrapServers = connectionString ?? throw new InvalidOperationException("Connection string is unavailable");
-                return new KafkaHealthCheck(options);
-            },
+            sp => sp.GetRequiredKeyedService<KafkaHealthCheck>(healthCheckKey),
             failureStatus: default,
             tags: default);
         builder.Services.AddHealthChecks().Add(healthCheckRegistration);

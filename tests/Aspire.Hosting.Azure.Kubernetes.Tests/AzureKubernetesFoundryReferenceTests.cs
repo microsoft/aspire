@@ -6,10 +6,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Foundry;
-using Aspire.Hosting.Publishing;
-using Aspire.Hosting.Tests;
-using Aspire.Hosting.Utils;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -19,11 +15,7 @@ public class AzureKubernetesFoundryReferenceTests(ITestOutputHelper outputHelper
     public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path);
-
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 

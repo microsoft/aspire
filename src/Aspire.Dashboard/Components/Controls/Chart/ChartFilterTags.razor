@@ -14,8 +14,8 @@
         {
             var isIncludedInFilters = Filter.SelectedValues.Contains(item);
             var isIncludedInFiltersClass = isIncludedInFilters ? "included-in-filters" : "";
-            // Always display the first item by setting a fixed value.
-            <div behavior="@(i == 0 ? "fixed" : null)">
+            // Keep the first value visible until the overflow container is too narrow to display it in full.
+            <div class="@(i == 0 ? "dimension-overflow-ellipsis" : null)" behavior="@(i == 0 ? "ellipsis" : null)">
                 <button type="button"
                         class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
                         aria-pressed="@isIncludedInFilters"
@@ -28,7 +28,7 @@
     </ChildContent>
     <MoreTemplate Context="overflow">
         @{
-            // The first item is fixed, so managed overflow item indexes start at the second value.
+            // The first item has ellipsis behavior, so managed overflow item indexes start at the second value.
             var firstOverflowItem = overflow.ItemsOverflow.FirstOrDefault();
             var hasSelectedInOverflow = firstOverflowItem is not null && orderedValues.Skip(firstOverflowItem.Index + 1).Any(Filter.SelectedValues.Contains);
             var isIncludedInFiltersClass = hasSelectedInOverflow ? "included-in-filters" : "";
