@@ -514,10 +514,61 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('debugSessions: state.state.debugSessions?.map(redactDebugSessionForDiagnostics)'));
         assert.ok(runner.includes('sanitizeDashboardUrlForDiagnostics'));
         assert.ok(runner.includes('redactTextFilesForArtifacts(resultsDir)'));
-        assert.ok(runner.includes('redactTextFilesForArtifacts(storageDiagnosticsDir)'));
-        assert.ok(runner.includes('shouldCopyAspireHomeDiagnostics'));
+        assert.ok(runner.includes('const redacted = redactSensitiveArtifactText(text);'));
+        assert.ok(runner.includes('fs.writeFileSync(destinationPath, redacted === text ? contents : redacted)'));
+        assert.ok(runner.includes('skipAspireLeaseFiles'));
         assert.ok(runner.includes('/login?t=<redacted>'));
         assert.ok(runner.includes('new URL(stripResourceSuffix(url)).origin'));
+    });
+
+    test('uploads the selected diagnostic inputs without runtime state', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const uploadStart = workflow.indexOf('id: upload_e2e_diagnostics');
+        const uploadEnd = workflow.indexOf('- name: Print E2E diagnostics links', uploadStart);
+        assert.ok(uploadStart >= 0 && uploadEnd > uploadStart);
+        // The path: | input lists one unquoted glob per line, e.g. extension/.test-results/**.
+        const patterns = workflow.slice(uploadStart, uploadEnd).match(/^\s+extension\/[^\s]+$/gm)?.map(line => line.trim()) ?? [];
+        assert.ok(patterns.length > 0);
+        const isUploaded = (relativePath: string) => patterns.some(pattern =>
+            path.matchesGlob(path.join('extension', ...relativePath.split('/')), path.join(...pattern.split('/'))));
+
+        for (const relativePath of [
+            '.test-results/shard/mocha.json',
+            '.test-storage/shard/run/aspire-home/logs/cli.log',
+            '.test-storage/shard/run/aspire-home/cache/apphost-info/app.json',
+            '.test-storage/shard/run/aspire-home/aspire.config.json',
+            '.test-storage/shard/run/settings/logs/window/Aspire Extension.log',
+            '.test-storage/shard/run/settings/User/settings.json',
+            '.test-storage/shard/run/screenshots/failure.png',
+            '.test-workspaces/shard/run/.aspire/logs/apphost.log',
+            '.test-workspaces/shard/run/.aspire/settings.json',
+            '.test-workspaces/shard/run/aspire.config.json',
+            '.test-workspaces/shard/run/.vscode/settings.json',
+            '.test-workspaces/shard/run/AspireE2E.WinUI/App.xaml',
+            '.test-workspaces/shard/run/AspireE2E.WinUI/App.xaml.cs',
+            '.test-workspaces/shard/run/AspireE2E.AppHost/AppHost.cs',
+            '.test-workspaces/shard/run/AspireE2E.AppHost/Program.cs',
+            '.test-workspaces/shard/run/AspireE2E.WinUI/app.manifest',
+            '.test-workspaces/shard/run/AspireE2E.AppHost/Properties/launchSettings.json',
+            '.test-workspaces/shard/run/AspireE2E.AppHost/AspireE2E.AppHost.csproj',
+            '.test-workspaces/shard/run/winui-e2e-ready.txt',
+        ]) {
+            assert.strictEqual(isUploaded(relativePath), true, `Missing diagnostic upload: ${relativePath}`);
+        }
+
+        for (const relativePath of [
+            '.test-storage/shard/run/aspire-home/dashboard/runs/run.lock',
+            '.test-storage/shard/run/aspire-home/cache/workspace-config-locks/workspace.lock',
+            '.test-storage/shard/run/aspire-home/packages/.aspire-bundle-lock',
+            '.test-storage/shard/run/settings/CrashpadMetrics-active.pma',
+            '.test-storage/shard/run/settings/User/globalStorage/cache.json',
+            '.test-workspaces/shard/run/.aspire/integrations/package-restore/hash/restore.lock',
+            '.test-workspaces/shard/run/.aspire/modules/generated.ts',
+            '.test-workspaces/shard/run/AspireE2E.AppHost/obj/project.assets.json',
+        ]) {
+            assert.strictEqual(isUploaded(relativePath), false, `Unexpected runtime-state upload: ${relativePath}`);
+        }
     });
 
     test('installs the E2E runner dependencies from the internal npm feed', () => {
