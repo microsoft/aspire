@@ -141,7 +141,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         // Directory.Build.props is where SDK-style projects require BaseIntermediateOutputPath
         // and MSBuildProjectExtensionsPath to be set; assigning them in Aspire.csproj is too late
         // because Microsoft.Common.props has already consumed them.
-        await File.WriteAllTextAsync(
+        await GeneratedFileWriter.WriteIfChangedAsync(
             Path.Combine(modulesDirectory.FullName, "Directory.Build.props"),
             IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
                 integrationRestoreDir,
@@ -151,8 +151,11 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
             cancellationToken).ConfigureAwait(false);
 
         // Write sentinel targets/packages files to prevent upstream imports from overriding generated project behavior.
-        await File.WriteAllTextAsync(Path.Combine(modulesDirectory.FullName, "Directory.Build.targets"), "<Project />", cancellationToken).ConfigureAwait(false);
-        await File.WriteAllTextAsync(
+        await GeneratedFileWriter.WriteIfChangedAsync(
+            Path.Combine(modulesDirectory.FullName, "Directory.Build.targets"),
+            "<Project />",
+            cancellationToken).ConfigureAwait(false);
+        await GeneratedFileWriter.WriteIfChangedAsync(
             Path.Combine(modulesDirectory.FullName, "Directory.Packages.props"),
             """
             <Project>
@@ -204,8 +207,10 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
                 new XAttribute("Condition", $"'$({BuildPropertyName})' != 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingInsideVisualStudio)' != 'true'"),
                 new XElement("Error", new XAttribute("Text", "This AppHost is managed by the Aspire CLI. Use 'aspire run', 'aspire restore', or 'aspire publish' instead of direct dotnet commands."))));
 
-        await using var stream = moduleProjectFile.Create();
-        await projectFile.ToXDocument().SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
+        await GeneratedFileWriter.WriteIfChangedAsync(
+            moduleProjectFile.FullName,
+            projectFile.ToXDocument().ToString(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task WriteAppHostBuildPropsFileAsync(
@@ -273,8 +278,10 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
                 projectFile.ProjectReferences.Select(CSharpProjectFile.CreateProjectReferenceElement)));
         }
 
-        await using var stream = appHostBuildPropsFile.Create();
-        await new XDocument(root).SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
+        await GeneratedFileWriter.WriteIfChangedAsync(
+            appHostBuildPropsFile.FullName,
+            new XDocument(root).ToString(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task WriteAppHostBuildTargetsFileAsync(
@@ -292,8 +299,10 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
                 new XAttribute("Update", "@(ProjectReference)"),
                 new XAttribute("GlobalPropertiesToRemove", "%(ProjectReference.GlobalPropertiesToRemove);DirectoryBuildPropsPath;DirectoryBuildTargetsPath"))));
 
-        await using var stream = appHostBuildTargetsFile.Create();
-        await new XDocument(root).SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
+        await GeneratedFileWriter.WriteIfChangedAsync(
+            appHostBuildTargetsFile.FullName,
+            new XDocument(root).ToString(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     internal static void AddBuildProperty(ProcessInvocationOptions options)

@@ -143,6 +143,52 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
     }
 
     [Fact]
+    public async Task TryGenerateAsyncPreservesUnchangedGeneratedFileTimestamps()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var appHostFile = CreateCliManagedAppHost(workspace.WorkspaceRoot);
+        var generator = CreateGenerator(workspace);
+        var config = new AspireConfigFile { SdkVersion = "13.2.0" };
+
+        await generator.TryGenerateAsync(
+            appHostFile,
+            config,
+            workspace.WorkspaceRoot,
+            packageSourceOverride: null,
+            CancellationToken.None);
+
+        var modulesDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules");
+        var generatedFilePaths = new[]
+        {
+            Path.Combine(modulesDirectory, CSharpCliManagedAppHostModuleGenerator.ModuleProjectFileName),
+            Path.Combine(modulesDirectory, CSharpCliManagedAppHostModuleGenerator.AppHostBuildPropsFileName),
+            Path.Combine(modulesDirectory, CSharpCliManagedAppHostModuleGenerator.AppHostBuildTargetsFileName),
+            Path.Combine(modulesDirectory, "Directory.Build.props"),
+            Path.Combine(modulesDirectory, "Directory.Build.targets"),
+            Path.Combine(modulesDirectory, "Directory.Packages.props")
+        };
+        var oldTimestamp = DateTime.UtcNow.AddDays(-1);
+        var expectedTimestamps = generatedFilePaths.ToDictionary(
+            path => path,
+            path =>
+            {
+                File.SetLastWriteTimeUtc(path, oldTimestamp);
+                return File.GetLastWriteTimeUtc(path);
+            });
+
+        await generator.TryGenerateAsync(
+            appHostFile,
+            config,
+            workspace.WorkspaceRoot,
+            packageSourceOverride: null,
+            CancellationToken.None);
+
+        Assert.All(
+            generatedFilePaths,
+            path => Assert.Equal(expectedTimestamps[path], File.GetLastWriteTimeUtc(path)));
+    }
+
+    [Fact]
     public async Task GeneratedModuleRejectsDirectRestoreButAllowsCliAndDesignTimeRestore()
     {
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
