@@ -9,7 +9,9 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITelemetryRepository
 {
+    public Func<GetLogsContext, CancellationToken, Task<PagedResult<OtlpLogEntry>>>? GetLogsAsyncHandler { get; init; }
     public Func<GetLogsContext, CancellationToken, Task<PagedResult<LogSummary>>>? GetLogSummariesAsyncHandler { get; init; }
+    public Func<GetSpansRequest, CancellationToken, Task<GetSpansResponse>>? GetSpansAsyncHandler { get; init; }
 
     public bool IsReadOnly => inner.IsReadOnly;
     public bool HasDisplayedMaxLogLimitMessage { get => inner.HasDisplayedMaxLogLimitMessage; set => inner.HasDisplayedMaxLogLimitMessage = value; }
@@ -30,7 +32,8 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Subscription OnNewMetrics(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback) => inner.OnNewMetrics(resourceKey, subscriptionType, callback);
     public Subscription OnNewTraces(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback) => inner.OnNewTraces(resourceKey, subscriptionType, callback);
 
-    public Task<PagedResult<OtlpLogEntry>> GetLogsAsync(GetLogsContext context, CancellationToken cancellationToken) => inner.GetLogsAsync(context, cancellationToken);
+    public Task<PagedResult<OtlpLogEntry>> GetLogsAsync(GetLogsContext context, CancellationToken cancellationToken) =>
+        GetLogsAsyncHandler?.Invoke(context, cancellationToken) ?? inner.GetLogsAsync(context, cancellationToken);
     public Task<PagedResult<LogSummary>> GetLogSummariesAsync(GetLogsContext context, CancellationToken cancellationToken) =>
         GetLogSummariesAsyncHandler?.Invoke(context, cancellationToken) ?? inner.GetLogSummariesAsync(context, cancellationToken);
     public OtlpLogEntry? GetLog(long logId) => inner.GetLog(logId);
@@ -40,7 +43,8 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Task<List<string>> GetTracePropertyKeysAsync(ResourceKey? resourceKey, CancellationToken cancellationToken) => inner.GetTracePropertyKeysAsync(resourceKey, cancellationToken);
     public Task<GetTracesResponse> GetTracesAsync(GetTracesRequest context, CancellationToken cancellationToken) => inner.GetTracesAsync(context, cancellationToken);
     public Task<GetTraceSummariesResponse> GetTraceSummariesAsync(GetTracesRequest context, CancellationToken cancellationToken) => inner.GetTraceSummariesAsync(context, cancellationToken);
-    public Task<GetSpansResponse> GetSpansAsync(GetSpansRequest context, CancellationToken cancellationToken) => inner.GetSpansAsync(context, cancellationToken);
+    public Task<GetSpansResponse> GetSpansAsync(GetSpansRequest context, CancellationToken cancellationToken) =>
+        GetSpansAsyncHandler?.Invoke(context, cancellationToken) ?? inner.GetSpansAsync(context, cancellationToken);
     public Task<Dictionary<string, int>> GetTraceFieldValuesAsync(string attributeName, CancellationToken cancellationToken) => inner.GetTraceFieldValuesAsync(attributeName, cancellationToken);
     public Task<Dictionary<string, int>> GetLogsFieldValuesAsync(string attributeName, CancellationToken cancellationToken) => inner.GetLogsFieldValuesAsync(attributeName, cancellationToken);
     public bool HasUpdatedTrace(OtlpTrace trace) => inner.HasUpdatedTrace(trace);
