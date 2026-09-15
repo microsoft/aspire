@@ -23,6 +23,9 @@
     account for — winget runs executable and malware checks against every binary in the archive, which
     turned it into submission friction on https://github.com/microsoft/winget-pkgs/pull/421219.
 
+    That is still true of every path in the tree today. The one deliberate exception is the bundle
+    build, which stages the helper ahead of the feature that will use it — see the target below.
+
     Unix is unaffected: there the package's native asset is libhex1binterop.{so,dylib}, the
     termios/ioctl shim the TUI does need, and it keeps flowing through.
 
@@ -34,6 +37,34 @@
           Condition="'$(PublishHex1bPtyHost)' != 'true'">
     <ItemGroup>
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish->WithMetadataValue('Filename', 'hex1bpty'))" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Aspire.Managed is that exception, and the reason is sequencing rather than a live code path.
+    No code in this tree launches hex1bpty.exe today — DCP owns every PTY we currently surface, exactly
+    as the comment above says. AppHost-owned terminals (#19887) add the path that does need it: there
+    Hex1b owns the pseudo-terminal itself instead of bridging DCP's. #19976 asks for the helper to be
+    built, signed and bundled before that feature lands, so the pipeline is ready rather than blocking
+    it. Aspire.Managed therefore sets PublishHex1bPtyHost=true, which turns the removal above off for
+    this project only. The CLI archive is unaffected and still strips it.
+
+    Once it is back in the publish output it also has to stay a loose file next to aspire-managed.
+    hex1bpty.exe is a native asset, so IncludeNativeLibrariesForSelfExtract would otherwise pack it
+    inside the single-file executable, leaving nothing on disk for Arcade to Authenticode-sign
+    (eng/Signing.props) or for CreateLayout to stage at managed/hex1bpty.exe. ExcludeFromSingleFile
+    keeps it out of the bundle without changing where it lands in the publish directory.
+
+    This has to happen before the SDK computes the single-file contents, hence both attributes:
+    AfterTargets gives us the resolved publish list, BeforeTargets pins us ahead of the bundler.
+  -->
+  <Target Name="KeepHex1bPtyHostOutOfSingleFileBundle"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          BeforeTargets="_ComputeFilesToBundle"
+          Condition="'$(PublishHex1bPtyHost)' == 'true' and '$(PublishSingleFile)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Update="@(ResolvedFileToPublish->WithMetadataValue('Filename', 'hex1bpty'))"
+                             ExcludeFromSingleFile="true" />
     </ItemGroup>
   </Target>
 

@@ -110,6 +110,12 @@ internal sealed class LayoutBuilder : IDisposable
     private readonly string _version;
     private readonly bool _verbose;
 
+    /// <summary>
+    /// Hex1b's Windows PTY host, staged next to aspire-managed. Windows-only, so the name is fixed
+    /// rather than derived from the RID.
+    /// </summary>
+    private const string Hex1bPtyHostFileName = "hex1bpty.exe";
+
     public LayoutBuilder(string outputPath, string artifactsPath, string rid, string version, bool verbose)
     {
         _outputPath = Path.GetFullPath(outputPath);
@@ -179,6 +185,27 @@ internal sealed class LayoutBuilder : IDisposable
         }
 
         Log($"  Copied aspire-managed to managed/");
+
+        // Hex1b's PTY host is the one other executable that belongs in managed/. It is staged for
+        // AppHost-owned terminals (#19887), where Hex1b owns the pseudo-terminal itself rather than
+        // bridging DCP's; no code launches it yet. It is a deliberate payload either way, not one of
+        // the leaked host stubs skipped above.
+        // Aspire.Managed publishes it as a loose file on Windows (PublishHex1bPtyHost) and the build
+        // signs it in place, so by the time we get here it exists next to the managed executable.
+        if (isWindows)
+        {
+            var ptyHostPath = Path.Combine(managedPublishPath, Hex1bPtyHostFileName);
+            if (!File.Exists(ptyHostPath))
+            {
+                throw new InvalidOperationException(
+                    $"{Hex1bPtyHostFileName} not found at {ptyHostPath}. " +
+                    $"Aspire.Managed must be published for a Windows RID with PublishHex1bPtyHost=true so Hex1b's PTY host " +
+                    $"lands in the publish output. A Windows bundle without it would fail to open AppHost-owned terminals at runtime.");
+            }
+
+            File.Copy(ptyHostPath, Path.Combine(managedDir, Hex1bPtyHostFileName), overwrite: true);
+            Log($"  Copied {Hex1bPtyHostFileName} to managed/");
+        }
     }
 
     private Task CopyDcpAsync()
