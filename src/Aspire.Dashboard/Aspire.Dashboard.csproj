@@ -5,6 +5,10 @@
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <TargetFramework>net11.0</TargetFramework>
     <PublishAot>true</PublishAot>
+    <!-- .NET 11 persistent services serialize framework-owned state with the internal
+         JsonSerializerOptionsProvider instead of CircuitOptions.JsonTypeInfoResolvers.
+         Remove the reflection fallback when https://github.com/dotnet/aspnetcore/issues/69325 is fixed. -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
@@ -22,6 +26,9 @@
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <!-- Only the opted-in dependency assemblies produce these summary diagnostics. -->
     <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
+    <!-- Enabling reflection for Blazor persistent services roots ASP.NET Core's fallback JSON resolver.
+      Remove this suppression when https://github.com/dotnet/aspnetcore/issues/69325 is fixed. -->
+    <NoWarn>$(NoWarn);IL2026</NoWarn>
     <!--
       IL2101 is not an analysis warning and cannot be grouped by assembly or suppressed by a member
       attribute. Blazor's Endpoints assembly embeds a hot-reload substitution with the Forms assembly
@@ -55,6 +62,11 @@
                                         '%(Filename)' == 'Microsoft.AspNetCore.Components.Forms' Or
                                         '%(Filename)' == 'Microsoft.AspNetCore.Components.Endpoints' Or
                                         '%(Filename)' == 'Microsoft.AspNetCore.Components.Server'">
+        <TrimmerSingleWarn>true</TrimmerSingleWarn>
+      </ResolvedFileToPublish>
+      <!-- The reflection fallback roots ASP.NET Core's default HTTP JSON resolver. Dashboard
+           endpoints prepend generated contexts, so the fallback is only used by framework code. -->
+      <ResolvedFileToPublish Condition="'%(Filename)' == 'Microsoft.AspNetCore.Http.Extensions'">
         <TrimmerSingleWarn>true</TrimmerSingleWarn>
       </ResolvedFileToPublish>
       <!-- JSInterop callable-method discovery and serialization need upstream annotations. -->

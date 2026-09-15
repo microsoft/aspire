@@ -54,6 +54,9 @@ using Aspire.Shared;
 [assembly: UnconditionalSuppressMessage("AOT", "IL3050", Scope = "member",
     Target = "M:Aspire.Dashboard.Components.Pages.Traces.BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder)",
     Justification = "Opening FluentDataGrid preserves its nested ColumnHeaderUiKind enum and inherited Enum.GetValues(Type).")]
+[assembly: UnconditionalSuppressMessage("AOT", "IL3050", Scope = "member",
+    Target = "M:Aspire.Dashboard.Components.Dialogs.SettingsDialog.BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder)",
+    Justification = "Opening FluentSelect and FluentRadioGroup preserves inherited enum parsing paths that call Enum.GetValues(Type); the dashboard enumeration uses Enum.GetValues<TEnum>().")]
 [assembly: UnconditionalSuppressMessage("AOT", "IL3050", Scope = "type",
     Target = "T:__Blazor.Aspire.Dashboard.Components.ChartFilters.TypeInference",
     Justification = "The generated FluentDataGrid factory preserves its nested ColumnHeaderUiKind enum and inherited Enum.GetValues(Type).")]
