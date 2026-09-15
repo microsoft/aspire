@@ -191,6 +191,7 @@ public static class EFResourceBuilderExtensions
                 State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, KnownResourceStateStyles.Info)
             })
             .WithIconName("Database")
+            .WithHiddenOnCompletion()
             .WithPipelineStepFactory(CreateMigrationPipelineStep);
 
         AddEFMigrationCommands(innerBuilder, migrationResource, dbContextTypeName);
@@ -868,11 +869,13 @@ public static class EFResourceBuilderExtensions
             migrationResource.IsExecutingCommand = false;
             if (result.Success)
             {
-                await UpdateStateAsync(resourceNotificationService, migrationResource, KnownResourceStates.Finished, KnownResourceStateStyles.Info).ConfigureAwait(false);
+                // Set a successful exit code so that WithHiddenOnCompletion() can hide the resource
+                // once it reaches this terminal state.
+                await UpdateStateAsync(resourceNotificationService, migrationResource, KnownResourceStates.Finished, KnownResourceStateStyles.Info, exitCode: 0).ConfigureAwait(false);
             }
             else
             {
-                await UpdateStateAsync(resourceNotificationService, migrationResource, KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error).ConfigureAwait(false);
+                await UpdateStateAsync(resourceNotificationService, migrationResource, KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error, exitCode: 1).ConfigureAwait(false);
             }
 
             return result;
@@ -887,20 +890,24 @@ public static class EFResourceBuilderExtensions
         catch (Exception ex)
         {
             migrationResource.IsExecutingCommand = false;
-            await UpdateStateAsync(resourceNotificationService, migrationResource, KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error).ConfigureAwait(false);
+            await UpdateStateAsync(resourceNotificationService, migrationResource, KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error, exitCode: 1).ConfigureAwait(false);
             logger.LogError(ex, "EF Core {Operation} command failed with exception.", operationDisplayName);
             return CommandResults.Failure(ex);
         }
     }
 
-    private static Task UpdateStateAsync(
+    internal static Task UpdateStateAsync(
         ResourceNotificationService resourceNotificationService,
         EFMigrationResource migrationResource,
         string state,
-        string style) =>
+        string style,
+        int? exitCode = null) =>
         resourceNotificationService.PublishUpdateAsync(migrationResource, s => s with
         {
-            State = new ResourceStateSnapshot(state, style)
+            State = new ResourceStateSnapshot(state, style),
+            // Clear any exit code from a previous run when transitioning into a non-terminal state,
+            // and set it explicitly on terminal states so HiddenBehavior.OnCompletion can act on it.
+            ExitCode = exitCode
         });
 
     private static Task<ExecuteCommandResult> ExecuteAddMigrationCommandAsync(

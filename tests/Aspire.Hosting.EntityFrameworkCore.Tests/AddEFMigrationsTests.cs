@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREDOTNETTOOL
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -256,6 +257,64 @@ public class AddEFMigrationsTests
 #pragma warning restore CS0618 // Type or member is obsolete
 
         Assert.Equal("{db1.connectionString}", Assert.Contains("ConnectionStrings__db1", env));
+    }
+
+    [Fact]
+    public void AddEFMigrationsHasHiddenOnCompletionAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
+
+        Assert.True(migrations.Resource.TryGetLastAnnotation<HiddenAnnotation>(out var hiddenAnnotation));
+        Assert.Equal(HiddenBehavior.OnCompletion, hiddenAnnotation.Behavior);
+        Assert.Contains(0, hiddenAnnotation.SuccessfulExitCodes);
+    }
+
+    [Fact]
+    public async Task EFMigrationResourceIsHiddenAfterSuccessfulCompletion()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var waitTask = notificationService.WaitForResourceAsync(
+            migrations.Resource.Name, e => e.Snapshot.State?.Text == KnownResourceStates.Finished, cts.Token);
+
+        // Mirror the terminal state transition that ExecuteWithStateManagementAsync publishes
+        // when an EF Core command completes successfully.
+        await EFResourceBuilderExtensions.UpdateStateAsync(
+            notificationService, migrations.Resource, KnownResourceStates.Finished, KnownResourceStateStyles.Info, exitCode: 0);
+
+        var resourceEvent = await waitTask;
+
+        Assert.Equal(0, resourceEvent.Snapshot.ExitCode);
+        Assert.True(resourceEvent.Snapshot.IsHidden);
+    }
+
+    [Fact]
+    public async Task EFMigrationResourceRemainsVisibleAfterFailure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var waitTask = notificationService.WaitForResourceAsync(
+            migrations.Resource.Name, e => e.Snapshot.State?.Text == KnownResourceStates.FailedToStart, cts.Token);
+
+        await EFResourceBuilderExtensions.UpdateStateAsync(
+            notificationService, migrations.Resource, KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error, exitCode: 1);
+
+        var resourceEvent = await waitTask;
+
+        Assert.Equal(1, resourceEvent.Snapshot.ExitCode);
+        Assert.False(resourceEvent.Snapshot.IsHidden);
     }
 
     // Test classes for DbContext types

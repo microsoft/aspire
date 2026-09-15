@@ -147,6 +147,7 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.EntityFrameworkCore" />
+    <InternalsVisibleTo Include="Aspire.Hosting.EntityFrameworkCore.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Radius.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Foundry.Tests" />
