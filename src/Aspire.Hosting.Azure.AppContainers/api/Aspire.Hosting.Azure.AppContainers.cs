@@ -66,15 +66,15 @@ namespace Aspire.Hosting
         [AspireExport]
         public static void ConfigureCustomDomain(this global::Azure.Provisioning.AppContainers.ContainerApp app, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> customDomain, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> certificateName) { }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this ApplicationModel.IResourceBuilder<T> resource, System.Action<Azure.AzureResourceInfrastructure, global::Azure.Provisioning.AppContainers.ContainerAppJob> configure)
             where T : ApplicationModel.IComputeResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this ApplicationModel.IResourceBuilder<T> resource)
             where T : ApplicationModel.IComputeResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsScheduledAzureContainerAppJob dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal publishAsScheduledAzureContainerAppJob dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsScheduledAzureContainerAppJob<T>(this ApplicationModel.IResourceBuilder<T> resource, string cronExpression, System.Action<Azure.AzureResourceInfrastructure, global::Azure.Provisioning.AppContainers.ContainerAppJob>? configure = null)
             where T : ApplicationModel.IComputeResource { throw null; }
     }
@@ -99,7 +99,7 @@ namespace Aspire.Hosting.Azure
 
 namespace Aspire.Hosting.Azure.AppContainers
 {
-    public partial class AzureContainerAppEnvironmentResource : AzureProvisioningResource, IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, IAzureContainerRegistry, ApplicationModel.IContainerRegistry, IAzureDelegatedSubnetResource
+    public partial class AzureContainerAppEnvironmentResource : AzureProvisioningResource, IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, ApplicationModel.IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, ApplicationModel.IContainerRegistry, IAzureDelegatedSubnetResource
     {
         public AzureContainerAppEnvironmentResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 

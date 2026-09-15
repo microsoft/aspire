@@ -27,25 +27,25 @@ namespace Aspire.Hosting
 
     public static partial class YarpConfigurationBuilderExtensions
     {
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addCatchAllRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, ApplicationModel.EndpointReference endpoint) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addCatchAllRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, ApplicationModel.IResourceBuilder<ExternalServiceResource> externalService) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addCatchAllRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, ApplicationModel.IResourceBuilder<IResourceWithServiceDiscovery> resource) { throw null; }
 
         [AspireExportIgnore(Reason = "Use the exported addCatchAllRoute helper instead.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, Yarp.YarpCluster cluster) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, ApplicationModel.EndpointReference endpoint) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, ApplicationModel.IResourceBuilder<ExternalServiceResource> externalService) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, ApplicationModel.IResourceBuilder<IResourceWithServiceDiscovery> resource) { throw null; }
     }
 
