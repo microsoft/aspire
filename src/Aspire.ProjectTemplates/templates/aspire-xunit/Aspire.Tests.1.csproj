@@ -12,12 +12,12 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.Testing" Version="!!REPLACE_WITH_LATEST_VERSION!!" />
-    <PackageReference Include="coverlet.collector" Version="6.0.4" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="coverlet.collector" Version="10.0.1" Condition=" $(XUnitVersion) != 'v3mtp' " />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.0" Condition=" $(XUnitVersion) != 'v3mtp' " />
     <PackageReference Include="xunit" Version="2.9.3"  Condition=" $(XUnitVersion) == 'v2' "/>
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
-    <PackageReference Include="xunit.v3" Version="3.0.1" Condition=" $(XUnitVersion) == 'v3' " />
-    <PackageReference Include="xunit.v3" Version="3.0.1" Condition=" $(XUnitVersion) == 'v3mtp' " />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" Condition=" $(XUnitVersion) != 'v3mtp' " />
+    <PackageReference Include="xunit.v3.mtp-off" Version="4.0.0" Condition=" $(XUnitVersion) == 'v3' " />
+    <PackageReference Include="xunit.v3" Version="4.0.0" Condition=" $(XUnitVersion) == 'v3mtp' " />
   </ItemGroup>
 
   <ItemGroup>

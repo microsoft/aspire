@@ -19,17 +19,20 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.Testing" Version="!!REPLACE_WITH_LATEST_VERSION!!" />
-    <PackageReference Include="coverlet.collector" Version="6.0.2" Condition=" $(TestFx) == 'xUnit.net' " />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" Condition=" $(TestFx) != 'MSTest' " />
-    <PackageReference Include="MSTest" Version="3.10.2" Condition=" $(TestFx) == 'MSTest' " />
-    <PackageReference Include="NUnit" Version="4.4.0" Condition=" $(TestFx) == 'NUnit' " />
-    <PackageReference Include="NUnit.Analyzers" Version="4.10.0" Condition=" $(TestFx) == 'NUnit' " />
-    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" Condition=" $(TestFx) == 'NUnit' " />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.0" Condition=" $(TestFx) == 'NUnit' " />
+    <PackageReference Include="MSTest" Version="4.4.0" Condition=" $(TestFx) == 'MSTest' " />
+    <PackageReference Include="NUnit" Version="4.6.1" Condition=" $(TestFx) == 'NUnit' " />
+    <PackageReference Include="NUnit.Analyzers" Version="4.14.0" Condition=" $(TestFx) == 'NUnit' " />
+    <PackageReference Include="NUnit3TestAdapter" Version="6.3.0" Condition=" $(TestFx) == 'NUnit' " />
     <!--#if (IsXunit) -->
+    <!--#if (XUnitVersion != "v3mtp") -->
+    <PackageReference Include="coverlet.collector" Version="10.0.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <!--#endif-->
     <PackageReference Include="xunit" Version="2.9.3"  Condition=" $(XUnitVersion) == 'v2' "/>
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" Condition=" $(TestFx) == 'xUnit.net' " />
-    <PackageReference Include="xunit.v3" Version="3.0.1" Condition=" $(XUnitVersion) == 'v3' " />
-    <PackageReference Include="xunit.v3" Version="3.0.1" Condition=" $(XUnitVersion) == 'v3mtp' " />
+    <PackageReference Include="xunit.v3.mtp-off" Version="4.0.0" Condition=" $(XUnitVersion) == 'v3' " />
+    <PackageReference Include="xunit.v3" Version="4.0.0" Condition=" $(XUnitVersion) == 'v3mtp' " />
     <!--#endif-->
   </ItemGroup>
 

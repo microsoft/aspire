@@ -55,6 +55,11 @@ The SDK in `artifacts/bin/dotnet-tests` is usable outside the repo at this point
 
 ## Inner loop tips
 
+`NewUpAndBuildStandaloneTemplateTests` builds the starter template with MSTest,
+NUnit, and xUnit (default, v2, v3, and v3mtp) across the SDK/target-framework
+matrix. It checks the generated test project's package names and versions before
+building, so update these expectations when changing starter test dependencies.
+
 - The sdk+workload is never updated automatically. In other words, once installed the workload packs don't get overwritten even when the source binaries changes in `artifacts`. This may change in future.
 
 There are three categories of NuGet packages used by the workload:
