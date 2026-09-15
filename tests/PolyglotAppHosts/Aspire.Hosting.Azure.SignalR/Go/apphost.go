@@ -13,6 +13,15 @@ func main() {
 	}
 
 	signalr := builder.AddAzureSignalR("signalr")
+	signalr.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		service := infrastructure.GetSignalRService()
+		if err := service.SetDisableLocalAuth(true).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := service.DisableLocalAuth(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
 	if signalr.Err() != nil {
 		log.Fatalf(aspire.FormatError(signalr.Err()))
 	}

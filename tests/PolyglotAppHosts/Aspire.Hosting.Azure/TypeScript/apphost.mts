@@ -4,6 +4,13 @@ const builder = await createBuilder();
 
 await builder.addAzureProvisioning();
 
+const frontDoor = await builder.addAzureFrontDoor("frontdoor");
+await frontDoor.configureInfrastructure(async infrastructure => {
+    const profile = await infrastructure.getCdnProfile();
+    await profile.originResponseTimeoutSeconds.set(60);
+    const _originTimeout = await profile.originResponseTimeoutSeconds.get();
+});
+
 const location = await builder.addParameter("location");
 const resourceGroup = await builder.addParameter("resource-group");
 const existingName = await builder.addParameter("existing-name");

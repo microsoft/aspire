@@ -3,6 +3,11 @@ import { AzureAppConfigurationRole, createBuilder } from './.aspire/modules/aspi
 const builder = await createBuilder();
 
 const appConfig = await builder.addAzureAppConfiguration("appconfig");
+await appConfig.configureInfrastructure(async infrastructure => {
+    const store = await infrastructure.getAppConfigurationStore();
+    await store.disableLocalAuth.set(true);
+    const _disableLocalAuth = await store.disableLocalAuth.get();
+});
 await appConfig.withAppConfigurationRoleAssignments(appConfig, [AzureAppConfigurationRole.AppConfigurationDataOwner, AzureAppConfigurationRole.AppConfigurationDataReader]);
 await appConfig.runAsEmulator({
     configureEmulator: async (emulator) => {

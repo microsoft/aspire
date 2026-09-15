@@ -17,6 +17,20 @@ func main() {
 	// Factory methods on builder
 	// ===================================================================
 
+	aks := builder.AddAzureKubernetesEnvironment("aks")
+	aks.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		cluster := infrastructure.GetContainerServiceManagedCluster()
+		if err := cluster.SetIsRbacEnabled(true).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := cluster.IsRbacEnabled(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
+	if aks.Err() != nil {
+		log.Fatalf(aspire.FormatError(aks.Err()))
+	}
+
 	// AddContainer (pre-existing)
 	container := builder.AddContainer("mycontainer", "nginx")
 	if err = container.Err(); err != nil {

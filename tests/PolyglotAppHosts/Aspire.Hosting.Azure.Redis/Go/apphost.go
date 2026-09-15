@@ -19,8 +19,47 @@ func main() {
 	var keyVaultResource aspire.AzureKeyVaultResource = keyVault
 
 	cache := builder.AddAzureManagedRedis("cache")
+	cache.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		cluster := infrastructure.GetRedisEnterpriseCluster()
+		if err := cluster.SetMinimumTlsVersion(aspire.RedisEnterpriseTlsVersionTls1_2).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := cluster.MinimumTlsVersion(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
 	if cache.Err() != nil {
 		log.Fatalf(aspire.FormatError(cache.Err()))
+	}
+
+	// The obsolete Azure Redis hosting API is not exported.
+	legacyCache := builder.AddAzureInfrastructure("legacyRedis", func(infrastructure aspire.AzureResourceInfrastructure) {
+		redis := infrastructure.AddRedisResource("legacyRedis")
+		sku := infrastructure.CreateRedisSku()
+		if err := sku.SetName(aspire.RedisSkuNameBasic).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if err := sku.SetFamily(aspire.RedisSkuFamilyBasicOrStandard).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if err := sku.SetCapacity(float64(0)).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if err := redis.SetSku(sku).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
+	legacyCache.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		redis := infrastructure.GetRedisResource()
+		if err := redis.SetEnableNonSslPort(false).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := redis.EnableNonSslPort(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
+	if legacyCache.Err() != nil {
+		log.Fatalf(aspire.FormatError(legacyCache.Err()))
 	}
 
 	accessKeyCache := builder.AddAzureManagedRedis("cache-access-key")

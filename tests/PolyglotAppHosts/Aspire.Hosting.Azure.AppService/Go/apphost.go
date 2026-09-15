@@ -28,9 +28,43 @@ func main() {
 		log.Fatalf(aspire.FormatError(environment.Err()))
 	}
 
+	environmentIdentifier, err := environment.GetBicepIdentifier()
+	if err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+	// The plan's identifier has an _asplan suffix, unlike the hosting resource.
+	environment.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		plan := infrastructure.GetAppServicePlanByIdentifier(environmentIdentifier + "_asplan")
+		if err := plan.SetIsPerSiteScaling(true).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := plan.IsPerSiteScaling(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		// Keep SKU location metadata out of the deployment's plan SKU.
+		sku := infrastructure.CreateAppServiceSkuDescription()
+		if err := sku.Locations().Add(infrastructure.CreateAppServiceAzureLocation("westus2")); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		location := sku.Locations().Get(0)
+		if _, err := location.Name(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
+	if environment.Err() != nil {
+		log.Fatalf(aspire.FormatError(environment.Err()))
+	}
+
 	website := builder.AddContainer("frontend", "nginx").
 		PublishAsAzureAppServiceWebsite(&aspire.PublishAsAzureAppServiceWebsiteOptions{
-			Configure: func(_ aspire.AzureResourceInfrastructure, appService aspire.WebSite) {
+			Configure: func(infrastructure aspire.AzureResourceInfrastructure, appService aspire.WebSite) {
+				site := infrastructure.GetWebSiteByIdentifier("webapp")
+				if err := site.SetIsHttpsOnly(true).Err(); err != nil {
+					log.Fatalf(aspire.FormatError(err))
+				}
+				if _, err := site.IsHttpsOnly(); err != nil {
+					log.Fatalf(aspire.FormatError(err))
+				}
 				if err := appService.ConfigureSiteConfig(&aspire.AzureAppServiceSiteConfig{IsAlwaysOn: aspire.BoolPtr(true)}); err != nil {
 					log.Fatalf(aspire.FormatError(err))
 				}

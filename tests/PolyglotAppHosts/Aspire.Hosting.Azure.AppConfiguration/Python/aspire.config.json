@@ -7,6 +7,7 @@
     "experimentalPolyglot:python": true
   },
   "packages": {
+    "Aspire.Hosting.Azure.Provisioning.AppConfiguration": "../../../../src/Aspire.Hosting.Azure.Provisioning.AppConfiguration/Aspire.Hosting.Azure.Provisioning.AppConfiguration.csproj",
     "Aspire.Hosting.Azure.AppConfiguration": ""
   }
 }

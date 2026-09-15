@@ -13,10 +13,25 @@ void main() throws Exception {
             .withAzureApplicationInsights(existingApplicationInsights)
             .withDeploymentSlot(deploymentSlot)
             .withDeploymentSlot("staging");
+        // The plan's identifier has an _asplan suffix, unlike the hosting resource.
+        var planIdentifier = environment.getBicepIdentifier() + "_asplan";
+        environment.configureInfrastructure(infrastructure -> {
+            var plan = infrastructure.getAppServicePlanByIdentifier(planIdentifier);
+            plan.setIsPerSiteScaling(true);
+            var _perSiteScaling = plan.isPerSiteScaling();
+            // Keep SKU location metadata out of the deployment's plan SKU.
+            var sku = infrastructure.createAppServiceSkuDescription();
+            sku.locations().add(infrastructure.createAppServiceAzureLocation("westus2"));
+            var location = sku.locations().get(0);
+            var _locationName = location.name();
+        });
         var website = builder.addContainer("frontend", "nginx");
         website.skipEnvironmentVariableNameChecks();
         website.publishAsAzureAppServiceWebsite(new PublishAsAzureAppServiceWebsiteOptions()
-            .configure((_infrastructure, appService) -> {
+            .configure((infrastructure, appService) -> {
+                var site = infrastructure.getWebSiteByIdentifier("webapp");
+                site.setIsHttpsOnly(true);
+                var _httpsOnly = site.isHttpsOnly();
                 var siteConfig = new AzureAppServiceSiteConfig();
                 siteConfig.setIsAlwaysOn(true);
                 appService.configureSiteConfig(siteConfig);

@@ -16,10 +16,27 @@ const environment = await builder.addAzureAppServiceEnvironment('appservice-envi
     .withDeploymentSlot(deploymentSlot)
     .withDeploymentSlot('staging');
 
+// App Service plans use an environment-derived identifier rather than the resource's root identifier.
+const planIdentifier = `${await environment.getBicepIdentifier()}_asplan`;
+await environment.configureInfrastructure(async infrastructure => {
+    const plan = await infrastructure.getAppServicePlanByIdentifier(planIdentifier);
+    await plan.isPerSiteScaling.set(true);
+    const _perSiteScaling = await plan.isPerSiteScaling.get();
+    // SKU location metadata is exercised without adding it to the deployment's plan SKU.
+    const sku = await infrastructure.createAppServiceSkuDescription();
+    const locations = await sku.locations.get();
+    await locations.add(await infrastructure.createAppServiceAzureLocation("westus2"));
+    const location = await locations.get(0);
+    const _locationName = await location.name();
+});
+
 const website = await builder.addContainer('frontend', 'nginx')
     .publishAsAzureAppServiceWebsite({
-        configure: async (_infrastructure, appService) => {
+        configure: async (infrastructure, appService) => {
             await appService.configureSiteConfig({ isAlwaysOn: true });
+            const site = await infrastructure.getWebSiteByIdentifier("webapp");
+            await site.isHttpsOnly.set(true);
+            const _httpsOnly = await site.isHttpsOnly.get();
         },
         configureSlot: async (_infrastructure, appServiceSlot) => {
             await appServiceSlot.configureSlotSiteConfig({ isAlwaysOn: false });

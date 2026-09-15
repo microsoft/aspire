@@ -5,6 +5,7 @@ from aspire_app import (
     AfterPublishEvent,
     AfterResourcesCreatedEvent,
     AksNodeVmSizes,
+    AzureResourceInfrastructure,
     AzureServiceTags,
     BeforePublishEvent,
     BeforeResourceStartedEvent,
@@ -246,7 +247,13 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     subnet = vnet.add_subnet("web", "10.0.1.0/24")
     subnet.allow_inbound(port="443", from_=AzureServiceTags.AzureLoadBalancer)
     subnet.deny_inbound(from_=AzureServiceTags.Internet)
+    def configure_aks(infrastructure: AzureResourceInfrastructure) -> None:
+        cluster = infrastructure.get_container_service_managed_cluster()
+        cluster.is_rbac_enabled = True
+        _rbac_enabled = cluster.is_rbac_enabled
+
     aks = builder.add_azure_kubernetes_env("aks")
+    aks.configure_infrastructure(configure_aks)
     aks.add_node_pool("system", vm_size=AksNodeVmSizes.StandardDSv5.StandardD2sV5)
     # builder-level pipeline APIs
     pipeline = builder.pipeline
