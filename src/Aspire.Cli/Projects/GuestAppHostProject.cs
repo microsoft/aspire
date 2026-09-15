@@ -36,6 +36,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 {
     private const string DevCertificateCacheDirectoryName = "dev-certs";
     private const string CertificateBundleCacheDirectoryName = "bundles";
+    internal const string CodeGenerationVersionFileName = ".codegen-version";
 
     private readonly IInteractionService _interactionService;
     private readonly IAppHostCliBackchannel _backchannel;
@@ -1709,6 +1710,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Write generation hash for caching
         SaveGenerationHash(outputPath, integrationsList);
+        await File.WriteAllTextAsync(
+            Path.Combine(outputPath, CodeGenerationVersionFileName),
+            _executionContext.IdentityInformationalVersion,
+            cancellationToken);
 
         await PruneObsoleteGeneratedFilesAsync(outputPath, files.Keys, cancellationToken);
 

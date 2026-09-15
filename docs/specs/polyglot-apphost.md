@@ -1072,6 +1072,7 @@ flowchart LR
 ```text
 .aspire/modules/
 ├── .codegen-hash     # Hash of package references for cache invalidation
+├── .codegen-version  # Aspire CLI identity that generated the SDK
 ├── aspire.ts         # Generated SDK (builder classes, wrapper registrations)
 ├── base.ts           # Base classes, ReferenceExpression, AspireDict, AspireList
 └── transport.ts      # JSON-RPC client, Handle, MarshalledHandle, callbacks

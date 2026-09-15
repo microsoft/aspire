@@ -358,6 +358,12 @@
         "category": "Aspire"
       },
       {
+        "command": "aspire-vscode.restoreAppHost",
+        "title": "%command.restoreAppHost%",
+        "category": "Aspire",
+        "icon": "$(sync)"
+      },
+      {
         "command": "aspire-vscode.settings",
         "title": "%command.settings%",
         "category": "Aspire"
@@ -686,6 +692,10 @@
         },
         {
           "command": "aspire-vscode.runAppHost",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.restoreAppHost",
           "when": "false"
         },
         {
@@ -1161,7 +1171,7 @@
         },
         "aspire.enableAutoRestore": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "%configuration.aspire.enableAutoRestore%",
           "scope": "window"
         }

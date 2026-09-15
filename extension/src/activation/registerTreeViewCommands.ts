@@ -10,6 +10,7 @@ const treeElementCommands: ReadonlyArray<readonly [commandId: string, invoke: Tr
   ['aspire-vscode.openDashboard', (p, e) => p.openDashboard(e)],
   ['aspire-vscode.openDashboardToSide', (p, e) => p.openDashboardToSide(e)],
   ['aspire-vscode.openAppHostSource', (p, e) => p.openAppHostSource(e)],
+  ['aspire-vscode.restoreAppHost', (p, e) => p.restoreAppHost(e)],
   ['aspire-vscode.stopAppHost', (p, e) => p.stopAppHost(e)],
   ['aspire-vscode.deployAppHost', (p, e) => p.deployAppHost(e)],
   ['aspire-vscode.publishAppHost', (p, e) => p.publishAppHost(e)],
