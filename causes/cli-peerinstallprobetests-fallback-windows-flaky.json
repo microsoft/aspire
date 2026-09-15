@@ -1,0 +1,20 @@
+{
+  "id": "cli-peerinstallprobetests-fallback-windows-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: PeerInstallProbeTests fallback-to-version test fails on Windows with generated batch script",
+  "test_name": "Aspire.Cli.Tests.Acquisition.PeerInstallProbeTests.ProbeAsync_PeerEmitsArrayWithNonObjectFirstElement_FallsBackToVersion",
+  "job_name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+  "error_pattern": "Expected PeerProbeResult.Ok, got PeerProbeResult.Failed. Reason:\nPeer produced no usable output (and --version fallback). Test uses a generated FakePeerScript .cmd file on Windows that routes 'doctor' and '--version' invocations via findstr; the --version fallback branch did not produce usable output as expected.",
+  "analysis": "The test exercises CLI peer-install probe fallback logic via a dynamically generated Windows batch script, invoked through cmd.exe with findstr-based argument matching. This code path and test file are unrelated to the PR's changes (Kestrel certificate configuration in Aspire.Hosting). The failure indicates the CMD interpreter or process invocation did not behave as the test expected for the --version fallback branch, consistent with an environment/timing-sensitive issue on Windows CI runners rather than a code regression from the PR.",
+  "failure_details": "Error:\nExpected PeerProbeResult.Ok, got PeerProbeResult.Failed. Reason:\nPeer produced no usable output (and --version fallback).\n\nStack Trace:\nat Aspire.Cli.Tests.Acquisition.PeerInstallProbeTests.AssertProbeOk(PeerProbeResult result) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Acquisition\\PeerInstallProbeTests.cs:line 38\n   at Aspire.Cli.Tests.Acquisition.PeerInstallProbeTests.ProbeAsync_PeerEmitsArrayWithNonObjectFirstElement_FallsBackToVersion(String doctorStdout, String kind) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Acquisition\\PeerInstallProbeTests.cs:line 352\n--- End of stack trace from previous location ---\n\nStandard Output (sensitive values redacted):\nTemporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\ttnjta5z.10l\n[FakePeerScript] --- begin script at C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\ttnjta5z.10l\\peer.cmd ---\n@echo off\necho %* | findstr /C:\"doctor\" > nul\nif not errorlevel 1 goto :doctor\necho %* | findstr /C:\"--version\" > nul\nif not errorlevel 1 goto :version\nexit /b 127\n:doctor\necho [\"string\"]\nexit /b 0\n:version\necho 9.0.0\necho \nexit /b 0\n\n[FakePeerScript] --- end script at C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\ttnjta5z.10l\\peer.cmd ---\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\ttnjta5z.10l",
+  "occurrences": [
+    {
+      "run_id": 35003412018,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35003412018",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "pr_number": 20133,
+      "observed_at": "2026-09-15T18:20:21Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20147"
+}
