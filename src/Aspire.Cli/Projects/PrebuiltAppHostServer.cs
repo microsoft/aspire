@@ -26,8 +26,8 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 {
-    // Closure file names are owned by IntegrationClosureBuilder so generated integration
-    // projects cannot drift from the post-build reader's MSBuild contract.
+    // Closure file names are owned by IntegrationClosureBuilder so the polyglot path here and
+    // the CLI-managed AppHost closure restorer can't drift on the MSBuild contract.
     internal const string ClosureManifestFileName = "closure-manifest.txt";
     internal const string IntegrationProjectFileName = "IntegrationRestore.csproj";
 

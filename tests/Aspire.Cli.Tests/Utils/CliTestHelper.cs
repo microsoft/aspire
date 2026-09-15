@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
+using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Hooks;
@@ -43,6 +45,7 @@ using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Diagnostics;
+using Aspire.Shared;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Profiling;
 
@@ -228,6 +231,7 @@ internal static class CliTestHelper
 
         // AppHost project handlers - must match Program.cs registration pattern
         services.AddSingleton<DotNetAppHostProject>();
+        services.AddSingleton<CliManagedDotNetAppHostProject>();
         services.AddSingleton<Func<LanguageInfo, GuestAppHostProject>>(sp =>
         {
             return language => ActivatorUtilities.CreateInstance<GuestAppHostProject>(sp, language);
@@ -342,6 +346,104 @@ internal static class CliTestHelper
         services.AddTransient(options.AppHostBackchannelFactory);
 
         return services;
+    }
+
+    public static void ConfigureCliManagedNuGet(
+        CliServiceCollectionTestOptions options,
+        TemporaryWorkspace workspace,
+        LayoutConfiguration? layout = null)
+    {
+        if (layout is null)
+        {
+            var bundleRoot = workspace.WorkspaceRoot.CreateSubdirectory(Guid.NewGuid().ToString());
+            var managedDirectory = bundleRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+            File.WriteAllText(
+                Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                "");
+            layout = new LayoutConfiguration
+            {
+                LayoutPath = bundleRoot.FullName,
+                Components = new LayoutComponents
+                {
+                    Managed = BundleDiscovery.ManagedDirectoryName
+                }
+            };
+        }
+
+        options.LayoutDiscoveryFactory = _ => new FixedLayoutDiscovery(layout);
+        options.BundleServiceFactory = _ => new TestBundleService(isBundle: true)
+        {
+            Layout = layout
+        };
+        options.DotNetCliExecutionFactoryFactory = _ => new TestProcessExecutionFactory
+        {
+            AssertionCallback = (arguments, _, _, _) =>
+            {
+                if (arguments.Length >= 2 && arguments[0] == "nuget" && arguments[1] == "write-config")
+                {
+                    WriteNuGetConfigOverlay(arguments);
+                }
+            },
+            AttemptCallback = (_, _) => (
+                0,
+                JsonSerializer.Serialize(new NuGetSettingsInfo(
+                    ConfigPaths: [],
+                    CacheIdentity: "test-cache",
+                    Sources: [],
+                    SensitiveSourceValues: [],
+                    PackageSourceMappingEnabled: false,
+                    PackageSourceMappings: [],
+                    DisabledPackageSourceKeys: [],
+                    ReservedPackageSourceKeys: [],
+                    SourceIdentityKey: new byte[NuGetSourceIdentity.KeySizeInBytes])))
+        };
+    }
+
+    private static void WriteNuGetConfigOverlay(string[] arguments)
+    {
+        static string GetArgumentValue(string[] values, string name)
+        {
+            var index = Array.IndexOf(values, name);
+            return index >= 0 && index + 1 < values.Length
+                ? values[index + 1]
+                : throw new InvalidDataException($"Missing '{name}'.");
+        }
+
+        var request = JsonSerializer.Deserialize<NuGetConfigOverlayRequest>(
+            File.ReadAllText(GetArgumentValue(arguments, "--request")))
+            ?? throw new InvalidDataException("The NuGet configuration request was empty.");
+        var configuration = new XElement("configuration");
+        if (request.Sources.Length > 0)
+        {
+            configuration.Add(new XElement(
+                "packageSources",
+                request.Sources.Select(source => new XElement(
+                    "add",
+                    new XAttribute("key", source.Key),
+                    new XAttribute("value", source.Source)))));
+        }
+        if (request.PackageSourceMappings.Length > 0)
+        {
+            configuration.Add(new XElement(
+                "packageSourceMapping",
+                request.PackageSourceMappings.Select(mapping => new XElement(
+                    "packageSource",
+                    new XAttribute("key", mapping.SourceKey),
+                    mapping.Patterns.Select(pattern => new XElement(
+                        "package",
+                        new XAttribute("pattern", pattern)))))));
+        }
+        if (request.GlobalPackagesFolder is not null)
+        {
+            configuration.Add(new XElement(
+                "config",
+                new XElement(
+                    "add",
+                    new XAttribute("key", "globalPackagesFolder"),
+                    new XAttribute("value", request.GlobalPackagesFolder))));
+        }
+
+        new XDocument(configuration).Save(GetArgumentValue(arguments, "--output"));
     }
 }
 
@@ -638,7 +740,7 @@ internal sealed class CliServiceCollectionTestOptions
         var templateNuGetConfigService = serviceProvider.GetRequiredService<TemplateNuGetConfigService>();
         var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, prompter, executionContext, sdkInstaller, features, telemetry, hostEnvironment, templateNuGetConfigService, new HostEnvironment());
         var projectFactory = serviceProvider.GetRequiredService<IAppHostProjectFactory>();
-        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, serviceProvider.GetRequiredService<IEnvironment>(), templateNuGetConfigService, cliTemplateLogger);
+        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, serviceProvider.GetRequiredService<IEnvironment>(), templateNuGetConfigService, features, cliTemplateLogger);
         return new TemplateProvider([dotNetFactory, cliFactory]);
     };
 

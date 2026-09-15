@@ -3918,6 +3918,70 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void CreatePackageProbeManifest_MapsManagedAssemblyPackageMetadata()
+    {
+        var entry = CreatePackageBackedManifestEntry(
+            "/packages/aspire.hosting.redis/13.2.0/lib/net10.0/Aspire.Hosting.Redis.dll",
+            "Aspire.Hosting.Redis.dll",
+            assetType: "runtime");
+
+        var probeManifest = CreateClosureManifest(entry).CreatePackageProbeManifest();
+
+        var assembly = Assert.Single(probeManifest.ManagedAssemblies);
+        Assert.Equal("Aspire.Hosting.Redis", assembly.Name);
+        Assert.Null(assembly.Culture);
+        Assert.Equal(entry.SourcePath, assembly.Path);
+        Assert.Equal(entry.PackageId, assembly.PackageId);
+        Assert.Equal(entry.PackageVersion, assembly.PackageVersion);
+        Assert.Empty(probeManifest.NativeLibraries);
+    }
+
+    [Fact]
+    public void CreatePackageProbeManifest_MapsNativeLibrary()
+    {
+        var entry = CreatePackageBackedManifestEntry(
+            "/packages/example/1.0.0/runtimes/osx-arm64/native/libexample.dylib",
+            "libexample.dylib",
+            assetType: "native");
+
+        var probeManifest = CreateClosureManifest(entry).CreatePackageProbeManifest();
+
+        var nativeLibrary = Assert.Single(probeManifest.NativeLibraries);
+        Assert.Equal("libexample.dylib", nativeLibrary.FileName);
+        Assert.Equal(entry.SourcePath, nativeLibrary.Path);
+        Assert.Empty(probeManifest.ManagedAssemblies);
+    }
+
+    [Fact]
+    public void CreatePackageProbeManifest_MapsSatelliteAssemblyCulture()
+    {
+        var entry = CreatePackageBackedManifestEntry(
+            "/packages/example/1.0.0/lib/net10.0/fr/Example.resources.dll",
+            "fr/Example.resources.dll",
+            assetType: "resources");
+
+        var probeManifest = CreateClosureManifest(entry).CreatePackageProbeManifest();
+
+        var assembly = Assert.Single(probeManifest.ManagedAssemblies);
+        Assert.Equal("Example.resources", assembly.Name);
+        Assert.Equal("fr", assembly.Culture);
+    }
+
+    [Fact]
+    public void CreatePackageProbeManifest_IgnoresNonDllManagedAsset()
+    {
+        var entry = CreatePackageBackedManifestEntry(
+            "/packages/example/1.0.0/lib/net10.0/Example.xml",
+            "Example.xml",
+            assetType: "runtime");
+
+        var probeManifest = CreateClosureManifest(entry).CreatePackageProbeManifest();
+
+        Assert.Empty(probeManifest.ManagedAssemblies);
+        Assert.Empty(probeManifest.NativeLibraries);
+    }
+
+    [Fact]
     [PlatformSpecific(TestPlatforms.AnyUnix)]
     public async Task ReadClosureManifestAsync_PreservesTrailingWhitespaceInPaths()
     {
@@ -3949,6 +4013,35 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var entry = Assert.Single(Assert.IsType<AppHostServerClosureManifest>(manifest).Entries);
         Assert.Equal(sourcePath, entry.SourcePath);
         Assert.Equal(relativePath, entry.RelativePath);
+    }
+
+    private static AppHostServerClosureManifestEntry CreatePackageBackedManifestEntry(
+        string sourcePath,
+        string relativePath,
+        string assetType)
+    {
+        return new AppHostServerClosureManifestEntry
+        {
+            SourcePath = sourcePath,
+            RelativePath = relativePath,
+            PackageId = "Example",
+            PackageVersion = "1.0.0",
+            PathInPackage = relativePath,
+            PackageSha512 = "sha512-example",
+            AssetType = assetType
+        };
+    }
+
+    private static AppHostServerClosureManifest CreateClosureManifest(
+        AppHostServerClosureManifestEntry entry)
+    {
+        return new AppHostServerClosureManifest
+        {
+            ManifestFingerprint = "manifest",
+            ProjectLayoutFingerprint = "layout",
+            Entries = [entry],
+            AppSettingsContent = "{}"
+        };
     }
 
     [Fact]
