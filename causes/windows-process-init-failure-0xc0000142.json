@@ -2,10 +2,10 @@
   "id": "windows-process-init-failure-0xc0000142",
   "type": "infra-failure",
   "title": "Windows process initialization failure (exit code -1073741502 / 0xC0000142) in build/post-test steps",
-  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Redis.Tests, Hosting.Redis, Hosting.Redis, tests/Aspire... / Hosting.Redis (windows-latest)",
+  "job_name": "Tests / No-package tests (regular, Aspire.RabbitMQ.Client.Tests, RabbitMQ.Client, RabbitMQ.Client, tests/... / RabbitMQ.Client (windows-latest)",
   "error_pattern": "Process completed with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED), a known transient Windows runner process-initialization failure occurring in post-test upload/cleanup steps on windows-latest runner.",
-  "analysis": "Multiple unrelated post-test steps (hang dump check, log/test result upload, CLI E2E recording copy/upload, results summary, post-checkout) all failed with the same exit code -1073741502, which decodes to 0xC0000142 STATUS_DLL_INIT_FAILED. This is a Windows runner-level process initialization failure, not something the test or build code can trigger, and the PR only modifies dependency version files (eng/Version.Details.xml, eng/Versions.props).",
-  "failure_details": "Annotations:\n- failure: Process completed with exit code -1073741502.\n- failure: Process completed with exit code -1073741502.\n- failure: Process completed with exit code -1073741502.\nFailed Steps: Check for hang dump files, Upload logs, and test results, Copy CLI E2E recordings for upload, Upload CLI E2E recordings, Generate test results summary, Post Checkout code",
+  "analysis": "Three separate steps in this job (Check for hang dump files, Upload logs/test results, Copy/Upload CLI E2E recordings, Generate test results summary, Post Checkout code) all failed with exit code -1073741502, which corresponds to STATUS_DLL_INIT_FAILED (0xC0000142). This is a well-known transient Windows runner process-initialization failure unrelated to any test or build code; it recurs sporadically across many unrelated jobs and PRs.",
+  "failure_details": "Annotations:\n- failure: Process completed with exit code -1073741502.\n- failure: Process completed with exit code -1073741502.\n- failure: Process completed with exit code -1073741502.\nFailed steps: Check for hang dump files, Upload logs, and test results, Copy CLI E2E recordings for upload, Upload CLI E2E recordings, Generate test results summary, Post Checkout code. Job logs unavailable (Failed to fetch logs for job).",
   "occurrences": [
     {
       "run_id": 29060131780,
@@ -139,6 +139,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Redis.Tests, Hosting.Redis, Hosting.Redis, tests/Aspire... / Hosting.Redis (windows-latest)",
       "pr_number": 20146,
       "observed_at": "2026-09-15T21:32:50Z"
+    },
+    {
+      "run_id": 35023788042,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35023788042",
+      "job": "Tests / No-package tests (regular, Aspire.RabbitMQ.Client.Tests, RabbitMQ.Client, RabbitMQ.Client, tests/... / RabbitMQ.Client (windows-latest)",
+      "pr_number": 20052,
+      "observed_at": "2026-09-15T21:59:54Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18720"

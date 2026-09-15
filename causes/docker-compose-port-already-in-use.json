@@ -1,9 +1,12 @@
 {
   "id": "docker-compose-port-already-in-use",
   "type": "flaky-test",
-  "title": "Flaky: DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints fails due to port already in use",
+  "title": "Flaky: DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints fails due to 'docker compose up' exiting with code 1",
   "test_name": "Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints",
-  "error_pattern": "Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint aspire-env-...-nginx-1: failed to bind host port for 0.0.0.0:56774:172.18.0.3:80/tcp: address already in use\n'docker compose up' failed with exit code 1.\nAssert.Contains() Failure: Filter not matched in collection\nCollection: []",
+  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Docker.Tests, Hosting.Docker, Hosting.Docker, tests/Asp... / Hosting.Docker (ubuntu-latest)",
+  "error_pattern": "'docker compose up' failed with exit code 1. Assert.Contains() Failure: Filter not matched in collection\nCollection: []",
+  "analysis": "The test invokes 'docker compose up' as part of publishing a Docker Compose environment, then asserts on printed dashboard/service endpoint output. When 'docker compose up' fails (e.g. due to port contention or container runtime issues on the shared CI runner), the output collection is empty and the Assert.Contains() call fails. This is a previously observed recurring failure pattern for this exact test and is unrelated to the PR's changes (NuGet config, build scripts, docs).",
+  "failure_details": "Temporary workspace created at: /tmp/Aspire.Hosting.TestUtilities/Workspace/g0xfcd42.kos\nUsing random host port: 54824\n[CreateStep] docker-compose-up-env\n    [Information:docker-compose-up-env] Container runtime auto-detected: Docker (docker).\n    [CreateTask:docker-compose-up-env] Running compose up for **env** using **Docker**\n      [CompleteTask:Running compose up for **env** using **Docker**] Compose deployment failed (Docker): 'docker compose up' failed with exit code 1. Ensure 'docker' is installed and available on PATH. The container runtime was auto-detected as 'docker'. Set ASPIRE_CONTAINER_RUNTIME to override (e.g., 'docker' or 'podman').\n\nAssert.Contains() Failure: Filter not matched in collection\nCollection: []\nat Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 460",
   "occurrences": [
     {
       "run_id": 29060081150,
@@ -25,6 +28,13 @@
       "job": "Tests / Hosting.Docker / Hosting.Docker (ubuntu-latest)",
       "pr_number": 18930,
       "observed_at": "2026-08-04T02:20:19Z"
+    },
+    {
+      "run_id": 35023788042,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35023788042",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Docker.Tests, Hosting.Docker, Hosting.Docker, tests/Asp... / Hosting.Docker (ubuntu-latest)",
+      "pr_number": 20052,
+      "observed_at": "2026-09-15T21:59:54Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18719"
