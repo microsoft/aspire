@@ -12,12 +12,13 @@ using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
 using Azure.Core;
+using Azure.Identity;
 using Hex1b.Automation;
 using Xunit;
 
 namespace Aspire.Deployment.EndToEnd.Tests;
 
-public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output)
+public sealed partial class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output)
 {
     [Fact]
     public async Task DeployEchoDotnetProjectAsFoundryHostedAgent()
@@ -49,29 +50,22 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
             var appHostFile = Path.Combine(projectDir, "apphost.cs");
             var directives = string.Join(Environment.NewLine,
                 File.ReadLines(appHostFile).Where(line => line.StartsWith("#:", StringComparison.Ordinal)));
-            File.WriteAllText(appHostFile, $$"""
-                {{directives}}
-                #pragma warning disable ASPIREDOTNETPROJECT001
-                using Aspire.Hosting.Foundry;
-
-                var builder = DistributedApplication.CreateBuilder(args);
-                var project = builder.AddFoundry("foundry").AddProject("project");
-                builder.AddDotnetProject("echo", Path.Combine("EchoAgent", "EchoAgent.csproj"))
-                    .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
-                builder.Build().Run();
-                """);
+            File.WriteAllText(appHostFile, FoundryEchoTestApp.CreateAppHost(directives));
             FoundryEchoTestApp.Write(Path.Combine(projectDir, "EchoAgent"), marker);
 
             await auto.RunCommandAsync(
-                $"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=swedencentral AZURE__RESOURCEGROUP={resourceGroupName} AZURE__SUBSCRIPTIONID={subscriptionId}" +
+                // Linux permits both spellings; the workflow's Azure__Location must not override this scenario's region.
+                $"unset ASPIRE_PLAYGROUND Azure__Location Azure__ResourceGroup Azure__SubscriptionId Azure__TenantId && " +
+                $"export AZURE__LOCATION=swedencentral AZURE__RESOURCEGROUP={resourceGroupName} AZURE__SUBSCRIPTIONID={subscriptionId}" +
                 " && export AZURE__TENANTID=$(az account show --query tenantId -o tsv)", counter);
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(TimeSpan.FromMinutes(35), counter: counter);
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            var endpoint = await GetProjectEndpointAsync(subscriptionId, resourceGroupName, cts.Token);
-            var client = new AIProjectClient(endpoint, AzureAuthenticationHelpers.GetAzureCredential());
+            var credential = new AzureCliCredential(new AzureCliCredentialOptions { TenantId = AzureAuthenticationHelpers.GetTenantId() });
+            var endpoint = await GetProjectEndpointAsync(subscriptionId, resourceGroupName, credential, cts.Token);
+            var client = new AIProjectClient(endpoint, credential);
             var versions = new List<ProjectsAgentVersion>();
             await foreach (var version in client.AgentAdministrationClient.GetAgentVersionsAsync(agentName, cancellationToken: cts.Token))
             {
@@ -157,9 +151,9 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
         }
     }
 
-    private static async Task<Uri> GetProjectEndpointAsync(string subscriptionId, string resourceGroupName, CancellationToken cancellationToken)
+    private static async Task<Uri> GetProjectEndpointAsync(string subscriptionId, string resourceGroupName, TokenCredential credential, CancellationToken cancellationToken)
     {
-        var token = await AzureAuthenticationHelpers.GetAzureCredential().GetTokenAsync(
+        var token = await credential.GetTokenAsync(
             new TokenRequestContext(["https://management.azure.com/.default"]), cancellationToken);
         using var http = new HttpClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
