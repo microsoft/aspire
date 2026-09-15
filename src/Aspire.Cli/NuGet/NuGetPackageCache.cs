@@ -215,8 +215,19 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
             collectedPackages.AddRange(result.Packages);
         }
 
-        // An explicit package ID remains installable even when it is hidden from package discovery.
-        return collectedPackages;
+        // If no specific filter is specified we use the fallback filter which is useful in most circumstances
+        // other that aspire update which really needs to see all the packages to work effectively.
+        var effectiveFilter = (NuGetPackage p) =>
+        {
+            // Apply deprecated package filter unless the user wants to show deprecated packages
+            if (!features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
+            {
+                return !DeprecatedPackages.IsDeprecated(p.Id);
+            }
+            return true;
+        };
+
+        return collectedPackages.Where(effectiveFilter);
     }
 }
 
