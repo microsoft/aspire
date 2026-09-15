@@ -15,6 +15,11 @@ namespace Aspire.Cli.Resources {
     [System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class PsCommandStrings {
+        public static string ProtocolRequiresFollowJson {
+            get {
+                return ResourceManager.GetString("ProtocolRequiresFollowJson", resourceCulture);
+            }
+        }
 
         private static System.Resources.ResourceManager resourceMan;
 

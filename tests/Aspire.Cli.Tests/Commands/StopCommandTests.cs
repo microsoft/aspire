@@ -55,6 +55,269 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
+    [Theory]
+    [InlineData(true, true, "AppHost.csproj")]
+    [InlineData(true, false, "AppHost.cs")]
+    [InlineData(false, true, "AppHost.csproj")]
+    [InlineData(false, false, "apphost.ts")]
+    public async Task StopCommand_WithPid_StopsOnlySelectedConnection(bool explicitPath, bool interactive, string fileName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App Host", fileName);
+        var selected = CreateConnection(appHostPath, int.MaxValue - 1, isInScope: false);
+        var sibling = CreateConnection(appHostPath, int.MaxValue - 2, isInScope: false);
+        selected.AppHostInfo = new AppHostInformation { AppHostPath = appHostPath, ProcessId = int.MaxValue - 1, CliProcessId = int.MaxValue - 3 };
+        sibling.AppHostInfo = new AppHostInformation { AppHostPath = appHostPath, ProcessId = int.MaxValue - 2, CliProcessId = int.MaxValue - 3 };
+        selected.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+        sibling.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 2);
+        monitor.AddConnection(selected.SocketPath, selected);
+        monitor.AddConnection(sibling.SocketPath, sibling);
+        var processFactory = new TestProcessExecutionFactory();
+
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, processFactory, interactive);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var arguments = new List<string> { "stop", "--pid", selected.AppHostInfo.ProcessId.ToString(CultureInfo.InvariantCulture), "--nologo" };
+        if (explicitPath)
+        {
+            arguments.AddRange(["--apphost", appHostPath]);
+        }
+        if (!interactive)
+        {
+            arguments.Add("--non-interactive");
+        }
+
+        var exitCode = await command.Parse(arguments.ToArray()).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, selected.StopAppHostCallCount);
+        Assert.Equal(0, sibling.StopAppHostCallCount);
+        Assert.False(File.Exists(selected.SocketPath));
+        Assert.True(File.Exists(sibling.SocketPath));
+        Assert.Empty(processFactory.CreatedExecutions);
+        Assert.Equal(1, monitor.ScanCallCount);
+        Assert.False(monitor.LastPruneOrphanedSockets);
+        Assert.Empty(interactionService.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData("missing", false)]
+    [InlineData("missing", true)]
+    [InlineData("pid", false)]
+    [InlineData("pid", true)]
+    [InlineData("path", true)]
+    [InlineData("directory", true)]
+    [InlineData("cli", false)]
+    [InlineData("metadata", false)]
+    [InlineData("ambiguous", false)]
+    public async Task StopCommand_WithPid_NoExactMatchStopsNothing(string mismatch, bool explicitPath)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
+        var connection = CreateConnection(appHostPath, int.MaxValue - 1);
+        connection.AppHostInfo = new AppHostInformation { AppHostPath = appHostPath, ProcessId = int.MaxValue - 1, CliProcessId = int.MaxValue - 3 };
+        var sibling = CreateConnection(appHostPath, mismatch == "ambiguous" ? int.MaxValue - 1 : int.MaxValue - 2);
+        connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+        sibling.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 2);
+        monitor.AddConnection(connection.SocketPath, connection);
+        monitor.AddConnection(sibling.SocketPath, sibling);
+        var pid = mismatch switch
+        {
+            "missing" or "cli" => int.MaxValue - 3,
+            "pid" => int.MaxValue,
+            _ => int.MaxValue - 1
+        };
+        if (mismatch == "missing")
+        {
+            monitor.ClearConnections();
+        }
+        if (mismatch == "metadata")
+        {
+            connection.AppHostInfo = null;
+        }
+        var requestedPath = mismatch switch
+        {
+            "path" => Path.Combine(workspace.WorkspaceRoot.FullName, "Other", "AppHost.csproj"),
+            "directory" => Path.GetDirectoryName(appHostPath)!,
+            _ => appHostPath
+        };
+        var processFactory = new TestProcessExecutionFactory();
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, processFactory, interactive: false);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var arguments = new List<string> { "stop", "--pid", pid.ToString(CultureInfo.InvariantCulture), "--non-interactive", "--nologo" };
+        if (explicitPath)
+        {
+            arguments.AddRange(["--apphost", requestedPath]);
+        }
+
+        var exitCode = await command.Parse(arguments.ToArray()).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Equal(0, connection.StopAppHostCallCount);
+        Assert.Equal(0, sibling.StopAppHostCallCount);
+        Assert.True(File.Exists(connection.SocketPath));
+        Assert.True(File.Exists(sibling.SocketPath));
+        Assert.Empty(processFactory.CreatedExecutions);
+        Assert.Equal(1, monitor.ScanCallCount);
+        Assert.False(monitor.LastPruneOrphanedSockets);
+        Assert.Empty(interactionService.DisplayedSuccess);
+        var expectedError = mismatch == "ambiguous"
+            ? string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AmbiguousAppHostPid, pid)
+            : explicitPath
+                ? string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostNotRunningAtPathWithPid, requestedPath, pid)
+                : string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostNotRunningWithPid, pid);
+        Assert.Equal(expectedError, Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Theory]
+    [InlineData("stop --pid 0")]
+    [InlineData("stop --pid -1")]
+    [InlineData("stop --pid 1 --all")]
+    [InlineData("stop --pid 1 --force")]
+    [InlineData("stop --pid 1 --all --force")]
+    public async Task StopCommand_WithInvalidPidOptions_DoesNotScanOrStop(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = CreateConnection(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.cs"), 1);
+        monitor.AddConnection(connection.SocketPath, connection);
+        var processFactory = new TestProcessExecutionFactory();
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, processFactory, interactive: false);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(0, monitor.ScanCallCount);
+        Assert.Equal(0, connection.StopAppHostCallCount);
+        Assert.Empty(processFactory.CreatedExecutions);
+        Assert.Single(interactionService.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData("stop --pid")]
+    [InlineData("stop --pid abc")]
+    [InlineData("stop --pid 1.5")]
+    [InlineData("stop --pid 2147483648")]
+    public async Task StopCommand_WithMalformedPid_FailsParsing(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(commandLine);
+
+        Assert.NotEmpty(result.Errors);
+        Assert.NotEqual(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StopCommand_WithPid_FailedRpcDoesNotFallBack(bool disconnect)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var selected = CreateConnection(appHostPath, int.MaxValue - 1);
+        var sibling = CreateConnection(appHostPath, int.MaxValue - 2);
+        selected.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+        sibling.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 2);
+        selected.StopAppHostHandler = _ => disconnect
+            ? throw new IOException("The selected connection was lost.")
+            : Task.FromResult(false);
+        monitor.AddConnection(selected.SocketPath, selected);
+        monitor.AddConnection(sibling.SocketPath, sibling);
+        var processFactory = new TestProcessExecutionFactory();
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, processFactory, interactive: false);
+        using var provider = services.BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse($"stop --pid {int.MaxValue - 1}");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Equal(1, selected.StopAppHostCallCount);
+        Assert.Equal(0, sibling.StopAppHostCallCount);
+        Assert.True(File.Exists(selected.SocketPath));
+        Assert.True(File.Exists(sibling.SocketPath));
+        Assert.Equal(1, monitor.ScanCallCount);
+        Assert.Empty(processFactory.CreatedExecutions);
+        Assert.Empty(interactionService.DisplayedSuccess);
+        Assert.Single(interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task StopCommand_WithPid_DoesNotRebindAfterSelection()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.cs");
+        var selected = CreateConnection(appHostPath, int.MaxValue - 1);
+        var replacement = CreateConnection(appHostPath, int.MaxValue - 1);
+        selected.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+        replacement.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 2);
+        monitor.AddConnection(selected.SocketPath, selected);
+        var identifier = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, "AppHost.cs", int.MaxValue - 1);
+        interactionService.ShowStatusCallback = message =>
+        {
+            if (message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, identifier))
+            {
+                monitor.ClearConnections();
+                monitor.AddConnection(replacement.SocketPath, replacement);
+            }
+        };
+        var processFactory = new TestProcessExecutionFactory();
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, processFactory, interactive: false);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse($"stop --pid {int.MaxValue - 1}").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Same(replacement, Assert.Single(monitor.Connections));
+        Assert.Equal(1, selected.StopAppHostCallCount);
+        Assert.Equal(0, replacement.StopAppHostCallCount);
+        Assert.False(File.Exists(selected.SocketPath));
+        Assert.True(File.Exists(replacement.SocketPath));
+        Assert.Equal(1, monitor.ScanCallCount);
+    }
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("stop --all")]
+    public async Task StopCommand_WithoutPid_StillStopsSameProjectInstances(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.cs");
+        var first = CreateConnection(appHostPath, int.MaxValue - 1);
+        var second = CreateConnection(appHostPath, int.MaxValue - 2);
+        first.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+        second.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 2);
+        monitor.AddConnection(first.SocketPath, first);
+        monitor.AddConnection(second.SocketPath, second);
+        var processFactory = new TestProcessExecutionFactory();
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, processFactory, interactive: true);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(File.Exists(first.SocketPath));
+        Assert.False(File.Exists(second.SocketPath));
+        Assert.Equal(commandLine == "stop" ? 3 : 2, interactionService.DisplayedSuccess.Count);
+        Assert.True(monitor.LastPruneOrphanedSockets);
+    }
+
     [Fact]
     public async Task StopCommand_WithInvalidExplicitAppHost_ReturnsFailedToFindProject()
     {
@@ -1276,6 +1539,29 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
               "Items": {}
             }
             """);
+    }
+
+    private IServiceCollection CreateInstanceStopServices(
+        TemporaryWorkspace workspace,
+        TestAuxiliaryBackchannelMonitor monitor,
+        TestInteractionService interactionService,
+        TestProcessExecutionFactory processFactory,
+        bool interactive)
+    {
+        return CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.DotNetCliExecutionFactoryFactory = _ => processFactory;
+            options.CliHostEnvironmentFactory = _ => interactive
+                ? TestHelpers.CreateInteractiveHostEnvironment()
+                : TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    throw new InvalidOperationException("Instance targeting must not discover or validate projects.")
+            };
+        });
     }
 
     private static TestAppHostAuxiliaryBackchannel CreateConnection(string appHostPath, int processId, bool isInScope = true)

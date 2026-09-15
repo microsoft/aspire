@@ -1,0 +1,11 @@
+Source pack: aspire-wave-assets.zip.
+
+Supplied provenance:
+Generated from the new rounded triangle single-wave concept in this conversation.
+
+The template PNG pair is derived from raw/aspire-tray-black-1024.png.
+The source's alpha bounds are (187, 211, 650, 597). A square crop at
+(185, 182, 654, 654), in top-left pixel coordinates, removes excess transparent
+padding while preserving the silhouette and wave. The crop is resampled with
+Core Graphics high-quality interpolation to 20 and 40 pixels, both representing
+a 20-point image. These generated concept assets are not official brand masters.

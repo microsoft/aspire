@@ -23,25 +23,42 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
     /// </summary>
     public int ScanCallCount { get; private set; }
 
+    public bool? LastPruneOrphanedSockets { get; private set; }
+    public bool? LastThrowOnDiscoveryFailure { get; private set; }
+    public bool? LastWatchReadOnly { get; private set; }
+    public Func<CancellationToken, IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>>>? WatchConnectionsHandler { get; set; }
+
     public Func<CancellationToken, Task>? ScanAsyncCallback { get; set; }
 
     /// <summary>
     /// Triggers an immediate scan. In the test implementation, this just increments ScanCallCount.
     /// </summary>
-    public Task ScanAsync(CancellationToken cancellationToken = default)
+    public Task ScanAsync(CancellationToken cancellationToken = default, bool pruneOrphanedSockets = true, bool throwOnDiscoveryFailure = false)
     {
         ScanCallCount++;
+        LastPruneOrphanedSockets = pruneOrphanedSockets;
+        LastThrowOnDiscoveryFailure = throwOnDiscoveryFailure;
         return ScanAsyncCallback?.Invoke(cancellationToken) ?? Task.CompletedTask;
     }
 
-    public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default, bool readOnly = false)
     {
-        await ScanAsync(cancellationToken).ConfigureAwait(false);
+        LastWatchReadOnly = readOnly;
+        if (WatchConnectionsHandler is not null)
+        {
+            await foreach (var connections in WatchConnectionsHandler(cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                yield return connections;
+            }
+            yield break;
+        }
+
+        await ScanAsync(cancellationToken, pruneOrphanedSockets: !readOnly, throwOnDiscoveryFailure: readOnly).ConfigureAwait(false);
         yield return Connections.ToList();
 
         await foreach (var _ in _connectionChanges.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
         {
-            await ScanAsync(cancellationToken).ConfigureAwait(false);
+            await ScanAsync(cancellationToken, pruneOrphanedSockets: !readOnly, throwOnDiscoveryFailure: readOnly).ConfigureAwait(false);
             yield return Connections.ToList();
         }
     }

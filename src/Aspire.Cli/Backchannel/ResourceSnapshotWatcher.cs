@@ -11,13 +11,13 @@ namespace Aspire.Cli.Backchannel;
 /// Watches for resource snapshot changes from an AppHost backchannel connection
 /// and maintains an up-to-date collection of resources.
 /// </summary>
-internal sealed class ResourceSnapshotWatcher : IDisposable
+internal sealed class ResourceSnapshotWatcher : IDisposable, IAsyncDisposable
 {
     internal const int UpdateBufferCapacity = 256;
 
     private readonly IAppHostAuxiliaryBackchannel _connection;
     private readonly Dictionary<string, ResourceSnapshot> _resources = new(StringComparers.ResourceName);
-    private readonly ILogger<ResourceSnapshotWatcher> _logger;
+    private readonly ILogger _logger;
     private readonly Channel<bool>? _updateSignal;
     private readonly Dictionary<string, ResourceSnapshotUpdate>? _pendingUpdates;
     private readonly object _resourcesLock = new();
@@ -29,7 +29,7 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
     private bool _resyncPending;
     public ResourceSnapshotWatcher(
         IAppHostAuxiliaryBackchannel connection,
-        ILogger<ResourceSnapshotWatcher> logger,
+        ILogger logger,
         bool includeHidden = false,
         bool bufferUpdates = false)
     {
@@ -346,6 +346,13 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
     public void Dispose()
     {
         _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _cts.CancelAsync().ConfigureAwait(false);
+        await _watchTask.ConfigureAwait(false);
         _cts.Dispose();
     }
 

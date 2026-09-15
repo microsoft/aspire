@@ -604,6 +604,8 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("ps", "--format", "json")]
     [InlineData("ps", "--format=json")]
+    [InlineData("ps", "--protocol-version", "1", "--banner")]
+    [InlineData("stop", "--protocol-version=1", "--banner")]
     [InlineData("config", "info", "--json")]
     [InlineData("resource", "database", "reset-password", "--load-arguments")]
     [InlineData("extension", "get-apphosts")]

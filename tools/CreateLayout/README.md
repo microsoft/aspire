@@ -1,148 +1,86 @@
 # CreateLayout Tool
 
-This tool creates the Aspire bundle layout for distribution. It assembles all components (CLI, Dashboard, DCP, runtime, and tools) into a self-contained package that can run without requiring a globally-installed .NET SDK.
-
-## Purpose
-
-The bundle layout enables polyglot app hosts (TypeScript, Python, Go, etc.) to use Aspire without needing a .NET SDK installed. The bundle includes:
-
-- **Aspire CLI** - Native AOT compiled command-line interface
-- **.NET Runtime** - Shared runtime for managed components
-- **Dashboard** - Blazor-based monitoring UI
-- **DCP** - Developer Control Plane (orchestrator)
-- **AppHost Server** - Pre-built server for running app models
-- **NuGet Helper** - Package search and restore operations
-- **Dev-certs** - HTTPS certificate management
+Creates the payload embedded in the Aspire CLI: the unified `aspire-managed`
+executable (Dashboard, AppHost Server, NuGet), DCP, and the native macOS tray app.
+The tool copies prepared components; it does not publish or sign them.
 
 ## Prerequisites
 
-Before running CreateLayout, you must:
+- Publish `Aspire.Managed` for the target RID.
+- Restore the target RID's DCP NuGet package.
+- For macOS, publish the tray app with `PackageTray` and complete any official signing **before** assembling the layout.
 
-1. Build the Aspire solution with the required components published
-2. Have the following publish outputs available in the artifacts directory:
-   - `Aspire.Managed` → `artifacts/bin/Aspire.Managed/{config}/{tfm}/publish/`
-
-The build scripts (`./build.sh -bundle` / `./build.cmd -bundle`) handle this automatically.
-
-## Usage
+`eng/Bundle.proj` orchestrates these steps and the final CLI publish:
 
 ```bash
-dotnet run --project tools/CreateLayout/CreateLayout.csproj -- [options]
+./dotnet.sh msbuild eng/Bundle.proj /p:Configuration=Release /p:TargetRid=osx-arm64
 ```
 
-### Required Options
+`SkipNativeBuild=true` skips the outer CLI publish, not the macOS tray build.
+`SkipTrayBuild=true` reuses a prepared app, particularly after official signing.
+Never republish or modify a signed app before copying it into the payload.
+`CliPublishDir` redirects the final native CLI publish to a separate directory
+for local validation without overwriting an executable that is currently running.
+
+## Options
 
 | Option | Description |
 |--------|-------------|
-| `-o, --output <path>` | Output directory for the layout |
-| `-a, --artifacts <path>` | Path to build artifacts directory |
+| `-o, --output <path>` | Required output directory (replaced on each build) |
+| `-a, --artifacts <path>` | Required build artifacts directory |
+| `--rid <rid>` | Required target runtime identifier |
+| `--bundle-version <version>` | Archive version; default `0.0.0-dev` |
+| `--tray-app <path>` | Prepared `.app` directory, required for macOS; ignored on Linux/Windows |
+| `--archive` | Create a tar.gz payload archive |
+| `--verbose` | Enable detailed output |
 
-### Optional Options
+## macOS Example
 
-| Option | Description |
-|--------|-------------|
-| `-r, --runtime <path>` | Path to existing .NET runtime to include |
-| `--rid <rid>` | Runtime identifier (default: current platform) |
-| `--bundle-version <ver>` | Version string for the layout |
-| `--download-runtime` | Download .NET and ASP.NET runtimes from Microsoft |
-| `--runtime-version <ver>` | Specific .NET SDK version to download |
-| `--archive` | Create archive (zip/tar.gz) after building |
-| `--verbose` | Enable verbose output |
-
-### Examples
-
-**Build layout with runtime download:**
 ```bash
-dotnet run --project tools/CreateLayout/CreateLayout.csproj -- \
-  --output ./artifacts/bundle/linux-x64 \
-  --artifacts ./artifacts \
-  --rid linux-x64 \
-  --bundle-version 13.2.0 \
-  --download-runtime \
-  --archive \
-  --verbose
+bash src/Aspire.Tray/Mac/publish.sh osx-arm64
+
+./dotnet.sh run --project tools/CreateLayout/CreateLayout.csproj -- \
+  --output artifacts/bundle/osx-arm64 \
+  --artifacts artifacts \
+  --rid osx-arm64 \
+  --bundle-version 13.6.0-dev \
+  --tray-app "artifacts/bin/Aspire.Tray.Mac/Release/net10.0/osx-arm64/app/Aspire Tray.app" \
+  --archive
 ```
 
-**Build layout with existing runtime:**
-```bash
-dotnet run --project tools/CreateLayout/CreateLayout.csproj -- \
-  --output ./artifacts/bundle/win-x64 \
-  --artifacts ./artifacts \
-  --runtime /path/to/dotnet \
-  --rid win-x64
-```
+## Payload Structure
 
-## Output Structure
-
-The tool creates the following layout:
-
-```
+```text
 {output}/
-├── aspire[.exe]             # Native AOT CLI executable
-├── runtime/                 # .NET shared runtime
-│   ├── dotnet[.exe]
-│   └── shared/
-│       ├── Microsoft.NETCore.App/{version}/
-│       └── Microsoft.AspNetCore.App/{version}/
-├── dashboard/               # Aspire Dashboard (framework-dependent)
-├── dcp/                     # DCP binaries
-├── aspire-server/           # Pre-built AppHost server (framework-dependent)
-└── tools/
-    ├── aspire-nuget/        # NuGet helper tool
-    └── dev-certs/           # Certificate management
+├── managed/
+│   ├── aspire-managed[.exe]
+│   └── wwwroot/
+├── dcp/
+│   └── ...
+└── tray/                              # macOS only
+    └── Aspire Tray.app/
+        └── Contents/
+            ├── MacOS/aspire-tray
+            ├── Info.plist
+            ├── Resources/Aspire.icns
+            └── _CodeSignature/
 ```
 
-## How It Works
+The complete macOS app is copied, including hidden files and signatures, with
+Unix file modes preserved. Missing executable/plist/icon/signature or missing execute bits
+fail packaging rather than silently producing a broken macOS bundle. Layouts
+installed by older CLIs remain valid without a tray. Windows tray sources are an
+unvalidated read-only scaffold and are never included.
 
-1. **Copies CLI** - Finds the native AOT compiled CLI from artifacts and copies to root
-2. **Downloads/Copies Runtime** - Either downloads from Microsoft or copies from specified path
-3. **Copies Dashboard** - Copies the published Dashboard output
-4. **Copies DCP** - Finds DCP binaries from NuGet package restore output
-5. **Copies AppHost Server** - Copies the published RemoteHost (server) output
-6. **Copies NuGet Helper** - Copies the published NuGet helper tool
-7. **Copies Dev-certs** - Copies the dev-certs tool from SDK
-8. **Creates Archive** - Optionally creates .zip (Windows) or .tar.gz (Linux/macOS)
+The tar.gz archive is placed next to the output directory and embedded during
+the CLI's NativeAOT publish. See [the bundle specification](../../docs/specs/bundle.md)
+for signing order, discovery, installation and lease behavior.
 
-## Runtime Download
-
-When `--download-runtime` is specified, the tool:
-
-1. Downloads the .NET SDK from `builds.dotnet.microsoft.com` (using `--runtime-version` for the SDK version)
-2. Extracts the .NET runtime and ASP.NET Core runtime from the SDK to the `runtime/` directory
-3. Extracts the `dotnet-dev-certs` tool from the SDK to `tools/dev-certs/`
-
-## Integration with Build Scripts
-
-The recommended way to build the bundle is through the main build scripts:
-
-**Linux/macOS:**
-```bash
-./build.sh -bundle
-```
-
-**Windows:**
-```powershell
-.\build.cmd -bundle
-```
-
-These scripts handle:
-- Building the solution
-- Publishing bundle components
-- Running CreateLayout with appropriate arguments
-
-## Troubleshooting
-
-### "AppHost Server publish output not found"
-Run `dotnet publish` on `Aspire.Hosting.RemoteHost` first:
-```bash
-dotnet publish src/Aspire.Hosting.RemoteHost/Aspire.Hosting.RemoteHost.csproj -c Release
-```
-
-### "Dashboard publish output not found"
-Run `dotnet publish` on `Aspire.Dashboard` first:
-```bash
-dotnet publish src/Aspire.Dashboard/Aspire.Dashboard.csproj -c Release
-```
-
-### "DCP not found"
-DCP binaries come from the NuGet package. Ensure the solution has been restored and built.
+`Bundle.proj` verifies every produced macOS archive with
+`verify-tray-payload.sh`: it extracts the app under
+`artifacts/tray-payload-verification/{rid}/`, checks the executable/plist/icon/signature,
+verifies execute bits and the app seal, and never launches the GUI. This runs
+before embedding, including the official layout-only signing pipeline path.
+The shared `tests/Aspire.Tray.Tests` contract/lifecycle suite runs through the
+normal test project discovery and selective matrix, including macOS. Platform
+project changes also select the shared suite and packaging regression tests.

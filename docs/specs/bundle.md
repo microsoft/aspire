@@ -33,6 +33,7 @@ The Aspire Bundle is a platform-specific archive containing the Aspire CLI and a
 - **Aspire CLI** (native AOT executable, includes native certificate management)
 - **Aspire Managed** (unified self-contained binary: Dashboard + AppHost Server + NuGet Helper)
 - **Developer Control Plane (DCP)** (no longer distributed via NuGet)
+- **Aspire Tray** (Windows NativeAOT notification-area companion and macOS NativeAOT AppKit menu-bar companion; optional for older layouts and absent on Linux)
 
 **Key change**: DCP and Dashboard are now bundled with the CLI installation, not downloaded as NuGet packages. Dashboard, AppHost Server, and NuGet Helper are consolidated into a single `aspire-managed` binary that dispatches via subcommands. Certificate management is handled natively in the CLI (no subprocess needed). This:
 
@@ -164,8 +165,23 @@ aspire-{version}-{platform}/
 │   ├── dcp[.exe]                       # Native executable
 │   └── ...
 │
+├── tray/                               # macOS only
+│   └── Aspire Tray.app/
+│       └── Contents/
+│           ├── MacOS/aspire-tray       # NativeAOT executable
+│           ├── Info.plist             # Product version, LSUIElement
+│           ├── Resources/Aspire.icns  # App icon
+│           └── _CodeSignature/       # Sealed app resources
+│
 └── (no more runtime/, dashboard/, aspire-server/, tools/ directories)
 ```
+
+In installed versioned layouts these components live under `versions/{id}/`,
+accessed through the `bundle/` link. `LayoutConfiguration.GetTrayPath()` returns
+the executable path only when discovery finds it. Tray absence does not invalidate
+an existing layout; new macOS payloads, however, must include the complete app.
+Windows `win-x64` and `win-arm64` payloads instead contain `tray/aspire-tray.exe`
+and the original `src/Shared/Aspire.ico` as `tray/Aspire.ico`.
 
 **Key change from previous layout**: The separate `.NET Runtime` (~106 MB), `dashboard/` (~42 MB), `aspire-server/` (~19 MB), `tools/aspire-nuget/` (~5 MB), and `tools/dev-certs/` directories have been consolidated into a single `managed/aspire-managed` self-contained binary. Certificate management has been moved natively into the CLI itself, eliminating the need for a separate dev-certs tool.
 
@@ -1397,25 +1413,115 @@ aspire-managed (self-contained, ~65 MB)
 ### Build Steps
 
 1. **Build aspire-managed** as a self-contained single-file binary (includes .NET runtime, Dashboard, AppHost Server, NuGet operations)
-2. **Download and copy DCP** binaries
-3. **Create archive** (tar.gz for Unix, ZIP for Windows) with `COPYFILE_DISABLE=1` to suppress macOS xattr headers
-4. **Create self-extracting binary** — appends tar.gz payload + 32-byte trailer to native AOT CLI
+2. **Build the native tray**, on Windows for `win-x64`/`win-arm64` and macOS for `osx-arm64`/`osx-x64`. Windows requires the Visual Studio C++ NativeAOT toolchain; Windows NativeAOT cross-publishing from macOS is unsupported. macOS uses the base .NET SDK, NativeAOT and Xcode command-line tools; no macOS workload or third-party GUI framework is needed.
+3. **Sign bundle components** in official builds, before layout assembly
+4. **Restore and copy DCP** binaries
+5. **Create the payload archive** (tar.gz on every platform), preserving executable modes and the complete tray app, with `COPYFILE_DISABLE=1` and macOS `tar --no-xattrs` to suppress filesystem metadata
+6. **Publish the native CLI**, embedding the payload as a resource
 
 ### Self-Extracting Binary Build
 
-`Bundle.proj` passes `--embed-in-cli` to `CreateLayout`, which:
-
-1. Takes the native AOT CLI binary and the tar.gz archive
-2. Copies the CLI binary to `{output}.bundle`
-3. Appends the tar.gz payload
-4. Writes the 32-byte trailer (magic + offset + size + version hash)
-5. Replaces the original CLI binary with the bundle
+`Bundle.proj` invokes `CreateLayout --archive`, then publishes the CLI with
+`BundlePayloadPath` pointing at that archive. `SkipNativeBuild=true` skips only
+the final CLI publish: it still builds the native tray payload on Windows and macOS.
 
 ```bash
-# Build command
-dotnet msbuild eng/Bundle.proj /p:TargetRid=osx-arm64 /p:Configuration=Release /p:BundleRuntimeVersion=10.0.102
-
-# Output: artifacts/bundle/osx-arm64/aspire (self-extracting, ~134 MB)
+./dotnet.sh msbuild eng/Bundle.proj /p:TargetRid=osx-arm64 /p:Configuration=Release
 ```
 
-The resulting binary is a valid native executable that also contains the full bundle. Running `aspire --version` works immediately; `aspire setup` extracts the payload.
+The resulting CLI is a valid native executable containing the full bundle.
+Running `aspire --version` works immediately; `aspire setup` extracts the payload.
+For local validation alongside a running CLI, use
+`/p:CliPublishDir="$PWD/artifacts/tray-cli-validation"` to place the final CLI
+in a separate directory instead of overwriting the default publish output.
+
+### macOS Tray Packaging and Signing
+
+The experimental native companion is implemented in `src/Aspire.Tray/Mac/`. Its `PackageTray`
+target runs after publish and assembles
+`artifacts/bin/Aspire.Tray.Mac/{Configuration}/net10.0/{rid}/app/Aspire Tray.app`.
+It stamps numeric `CFBundleVersion`/`CFBundleShortVersionString` from `VersionPrefix`,
+records the full product version (including Arcade's official build suffix) in `AspireVersion`, generates `Resources/Aspire.icns`
+from the shared Aspire artwork, and ad-hoc signs the app for local/GitHub builds.
+Publishing uses project-specific build output, not an installed or running app.
+Before starting this version, quit any running companion from an older preview
+using its **Quit** menu action. Preview single-instance identifiers have changed;
+the current CLI does not discover or stop instances using the older identifiers.
+
+Publish just this app (without publishing the CLI or the managed payload):
+
+```bash
+bash src/Aspire.Tray/Mac/publish.sh osx-arm64
+# Equivalent shared build target:
+./dotnet.sh msbuild eng/Bundle.proj /t:_PublishNativeTray /p:TargetRid=osx-arm64 /p:Configuration=Release
+```
+
+Official `build_sign_native.yml` builds the app, invokes `PrepareTraySigning` to
+produce Arcade's ZIP-based `.app` signing input, then signs it through
+`eng/Signing.props` using `MacDeveloperHardenWithNotarization`. `RestoreSignedTray`
+extracts the signed app and verifies its seal and Apple signing anchor before
+`CreateLayout` copies it. The layout-only invocation never republishes the app.
+For an explicit full `Bundle.proj` invocation over signed input, pass
+`SkipTrayBuild=true` (and `SkipManagedBuild=true` for the already signed managed
+binary). `TrayAppPath` can select a different prepared app directory.
+
+`CreateLayout --tray-app <app-directory>` copies the complete app to
+`tray/Aspire Tray.app`, including resources, hidden files and signatures. It fails
+explicitly for a macOS payload missing its executable, plist, icon or resource signature, or one whose
+executable has lost all execute bits. Older installed bundles remain usable
+without a tray.
+
+After layout creation, `_VerifyNativeTrayArchive` extracts the app from the actual
+tar.gz payload and checks its executable, plist, icon, signature and execute bits.
+This covers both GitHub and official signing paths before CLI embedding.
+`tests/Aspire.Tray.Tests/Aspire.Tray.Tests.csproj` participates in the normal
+selective test matrix, including macOS, for shared contract/lifecycle coverage.
+Native platform changes select the shared suite and packaging regression tests;
+Windows and macOS changes also select CLI bundle consumers. Payload verification and
+shared unit tests do not launch the GUI.
+
+Local ad-hoc signing does **not** validate Developer ID signing, notarization or
+Gatekeeper behavior. Those require an official signing run and validation of the
+extracted shipped app on a clean Mac; pipeline wiring alone is not release validation.
+
+### Windows Tray Packaging and Signing
+
+`Bundle.proj` publishes `src/Aspire.Tray/Windows/Aspire.Tray.Windows.csproj` on a
+Windows lane for the target architecture, with PowerShell 7.4 or later for payload
+verification. `WindowsTrayPath` defaults to
+`artifacts/bin/Aspire.Tray.Windows/{Configuration}/net10.0/{rid}/publish`.
+`CreateLayout --tray-windows <publish-directory>` validates a native PE32+ WinExe
+whose machine matches the requested RID, then copies only `aspire-tray.exe` and
+`Aspire.ico` into `tray/`. Debug symbols and smoke logs are not runtime payload.
+The Windows application icon and companion icon are the original shared ICO,
+not macOS template or wave artwork.
+
+The official `build_sign_native.yml` pipeline publishes the tray before signing
+bundle components. `eng/Signing.props` signs the final `aspire-tray.exe` publish
+output using `Microsoft400`. Layout assembly reuses that signed output without
+republishing. `_VerifyWindowsTrayArchive` extracts the actual tar.gz payload and
+checks its complete file set, original icon bytes and PE architecture; official
+signed builds additionally require a valid Microsoft Authenticode signature.
+The outer CLI then embeds that archive and follows existing archive, installer,
+dotnet-tool and npm signing/distribution paths. There is no separate tray installer.
+
+`aspire tray start` requires an installed native CLI and launches
+`aspire-tray.exe start --cli <absolute-invoking-cli> --bundle-root <version-directory>`.
+`aspire tray stop` launches `aspire-tray.exe stop`. Both use argument lists,
+capture redirected WinExe diagnostics, preserve native helper exit codes, and
+hold the version lease through acknowledgement. The running companion acquires
+its own lease so version cleanup cannot delete its payload. CLI startup rejects
+an incomplete Windows payload or a PE machine incompatible with the invoking
+CLI process architecture. Linux is explicitly unsupported. Managed development
+CLI builds cannot start the tray; stop still requires a usable leased native
+bundle and never falls back to a source-tree or PATH executable.
+
+GitHub native Windows x64 and ARM64 lanes run the frontend's bounded native smoke
+against the extracted payload and the absolute CLI executable from the produced
+archive. The smoke uses `publish.ps1 -SkipPublish -CliPath <absolute-cli>
+-SmokeSeconds 60`, with output under `artifacts/log/{Configuration}/tray-{rid}`.
+It requires a desktop with Explorer; an unavailable desktop is a failure, not
+a successful substitute for native UI coverage. Local cross-platform unit tests
+cannot verify Windows NativeAOT linking, native shell behavior, or official
+Authenticode signing: those require the matching Windows CI lanes and an
+internal signed Azure DevOps build.

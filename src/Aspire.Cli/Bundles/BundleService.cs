@@ -720,6 +720,7 @@ internal sealed class BundleService(
             {
                 Dcp = BundleDiscovery.DcpDirectoryName,
                 Managed = BundleDiscovery.ManagedDirectoryName,
+                Tray = LayoutDiscovery.FindTrayRelativePath(versionDirectory, ""),
             }
         };
     }

@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
@@ -52,13 +53,27 @@ internal sealed class AuxiliaryBackchannelMonitor(
     private event Action? ConnectionsChanged;
 
     /// <summary>
-    /// Gets all active AppHost connections, flattened from all hashes.
+    /// Gets all active AppHost connections.
     /// </summary>
     public IEnumerable<IAppHostAuxiliaryBackchannel> Connections =>
         _connectionsBySocketPath.Values;
 
-    public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default, bool readOnly = false)
     {
+        if (readOnly)
+        {
+            // Polling also observes directories created after an initially empty discovery, without
+            // creating those directories ourselves. This path owns no detached watcher tasks.
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1), _timeProvider);
+            do
+            {
+                await ScanAsync(cancellationToken, pruneOrphanedSockets: false, throwOnDiscoveryFailure: true).ConfigureAwait(false);
+                yield return Connections.ToList();
+            }
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
+            yield break;
+        }
+
         var connectionChanges = Channel.CreateUnbounded<bool>(new UnboundedChannelOptions
         {
             SingleReader = true
@@ -70,7 +85,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
         try
         {
-            await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
+            await ProcessDirectoryChangesAsync(cancellationToken, pruneOrphanedSockets: true, throwOnDiscoveryFailure: false).ConfigureAwait(false);
             yield return Connections.ToList();
 
             fileProviders = CreateFileProviders();
@@ -109,7 +124,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         {
             await foreach (var _ in WatchForChangesAsync(fileProvider, watchPattern, cancellationToken).ConfigureAwait(false))
             {
-                await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
+                await UpdateConnectionsAsync(cancellationToken).ConfigureAwait(false);
                 QueueConnectionChange();
             }
         }
@@ -245,9 +260,9 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// <summary>
     /// Triggers an immediate scan of the backchannels directory for new/removed AppHosts.
     /// </summary>
-    public Task ScanAsync(CancellationToken cancellationToken = default)
+    public Task ScanAsync(CancellationToken cancellationToken = default, bool pruneOrphanedSockets = true, bool throwOnDiscoveryFailure = false)
     {
-        return UpdateConnectionsAsync(cancellationToken);
+        return ProcessDirectoryChangesAsync(cancellationToken, pruneOrphanedSockets, throwOnDiscoveryFailure);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -271,7 +286,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             logger.LogInformation("Starting auxiliary backchannel monitor for {CommandType}", command.GetType().Name);
 
             // Scan for existing sockets on startup.
-            await ProcessDirectoryChangesAsync(stoppingToken).ConfigureAwait(false);
+            await ProcessDirectoryChangesAsync(stoppingToken, pruneOrphanedSockets: true, throwOnDiscoveryFailure: false).ConfigureAwait(false);
 
             var fileProviders = CreateFileProviders();
             try
@@ -310,7 +325,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
     private async Task UpdateConnectionsAsync(CancellationToken cancellationToken)
     {
-        await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
+        await ProcessDirectoryChangesAsync(cancellationToken, pruneOrphanedSockets: true, throwOnDiscoveryFailure: false).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -362,15 +377,18 @@ internal sealed class AuxiliaryBackchannelMonitor(
         }
     }
 
-    private async Task<IReadOnlyList<Task>> ProcessDirectoryChangesAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<Task>> ProcessDirectoryChangesAsync(CancellationToken cancellationToken, bool pruneOrphanedSockets, bool throwOnDiscoveryFailure)
     {
         var connectTasks = new List<Task>();
         var failedSockets = new ConcurrentBag<string>();
+        Exception? discoveryFailure = null;
 
         await _scanLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var currentSockets = AppHostSocketManager.FindSockets(executionContext.HomeDirectory.FullName, Environment.ProcessId, logger);
+            var currentSockets = AppHostSocketManager.FindSockets(
+                executionContext.HomeDirectory.FullName, Environment.ProcessId, logger,
+                pruneOrphanedSockets, throwOnDiscoveryFailure);
             var currentSocketPaths = currentSockets.Select(socket => socket.SocketPath).ToHashSet(StringComparers.FileSystemPath);
 
             // Find new sockets (files that exist now but weren't known before), plus previously
@@ -382,7 +400,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             foreach (var newSocket in newSockets)
             {
                 logger.LogDebug("Socket created: {SocketPath}", newSocket.SocketPath);
-                connectTasks.Add(TryConnectToSocketAsync(newSocket, failedSockets, cancellationToken));
+                connectTasks.Add(TryConnectToSocketAsync(newSocket, failedSockets, pruneOrphanedSockets, cancellationToken));
             }
 
             // Find removed files (files that were known but no longer exist)
@@ -407,6 +425,10 @@ internal sealed class AuxiliaryBackchannelMonitor(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Error processing directory changes");
+            if (throwOnDiscoveryFailure)
+            {
+                discoveryFailure = ex;
+            }
         }
         finally
         {
@@ -417,6 +439,11 @@ internal sealed class AuxiliaryBackchannelMonitor(
         if (connectTasks.Count > 0)
         {
             await Task.WhenAll(connectTasks).ConfigureAwait(false);
+        }
+
+        if (discoveryFailure is not null)
+        {
+            ExceptionDispatchInfo.Capture(discoveryFailure).Throw();
         }
 
         // Remove failed sockets from known files so they can be retried on next scan.
@@ -444,7 +471,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         return connectTasks;
     }
 
-    private async Task TryConnectToSocketAsync(IAppHostSocket appHostSocket, ConcurrentBag<string> failedSockets, CancellationToken cancellationToken)
+    internal async Task TryConnectToSocketAsync(IAppHostSocket appHostSocket, ConcurrentBag<string> failedSockets, bool pruneOrphanedSockets, CancellationToken cancellationToken)
     {
         var socketPath = appHostSocket.SocketPath;
 
@@ -496,7 +523,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
                 // so age is the only available signal: anything past the bind grace window is treated
                 // as stale and reclaimed.
                 //
-                // A refusal on a PID-qualified socket is retried instead. FindSockets already deleted
+                // A refusal on a PID-qualified socket is retried instead. FindSockets already excluded
                 // sockets whose owning process is gone, so reaching here usually means the AppHost is
                 // mid-startup. It can also mean the AppHost died and an unrelated process inherited its
                 // PID, but a refusal cannot distinguish the two: macOS also reports ECONNREFUSED for a
@@ -520,8 +547,17 @@ internal sealed class AuxiliaryBackchannelMonitor(
                     }
 
                     logger.LogDebug("Socket connection refused (stale socket): {SocketPath}", socketPath);
-                    appHostSocket.TryDelete();
-                    failedSockets.Add(socketPath);
+                    if (pruneOrphanedSockets)
+                    {
+                        appHostSocket.TryDelete();
+                        failedSockets.Add(socketPath);
+                    }
+                    else
+                    {
+                        // Read-only discovery cannot reclaim legacy sockets, but must retain the
+                        // same bounded retry cost as PID-qualified unreachable sockets.
+                        MarkUnreachable(socketPath);
+                    }
                     return;
                 }
 
@@ -541,7 +577,10 @@ internal sealed class AuxiliaryBackchannelMonitor(
             logger.LogDebug("Socket connection timed out after {ElapsedSeconds} seconds: {SocketPath}", maxElapsed.TotalSeconds, socketPath);
             if (pid is { } pidValue && !BackchannelConstants.ProcessExists(pidValue))
             {
-                appHostSocket.TryDelete();
+                if (pruneOrphanedSockets)
+                {
+                    appHostSocket.TryDelete();
+                }
                 failedSockets.Add(socketPath);
                 return;
             }
@@ -718,7 +757,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         {
             await foreach (var changed in WatchForChangesAsync(fileProvider, watchPattern, cancellationToken))
             {
-                await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
+                await UpdateConnectionsAsync(cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

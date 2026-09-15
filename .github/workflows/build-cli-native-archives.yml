@@ -86,6 +86,8 @@ jobs:
           ${{ inputs.versionOverrideArg }}
 
       - name: Build bundle payload archive
+        # SkipNativeBuild skips only the outer CLI. Bundle.proj still publishes
+        # native tray payloads on Windows/macOS and verifies the actual archive.
         run: >
           ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
           msbuild
@@ -131,6 +133,73 @@ jobs:
             -PackagesDir artifacts/packages/${{ inputs.configuration }} `
             -Rid $rid `
             -ArchivePath $archive[0].FullName
+
+      - name: Check Windows tray desktop availability
+        id: windows_tray_desktop
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $session = [Diagnostics.Process]::GetCurrentProcess().SessionId
+          $explorer = @(Get-Process -Name explorer -ErrorAction SilentlyContinue |
+            Where-Object { $_.SessionId -eq $session })
+          $available = [Environment]::UserInteractive -and $session -ne 0 -and $explorer.Count -gt 0
+          if ($available) {
+            # Explorer in another desktop or a locked input desktop cannot support modal UI smoke.
+            Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class AspireTrayDesktopProbe
+          {
+              [DllImport("user32.dll", EntryPoint = "FindWindowW", CharSet = CharSet.Unicode)]
+              private static extern IntPtr FindWindow(string className, string windowName);
+              [DllImport("user32.dll")]
+              private static extern IntPtr OpenInputDesktop(uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint access);
+              [DllImport("user32.dll")]
+              [return: MarshalAs(UnmanagedType.Bool)]
+              private static extern bool CloseDesktop(IntPtr desktop);
+              public static bool IsAvailable()
+              {
+                  if (FindWindow("Shell_TrayWnd", null) == IntPtr.Zero) return false;
+                  var desktop = OpenInputDesktop(0, false, 0x0001);
+                  return desktop != IntPtr.Zero && CloseDesktop(desktop);
+              }
+          }
+          '@
+            $available = [AspireTrayDesktopProbe]::IsAvailable()
+          }
+          "available=$($available.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if (-not $available) {
+            $notice = 'Windows native tray smoke was not run: an interactive Explorer/input desktop is unavailable. Native publishing and payload verification remain enabled; validate UI on a Windows desktop.'
+            Write-Output "::warning::$notice"
+            "### Windows tray UI validation`n`n$notice" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Smoke Windows native tray
+        if: runner.os == 'Windows' && steps.windows_tray_desktop.outputs.available == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $rid = '${{ matrix.targets.rids }}'
+          $archive = @(Get-ChildItem -Path 'artifacts/packages/${{ inputs.configuration }}' -Filter "aspire-cli-$rid-*.zip" -Recurse -File)
+          if ($archive.Count -ne 1) {
+            throw "Expected exactly one native CLI archive for $rid."
+          }
+          $scratch = [IO.Directory]::CreateTempSubdirectory('aspire-tray-ci-').FullName
+          try {
+            Expand-Archive -LiteralPath $archive[0].FullName -DestinationPath (Join-Path $scratch 'cli')
+            $cli = Join-Path $scratch 'cli/aspire.exe'
+            & tar -xzf "artifacts/bundle/aspire-ci-bundlepayload-$rid.tar.gz" -C $scratch "$rid/tray"
+            if ($LASTEXITCODE -ne 0) { throw 'Could not extract native tray smoke payload.' }
+            src/Aspire.Tray/Windows/publish.ps1 `
+              -Architecture ($rid -replace '^win-', '') `
+              -Configuration '${{ inputs.configuration }}' `
+              -PublishDirectory (Join-Path $scratch "$rid/tray") `
+              -SkipPublish -CliPath $cli -SmokeSeconds 60
+          }
+          finally {
+            Remove-Item -LiteralPath $scratch -Recurse -Force
+          }
 
       - name: Verify CLI npm package
         shell: pwsh

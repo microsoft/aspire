@@ -147,4 +147,7 @@
   <data name="FollowRequiresJson" xml:space="preserve">
     <value>The --follow option only supports JSON output. Use --format json.</value>
   </data>
+  <data name="ProtocolRequiresFollowJson" xml:space="preserve">
+    <value>The experimental tray protocol requires --protocol-version 1 --follow --format json.</value>
+  </data>
 </root>

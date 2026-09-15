@@ -47,6 +47,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the dashboard URLs state to return from GetDashboardUrlsAsync.
     /// </summary>
     public DashboardUrlsState? DashboardUrlsState { get; set; }
+    public Func<CancellationToken, Task<DashboardUrlsState?>>? GetDashboardUrlsHandler { get; set; }
 
     /// <summary>
     /// Gets or sets the AppHost info response to return from GetAppHostInfoV2Async.
@@ -65,6 +66,10 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the result to return from StopAppHostAsync.
     /// </summary>
     public bool StopAppHostResult { get; set; } = true;
+
+    private int _stopAppHostCallCount;
+    public int StopAppHostCallCount => Volatile.Read(ref _stopAppHostCallCount);
+    public Func<CancellationToken, Task<bool>>? StopAppHostHandler { get; set; }
 
     /// <summary>
     /// Gets or sets the function to call when CallResourceMcpToolAsync is invoked.
@@ -118,7 +123,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(DashboardUrlsState);
+        return GetDashboardUrlsHandler?.Invoke(cancellationToken) ?? Task.FromResult(DashboardUrlsState);
     }
 
     public Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default)
@@ -282,7 +287,8 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<bool> StopAppHostAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(StopAppHostResult);
+        Interlocked.Increment(ref _stopAppHostCallCount);
+        return StopAppHostHandler?.Invoke(cancellationToken) ?? Task.FromResult(StopAppHostResult);
     }
 
     /// <summary>

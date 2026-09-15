@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Telemetry;
@@ -14,6 +15,137 @@ namespace Aspire.Cli.Tests.Backchannel;
 
 public class AuxiliaryBackchannelMonitorTests
 {
+    [Fact]
+    public async Task ReadOnlyWatchEmitsInitialEmptyStateWithoutCreatingDirectories()
+    {
+        var homeDirectory = Directory.CreateTempSubdirectory("tray-readonly-");
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+            using var cancellation = new CancellationTokenSource();
+            await using var watch = monitor.WatchConnectionsAsync(cancellation.Token, readOnly: true).GetAsyncEnumerator();
+
+            Assert.True(await watch.MoveNextAsync().AsTask().DefaultTimeout());
+            Assert.Empty(watch.Current);
+            Assert.All(AppHostSocketManager.GetSocketDirectories(homeDirectory.FullName),
+                directory => Assert.False(Directory.Exists(directory.DirectoryPath)));
+
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watch.MoveNextAsync().AsTask()).DefaultTimeout();
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ScanAsyncPrunesDeadSocketsOnlyWhenRequested(bool prune)
+    {
+        var homeDirectory = Directory.CreateTempSubdirectory("tray-orphans-");
+        try
+        {
+            var compactDirectory = BackchannelConstants.GetBackchannelsDirectory(homeDirectory.FullName);
+            var legacyDirectory = BackchannelConstants.GetLegacyBackchannelsDirectory(homeDirectory.FullName);
+            Directory.CreateDirectory(compactDirectory);
+            Directory.CreateDirectory(legacyDirectory);
+            var compactPath = Path.Combine(compactDirectory, $"{BackchannelConstants.ComputeAppHostId("AppHost.cs")}a1b2C3d4.{int.MaxValue}");
+            var legacyPath = Path.Combine(legacyDirectory, $"auxi.sock.abc123def4567890.{int.MaxValue}");
+            File.WriteAllText(compactPath, "orphan");
+            File.WriteAllText(legacyPath, "orphan");
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+
+            await monitor.ScanAsync(pruneOrphanedSockets: prune, throwOnDiscoveryFailure: true).DefaultTimeout();
+
+            Assert.Empty(monitor.Connections);
+            Assert.Equal(!prune, File.Exists(compactPath));
+            Assert.Equal(!prune, File.Exists(legacyPath));
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReadOnlyWatchPropagatesDirectoryFailuresBeforeOrAfterInitialState(bool afterInitial)
+    {
+        var homeDirectory = Directory.CreateTempSubdirectory("tray-discovery-");
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var time = new FakeTimeProvider();
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), time, profiling);
+            await using var watch = monitor.WatchConnectionsAsync(readOnly: true).GetAsyncEnumerator();
+            if (afterInitial)
+            {
+                Assert.True(await watch.MoveNextAsync().AsTask().DefaultTimeout());
+                Assert.Empty(watch.Current);
+            }
+
+            var legacyDirectory = BackchannelConstants.GetLegacyBackchannelsDirectory(homeDirectory.FullName);
+            Directory.CreateDirectory(Path.GetDirectoryName(legacyDirectory)!);
+            File.WriteAllText(legacyDirectory, "Not a directory.");
+            var next = watch.MoveNextAsync().AsTask();
+            time.Advance(TimeSpan.FromSeconds(1));
+
+            await Assert.ThrowsAnyAsync<IOException>(() => next).DefaultTimeout();
+            Assert.True(File.Exists(legacyDirectory));
+
+            // Preserve the legacy scanner's permissive handling of unavailable directories.
+            await monitor.ScanAsync().DefaultTimeout();
+            Assert.Empty(monitor.Connections);
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task FailedConnectionCleanupHonorsReadOnlyForPidlessAndDeadSockets(bool pidQualified, bool prune)
+    {
+        var homeDirectory = Directory.CreateTempSubdirectory("tray-connect-");
+        try
+        {
+            var socketPath = Path.Combine(homeDirectory.FullName, "stale-socket");
+            File.WriteAllText(socketPath, "stale");
+            var socket = new TestAppHostSocket(socketPath)
+            {
+                ProcessId = pidQualified ? int.MaxValue : null,
+                ConnectAsyncCallback = _ => ValueTask.FromException<Socket>(new SocketException((int)SocketError.ConnectionRefused))
+            };
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var time = new FakeTimeProvider(DateTimeOffset.UtcNow.AddSeconds(1));
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), time, profiling);
+
+            await PumpUntilCompletedAsync(monitor.TryConnectToSocketAsync(
+                socket, new ConcurrentBag<string>(), prune, CancellationToken.None), time).DefaultTimeout();
+
+            Assert.Equal(prune ? 1 : 0, socket.TryDeleteCallCount);
+            Assert.Equal(!prune, File.Exists(socketPath));
+            Assert.Empty(monitor.Connections);
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void IsAppHostInScopeOfDirectory_WithSymlinkedPaths_IsInScope()
     {
