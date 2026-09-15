@@ -17,13 +17,17 @@ namespace Aspire.Hosting
 
         [AspireExport("publishComputeResourceAsAzureSandbox", MethodName = "publishAsAzureSandbox")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<T> PublishAsAzureSandbox<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> sandboxGroup, Azure.AzureSandboxOptions? options = null)
+        public static ApplicationModel.IResourceBuilder<T> PublishAsAzureSandbox<T>(this ApplicationModel.IResourceBuilder<T> builder, Azure.AzureSandboxOptions? options = null)
             where T : ApplicationModel.IComputeResource { throw null; }
 
         [AspireExportIgnore(Reason = "Use the AzureSandboxOptions overload from ATS.")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<T> PublishAsAzureSandbox<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> sandboxGroup, System.Action<Azure.AzureSandboxOptions> configure)
+        public static ApplicationModel.IResourceBuilder<T> PublishAsAzureSandbox<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Azure.AzureSandboxOptions> configure)
             where T : ApplicationModel.IComputeResource { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> WithAcrPullIdentity(this ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureUserAssignedIdentityResource> identity) { throw null; }
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -107,8 +111,6 @@ namespace Aspire.Hosting.Azure
         public AzureSandboxAutoSuspendMode? AutoSuspendMode { get { throw null; } set { } }
 
         public AzureSandboxEndpointOptions[]? Endpoints { get { throw null; } set { } }
-
-        public System.TimeSpan? PublicEndpointReadyTimeout { get { throw null; } set { } }
 
         public AzureSandboxTier Tier { get { throw null; } set { } }
     }
