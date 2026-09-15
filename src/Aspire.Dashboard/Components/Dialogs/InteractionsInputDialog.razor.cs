@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
@@ -22,7 +23,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     public InteractionsInputsDialogViewModel Content { get; set; } = default!;
 
     [CascadingParameter]
-    public FluentDialog Dialog { get; set; } = default!;
+    public IDialogInstance Dialog { get; set; } = default!;
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
@@ -33,11 +34,12 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     [Inject]
     public required IJSRuntime JS { get; init; }
 
+    private readonly CancellationTokenSource _disposalCts = new();
     private InteractionsInputsDialogViewModel? _content;
     private EditContext _editContext = default!;
     private ValidationMessageStore _validationMessages = default!;
     private List<InputViewModel> _inputDialogInputViewModels = default!;
-    private Dictionary<InputViewModel, FluentComponentBase?> _elementRefs = default!;
+    private Dictionary<InputViewModel, IFluentComponentBase?> _elementRefs = default!;
     private MarkdownProcessor _markdownProcessor = default!;
     private IJSObjectReference? _jsModule;
 
@@ -89,24 +91,13 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             // Focus the first input when the dialog loads.
             if (_inputDialogInputViewModels.Count > 0 && _elementRefs.TryGetValue(_inputDialogInputViewModels[0], out var firstInputElement))
             {
-                if (firstInputElement is FluentInputBase<string> textInput)
+                if (firstInputElement is IFluentComponentElementBase elementInput)
                 {
-                    textInput.FocusAsync();
-                }
-                else if (firstInputElement is FluentInputBase<bool> boolInput)
-                {
-                    boolInput.FocusAsync();
-                }
-                else if (firstInputElement is FluentInputBase<int?> numberInput)
-                {
-                    numberInput.FocusAsync();
-                }
-                else if (firstInputElement is FluentInputBase<SelectViewModel<string>> selectInput)
-                {
-                    selectInput.FocusAsync();
+                    await elementInput.Element.FocusAsync();
                 }
             }
         }
+
     }
 
     private void AddValidationErrorsFromModel()
@@ -132,31 +123,48 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
         foreach (var inputModel in _inputDialogInputViewModels)
         {
-            var field = GetFieldIdentifier(inputModel);
-            if (IsMissingRequiredValue(inputModel))
-            {
-                _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
-            }
+            ValidateInput(inputModel);
         }
 
         _editContext.NotifyValidationStateChanged();
     }
 
+    private void ValidateInput(InputViewModel inputModel)
+    {
+        var field = GetFieldIdentifier(inputModel);
+        _validationMessages.Clear(field);
+
+        if (IsMissingRequiredValue(inputModel))
+        {
+            _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
+        }
+        foreach (var erroredFile in inputModel.FileReferences.Where(f => f.ErrorMessage is not null))
+        {
+            _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
+        }
+    }
+
     private void InputValueChanged(FieldIdentifier field)
     {
-        _validationMessages.Clear(field);
+        // Combobox selection is UI state; UpdateChoiceValueState notifies the actual Value field.
+        // Processing both fields would send the same update to the AppHost twice.
+        if (field.Model is InputViewModel && field.FieldName == nameof(InputViewModel.SelectedOption))
+        {
+            return;
+        }
 
         if (field.Model is InputViewModel inputModel)
         {
-            if (IsMissingRequiredValue(inputModel))
-            {
-                _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
-            }
+            ValidateInput(inputModel);
 
             if (inputModel.Input.UpdateStateOnChange)
             {
                 _ = Content.OnSubmitCallback(Content.Interaction, true);
             }
+        }
+        else
+        {
+            _validationMessages.Clear(field);
         }
 
         _editContext.NotifyValidationStateChanged();
@@ -180,6 +188,36 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             string.IsNullOrWhiteSpace(inputModel.Value);
     }
 
+    private void OnChoiceTextChanged(InputViewModel inputModel, string? text)
+    {
+        // Fluent also reports the display label after selection. Don't replace the submitted key
+        // with that label (for example, selecting "Blue" must keep the value "blue").
+        if (inputModel.SelectedOption?.Name == text)
+        {
+            return;
+        }
+
+        // Fluent restores the selected option's text on blur. Represent custom text with a
+        // standalone option so losing focus doesn't restore an earlier selection.
+        text ??= string.Empty;
+        inputModel.SelectedOption = inputModel.SelectOptions.FirstOrDefault(option => option.Name == text)
+            ?? new SelectViewModel<string> { Id = text, Name = text };
+        UpdateChoiceValueState(inputModel);
+    }
+
+    private void UpdateChoiceValueState(InputViewModel inputModel)
+    {
+        // An unmatched native selection isn't a request to clear the typed value.
+        inputModel.SelectedOption ??= inputModel.SelectOptions.FirstOrDefault(option => option.Id == inputModel.Value)
+            ?? new SelectViewModel<string> { Id = inputModel.Value, Name = inputModel.Value };
+
+        if (inputModel.Value != inputModel.SelectedOption.Id)
+        {
+            inputModel.Value = inputModel.SelectedOption.Id;
+            _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+        }
+    }
+
     private async Task SubmitAsync()
     {
         // The workflow is:
@@ -196,6 +234,59 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     private async Task CancelAsync()
     {
         await Dialog.CancelAsync();
+    }
+
+    private static long GetMaxFileSize(InputViewModel inputModel) =>
+        inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : InputViewModel.DefaultMaxUploadedFileBytes;
+
+    private string GetFileButtonText(InputViewModel inputModel)
+    {
+        if (!string.IsNullOrEmpty(inputModel.Input.Placeholder))
+        {
+            return inputModel.Input.Placeholder;
+        }
+
+        return inputModel.Input.AllowMultipleFiles
+            ? Loc[nameof(Resources.Dialogs.InteractionFilePlaceholderMultiple)]
+            : Loc[nameof(Resources.Dialogs.InteractionFilePlaceholder)];
+    }
+
+    private async Task OnInputFileChangeAsync(InputViewModel inputModel, InputFileChangeEventArgs args)
+    {
+        var maxFileSize = GetMaxFileSize(inputModel);
+        var fileReferences = new List<FileReferenceViewModel>();
+
+        foreach (var file in args.GetMultipleFiles(InteractionHelpers.MaxFileCount))
+        {
+            if (file.Size > maxFileSize)
+            {
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Dialogs.InteractionFileExceedsMaxSize)], FormatHelpers.FormatFileSize(maxFileSize)) });
+                continue;
+            }
+
+            try
+            {
+                using var stream = file.OpenReadStream(maxFileSize);
+                var fileId = await Content.DashboardClient.UploadFileAsync(stream, file.Name, file.Size, Content.Interaction.InteractionId, inputModel.Input.Name, _disposalCts.Token);
+                fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = Loc[nameof(Resources.Dialogs.InteractionFileUploadFailed)] });
+            }
+        }
+
+        inputModel.SetFileReferences(fileReferences);
+
+        var field = GetFieldIdentifier(inputModel);
+        _validationMessages.Clear(field);
+
+        foreach (var erroredFile in fileReferences.Where(f => f.ErrorMessage is not null))
+        {
+            _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
+        }
+
+        _editContext.NotifyValidationStateChanged();
     }
 
     private async Task ToggleSecretTextVisibilityAsync(InputViewModel inputModel)
@@ -217,6 +308,8 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _disposalCts.Cancel();
+        _disposalCts.Dispose();
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
     }
 }

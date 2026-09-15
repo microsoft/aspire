@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Mcp.Tools;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -87,7 +88,7 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
                 selectedAppHostPath = connection.AppHostInfo?.AppHostPath;
 
                 var allResources = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
-                var resourcesWithTools = allResources.Where(r => r.McpServer is not null).ToList();
+                var resourcesWithTools = allResources.Where(r => r.McpServer is not null && !McpToolHelpers.IsExcludedFromMcp(r)).ToList();
 
                 _logger.LogDebug("Resources with MCP tools received: {Count}", resourcesWithTools.Count);
 

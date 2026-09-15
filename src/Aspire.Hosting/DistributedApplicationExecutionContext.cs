@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting;
 
 /// <summary>
@@ -48,6 +50,11 @@ public class DistributedApplicationExecutionContext
     public DistributedApplicationExecutionContext(DistributedApplicationExecutionContextOptions options) : this(options.Operation, options.PublisherName ?? "manifest")
     {
         _options = options;
+#pragma warning disable ASPIREWATCH001 // RunConfiguration is experimental; core populates it from the options.
+        // Publish never runs resources, so the run configuration is meaningless there. Reporting defaults
+        // instead of whatever the caller supplied keeps integrations from acting on a run-only signal.
+        RunConfiguration = options.Operation == DistributedApplicationOperation.Run ? options.RunConfiguration : RunConfiguration.Default;
+#pragma warning restore ASPIREWATCH001
     }
 
     /// <summary>
@@ -56,10 +63,24 @@ public class DistributedApplicationExecutionContext
     public DistributedApplicationOperation Operation { get; }
 
     /// <summary>
+    /// Describes how the AppHost is being run. Only meaningful when <see cref="Operation"/> is
+    /// <see cref="DistributedApplicationOperation.Run"/>; otherwise every aspect holds its default value.
+    /// </summary>
+    [Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public RunConfiguration RunConfiguration { get; } = RunConfiguration.Default;
+
+    /// <summary>
     /// The <see cref="IServiceProvider"/> for the AppHost.
     /// </summary>
     /// <exception cref="InvalidOperationException" accessor="get">Thrown when the <see cref="IServiceProvider"/> is not available.</exception>
-    public IServiceProvider ServiceProvider
+    [Obsolete("Use Services instead.")]
+    public IServiceProvider ServiceProvider => Services;
+
+    /// <summary>
+    /// The <see cref="IServiceProvider"/> for the AppHost.
+    /// </summary>
+    /// <exception cref="InvalidOperationException" accessor="get">Thrown when the <see cref="IServiceProvider"/> is not available.</exception>
+    public IServiceProvider Services
     {
         get
         {
@@ -68,7 +89,7 @@ public class DistributedApplicationExecutionContext
                 throw new InvalidOperationException("IServiceProvider is not available because execution context was not constructed with DistributedApplicationExecutionContextOptions.");
             }
 
-            if (options.ServiceProvider is not { } serviceProvider)
+            if (options.Services is not { } serviceProvider)
             {
                 throw new InvalidOperationException("IServiceProvider is not available because the container has not yet been built.");
             }

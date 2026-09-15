@@ -3,8 +3,6 @@
 
 namespace Aspire.Hosting.ApplicationModel;
 
-#pragma warning disable ASPIREINTERACTION001 // HTTP command arguments intentionally reuse the experimental interaction input model.
-
 /// <summary>
 /// Context passed to callback to configure <see cref="HttpRequestMessage"/> when using
 /// <see cref="ResourceBuilderExtensions.WithHttpCommand{TResource}(IResourceBuilder{TResource}, string, string, string?, string?, HttpCommandOptions?)"/>
@@ -15,7 +13,17 @@ public sealed class HttpCommandRequestContext
     /// <summary>
     /// The service provider.
     /// </summary>
-    public required IServiceProvider ServiceProvider { get; init; }
+    [Obsolete("Use Services instead.")]
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// The service provider.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
 
     /// <summary>
     /// The name of the resource the command was configured on.
@@ -92,7 +100,17 @@ public sealed class HttpCommandResultContext
     /// <summary>
     /// The service provider.
     /// </summary>
-    public required IServiceProvider ServiceProvider { get; init; }
+    [Obsolete("Use Services instead.")]
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// The service provider.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
 
     /// <summary>
     /// The name of the resource the command was configured on.
@@ -132,4 +150,3 @@ public sealed class HttpCommandResultContext
     public required HttpResponseMessage Response { get; init; }
 }
 
-#pragma warning restore ASPIREINTERACTION001

@@ -8,7 +8,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Python.Tests;
 
-public class AddUvicornAppTests
+public class AddUvicornAppTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void AddUvicornApp_CreatesUvicornAppResource()
@@ -28,9 +28,10 @@ public class AddUvicornAppTests
     [Fact]
     public async Task WithUv_GeneratesDockerfileInPublishMode()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
-        var projectDirectory = sourceDir.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+        var projectDirectory = sourceDir.FullName;
 
         // Create a UV-based Python project with pyproject.toml and uv.lock
         var pyprojectContent = """
@@ -60,7 +61,7 @@ public class AddUvicornAppTests
 
         var manifestPath = Path.Combine(projectDirectory, "aspire-manifest.json");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         var main = builder.AddUvicornApp("main", projectDirectory, "main.py")
             .WithUv();
@@ -84,7 +85,7 @@ public class AddUvicornAppTests
         app.Run();
 
         // Verify that Dockerfiles were generated for each entrypoint type
-        var appDockerfilePath = Path.Combine(outputDir.Path, "main.Dockerfile");
+        var appDockerfilePath = Path.Combine(outputDir.FullName, "main.Dockerfile");
         Assert.True(File.Exists(appDockerfilePath), "Dockerfile should be generated for script entrypoint");
 
         var scriptDockerfileContent = File.ReadAllText(appDockerfilePath);

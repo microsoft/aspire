@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "대상 net8.0",
   "symbols/Framework/choices/net9.0/description": "Target net9.0",
   "symbols/Framework/choices/net10.0/description": "대상 net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/AspireVersion/description": "사용하려는 Aspire 버전입니다.",
   "symbols/AspireVersion/displayName": "Aspire 버전",
   "symbols/AspireVersion/choices/!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!/displayName": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",

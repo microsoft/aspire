@@ -6,5 +6,5 @@ from aspire_app import create_builder
 
 with create_builder() as builder:
     search = builder.add_azure_search("resource")
-    search.with_search_role_assignments()
+    search.with_search_role_assignments(search, ["SearchIndexDataReader"])
     builder.run()

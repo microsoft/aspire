@@ -78,6 +78,9 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
             var dashboardUrls = await dashboardUrlsTask.ConfigureAwait(false);
             var snapshots = await snapshotsTask.ConfigureAwait(false);
 
+            // Filter out resources that have opted out of MCP.
+            snapshots = snapshots.Where(s => !McpToolHelpers.IsExcludedFromMcp(s)).ToList();
+
             if (snapshots.Count == 0)
             {
                 return new CallToolResult

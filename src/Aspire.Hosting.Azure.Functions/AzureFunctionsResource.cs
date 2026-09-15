@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure;
@@ -13,6 +14,7 @@ internal interface IAzureFunctionsResource : IResource
 /// <summary>
 /// Specifies the authoring language used by an Azure Functions app.
 /// </summary>
+[Experimental("ASPIREAZUREFUNCTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum AzureFunctionsLanguage
 {
     /// <summary>
@@ -73,6 +75,7 @@ public class AzureFunctionsProjectResource(string name) : ProjectResource(name),
 /// <param name="appDirectory">The directory that contains the Azure Functions app.</param>
 /// <param name="language">The authoring language used by the Azure Functions app.</param>
 [AspireExport(ExposeProperties = true)]
+[Experimental("ASPIREAZUREFUNCTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class AzureFunctionsAppResource(string name, string command, string appDirectory, AzureFunctionsLanguage language)
     : ExecutableResource(name, command, appDirectory), IResourceWithServiceDiscovery, IAzureFunctionsResource, IResourceWithCustomWithReference<AzureFunctionsAppResource>
 {

@@ -16,9 +16,9 @@
 #
 #   overrideCliIdentityChannel       - forces the identity used for staging-feed
 #                                      routing decisions (here: `staging`).
-#   overrideCliInformationalVersion  - forces the informational version the SHA
-#                                      derivation and version-shape (quality)
-#                                      checks read, e.g. `13.4.0-preview.1.x+<sha>`.
+#   overrideCliInformationalVersion  - forces the informational version used to
+#                                      derive the SHA-specific feed URL, e.g.
+#                                      `13.4.0-preview.1.x+<sha>`.
 #
 # Both flow into IConfiguration from environment variables (used here) OR from
 # aspire.config.json, and are scoped to staging feed routing only -- they do NOT
@@ -32,8 +32,8 @@
 # aspire.config.json pins `channel: staging`, then asserts the debug log contains
 #   Resolved 'staging' channel: feed=<expected darc feed>, quality=<expected>
 # where the feed is the SHA-specific darc-pub-microsoft-aspire-<first8-of-sha>
-# feed. The `aspire add` step is expected to fail later (there is no real apphost
-# project in the scratch directory); only the feed-routing log line is validated.
+# feed. A minimal TypeScript AppHost lets `aspire add` reach package discovery;
+# only the feed-routing log line is validated.
 
 set -euo pipefail
 
@@ -102,7 +102,7 @@ run_debug_channel() {
 
     case "$kind" in
         staging) KIND_LABEL="staging (prerelease-shaped)"; DEFAULT_VERSION="$DEFAULT_STAGING_VERSION"; EXPECTED_QUALITY="Both" ;;
-        stable)  KIND_LABEL="staging (stable-shaped)";    DEFAULT_VERSION="$DEFAULT_STABLE_VERSION";  EXPECTED_QUALITY="Stable" ;;
+        stable)  KIND_LABEL="staging (stable-shaped)";    DEFAULT_VERSION="$DEFAULT_STABLE_VERSION";  EXPECTED_QUALITY="Both" ;;
         *) say_err "unknown kind '$kind'"; return 2 ;;
     esac
 
@@ -234,9 +234,9 @@ ENV
     fi
 
     # Throwaway working directory pinned to channel: staging so 'aspire add'
-    # filters to the synthesized staging channel. Created securely; cleaned up
-    # on exit. No real apphost project lives here, so 'add' will ultimately fail
-    # after feed routing has already been logged -- that is expected.
+    # filters to the synthesized staging channel. A minimal TypeScript AppHost is
+    # enough to reach package discovery without scaffolding a complete project.
+    # Created securely and cleaned up on exit.
     local scratch
     scratch="$(mktemp -d)"
     trap 'rm -rf "$scratch"' RETURN
@@ -245,10 +245,11 @@ ENV
   "channel": "staging"
 }
 JSON
+    : > "${scratch}/apphost.ts"
 
     local log="${scratch}/aspire-debug.log"
     say ">> Running: aspire add ${package} --debug ${passthrough[*]:-}"
-    say "   (feed routing is logged before the add step fails on the missing apphost)"
+    say "   (only feed routing is validated; the add result itself is ignored)"
     say ""
 
     # The overrides are scoped to THIS invocation only (no export, no persisted

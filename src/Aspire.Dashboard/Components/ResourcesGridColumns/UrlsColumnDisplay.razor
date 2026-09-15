@@ -7,59 +7,59 @@
 }
 else if (DisplayedUrls.Count == 1)
 {
-    @WriteUrl(DisplayedUrls[0])
+    <div class="url-container" style="display: inline-block;" @onclick:stopPropagation="true">
+        @WriteUrl(DisplayedUrls[0])
+    </div>
 }
 else if (DisplayedUrls.Count > 1)
 {
-    <FluentOverflow Class="url-overflow">
-        <ChildContent>
-            @for (var i = 0; i < DisplayedUrls.Count; i++)
-            {
-                var displayedUrl = DisplayedUrls[i];
+    <div class="url-container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+        <FluentOverflow Class="url-overflow" MaxRenderedItems="@MaxRenderedOverflowItems" Threshold="0">
+            <ChildContent>
+                @* TODO: Filter the URLs before rendering if resource URL cardinality becomes large enough to cause performance problems. *@
+                @for (var i = 0; i < DisplayedUrls.Count; i++)
+                {
+                    var displayedUrl = DisplayedUrls[i];
 
-                 // Always display the first item by setting a fixed value.
-                <FluentOverflowItem Data="displayedUrl" Fixed="@(i == 0 ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)">
-                    @WriteUrl(displayedUrl)
-                </FluentOverflowItem>
-            }
-        </ChildContent>
-        <MoreButtonTemplate Context="overflow">
-            <div @onclick:stopPropagation="true" style="display:inherit;">
-                <FluentButton Appearance="Appearance.Accent" OnClick="() => _popoverVisible = !_popoverVisible" Class="url-button">
-                    @($"+{overflow.ItemsOverflow.Count()}")
-                </FluentButton>
-            </div>
-        </MoreButtonTemplate>
-        <OverflowTemplate Context="overflow">
-            @{
-                var items = overflow.ItemsOverflow.ToList();
-            }
-            <div @onclick:stopPropagation="true">
-                @* Each item is approximately 36px tall, plus 48px for the header and container padding. The popover body has a CSS max-height of 300px. *@
-                <FluentPopover AnchorId="@overflow.IdMoreButton" @bind-Open="_popoverVisible" VerticalThreshold="@(Math.Min(items.Count * 36 + 48, 300))" AutoFocus="false">
-                    <Header>
-                        @Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]
-                    </Header>
-                    <Body>
-                        <div class="url-popup">
+                    // Keep the first URL visible until the overflow container is too narrow to display it in full.
+                    <div behavior="@(i == 0 ? "ellipsis" : null)">
+                        @WriteUrl(displayedUrl)
+                    </div>
+                }
+            </ChildContent>
+            <MoreTemplate Context="overflow">
+                <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" style="display:inherit;">
+                    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="() => _popoverVisible = !_popoverVisible" Class="url-button">
+                        @($"+{overflow.OverflowCount}")
+                    </FluentButton>
+                </div>
+            </MoreTemplate>
+            <OverflowTemplate Context="overflow">
+                @{
+                    // The first URL uses ellipsis behavior, so managed overflow item indexes start at the second URL.
+                    var firstOverflowItem = overflow.ItemsOverflow.FirstOrDefault();
+                    var items = firstOverflowItem is null ? [] : DisplayedUrls.Skip(firstOverflowItem.Index + 1);
+                }
+                <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                    @* Each item is approximately 36px tall, plus 48px for the header and container padding. The popover body has a CSS max-height of 300px. *@
+                    <FluentPopover AnchorId="@overflow.IdMoreButton"
+                                   @bind-Opened="_popoverVisible"
+                                   Class="content-list-popover url-overflow-popover"
+                                   Style="@($"--url-overflow-anchor: --{overflow.IdMoreButton};")">
+                        <strong>@Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]</strong>
+                        <div class="content-list-popover-items url-popup">
                             @foreach (var item in items)
                             {
-                                var d = (DisplayedUrl)item.Data!;
                                 <div class="url-link">
-                                    @WriteUrl(d)
+                                    @WriteUrl(item)
                                 </div>
                             }
                         </div>
-                    </Body>
-                </FluentPopover>
-            </div>
-        </OverflowTemplate>
-    </FluentOverflow>
-}
-
-@if (!string.IsNullOrEmpty(AdditionalMessage))
-{
-    <div>@AdditionalMessage</div>
+                    </FluentPopover>
+                </div>
+            </OverflowTemplate>
+        </FluentOverflow>
+    </div>
 }
 
 @code {
@@ -67,11 +67,11 @@ else if (DisplayedUrls.Count > 1)
     {
         if (displayedUrl.Url != null)
         {
-            return @<a href="@displayedUrl.Url" target="_blank" @onclick:stopPropagation="true">@displayedUrl.Text</a>;
+            return @<a href="@displayedUrl.Url" target="_blank" title="@GetTooltipText(displayedUrl)" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">@displayedUrl.Text</a>;
         }
         else
         {
-            return @<span title="@displayedUrl.Text">@displayedUrl.Text</span>;
+            return @<span title="@GetTooltipText(displayedUrl)">@displayedUrl.Text</span>;
         }
     }
 }

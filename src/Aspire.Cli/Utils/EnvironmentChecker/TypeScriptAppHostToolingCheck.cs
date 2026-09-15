@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Projects;
 using Microsoft.Extensions.Logging;
@@ -9,18 +10,33 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
 {
+    internal const string YarnClassicCheckName = "typescript-apphost-yarn-classic";
+    internal const string DenoVersionCheckName = "typescript-apphost-deno-version";
+    internal const string ToolsCheckName = "typescript-apphost-tools";
+    private static readonly TimeSpan s_versionCheckTimeout = TimeSpan.FromSeconds(5);
+
     private readonly IProjectLocator _projectLocator;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
     private readonly ILogger<TypeScriptAppHostToolingCheck> _logger;
     private readonly Func<string, string?> _commandResolver;
+    private readonly Func<string, CancellationToken, Task<string?>> _denoVersionResolver;
 
     public TypeScriptAppHostToolingCheck(
         IProjectLocator projectLocator,
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<TypeScriptAppHostToolingCheck> logger)
-        : this(projectLocator, languageDiscovery, executionContext, logger, PathLookupHelper.FindFullPathFromPath)
+        : this(
+            projectLocator,
+            languageDiscovery,
+            executionContext,
+            environment,
+            logger,
+            PathLookupHelper.FindFullPathFromPath,
+            (path, cancellationToken) => GetDenoVersionOutputAsync(path, logger, cancellationToken))
     {
     }
 
@@ -28,14 +44,18 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         IProjectLocator projectLocator,
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<TypeScriptAppHostToolingCheck> logger,
-        Func<string, string?> commandResolver)
+        Func<string, string?> commandResolver,
+        Func<string, CancellationToken, Task<string?>> denoVersionResolver)
     {
         _projectLocator = projectLocator;
         _languageDiscovery = languageDiscovery;
         _executionContext = executionContext;
+        _environment = environment;
         _logger = logger;
         _commandResolver = commandResolver;
+        _denoVersionResolver = denoVersionResolver;
     }
 
     public int Order => 31;
@@ -51,7 +71,7 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         TypeScriptAppHostToolchain toolchain;
         try
         {
-            toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _logger);
+            toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _environment, _logger);
         }
         catch (YarnClassicNotSupportedException ex)
         {
@@ -59,12 +79,12 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
             [
                 new EnvironmentCheckResult
                 {
-                    Category = "environment",
-                    Name = "typescript-apphost-yarn-classic",
+                    Category = EnvironmentCheckCategories.Environment,
+                    Name = YarnClassicCheckName,
                     Status = EnvironmentCheckStatus.Fail,
                     Message = "TypeScript AppHost does not support Yarn Classic.",
                     Details = ex.Message,
-                    Fix = "Upgrade to Yarn 4 or later, or switch to npm, pnpm, or Bun, then rerun 'aspire doctor'.",
+                    Fix = "Upgrade to Yarn 4 or later, or switch to npm, pnpm, Bun, or Deno, then rerun 'aspire doctor'.",
                     Link = "https://yarnpkg.com/getting-started/install",
                     Metadata = new JsonObject
                     {
@@ -74,20 +94,29 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
                 }
             ];
         }
+        catch (DenoVersionNotSupportedException ex)
+        {
+            return [CreateDenoVersionFailure(appHostFile, ex.Message)];
+        }
 
         var missingResults = new List<EnvironmentCheckResult>();
+        string? denoPath = null;
 
         foreach (var command in TypeScriptAppHostToolchainResolver.GetRequiredCommands(toolchain))
         {
-            if (CommandPathResolver.TryResolveCommand(command, _commandResolver, out _, out var errorMessage))
+            if (CommandPathResolver.TryResolveCommand(command, _commandResolver, out var commandPath, out var errorMessage))
             {
+                if (toolchain == TypeScriptAppHostToolchain.Deno)
+                {
+                    denoPath = commandPath;
+                }
                 continue;
             }
 
             missingResults.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = $"typescript-apphost-{command}",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = GetMissingCommandCheckName(command),
                 Status = EnvironmentCheckStatus.Fail,
                 Message = $"TypeScript AppHost requires '{command}'.",
                 Details = errorMessage,
@@ -107,12 +136,24 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
             return missingResults;
         }
 
+        if (toolchain == TypeScriptAppHostToolchain.Deno)
+        {
+            var versionOutput = await _denoVersionResolver(denoPath!, cancellationToken);
+            if (!TryParseDenoMajorVersion(versionOutput, out var majorVersion) || majorVersion < 2)
+            {
+                var details = majorVersion > 0
+                    ? $"Deno {majorVersion} is installed, but TypeScript AppHosts require Deno 2 or later."
+                    : "The installed Deno version could not be determined. TypeScript AppHosts require Deno 2 or later.";
+                return [CreateDenoVersionFailure(appHostFile, details)];
+            }
+        }
+
         return
         [
             new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "typescript-apphost-tools",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = ToolsCheckName,
                 Status = EnvironmentCheckStatus.Pass,
                 Message = $"TypeScript AppHost tooling found ({string.Join(", ", TypeScriptAppHostToolchainResolver.GetRequiredCommands(toolchain))}).",
                 Metadata = new JsonObject
@@ -125,40 +166,109 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         ];
     }
 
-    private async Task<FileInfo?> ResolveTypeScriptAppHostAsync(CancellationToken cancellationToken)
+    // Delegates to the shared resolver so the doctor tooling check and `aspire update --migrate` stay in
+    // lockstep on how the TypeScript AppHost entry point is located.
+    private Task<FileInfo?> ResolveTypeScriptAppHostAsync(CancellationToken cancellationToken)
+        => LegacyTypeScriptAppHost.ResolveTypeScriptAppHostAsync(
+            _projectLocator,
+            _languageDiscovery,
+            _executionContext.WorkingDirectory,
+            _logger,
+            cancellationToken);
+
+    internal static string GetMissingCommandCheckName(string command) => $"typescript-apphost-{command}";
+
+    private static EnvironmentCheckResult CreateDenoVersionFailure(FileInfo appHostFile, string details)
     {
-        try
+        return new EnvironmentCheckResult
         {
-            var configuredAppHost = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
-            if (configuredAppHost is not null &&
-                TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_languageDiscovery.GetLanguageByFile(configuredAppHost)))
+            Category = EnvironmentCheckCategories.Environment,
+            Name = DenoVersionCheckName,
+            Status = EnvironmentCheckStatus.Fail,
+            Message = "TypeScript AppHost requires Deno 2 or later.",
+            Details = details,
+            Fix = "Upgrade to Deno 2 or later and rerun 'aspire doctor'.",
+            Link = CommandPathResolver.GetInstallationLink("deno"),
+            Metadata = new JsonObject
             {
-                return configuredAppHost;
+                ["language"] = KnownLanguageId.TypeScript,
+                ["toolchain"] = "deno",
+                ["appHostPath"] = appHostFile.FullName
             }
+        };
+    }
 
-            var detectedLanguageId = await _languageDiscovery.DetectLanguageRecursiveAsync(_executionContext.WorkingDirectory, cancellationToken);
-            if (detectedLanguageId is null)
-            {
-                return null;
-            }
-
-            var detectedLanguage = _languageDiscovery.GetLanguageById(detectedLanguageId.Value);
-            if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(detectedLanguage))
-            {
-                return null;
-            }
-
-            var discoveredPath = detectedLanguage?.FindInDirectory(_executionContext.WorkingDirectory.FullName);
-            return discoveredPath is not null ? new FileInfo(discoveredPath) : null;
+    internal static bool TryParseDenoMajorVersion(string? output, out int majorVersion)
+    {
+        majorVersion = 0;
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return false;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+
+        // `deno --version` starts with `deno 2.9.0 (stable, release, ...)`, followed by
+        // separate V8 and TypeScript version lines. Only the first version token is relevant.
+        var firstLine = output.AsSpan().TrimStart();
+        var lineEnd = firstLine.IndexOfAny('\r', '\n');
+        if (lineEnd >= 0)
         {
-            throw;
+            firstLine = firstLine[..lineEnd];
         }
-        catch (Exception ex)
+
+        const string prefix = "deno ";
+        if (!firstLine.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogDebug(ex, "Failed to resolve TypeScript AppHost for environment check");
+            return false;
+        }
+
+        var version = firstLine[prefix.Length..].TrimStart();
+        var majorEnd = version.IndexOf('.');
+        return majorEnd > 0 && int.TryParse(version[..majorEnd], out majorVersion);
+    }
+
+    private static async Task<string?> GetDenoVersionOutputAsync(
+        string executablePath,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executablePath,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add("--version");
+
+        var result = await ProcessCaptureRunner.RunAsync(
+            startInfo,
+            s_versionCheckTimeout,
+            static async (process, captureToken) =>
+            {
+                var stdoutTask = process.StandardOutput.ReadToEndAsync(captureToken);
+                var stderrTask = process.StandardError.ReadToEndAsync(captureToken);
+                await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+                return (Stdout: await stdoutTask.ConfigureAwait(false), Stderr: await stderrTask.ConfigureAwait(false));
+            },
+            static () => (Stdout: string.Empty, Stderr: string.Empty),
+            logger,
+            cancellationToken);
+
+        if (result.Cancelled)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        if (result.ExitCode != 0 || result.FailureKind is not null)
+        {
+            logger.LogDebug(
+                "Deno version check failed with exit code {ExitCode}: {Error}",
+                result.ExitCode,
+                result.Capture.Stderr.Trim());
             return null;
         }
+
+        return result.Capture.Stdout;
     }
 }

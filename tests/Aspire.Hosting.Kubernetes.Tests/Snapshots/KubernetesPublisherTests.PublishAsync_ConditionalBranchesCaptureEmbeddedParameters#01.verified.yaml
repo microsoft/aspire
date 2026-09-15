@@ -1,0 +1,12 @@
+﻿---
+apiVersion: "v1"
+kind: "Secret"
+metadata:
+  name: "myapp-secrets"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "myapp"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+stringData:
+  OPTIONS: {{ tpl "{{ if eq (.Values.parameters.myapp.mode | toString | lower) \u0022enabled\u0022 }}user={{ .Values.config.myapp.user }};password={{ .Values.secrets.myapp.password }}{{ else }}user={{ .Values.config.myapp.user }};disabled{{ end }}" . | quote }}
+type: "Opaque"

@@ -20,7 +20,7 @@ internal class TransportOptionsValidator(IConfiguration configuration, Distribut
         }
 
         // Validate ASPNETCORE_URLS
-        var applicationUrls = configuration[KnownConfigNames.AspNetCoreUrls];
+        var applicationUrls = configuration[KnownAspNetCoreConfigNames.Urls];
         if (!string.IsNullOrEmpty(applicationUrls))
         {
             var firstApplicationUrl = applicationUrls.Split(";").First();

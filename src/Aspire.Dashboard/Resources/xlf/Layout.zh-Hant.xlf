@@ -2,6 +2,31 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../Layout.resx">
     <body>
+      <trans-unit id="DashboardRunSelectAccessibleLabel">
+        <source>Select run: {0}</source>
+        <target state="new">Select run: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectCurrent">
+        <source>Live run</source>
+        <target state="new">Live run</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectPin">
+        <source>Pin run</source>
+        <target state="new">Pin run</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectTitle">
+        <source>Select dashboard run</source>
+        <target state="new">Select dashboard run</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectUnpin">
+        <source>Unpin run</source>
+        <target state="new">Unpin run</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutAspire">
         <source>Aspire</source>
         <target state="translated">Aspire</target>
@@ -97,6 +122,16 @@
         <target state="translated">結構化</target>
         <note />
       </trans-unit>
+      <trans-unit id="NavMenuToggleCollapse">
+        <source>Collapse navigation to icons</source>
+        <target state="new">Collapse navigation to icons</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuToggleExpand">
+        <source>Expand navigation labels</source>
+        <target state="new">Expand navigation labels</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NavMenuTracesTab">
         <source>Traces</source>
         <target state="translated">追蹤</target>
@@ -105,26 +140,6 @@
       <trans-unit id="PageLayoutViewFilters">
         <source>View filters</source>
         <target state="translated">檢視篩選</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectFailedText">
-        <source>Failed to rejoin.&lt;br /&gt;Please retry or reload the page.</source>
-        <target state="translated">無法重新加入。&lt;br /&gt;請重試或重新載入頁面。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectFirstAttemptText">
-        <source>Rejoining the server...</source>
-        <target state="translated">正在重新加入伺服器...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectRepeatedAttemptText">
-        <source>Rejoin failed... trying again in &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; seconds.</source>
-        <target state="translated">重新加入失敗... 請在 &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; 秒內再試一次。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectRetryButtonText">
-        <source>Retry</source>
-        <target state="translated">重試</target>
         <note />
       </trans-unit>
     </body>

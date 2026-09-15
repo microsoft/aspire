@@ -133,6 +133,38 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string AllArgumentDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("AllArgumentDescription", resourceCulture);
+            }
+        }
+
+        public static string IntegrationNotPolyglotCompatible
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationNotPolyglotCompatible", resourceCulture);
+            }
+        }
+
+        public static string NoPolyglotCompatibleIntegrationsFound
+        {
+            get
+            {
+                return ResourceManager.GetString("NoPolyglotCompatibleIntegrationsFound", resourceCulture);
+            }
+        }
+
+        public static string PolyglotIntegrationsHidden
+        {
+            get
+            {
+                return ResourceManager.GetString("PolyglotIntegrationsHidden", resourceCulture);
+            }
+        }
+
         public static string FormatOptionDescription
         {
             get

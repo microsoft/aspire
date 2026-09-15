@@ -1,6 +1,16 @@
 ::deep .unread-logs-errors-link {
-    vertical-align: super;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 6px;
+    text-decoration: none;
     --unread-logs-badge-color: #ffffff;
+}
+
+::deep .unread-logs-errors-link:hover {
+    background-color: var(--colorNeutralBackground2);
 }
 
 ::deep .value-not-set-link {
@@ -8,21 +18,14 @@
     padding: 0;
     border: 0;
     background: none;
-    color: var(--accent-fill-rest);
+    color: var(--colorBrandBackground);
     text-decoration: underline;
     cursor: pointer;
     font: inherit;
 }
 
 ::deep .value-not-set-link:hover {
-    color: var(--accent-fill-hover);
-}
-
-::deep .unread-logs-errors-link::part(control) {
-    margin-left: 5px;
-    padding: 0;
-    flex-grow: 0;
-    color: #ffffff;
+    color: var(--colorBrandBackgroundHover);
 }
 
 ::deep .error-counter-badge {
@@ -79,8 +82,106 @@
     overflow: hidden;
 }
 
-::deep .resource-tabs fluent-tabs {
-    margin-left: calc(var(--design-unit) * 3px);
+::deep .resources-tab-header {
+    width: max-content;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
+   focus can scroll the selected tab into view when space is limited above ultra-low width. */
+::deep .resources-tab-header[orientation="horizontal"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+/* On desktop the tabs row also hosts the filter controls on the right. The filter toolbar wraps
+    its controls when its share of the row becomes too narrow. */
+::deep .resource-tabs-header-row {
+    grid-area: resources-tab-header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--spacingHorizontalSNudge);
+    min-width: 0;
+    padding-top: 0.5rem;
+    padding-left: var(--layout-left-padding);
+    padding-right: var(--layout-right-padding);
+    container-type: inline-size;
+}
+
+/* Let the tabs take their content width and shrink/scroll (see the overflow rule above) instead
+   of pushing the toolbar off the row. */
+::deep .resource-tabs-header-row .resources-tab-header {
+    flex: 0 1 auto;
+}
+
+::deep .resource-tabs-toolbar {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+}
+
+.resources-filter-popup-container {
+    display: contents;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup::part(dialog) {
+    transform: translateX(calc(-100% + 32px));
+    box-sizing: border-box;
+    width: max-content;
+    max-width: 400px;
+    max-height: 500px;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0;
+    background: var(--aspire-popup-background);
+    box-shadow: var(--aspire-popup-shadow);
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup > .fluent-stack-vertical {
+    box-sizing: border-box;
+    max-width: 100%;
+    padding: 14px;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group {
+    min-width: 0;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group > legend {
+    font-family: var(--aspire-font-display);
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 27px;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group > .fluent-stack-vertical {
+    min-width: 0;
+    row-gap: 4px;
+    width: 100%;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group fluent-field {
+    grid-template-columns: auto minmax(0, 1fr);
+    height: 20px;
+    margin: 0;
+    min-width: 0;
+    width: 100%;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group fluent-field > label[slot="label"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@container (max-width: 500px) {
+    ::deep .resource-tabs-toolbar {
+        min-width: 0;
+    }
 }
 
 ::deep .resources-grid-container {
@@ -105,6 +206,27 @@
     column-gap: 10px;
 }
 
+::deep .resource-graph-controls fluent-button {
+    --aspire-button-background: var(--aspire-page-background);
+    --aspire-button-border-color: transparent;
+    border: var(--strokeWidthThin) solid var(--aspire-button-border-color);
+    background-color: var(--aspire-button-background);
+}
+
+::deep .resource-graph-controls fluent-button:hover {
+    background-color: var(--colorNeutralBackground3);
+}
+
+::deep .resource-graph-controls fluent-button:active,
+::deep .resource-graph-controls fluent-button:hover:active {
+    background-color: var(--resource-graph-secondary-hover-background);
+}
+
+::deep .resource-graph-controls fluent-button > svg {
+    width: 24px;
+    height: 24px;
+}
+
 ::deep .resource-graph .texts {
     cursor: pointer;
 }
@@ -114,8 +236,8 @@
 }
 
 ::deep .resource-name {
-    fill: var(--neutral-foreground-rest);
-    stroke: var(--fill-color);
+    fill: var(--colorNeutralForeground1);
+    stroke: var(--aspire-page-background);
     font-size: 15px;
     text-anchor: middle;
     stroke-width: 0.5em;
@@ -124,12 +246,12 @@
 }
 
 ::deep .resource-node {
-    stroke: var(--fill-color);
-    fill: var(--fill-color);
+    stroke: var(--aspire-page-background);
+    fill: var(--aspire-page-background);
 }
 
 ::deep .resource-group-hover .resource-node {
-    fill: var(--neutral-fill-hover) !important;
+    fill: var(--resource-graph-hover-background) !important;
 }
 
 ::deep .resource-group-selected .resource-scale {
@@ -137,11 +259,11 @@
 }
 
 ::deep .resource-group-selected .resource-node {
-    fill: var(--neutral-fill-secondary-rest) !important;
+    fill: var(--colorNeutralBackground3) !important;
 }
 
 ::deep .resource-group-selected .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-group-highlight .resource-node {
@@ -149,15 +271,15 @@
 }
 
 ::deep .resource-group-highlight .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-group-hover .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-node-border {
-    stroke: var(--neutral-stroke-rest);
+    stroke: var(--colorNeutralStroke1);
     stroke-width: 1;
     fill: transparent;
 }
@@ -169,41 +291,94 @@
 }
 
 ::deep .resource-status-circle {
-    fill: var(--fill-color);
+    fill: var(--aspire-page-background);
+}
+
+/* Context menu affordance (cog) shown on the lower-right of a node. Hidden until the node is
+   hovered so it doesn't clutter the graph, and non-interactive while hidden (pointer-events: none)
+   so the invisible element can't intercept clicks. */
+::deep .resource-menu-cog {
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease-in-out;
+}
+
+::deep .resource-group-hover .resource-menu-cog,
+::deep .resource-menu-cog:focus,
+::deep .resource-menu-cog[aria-expanded="true"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (hover: none) {
+    ::deep .resource-menu-cog {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+::deep .resource-menu-cog-background {
+    fill: var(--aspire-page-background);
+    stroke: var(--colorNeutralStroke1);
+    stroke-width: var(--strokeWidthThin);
+}
+
+::deep .resource-menu-cog:hover .resource-menu-cog-background {
+    fill: var(--resource-graph-secondary-hover-background);
+    stroke: var(--aspire-button-hover-border);
+}
+
+::deep .resource-menu-cog:focus-visible .resource-menu-cog-background {
+    stroke: var(--colorStrokeFocus1);
+    stroke-width: var(--strokeWidthThick);
+}
+
+::deep .resource-menu-cog[aria-expanded="true"] .resource-menu-cog-background {
+    stroke: transparent;
+}
+
+::deep .resource-menu-cog[aria-expanded="true"] {
+    outline: none;
+}
+
+::deep .resource-menu-cog:active {
+    outline: none;
+}
+
+::deep .resource-menu-cog-icon {
+    fill: var(--colorBrandForeground1);
+    pointer-events: none;
 }
 
 ::deep .resource-link {
-    stroke: var(--neutral-stroke-rest);
+    stroke: var(--colorNeutralStroke1);
     stroke-width: 1;
     marker-end: url(#arrow-normal);
 }
 
 ::deep .arrow-normal {
-    fill: var(--neutral-stroke-rest);
+    fill: var(--colorNeutralStroke1);
 }
 
 ::deep .arrow-highlight {
-    fill: var(--neutral-stroke-hover);
+    fill: var(--aspire-button-hover-border);
 }
 
 ::deep .arrow-highlight-expand {
-    fill: var(--neutral-stroke-hover);
+    fill: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-link-highlight {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--aspire-button-hover-border);
     stroke-dasharray: 5,5;
     stroke-width: 2;
     marker-end: url(#arrow-highlight);
 }
 
 ::deep .resource-link-highlight-expand {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--aspire-button-hover-border);
     stroke-dasharray: 5,5;
     stroke-width: 2;
     marker-end: url(#arrow-highlight-expand);
-}
-
-::deep .tab-label > svg {
-    margin-right: calc(var(--design-unit) * 1px);
 }

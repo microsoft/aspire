@@ -1,6 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZUREFUNCTIONS001 // Tests exercise the experimental directory-based Functions APIs.
+
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -8,6 +12,43 @@ namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
 public class FunctionsPublicApiTests
 {
+    [Fact]
+    public void DirectoryBasedFunctionsApisAreExperimental()
+    {
+        var members = new MemberInfo[]
+        {
+            typeof(AzureFunctionsAppResource),
+            typeof(AzureFunctionsLanguage),
+            typeof(AzureFunctionsProjectResourceExtensions).GetMethod(nameof(AzureFunctionsProjectResourceExtensions.AddAzureFunctionsApp))!,
+            typeof(AzureFunctionsProjectResourceExtensions).GetMethods().Single(method =>
+                method.Name == nameof(AzureFunctionsProjectResourceExtensions.WithHostStorage) &&
+                method.ReturnType == typeof(IResourceBuilder<AzureFunctionsAppResource>)),
+            typeof(AzureFunctionsProjectResourceExtensions).GetMethods().Single(method =>
+                method.Name == nameof(AzureFunctionsProjectResourceExtensions.WithReference) &&
+                method.ReturnType == typeof(IResourceBuilder<AzureFunctionsAppResource>))
+        };
+
+        foreach (var member in members)
+        {
+            var attribute = member.GetCustomAttribute<ExperimentalAttribute>();
+            Assert.NotNull(attribute);
+            Assert.Equal("ASPIREAZUREFUNCTIONS001", attribute.DiagnosticId);
+            Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+        }
+    }
+
+    [Fact]
+    public void ProjectBasedFunctionsApisAreNotExperimental()
+    {
+        Assert.Null(typeof(AzureFunctionsProjectResource).GetCustomAttribute<ExperimentalAttribute>());
+
+        var methods = typeof(AzureFunctionsProjectResourceExtensions).GetMethods()
+            .Where(method => method.ReturnType == typeof(IResourceBuilder<AzureFunctionsProjectResource>));
+
+        Assert.NotEmpty(methods);
+        Assert.All(methods, method => Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>()));
+    }
+
     [Fact]
     public void AddAzureFunctionsProjectShouldThrowWhenBuilderIsNull()
     {

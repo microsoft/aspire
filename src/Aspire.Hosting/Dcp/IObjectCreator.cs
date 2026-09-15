@@ -23,12 +23,6 @@ internal interface IObjectCreator<TDcpResource, TContext>
     where TDcpResource : CustomResource, IKubernetesStaticMetadata
 {
     /// <summary>
-    /// Prepares DCP resource objects based on the Aspire application model.
-    /// Returns the set of prepared resources that should be created.
-    /// </summary>
-    IEnumerable<RenderedModelResource<TDcpResource>> PrepareObjects();
-
-    /// <summary>
     /// Determines whether the resource is ready to be created immediately.
     /// Returns false if the resource uses explicit startup and should not be created yet.
     /// Implementations may perform side effects (e.g. setting Spec.Start = false for delayed containers).

@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.RemoteHost.Ats;
+using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
@@ -155,11 +156,20 @@ internal sealed class RemoteAppHostService
         {
             activity.SetError(ex);
             _logger.LogError(ex, "   invokeCapability({CapabilityId}) Exception: {ExceptionType} - {Message}", capabilityId, ex.GetType().Name, ex.Message);
+
+            // A reflection-load failure while dispatching a capability means the server binary and the
+            // integration assemblies disagree on a contract. That is a version-skew problem the user
+            // can act on, but the runtime's own message never says so, so the explanation is appended
+            // here rather than left for the CLI to infer from the message text.
+            var message = CodeGenerationDiagnosticBuilder.TryDescribeAssemblySkew(ex) is { } skewExplanation
+                ? $"{ex.Message} {skewExplanation}"
+                : ex.Message;
+
             // Wrap unexpected errors
             var error = new AtsError
             {
                 Code = AtsErrorCodes.InternalError,
-                Message = ex.Message,
+                Message = message,
                 Capability = capabilityId
             };
             return new JsonObject

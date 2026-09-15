@@ -14,22 +14,89 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenPackageManagerIsBun_ReturnsBun()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"bun@1.2.0\" }");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Bun, toolchain);
     }
 
     [Fact]
-    public void Resolve_WhenPnpmLockExists_ReturnsPnpm()
+    public void Resolve_WhenPackageManagerIsDeno_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"deno@2.9.0\" }");
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, toolchain);
+    }
+
+    [Theory]
+    [InlineData("deno@0.224.0")]
+    [InlineData("deno@1.46.3")]
+    public void Resolve_WhenPackageManagerIsPreV2Deno_Throws(string packageManager)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packageJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "package.json");
+        File.WriteAllText(packageJsonPath, $$"""{ "packageManager": "{{packageManager}}" }""");
+
+        var exception = Assert.Throws<DenoVersionNotSupportedException>(
+            () => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
+
+        Assert.Equal(
+            $"Deno versions earlier than 2 are not supported for TypeScript AppHosts because dependency restore requires Deno 2 or later. Upgrade '{packageManager}' in {packageJsonPath} to Deno 2 or later.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_WhenDenoLockExists_ReturnsDeno()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "deno.lock"), "{ \"version\": \"5\" }");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, resolution.Toolchain);
+        Assert.Equal($"deno.lock found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
+    public void Resolve_WhenDenoJsonExists_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "deno.json"), "{}");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, resolution.Toolchain);
+        Assert.Equal($"deno.json found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
+    public void Resolve_WhenDenoJsoncExists_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "deno.jsonc"), "{ /* Deno configuration */ }");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, resolution.Toolchain);
+        Assert.Equal($"deno.jsonc found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
+    public void Resolve_WhenPnpmLockExists_ReturnsPnpm()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "pnpm-lock.yaml"), "lockfileVersion: '9.0'");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Pnpm, toolchain);
     }
@@ -37,22 +104,22 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenPackageManagerIsYarnClassic_Throws()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packageJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "package.json");
         File.WriteAllText(packageJsonPath, "{ \"packageManager\": \"yarn@1.22.22\" }");
 
-        var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null));
+        var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade 'yarn@1.22.22' in {packageJsonPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade 'yarn@1.22.22' in {packageJsonPath} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.", exception.Message);
     }
 
     [Fact]
     public void Resolve_WhenPackageManagerIsModernYarn_ReturnsYarn()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"yarn@4.14.1\" }");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Yarn, toolchain);
     }
@@ -60,20 +127,20 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenYarnLockIsClassic_Throws()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         var yarnLockPath = Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock");
         File.WriteAllText(yarnLockPath, "# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.\n# yarn lockfile v1\n");
 
-        var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null));
+        var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.", exception.Message);
     }
 
     [Fact]
     public void Resolve_WhenParentYarnLockIsClassic_Throws()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
         var parentDirectory = appHostDirectory.Parent!;
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
@@ -81,15 +148,15 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         var yarnLockPath = Path.Combine(parentDirectory.FullName, "yarn.lock");
         File.WriteAllText(yarnLockPath, "# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.\n# yarn lockfile v1\n");
 
-        var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, logger: null));
+        var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.", exception.Message);
     }
 
     [Fact]
     public void Resolve_WhenPackageLockExists_ReturnsNpm()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
         var parentDirectory = appHostDirectory.Parent!;
         File.WriteAllText(Path.Combine(parentDirectory.FullName, "package.json"), "{ \"name\": \"workspace\" }");
@@ -97,7 +164,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package-lock.json"), "{}");
 
-        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory);
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory, new TestEnvironment());
 
         Assert.Equal(TypeScriptAppHostToolchain.Npm, resolution.Toolchain);
         Assert.Equal($"package-lock.json found in {appHostDirectory.FullName}", resolution.Reason);
@@ -106,12 +173,12 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenPackageLockAndYarnLockExistInSameDirectory_ReturnsYarn()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package-lock.json"), "{}");
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock"), string.Empty);
 
-        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot);
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
 
         Assert.Equal(TypeScriptAppHostToolchain.Yarn, resolution.Toolchain);
         Assert.Equal($"yarn.lock found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
@@ -120,11 +187,11 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenYarnDirectoryExists_ReturnsNpm()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".yarn"));
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Npm, toolchain);
     }
@@ -132,10 +199,10 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenNothingConfigured_ReturnsNpm()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Npm, toolchain);
     }
@@ -143,14 +210,14 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenMarkerExists_LogsReason()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock"), string.Empty);
 
         var sink = new TestSink();
         var logger = new TestLogger(nameof(TypeScriptAppHostToolchainResolverTests), sink, logLevel => logLevel == LogLevel.Debug);
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger);
 
         Assert.Equal(TypeScriptAppHostToolchain.Yarn, toolchain);
         var write = Assert.Single(sink.Writes);
@@ -161,13 +228,13 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenParentDirectoryDefinesToolchain_ReturnsParentToolchain()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
         File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), "{ \"packageManager\": \"pnpm@10.12.1\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, logger: null);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Pnpm, toolchain);
     }
@@ -175,13 +242,13 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenAppHostAndParentDefineDifferentToolchains_ReturnsAppHostToolchain()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
         File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), "{ \"packageManager\": \"pnpm@10.12.1\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"packageManager\": \"bun@1.2.0\" }");
 
-        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory);
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory, new TestEnvironment());
 
         Assert.Equal(TypeScriptAppHostToolchain.Bun, resolution.Toolchain);
         Assert.Equal($"packageManager 'bun@1.2.0' found in {Path.Combine(appHostDirectory.FullName, "package.json")}", resolution.Reason);
@@ -190,14 +257,14 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenAppHostLockFileAndParentPackageManagerDiffer_ReturnsAppHostLockFileToolchain()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
         File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), "{ \"packageManager\": \"yarn@4.14.1\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "pnpm-lock.yaml"), "lockfileVersion: '9.0'");
 
-        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory);
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory, new TestEnvironment());
 
         Assert.Equal(TypeScriptAppHostToolchain.Pnpm, resolution.Toolchain);
         Assert.Equal($"pnpm-lock.yaml found in {appHostDirectory.FullName}", resolution.Reason);
@@ -206,12 +273,12 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void Resolve_WhenGrandparentDirectoryDefinesToolchain_ReturnsNpm()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"bun@1.2.0\" }");
 
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, logger: null);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Npm, toolchain);
     }
@@ -221,7 +288,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     {
         var directory = new DirectoryInfo(Path.GetPathRoot(Path.GetTempPath())!);
 
-        var shouldSearch = TypeScriptAppHostToolchainResolver.ShouldSearchParentDirectory(directory);
+        var shouldSearch = TypeScriptAppHostToolchainResolver.ShouldSearchParentDirectory(directory, new TestEnvironment());
 
         Assert.False(shouldSearch);
     }
@@ -229,26 +296,53 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void ShouldSearchParentDirectory_WhenDirectoryIsHome_ReturnsFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var shouldSearch = TypeScriptAppHostToolchainResolver.ShouldSearchParentDirectory(
             workspace.WorkspaceRoot,
-            workspace.WorkspaceRoot.FullName);
+            new TestEnvironment(),
+            homeDirectory: workspace.WorkspaceRoot.FullName);
 
         Assert.False(shouldSearch);
     }
 
     [Fact]
-    public void ShouldSearchParentDirectory_WhenDirectoryIsHomeWithDifferentCasingOnCaseInsensitiveOS_ReturnsFalse()
+    public void ShouldSearchParentDirectory_WhenDirectoryIsHomeWithDifferentCasingOnWindows_ReturnsFalse()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), "Case-insensitive path comparison only applies to Windows and macOS.");
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var shouldSearch = TypeScriptAppHostToolchainResolver.ShouldSearchParentDirectory(
             workspace.WorkspaceRoot,
-            InvertCasing(workspace.WorkspaceRoot.FullName));
+            TestEnvironment.CreateWindows(),
+            homeDirectory: InvertCasing(workspace.WorkspaceRoot.FullName));
 
         Assert.False(shouldSearch);
+    }
+
+    [Fact]
+    public void ShouldSearchParentDirectory_WhenDirectoryIsHomeWithDifferentCasingOnMacOS_ReturnsFalse()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var shouldSearch = TypeScriptAppHostToolchainResolver.ShouldSearchParentDirectory(
+            workspace.WorkspaceRoot,
+            TestEnvironment.CreateMacOS(),
+            homeDirectory: InvertCasing(workspace.WorkspaceRoot.FullName));
+
+        Assert.False(shouldSearch);
+    }
+
+    [Fact]
+    public void ShouldSearchParentDirectory_WhenDirectoryIsHomeWithDifferentCasingOnLinux_ReturnsTrue()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var shouldSearch = TypeScriptAppHostToolchainResolver.ShouldSearchParentDirectory(
+            workspace.WorkspaceRoot,
+            TestEnvironment.CreateLinux(),
+            homeDirectory: InvertCasing(workspace.WorkspaceRoot.FullName));
+
+        Assert.True(shouldSearch);
     }
 
     [Fact]
@@ -282,6 +376,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
             ],
             runtimeSpec.WatchExecute!.Args);
         Assert.Equal("node", runtimeSpec.ExtensionLaunchCapability);
+        Assert.Equal("NODE_EXTRA_CA_CERTS", runtimeSpec.CertificateBundleEnvironmentVariable);
     }
 
     [Fact]
@@ -319,6 +414,27 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Contains("pnpm exec tsc --noEmit -p tsconfig.apphost.json && pnpm exec tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
     }
 
+    [Fact]
+    public void ApplyToRuntimeSpec_WhenDenoSelected_UsesDenoRunCommands()
+    {
+        var baseRuntimeSpec = CreateBaseRuntimeSpec();
+
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Deno);
+
+        Assert.Equal("TypeScript (Deno)", runtimeSpec.DisplayName);
+        Assert.Equal("deno", runtimeSpec.InstallDependencies?.Command);
+        Assert.Equal(["install"], runtimeSpec.InstallDependencies!.Args);
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
+        Assert.Equal("deno", preExecute.Command);
+        Assert.Equal(["check", "--unstable-sloppy-imports", "{appHostFile}"], preExecute.Args);
+        Assert.Equal("deno", runtimeSpec.Execute.Command);
+        Assert.Equal(["run", "-A", "--unstable-sloppy-imports", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal("deno", runtimeSpec.WatchExecute?.Command);
+        Assert.Equal(["run", "-A", "--unstable-sloppy-imports", "--check", "--watch", "{appHostFile}"], runtimeSpec.WatchExecute!.Args);
+        Assert.Equal("deno.v1", runtimeSpec.ExtensionLaunchCapability);
+        Assert.Equal("DENO_CERT", runtimeSpec.CertificateBundleEnvironmentVariable);
+    }
+
     private static RuntimeSpec CreateBaseRuntimeSpec()
     {
         return new RuntimeSpec
@@ -350,7 +466,8 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 Command = "npx",
                 Args = ["--no-install", "nodemon", "--exec", "npx --no-install tsx --tsconfig tsconfig.apphost.json {appHostFile}"]
             },
-            ExtensionLaunchCapability = "node"
+            ExtensionLaunchCapability = "node",
+            CertificateBundleEnvironmentVariable = "NODE_EXTRA_CA_CERTS"
         };
     }
 

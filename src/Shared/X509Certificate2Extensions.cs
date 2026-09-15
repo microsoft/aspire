@@ -129,4 +129,69 @@ internal static class X509Certificate2Extensions
             .OrderByDescending(c => c.GetCertificateVersion())
             .ThenByDescending(c => c.NotAfter);
     }
+
+    /// <summary>
+    /// Gets the certificates trusted by the current user's platform trust store.
+    /// </summary>
+    /// <param name="certificates">The certificates to check.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>The trusted certificates in their original order.</returns>
+    public static List<X509Certificate2> GetTrustedCertificates(
+        this IEnumerable<X509Certificate2> certificates,
+        CancellationToken cancellationToken = default)
+    {
+        using var chain = new X509Chain();
+        // Revocation does not apply to self-signed development certificates.
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+
+        X509Certificate2Collection? rootCertificates = null;
+        if (OperatingSystem.IsWindows())
+        {
+            // On Windows, chain.Build() can succeed even when the certificate is not in the trusted root store.
+            using var rootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+            rootStore.Open(OpenFlags.ReadOnly);
+            rootCertificates = rootStore.Certificates;
+        }
+
+        try
+        {
+            var trustedCertificates = new List<X509Certificate2>();
+            foreach (var certificate in certificates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                try
+                {
+                    if (!chain.Build(certificate))
+                    {
+                        continue;
+                    }
+
+                    if (rootCertificates is not null &&
+                        !rootCertificates.Any(rootCertificate => rootCertificate.RawDataMemory.Span.SequenceEqual(certificate.RawDataMemory.Span)))
+                    {
+                        continue;
+                    }
+
+                    trustedCertificates.Add(certificate);
+                }
+                finally
+                {
+                    chain.Reset();
+                }
+            }
+
+            return trustedCertificates;
+        }
+        finally
+        {
+            if (rootCertificates is not null)
+            {
+                foreach (var rootCertificate in rootCertificates)
+                {
+                    rootCertificate.Dispose();
+                }
+            }
+        }
+    }
 }

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { createMessageConnection, MessageConnection } from 'vscode-jsonrpc';
+import { createMessageConnection, ErrorCodes, MessageConnection, ResponseError } from 'vscode-jsonrpc';
 import { StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node';
 import { invalidTokenProvided, rpcServerAddressError, rpcServerError } from '../loc/strings';
 import { addInteractionServiceEndpoints, IInteractionService } from './interactionService';
@@ -21,6 +21,8 @@ export default class AspireRpcServer {
     public connectionInfo: RpcServerConnectionInfo;
     public connections: ICliRpcClient[] = [];
 
+    private readonly _ownedConnections = new Set<ICliRpcClient>();
+    private _disposed = false;
     private _onNewConnection = new vscode.EventEmitter<ICliRpcClient>();
     public readonly onNewConnection = this._onNewConnection.event;
 
@@ -33,22 +35,59 @@ export default class AspireRpcServer {
         return this.connections.find(connection => connection.debugSessionId === debugSessionId) || null;
     }
 
-    public addConnection(connection: ICliRpcClient) {
+    public addConnection(connection: ICliRpcClient): boolean {
+        if (this._disposed) {
+            connection.dispose();
+            return false;
+        }
+
+        this._ownedConnections.add(connection);
+        if (this.connections.includes(connection)) {
+            return true;
+        }
+
         this.connections.push(connection);
         this._onNewConnection.fire(connection);
+        return true;
     }
 
     public removeConnection(connection: ICliRpcClient) {
+        this._ownedConnections.delete(connection);
         const index = this.connections.indexOf(connection);
         if (index !== -1) {
             this.connections.splice(index, 1);
         }
+
+        connection.dispose();
     }
 
     public dispose() {
+        if (this._disposed) {
+            return;
+        }
+
+        this._disposed = true;
         extensionLogOutputChannel.info(`Disposing RPC server`);
+        // A client is owned before its debug-session handshake starts. That ensures a stalled
+        // handshake cannot outlive server teardown with its transport and UI state still active.
+        for (const connection of this._ownedConnections) {
+            connection.dispose();
+        }
+
+        this._ownedConnections.clear();
+        this.connections.splice(0);
         this._onNewConnection.dispose();
         this.server.close();
+    }
+
+    private _ownConnection(connection: ICliRpcClient): boolean {
+        if (this._disposed) {
+            connection.dispose();
+            return false;
+        }
+
+        this._ownedConnections.add(connection);
+        return true;
     }
 
     static async create(rpcClientFactory: (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => ICliRpcClient): Promise<AspireRpcServer> {
@@ -113,17 +152,36 @@ export default class AspireRpcServer {
                         // to avoid a race condition where the CLI sends requests (e.g. displayEmptyLine)
                         // before handlers are registered.
                         const rpcClient = rpcClientFactory(connectionInfo, connection, token, null);
-                        addInteractionServiceEndpoints(connection, rpcClient.interactionService, rpcClient, withAuthentication);
-
-                        connection.listen();
-
-                        const clientDebugSessionId = await connection.sendRequest<string | null>('getDebugSessionId');
-                        rpcClient.debugSessionId = clientDebugSessionId;
-
-                        rpcServer.addConnection(rpcClient);
-
                         connection.onClose(() => rpcServer.removeConnection(rpcClient));
+                        if (!rpcServer._ownConnection(rpcClient)) {
+                            return;
+                        }
 
+                        try {
+                            addInteractionServiceEndpoints(connection, rpcClient.interactionService, rpcClient, withAuthentication);
+                            connection.listen();
+
+                            const clientDebugSessionId = await connection.sendRequest<string | null>('getDebugSessionId');
+                            rpcClient.debugSessionId = clientDebugSessionId;
+                            rpcServer.addConnection(rpcClient);
+                        }
+                        catch (error) {
+                            // MessageConnection disposal rejects its outstanding request with
+                            // PendingResponseRejected during normal CLI exit. The ownership check
+                            // keeps the same response from a still-live client visible as a warning.
+                            const transportDisposedDuringHandshake =
+                                error instanceof ResponseError &&
+                                error.code === ErrorCodes.PendingResponseRejected &&
+                                !rpcServer._ownedConnections.has(rpcClient);
+                            if (transportDisposedDuringHandshake) {
+                                extensionLogOutputChannel.info(`RPC client transport closed during initialization: ${error}`);
+                            }
+                            else {
+                                extensionLogOutputChannel.warn(`Failed to initialize RPC client: ${error}`);
+                            }
+
+                            rpcServer.removeConnection(rpcClient);
+                        }
                     });
 
                     resolve(rpcServer);

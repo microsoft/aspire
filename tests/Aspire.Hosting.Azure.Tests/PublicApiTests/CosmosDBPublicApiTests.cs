@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -316,13 +315,12 @@ public class CosmosDBPublicApiTests
     }
 
     [Fact]
-    [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public void RunAsPreviewEmulatorShouldThrowWhenBuilderIsNull()
+    public void RunAsClassicEmulatorShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<AzureCosmosDBResource> builder = null!;
         Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null;
 
-        var action = () => builder.RunAsPreviewEmulator(configureContainer);
+        var action = () => builder.RunAsClassicEmulator(configureContainer);
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(builder), exception.ParamName);
@@ -513,7 +511,6 @@ public class CosmosDBPublicApiTests
     }
 
     [Fact]
-    [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public void WithDataExplorerShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<AzureCosmosDBEmulatorResource> builder = null!;

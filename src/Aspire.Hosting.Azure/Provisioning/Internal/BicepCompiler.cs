@@ -45,6 +45,7 @@ internal sealed class BicepCliCompiler : IBicepCompiler
         }
 
         var armTemplateContents = new StringBuilder();
+        var errorContents = new StringBuilder();
         var templateSpec = new ProcessSpec(commandPath)
         {
             Arguments = arguments,
@@ -56,17 +57,35 @@ internal sealed class BicepCliCompiler : IBicepCompiler
             OnErrorData = data =>
             {
                 _logger.LogDebug("{CommandPath} (stderr): {Error}", commandPath, data);
+                errorContents.AppendLine(data);
             },
         };
 
         _logger.LogDebug("Running {CommandPath} with arguments: {Arguments}", commandPath, arguments);
 
-        var exitCode = await ExecuteCommand(templateSpec).ConfigureAwait(false);
+        int exitCode;
+        try
+        {
+            exitCode = await ExecuteCommand(templateSpec).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            var errorMessage = errorContents.ToString().Trim();
+            throw new InvalidOperationException(
+                string.IsNullOrEmpty(errorMessage)
+                    ? $"Failed to compile bicep file: {bicepFilePath}"
+                    : $"Failed to compile bicep file: {bicepFilePath}{Environment.NewLine}{errorMessage}",
+                ex);
+        }
 
         if (exitCode != 0)
         {
             _logger.LogError("Bicep compilation for {BicepFilePath} failed with exit code {ExitCode}.", bicepFilePath, exitCode);
-            throw new InvalidOperationException($"Failed to compile bicep file: {bicepFilePath}");
+            var errorMessage = errorContents.ToString().Trim();
+            throw new InvalidOperationException(
+                string.IsNullOrEmpty(errorMessage)
+                    ? $"Failed to compile bicep file: {bicepFilePath}"
+                    : $"Failed to compile bicep file: {bicepFilePath}{Environment.NewLine}{errorMessage}");
         }
 
         _logger.LogDebug("Bicep compilation for {BicepFilePath} succeeded.", bicepFilePath);

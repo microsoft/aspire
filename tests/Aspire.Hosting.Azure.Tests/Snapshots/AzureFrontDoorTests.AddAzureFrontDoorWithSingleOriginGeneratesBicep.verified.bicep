@@ -37,7 +37,7 @@ resource my_apiOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
 }
 
 resource my_apiOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
-  name: take('myapiOrigin-${uniqueString(resourceGroup().id)}', 90)
+  name: take('my-apiOrigin-${uniqueString(resourceGroup().id, my_api_host)}', 90)
   properties: {
     hostName: my_api_host
     originHostHeader: my_api_host

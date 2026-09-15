@@ -1,0 +1,22 @@
+@using Aspire.Dashboard.Model.Interaction
+
+<FluentDialogBody Class="interaction-progress-dialog">
+    <ChildContent>
+        <div class="progress-content">
+            <AspireProgressRing AriaLabel="@ControlsLoc[nameof(Aspire.Dashboard.Resources.ControlsStrings.Loading)]" />
+
+            <div class="interaction-message">
+                @((MarkupString)Content.Message)
+            </div>
+        </div>
+    </ChildContent>
+
+    <ActionTemplate>
+        @if (!string.IsNullOrEmpty(Dialog.Options.Footer.PrimaryAction.Label))
+        {
+            <FluentButton Appearance="ButtonAppearance.Default" Class="aspire-button aspire-neutral-button" OnClick="@CancelAsync">
+                @Dialog.Options.Footer.PrimaryAction.Label
+            </FluentButton>
+        }
+    </ActionTemplate>
+</FluentDialogBody>

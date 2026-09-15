@@ -129,6 +129,9 @@
   <data name="BannerVersionFormat" xml:space="preserve">
     <value>CLI — version {0}</value>
   </data>
+  <data name="IdentityOverrideNotice" xml:space="preserve">
+    <value>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</value>
+  </data>
   <data name="DebugArgumentDescription" xml:space="preserve">
     <value>Enable debug logging to the console</value>
   </data>

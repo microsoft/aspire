@@ -17,13 +17,13 @@ public class ConformanceTests : ConformanceTests<TestDbContext, EntityFrameworkC
 
     protected override string ActivitySourceName => "Azure.Cosmos.Operation";
 
-    protected override string[] RequiredLogCategories => new string[]
-    {
-        "Microsoft.EntityFrameworkCore.ChangeTracking",
-        "Microsoft.EntityFrameworkCore.Database.Command",
-        "Microsoft.EntityFrameworkCore.Infrastructure",
-        "Microsoft.EntityFrameworkCore.Query",
-    };
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("Microsoft.EntityFrameworkCore.ChangeTracking"),
+        new("Microsoft.EntityFrameworkCore.Database.Command"),
+        new("Microsoft.EntityFrameworkCore.Infrastructure"),
+        new("Microsoft.EntityFrameworkCore.Query"),
+    ];
 
     protected override void PopulateConfiguration(ConfigurationManager configuration, string? key = null)
         => configuration.AddInMemoryCollection(new KeyValuePair<string, string?>[]

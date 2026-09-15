@@ -435,6 +435,7 @@ public class ListTracesToolTests
         IDashboardInfoProvider dashboardInfoProvider = new BackchannelDashboardInfoProvider(actualMonitor, NullLogger<BackchannelDashboardInfoProvider>.Instance);
         return new ListTracesTool(
             dashboardInfoProvider,
+            actualMonitor,
             httpClientFactory ?? s_httpClientFactory,
             NullLogger<ListTracesTool>.Instance);
     }
@@ -457,7 +458,7 @@ public class ListTracesToolTests
                 DashboardUrls = dashboardUrls ?? ["http://localhost:18888"]
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
         return monitor;
     }
 

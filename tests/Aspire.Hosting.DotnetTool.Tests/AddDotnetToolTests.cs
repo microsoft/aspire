@@ -379,6 +379,45 @@ public class AddDotnetToolTests
     }
 
     [Fact]
+    public async Task CustomLaunchToolArgsReplaceBuiltInInvocationInArgumentsAndManifest()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+#pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental.
+        var tool = builder.AddDotnetTool("ef-tool", "dotnet-ef")
+            .WithArgs("app-arg")
+            .WithLaunchToolArgs(static context =>
+            {
+                context.Args.Add("custom");
+                context.Args.Add("exec");
+                context.Args.Add("--");
+            });
+#pragma warning restore ASPIREEXTENSION001
+
+        using var app = builder.Build();
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(tool.Resource).DefaultTimeout();
+        Assert.Equal(new[] { "custom", "exec", "--", "app-arg" }, args);
+
+        var manifest = await ManifestUtils.GetManifest(tool.Resource).DefaultTimeout();
+        var expectedManifest =
+        """
+        {
+          "type": "executable.v0",
+          "workingDirectory": ".",
+          "command": "dotnet",
+          "args": [
+            "custom",
+            "exec",
+            "--",
+            "app-arg"
+          ]
+        }
+        """;
+
+        Assert.Equal(expectedManifest, manifest.ToString());
+    }
+
+    [Fact]
     public void AddDotnetTool_IncludesRequiredCommandAnnotation()
     {
         var builder = DistributedApplication.CreateBuilder();

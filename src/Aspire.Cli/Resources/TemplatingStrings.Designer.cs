@@ -169,15 +169,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to An error occurred while trusting the certificates: {0}.
-        /// </summary>
-        public static string CertificateTrustError {
-            get {
-                return ResourceManager.GetString("CertificateTrustError", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Create NuGet.config for selected channels?.
         /// </summary>
         public static string CreateNugetConfigConfirmation {
@@ -237,6 +228,21 @@ namespace Aspire.Cli.Resources {
         public static string No {
             get {
                 return ResourceManager.GetString("No", resourceCulture);
+            }
+        }
+
+        public static string NoMatchingLocalTemplatePackage {
+            get {
+                return ResourceManager.GetString("NoMatchingLocalTemplatePackage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Template version &apos;{0}&apos; was not found..
+        /// </summary>
+        public static string TemplateVersionNotFound {
+            get {
+                return ResourceManager.GetString("TemplateVersionNotFound", resourceCulture);
             }
         }
 

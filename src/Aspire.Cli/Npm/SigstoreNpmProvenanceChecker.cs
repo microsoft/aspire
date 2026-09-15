@@ -1,24 +1,60 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Sigstore;
 
 namespace Aspire.Cli.Npm;
 
 /// <summary>
+/// Verifies a Sigstore bundle after the caller constructs the expected identity policy.
+/// </summary>
+internal delegate Task<(bool Success, VerificationResult? Result)> SigstoreBundleVerificationHandler(
+    SigstoreVerifier verifier,
+    SigstoreBundle bundle,
+    VerificationPolicy policy,
+    string? sriIntegrity,
+    CancellationToken cancellationToken);
+
+/// <summary>
 /// Verifies npm package provenance by cryptographically verifying Sigstore bundles
-/// from the npm registry attestations API using the Sigstore .NET library.
+/// from the public npm registry attestations API using the Sigstore .NET library.
 /// Uses Fulcio certificate extensions and in-toto statement APIs for attestation analysis.
 /// </summary>
-internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogger<SigstoreNpmProvenanceChecker> logger) : INpmProvenanceChecker
+internal sealed class SigstoreNpmProvenanceChecker : INpmProvenanceChecker
 {
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<SigstoreNpmProvenanceChecker> _logger;
+    private readonly SigstoreBundleVerificationHandler _verifyBundleWithPolicyAsync;
+
     internal const string NpmRegistryAttestationsBaseUrl = "https://registry.npmjs.org/-/npm/v1/attestations";
     internal const string SlsaProvenancePredicateType = "https://slsa.dev/provenance/v1";
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SigstoreNpmProvenanceChecker"/> class.
+    /// </summary>
+    public SigstoreNpmProvenanceChecker(
+        HttpClient httpClient,
+        ILogger<SigstoreNpmProvenanceChecker> logger)
+        : this(httpClient, logger, VerifyBundleWithPolicyAsync)
+    {
+    }
+
+    internal SigstoreNpmProvenanceChecker(
+        HttpClient httpClient,
+        ILogger<SigstoreNpmProvenanceChecker> logger,
+        SigstoreBundleVerificationHandler verifyBundleWithPolicyAsync)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(verifyBundleWithPolicyAsync);
+
+        _httpClient = httpClient;
+        _logger = logger;
+        _verifyBundleWithPolicyAsync = verifyBundleWithPolicyAsync;
+    }
 
     /// <inheritdoc />
     public async Task<ProvenanceVerificationResult> VerifyProvenanceAsync(
@@ -28,15 +64,15 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         string expectedWorkflowPath,
         string expectedBuildType,
         Func<WorkflowRefInfo, bool>? validateWorkflowRef,
-        CancellationToken cancellationToken,
-        string? sriIntegrity = null)
+        string? sriIntegrity,
+        CancellationToken cancellationToken)
     {
-        logger.LogDebug("Verifying provenance for {PackageSpecifier} from {ExpectedSourceRepository}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), expectedSourceRepository);
+        _logger.LogDebug("Verifying provenance for {PackageSpecifier} from {ExpectedSourceRepository}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), expectedSourceRepository);
 
         var json = await FetchAttestationJsonAsync(packageName, version, cancellationToken).ConfigureAwait(false);
         if (json is null)
         {
-            logger.LogDebug("Attestation fetch failed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            _logger.LogDebug("Attestation fetch failed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationFetchFailed };
         }
 
@@ -47,7 +83,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             var outcome = parseFailed
                     ? ProvenanceVerificationOutcome.AttestationParseFailed
                     : ProvenanceVerificationOutcome.SlsaProvenanceNotFound;
-            logger.LogDebug("SLSA bundle extraction failed for {PackageSpecifier}: {Outcome}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), outcome);
+            _logger.LogDebug("SLSA bundle extraction failed for {PackageSpecifier}: {Outcome}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), outcome);
             return new ProvenanceVerificationResult
             {
                 Outcome = outcome
@@ -61,7 +97,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Failed to deserialize Sigstore bundle for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            _logger.LogDebug(ex, "Failed to deserialize Sigstore bundle for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed };
         }
 
@@ -76,11 +112,25 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             return sigstoreFailure;
         }
 
+        var subjectOutcome = VerifyNpmSubject(
+            verificationResult?.Statement,
+            packageName,
+            version,
+            sriIntegrity);
+        if (subjectOutcome is not ProvenanceVerificationOutcome.Verified)
+        {
+            _logger.LogDebug(
+                "Signed npm subject verification failed for {PackageSpecifier}: {Outcome}",
+                NpmPackageInfo.FormatPackageSpecifier(packageName, version),
+                subjectOutcome);
+            return new ProvenanceVerificationResult { Outcome = subjectOutcome };
+        }
+
         // Extract provenance from the verified result's in-toto statement and certificate extensions.
         var provenance = ExtractProvenanceFromResult(verificationResult!);
         if (provenance is null)
         {
-            logger.LogDebug("Failed to extract provenance data from verified result for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            _logger.LogDebug("Failed to extract provenance data from verified result for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed };
         }
 
@@ -88,13 +138,13 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             provenance, expectedSourceRepository, expectedWorkflowPath,
             expectedBuildType, validateWorkflowRef);
 
-        logger.LogDebug("Provenance verification for {PackageSpecifier} completed with outcome {Outcome}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), result.Outcome);
+        _logger.LogDebug("Provenance verification for {PackageSpecifier} completed with outcome {Outcome}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), result.Outcome);
 
         return result;
     }
 
     /// <summary>
-    /// Fetches the attestation JSON from the npm registry for the given package and version.
+    /// Fetches the attestation JSON from the public npm registry for the given package and version.
     /// </summary>
     private async Task<string?> FetchAttestationJsonAsync(
         string packageName, string version, CancellationToken cancellationToken)
@@ -104,12 +154,12 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             var encodedPackage = Uri.EscapeDataString(packageName);
             var url = $"{NpmRegistryAttestationsBaseUrl}/{encodedPackage}@{version}";
 
-            logger.LogDebug("Fetching attestations from {Url}", url);
-            var response = await httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            _logger.LogDebug("Fetching attestations from {Url}", url);
+            var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogDebug("Failed to fetch attestations: HTTP {StatusCode}", response.StatusCode);
+                _logger.LogDebug("Failed to fetch attestations: HTTP {StatusCode}", response.StatusCode);
                 return null;
             }
 
@@ -117,14 +167,14 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         }
         catch (HttpRequestException ex)
         {
-            logger.LogDebug(ex, "Failed to fetch attestations for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            _logger.LogDebug(ex, "Failed to fetch attestations for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return null;
         }
     }
 
     /// <summary>
     /// Extracts the Sigstore bundle JSON string for the SLSA provenance attestation
-    /// from the npm registry attestations API response.
+    /// from the public npm registry attestations API response.
     /// Returns the bundle JSON on success, or <c>null</c> if the JSON is malformed or
     /// no SLSA provenance attestation is found.
     /// </summary>
@@ -201,7 +251,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
     {
         if (!TryParseGitHubOwnerRepo(expectedSourceRepository, out var owner, out var repo))
         {
-            logger.LogWarning("Could not parse GitHub owner/repo from expected source repository: {ExpectedSourceRepository}", expectedSourceRepository);
+            _logger.LogWarning("Could not parse GitHub owner/repo from expected source repository: {ExpectedSourceRepository}", expectedSourceRepository);
             return (new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.SourceRepositoryMismatch }, null);
         }
 
@@ -214,81 +264,18 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
 
         try
         {
-            var (success, result) = await VerifyBundleWithPolicyAsync(
+            var (success, result) = await _verifyBundleWithPolicyAsync(
                 verifier, bundle, policy, sriIntegrity, cancellationToken).ConfigureAwait(false);
-
-            // Workaround for Sigstore .NET library bug on Windows where ExtractSan() fails because
-            // .NET formats URI-type SANs as "URL=..." but the library checks for "URI". This will be
-            // fixed in Sigstore 0.5.0. See https://github.com/mitchdenny/sigstore-dotnet/issues/14
-            //
-            // When the SAN extraction fails, we retry cryptographic verification without the
-            // CertificateIdentity policy, then manually verify the three identity checks that
-            // ForGitHubActions would have performed (SAN pattern, OIDC issuer, SourceRepositoryUri)
-            // by reading the Fulcio certificate extensions directly from the bundle. This is safe
-            // because:
-            //
-            //   1. Full cryptographic verification still occurs: the Fulcio certificate chain is
-            //      validated against the Sigstore TUF trust root, Signed Certificate Timestamps are
-            //      checked, Rekor transparency log inclusion is verified, and the artifact signature
-            //      (ECDSA over the DSSE envelope) is validated. An attacker cannot forge a bundle
-            //      without Fulcio issuing them a certificate, which requires a valid OIDC token.
-            //
-            //   2. We manually verify the OIDC issuer from the Fulcio certificate extension
-            //      (OID 1.3.6.1.4.1.57264.1.8), confirming the certificate was issued after
-            //      authenticating with GitHub Actions' OIDC provider. These extensions are parsed
-            //      from raw DER bytes (not the platform-dependent Format() method), so they work
-            //      correctly on all platforms.
-            //
-            //   3. We manually verify the SourceRepositoryUri from the Fulcio certificate extension
-            //      (OID 1.3.6.1.4.1.57264.1.12), confirming the signing identity is bound to the
-            //      expected GitHub repository. This is the same check that ForGitHubActions performs
-            //      via CertificateExtensionPolicy.
-            //
-            //   4. We manually verify the SAN matches the expected pattern for the GitHub repository.
-            //      The SAN is extracted using a platform-independent method that handles both the
-            //      "URI:" format (Linux/OpenSSL) and "URL=" format (Windows/CryptoAPI).
-            //
-            //   5. After this method returns, VerifyProvenanceFields() performs additional
-            //      defense-in-depth checks on the SLSA predicate fields (source repository, workflow
-            //      path, build type, workflow ref) from the DSSE payload, which was signature-verified
-            //      in step 1.
-            //
-            // Once the upstream bug is fixed in Sigstore 0.5.0 and we upgrade, this retry logic and
-            // the VerifyCertificateIdentityFromBundle/ExtractSubjectAlternativeNamePortable helpers
-            // can be removed — the initial VerifyBundleWithPolicyAsync call with CertificateIdentity
-            // will succeed on all platforms.
-            if (!success
-                && result?.FailureReason is not null
-                && result.FailureReason.Contains("Subject Alternative Name", StringComparison.OrdinalIgnoreCase))
-            {
-                logger.LogDebug(
-                    "Retrying Sigstore verification without CertificateIdentity due to known SAN extraction bug " +
-                    "(https://github.com/mitchdenny/sigstore-dotnet/issues/14) for {PackageSpecifier}",
-                    NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-
-                var fallbackPolicy = new VerificationPolicy();
-                (success, result) = await VerifyBundleWithPolicyAsync(
-                    verifier, bundle, fallbackPolicy, sriIntegrity, cancellationToken).ConfigureAwait(false);
-
-                if (success)
-                {
-                    var identityFailure = VerifyCertificateIdentityFromBundle(bundle, identityPolicy, packageName, version);
-                    if (identityFailure is not null)
-                    {
-                        return (identityFailure, null);
-                    }
-                }
-            }
 
             if (!success)
             {
-                logger.LogWarning(
+                _logger.LogWarning(
                     "Sigstore verification failed for {PackageSpecifier}: {FailureReason}",
                     NpmPackageInfo.FormatPackageSpecifier(packageName, version), result?.FailureReason);
                 return (new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed }, null);
             }
 
-            logger.LogDebug(
+            _logger.LogDebug(
                 "Sigstore verification passed for {PackageSpecifier}. Signed by: {Signer}",
                 NpmPackageInfo.FormatPackageSpecifier(packageName, version), result?.SignerIdentity?.SubjectAlternativeName);
 
@@ -296,7 +283,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Sigstore verification threw an exception for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            _logger.LogWarning(ex, "Sigstore verification threw an exception for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return (new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed }, null);
         }
     }
@@ -335,125 +322,52 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
     }
 
     /// <summary>
-    /// Manually verifies the certificate identity checks that <see cref="CertificateIdentity.ForGitHubActions"/>
-    /// would normally perform, by reading Fulcio certificate extensions directly from the bundle.
-    /// This is the workaround path used when the library's SAN extraction fails on Windows.
+    /// Verifies that the signed in-toto subject identifies the expected npm package archive.
     /// </summary>
-    private ProvenanceVerificationResult? VerifyCertificateIdentityFromBundle(
-        SigstoreBundle bundle,
-        CertificateIdentity expectedIdentity,
+    internal static ProvenanceVerificationOutcome VerifyNpmSubject(
+        InTotoStatement? statement,
         string packageName,
-        string version)
+        string version,
+        string? sriIntegrity)
     {
-        // Extract the leaf certificate from the bundle's verification material.
-        ReadOnlyMemory<byte>? certBytes = bundle.VerificationMaterial?.Certificate;
-        if (certBytes is null && bundle.VerificationMaterial?.CertificateChain is { Count: > 0 } chain)
+        if (statement?.Subject is not [var subject])
         {
-            certBytes = chain[0];
+            return ProvenanceVerificationOutcome.PackageIdentityMismatch;
         }
 
-        if (certBytes is not { Length: > 0 } leafCertBytes)
+        // npm-package-arg encodes the leading '@' in scoped package names when creating the
+        // provenance PURL: @playwright/cli@0.1.1 => pkg:npm/%40playwright/cli@0.1.1.
+        // See https://github.com/npm/npm-package-arg/blob/main/lib/npa.js.
+        var purlPackageName = packageName.StartsWith('@')
+            ? $"%40{packageName[1..]}"
+            : packageName;
+        var expectedSubjectName = $"pkg:npm/{purlPackageName}@{version}";
+        if (!string.Equals(subject.Name, expectedSubjectName, StringComparison.Ordinal))
         {
-            logger.LogWarning("No signing certificate found in bundle for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-            return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed };
+            return ProvenanceVerificationOutcome.PackageIdentityMismatch;
         }
 
-        using var cert = X509CertificateLoader.LoadCertificate(leafCertBytes.Span);
-        var extensions = FulcioCertificateExtensions.FromCertificate(cert);
-
-        // Check OIDC issuer (OID 1.3.6.1.4.1.57264.1.8).
-        if (expectedIdentity.Issuer is not null)
+        if (sriIntegrity is null ||
+            !sriIntegrity.StartsWith("sha512-", StringComparison.OrdinalIgnoreCase) ||
+            !subject.Digest.TryGetValue("sha512", out var subjectDigest))
         {
-            if (extensions.Issuer is null || !string.Equals(extensions.Issuer, expectedIdentity.Issuer, StringComparison.Ordinal))
-            {
-                logger.LogWarning(
-                    "OIDC issuer mismatch for {PackageSpecifier}: expected '{Expected}', got '{Actual}'",
-                    NpmPackageInfo.FormatPackageSpecifier(packageName, version), expectedIdentity.Issuer, extensions.Issuer);
-                return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed };
-            }
+            return ProvenanceVerificationOutcome.PackageDigestMismatch;
         }
 
-        // Check SourceRepositoryUri extension (OID 1.3.6.1.4.1.57264.1.12).
-        if (expectedIdentity.Extensions?.SourceRepositoryUri is not null)
+        string expectedDigest;
+        try
         {
-            if (!string.Equals(extensions.SourceRepositoryUri, expectedIdentity.Extensions.SourceRepositoryUri, StringComparison.Ordinal))
-            {
-                logger.LogWarning(
-                    "SourceRepositoryUri mismatch for {PackageSpecifier}: expected '{Expected}', got '{Actual}'",
-                    NpmPackageInfo.FormatPackageSpecifier(packageName, version), expectedIdentity.Extensions.SourceRepositoryUri, extensions.SourceRepositoryUri);
-                return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.SourceRepositoryMismatch };
-            }
+            var digestBytes = Convert.FromBase64String(sriIntegrity["sha512-".Length..]);
+            expectedDigest = Convert.ToHexStringLower(digestBytes);
+        }
+        catch (FormatException)
+        {
+            return ProvenanceVerificationOutcome.PackageDigestMismatch;
         }
 
-        // Check SAN pattern using a platform-independent extraction that handles both "URI:" and "URL=".
-        if (expectedIdentity.SubjectAlternativeNamePattern is not null)
-        {
-            var san = ExtractSubjectAlternativeNamePortable(cert);
-            if (san is null || !Regex.IsMatch(san, expectedIdentity.SubjectAlternativeNamePattern))
-            {
-                logger.LogWarning(
-                    "SAN pattern mismatch for {PackageSpecifier}: expected pattern '{Pattern}', got '{Actual}'",
-                    NpmPackageInfo.FormatPackageSpecifier(packageName, version), expectedIdentity.SubjectAlternativeNamePattern, san);
-                return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed };
-            }
-        }
-
-        logger.LogDebug(
-            "Manual certificate identity verification passed for {PackageSpecifier} (issuer: {Issuer}, repo: {Repo})",
-            NpmPackageInfo.FormatPackageSpecifier(packageName, version), extensions.Issuer, extensions.SourceRepositoryUri);
-
-        return null;
-    }
-
-    /// <summary>
-    /// Extracts the URI-type Subject Alternative Name from a certificate in a platform-independent way.
-    /// Handles both "URI:" (Linux/OpenSSL) and "URL=" (Windows/CryptoAPI) formatting
-    /// produced by <c>X509Extension.Format(bool)</c>.
-    /// </summary>
-    internal static string? ExtractSubjectAlternativeNamePortable(X509Certificate2 cert)
-    {
-        foreach (var ext in cert.Extensions)
-        {
-            if (ext.Oid?.Value != "2.5.29.17")
-            {
-                continue;
-            }
-
-            var formatted = ext.Format(false);
-            var uri = ParseUriFromFormattedSan(formatted);
-            if (uri is not null)
-            {
-                return uri;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Parses a URI value from the formatted string representation of a Subject Alternative Name extension.
-    /// Handles both "URI:" (Linux/OpenSSL) and "URL=" (Windows/CryptoAPI) formatting conventions.
-    /// </summary>
-    internal static string? ParseUriFromFormattedSan(string formattedSan)
-    {
-        foreach (var part in formattedSan.Split(',', StringSplitOptions.TrimEntries))
-        {
-            // Linux/OpenSSL formats as "URI:https://..."
-            var uriIdx = part.IndexOf("URI:", StringComparison.OrdinalIgnoreCase);
-            if (uriIdx >= 0)
-            {
-                return part[(uriIdx + 4)..].Trim();
-            }
-
-            // Windows/CryptoAPI formats as "URL=https://..."
-            var urlIdx = part.IndexOf("URL=", StringComparison.OrdinalIgnoreCase);
-            if (urlIdx >= 0)
-            {
-                return part[(urlIdx + 4)..].Trim();
-            }
-        }
-
-        return null;
+        return string.Equals(subjectDigest, expectedDigest, StringComparison.Ordinal)
+            ? ProvenanceVerificationOutcome.Verified
+            : ProvenanceVerificationOutcome.PackageDigestMismatch;
     }
 
     /// <summary>

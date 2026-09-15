@@ -39,8 +39,15 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
+	// withModule on RedisResource - well-known and custom module paths
+	cache.WithModule(aspire.RedisModules.Json)
+	cache.WithModule("/opt/redis/custom-module.so")
+	if err = cache.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
 	// withHostPort on cache — stand-alone
-	cache.WithHostPort(6379)
+	cache.WithHostPort(aspire.Float64Ptr(6379))
 	if err = cache.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -55,7 +62,7 @@ func main() {
 	// withRedisCommander — with configureContainer callback exercising WithHostPort
 	cache.WithRedisCommander(&aspire.WithRedisCommanderOptions{
 		ConfigureContainer: func(commander aspire.RedisCommanderResource) {
-			commander.WithHostPort(8081)
+			commander.WithHostPort(aspire.Float64Ptr(8081))
 		},
 		ContainerName: aspire.StringPtr("my-commander"),
 	})
@@ -63,7 +70,7 @@ func main() {
 	// withRedisInsight — with configureContainer callback exercising WithHostPort, WithDataVolume, WithDataBindMount
 	cache.WithRedisInsight(&aspire.WithRedisInsightOptions{
 		ConfigureContainer: func(insight aspire.RedisInsightResource) {
-			insight.WithHostPort(5540)
+			insight.WithHostPort(aspire.Float64Ptr(5540))
 			insight.WithDataVolume(&aspire.RedisInsightResourceWithDataVolumeOptions{Name: aspire.StringPtr("insight-data")})
 			insight.WithDataBindMount("/tmp/insight-data")
 		},

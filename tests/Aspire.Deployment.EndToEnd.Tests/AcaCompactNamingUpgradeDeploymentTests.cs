@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -93,7 +92,7 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
             output.WriteLine("Step 2: Backing up dev CLI and installing GA Aspire CLI...");
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                await auto.TypeAsync("cp ~/.aspire/bin/aspire /tmp/aspire-dev-backup && cp -r ~/.aspire/hives /tmp/aspire-hives-backup 2>/dev/null && cp -r ~/.aspire/managed /tmp/aspire-managed-backup 2>/dev/null && cp -r ~/.aspire/dcp /tmp/aspire-dcp-backup 2>/dev/null; echo 'dev CLI backed up'");
+                await auto.TypeAsync("cp ~/.aspire/bin/aspire /tmp/aspire-dev-backup && cp -r ~/.aspire/hives /tmp/aspire-hives-backup 2>/dev/null; echo 'dev CLI backed up'");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
             }
@@ -274,8 +273,13 @@ builder.Build().Run();
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 output.WriteLine("Step 11: Restoring dev CLI from backup...");
-                // Restore the dev CLI and hive that we backed up before GA install
-                await auto.TypeAsync("cp -f /tmp/aspire-dev-backup ~/.aspire/bin/aspire && cp -rf /tmp/aspire-hives-backup/* ~/.aspire/hives/ 2>/dev/null && cp -rf /tmp/aspire-managed-backup/* ~/.aspire/managed/ 2>/dev/null && cp -rf /tmp/aspire-dcp-backup/* ~/.aspire/dcp/ 2>/dev/null; echo 'dev CLI restored'");
+                // Restore the dev CLI binary and hive that we backed up before GA install, then
+                // re-extract its embedded bundle (managed + dcp). The dev CLI is self-extracting,
+                // so the bundle lives inside the binary — restoring the binary and running
+                // 'aspire setup' rebuilds ~/.aspire/versions/<id>/ for the dev build. The hive copy
+                // is non-fatal (';') so an empty glob can't short-circuit 'aspire setup', and the
+                // success echo is gated ('&&') on setup so the prompt reflects a setup failure.
+                await auto.TypeAsync("cp -f /tmp/aspire-dev-backup ~/.aspire/bin/aspire && cp -rf /tmp/aspire-hives-backup/* ~/.aspire/hives/ 2>/dev/null; ~/.aspire/bin/aspire setup --force && echo 'dev CLI restored'");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
 

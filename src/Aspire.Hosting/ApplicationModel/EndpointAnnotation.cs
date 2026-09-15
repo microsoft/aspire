@@ -211,6 +211,9 @@ public sealed class EndpointAnnotation : IResourceAnnotation
 
     internal int? SpecifiedPort => _port;
 
+    // For most cases "port==0" is equivalent to "port is unspecified". Both should be treated as "port should be allocated dynamically".
+    internal static int? NormalizePort(int? port) => port is 0 ? null : port;
+
     /// <summary>
     /// This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.
     /// </summary>

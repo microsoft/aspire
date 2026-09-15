@@ -69,6 +69,7 @@ internal sealed class ContainerSpec
 
     // Optional parent process identity timestamp used with MonitorPid to guard against PID reuse.
     [JsonPropertyName("monitorTimestamp")]
+    [JsonConverter(typeof(KubernetesMicroTimeJsonConverter))]
     public DateTime? MonitorTimestamp { get; set; }
 
     [JsonPropertyName("networks")]
@@ -104,6 +105,14 @@ internal sealed class ContainerSpec
     // List of public PEM certificates to be trusted by the container
     [JsonPropertyName("pemCertificates")]
     public ContainerPemCertificates? PemCertificates { get; set; }
+
+    /// <summary>
+    /// Terminal configuration for interactive PTY access.
+    /// When set, DCP allocates a pseudo-terminal for the container and forwards
+    /// I/O over a Unix domain socket using <see href="https://github.com/dotnet/hex1b">Hex1b</see>'s HMP v1 framing.
+    /// </summary>
+    [JsonPropertyName("terminal")]
+    public TerminalSpec? Terminal { get; set; }
 }
 
 internal sealed class BuildContext
@@ -365,6 +374,7 @@ internal sealed class ContainerCreateFileSystem : IEquatable<ContainerCreateFile
 
 internal static class ContainerFileSystemItemExtensions
 {
+    [AspireExportIgnore(Reason = "Internal conversion to the DCP ContainerFileSystemEntry model, which is not part of the ATS surface.")]
     public static ContainerFileSystemEntry ToContainerFileSystemEntry(this ContainerFileSystemItem item)
     {
         var type = item switch

@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.DashboardService.Proto.V1;
 using Bunit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,11 +22,7 @@ public class ApplicationNameTests : DashboardTestContext
     public void Render_DashboardClientDisabled_Success()
     {
         // Arrange
-        Services.AddSingleton<IConfiguration>(new ConfigurationManager());
-        Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
-        Services.AddSingleton<IDashboardClient, DashboardClient>();
-        Services.AddSingleton<BrowserTimeProvider>();
-        Services.AddSingleton<IKnownPropertyLookup>(new MockKnownPropertyLookup());
+        AddDashboardClientServices();
 
         // Act
         var cut = RenderComponent<ApplicationName>();
@@ -38,11 +35,7 @@ public class ApplicationNameTests : DashboardTestContext
     public void Render_With_Args()
     {
         // Arrange
-        Services.AddSingleton<IConfiguration>(new ConfigurationManager());
-        Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
-        Services.AddSingleton<IDashboardClient, DashboardClient>();
-        Services.AddSingleton<BrowserTimeProvider>();
-        Services.AddSingleton<IKnownPropertyLookup>(new MockKnownPropertyLookup());
+        AddDashboardClientServices();
 
         // Act
         var cut = RenderComponent<ApplicationName>(builder =>
@@ -71,11 +64,33 @@ public class ApplicationNameTests : DashboardTestContext
         cut.MarkupMatches("&lt;marquee&gt;An HTML title!&lt;/marquee&gt;");
     }
 
+    private void AddDashboardClientServices()
+    {
+        Services.AddLocalization();
+        Services.AddSingleton<IConfiguration>(new ConfigurationManager());
+        Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        Services.AddSingleton<DashboardActivitySource>();
+        // Use the real client intentionally to verify ApplicationName and DashboardClient work together.
+        Services.AddSingleton<IDashboardClient, DashboardClient>();
+        Services.AddSingleton<BrowserTimeProvider>();
+        Services.AddSingleton<IKnownPropertyLookup>(new MockKnownPropertyLookup());
+        Services.AddSingleton<IResourceRepositoryWriter, NoopResourceRepositoryWriter>();
+    }
+
     private sealed class TestStringLocalizer<T> : IStringLocalizer<T>
     {
         public LocalizedString this[string name] => new LocalizedString(name, $"Localized:{name}");
         public LocalizedString this[string name, params object[] arguments] => new LocalizedString(name, $"Localized:{name}:" + string.Join("+", arguments));
 
         public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures) => [];
+    }
+
+    private sealed class NoopResourceRepositoryWriter : IResourceRepositoryWriter
+    {
+        public Task ReplaceResourcesAsync(IReadOnlyList<Resource> resources) => Task.CompletedTask;
+        public Task ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes) => Task.CompletedTask;
+        public Task MarkConsoleLogsLoadedAsync(string resourceName) => Task.CompletedTask;
+        public Task AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines) => Task.CompletedTask;
+        public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) => Task.CompletedTask;
     }
 }

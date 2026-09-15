@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
@@ -8,7 +8,6 @@
     <None Include="$(RepoRoot)src\Components\Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="..\Aspire.Azure.Security.KeyVault.Tests\MockTransport.cs" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Components\Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration\Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.csproj" />
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />

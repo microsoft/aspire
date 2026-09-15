@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
+#pragma warning disable ASPIREAZUREFUNCTIONS001 // Internal implementation of the experimental directory-based Functions APIs.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
@@ -202,6 +204,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// </example>
     /// </remarks>
     [AspireExport]
+    [Experimental("ASPIREAZUREFUNCTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureFunctionsAppResource> AddAzureFunctionsApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, AzureFunctionsLanguage language)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -224,6 +227,7 @@ public static class AzureFunctionsProjectResourceExtensions
 
 #pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
         var functionsBuilder = builder.AddResource(resource)
+            .WithIconName("Flash")
             .WithAnnotation(projectMetadata)
             .WithAnnotation(new AzureFunctionsAnnotation())
             .WithAnnotation(new AzureFunctionsHostStorageAnnotation(storage), ResourceAnnotationMutationBehavior.Replace)
@@ -469,6 +473,13 @@ public static class AzureFunctionsProjectResourceExtensions
                 {
                     dockerfile.Run("npm run build");
                 }
+
+                if (hasPackageJson)
+                {
+                    // Keep build tools available until TypeScript compilation completes, but don't
+                    // leave development dependencies such as Core Tools in the deployed app.
+                    dockerfile.Run("npm prune --omit=dev");
+                }
             });
 
             if (containerBuilder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
@@ -502,6 +513,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// <param name="storage">The resource builder for the Azure Storage resource to be used as host storage.</param>
     /// <returns>The resource builder for the Azure Functions app resource, configured with the specified host storage.</returns>
     [AspireExport("withAzureFunctionsAppHostStorage", MethodName = "withHostStorage")]
+    [Experimental("ASPIREAZUREFUNCTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureFunctionsAppResource> WithHostStorage(this IResourceBuilder<AzureFunctionsAppResource> builder, IResourceBuilder<AzureStorageResource> storage)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -550,6 +562,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// <param name="connectionName">An override of the source resource's name for the connection name. The resulting connection name will be connectionName if this is not null.</param>
     /// <remarks>This method is not available in polyglot app hosts. Use the standard <c>withReference</c> method from the base resource builder instead.</remarks>
     [AspireExportIgnore(Reason = "IResourceWithAzureFunctionsConfig is an internal interface constraint not compatible with ATS.")]
+    [Experimental("ASPIREAZUREFUNCTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureFunctionsAppResource> WithReference<TSource>(this IResourceBuilder<AzureFunctionsAppResource> destination, IResourceBuilder<TSource> source, string? connectionName = null)
         where TSource : IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
     {

@@ -25,10 +25,7 @@ namespace Aspire.Hosting.Foundry;
 /// </summary>
 public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 {
-    // The "Azure AI User" built-in role (data-plane access to Foundry agents/inference). Granted to
-    // the agent's own instance identity below, and to consumers that reference the agent (see
-    // HostedAgentResourceBuilderExtensions.GrantHostedAgentConsumerRoles).
-    internal const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
+    internal const string DefaultResponsesProtocolVersion = "2.0.0";
 
     /// <summary>
     /// Creates a new instance of the <see cref="AzureHostedAgentResource"/> class.
@@ -121,7 +118,16 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         {
             Configure(def);
         }
+        EnsureProtocolVersions(def);
         return def;
+    }
+
+    internal static void EnsureProtocolVersions(HostedAgentConfiguration configuration)
+    {
+        if (configuration.ProtocolVersions.Count == 0)
+        {
+            configuration.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, DefaultResponsesProtocolVersion));
+        }
     }
 
     /// <summary>
@@ -157,10 +163,12 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid connection string.");
         }
         var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
+        var options = def.ToProjectsAgentVersionCreationOptions(Target.Name);
+
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
         var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
             Name,
-            def.ToProjectsAgentVersionCreationOptions(Target.Name),
+            options,
             cancellationToken: context.CancellationToken
         ).ConfigureAwait(false);
 
@@ -174,7 +182,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 
     private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
     {
-        var endpointProtocols = GetAgentEndpointProtocols(configuration.ContainerProtocolVersions);
+        var endpointProtocols = GetAgentEndpointProtocols(configuration.ProtocolVersions);
         if (endpointProtocols.Count == 0)
         {
             return;
@@ -240,13 +248,13 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         var foundryResourceId = await project.Parent.Id.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(foundryResourceId))
         {
-            context.Logger.LogWarning("Could not resolve the Microsoft Foundry resource ID for hosted agent '{Name}'. The agent identity '{PrincipalId}' may need the Cognitive Services User role assigned manually.", Name, principalId);
+            context.Logger.LogWarning("Could not resolve the Microsoft Foundry resource ID for hosted agent '{Name}'. The agent identity '{PrincipalId}' may need the Foundry User role assigned manually.", Name, principalId);
             return;
         }
 
         var subscriptionResourceId = provisioningContext.Subscription.Id.ToString();
         var roleDefinitionId = new ResourceIdentifier(
-            $"{subscriptionResourceId}/providers/Microsoft.Authorization/roleDefinitions/{AzureAIUserRoleDefinitionId}");
+            $"{subscriptionResourceId}/providers/Microsoft.Authorization/roleDefinitions/{FoundryResource.FoundryUserRoleDefinitionId}");
 
         var assignmentName = StableGuid(principalId, roleDefinitionId.ToString(), foundryResourceId);
 
@@ -266,13 +274,13 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 content,
                 context.CancellationToken).ConfigureAwait(false);
 
-            context.Logger.LogInformation("Assigned Cognitive Services User role to hosted agent '{Name}' identity '{PrincipalId}'.", Name, principalId);
+            context.Logger.LogInformation("Assigned Foundry User role to hosted agent '{Name}' identity '{PrincipalId}'.", Name, principalId);
         }
         catch (RequestFailedException ex)
         {
             context.Logger.LogWarning(
                 ex,
-                "Could not create Cognitive Services User role assignment for hosted agent '{Name}' identity '{PrincipalId}' on Foundry resource '{FoundryResourceId}'. Create the role assignment manually.",
+                "Could not create Foundry User role assignment for hosted agent '{Name}' identity '{PrincipalId}' on Foundry resource '{FoundryResourceId}'. Create the role assignment manually.",
                 Name,
                 principalId,
                 foundryResourceId);
@@ -319,6 +327,15 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 continue;
             }
 
+            if (IsHostedAgentTargetPortValue(value, hostedAgent))
+            {
+                // Endpoint target-port variables model how a local process or container binds. Foundry
+                // hosted agents own the container port contract during deployment, and their endpoint
+                // resolver intentionally does not support EndpointProperty.TargetPort.
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' references the hosted agent target port and will be skipped.", key, resource.Name);
+                continue;
+            }
+
             switch (value)
             {
                 case null:
@@ -339,6 +356,26 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             }
         }
         return resolvedEnvVars;
+    }
+
+    private static bool IsHostedAgentTargetPortValue(object? value, AzureHostedAgentResource hostedAgent)
+    {
+        return value switch
+        {
+            EndpointReferenceExpression endpointReferenceExpression => IsHostedAgentTargetPortExpression(endpointReferenceExpression, hostedAgent),
+            ReferenceExpression referenceExpression when referenceExpression.IsConditional =>
+                IsHostedAgentTargetPortValue(referenceExpression.Condition, hostedAgent) ||
+                IsHostedAgentTargetPortValue(referenceExpression.WhenTrue, hostedAgent) ||
+                IsHostedAgentTargetPortValue(referenceExpression.WhenFalse, hostedAgent),
+            ReferenceExpression referenceExpression => referenceExpression.ValueProviders.Any(valueProvider => IsHostedAgentTargetPortValue(valueProvider, hostedAgent)),
+            _ => false
+        };
+    }
+
+    private static bool IsHostedAgentTargetPortExpression(EndpointReferenceExpression endpointReferenceExpression, AzureHostedAgentResource hostedAgent)
+    {
+        return endpointReferenceExpression.Property == EndpointProperty.TargetPort &&
+            ReferenceEquals(endpointReferenceExpression.Endpoint.Resource, hostedAgent.Target);
     }
 
     private static async ValueTask<string?> ResolveValueProviderAsync(

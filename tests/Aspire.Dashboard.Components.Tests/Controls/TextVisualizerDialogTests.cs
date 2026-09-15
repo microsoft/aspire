@@ -2,13 +2,19 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Dialogs;
+using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -41,14 +47,21 @@ public class TextVisualizerDialogTests : DashboardTestContext
                            ]
                            """;
 
-        var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawJson, string.Empty, false), []);
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawJson, string.Empty, false), new DialogParameters());
+        var cut = getCut();
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
 
         Assert.Equal(expectedJson, instance.TextVisualizerViewModel.FormattedText);
         Assert.Equal(DashboardUIHelpers.JsonFormat, instance.TextVisualizerViewModel.FormatKind);
-        Assert.Equal([DashboardUIHelpers.JsonFormat, DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.JsonFormat, DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Single(cut.FindAll("fluent-dialog-body [slot='title']"));
+        Assert.Single(cut.FindAll("fluent-dialog-body [slot='title'] svg"));
+        Assert.Single(cut.FindAll("fluent-dialog-body [slot='title'] .dialog-format"));
+        Assert.Single(cut.FindAll("fluent-dialog-body [slot='action'] .button-container"));
+        Assert.Empty(cut.FindAll(".text-visualizer-container .button-container"));
+        Assert.Empty(cut.FindAll("header"));
     }
 
     [Fact]
@@ -62,21 +75,77 @@ public class TextVisualizerDialogTests : DashboardTestContext
             </parent>
             """;
 
-        var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawXml, string.Empty, false), []);
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawXml, string.Empty, false), new DialogParameters());
+        var cut = getCut();
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
 
         Assert.Equal(DashboardUIHelpers.XmlFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(expectedXml, instance.TextVisualizerViewModel.FormattedText);
-        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
 
-        // changing format works
-        instance.ChangeFormat(DashboardUIHelpers.PlaintextFormat, rawXml);
+        instance.ChangeFormat(DashboardUIHelpers.PlaintextFormat);
 
         Assert.Equal(DashboardUIHelpers.PlaintextFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(rawXml, instance.TextVisualizerViewModel.FormattedText);
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_FormatPicker_UsesFluentSelectAndPreservesSelectionAfterParentRerenderAsync()
+    {
+        const string rawXml = """<parent><child>text<!-- comment --></child></parent>""";
+
+        var content = new TextVisualizerDialogViewModel(rawXml, string.Empty, false);
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(content, new DialogParameters());
+        var cut = getCut();
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var formatSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>());
+        Assert.NotNull(formatSelect.Find("fluent-dropdown"));
+
+        Assert.Equal(Aspire.Dashboard.Resources.Dialogs.TextVisualizerSelectFormatType, formatSelect.Instance.AriaLabel);
+        Assert.Equal(DashboardUIHelpers.XmlFormat, formatSelect.Instance.Value?.Id);
+        Assert.Null(formatSelect.Instance.OptionText!(null));
+        Assert.False(formatSelect.Instance.OptionDisabled!(null));
+
+        var formatOptions = formatSelect.Instance.Items ?? throw new InvalidOperationException("Expected format options.");
+        var plaintextOption = formatOptions.Single(o => o.Id == DashboardUIHelpers.PlaintextFormat);
+        await formatSelect.InvokeAsync(() => formatSelect.Instance.ValueChanged.InvokeAsync(plaintextOption));
+
+        cut.WaitForAssertion(() =>
+        {
+            var dialog = cut.FindComponent<TextVisualizerDialog>().Instance;
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
+            Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>().Instance.Value?.Id);
+            Assert.Single(cut.FindAll(".text-visualizer-unformatted"));
+        });
+
+        cut.FindComponent<TextVisualizerDialog>().SetParametersAndRender(parameters => parameters.Add(p => p.Content, content));
+
+        cut.WaitForAssertion(() =>
+        {
+            var dialog = cut.FindComponent<TextVisualizerDialog>().Instance;
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
+            Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>().Instance.Value?.Id);
+        });
+    }
+
+    [Fact]
+    public void Render_TextVisualizer_DisplayUnformatted_AddsUnformattedClass()
+    {
+        SetUpDialog(out _);
+
+        var cut = RenderComponent<TextVisualizer>(parameters => parameters
+            .Add(p => p.ViewModel, new TextVisualizerViewModel("""{"value":1}""", indentText: false))
+            .Add(p => p.DisplayUnformatted, true)
+            .Add(p => p.Virtualize, false));
+
+        Assert.Single(cut.FindAll(".text-visualizer-unformatted"));
     }
 
     [Fact]
@@ -89,15 +158,16 @@ public class TextVisualizerDialogTests : DashboardTestContext
             <test>text content</test>
             """;
 
-        var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawXml, string.Empty, false), []);
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawXml, string.Empty, false), new DialogParameters());
+        var cut = getCut();
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
 
         Assert.Equal(DashboardUIHelpers.XmlFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(expectedXml, instance.TextVisualizerViewModel.FormattedText);
-        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
     }
 
     [Fact]
@@ -105,8 +175,9 @@ public class TextVisualizerDialogTests : DashboardTestContext
     {
         const string rawText = """{{{{{{"test": 4}""";
 
-        var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), new DialogParameters());
+        var cut = getCut();
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
@@ -121,8 +192,9 @@ public class TextVisualizerDialogTests : DashboardTestContext
     {
         const string rawText = "See https://aka.ms/aspire/container-runtime-unhealthy for more information.";
 
-        var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), new DialogParameters());
+        var cut = getCut();
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var link = cut.Find("a[href='https://aka.ms/aspire/container-runtime-unhealthy']");
@@ -134,9 +206,10 @@ public class TextVisualizerDialogTests : DashboardTestContext
     {
         var xml = @"<hello><!-- world --></hello>";
         var themeManager = new ThemeManager(new TestThemeResolver { EffectiveTheme = "Light" });
-        var cut = SetUpDialog(out var dialogService, themeManager: themeManager);
+        var getCut = SetUpDialog(out var dialogService, themeManager: themeManager);
         themeManager.EffectiveTheme = "Light";
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(xml, string.Empty, false), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(xml, string.Empty, false), new DialogParameters());
+        var cut = getCut();
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         Assert.NotEmpty(cut.FindAll(".theme-a11y-light-min"));
@@ -153,8 +226,9 @@ public class TextVisualizerDialogTests : DashboardTestContext
     {
         var xml = @"<hello><!-- world --></hello>";
 
-        var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(xml, string.Empty, false), []);
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(xml, string.Empty, false), new DialogParameters());
+        var cut = getCut();
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         Assert.NotEmpty(cut.FindAll(".theme-a11y-dark-min"));
@@ -175,8 +249,9 @@ public class TextVisualizerDialogTests : DashboardTestContext
             }
         };
 
-        var cut = SetUpDialog(out var dialogService, localStorage: localStorage);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: true), []);
+        var getCut = SetUpDialog(out var dialogService, localStorage: localStorage);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: true), new DialogParameters());
+        var cut = getCut();
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         Assert.Single(cut.FindAll(".block-warning"));
@@ -197,8 +272,9 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         var localStorage = new TestLocalStorage();
         localStorage.OnGetUnprotectedAsync = _ => new ValueTuple<bool, object>(true, new TextVisualizerDialog.TextVisualizerDialogSettings(SecretsWarningAcknowledged: true));
-        var cut = SetUpDialog(out var dialogService, localStorage: localStorage);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: true), []);
+        var getCut = SetUpDialog(out var dialogService, localStorage: localStorage);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: true), new DialogParameters());
+        var cut = getCut();
         cut.WaitForAssertion(() => Assert.False(cut.FindComponent<TextVisualizerDialog>().Instance.ShowSecretsWarning));
 
         cut.WaitForAssertion(() => Assert.False(cut.FindComponent<TextVisualizerDialog>().Instance.ShowSecretsWarning));
@@ -207,12 +283,30 @@ public class TextVisualizerDialogTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_TextVisualizerDialog_WithSecretAndAsyncSettingsLoad_RendersActionsAfterInitializationAsync()
+    {
+        const string rawText = """my text with a secret""";
+
+        var localStorage = new TestLocalStorage
+        {
+            OnBeforeGetUnprotectedAsync = async _ => await Task.Yield()
+        };
+        var getCut = SetUpDialog(out var dialogService, localStorage: localStorage);
+
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: true), new DialogParameters());
+        var cut = getCut();
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".button-container")));
+    }
+
+    [Fact]
     public async Task Render_TextVisualizerDialog_WithFixedFormat_UsesFixedFormatAndHidesDropdownAsync()
     {
         const string rawText = """export VAR=value""";
 
-        var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.PropertiesFormat), []);
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.PropertiesFormat), new DialogParameters());
+        var cut = getCut();
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
@@ -222,7 +316,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.True(instance.HasFixedFormat);
 
         // Verify the format dropdown is not rendered
-        Assert.Empty(cut.FindAll("#" + instance.GetType().GetField("_openSelectFormatButtonId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(instance)));
+        Assert.Empty(cut.FindComponents<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>());
     }
 
     [Fact]
@@ -230,18 +324,26 @@ public class TextVisualizerDialogTests : DashboardTestContext
     {
         const string rawText = """{"key": "value"}""";
 
-        var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.JsonFormat), []);
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.JsonFormat), new DialogParameters());
+        var cut = getCut();
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
 
         // Verify the fixed format is used
         Assert.Equal(DashboardUIHelpers.JsonFormat, instance.TextVisualizerViewModel.FormatKind);
+        Assert.Equal(
+            """
+            {
+              "key": "value"
+            }
+            """,
+            instance.TextVisualizerViewModel.FormattedText);
         Assert.True(instance.HasFixedFormat);
     }
 
-    private IRenderedFragment SetUpDialog(out IDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)
+    private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this, themeManager: themeManager, localStorage: localStorage);
 
@@ -249,11 +351,31 @@ public class TextVisualizerDialogTests : DashboardTestContext
         module.SetupVoid();
 
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentList(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        IRenderedFragment? cut = null;
+        TestDialogService? testDialogService = null;
+        testDialogService = new TestDialogService((content, _) =>
+        {
+            cut = RenderComponent<CascadingValue<IDialogInstance>>(builder =>
+            {
+                builder.Add(p => p.Value, testDialogService!.LastInstance!);
+                builder.AddChildContent<TextVisualizerDialog>(childBuilder =>
+                {
+                    childBuilder.Add(p => p.Content, Assert.IsType<TextVisualizerDialogViewModel>(content));
+                });
+            });
+            return Task.CompletedTask;
+        });
+        Services.RemoveAll<IDialogService>();
+        Services.AddSingleton<IDialogService>(testDialogService);
 
-        dialogService = Services.GetRequiredService<IDialogService>();
-        return cut;
+        dialogService = new DashboardDialogService(
+            testDialogService,
+            new TestStringLocalizer<Aspire.Dashboard.Resources.Dialogs>(),
+            Services.GetRequiredService<DimensionManager>());
+        return () => cut ?? throw new InvalidOperationException("The dialog was not rendered.");
     }
 }

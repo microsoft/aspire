@@ -20,8 +20,8 @@ public class DashboardOptionsTests
         var builder = DistributedApplication.CreateBuilder();
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            { "ASPNETCORE_ENVIRONMENT", "Development" },
-            { KnownConfigNames.AspNetCoreUrls, "https://localhost:8080" },
+            { KnownAspNetCoreConfigNames.Environment, "Development" },
+            { KnownAspNetCoreConfigNames.Urls, "https://localhost:8080" },
             { KnownConfigNames.DashboardOtlpGrpcEndpointUrl, otlpEndpoint },
             { KnownConfigNames.DashboardOtlpHttpEndpointUrl, null }
         });
@@ -38,7 +38,7 @@ public class DashboardOptionsTests
         var builder = DistributedApplication.CreateBuilder();
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            { KnownConfigNames.AspNetCoreUrls, "https://localhost:8080" },
+            { KnownAspNetCoreConfigNames.Urls, "https://localhost:8080" },
             { KnownConfigNames.DashboardOtlpGrpcEndpointUrl, null },
             { KnownConfigNames.DashboardOtlpHttpEndpointUrl, "https://localhost:4318" }
         });
@@ -62,8 +62,8 @@ public class DashboardOptionsTests
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             { "ASPIRE_DASHBOARD_TELEMETRY_OPTOUT", configurationValue },
-            { "ASPNETCORE_ENVIRONMENT", "Development" },
-            { KnownConfigNames.AspNetCoreUrls, "http://localhost:8080" },
+            { KnownAspNetCoreConfigNames.Environment, "Development" },
+            { KnownAspNetCoreConfigNames.Urls, "http://localhost:8080" },
             { KnownConfigNames.DashboardOtlpGrpcEndpointUrl, "http://localhost:4317" }
         });
 

@@ -11,7 +11,7 @@
 namespace Aspire.Dashboard.Resources {
     using System;
     
-    
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -31,7 +31,7 @@ namespace Aspire.Dashboard.Resources {
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal Layout() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,52 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Select dashboard run.
+        /// </summary>
+        public static string DashboardRunSelectTitle {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Select run: {0}.
+        /// </summary>
+        public static string DashboardRunSelectAccessibleLabel {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectAccessibleLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Live run.
+        /// </summary>
+        public static string DashboardRunSelectCurrent {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectCurrent", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Pin run.
+        /// </summary>
+        public static string DashboardRunSelectPin {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectPin", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unpin run.
+        /// </summary>
+        public static string DashboardRunSelectUnpin {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectUnpin", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>
@@ -205,6 +250,24 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Expand navigation labels.
+        /// </summary>
+        public static string NavMenuToggleExpand {
+            get {
+                return ResourceManager.GetString("NavMenuToggleExpand", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Collapse navigation to icons.
+        /// </summary>
+        public static string NavMenuToggleCollapse {
+            get {
+                return ResourceManager.GetString("NavMenuToggleCollapse", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Resources.
         /// </summary>
         public static string NavMenuResourcesTab {
@@ -237,42 +300,6 @@ namespace Aspire.Dashboard.Resources {
         public static string PageLayoutViewFilters {
             get {
                 return ResourceManager.GetString("PageLayoutViewFilters", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Failed to rejoin.&lt;br /&gt;Please retry or reload the page..
-        /// </summary>
-        public static string ReconnectFailedText {
-            get {
-                return ResourceManager.GetString("ReconnectFailedText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Rejoining the server....
-        /// </summary>
-        public static string ReconnectFirstAttemptText {
-            get {
-                return ResourceManager.GetString("ReconnectFirstAttemptText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Rejoin failed... trying again in &lt;span id=&quot;components-seconds-to-next-attempt&quot;&gt;&lt;/span&gt; seconds..
-        /// </summary>
-        public static string ReconnectRepeatedAttemptText {
-            get {
-                return ResourceManager.GetString("ReconnectRepeatedAttemptText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Retry.
-        /// </summary>
-        public static string ReconnectRetryButtonText {
-            get {
-                return ResourceManager.GetString("ReconnectRetryButtonText", resourceCulture);
             }
         }
         

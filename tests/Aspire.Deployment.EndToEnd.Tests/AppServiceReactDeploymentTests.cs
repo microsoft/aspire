@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -13,22 +12,23 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// </summary>
 public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
 {
-    // Timeout set to 40 minutes to allow for Azure App Service provisioning.
-    // Full deployments can take up to 30 minutes if Azure infrastructure is backed up.
-    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
+    // This test deploys both the initial slot-enabled site and its VNet-integration upgrade.
+    // Two 30-minute provisioning operations plus bounded verification waits leave time for
+    // template creation, package installation, and the commands between deployments.
+    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(85);
 
     [Fact]
-    public async Task DeployReactTemplateToAzureAppService()
+    public async Task DeployReactTemplateToAzureAppServiceWithDelegatedSubnet()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cts.Token, TestContext.Current.CancellationToken);
         var cancellationToken = linkedCts.Token;
 
-        await DeployReactTemplateToAzureAppServiceCore(cancellationToken);
+        await DeployReactTemplateToAzureAppServiceWithDelegatedSubnetCore(cancellationToken);
     }
 
-    private async Task DeployReactTemplateToAzureAppServiceCore(CancellationToken cancellationToken)
+    private async Task DeployReactTemplateToAzureAppServiceWithDelegatedSubnetCore(CancellationToken cancellationToken)
     {
         // Validate prerequisites
         var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
@@ -49,15 +49,15 @@ public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
             }
         }
 
-        var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.Create(output);
         var startTime = DateTime.UtcNow;
         var deploymentUrls = new Dictionary<string, string>();
         // Generate a unique resource group name with pattern: e2e-[testcasename]-[runid]-[attempt]
-        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("appservice");
+        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("appservice-vnet");
         // Project name can be simpler since resource group is explicitly set
         var projectName = "ReactAppSvc";
 
-        output.WriteLine($"Test: {nameof(DeployReactTemplateToAzureAppService)}");
+        output.WriteLine($"Test: {nameof(DeployReactTemplateToAzureAppServiceWithDelegatedSubnet)}");
         output.WriteLine($"Project Name: {projectName}");
         output.WriteLine($"Resource Group: {resourceGroupName}");
         output.WriteLine($"Subscription: {subscriptionId[..8]}...");
@@ -98,36 +98,58 @@ public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
             // aspire add may show a version selection prompt
             await auto.WaitForAspireAddCompletionAsync(counter);
 
-            // Step 6: Modify AppHost.cs to add Azure App Service Environment
+            // Step 6: Add Azure Virtual Network hosting package
+            output.WriteLine("Step 6: Adding Azure Virtual Network hosting package...");
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Network");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter);
+
+            // Step 7: Configure the first deployment with a staging slot but without VNet integration.
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
             var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
 
             output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
 
-            var content = File.ReadAllText(appHostFilePath);
-
-            // Insert the Azure App Service Environment before builder.Build().Run();
-            var buildRunPattern = "builder.Build().Run();";
-            var replacement = """
-// Add Azure App Service Environment for deployment
-builder.AddAzureAppServiceEnvironment("infra");
-
-builder.Build().Run();
+            const string buildRunPattern = "builder.Build().Run();";
+            const string initialEnvironmentConfiguration = """
+builder.AddAzureAppServiceEnvironment("infra")
+    .WithDeploymentSlot("stage");
+""";
+            const string upgradedEnvironmentConfiguration = """
+#pragma warning disable ASPIREAZURE003 // Azure Virtual Network APIs are experimental.
+var vnet = builder.AddAzureVirtualNetwork("vnet");
+var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+builder.AddAzureAppServiceEnvironment("infra")
+    .WithDelegatedSubnet(subnet)
+    .WithDeploymentSlot("stage");
+#pragma warning restore ASPIREAZURE003
 """;
 
-            content = content.Replace(buildRunPattern, replacement);
+            var content = File.ReadAllText(appHostFilePath);
+            var initialAppHostConfiguration = $"""
+// Add Azure App Service Environment with a staging slot for deployment.
+{initialEnvironmentConfiguration}
+
+{buildRunPattern}
+""";
+            if (!content.Contains(buildRunPattern, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Could not find '{buildRunPattern}' in the generated AppHost.");
+            }
+
+            content = content.Replace(buildRunPattern, initialAppHostConfiguration, StringComparison.Ordinal);
             File.WriteAllText(appHostFilePath, content);
 
             output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
 
-            // Step 7: Navigate to AppHost project directory
-            output.WriteLine("Step 6: Navigating to AppHost directory...");
+            // Step 8: Navigate to AppHost project directory
+            output.WriteLine("Step 8: Navigating to AppHost directory...");
             await auto.TypeAsync($"cd {projectName}.AppHost");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // Step 8: Set environment variables for deployment
+            // Step 9: Set environment variables for deployment
             // - Unset ASPIRE_PLAYGROUND to avoid conflicts
             // - Set Azure location
             // - Set AZURE__RESOURCEGROUP to use our unique resource group name
@@ -135,41 +157,63 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // Step 9: Deploy to Azure App Service using aspire deploy
-            // Use --clear-cache to ensure fresh deployment without cached location from previous runs
-            output.WriteLine("Step 7: Starting Azure App Service deployment...");
+            // Step 10: Deploy the site and slot without VNet integration.
+            output.WriteLine("Step 10: Starting the initial Azure App Service deployment...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            // Wait for pipeline to complete successfully (App Service can take longer)
-            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(35));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            // Step 10: Extract deployment URLs and verify endpoints with retry
-            // For App Service, we use az webapp list instead of az containerapp list
-            // Retry each endpoint for up to 3 minutes (18 attempts * 10 seconds)
-            output.WriteLine("Step 8: Verifying deployed endpoints...");
-            await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
-                  "echo \"Resource group: $RG_NAME\" && " +
-                  "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
-                  // Get App Service hostnames (defaultHostName for each web app)
-                  "urls=$(az webapp list -g \"$RG_NAME\" --query \"[].defaultHostName\" -o tsv 2>/dev/null) && " +
-                  "if [ -z \"$urls\" ]; then echo \"❌ No App Service endpoints found\"; exit 1; fi && " +
-                  "failed=0 && " +
-                  "for url in $urls; do " +
-                  "echo \"Checking https://$url...\"; " +
-                  "success=0; " +
-                  "for i in $(seq 1 18); do " +
-                  "STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$url\" --max-time 30 2>/dev/null); " +
-                  "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS (attempt $i)\"; success=1; break; fi; " +
-                  "echo \"  Attempt $i: $STATUS, retrying in 10s...\"; sleep 10; " +
-                  "done; " +
-                  "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
-                  "done && " +
-                  "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+            // The protected production-site path is only exercised when VNet integration is added
+            // after the slot-enabled site already exists.
+            output.WriteLine("Step 11: Verifying the initial deployment has no VNet integration...");
+            await VerifyNoVnetIntegrationAsync(auto, counter, resourceGroupName);
 
-            // Step 11: Exit terminal
+            // Step 12: Add the delegated subnet before redeploying to the same resource group.
+            content = File.ReadAllText(appHostFilePath);
+            var upgradedContent = content.Replace(
+                initialEnvironmentConfiguration,
+                upgradedEnvironmentConfiguration,
+                StringComparison.Ordinal);
+            if (upgradedContent == content)
+            {
+                throw new InvalidOperationException("Could not add regional VNet integration to the generated AppHost.");
+            }
+
+            File.WriteAllText(appHostFilePath, upgradedContent);
+
+            // Clear the terminal before redeploying. WaitForPipelineSuccessAsync matches the
+            // "pipeline succeeded" banner anywhere on the visible screen, and the first deploy's
+            // banner is still shown. Without clearing, the second deploy's wait matches that stale
+            // banner immediately (instead of waiting for the redeploy to finish), which forces the
+            // subsequent success-prompt wait to absorb the entire second deployment and time out.
+            await auto.TypeAsync("clear");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // Step 13: Upgrade the existing production site, staging slot, and dashboard.
+            output.WriteLine("Step 13: Upgrading the deployment with regional VNet integration...");
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            // Step 14: Extract deployment URLs and verify endpoints with retry.
+            // The workload is deployed to its staging slot, so the production site's empty
+            // hostname is not a liveness target. Sites without slots, such as the dashboard,
+            // are reached through their production hostname.
+            // Verify both endpoints concurrently for up to six minutes. Each attempt has a
+            // 10-second curl cap and waits 10 seconds before the next attempt.
+            output.WriteLine("Step 14: Verifying deployed endpoints...");
+            await auto.TypeAsync(BuildEndpointVerificationCommand(resourceGroupName));
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(7));
+
+            // Step 15: Verify that the production site, staging slot, and dashboard use the delegated subnet.
+            output.WriteLine("Step 15: Verifying regional VNet integration...");
+            await VerifyVnetIntegrationAsync(auto, counter, resourceGroupName);
+
+            // Step 16: Exit terminal
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 
@@ -180,7 +224,7 @@ builder.Build().Run();
 
             // Report success
             DeploymentReporter.ReportDeploymentSuccess(
-                nameof(DeployReactTemplateToAzureAppService),
+                nameof(DeployReactTemplateToAzureAppServiceWithDelegatedSubnet),
                 resourceGroupName,
                 deploymentUrls,
                 duration);
@@ -193,7 +237,7 @@ builder.Build().Run();
             output.WriteLine($"❌ Test failed after {duration}: {ex.Message}");
 
             DeploymentReporter.ReportDeploymentFailure(
-                nameof(DeployReactTemplateToAzureAppService),
+                nameof(DeployReactTemplateToAzureAppServiceWithDelegatedSubnet),
                 resourceGroupName,
                 ex.Message,
                 ex.StackTrace);
@@ -202,22 +246,173 @@ builder.Build().Run();
         }
         finally
         {
-            // Clean up the resource group we created
             output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
-            TriggerCleanupResourceGroup(resourceGroupName, output);
-            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
+            await TriggerCleanupResourceGroupAsync(resourceGroupName, output);
         }
     }
 
-    /// <summary>
-    /// Triggers cleanup of a specific resource group.
-    /// This is fire-and-forget - the hourly cleanup workflow handles any missed resources.
-    /// </summary>
-    private static void TriggerCleanupResourceGroup(string resourceGroupName, ITestOutputHelper output)
+    private static string BuildEndpointVerificationCommand(string resourceGroupName)
     {
-        // Fire and forget - trigger deletion of the specific resource group created by this test
-        // The cleanup workflow will handle any that don't get deleted
-        var process = new System.Diagnostics.Process
+        var script = $$"""
+            set -uo pipefail
+
+            fail() {
+                echo "ERROR: $1"
+                exit 1
+            }
+
+            resource_group={{AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)}}
+
+            az group show -n "$resource_group" >/dev/null ||
+                fail "Resource group was not found"
+
+            webapps=$(az webapp list -g "$resource_group" --query "[].name" -o tsv) ||
+                fail "Failed to query App Service sites"
+            [ -n "$webapps" ] || fail "No App Service sites found"
+
+            urls=""
+            staging_endpoint_count=0
+            dashboard_endpoint_count=0
+            for webapp in $webapps
+            do
+                slots=$(az webapp deployment slot list -g "$resource_group" -n "$webapp" --query "[].name" -o tsv) ||
+                    fail "Failed to query deployment slots for $webapp"
+                if [ -n "$slots" ]
+                then
+                    for slot in $slots
+                    do
+                        url=$(az webapp show -g "$resource_group" -n "$webapp" --slot "$slot" --query defaultHostName -o tsv) ||
+                            fail "Failed to query hostname for staging slot $webapp/$slot"
+                        [ -n "$url" ] || fail "Missing hostname for staging slot $webapp/$slot"
+                        urls="$urls $url"
+                        staging_endpoint_count=$((staging_endpoint_count + 1))
+                    done
+                else
+                    url=$(az webapp show -g "$resource_group" -n "$webapp" --query defaultHostName -o tsv) ||
+                        fail "Failed to query hostname for dashboard $webapp"
+                    [ -n "$url" ] || fail "Missing hostname for dashboard $webapp"
+                    urls="$urls $url"
+                    dashboard_endpoint_count=$((dashboard_endpoint_count + 1))
+                fi
+            done
+
+            [ "$staging_endpoint_count" -eq 1 ] &&
+                [ "$dashboard_endpoint_count" -eq 1 ] ||
+                fail "Expected one staging slot endpoint and one dashboard endpoint"
+
+            verify_endpoint() {
+                local url="$1"
+                local status
+
+                echo "Checking https://$url..."
+                for attempt in $(seq 1 18)
+                do
+                    status=$(curl -s -o /dev/null -w "%{http_code}" "https://$url" --max-time 10 2>/dev/null) ||
+                        status=""
+                    if [ "$status" = "200" ] || [ "$status" = "302" ]
+                    then
+                        echo "  $status (attempt $attempt)"
+                        return 0
+                    fi
+
+                    echo "  Attempt $attempt: $status, retrying in 10 seconds..."
+                    if [ "$attempt" -lt 18 ]
+                    then
+                        sleep 10
+                    fi
+                done
+
+                echo "  Failed after 18 attempts"
+                return 1
+            }
+
+            pids=()
+            for url in $urls
+            do
+                verify_endpoint "$url" &
+                pids+=("$!")
+            done
+
+            failed=0
+            for pid in "${pids[@]}"
+            do
+                if ! wait "$pid"
+                then
+                    failed=1
+                fi
+            done
+
+            [ "$failed" -eq 0 ] || fail "One or more endpoint checks failed"
+            """;
+
+        return $"bash -c {AspireCliShellCommandHelpers.QuoteBashArg(script)}";
+    }
+
+    private static async Task VerifyNoVnetIntegrationAsync(
+        Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string resourceGroupName)
+    {
+        await auto.TypeAsync($"RG_NAME={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)} && " +
+            "webapps=$(az webapp list -g \"$RG_NAME\" --query \"[].name\" -o tsv 2>/dev/null) && " +
+            "if [ -z \"$webapps\" ]; then echo \"ERROR: No App Service sites found\"; exit 1; fi && " +
+            "webapp_count=0 && slot_count=0 && " +
+            "for webapp in $webapps; do " +
+            "webapp_count=$((webapp_count + 1)); " +
+            "if ! subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --query \"virtualNetworkSubnetId\" -o tsv); then echo \"ERROR: Failed to query VNet integration for $webapp\"; exit 1; fi; " +
+            "if [ -n \"$subnet_id\" ]; then echo \"ERROR: $webapp unexpectedly has VNet integration\"; exit 1; fi; " +
+            "if ! slots=$(az webapp deployment slot list -g \"$RG_NAME\" -n \"$webapp\" --query \"[].name\" -o tsv 2>/dev/null); then echo \"ERROR: Failed to query deployment slots for $webapp\"; exit 1; fi; " +
+            "for slot in $slots; do " +
+            "slot_count=$((slot_count + 1)); " +
+            "if ! subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --slot \"$slot\" --query \"virtualNetworkSubnetId\" -o tsv); then echo \"ERROR: Failed to query VNet integration for $webapp/$slot\"; exit 1; fi; " +
+            "if [ -n \"$subnet_id\" ]; then echo \"ERROR: $webapp/$slot unexpectedly has VNet integration\"; exit 1; fi; " +
+            "done; " +
+            "done && " +
+            "if [ \"$webapp_count\" -ne 2 ] || [ \"$slot_count\" -ne 1 ]; then echo \"ERROR: Expected two sites and one staging slot\"; exit 1; fi && " +
+            "echo \"Verified no VNet integration on the initial deployment\"");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+    }
+
+    private static async Task VerifyVnetIntegrationAsync(
+        Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string resourceGroupName)
+    {
+        await auto.TypeAsync($"RG_NAME={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)} && " +
+            "vnet_name=$(az network vnet list -g \"$RG_NAME\" --query \"[?subnets[?name == 'app-service-subnet']].name | [0]\" -o tsv 2>/dev/null) && " +
+            "expected_subnet_id=$(az network vnet subnet show -g \"$RG_NAME\" --vnet-name \"$vnet_name\" --name app-service-subnet --query \"id\" -o tsv 2>/dev/null) && " +
+            "if [ -z \"$expected_subnet_id\" ]; then echo \"ERROR: Delegated subnet not found\"; exit 1; fi && " +
+            "delegation=$(az network vnet subnet show --ids \"$expected_subnet_id\" --query \"delegations[?serviceName == 'Microsoft.Web/serverFarms'].serviceName | [0]\" -o tsv 2>/dev/null) && " +
+            "if [ \"$delegation\" != \"Microsoft.Web/serverFarms\" ]; then echo \"ERROR: Subnet is not delegated to Microsoft.Web/serverFarms\"; exit 1; fi && " +
+            "webapps=$(az webapp list -g \"$RG_NAME\" --query \"[].name\" -o tsv 2>/dev/null) && " +
+            "if [ -z \"$webapps\" ]; then echo \"ERROR: No App Service sites found\"; exit 1; fi && " +
+            // Keep the interactive shell alive after successful verification so Hex1b can observe its prompt.
+            "integration_verified=0 && " +
+            "for attempt in $(seq 1 12); do " +
+            "all_integrated=1; webapp_count=0; slot_count=0; " +
+            "for webapp in $webapps; do " +
+            "webapp_count=$((webapp_count + 1)); " +
+            "subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --query \"virtualNetworkSubnetId\" -o tsv 2>/dev/null); " +
+            "if [ \"$subnet_id\" != \"$expected_subnet_id\" ]; then all_integrated=0; fi; " +
+            "if ! slots=$(az webapp deployment slot list -g \"$RG_NAME\" -n \"$webapp\" --query \"[].name\" -o tsv 2>/dev/null); then echo \"ERROR: Failed to query deployment slots for $webapp\"; all_integrated=0; continue; fi; " +
+            "for slot in $slots; do " +
+            "slot_count=$((slot_count + 1)); " +
+            "subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --slot \"$slot\" --query \"virtualNetworkSubnetId\" -o tsv 2>/dev/null); " +
+            "if [ \"$subnet_id\" != \"$expected_subnet_id\" ]; then all_integrated=0; fi; " +
+            "done; " +
+            "done; " +
+            "if [ \"$all_integrated\" -eq 1 ] && [ \"$webapp_count\" -eq 2 ] && [ \"$slot_count\" -eq 1 ]; then echo \"Verified VNet integration on production, staging, and dashboard\"; integration_verified=1; break; fi; " +
+            "echo \"Waiting for VNet integration (attempt $attempt)...\"; sleep 10; " +
+            "done && " +
+            "if [ \"$integration_verified\" -ne 1 ]; then echo \"ERROR: VNet integration was not configured on every site and slot\"; exit 1; fi");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
+    }
+
+    private static async Task TriggerCleanupResourceGroupAsync(string resourceGroupName, ITestOutputHelper output)
+    {
+        using var process = new System.Diagnostics.Process
         {
             StartInfo = new System.Diagnostics.ProcessStartInfo
             {
@@ -230,14 +425,30 @@ builder.Build().Run();
             }
         };
 
-        try
+        if (!process.Start())
         {
-            process.Start();
-            output.WriteLine($"Cleanup triggered for resource group: {resourceGroupName}");
+            const string message = "Azure CLI did not start the resource group deletion request.";
+            output.WriteLine(message);
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: false, message);
+            return;
         }
-        catch (Exception ex)
+
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        await Task.WhenAll(process.WaitForExitAsync(), standardOutputTask, standardErrorTask);
+
+        if (process.ExitCode == 0)
         {
-            output.WriteLine($"Failed to trigger cleanup: {ex.Message}");
+            output.WriteLine($"Resource group deletion initiated: {resourceGroupName}");
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Deletion initiated");
+            return;
         }
+
+        var standardError = await standardErrorTask;
+        var standardOutput = await standardOutputTask;
+        var error = string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError;
+        output.WriteLine($"Resource group deletion may have failed (exit code {process.ExitCode}): {error}");
+        DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: false, $"Exit code {process.ExitCode}: {error}");
     }
 }

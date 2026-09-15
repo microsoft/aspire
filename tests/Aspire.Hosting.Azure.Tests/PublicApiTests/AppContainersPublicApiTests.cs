@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.AppContainers;
@@ -113,7 +112,6 @@ public class AppContainersPublicApiTests
     }
 
     [Fact]
-    [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public void ConfigureCustomDomainShouldThrowWhenAppIsNull()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -128,7 +126,6 @@ public class AppContainersPublicApiTests
     }
 
     [Fact]
-    [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public void ConfigureCustomDomainShouldThrowWhenCustomDomainIsNull()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -143,7 +140,6 @@ public class AppContainersPublicApiTests
     }
 
     [Fact]
-    [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public void ConfigureCustomDomainShouldThrowWhenCertificateNameIsNull()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

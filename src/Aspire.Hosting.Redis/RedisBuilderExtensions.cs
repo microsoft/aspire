@@ -35,7 +35,7 @@ public static class RedisBuilderExtensions
     /// </para>
     /// This version of the package defaults to the <inheritdoc cref="RedisContainerImageTags.Tag"/> tag of the <inheritdoc cref="RedisContainerImageTags.Image"/> container image.
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the canonical addRedis export with options.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the canonical addRedis export with options.")]
     public static IResourceBuilder<RedisResource> AddRedis(this IDistributedApplicationBuilder builder, [ResourceName] string name, int? port)
     {
         return builder.AddRedis(name, port, null);
@@ -96,6 +96,7 @@ public static class RedisBuilderExtensions
             .WithEndpoint(port: port, targetPort: 6379, name: RedisResource.PrimaryEndpointName, scheme: RedisResource.StandardRedisScheme)
             .WithImage(RedisContainerImageTags.Image, RedisContainerImageTags.Tag)
             .WithImageRegistry(RedisContainerImageTags.Registry)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey)
             // see https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way
             .WithEntrypoint("/bin/sh")
@@ -126,6 +127,15 @@ public static class RedisBuilderExtensions
                     additionalArgs.Add("--save");
                     additionalArgs.Add(interval);
                     additionalArgs.Add(persistenceAnnotation.KeysChangedThreshold.ToString(CultureInfo.InvariantCulture));
+                }
+
+                if (redis.TryGetAnnotationsOfType<RedisModuleAnnotation>(out var moduleAnnotations))
+                {
+                    foreach (var moduleAnnotation in moduleAnnotations.Distinct())
+                    {
+                        additionalArgs.Add("--loadmodule");
+                        additionalArgs.Add(moduleAnnotation.Path);
+                    }
                 }
 
                 // This is a temporary workaround to allow the args list to be expanded dynamically at run time with additional server certificate arguments.
@@ -167,7 +177,7 @@ public static class RedisBuilderExtensions
 
                 if (ctx.Password is not null)
                 {
-                    var resourceLogger = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                    var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                     var logger = resourceLogger.GetLogger(redis);
                     logger.LogError($"Cannot configure an encrypted certificate for redis resource '{redis.Name}'");
                 }
@@ -231,8 +241,11 @@ public static class RedisBuilderExtensions
             var resourceBuilder = builder.ApplicationBuilder.AddResource(resource)
                                       .WithImage(RedisContainerImageTags.RedisCommanderImage, RedisContainerImageTags.RedisCommanderTag)
                                       .WithImageRegistry(RedisContainerImageTags.RedisCommanderRegistry)
+                                      .WithIconName("WindowDatabase")
                                       .WithHttpEndpoint(targetPort: 8081, name: "http")
                                       .ExcludeFromManifest();
+
+            AddManagementLinks(resourceBuilder, "http", "Manage (Commander)");
 
             builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(resource, async (e, ct) =>
             {
@@ -310,6 +323,7 @@ public static class RedisBuilderExtensions
             var resourceBuilder = builder.ApplicationBuilder.AddResource(resource)
                 .WithImage(RedisContainerImageTags.RedisInsightImage, RedisContainerImageTags.RedisInsightTag)
                 .WithImageRegistry(RedisContainerImageTags.RedisInsightRegistry)
+                .WithIconName("WindowDatabase")
                 .WithHttpEndpoint(targetPort: 5540, name: "http")
                 .WithEnvironment(context =>
                 {
@@ -365,7 +379,7 @@ public static class RedisBuilderExtensions
 
                     if (ctx.Password != null)
                     {
-                        var resourceLogger = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                        var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                         var logger = resourceLogger.GetLogger(resource);
                         logger.LogError($"Cannot configure an encrypted certificate for redis insight resource '{resource.Name}'");
                     }
@@ -380,10 +394,38 @@ public static class RedisBuilderExtensions
                 resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
             });
 
+            AddManagementLinks(resourceBuilder, "http", "Manage (Insights)");
+
             configureContainer?.Invoke(resourceBuilder);
 
             return builder;
         }
+    }
+
+    /// <summary>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpointName"/>
+    /// endpoint to every <see cref="RedisResource"/> in the app.
+    /// </summary>
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, string endpointName, string displayText)
+        where T : IResourceWithEndpoints
+    {
+        resourceBuilder.WithHidden();
+
+        var endpoint = resourceBuilder.GetEndpoint(endpointName);
+        resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var redisResource in @event.Model.Resources.OfType<RedisResource>())
+            {
+                redisResource.Annotations.Add(new ResourceUrlAnnotation
+                {
+                    Url = "/",
+                    DisplayText = displayText,
+                    Endpoint = endpoint
+                });
+            }
+
+            return Task.CompletedTask;
+        });
     }
 
     /// <summary>
@@ -519,6 +561,46 @@ public static class RedisBuilderExtensions
         public TimeSpan? Interval => interval;
         public long KeysChangedThreshold => keysChangedThreshold;
     }
+
+    /// <summary>
+    /// Configures the Redis resource to use the specified Redis module by providing its path inside the container.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="path">The absolute path to the Redis module inside the Redis container.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// This method passes the module path to <c>redis-server</c> as a <c>--loadmodule</c> argument. Redis resolves the path inside the
+    /// container, not on the host. To load a module built on the host machine, mount it into the Redis container first and then use
+    /// the mounted container path. Use <see cref="RedisModules" /> for well-known module paths that are included in the default
+    /// Redis container image.
+    /// <code lang="csharp">
+    /// var cache = builder.AddRedis("cache")
+    ///                    .WithModule(RedisModules.Json)
+    ///                    .WithModule(RedisModules.Search);
+    ///
+    /// var customModuleCache = builder.AddRedis("custom-cache")
+    ///                                .WithBindMount("/host/redis/modules", "/redis/modules", isReadOnly: true)
+    ///                                .WithModule("/redis/modules/custom-module.so");
+    /// </code>
+    /// For more information, see the Redis module loading documentation at <see href="https://redis.io/docs/latest/develop/reference/modules/" />.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, string path)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        if (path[0] is not '/')
+        {
+            throw new ArgumentException("The Redis module path must be an absolute container path.", nameof(path));
+        }
+
+        return builder.WithAnnotation(new RedisModuleAnnotation(path));
+    }
+
+    private record RedisModuleAnnotation(
+        string Path
+    ) : IResourceAnnotation;
 
     /// <summary>
     /// Adds a named volume for the data folder to a Redis Insight container resource.

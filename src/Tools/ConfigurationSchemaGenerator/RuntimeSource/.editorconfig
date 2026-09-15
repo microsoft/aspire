@@ -6,6 +6,12 @@ dotnet_diagnostic.IDE0161.severity = none
 # CA1305: Specify IFormatProvider
 dotnet_diagnostic.CA1305.severity = none
 
+# CA1310: Specify StringComparison for correctness
+dotnet_diagnostic.CA1310.severity = none
+
+# CA1311: Specify a culture or use an invariant version
+dotnet_diagnostic.CA1311.severity = none
+
 # IDE0005: Remove unnecessary usings
 dotnet_diagnostic.IDE0005.severity = none
 

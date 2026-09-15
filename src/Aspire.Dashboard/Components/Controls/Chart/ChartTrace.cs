@@ -6,7 +6,7 @@ namespace Aspire.Dashboard.Components.Controls.Chart;
 public sealed class ChartTrace
 {
     public int? Percentile { get; init; }
-    public required string Name { get; init; }
+    public required string Name { get; set; }
     public List<double?> Values { get; } = new();
     public List<double?> DiffValues { get; } = new();
     public List<string?> Tooltips { get; } = new();

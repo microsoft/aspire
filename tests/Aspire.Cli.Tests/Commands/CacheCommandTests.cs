@@ -14,7 +14,7 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CacheCommand_WithoutSubcommand_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -29,7 +29,7 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CacheCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -43,7 +43,7 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CacheClear_ClearsPackagesDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "packages"));
         var restoreDir = packagesDir.CreateSubdirectory("restore").CreateSubdirectory("ABC123");
         File.WriteAllText(Path.Combine(restoreDir.FullName, "test.dll"), "fake");
@@ -66,7 +66,7 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CacheClear_ClearsAppHostInfoDiskCache()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostInfoCacheDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache", "apphost-info"));
         appHostInfoCacheDir.Create();
         var cacheEntry = Path.Combine(appHostInfoCacheDir.FullName, "entry.json");
@@ -92,7 +92,7 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
         // <ASPIRE_HOME>/.nugetpackages — produced by PrebuiltAppHostServer's temporary
         // nuget.config for the staging channel. Without this, a wedged staging restore can only
         // be recovered by manual filesystem surgery.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -122,7 +122,7 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
     {
         // Common case for fresh installs and non-staging users: the staging cache root simply
         // doesn't exist yet. The command must still succeed.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -143,7 +143,7 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CacheClear_HandlesNonExistentPackagesDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "packages-nonexistent"));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>

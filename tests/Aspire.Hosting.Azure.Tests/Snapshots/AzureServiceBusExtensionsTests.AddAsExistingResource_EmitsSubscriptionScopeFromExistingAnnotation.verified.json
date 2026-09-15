@@ -1,0 +1,8 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "mymodule.module.bicep",
+  "params": {
+    "existing_sb_name": "{existing-sb-name.value}",
+    "existing_sb_subscription": "{existing-sb-subscription.value}"
+  }
+}

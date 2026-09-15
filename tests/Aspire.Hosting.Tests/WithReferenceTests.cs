@@ -529,11 +529,20 @@ public class WithReferenceTests
     }
 
     [Fact]
-    public void WithReferenceHttpUriThrowsException()
+    public async Task WithReferenceHttpUriWithPathProducesEnvironmentVariables()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        Assert.Throws<InvalidOperationException>(() => builder.AddProject<ProjectA>("projecta").WithReference("petstore", new Uri("https://petstore.swagger.io/v2")));
+        var projectA = builder.AddProject<ProjectA>("projecta")
+                               .WithReference("petstore", new Uri("https://petstore.swagger.io/v2"));
+
+        // Call environment variable callbacks.
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        var servicesKeysCount = config.Keys.Count(k => k.StartsWith("services__"));
+        Assert.Equal(1, servicesKeysCount);
+        Assert.Contains(config, kvp => kvp.Key == "services__petstore__default__0" && kvp.Value == "https://petstore.swagger.io/v2");
+        Assert.Contains(config, kvp => kvp.Key == "petstore" && kvp.Value == "https://petstore.swagger.io/v2");
     }
 
     [Fact]

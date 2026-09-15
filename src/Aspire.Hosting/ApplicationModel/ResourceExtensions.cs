@@ -255,16 +255,14 @@ public static class ResourceExtensions
     }
 
     /// <summary>
-    /// Gather argument values, but do not resolve them. Used to allow multiple callbacks to constructively contribute to
-    /// the argument list before resolving.
+    /// Gathers argument values without resolving them or using cached callback results.
     /// </summary>
     /// <param name="resource">The resource to retrieve argument values for.</param>
     /// <param name="executionContext">The execution context used during the retrieval of argument values.</param>
     /// <param name="logger">The logger used for logging information or errors during the retrieval of argument values.</param>
     /// <param name="cancellationToken">A token for cancelling the operation, if needed.</param>
     /// <returns>A list of unprocessed argument values.</returns>
-    [Obsolete("Use ExecutionConfigurationBuilder instead.")]
-    internal static async ValueTask<List<object>> GatherArgumentValuesAsync(
+    internal static async ValueTask<List<object>> GatherArgumentValuesWithoutCachingAsync(
         this IResource resource,
         DistributedApplicationExecutionContext executionContext,
         ILogger logger,
@@ -285,7 +283,57 @@ public static class ResourceExtensions
             }
         }
 
+        var launchToolArgs = await GatherLaunchToolArgumentValuesAsync(
+            resource,
+            executionContext,
+            logger,
+            cacheAnnotationCallbackResult: false,
+            peekCachedResultOnly: false,
+            cancellationToken).ConfigureAwait(false);
+        args.InsertRange(0, launchToolArgs);
+
         return args;
+    }
+
+    private static async ValueTask<IList<object>> GatherLaunchToolArgumentValuesAsync(
+        IResource resource,
+        DistributedApplicationExecutionContext executionContext,
+        ILogger logger,
+        bool cacheAnnotationCallbackResult,
+        bool peekCachedResultOnly,
+        CancellationToken cancellationToken)
+    {
+        // Launch tool arguments run against an isolated list and do not apply to containers, matching
+        // ArgumentsExecutionConfigurationGatherer's composition of the effective command line.
+        if (resource.IsContainer() ||
+            !resource.TryGetLastAnnotation<LaunchToolArgsCallbackAnnotation>(out var annotation))
+        {
+            return [];
+        }
+
+        if (peekCachedResultOnly)
+        {
+            // Read-only discovery: never invoke the callback. Only surface a result DCP has already resolved
+            // and cached; skip anything still in flight, faulted, or canceled.
+            return annotation.AsCallbackAnnotation().TryGetCachedResult(out var cachedTask) && cachedTask!.IsCompletedSuccessfully
+                ? cachedTask.Result
+                : [];
+        }
+
+        var context = new CommandLineArgsCallbackContext([], resource, cancellationToken)
+        {
+            Logger = logger,
+            ExecutionContext = executionContext
+        };
+
+        if (cacheAnnotationCallbackResult)
+        {
+            return await annotation.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
+        }
+
+        await annotation.Callback(context).ConfigureAwait(false);
+
+        return context.Args;
     }
 
     /// <summary>
@@ -347,7 +395,7 @@ public static class ResourceExtensions
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        var args = await GatherArgumentValuesAsync(resource, executionContext, logger, cancellationToken).ConfigureAwait(false);
+        var args = await GatherArgumentValuesWithoutCachingAsync(resource, executionContext, logger, cancellationToken).ConfigureAwait(false);
 
         await ProcessGatheredArgumentValuesAsync(resource, executionContext, args, processValue, logger, cancellationToken).ConfigureAwait(false);
     }
@@ -491,9 +539,8 @@ public static class ResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback to configure container build options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts.</remarks>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "ContainerBuildOptionsCallbackContext exposes IResource and IServiceProvider — .NET runtime types not usable from polyglot hosts.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
     public static IResourceBuilder<T> WithContainerBuildOptions<T>(
         this IResourceBuilder<T> builder,
         Action<ContainerBuildOptionsCallbackContext> callback)
@@ -512,9 +559,8 @@ public static class ResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">An async callback to configure container build options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts.</remarks>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "ContainerBuildOptionsCallbackContext exposes IResource and IServiceProvider — .NET runtime types not usable from polyglot hosts.")]
+    [AspireExport]
     public static IResourceBuilder<T> WithContainerBuildOptions<T>(
         this IResourceBuilder<T> builder,
         Func<ContainerBuildOptionsCallbackContext, Task> callback)
@@ -802,8 +848,11 @@ public static class ResourceExtensions
 
         foreach (var endpoint in endpoints)
         {
+            var publicPort = EndpointAnnotation.NormalizePort(endpoint.Port);
+            var configuredTargetPort = EndpointAnnotation.NormalizePort(endpoint.TargetPort);
+
             // Compute target port based on resource type and endpoint configuration
-            ResolvedPort targetPort = (resource, endpoint.UriScheme, endpoint.TargetPort, endpoint.Port) switch
+            ResolvedPort targetPort = (resource, endpoint.UriScheme, configuredTargetPort, publicPort) switch
             {
                 // The port was explicitly specified so use it
                 (_, _, int target, _) => ResolvedPort.Explicit(target),
@@ -826,7 +875,7 @@ public static class ResourceExtensions
             }
 
             // Compute exposed port (host port)
-            ResolvedPort exposedPort = (endpoint.UriScheme, endpoint.Port, targetPort.Value) switch
+            ResolvedPort exposedPort = (endpoint.UriScheme, publicPort, targetPort.Value) switch
             {
                 // Port set explicitly, use it
                 (_, int port, _) => ResolvedPort.Explicit(port),
@@ -1364,19 +1413,33 @@ public static class ResourceExtensions
     }
 
     /// <summary>
-    /// Gets the archive file path for a container image.
+    /// Gets the archive file path for a container image. This is the single calculation shared by the
+    /// container runtimes that write the archive and by <see cref="ContainerImageReference"/>, which hands
+    /// the path to consumers.
     /// </summary>
     /// <param name="outputPath">The output directory path.</param>
-    /// <param name="imageName">The image name.</param>
-    /// <param name="imageTag">The image tag (optional, defaults to "latest" if provided).</param>
+    /// <param name="imageName">The image name. May be registry-qualified and may include the tag.</param>
+    /// <param name="imageTag">The image tag, when it is not already part of <paramref name="imageName"/>.</param>
     /// <returns>The full path to the archive file with .tar extension.</returns>
+    /// <remarks>
+    /// Producers and consumers must agree on this path, otherwise the archive is written to one location
+    /// and looked up at another. Callers supply the image name in one of two shapes — combined
+    /// (<c>myapp:latest</c>) or split (<c>myapp</c> + <c>latest</c>) — and both must resolve identically,
+    /// which they do because <c>:</c> flattens to the same separator the split form joins with.
+    /// </remarks>
     internal static string GetContainerImageArchivePath(string outputPath, string imageName, string? imageTag = null)
     {
         var fileName = string.IsNullOrEmpty(imageTag)
-            ? $"{imageName}.tar"
-            : $"{imageName}-{imageTag}.tar";
+            ? $"{FlattenContainerImageName(imageName)}.tar"
+            : $"{FlattenContainerImageName(imageName)}-{FlattenContainerImageName(imageTag)}.tar";
         return Path.Combine(outputPath, fileName);
     }
+
+    /// <summary>
+    /// Flattens a <c>&lt;registry&gt;/&lt;repository&gt;:&lt;tag&gt;</c> image name into a single
+    /// file-name-safe segment, so that neither a repository segment nor the tag turns into a directory.
+    /// </summary>
+    internal static string FlattenContainerImageName(string imageName) => imageName.Replace('/', '-').Replace(':', '-');
 
     /// <summary>
     /// Gets a logger for the specified resource using the provided service provider.
@@ -1578,54 +1641,94 @@ public static class ResourceExtensions
         // Gather environment variable values
         if (resource.TryGetEnvironmentVariables(out var envAnnotations))
         {
-            var envVars = new Dictionary<string, object>();
-            var context = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken: cancellationToken);
-            
-            if (options.CacheAnnotationCallbackResults)
+            if (options.PeekCachedCallbackResultsOnly)
             {
+                // Read-only discovery: never invoke a callback. Only harvest values DCP has already resolved
+                // and cached via EvaluateOnceAsync. Skip in-flight/faulted/canceled tasks so we never block
+                // describe on an unresolved value nor observe a poisoned task.
                 foreach (var ann in envAnnotations)
                 {
-                    var resultingVars = await ann.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
-                    rawValues.AddRange(resultingVars.Values);
+                    if (ann.AsCallbackAnnotation().TryGetCachedResult(out var cachedTask) &&
+                        cachedTask!.IsCompletedSuccessfully)
+                    {
+                        rawValues.AddRange(cachedTask.Result.Values);
+                    }
                 }
-                
             }
             else
             {
-                foreach (var ann in envAnnotations)
+                var envVars = new Dictionary<string, object>();
+                var context = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken: cancellationToken);
+
+                if (options.CacheAnnotationCallbackResults)
                 {
-                    await ann.Callback(context).ConfigureAwait(false);
+                    foreach (var ann in envAnnotations)
+                    {
+                        var resultingVars = await ann.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
+                        rawValues.AddRange(resultingVars.Values);
+                    }
+
                 }
-                rawValues.AddRange(envVars.Values);
+                else
+                {
+                    foreach (var ann in envAnnotations)
+                    {
+                        await ann.Callback(context).ConfigureAwait(false);
+                    }
+                    rawValues.AddRange(envVars.Values);
+                }
             }
         }
 
         // Gather command-line argument values
         if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var argAnnotations))
         {
-            var args = new List<object>();
-            var context = new CommandLineArgsCallbackContext(args, resource, cancellationToken)
-            {
-                ExecutionContext = executionContext
-            };
-
-            if (options.CacheAnnotationCallbackResults)
+            if (options.PeekCachedCallbackResultsOnly)
             {
                 foreach (var ann in argAnnotations)
                 {
-                    var resultingArgs = await ann.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
-                    rawValues.AddRange(resultingArgs);
+                    if (ann.AsCallbackAnnotation().TryGetCachedResult(out var cachedTask) &&
+                        cachedTask!.IsCompletedSuccessfully)
+                    {
+                        rawValues.AddRange(cachedTask.Result);
+                    }
                 }
             }
             else
             {
-                foreach (var ann in argAnnotations)
+                var args = new List<object>();
+                var context = new CommandLineArgsCallbackContext(args, resource, cancellationToken)
                 {
-                    await ann.Callback(context).ConfigureAwait(false);
+                    ExecutionContext = executionContext
+                };
+
+                if (options.CacheAnnotationCallbackResults)
+                {
+                    foreach (var ann in argAnnotations)
+                    {
+                        var resultingArgs = await ann.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
+                        rawValues.AddRange(resultingArgs);
+                    }
                 }
-                rawValues.AddRange(args);
+                else
+                {
+                    foreach (var ann in argAnnotations)
+                    {
+                        await ann.Callback(context).ConfigureAwait(false);
+                    }
+                    rawValues.AddRange(args);
+                }
             }
         }
+
+        var launchToolArgs = await GatherLaunchToolArgumentValuesAsync(
+            resource,
+            executionContext,
+            NullLogger.Instance,
+            options.CacheAnnotationCallbackResults,
+            options.PeekCachedCallbackResultsOnly,
+            cancellationToken).ConfigureAwait(false);
+        rawValues.AddRange(launchToolArgs);
 
         return rawValues;
     }
@@ -1730,7 +1833,7 @@ public static class ResourceExtensions
         DistributedApplicationModel? model;
         try
         {
-            model = executionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+            model = executionContext.Services.GetService<DistributedApplicationModel>();
         }
         catch (InvalidOperationException)
         {
@@ -1761,6 +1864,7 @@ public static class ResourceExtensions
         ContainerResource => KnownResourceTypes.Container,
         ContainerExecutableResource => KnownResourceTypes.ContainerExec,
         DotnetToolResource => KnownResourceTypes.Tool,
+        ExecutableResource when resource.HasAnnotationOfType<IProjectMetadata>() => KnownResourceTypes.Project,
         ExecutableResource => KnownResourceTypes.Executable,
         ParameterResource => KnownResourceTypes.Parameter,
         ConnectionStringResource => KnownResourceTypes.ConnectionString,

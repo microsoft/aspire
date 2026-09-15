@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.DevTunnels;
 
-internal sealed class DevTunnelCli
+internal class DevTunnelCli
 {
     public const int ResourceConflictsWithExistingExitCode = 1;
     public const int ResourceNotFoundExitCode = 2;
@@ -48,7 +48,7 @@ internal sealed class DevTunnelCli
     public Task<int> UserStatusAsync(TextWriter? outputWriter = null, TextWriter? errorWriter = null, ILogger? logger = default, CancellationToken cancellationToken = default)
         => RunAsync(["user", "show", "--json", "--nologo"], outputWriter, errorWriter, logger, cancellationToken);
 
-    public Task<int> CreateTunnelAsync(
+    public virtual Task<int> CreateTunnelAsync(
         string? tunnelId = null,
         DevTunnelOptions? options = null,
         TextWriter? outputWriter = null,
@@ -60,6 +60,7 @@ internal sealed class DevTunnelCli
         return RunAsync(new ArgsBuilder(["create"])
             .AddIfNotNull(tunnelId)
             .AddIfNotNull("--description", options.Description)
+            .AddIfNotNull("--expiration", GetExpirationArgument(options))
             .AddIfNotNull("--service-uri", GetServiceUri(options))
             .AddIfTrue("--allow-anonymous", options.AllowAnonymous)
             .AddValues("--labels", options.Labels)
@@ -68,7 +69,7 @@ internal sealed class DevTunnelCli
         , outputWriter, errorWriter, logger, cancellationToken);
     }
 
-    public Task<int> UpdateTunnelAsync(
+    public virtual Task<int> UpdateTunnelAsync(
         string tunnelId,
         DevTunnelOptions? options = null,
         TextWriter? outputWriter = null,
@@ -79,6 +80,7 @@ internal sealed class DevTunnelCli
         options ??= new DevTunnelOptions();
         return RunAsync(new ArgsBuilder(["update", tunnelId])
             .AddIfNotNull("--description", options.Description)
+            .AddIfNotNull("--expiration", GetExpirationArgument(options))
             .AddValues("--add-labels", options.Labels)
             .Add("--json")
             .Add("--nologo")
@@ -215,7 +217,7 @@ internal sealed class DevTunnelCli
         CancellationToken cancellationToken = default)
         => RunAsync(["port", "delete", tunnelId, "--port-number", portNumber.ToString(CultureInfo.InvariantCulture), "--json", "--nologo"], outputWriter, errorWriter, logger, cancellationToken);
 
-    private Task<int> RunAsync(string[] args, TextWriter? outputWriter = null, TextWriter? errorWriter = null, ILogger? logger = default, CancellationToken cancellationToken = default)
+    protected virtual Task<int> RunAsync(string[] args, TextWriter? outputWriter = null, TextWriter? errorWriter = null, ILogger? logger = default, CancellationToken cancellationToken = default)
         => RunAsync(args, outputWriter, errorWriter, useShellExecute: false, logger, cancellationToken);
 
     private Task<int> RunAsync(string[] args, TextWriter? outputWriter = null, TextWriter? errorWriter = null, bool useShellExecute = false, ILogger? logger = default, CancellationToken cancellationToken = default)
@@ -392,6 +394,11 @@ internal sealed class DevTunnelCli
             }
         }
     }
+
+    private static string? GetExpirationArgument(DevTunnelOptions options)
+        => options.ExpirationHours is { } expirationHours
+            ? expirationHours.ToString("0h", CultureInfo.InvariantCulture)
+            : null;
 
     private static string? GetServiceUri(DevTunnelOptions options)
     {

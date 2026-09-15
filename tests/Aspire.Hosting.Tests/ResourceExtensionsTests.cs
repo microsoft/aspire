@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -13,6 +14,26 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class ResourceExtensionsTests
 {
+    [Fact]
+    public void GetResourceTypeReturnsProjectForExecutableResourceWithProjectMetadata()
+    {
+        // An annotation-based project (e.g. DotnetProjectResource) derives from ExecutableResource but
+        // carries IProjectMetadata, so it must be classified as a project. This is what seeds the initial
+        // CustomResourceSnapshot.ResourceType with "Project" instead of "Executable".
+        var resource = new ExecutableResource("proj", "dotnet", "/app");
+        resource.Annotations.Add(new TestProjectMetadata());
+
+        Assert.Equal(KnownResourceTypes.Project, resource.GetResourceType());
+    }
+
+    [Fact]
+    public void GetResourceTypeReturnsExecutableForExecutableResourceWithoutProjectMetadata()
+    {
+        var resource = new ExecutableResource("exe", "dotnet", "/app");
+
+        Assert.Equal(KnownResourceTypes.Executable, resource.GetResourceType());
+    }
+
     [Fact]
     public void TryGetAnnotationsOfTypeReturnsFalseWhenNoAnnotations()
     {
@@ -570,6 +591,11 @@ public class ResourceExtensionsTests
 
     }
 
+    private sealed class TestProjectMetadata : IProjectMetadata
+    {
+        public string ProjectPath => "/app/project.csproj";
+    }
+
     private sealed class TestContainerFilesResource(string name) : ContainerResource(name), IResourceWithContainerFiles
     {
     }
@@ -642,5 +668,24 @@ public class ResourceExtensionsTests
         var result = resource.Resource.GetResolvedResourceNames();
 
         Assert.Equal(["test-abc123", "test-def456"], result);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    public void ResolveEndpointsTreatsZeroPublicPortAsUnspecified(int? port)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddContainer("container", "image")
+            .WithEndpoint(name: "tcp", port: port, targetPort: 1234);
+
+        var endpoint = Assert.Single(resource.Resource.ResolveEndpoints());
+
+        Assert.Equal(1234, endpoint.TargetPort.Value);
+        Assert.False(endpoint.TargetPort.IsAllocated);
+        Assert.False(endpoint.TargetPort.IsImplicit);
+        Assert.Equal(1234, endpoint.ExposedPort.Value);
+        Assert.False(endpoint.ExposedPort.IsAllocated);
+        Assert.True(endpoint.ExposedPort.IsImplicit);
     }
 }

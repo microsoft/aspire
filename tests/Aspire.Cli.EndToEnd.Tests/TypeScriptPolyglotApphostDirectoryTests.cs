@@ -3,7 +3,6 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -64,7 +63,7 @@ public sealed class TypeScriptPolyglotApphostDirectoryTests(ITestOutputHelper ou
             CliE2ETestHelpers.WriteLocalChannelSettings(projectRoot, localChannel.SdkVersion);
         }
 
-        await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
+        await auto.TypeAsync(ViteTestHelpers.GetCreateCommand("viteapp"));
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 

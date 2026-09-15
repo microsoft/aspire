@@ -8,7 +8,7 @@ using SqlServerEndToEnd.Common;
 
 #nullable disable
 
-namespace SqlServerEndToEnd.Common.Db2
+namespace SqlServerEndToEnd.Common.Db2Migrations
 {
     [DbContext(typeof(MyDb2Context))]
     partial class MyDb2ContextModelSnapshot : ModelSnapshot

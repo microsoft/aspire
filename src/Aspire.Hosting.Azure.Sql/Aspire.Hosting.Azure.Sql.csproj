@@ -22,4 +22,8 @@
     <PackageReference Include="Azure.Provisioning.Sql" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Tests" />
+  </ItemGroup>
+
 </Project>

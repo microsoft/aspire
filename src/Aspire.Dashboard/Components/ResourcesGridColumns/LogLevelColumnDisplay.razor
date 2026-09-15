@@ -1,6 +1,7 @@
 ﻿@namespace Aspire.Dashboard.Components
 
 @using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Otlp.Storage
 @using Microsoft.Extensions.Logging
 
 @if (LogEntry.IsError)
@@ -16,5 +17,5 @@ else if (LogEntry.IsWarning)
 
 @code {
     [Parameter, EditorRequired]
-    public required OtlpLogEntry LogEntry { get; set; }
+    public required LogSummary LogEntry { get; set; }
 }

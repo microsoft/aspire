@@ -2,13 +2,32 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.DashboardService.Proto.V1;
 
 namespace Aspire.Dashboard.Model.Interaction;
 
 public sealed class InputViewModel
 {
+    // Fallback maximum upload size matching the server's default (100 MB).
+    // In practice the server always sends a MaxFileSize value for file inputs,
+    // so this constant is only used as a defensive safety net.
+    internal const long DefaultMaxUploadedFileBytes = 100 * 1024 * 1024; // 100 MB
+
+    private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     public InteractionInput Input { get; private set; } = default!;
+
+    /// <summary>
+    /// Identifies the rendered input before component references are populated and across interaction updates.
+    /// </summary>
+    public string ElementId { get; } = $"interaction-input-{Guid.NewGuid():N}";
 
     public InputViewModel(InteractionInput input)
     {
@@ -17,10 +36,14 @@ public sealed class InputViewModel
 
     public void SetInput(InteractionInput input)
     {
-        var value = Input is null || ShouldUseIncomingValue(Input, input)
-            ? input.Value
-            : Input.Value;
-        input.Value = value;
+        // Interaction updates carry a full server-side snapshot even when only one input changed. Keep
+        // local values by default so an update for a dependent choice does not clobber text the user is
+        // typing elsewhere in the dialog. ShouldUseIncomingValue captures the cases where the server is
+        // authoritative because the field is being dynamically loaded or is not currently editable.
+        if (Input is not null && !ShouldUseIncomingValue(Input, input))
+        {
+            input.Value = Input.Value;
+        }
 
         Input = input;
         if (input.InputType == InputType.Choice && input.Options != null)
@@ -42,10 +65,18 @@ public sealed class InputViewModel
             {
                 input.Value = optionsVM[0].Id;
             }
+
+            SelectedOption = SelectOptions.FirstOrDefault(option => option.Id == input.Value);
+            if (SelectedOption is null && input.AllowCustomChoice && !string.IsNullOrEmpty(input.Value))
+            {
+                SelectedOption = new SelectViewModel<string> { Id = input.Value, Name = input.Value };
+            }
         }
     }
 
     public List<SelectViewModel<string>> SelectOptions { get; private set; } = [];
+
+    public SelectViewModel<string>? SelectedOption { get; set; }
 
     /// <summary>
     /// Incremented each time <see cref="SelectOptions"/> is rebuilt so Blazor
@@ -80,10 +111,11 @@ public sealed class InputViewModel
         return filteredValues;
     }
 
-    public string? Value
+    [AllowNull]
+    public string Value
     {
         get => Input.Value;
-        set => Input.Value = value;
+        set => Input.Value = value ?? string.Empty;
     }
 
     // Used when binding to FluentCheckbox.
@@ -93,7 +125,7 @@ public sealed class InputViewModel
         set => Input.Value = value ? "true" : "false";
     }
 
-    // Used when binding to FluentNumberField.
+    // Used when binding to FluentNumberInput.
     public int? NumberValue
     {
         get => int.TryParse(Input.Value, CultureInfo.InvariantCulture, out var result) ? result : null;
@@ -104,6 +136,21 @@ public sealed class InputViewModel
 
     // Used to track secret text visibility state
     public bool IsSecretTextVisible { get; set; }
+
+    // Tracks the uploaded file references for File inputs.
+    // When set, serializes successful references (Id != null) to JSON on the underlying Input.Value.
+    public List<FileReferenceViewModel> FileReferences { get; } = [];
+
+    public void SetFileReferences(IEnumerable<FileReferenceViewModel> files)
+    {
+        FileReferences.Clear();
+        FileReferences.AddRange(files);
+        var successfulRefs = FileReferences.Where(f => f.Id is not null).ToList();
+        // Use empty string (not "[]") when no files were accepted, so required-field checks work correctly.
+        Input.Value = successfulRefs.Count > 0
+            ? JsonSerializer.Serialize(successfulRefs, s_jsonSerializerOptions)
+            : string.Empty;
+    }
 
     private static bool OptionsEqual(List<SelectViewModel<string>> existing, List<SelectViewModel<string>> incoming)
     {
@@ -125,8 +172,21 @@ public sealed class InputViewModel
 
     private static bool ShouldUseIncomingValue(InteractionInput current, InteractionInput incoming)
     {
-        // Preserve local edits during ordinary updates, but accept server-provided values when
-        // dynamic loading completes or when the input is disabled and therefore server-owned.
-        return (current.Loading && !incoming.Loading) || incoming.Disabled;
+        // Dynamic loading can replace both the option list and the selected value. When loading
+        // completes, the server value is the one validated against the freshly loaded options.
+        //
+        // Disabled inputs are also server-owned because the user could not have made a meaningful local
+        // edit while the control was unavailable. This includes disabled -> enabled transitions, such as
+        // Azure Subscription ID becoming editable after tenant-specific subscriptions are loaded.
+        return (current.Loading && !incoming.Loading) || current.Disabled || incoming.Disabled;
     }
+}
+
+public sealed class FileReferenceViewModel
+{
+    public string? Id { get; set; }
+    public required string Name { get; set; }
+
+    [JsonIgnore]
+    public string? ErrorMessage { get; set; }
 }

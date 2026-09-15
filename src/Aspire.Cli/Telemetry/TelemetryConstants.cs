@@ -74,6 +74,122 @@ internal static class TelemetryConstants
         public const string CliBuildId = "aspire.cli.build_id";
 
         /// <summary>
+        /// Tag for the CLI's effective identity version. This is the version the CLI is
+        /// behaving as — which honors <c>ASPIRE_CLI_VERSION</c> / the sidecar config — and may
+        /// differ from <see cref="CliVersion"/> (the physical binary's assembly version) when the
+        /// CLI is emulating another build for reproduction/diagnosis. See
+        /// docs/specs/cli-identity-sidecar.md.
+        /// </summary>
+        public const string IdentityVersion = "aspire.cli.identity.version";
+
+        /// <summary>
+        /// Tag for the CLI's effective identity commit (honors <c>ASPIRE_CLI_COMMIT</c> / sidecar).
+        /// May differ from the physical binary's commit when emulating another build.
+        /// </summary>
+        public const string IdentityCommit = "aspire.cli.identity.commit";
+
+        /// <summary>
+        /// Tag for the CLI's effective identity channel (honors <c>ASPIRE_CLI_CHANNEL</c> / sidecar).
+        /// </summary>
+        public const string IdentityChannel = "aspire.cli.identity.channel";
+
+        /// <summary>
+        /// Tag for the detected coding agent that invoked the CLI process.
+        /// </summary>
+        public const string CodingAgent = "process.coding_agent";
+
+        /// <summary>
+        /// Tag indicating whether the current user or machine appears to be Microsoft internal.
+        /// </summary>
+        public const string InternalMicrosoft = "aspire.cli.is_microsoft_internal";
+
+        /// <summary>
+        /// Source that populates the <see cref="InternalMicrosoft"/> tag, used to differentiate between
+        /// different heuristics or signals used to determine if the user/machine is Microsoft internal.
+        /// </summary>
+        public const string InternalMicrosoftSource = "aspire.cli.microsoft_internal_source";
+
+        /// <summary>
+        /// Alias extracted by the probe that populates the <see cref="InternalMicrosoft"/> tag.
+        /// </summary>
+        public const string InternalMicrosoftAlias = "aspire.cli.microsoft_internal_alias";
+
+        /// <summary>
+        /// Active Directory domain extracted by the probe that populates the <see cref="InternalMicrosoft"/> tag.
+        /// </summary>
+        public const string InternalMicrosoftDomain = "aspire.cli.microsoft_internal_domain";
+
+        /// <summary>
+        /// Low-cardinality outcome of the Microsoft-internal detector.
+        /// </summary>
+        public const string InternalMicrosoftDetectorOutcome = "aspire.cli.microsoft_internal_detector.outcome";
+
+        /// <summary>
+        /// Cache status for the Microsoft-internal detector run.
+        /// </summary>
+        public const string InternalMicrosoftDetectorCacheStatus = "aspire.cli.microsoft_internal_detector.cache_status";
+
+        /// <summary>
+        /// Detector duration in milliseconds.
+        /// </summary>
+        public const string InternalMicrosoftDetectorDurationMs = "aspire.cli.microsoft_internal_detector.duration_ms";
+
+        /// <summary>
+        /// Whether the detector result has a canonical alias.
+        /// </summary>
+        public const string InternalMicrosoftDetectorHasAlias = "aspire.cli.microsoft_internal_detector.has_alias";
+
+        /// <summary>
+        /// Whether the detector result has a domain.
+        /// </summary>
+        public const string InternalMicrosoftDetectorHasDomain = "aspire.cli.microsoft_internal_detector.has_domain";
+
+        /// <summary>
+        /// Low-cardinality outcome of one Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeOutcome = "aspire.cli.microsoft_internal_probe.outcome";
+
+        /// <summary>
+        /// Probe duration in milliseconds.
+        /// </summary>
+        public const string InternalMicrosoftProbeDurationMs = "aspire.cli.microsoft_internal_probe.duration_ms";
+
+        /// <summary>
+        /// Whether a probe result included a canonical alias.
+        /// </summary>
+        public const string InternalMicrosoftProbeHasAlias = "aspire.cli.microsoft_internal_probe.has_alias";
+
+        /// <summary>
+        /// Whether a probe result included a domain.
+        /// </summary>
+        public const string InternalMicrosoftProbeHasDomain = "aspire.cli.microsoft_internal_probe.has_domain";
+
+        /// <summary>
+        /// Low-cardinality failure classification for one Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeFailureCode = "aspire.cli.microsoft_internal_probe.failure_code";
+
+        /// <summary>
+        /// Static stage within a Microsoft-internal probe where a failure occurred.
+        /// </summary>
+        public const string InternalMicrosoftProbeFailureStage = "aspire.cli.microsoft_internal_probe.failure_stage";
+
+        /// <summary>
+        /// Allow-listed exception type for one Microsoft-internal probe failure.
+        /// </summary>
+        public const string InternalMicrosoftProbeExceptionType = "aspire.cli.microsoft_internal_probe.exception_type";
+
+        /// <summary>
+        /// Exit code returned by a process-backed Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeProcessExitCode = "aspire.cli.microsoft_internal_probe.process_exit_code";
+
+        /// <summary>
+        /// HTTP status code returned by a network-backed Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeHttpStatusCode = "aspire.cli.microsoft_internal_probe.http_status_code";
+
+        /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
         /// </summary>
         public const string DeploymentEnvironmentName = "deployment.environment.name";
@@ -129,6 +245,46 @@ internal static class TelemetryConstants
         /// Absence of this tag indicates success.
         /// </summary>
         public const string ErrorType = "error.type";
+
+        /// <summary>
+        /// Tag for the AI agent telemetry event type forwarded by the hook scripts.
+        /// One of <c>skill_invocation</c>, <c>tool_invocation</c>, or <c>reference_file_read</c>.
+        /// </summary>
+        public const string AgentEventType = "aspire.cli.agent.event_type";
+
+        /// <summary>
+        /// Tag for the AI agent client that produced the event (for example <c>copilot-cli</c>,
+        /// <c>claude-code</c>, or <c>vscode</c>).
+        /// </summary>
+        public const string AgentClientName = "aspire.cli.agent.client_name";
+
+        /// <summary>
+        /// Tag for the AI agent session identifier. This is an opaque per-session GUID and does
+        /// not identify a user or machine.
+        /// </summary>
+        public const string AgentSessionId = "aspire.cli.agent.session_id";
+
+        /// <summary>
+        /// Tag for the Aspire skill name associated with a <c>skill_invocation</c> event.
+        /// </summary>
+        public const string AgentSkillName = "aspire.cli.agent.skill_name";
+
+        /// <summary>
+        /// Tag for the Aspire MCP tool name associated with a <c>tool_invocation</c> event.
+        /// </summary>
+        public const string AgentToolName = "aspire.cli.agent.tool_name";
+
+        /// <summary>
+        /// Tag for the Aspire skills-relative reference file path associated with a
+        /// <c>reference_file_read</c> event. Only the path after the <c>skills/</c> segment is
+        /// recorded so that no absolute path, repository name, or user name is captured.
+        /// </summary>
+        public const string AgentFileReference = "aspire.cli.agent.file_reference";
+
+        /// <summary>
+        /// Tag for the timestamp the hook recorded for the AI agent event.
+        /// </summary>
+        public const string AgentEventTimestamp = "aspire.cli.agent.event_timestamp";
     }
 
     /// <summary>
@@ -150,6 +306,17 @@ internal static class TelemetryConstants
         /// Activity name for running an app host.
         /// </summary>
         public const string RunAppHost = "aspire/cli/run_apphost";
+
+        /// <summary>
+        /// Activity name for an AI agent skill/tool/reference telemetry event forwarded by the
+        /// agent telemetry hook scripts.
+        /// </summary>
+        public const string AgentTelemetry = "aspire/cli/agent_telemetry";
+
+        /// <summary>
+        /// Activity name for Microsoft-internal detector diagnostics.
+        /// </summary>
+        public const string InternalMicrosoftDetector = "aspire/cli/internal_microsoft_detector";
     }
 
     /// <summary>
@@ -161,5 +328,10 @@ internal static class TelemetryConstants
         /// Event name for recording errors in the CLI.
         /// </summary>
         public const string Error = "aspire/cli/error";
+
+        /// <summary>
+        /// Event name for a single Microsoft-internal detector probe.
+        /// </summary>
+        public const string InternalMicrosoftProbe = "aspire/cli/internal_microsoft_probe";
     }
 }

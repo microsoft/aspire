@@ -6,6 +6,8 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
+using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -23,29 +25,32 @@ internal sealed class RunningInstanceManager
     private readonly ILogger _logger;
     private readonly IInteractionService _interactionService;
     private readonly TimeProvider _timeProvider;
+    private readonly ProfilingTelemetry _profilingTelemetry;
 
     public RunningInstanceManager(
         ILogger logger,
         IInteractionService interactionService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ProfilingTelemetry profilingTelemetry)
     {
         _logger = logger;
         _interactionService = interactionService;
         _timeProvider = timeProvider;
+        _profilingTelemetry = profilingTelemetry;
     }
 
     /// <summary>
     /// Stops a running AppHost instance by connecting to its auxiliary backchannel.
     /// </summary>
-    /// <param name="socketPath">The path to the auxiliary backchannel socket.</param>
+    /// <param name="appHostSocket">The auxiliary backchannel socket.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if the instance was stopped successfully, false otherwise.</returns>
-    public async Task<bool> StopRunningInstanceAsync(string socketPath, CancellationToken cancellationToken)
+    public async Task<bool> StopRunningInstanceAsync(IAppHostSocket appHostSocket, CancellationToken cancellationToken)
     {
         try
         {
             // Connect to the auxiliary backchannel
-            using var backchannel = await AppHostAuxiliaryBackchannel.ConnectAsync(socketPath, _logger, cancellationToken).ConfigureAwait(false);
+            using var backchannel = await AppHostAuxiliaryBackchannel.ConnectAsync(appHostSocket, _logger, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
 
             // Get the AppHost information
             var appHostInfo = backchannel.AppHostInfo;
@@ -65,6 +70,7 @@ internal sealed class RunningInstanceManager
             if (stopped)
             {
                 _interactionService.DisplaySuccess(RunCommandStrings.RunningInstanceStopped);
+                appHostSocket.TryDelete();
             }
             else
             {

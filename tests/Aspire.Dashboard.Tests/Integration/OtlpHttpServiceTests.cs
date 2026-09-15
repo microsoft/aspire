@@ -41,7 +41,10 @@ public class OtlpHttpServiceTests
 
         using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.OtlpServiceHttpEndPointAccessor().EndPoint}");
 
-        var request = CreateExportLogsServiceRequest(logRecordsCount: 10000);
+        // One hundred 40,000-character messages keep the record count low while producing a protobuf payload
+        // just below the 4 MiB request limit, so the test targets request size rather than log insertion volume.
+        var request = CreateExportLogsServiceRequest(logRecordsCount: 100, messageLength: 40_000);
+        Assert.InRange(request.CalculateSize(), 3_900_000, (4 * 1024 * 1024) - 1);
 
         var content = new ByteArrayContent(request.ToByteArray());
         content.Headers.TryAddWithoutValidation("content-type", OtlpHttpEndpointsBuilder.ProtobufContentType);
@@ -79,15 +82,18 @@ public class OtlpHttpServiceTests
         Assert.Equal(HttpStatusCode.BadRequest, responseMessage.StatusCode);
     }
 
-    private static ExportLogsServiceRequest CreateExportLogsServiceRequest(int logRecordsCount)
+    private static ExportLogsServiceRequest CreateExportLogsServiceRequest(int logRecordsCount, int? messageLength = null)
     {
         var scopeLogs = new ScopeLogs
         {
             Scope = TelemetryTestHelpers.CreateScope("TestLogger")
         };
+        var message = messageLength is { } length
+            ? new string('x', length)
+            : "The quick brown fox jumped over the lazy dog. Peter Pipper picked a patch of pickled peppers.";
         for (var i = 0; i < logRecordsCount; i++)
         {
-            scopeLogs.LogRecords.Add(TelemetryTestHelpers.CreateLogRecord(message: $"This is the test log message {i}. The quick brown fox jumped over the lazy dog. Peter Pipper picked a patch of pickled peppers."));
+            scopeLogs.LogRecords.Add(TelemetryTestHelpers.CreateLogRecord(message: $"This is the test log message {i}. {message}"));
         }
 
         var request = new ExportLogsServiceRequest();

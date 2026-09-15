@@ -130,20 +130,20 @@ public class AspireEnvironmentTests
 
         if (dotnetEnvironment is not null)
         {
-            options.StartInfo.Environment["DOTNET_ENVIRONMENT"] = dotnetEnvironment;
+            options.StartInfo.Environment[KnownAspNetCoreConfigNames.DotNetEnvironment] = dotnetEnvironment;
         }
         else
         {
-            options.StartInfo.Environment.Remove("DOTNET_ENVIRONMENT");
+            options.StartInfo.Environment.Remove(KnownAspNetCoreConfigNames.DotNetEnvironment);
         }
 
         if (aspNetCoreEnvironment is not null)
         {
-            options.StartInfo.Environment["ASPNETCORE_ENVIRONMENT"] = aspNetCoreEnvironment;
+            options.StartInfo.Environment[KnownAspNetCoreConfigNames.Environment] = aspNetCoreEnvironment;
         }
         else
         {
-            options.StartInfo.Environment.Remove("ASPNETCORE_ENVIRONMENT");
+            options.StartInfo.Environment.Remove(KnownAspNetCoreConfigNames.Environment);
         }
 
         return options;

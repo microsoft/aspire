@@ -6,7 +6,7 @@
 namespace Aspire.Hosting.Tests.ApplicationModel.Docker;
 
 [Trait("Partition", "4")]
-public class DockerfileBuildAnnotationTests
+public class DockerfileBuildAnnotationTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void DockerfileBuildAnnotation_Constructor_CreatesAnnotation()
@@ -218,9 +218,9 @@ public class DockerfileBuildAnnotationTests
     [Fact]
     public async Task EmitDockerfileArtifactsAsync_SkipsCopyWhenOutputPathCasingDiffersOnCaseInsensitiveFileSystem()
     {
-        using var tempDir = new TestTempDirectory();
-        var dockerfilePath = Path.Combine(tempDir.Path, "Dockerfile");
-        var differentCasingDockerfilePath = Path.Combine(tempDir.Path, "DOCKERFILE");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dockerfilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "Dockerfile");
+        var differentCasingDockerfilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "DOCKERFILE");
         await File.WriteAllTextAsync(dockerfilePath, "FROM scratch");
 
         if (!File.Exists(differentCasingDockerfilePath))
@@ -228,7 +228,7 @@ public class DockerfileBuildAnnotationTests
             return;
         }
 
-        var annotation = new DockerfileBuildAnnotation(tempDir.Path, dockerfilePath, null);
+        var annotation = new DockerfileBuildAnnotation(workspace.WorkspaceRoot.FullName, dockerfilePath, null);
 
         await annotation.EmitDockerfileArtifactsAsync(CreateDockerfileFactoryContext(), differentCasingDockerfilePath);
 
@@ -238,9 +238,9 @@ public class DockerfileBuildAnnotationTests
     [Fact]
     public async Task EmitDockerfileArtifactsAsync_RemovesAspireOwnedPerDockerfileIgnoreWhenContextRootIgnoreExists()
     {
-        using var tempDir = new TestTempDirectory();
-        var contextPath = Path.Combine(tempDir.Path, "app");
-        var outputPath = Path.Combine(tempDir.Path, "out");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var contextPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app");
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "out");
         Directory.CreateDirectory(contextPath);
         Directory.CreateDirectory(outputPath);
 
@@ -268,9 +268,9 @@ public class DockerfileBuildAnnotationTests
     [Fact]
     public async Task EmitDockerfileArtifactsAsync_PreservesUserPerDockerfileIgnoreWhenContextRootIgnoreExists()
     {
-        using var tempDir = new TestTempDirectory();
-        var contextPath = Path.Combine(tempDir.Path, "app");
-        var outputPath = Path.Combine(tempDir.Path, "out");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var contextPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app");
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "out");
         Directory.CreateDirectory(contextPath);
         Directory.CreateDirectory(outputPath);
 

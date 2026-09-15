@@ -113,6 +113,24 @@ internal static class CodeGenerationDiagnosticBuilder
     private const string RemediationHint =
         "Run 'aspire update' to align the installed Aspire CLI with the configured SDK version, then retry.";
 
+    private const string AssemblySkewMessage =
+        "This usually means the Aspire AppHost server is older than the Aspire packages the AppHost references. " +
+        "Run 'aspire update --self' to update the Aspire CLI, or set 'sdkVersion' in aspire.config.json to the CLI's version.";
+
+    /// <summary>
+    /// Returns an actionable explanation when <paramref name="exception" /> is a reflection-load
+    /// failure, or <see langword="null" /> when it is not.
+    /// </summary>
+    /// <remarks>
+    /// The AppHost server loads integration assemblies compiled against its own contract assemblies.
+    /// When the server is older, a type or member the integration references is simply absent and the
+    /// runtime reports a bare load failure that never says the CLI and the packages disagree, which is
+    /// the only actionable part. Detection is by exception type rather than message text so it still
+    /// works under a localized runtime.
+    /// </remarks>
+    internal static string? TryDescribeAssemblySkew(Exception exception)
+        => FindReflectionLoadException(exception) is null ? null : AssemblySkewMessage;
+
     /// <summary>
     /// Inspects the supplied exception (and any inner exceptions) and, if it looks like a
     /// reflection/load failure, returns a <see cref="LocalRpcException"/> carrying a
@@ -182,6 +200,11 @@ internal static class CodeGenerationDiagnosticBuilder
     /// Walks the exception chain and returns the first inner exception that looks like a
     /// reflection-load failure, or <see langword="null"/> if none is found.
     /// </summary>
+    /// <remarks>
+    /// <see cref="AggregateException"/> is fanned out explicitly because its
+    /// <see cref="Exception.InnerException"/> is only the first of its children, so a load failure
+    /// raised by any later parallel operation would otherwise be invisible.
+    /// </remarks>
     internal static Exception? FindReflectionLoadException(Exception? exception)
     {
         for (var current = exception; current is not null; current = current.InnerException)
@@ -198,6 +221,17 @@ internal static class CodeGenerationDiagnosticBuilder
 
                 // No specific loader exception matched, but the RTLE itself is a reflection-load
                 // failure — fall through and return it from the IsReflectionLoadException check below.
+            }
+
+            if (current is AggregateException aggregate)
+            {
+                foreach (var inner in aggregate.InnerExceptions)
+                {
+                    if (FindReflectionLoadException(inner) is { } found)
+                    {
+                        return found;
+                    }
+                }
             }
 
             if (IsReflectionLoadException(current))

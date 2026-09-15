@@ -8,6 +8,7 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -194,6 +195,10 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             args,
             workingDirectory: workingDirectory.FullName,
             environmentVariables: environmentVariables,
+            // A package search against a slow/unresponsive NuGet source can hang. LayoutProcessRunner uses
+            // this to bind the helper to the CLI's Windows kill-on-close job (and, on non-Windows, to
+            // instead arm the cooperative parent-liveness watchdog) so a hard-killed CLI cannot leak it.
+            killOnParentExit: true,
             ct: cancellationToken).ConfigureAwait(false);
 
         // Log stderr output (verbose info from NuGetHelper)
@@ -220,7 +225,11 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
                 return [];
             }
 
-            var result = JsonSerializer.Deserialize(output, BundleSearchJsonContext.Default.BundleSearchResult);
+            // The aspire-managed helper writes the search result as JSON to stdout, but a NuGet credential
+            // provider can write diagnostics before or after that payload. Extract exactly one complete root object
+            // with the expected bundle-search shape so provider diagnostics cannot be deserialized as the result.
+            // See https://github.com/microsoft/aspire/issues/19339.
+            var result = JsonSerializer.Deserialize(PackageUpdateHelpers.ExtractJsonPayload(output, IsBundleSearchPayload), BundleSearchJsonContext.Default.BundleSearchResult);
             if (result?.Packages is null)
             {
                 return [];
@@ -259,6 +268,15 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         }
     }
 
+    private static bool IsBundleSearchPayload(JsonElement root)
+    {
+        return root.ValueKind == JsonValueKind.Object &&
+            root.TryGetProperty("packages", out var packages) &&
+            packages.ValueKind == JsonValueKind.Array &&
+            root.TryGetProperty("totalHits", out var totalHits) &&
+            totalHits.ValueKind == JsonValueKind.Number;
+    }
+
     private IEnumerable<NuGetPackage> FilterPackages(IEnumerable<NuGetPackage> packages, Func<string, bool>? filter)
     {
         var showDeprecatedPackages = _features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
@@ -269,7 +287,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
                 return filter(p.Id);
             }
 
-            var isOfficialPackage = IsOfficialOrCommunityToolkitPackage(p.Id);
+            var isOfficialPackage = PackageIdFilters.IsOfficialOrCommunityToolkitPackage(p.Id);
 
             // Apply deprecated package filter unless the user wants to show deprecated packages
             if (isOfficialPackage && !showDeprecatedPackages)
@@ -281,22 +299,6 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         };
 
         return packages.Where(effectiveFilter);
-    }
-
-    private static bool IsOfficialOrCommunityToolkitPackage(string packageName)
-    {
-        var isHostingOrCommunityToolkitNamespaced = packageName.StartsWith("Aspire.Hosting.", StringComparison.Ordinal) ||
-               packageName.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.Ordinal) ||
-               packageName.Equals("Aspire.ProjectTemplates", StringComparison.Ordinal) ||
-               packageName.Equals("Aspire.Cli", StringComparison.Ordinal);
-
-        var isExcluded = packageName.StartsWith("Aspire.Hosting.AppHost") ||
-                         packageName.StartsWith("Aspire.Hosting.Sdk") ||
-                         packageName.StartsWith("Aspire.Hosting.Orchestration") ||
-                         packageName.StartsWith("Aspire.Hosting.Testing") ||
-                         packageName.StartsWith("Aspire.Hosting.Msi");
-
-        return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 }
 
@@ -327,4 +329,3 @@ internal sealed partial class BundleSearchJsonContext : JsonSerializerContext
 }
 
 #endregion
-

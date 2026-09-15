@@ -219,12 +219,14 @@
     <value>Project created successfully in {0}.</value>
     <comment>{0} is a path</comment>
   </data>
-  <data name="CertificateTrustError" xml:space="preserve">
-    <value>An error occurred while trusting the certificates: {0}</value>
-    <comment>{0} is an exception message</comment>
-  </data>
   <data name="SearchingForAvailableTemplateVersions" xml:space="preserve">
     <value>Searching for available project template versions...</value>
+  </data>
+  <data name="NoMatchingLocalTemplatePackage" xml:space="preserve">
+    <value>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</value>
+  </data>
+  <data name="TemplateVersionNotFound" xml:space="preserve">
+    <value>Template version '{0}' was not found.</value>
   </data>
   <data name="NoTemplateVersionsFound" xml:space="preserve">
     <value>No template versions were found. Please check your internet connection or NuGet source configuration.</value>

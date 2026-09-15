@@ -57,12 +57,12 @@ async function callFunction(functionName: string, pendingMessage: string): Promi
 
     try {
         const response = await fetch(`/api/${functionName}?name=${encodeURIComponent(name)}`);
-        const body = await response.json();
-
         if (!response.ok) {
-            throw new Error(body.error ?? `Function returned HTTP ${response.status}.`);
+            const errorBody = await response.text();
+            throw new Error(`Function returned HTTP ${response.status}.${errorBody ? ` ${errorBody}` : ""}`);
         }
 
+        const body = await response.json();
         resultElement.textContent = JSON.stringify(body, null, 2);
     } catch (error) {
         resultElement.textContent = error instanceof Error ? error.message : String(error);

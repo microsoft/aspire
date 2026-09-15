@@ -49,6 +49,7 @@ internal sealed class RenderCommand : BaseCommand
         ["markdown-plain"] = "Render markdown as plain text with DisplayRawText (non-interactive)",
         ["markdown-renderable"] = "Render markdown via ConvertToRenderable with ANSI disabled",
         ["links"] = "Render terminal links with SafeLink and SafeFileLink",
+        ["incompatible-version-error"] = "Display incompatible version error (borderless table)",
         ["debug-activities"] = "Debug pipeline activities (calls ProcessPublishingActivitiesDebugAsync)",
         ["pipeline-activities"] = "Pipeline activities with spinner (calls ProcessAndDisplayPublishingActivitiesAsync)",
         ["publish-summary-all"] = "Publish summary timeline (stress scenarios)",
@@ -183,6 +184,8 @@ internal sealed class RenderCommand : BaseCommand
                     return TestMarkdownRenderRenderable();
                 case "links":
                     return await TestLinksAsync(cancellationToken);
+                case "incompatible-version-error":
+                    return TestIncompatibleVersionError();
                 case "debug-activities":
                     return await RenderDebugActivitiesAsync(cancellationToken);
                 case "pipeline-activities":
@@ -448,6 +451,15 @@ internal sealed class RenderCommand : BaseCommand
         InteractionService.DisplayMarkupLine($"SafeFileLink: {MarkupHelpers.SafeFileLink(InteractionService, filePath)}");
 
         return CliExitCodes.Success;
+    }
+
+    private int TestIncompatibleVersionError()
+    {
+        var ex = new AppHostIncompatibleException(
+            "The AppHost is not compatible with this version of the Aspire CLI.",
+            requiredCapability: "baseline.v2",
+            aspireHostingVersion: "9.2.0");
+        return InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability);
     }
 
     private int RenderPublishSummaryScenarios(IEnumerable<string> scenarioKeys)
@@ -808,7 +820,7 @@ internal sealed class RenderCommand : BaseCommand
         protected override string OperationCompletedPrefix => "Publish";
         protected override string OperationFailedPrefix => "Publish failed";
         protected override string GetOutputPathDescription() => "Test output path";
-        protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken) => Task.FromResult(Array.Empty<string>());
+        protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken) => Task.FromResult(Array.Empty<string>());
         protected override string GetCanceledMessage() => "Test canceled";
         protected override string GetProgressMessage(ParseResult parseResult) => "Test progress";
     }

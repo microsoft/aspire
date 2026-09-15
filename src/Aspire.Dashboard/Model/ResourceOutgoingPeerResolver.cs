@@ -13,70 +13,95 @@ namespace Aspire.Dashboard.Model;
 
 public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver, IAsyncDisposable
 {
+    // db.name was renamed to db.namespace in the stable OpenTelemetry database semantic conventions.
+    // https://opentelemetry.io/docs/specs/semconv/database/database-spans/
+    private const string DatabaseNamespaceAttribute = "db.namespace";
+    private const string DatabaseNameAttribute = "db.name";
+
     // Some libraries use "127.0.0.1" instead of "localhost".
     // Also handle container to host addresses.
     [GeneratedRegex(@"^(?:127\.0\.0\.1|host\.docker\.internal|host\.containers\.internal):", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex HostRegex();
 
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly CancellationTokenSource _watchContainersTokenSource = new();
-    private readonly List<ModelSubscription> _subscriptions = [];
+    private readonly ActivitySource _activitySource;
+    private readonly ILogger<ResourceOutgoingPeerResolver> _logger;
+    private readonly CancellationTokenSource _watchContainersTokenSource;
+    private readonly CancellationToken _watchContainersToken;
+    private readonly List<PeerChangesSubscription> _subscriptions = [];
     private readonly object _lock = new();
     private readonly Task? _watchTask;
 
-    public ResourceOutgoingPeerResolver(IDashboardClient resourceService)
+    public ResourceOutgoingPeerResolver(
+        IResourceRepository resourceRepository,
+        DashboardActivitySource activitySource,
+        ILogger<ResourceOutgoingPeerResolver> logger)
     {
-        if (!resourceService.IsEnabled)
+        _activitySource = activitySource.ActivitySource;
+        _logger = logger;
+        _watchContainersTokenSource = new();
+        _watchContainersToken = _watchContainersTokenSource.Token;
+
+        if (resourceRepository is IDashboardClient { IsEnabled: false })
         {
             return;
         }
 
-        _watchTask = Task.Run(async () =>
+        // This watcher lives for the lifetime of the resolver. Don't let the request or component that
+        // causes the resolver to be constructed become the parent of that long-running operation.
+        using (ExecutionContext.SuppressFlow())
         {
-            var (snapshot, subscription) = await resourceService.SubscribeResourcesAsync(_watchContainersTokenSource.Token).ConfigureAwait(false);
+            _watchTask = Task.Run(() => WatchResourcesAsync(resourceRepository));
+        }
+    }
 
-            if (snapshot.Length > 0)
+    private async Task WatchResourcesAsync(IResourceRepository resourceRepository)
+    {
+        var (snapshot, subscription) = await resourceRepository.SubscribeResourcesAsync(_watchContainersToken).ConfigureAwait(false);
+
+        if (snapshot.Length > 0)
+        {
+            foreach (var resource in snapshot)
             {
-                foreach (var resource in snapshot)
-                {
-                    var added = _resourceByName.TryAdd(resource.Name, resource);
-                    Debug.Assert(added, "Should not receive duplicate resources in initial snapshot data.");
-                }
-
-                await RaisePeerChangesAsync().ConfigureAwait(false);
+                var added = _resourceByName.TryAdd(resource.Name, resource);
+                Debug.Assert(added, "Should not receive duplicate resources in initial snapshot data.");
             }
 
-            await foreach (var changes in subscription.WithCancellation(_watchContainersTokenSource.Token).ConfigureAwait(false))
+            await RaisePeerChangesAsync().ConfigureAwait(false);
+        }
+
+        await foreach (var changes in subscription.WithCancellation(_watchContainersToken).ConfigureAwait(false))
+        {
+            using var activity = _activitySource.StartActivity("Process resource subscription changes", ActivityKind.Consumer);
+
+            var hasPeerRelevantChanges = false;
+
+            foreach (var (changeType, resource) in changes)
             {
-                var hasPeerRelevantChanges = false;
-
-                foreach (var (changeType, resource) in changes)
+                if (changeType == ResourceViewModelChangeType.Upsert)
                 {
-                    if (changeType == ResourceViewModelChangeType.Upsert)
-                    {
-                        if (!_resourceByName.TryGetValue(resource.Name, out var existingResource) || 
-                            !ArePeerRelevantPropertiesEquivalent(resource, existingResource))
-                        {
-                            hasPeerRelevantChanges = true;
-                        }
-
-                        _resourceByName[resource.Name] = resource;
-                    }
-                    else if (changeType == ResourceViewModelChangeType.Delete)
+                    if (!_resourceByName.TryGetValue(resource.Name, out var existingResource) ||
+                        !ArePeerRelevantPropertiesEquivalent(resource, existingResource))
                     {
                         hasPeerRelevantChanges = true;
-
-                        var removed = _resourceByName.TryRemove(resource.Name, out _);
-                        Debug.Assert(removed, "Cannot remove unknown resource.");
                     }
-                }
 
-                if (hasPeerRelevantChanges)
+                    _resourceByName[resource.Name] = resource;
+                }
+                else if (changeType == ResourceViewModelChangeType.Delete)
                 {
-                    await RaisePeerChangesAsync().ConfigureAwait(false);
+                    hasPeerRelevantChanges = true;
+
+                    var removed = _resourceByName.TryRemove(resource.Name, out _);
+                    Debug.Assert(removed, "Cannot remove unknown resource.");
                 }
             }
-        });
+
+            if (hasPeerRelevantChanges)
+            {
+                await RaisePeerChangesAsync().ConfigureAwait(false);
+            }
+        }
     }
 
     private static bool ArePeerRelevantPropertiesEquivalent(ResourceViewModel resource1, ResourceViewModel resource2)
@@ -89,6 +114,11 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
 
         // Check if connection string properties are equivalent
         if (!ArePropertyValuesEquivalent(resource1, resource2, KnownProperties.Resource.ConnectionString))
+        {
+            return false;
+        }
+
+        if (!ArePropertyValuesEquivalent(resource1, resource2, KnownProperties.Resource.ConnectionProperties))
         {
             return false;
         }
@@ -141,11 +171,8 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             return false;
         }
 
-        // Both have the property, compare values
-        var value1 = property1!.Value.TryConvertToString(out var str1) ? str1 : string.Empty;
-        var value2 = property2!.Value.TryConvertToString(out var str2) ? str2 : string.Empty;
-
-        return string.Equals(value1, value2, StringComparison.Ordinal);
+        // Protobuf value equality handles scalar and structured values recursively.
+        return property1!.Value.Equals(property2!.Value);
     }
 
     public bool TryResolvePeer(KeyValuePair<string, string>[] attributes, out string? name, out ResourceViewModel? matchedResource)
@@ -158,12 +185,15 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
         var address = OtlpHelpers.GetPeerAddress(attributes);
         if (address != null)
         {
+            var matchContext = new PeerMatchContext(resources, attributes.GetValueWithFallback(DatabaseNamespaceAttribute, DatabaseNameAttribute));
+
             // Apply transformers to the peer address cumulatively
             var transformedAddress = address;
 
             // First check exact match
-            if (TryMatchAgainstResources(transformedAddress, resources, out name, out resourceMatch))
+            if (TryMatchAgainstResources(transformedAddress, matchContext, out resourceMatch))
             {
+                name = ResourceViewModel.GetResourceName(resourceMatch, resources);
                 return true;
             }
 
@@ -171,10 +201,18 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             foreach (var transformer in s_addressTransformers)
             {
                 transformedAddress = transformer(transformedAddress);
-                if (TryMatchAgainstResources(transformedAddress, resources, out name, out resourceMatch))
+                if (TryMatchAgainstResources(transformedAddress, matchContext, out resourceMatch))
                 {
+                    name = ResourceViewModel.GetResourceName(resourceMatch, resources);
                     return true;
                 }
+            }
+
+            resourceMatch = matchContext.FallbackMatch;
+            if (resourceMatch is not null)
+            {
+                name = ResourceViewModel.GetResourceName(resourceMatch, resources);
+                return true;
             }
         }
 
@@ -186,24 +224,43 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     /// <summary>
     /// Checks if a transformed peer address matches any of the resource addresses using their cached addresses.
     /// Applies the same transformations to resource addresses for consistent matching.
-    /// Returns true and outputs the first matching resource if a match is found; otherwise, returns false.
+    /// Returns a resource whose database matches the telemetry and records lower-priority matches for fallback after all peer address transformations have been checked.
     /// </summary>
-    private static bool TryMatchAgainstResources(string peerAddress, IDictionary<string, ResourceViewModel> resources, [NotNullWhen(true)] out string? name, [NotNullWhen(true)] out ResourceViewModel? resourceMatch)
+    private static bool TryMatchAgainstResources(string peerAddress, PeerMatchContext context, [NotNullWhen(true)] out ResourceViewModel? resourceMatch)
     {
-        foreach (var (_, resource) in resources)
+        foreach (var (_, resource) in context.Resources)
         {
             foreach (var resourceAddress in resource.CachedAddresses)
             {
                 if (DoesAddressMatch(resourceAddress, peerAddress))
                 {
-                    name = ResourceViewModel.GetResourceName(resource, resources);
-                    resourceMatch = resource;
-                    return true;
+                    context.FirstAddressMatch ??= resource;
+
+                    if (resource.CachedDatabaseName is { } resourceDatabaseName)
+                    {
+                        context.FirstDatabaseMatch ??= resource;
+
+                        if (context.DatabaseName is not null && string.Equals(resourceDatabaseName, context.DatabaseName, StringComparison.Ordinal))
+                        {
+                            resourceMatch = resource;
+                            return true;
+                        }
+
+                        if (context.DatabaseName is not null && string.Equals(resourceDatabaseName, context.DatabaseName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            context.CaseInsensitiveDatabaseMatch ??= resource;
+                        }
+                    }
+                    else if (resource.Properties.ContainsKey(KnownProperties.Resource.ConnectionString))
+                    {
+                        context.FirstServerMatch ??= resource;
+                    }
+
+                    break;
                 }
             }
         }
 
-        name = null;
         resourceMatch = null;
         return false;
     }
@@ -251,13 +308,13 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     {
         lock (_lock)
         {
-            var subscription = new ModelSubscription(callback, RemoveSubscription);
+            var subscription = new PeerChangesSubscription(callback, RemoveSubscription, _logger);
             _subscriptions.Add(subscription);
             return subscription;
         }
     }
 
-    private void RemoveSubscription(ModelSubscription subscription)
+    private void RemoveSubscription(PeerChangesSubscription subscription)
     {
         lock (_lock)
         {
@@ -267,12 +324,12 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
 
     private async Task RaisePeerChangesAsync()
     {
-        if (_subscriptions.Count == 0 || _watchContainersTokenSource.IsCancellationRequested)
+        if (_watchContainersTokenSource.IsCancellationRequested)
         {
             return;
         }
 
-        ModelSubscription[] subscriptions;
+        PeerChangesSubscription[] subscriptions;
         lock (_lock)
         {
             subscriptions = _subscriptions.ToArray();
@@ -287,8 +344,67 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     public async ValueTask DisposeAsync()
     {
         _watchContainersTokenSource.Cancel();
+
+        PeerChangesSubscription[] subscriptions;
+        lock (_lock)
+        {
+            subscriptions = _subscriptions.ToArray();
+        }
+        foreach (var subscription in subscriptions)
+        {
+            subscription.Dispose();
+        }
+
         _watchContainersTokenSource.Dispose();
 
         await TaskHelpers.WaitIgnoreCancelAsync(_watchTask).ConfigureAwait(false);
+    }
+
+    private sealed class PeerChangesSubscription : IDisposable
+    {
+        private const int StateNone = 0;
+        private const int StateDisposed = 1;
+
+        private readonly CallbackThrottler _callbackThrottler;
+        private readonly Action<PeerChangesSubscription> _onDispose;
+        private int _disposed;
+
+        public PeerChangesSubscription(
+            Func<Task> callback,
+            Action<PeerChangesSubscription> onDispose,
+            ILogger logger)
+        {
+            _callbackThrottler = new CallbackThrottler(
+                nameof(OnPeerChanges),
+                logger,
+                CallbackThrottler.DefaultMinExecuteInterval,
+                callback,
+                executionContext: null);
+            _onDispose = onDispose;
+        }
+
+        public Task ExecuteAsync() => _callbackThrottler.ExecuteAsync();
+
+        public void Dispose()
+        {
+            if (Interlocked.CompareExchange(ref _disposed, StateDisposed, StateNone) == StateDisposed)
+            {
+                return;
+            }
+
+            _onDispose(this);
+            _callbackThrottler.Dispose();
+        }
+    }
+
+    private sealed class PeerMatchContext(IDictionary<string, ResourceViewModel> resources, string? databaseName)
+    {
+        public IDictionary<string, ResourceViewModel> Resources { get; } = resources;
+        public string? DatabaseName { get; } = databaseName;
+        public ResourceViewModel? FirstAddressMatch { get; set; }
+        public ResourceViewModel? FirstServerMatch { get; set; }
+        public ResourceViewModel? FirstDatabaseMatch { get; set; }
+        public ResourceViewModel? CaseInsensitiveDatabaseMatch { get; set; }
+        public ResourceViewModel? FallbackMatch => CaseInsensitiveDatabaseMatch ?? FirstServerMatch ?? FirstDatabaseMatch ?? FirstAddressMatch;
     }
 }

@@ -5,7 +5,6 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -16,21 +15,17 @@ namespace Aspire.Dashboard.Api;
 /// <summary>
 /// Handles telemetry API requests, returning data in OTLP JSON format.
 /// </summary>
-internal sealed class TelemetryApiService(
-    TelemetryRepository telemetryRepository,
-    IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+internal sealed class TelemetryApiService(ITelemetryRepository telemetryRepository)
 {
     private const int DefaultLimit = 200;
     private const int DefaultTraceLimit = 100;
-
-    private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
 
     /// <summary>
     /// Gets spans in OTLP JSON format.
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetSpans(string[]? resourceNames, string? traceId, bool? hasError, int? limit, string? search = null)
+    public async Task<TelemetryApiResponse?> GetSpansAsync(string[]? resourceNames, string? traceId, bool? hasError, int? limit, CancellationToken cancellationToken, string? search = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -47,7 +42,7 @@ internal sealed class TelemetryApiService(
         var searchTextFragments = ParseAndApplySearchFilters(search, spanFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
         // Get spans for all resource keys (empty list means no filter / all resources)
-        var result = telemetryRepository.GetSpans(new GetSpansRequest
+        var result = await telemetryRepository.GetSpansAsync(new GetSpansRequest
         {
             ResourceKeys = resourceKeys,
             StartIndex = 0,
@@ -56,7 +51,7 @@ internal sealed class TelemetryApiService(
             TraceId = traceId,
             HasError = hasError,
             TextFragments = searchTextFragments
-        });
+        }, cancellationToken).ConfigureAwait(false);
         var allSpans = result.PagedResult.Items;
 
         var totalCount = allSpans.Count;
@@ -68,7 +63,7 @@ internal sealed class TelemetryApiService(
             spans = spans.Skip(spans.Count - effectiveLimit).ToList();
         }
 
-        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
+        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans);
 
         return new TelemetryApiResponse
         {
@@ -83,7 +78,7 @@ internal sealed class TelemetryApiService(
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetTraces(string[]? resourceNames, bool? hasError, int? limit, string? search = null)
+    public async Task<TelemetryApiResponse?> GetTracesAsync(string[]? resourceNames, bool? hasError, int? limit, CancellationToken cancellationToken, string? search = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -97,32 +92,28 @@ internal sealed class TelemetryApiService(
 
         // Convert structured search qualifiers into TelemetryFilter objects for repository-level filtering
         var traceFilters = new List<TelemetryFilter>();
+        if (hasError is not null)
+        {
+            traceFilters.Add(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.StatusField,
+                Value = nameof(OtlpSpanStatusCode.Error),
+                Condition = hasError.Value ? FilterCondition.Equals : FilterCondition.NotEqual
+            });
+        }
         var searchTextFragments = ParseAndApplySearchFilters(search, traceFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
         // Get traces for all resource keys (empty list means no filter / all resources)
-        var result = telemetryRepository.GetTraces(new GetTracesRequest
+        var result = await telemetryRepository.GetTracesAsync(new GetTracesRequest
         {
             ResourceKeys = resourceKeys,
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = traceFilters,
             TextFragments = searchTextFragments
-        });
-        var allTraces = result.PagedResult.Items;
-
-        var traces = allTraces;
-
-        // Filter traces by hasError
-        if (hasError == true)
-        {
-            traces = traces.Where(t => t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error)).ToList();
-        }
-        else if (hasError == false)
-        {
-            traces = traces.Where(t => !t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error)).ToList();
-        }
-
-        var totalCount = traces.Count;
+        }, cancellationToken).ConfigureAwait(false);
+        var traces = result.PagedResult.Items;
+        var totalCount = result.PagedResult.TotalItemCount;
 
         // Apply limit (take from end for most recent)
         if (traces.Count > effectiveLimit)
@@ -133,7 +124,7 @@ internal sealed class TelemetryApiService(
         var spans = traces.SelectMany(t => t.Spans).ToList();
         var returnedCount = traces.Count;
 
-        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
+        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans);
 
         return new TelemetryApiResponse
         {
@@ -157,7 +148,7 @@ internal sealed class TelemetryApiService(
 
         var spans = trace.Spans.ToList();
 
-        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
+        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans);
 
         return new TelemetryApiResponse
         {
@@ -172,7 +163,7 @@ internal sealed class TelemetryApiService(
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetLogs(string[]? resourceNames, string? traceId, string? severity, int? limit, string? search = null)
+    public async Task<TelemetryApiResponse?> GetLogsAsync(string[]? resourceNames, string? traceId, string? severity, int? limit, CancellationToken cancellationToken, string? search = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -214,14 +205,14 @@ internal sealed class TelemetryApiService(
         var searchTextFragments = ParseAndApplySearchFilters(search, filters, AddLogFiltersFromQualifiers, key => ResolveLogFieldKey(key) is not null);
 
         // Get logs for all resource keys (empty list means no filter / all resources)
-        var result = telemetryRepository.GetLogs(new GetLogsContext
+        var result = await telemetryRepository.GetLogsAsync(new GetLogsContext
         {
             ResourceKeys = resourceKeys,
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = filters,
             TextFragments = searchTextFragments
-        });
+        }, cancellationToken).ConfigureAwait(false);
 
         var logs = result.Items;
 
@@ -276,7 +267,7 @@ internal sealed class TelemetryApiService(
         await foreach (var span in telemetryRepository.WatchSpansAsync(watchRequest, cancellationToken).ConfigureAwait(false))
         {
             // Use compact JSON for NDJSON streaming (no indentation)
-            yield return TelemetryExportService.ConvertSpanToJson(span, _outgoingPeerResolvers, logs: null, indent: false);
+            yield return TelemetryExportService.ConvertSpanToJson(span, logs: null, indent: false);
         }
     }
 
@@ -568,7 +559,7 @@ internal sealed class TelemetryApiService(
         var keys = new List<ResourceKey>();
         foreach (var resourceName in resourceNames)
         {
-            if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey))
+            if (!TryResolveResourceForTelemetry(resources, resourceName, out var resourceKey))
             {
                 return null;
             }
@@ -578,5 +569,31 @@ internal sealed class TelemetryApiService(
             }
         }
         return keys;
+    }
+
+    /// <summary>
+    /// Tries to resolve a resource name for telemetry queries.
+    /// Returns true if no resource was specified or if the resource was found.
+    /// </summary>
+    private static bool TryResolveResourceForTelemetry(
+        IReadOnlyList<OtlpResource> resources,
+        string? resourceName,
+        out ResourceKey? resourceKey)
+    {
+        if (string.IsNullOrWhiteSpace(resourceName) || string.Equals(resourceName, "null", StringComparison.OrdinalIgnoreCase))
+        {
+            resourceKey = null;
+            return true;
+        }
+
+        var matches = OtlpHelpers.ResolveResourceNameMatches(resourceName, resources);
+        if (matches.Count == 1)
+        {
+            resourceKey = matches[0].ResourceKey;
+            return true;
+        }
+
+        resourceKey = null;
+        return false;
     }
 }

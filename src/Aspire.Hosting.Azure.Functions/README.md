@@ -76,6 +76,8 @@ await builder.build().run();
 
 ## TypeScript and JavaScript Functions apps
 
+The directory-based APIs (`AddAzureFunctionsApp`, `AzureFunctionsAppResource`, `AzureFunctionsLanguage`, and the app-specific extension overloads) are experimental pending API review and may change or be removed. C# callers must opt in by suppressing diagnostic `ASPIREAZUREFUNCTIONS001`, for example with `#pragma warning disable ASPIREAZUREFUNCTIONS001`. The existing .NET project APIs are unaffected.
+
 Directory-based Functions apps run on the Azure Functions Node worker with `FUNCTIONS_WORKER_RUNTIME` set to `node`.
 
 TypeScript apps are started with:
@@ -110,7 +112,7 @@ Use `WithHostStorage` to choose the Azure Storage resource used by the Functions
 
 ## Publish and deployment
 
-When a TypeScript or JavaScript Functions app does not include a `Dockerfile`, Aspire publish generates a Dockerfile that uses the official Azure Functions Node image, copies the app to `/home/site/wwwroot`, installs npm dependencies, and runs `npm run build` for TypeScript apps.
+When a TypeScript or JavaScript Functions app does not include a `Dockerfile`, Aspire publish generates a Dockerfile that uses the official Azure Functions Node image, copies the app to `/home/site/wwwroot`, installs npm dependencies, and runs `npm run build` for TypeScript apps. After the build (or installation for JavaScript), it runs `npm prune --omit=dev` so the deployed app retains only production dependencies.
 
 If the Functions app directory already contains a `Dockerfile`, Aspire uses that Dockerfile instead. Use this to select a different Azure Functions Node image, customize the Node version, or add project-specific build steps.
 
