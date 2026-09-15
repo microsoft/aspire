@@ -582,6 +582,115 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [InlineData(null)]
+    public async Task WatchInteractions_PromptTerminalAsync_DedicatedPayloadAndCompletion(bool? result)
+    {
+        await using var terminals = TestTerminalService.Create();
+        using var services = new ServiceCollection().AddSingleton(terminals).BuildServiceProvider();
+        var interactionService = new InteractionService(
+            NullLogger<InteractionService>.Instance, new DistributedApplicationOptions(), services,
+            new ConfigurationBuilder().Build(), new TestInteractionFileUploadStore());
+        using var data = CreateDashboardServiceData(interactionService: interactionService);
+        var dashboard = CreateDashboardService(data, terminalService: terminals);
+        await using var terminal = terminals.CreateTerminal(new TerminalLaunchOptions
+        {
+            Title = "Shell", Executable = "must-not-be-started", Placement = TerminalPlacement.Dialog
+        });
+        using var cts = new CancellationTokenSource();
+        var context = TestServerCallContext.Create(cancellationToken: cts.Token);
+        var writer = new TestServerStreamWriter<WatchInteractionsResponseUpdate>(context);
+        var reader = new TestAsyncStreamReader<WatchInteractionsRequestUpdate>(context);
+        var watch = dashboard.WatchInteractions(reader, writer, context);
+        var prompt = interactionService.PromptTerminalAsync("Message", terminal,
+            new TerminalInteractionOptions { Title = "Dialog", PrimaryButtonText = "Cancel" }, cts.Token);
+
+        var update = await writer.ReadNextAsync().DefaultTimeout();
+        Assert.Equal(WatchInteractionsResponseUpdate.KindOneofCase.PromptTerminal, update.KindCase);
+        Assert.Equal("Dialog", update.Title);
+        Assert.Equal("Message", update.Message);
+        Assert.Equal("Cancel", update.PrimaryButtonText);
+        Assert.Equal(terminal.Id, update.PromptTerminal.TerminalId);
+        Assert.False(update.PromptTerminal.HasResult);
+        Assert.False(prompt.IsCompleted);
+
+        var response = new WatchInteractionsRequestUpdate { InteractionId = update.InteractionId };
+        if (result is { } value)
+        {
+            response.PromptTerminal = new InteractionPromptTerminal { TerminalId = terminal.Id, Result = value };
+        }
+        else
+        {
+            response.Complete = new InteractionComplete();
+        }
+        reader.AddMessage(response);
+        var promptResult = await prompt.DefaultTimeout();
+        Assert.Equal(result != true, promptResult.Canceled);
+        Assert.Equal(result == true, promptResult.Data);
+        var complete = await writer.ReadNextAsync().DefaultTimeout();
+        Assert.Equal(update.InteractionId, complete.InteractionId);
+        Assert.Equal(WatchInteractionsResponseUpdate.KindOneofCase.Complete, complete.KindCase);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+        Assert.True(terminals.TryGetTerminal(terminal.Id, out var registered));
+        Assert.Same(terminal, registered);
+        await CancelTokenAndAwaitTask(cts, watch).DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SendInteractionRequestAsync_TerminalResponseMustMatchInteraction(bool wrongKind)
+    {
+        await using var terminals = TestTerminalService.Create();
+        using var services = new ServiceCollection().AddSingleton(terminals).BuildServiceProvider();
+        var interactions = new InteractionService(
+            NullLogger<InteractionService>.Instance, new DistributedApplicationOptions(), services,
+            new ConfigurationBuilder().Build(), new TestInteractionFileUploadStore());
+        using var data = CreateDashboardServiceData(interactionService: interactions);
+        await using var terminal = terminals.CreateTerminal(new TerminalLaunchOptions
+        {
+            Title = "Shell", Executable = "must-not-be-started", Placement = TerminalPlacement.Dialog
+        });
+        using var cts = new CancellationTokenSource();
+        var prompt = wrongKind
+            ? interactions.PromptMessageBoxAsync("Title", "Message", cancellationToken: cts.Token)
+            : interactions.PromptTerminalAsync("Message", terminal, cancellationToken: cts.Token);
+        var interaction = Assert.Single(interactions.GetCurrentInteractions());
+        var response = new WatchInteractionsRequestUpdate
+        {
+            InteractionId = interaction.InteractionId,
+            PromptTerminal = new InteractionPromptTerminal
+            {
+                TerminalId = wrongKind ? terminal.Id : "different-terminal",
+                Result = false
+            }
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => data.SendInteractionRequestAsync(response, CancellationToken.None));
+        Assert.Equal("The terminal response must match the interaction's terminal.", ex.Message);
+        Assert.Same(interaction, Assert.Single(interactions.GetCurrentInteractions()));
+        Assert.False(prompt.IsCompleted);
+        cts.Cancel();
+        Assert.True((await prompt.DefaultTimeout()).Canceled);
+    }
+
+    [Fact]
+    public void TerminalInteractionProtocol_UsesDedicatedFieldsAndReservesRemovedInputIdentifiers()
+    {
+        Assert.Equal(8, WatchInteractionsRequestUpdate.Descriptor.FindFieldByName("prompt_terminal").FieldNumber);
+        Assert.Equal(21, WatchInteractionsResponseUpdate.Descriptor.FindFieldByName("prompt_terminal").FieldNumber);
+        var input = Aspire.DashboardService.Proto.V1.InteractionInput.Descriptor.ToProto();
+        Assert.Contains("terminal_id", input.ReservedName);
+        Assert.Contains(input.ReservedRange, range => range.Start == 19 && range.End == 20);
+        Assert.Null(Aspire.DashboardService.Proto.V1.InteractionInput.Descriptor.FindFieldByName("terminal_id"));
+        var inputType = DashboardServiceReflection.Descriptor.EnumTypes.Single(type => type.Name == "InputType");
+        Assert.Contains("INPUT_TYPE_TERMINAL", inputType.ToProto().ReservedName);
+        Assert.Contains(inputType.ToProto().ReservedRange, range => range.Start == 7 && range.End == 7);
+        Assert.Null(inputType.FindValueByNumber(7));
+    }
+
     [Fact]
     public async Task WatchInteractions_PromptInputAsync_CompleteOnCancelResponse()
     {

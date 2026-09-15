@@ -19,8 +19,8 @@ namespace Aspire.Hosting.Terminals;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Two experiences share this service: terminals belonging to an <see cref="InputType.Terminal"/> interaction
-/// input, and terminals shown as tabs in the dashboard's terminal dock. They differ only in
+/// Two experiences share this service: terminals displayed by <see cref="IInteractionService.PromptTerminalAsync"/>
+/// and terminals shown as tabs in the dashboard's terminal dock. They differ only in
 /// <see cref="TerminalPlacement"/>; the lifetime, transport, and automation machinery is identical.
 /// </para>
 /// <para>

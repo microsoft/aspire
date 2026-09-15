@@ -129,7 +129,7 @@ internal class InteractionService : IInteractionService
 
             var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
             var promptState = completion.State as bool?;
-            return promptState == null
+            return promptState is null
                 ? InteractionResult.Cancel<bool>()
                 : InteractionResult.Ok(promptState.Value);
         }
@@ -164,45 +164,11 @@ internal class InteractionService : IInteractionService
         // Create the collection early to validate names and generate missing ones
         var inputCollection = new InteractionInputCollection(inputs);
         var hasFileInputs = inputs.Any(input => input.InputType == InputType.File);
-        var hasTerminalInputs = inputs.Any(input => input.InputType == InputType.Terminal);
 
         // Validate inputs.
         for (var i = 0; i < inputs.Count; i++)
         {
             var input = inputs[i];
-            if (input.InputType == InputType.Terminal)
-            {
-                // The input only borrows a terminal for presentation. Its caller-owned lifetime is independent
-                // of the dialog, so reusing the same terminal in later interactions is valid.
-                if (input.Required)
-                {
-                    throw new InvalidOperationException($"The input '{input.Name}' has {nameof(InteractionInput.Required)} set to true, but {nameof(InputType.Terminal)} inputs do not produce a value and cannot be required.");
-                }
-
-                if (input.Terminal is null)
-                {
-                    throw new InvalidOperationException($"The input '{input.Name}' is a {nameof(InputType.Terminal)} input, so {nameof(InteractionInput.Terminal)} must be set to a terminal created by the caller.");
-                }
-
-                // A dock terminal is presented as a dock tab that outlives the code which created it. Showing one in a
-                // dialog as well would render the same terminal through two competing presentations.
-                if (input.Terminal.Placement != TerminalPlacement.Dialog)
-                {
-                    throw new InvalidOperationException($"The input '{input.Name}' sets {nameof(InteractionInput.Terminal)} to a terminal whose {nameof(AspireTerminal.Placement)} is {input.Terminal.Placement}. Terminals shown by an interaction must be created with {nameof(TerminalPlacement)}.{nameof(TerminalPlacement.Dialog)}.");
-                }
-
-                // The dashboard resolves IDs in this AppHost's registry rather than using the supplied object.
-                // Require identity as well as registration; dialog placement above excludes resource-owned handles.
-                // Resolve the service only here so ordinary prompts do not require terminal infrastructure.
-                // Callers can still dispose after this check, so attachment must continue to validate availability.
-                if (_serviceProvider.GetService<TerminalService>() is not { } terminalService ||
-                    !terminalService.TryGetTerminal(input.Terminal.Id, out var registeredTerminal) ||
-                    !ReferenceEquals(input.Terminal, registeredTerminal))
-                {
-                    throw new InvalidOperationException($"The input '{input.Name}' must reference the terminal instance registered with this AppHost's {nameof(TerminalService)}.");
-                }
-            }
-
             if (input.DynamicLoading is { } dynamic)
             {
                 if (dynamic.DependsOnInputs != null)
@@ -238,18 +204,6 @@ internal class InteractionService : IInteractionService
                     .Select(input => (input.Name, InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles)))
                     .ToArray();
                 _fileUploadStore.StartInteraction(newState.InteractionId, fileInputs);
-            }
-            if (hasTerminalInputs)
-            {
-                // The dashboard addresses a terminal by id, so carry the caller's terminal id on the input. The
-                // terminal is neither created nor disposed here: the caller owns it.
-                foreach (var input in inputs)
-                {
-                    if (input.InputType == InputType.Terminal)
-                    {
-                        input.TerminalId = input.Terminal!.Id;
-                    }
-                }
             }
             AddInteractionUpdate(newState);
 
@@ -340,6 +294,47 @@ internal class InteractionService : IInteractionService
 
     public async Task<InteractionResult<bool>> PromptProgressAsync(string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {
+        options ??= ProgressInteractionOptions.CreateDefault();
+        return await PromptWorkAsync(
+            options.Title ?? string.Empty, message, options, new Interaction.ProgressInteractionInfo(),
+            options.Work is { } work ? token => work(new ProgressContext { CancellationToken = token }) : null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<InteractionResult<bool>> PromptTerminalAsync(string message, AspireTerminal terminal, TerminalInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(terminal);
+        EnsureServiceAvailable();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // A dock terminal already has a presentation that outlives a prompt. Only a dialog terminal can be borrowed.
+        if (terminal.Placement != TerminalPlacement.Dialog)
+        {
+            throw new InvalidOperationException($"Terminals shown by an interaction must be created with {nameof(TerminalPlacement)}.{nameof(TerminalPlacement.Dialog)}; the supplied terminal has placement {terminal.Placement}.");
+        }
+
+        // The dashboard resolves IDs in this AppHost's registry rather than using the supplied object.
+        // Require reference identity as well as registration and resolve the service only for terminal prompts.
+        // Callers can still dispose after this check, so attachment must continue validating availability.
+        if (_serviceProvider.GetService<TerminalService>() is not { } terminalService ||
+            !terminalService.TryGetTerminal(terminal.Id, out var registeredTerminal) ||
+            !ReferenceEquals(terminal, registeredTerminal))
+        {
+            throw new InvalidOperationException($"The terminal must be the instance registered with this AppHost's {nameof(TerminalService)}.");
+        }
+
+        options ??= new TerminalInteractionOptions();
+        return await PromptWorkAsync(
+            options.Title ?? string.Empty, message, options, new Interaction.TerminalInteractionInfo(terminal.Id),
+            options.Work is { } work ? token => work(new TerminalContext { CancellationToken = token }) : null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<InteractionResult<bool>> PromptWorkAsync(
+        string title, string message, InteractionOptions options, Interaction.InteractionInfoBase interactionInfo,
+        Func<CancellationToken, Task>? work, CancellationToken cancellationToken)
+    {
         EnsureServiceAvailable();
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -347,14 +342,12 @@ internal class InteractionService : IInteractionService
 
         try
         {
-            options ??= ProgressInteractionOptions.CreateDefault();
-
-            var newState = new Interaction(options.Title ?? string.Empty, message, options, new Interaction.ProgressInteractionInfo(), interactionCts.Token);
+            var newState = new Interaction(title, message, options, interactionInfo, interactionCts.Token);
             AddInteractionUpdate(newState);
 
             using var ctRegistration = cancellationToken.Register(OnInteractionCancellation, state: newState);
 
-            if (options.Work is { } work)
+            if (work is not null)
             {
                 // When the button is clicked, CompletionTcs fires. Cancel the work's CT so it can stop.
                 // Don't dispose the continuation task — it may not have completed when scope exits
@@ -379,36 +372,23 @@ internal class InteractionService : IInteractionService
 
                 try
                 {
-                    await work(new ProgressContext { CancellationToken = interactionCts.Token }).ConfigureAwait(false);
+                    await work(interactionCts.Token).ConfigureAwait(false);
 
-                    // Work completed successfully. Complete the interaction.
-                    if (!newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true, State = true }))
-                    {
-                        var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
-                        return CreateProgressResult(completion);
-                    }
-
-                    newState.State = Interaction.InteractionState.Complete;
-                    AddInteractionUpdate(newState);
-
-                    return InteractionResult.Ok(true);
+                    CompleteWorkInteraction(newState, new InteractionCompletionState { Complete = true, State = true });
+                    return CreateWorkResult(await newState.CompletionTcs.Task.ConfigureAwait(false));
                 }
                 catch (OperationCanceledException) when (interactionCts.IsCancellationRequested)
                 {
                     // The work was canceled. Complete the interaction if not already done.
-                    newState.State = Interaction.InteractionState.Complete;
-                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true });
-                    AddInteractionUpdate(newState);
+                    CompleteWorkInteraction(newState, new InteractionCompletionState { Complete = true });
 
                     return InteractionResult.Cancel<bool>();
                 }
                 catch
                 {
                     // If work throws a non-cancellation exception, ensure the interaction is
-                    // completed and removed so the progress dialog doesn't stay open indefinitely.
-                    newState.State = Interaction.InteractionState.Complete;
-                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true });
-                    AddInteractionUpdate(newState);
+                    // completed and removed so the dialog doesn't stay open indefinitely.
+                    CompleteWorkInteraction(newState, new InteractionCompletionState { Complete = true });
 
                     throw;
                 }
@@ -419,7 +399,7 @@ internal class InteractionService : IInteractionService
                 // - The user clicking the button (sends response from dashboard)
                 // - External cancellation via cancellationToken (handled by OnInteractionCancellation registration)
                 var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
-                return CreateProgressResult(completion);
+                return CreateWorkResult(completion);
             }
         }
         finally
@@ -428,7 +408,20 @@ internal class InteractionService : IInteractionService
         }
     }
 
-    private static InteractionResult<bool> CreateProgressResult(InteractionCompletionState completion)
+    private void CompleteWorkInteraction(Interaction interaction, InteractionCompletionState completion)
+    {
+        // Serialize work completion with client/external cancellation so only the winner removes and publishes
+        // completion. In particular, work that handles cancellation must not overwrite a canceled result.
+        lock (_onInteractionUpdatedLock)
+        {
+            if (_interactionCollection.Contains(interaction.InteractionId))
+            {
+                CompleteInteractionCore(interaction, completion);
+            }
+        }
+    }
+
+    private static InteractionResult<bool> CreateWorkResult(InteractionCompletionState completion)
     {
         var promptState = completion.State as bool?;
 
@@ -824,5 +817,10 @@ internal class Interaction
 
     internal sealed class ProgressInteractionInfo : InteractionInfoBase
     {
+    }
+
+    internal sealed class TerminalInteractionInfo(string terminalId) : InteractionInfoBase
+    {
+        public string TerminalId { get; } = terminalId;
     }
 }

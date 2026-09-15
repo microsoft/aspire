@@ -5,7 +5,7 @@
 // (`dotnet run --file numberguess.cs -- <limit>`).
 //
 // It exists to demonstrate driving an interactive process from AppHost code: the AppHost shows this program in an
-// InputType.Terminal interaction, then plays it by typing guesses and reading the replies back off the terminal
+// PromptTerminalAsync interaction, then plays it by typing guesses and reading the replies back off the terminal
 // screen. Nothing here knows it is being automated - it is an ordinary Console.ReadLine app.
 //
 // The reply format is the contract the automation relies on, so it is deliberately unambiguous:

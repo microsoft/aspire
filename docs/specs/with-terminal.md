@@ -55,12 +55,72 @@ override the AppHost's inherited environment. Requested dimensions default to 12
 columns and 32 rows. The current HMP server overrides those initial dimensions to
 80 columns and 24 rows; viewer-driven resizing still applies after attachment.
 Placement defaults to the dock;
-use `Dialog` for terminal interaction inputs or `None` for automation-only terminals.
+use `Dialog` for terminal interactions or `None` for automation-only terminals.
 
 The creator owns the terminal. A dock terminal can outlive the command that
 created it: closing its tab or shutting down the AppHost disposes it. For a
 dialog-scoped terminal, use `await using` around creation and the interaction;
 closing the interaction alone does not dispose the terminal.
+
+### Terminal interactions
+
+`IInteractionService.PromptTerminalAsync` displays one caller-owned terminal in
+a dedicated dialog, following progress-interaction completion and cancellation
+semantics. It is experimental under the same `ASPIRETERMINAL002` diagnostic.
+The public API uses only Aspire types, not Hex1b types.
+
+```csharp
+var interactions = app.Services.GetRequiredService<IInteractionService>();
+await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+{
+    Title = "Setup",
+    Executable = "./setup.sh",
+    Placement = TerminalPlacement.Dialog
+});
+terminal.Start();
+var result = await interactions.PromptTerminalAsync(
+    "Running setup.", terminal,
+    new TerminalInteractionOptions
+    {
+        Title = "Setup",
+        PrimaryButtonText = "Cancel",
+        Work = async context =>
+        {
+            await terminal.WaitForTextAsync("Continue? ", cancellationToken: context.CancellationToken);
+            await terminal.SendTextAsync("y\r", context.CancellationToken);
+            await terminal.WaitForTextAsync("Setup complete", cancellationToken: context.CancellationToken);
+        }
+    },
+    cancellationToken);
+```
+
+- The supplied terminal must use `Dialog` placement and be the exact instance
+  still registered with the same AppHost. A foreign, disposed, or merely
+  same-ID handle is rejected. Attachment also checks availability.
+- Successful `Work` completion closes the dialog and returns a successful
+  `InteractionResult<bool>`. The optional primary button requests cancellation;
+  it is not a form submit/accept button. Secondary and dismiss actions are hidden.
+- User or external cancellation closes the dialog, signals
+  `TerminalContext.CancellationToken`, and waits for `Work` to finish before
+  returning a canceled result. A pre-canceled caller token throws before
+  publishing. Other callback failures remove the interaction and propagate.
+- Without `Work`, the interaction waits for explicit completion, user
+  cancellation (when a button is configured), or external cancellation.
+  **Process exit does not close the dialog.**
+- The caller starts and owns the terminal. Completion, cancellation, viewer
+  disposal, and dashboard disconnect never stop or dispose the producer.
+  Disconnecting only releases that viewer; the pending interaction can be
+  redisplayed on reconnect. The caller can reuse the terminal in later prompts.
+- The dialog contains a chromeless terminal with its existing font/footer
+  controls, no duplicate title bar or launch button, and a wider viewport than
+  ordinary input dialogs. It uses the PathBase-aware AppHost terminal endpoint.
+
+Migration: replace `InputType.Terminal` / `InteractionInput.Terminal` passed to
+`PromptInputsAsync` with `PromptTerminalAsync`. The old protobuf input field and
+enum identifiers are reserved; the dedicated `prompt_terminal` payload carries
+the terminal ID and optional boolean result. There is no terminal input value,
+required-field validation, or command-argument cloning. This change does not
+introduce an ATS/polyglot terminal API.
 
 ## Process topology
 
@@ -196,7 +256,7 @@ closure (`1000`), abnormal transport loss (`1006`), close reason strings, and
 `wasClean` do not indicate producer completion and remain retryable.
 
 Each component registers a separate input policy with the dashboard and passes
-its opaque `viewId` with the WebSocket URL. Changes to an interaction's disabled
+its opaque `viewId` with the WebSocket URL. Changes to a view's read-only
 state update that policy before updating browser input behavior. The bridge
 applies `Hwt1PresentationAdapter.IsReadOnly` before dispatching each complete
 command, delegating validation and input gating to Hex1b. The browser uses

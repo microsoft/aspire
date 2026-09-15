@@ -70,7 +70,7 @@ public interface IDashboardClient : IResourceRepository, IAsyncDisposable
     /// Opens a duplex byte stream to an AppHost-owned terminal.
     /// </summary>
     /// <remarks>
-    /// Used by terminal interaction inputs, docked terminals, and detached terminal windows.
+    /// Used by terminal interactions, docked terminals, and detached terminal windows.
     /// The returned stream carries HMP1 frames between the dashboard and the AppHost. The dashboard's terminal
     /// replica bridges this stream to the browser's HWT1 WebSocket connection.
     /// </remarks>

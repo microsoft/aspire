@@ -22,9 +22,8 @@ public enum TerminalPlacement
     Dock,
 
     /// <summary>
-    /// The terminal belongs to an <see cref="InputType.Terminal"/> interaction input and is displayed inside
-    /// that interaction's dialog. These are addressed directly by the dialog and are deliberately excluded
-    /// from the dock's tab list.
+    /// The terminal can be displayed by <see cref="IInteractionService.PromptTerminalAsync"/>.
+    /// It remains caller-owned and is addressed directly by the dialog, not listed in the terminal dock.
     /// </summary>
     Dialog,
 

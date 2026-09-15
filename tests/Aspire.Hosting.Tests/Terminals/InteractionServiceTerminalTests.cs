@@ -1,402 +1,456 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Pipelines;
 using Aspire.Hosting.Terminals;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Hex1b;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+#pragma warning disable ASPIREINTERACTION001 // Regression coverage for the shared progress lifecycle.
 #pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Tests.Terminals;
 
-/// <summary>
-/// Guards how <see cref="InteractionService"/> validates terminal-typed inputs and, above all, that it keeps its
-/// hands off the terminal's lifetime. The caller creates the terminal and the caller disposes it, so the dialog is
-/// only ever a view onto a terminal that already exists.
-/// </summary>
 [Trait("Partition", "2")]
 public class InteractionServiceTerminalTests
 {
+    [Fact]
+    public async Task PromptTerminalAsync_NullArguments_ThrowsBeforePublishing()
+    {
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(terminals);
+
+        await Assert.ThrowsAsync<ArgumentNullException>("message", () => service.PromptTerminalAsync(null!, terminal));
+        await Assert.ThrowsAsync<ArgumentNullException>("terminal", () => service.PromptTerminalAsync("Message", null!));
+        Assert.Empty(service.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptTerminalAsync_Unavailable_ThrowsBeforePublishing()
+    {
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(terminals);
+        using var scope = InteractionService.StartNonInteractiveScope();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.PromptTerminalAsync("Message", terminal));
+        Assert.Empty(service.GetCurrentInteractions());
+    }
+
     [Theory]
-    [InlineData(false, null)]
-    [InlineData(false, "supplied-value")]
-    [InlineData(true, null)]
-    [InlineData(true, "supplied-value")]
-    public async Task PromptInputsAsync_RequiredTerminalInput_ThrowsBeforePublishing(bool singleInput, string? value)
+    [InlineData(TerminalPlacement.Dock)]
+    [InlineData(TerminalPlacement.None)]
+    public async Task PromptTerminalAsync_NonDialogPlacement_ThrowsBeforePublishing(TerminalPlacement placement)
     {
-        var (interactionService, terminalService) = CreateInteractionService();
-        await using var serviceOwner = terminalService;
-        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
-        var input = new InteractionInput
-        {
-            Name = "shell",
-            InputType = InputType.Terminal,
-            Terminal = terminal,
-            Required = true,
-            Value = value
-        };
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(terminals, placement);
 
-        Func<Task> prompt = singleInput
-            ? () => interactionService.PromptInputAsync("Title", "Message", input)
-            : () => interactionService.PromptInputsAsync("Title", "Message", [input]);
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(prompt).DefaultTimeout();
-
-        Assert.Equal("The input 'shell' has Required set to true, but Terminal inputs do not produce a value and cannot be required.", ex.Message);
-        Assert.Empty(interactionService.GetCurrentInteractions());
-        Assert.Null(input.TerminalId);
-        Assert.True(terminalService.TryGetTerminal(terminal.Id, out var registered));
-        Assert.Same(terminal, registered);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.PromptTerminalAsync("Message", terminal));
+        Assert.Equal($"Terminals shown by an interaction must be created with TerminalPlacement.Dialog; the supplied terminal has placement {placement}.", ex.Message);
+        Assert.Empty(service.GetCurrentInteractions());
+        AssertRegistered(terminals, terminal);
     }
 
     [Fact]
-    public async Task PromptInputsAsync_OptionalTerminalInput_SubmitsWithoutAValue()
+    public async Task PromptTerminalAsync_TerminalFromAnotherService_ThrowsBeforePublishing()
     {
-        var (interactionService, terminalService) = CreateInteractionService();
-        await using var serviceOwner = terminalService;
-        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
-        var input = new InteractionInput
-        {
-            Name = "shell",
-            InputType = InputType.Terminal,
-            Terminal = terminal,
-            Required = false
-        };
-
-        var prompt = interactionService.PromptInputsAsync("Title", "Message", [input]);
-        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
-        await interactionService.ProcessInteractionFromClientAsync(
-            interaction.InteractionId,
-            (_, _, _) => new InteractionCompletionState { Complete = true, State = new[] { input } },
-            CancellationToken.None).DefaultTimeout();
-        var result = await prompt.DefaultTimeout();
-
-        Assert.False(result.Canceled);
-        Assert.Same(input, Assert.Single(result.Data));
-        Assert.Null(input.Value);
-        Assert.Empty(interactionService.GetCurrentInteractions());
-        Assert.True(terminalService.TryGetTerminal(terminal.Id, out var registered));
-        Assert.Same(terminal, registered);
-    }
-
-    [Fact]
-    public async Task PromptInputsAsync_TerminalInputWithoutATerminal_Throws()
-    {
-        var (interactionService, _) = CreateInteractionService();
-
-        var input = new InteractionInput { Name = "shell", InputType = InputType.Terminal };
-
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => interactionService.PromptInputsAsync("Title", "Message", [input])).DefaultTimeout();
-
-        Assert.Contains(nameof(InteractionInput.Terminal), ex.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task PromptInputsAsync_TerminalFromAnotherService_ThrowsBeforePublishing()
-    {
-        var (interactionService, terminalService) = CreateInteractionService();
-        await using var serviceOwner = terminalService;
+        await using var terminals = TestTerminalService.Create();
         await using var otherService = TestTerminalService.Create();
-        await using var terminal = CreateTerminal(otherService, TerminalPlacement.Dialog);
-        var input = new InteractionInput { Name = "shell", InputType = InputType.Terminal, Terminal = terminal };
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(otherService);
 
-        await AssertTerminalRejectedAsync(interactionService, [input], input.Name);
-
-        Assert.True(otherService.TryGetTerminal(terminal.Id, out var registered));
-        Assert.Same(terminal, registered);
-        Assert.False(terminalService.TryGetTerminal(terminal.Id, out _));
+        await AssertTerminalRejectedAsync(service, terminal);
+        AssertRegistered(otherService, terminal);
+        Assert.False(terminals.TryGetTerminal(terminal.Id, out _));
     }
 
     [Fact]
-    public async Task PromptInputsAsync_DisposedTerminal_ThrowsBeforePublishing()
+    public async Task PromptTerminalAsync_DisposedTerminal_ThrowsBeforePublishing()
     {
-        var (interactionService, terminalService) = CreateInteractionService();
-        await using var serviceOwner = terminalService;
-        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(terminals);
         await terminal.DisposeAsync();
-        var input = new InteractionInput { Name = "shell", InputType = InputType.Terminal, Terminal = terminal };
 
-        await AssertTerminalRejectedAsync(interactionService, [input], input.Name);
-
-        Assert.False(terminalService.TryGetTerminal(terminal.Id, out _));
+        await AssertTerminalRejectedAsync(service, terminal);
+        Assert.False(terminals.TryGetTerminal(terminal.Id, out _));
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task PromptInputsAsync_UnregisteredTerminal_ThrowsBeforePublishing(bool useRegisteredId)
+    public async Task PromptTerminalAsync_UnregisteredInstance_ThrowsBeforePublishing(bool useRegisteredId)
     {
-        var (interactionService, terminalService) = CreateInteractionService();
-        await using var serviceOwner = terminalService;
-        await using var registeredTerminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var registeredTerminal = CreateTerminal(terminals);
         var backend = new TestTerminalBackend(useRegisteredId ? registeredTerminal.Id : "unregistered");
         await using var unregisteredTerminal = new AspireTerminal(backend);
-        var validInput = new InteractionInput { Name = "valid", InputType = InputType.Terminal, Terminal = registeredTerminal };
-        var invalidInput = new InteractionInput { Name = "invalid", InputType = InputType.Terminal, Terminal = unregisteredTerminal };
         Assert.Equal(useRegisteredId, backend.Equals(registeredTerminal.Backend));
         Assert.NotEqual(registeredTerminal, unregisteredTerminal);
 
-        await AssertTerminalRejectedAsync(interactionService, [validInput, invalidInput], invalidInput.Name);
-
+        await AssertTerminalRejectedAsync(service, unregisteredTerminal);
         Assert.False(backend.IsDisposed);
-        Assert.True(terminalService.TryGetTerminal(registeredTerminal.Id, out var registered));
-        Assert.Same(registeredTerminal, registered);
+        AssertRegistered(terminals, registeredTerminal);
     }
 
     [Fact]
-    public async Task PromptInputsAsync_NoTerminalService_ThrowsBeforePublishing()
+    public async Task PromptTerminalAsync_NoTerminalService_ThrowsBeforePublishing()
     {
-        var (interactionService, terminalService) = CreateInteractionService(registerTerminalService: false);
-        await using var serviceOwner = terminalService;
-        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
-        var input = new InteractionInput { Name = "shell", InputType = InputType.Terminal, Terminal = terminal };
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(null);
+        await using var terminal = CreateTerminal(terminals);
 
-        await AssertTerminalRejectedAsync(interactionService, [input], input.Name);
-
-        Assert.True(terminalService.TryGetTerminal(terminal.Id, out var registered));
-        Assert.Same(terminal, registered);
+        await AssertTerminalRejectedAsync(service, terminal);
+        AssertRegistered(terminals, terminal);
     }
 
     [Fact]
     public async Task PromptInputsAsync_TextInput_DoesNotRequireTerminalService()
     {
-        var (interactionService, terminalService) = CreateInteractionService(registerTerminalService: false);
-        await using var serviceOwner = terminalService;
-        var input = new InteractionInput { Name = "text", InputType = InputType.Text };
+        var service = CreateInteractionService(null);
+        var input = new InteractionInput { Name = "text", InputType = InputType.Text, Required = true, Value = "value" };
+        var prompt = service.PromptInputsAsync("Title", "Message", [input]);
+        var interaction = Assert.Single(service.GetCurrentInteractions());
+        await CompleteInteractionAsync(service, interaction.InteractionId, new[] { input });
 
-        var prompt = interactionService.PromptInputsAsync("Title", "Message", [input]);
-        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
-        await CancelInteractionAsync(interactionService, interaction.InteractionId).DefaultTimeout();
         var result = await prompt.DefaultTimeout();
-
-        Assert.True(result.Canceled);
-        Assert.Null(input.TerminalId);
-        Assert.Empty(interactionService.GetCurrentInteractions());
+        Assert.False(result.Canceled);
+        Assert.Same(input, Assert.Single(result.Data));
+        Assert.Empty(service.GetCurrentInteractions());
     }
 
     [Fact]
-    public async Task PromptInputsAsync_TerminalDisposedAfterPublishing_AttachmentStillRejectsIt()
+    public async Task PromptTerminalAsync_DisposedAfterPublishing_AttachmentStillRejectsIt()
     {
-        var (interactionService, terminalService) = CreateInteractionService();
-        await using var serviceOwner = terminalService;
-        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
-        var input = new InteractionInput { Name = "shell", InputType = InputType.Terminal, Terminal = terminal };
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(terminals);
         using var cts = new CancellationTokenSource();
 
-        var prompt = interactionService.PromptInputsAsync("Title", "Message", [input], cancellationToken: cts.Token);
-        Assert.Single(interactionService.GetCurrentInteractions());
+        var prompt = service.PromptTerminalAsync("Message", terminal, cancellationToken: cts.Token);
+        Assert.Single(service.GetCurrentInteractions());
         await terminal.DisposeAsync();
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => terminalService.AttachAsync(terminal.Id, Stream.Null, _ => Task.CompletedTask, CancellationToken.None)).DefaultTimeout();
+            () => terminals.AttachAsync(terminal.Id, Stream.Null, _ => Task.CompletedTask, CancellationToken.None)).DefaultTimeout();
         Assert.Equal($"There is no terminal with id '{terminal.Id}'.", ex.Message);
+        Assert.False(prompt.IsCompleted);
         cts.Cancel();
-        var result = await prompt.DefaultTimeout();
-        Assert.True(result.Canceled);
-        Assert.Empty(interactionService.GetCurrentInteractions());
+        Assert.True((await prompt.DefaultTimeout()).Canceled);
+        Assert.Empty(service.GetCurrentInteractions());
     }
 
-    [Fact]
-    public async Task PromptInputsAsync_TerminalOnTheDockSurface_Throws()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [InlineData(null)]
+    public async Task PromptTerminalAsync_WithoutWork_CompletesAndCanBeReused(bool? completion)
     {
-        var (interactionService, terminalService) = CreateInteractionService();
-
-        // A dock terminal is already presented as a dock tab, so showing it in a dialog as well would render one
-        // terminal through two competing presentations.
-        await using var dockTerminal = CreateTerminal(terminalService, TerminalPlacement.Dock);
-        var input = new InteractionInput
-        {
-            Name = "shell",
-            InputType = InputType.Terminal,
-            Terminal = dockTerminal
-        };
-
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => interactionService.PromptInputsAsync("Title", "Message", [input])).DefaultTimeout();
-
-        Assert.Contains(nameof(TerminalPlacement.Dock), ex.Message, StringComparison.Ordinal);
-
-        // The rejected prompt must not take the caller's dock tab with it.
-        Assert.True(terminalService.TryGetTerminal(dockTerminal.Id, out _));
-    }
-
-    [Fact]
-    public async Task PromptInputsAsync_TerminalInput_CarriesTheCallersTerminalIdIntoTheDialog()
-    {
-        var (interactionService, terminalService) = CreateInteractionService();
-
-        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
-        var input = new InteractionInput
-        {
-            Name = "shell",
-            Label = "Shell",
-            InputType = InputType.Terminal,
-            Terminal = terminal
-        };
-
-        var resultTask = interactionService.PromptInputsAsync("Title", "Message", [input]);
-
-        // The dashboard addresses terminals by id, so the id of the caller's terminal is what the dialog has to
-        // carry -- the interaction does not stand up a terminal of its own.
-        Assert.Equal(terminal.Id, input.TerminalId);
-
-        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
-        await CancelInteractionAsync(interactionService, interaction.InteractionId);
-
-        await resultTask.DefaultTimeout();
-    }
-
-    [Fact]
-    public async Task PromptInputsAsync_Cancelled_LeavesTheCallersTerminalAlone()
-    {
-        var (interactionService, terminalService) = CreateInteractionService();
-
-        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
-        var input = new InteractionInput
-        {
-            Name = "shell",
-            InputType = InputType.Terminal,
-            Terminal = terminal
-        };
-
-        var resultTask = interactionService.PromptInputsAsync("Title", "Message", [input]);
-
-        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
-        await CancelInteractionAsync(interactionService, interaction.InteractionId);
-
-        var result = await resultTask.DefaultTimeout();
-
-        // The terminal outlives the dialog. A caller may show the same terminal in a second prompt, or keep
-        // driving it through the automation API after the user dismisses this one, so a dismissed dialog must not
-        // stop the workload.
-        Assert.True(result.Canceled);
-        Assert.True(terminalService.TryGetTerminal(terminal.Id, out _));
-    }
-
-    [Fact]
-    public async Task PromptInputsAsync_CallerTokenCancelled_LeavesTheCallersTerminalAlone()
-    {
-        var (interactionService, terminalService) = CreateInteractionService();
-
-        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
-        var terminalInput = new InteractionInput
-        {
-            Name = "shell",
-            InputType = InputType.Terminal,
-            Terminal = terminal
-        };
-
-        using var cts = new CancellationTokenSource();
-        var resultTask = interactionService.PromptInputsAsync("Title", "Message", [terminalInput], cancellationToken: cts.Token);
-
-        // Cancelling the caller's token unwinds the prompt through OnInteractionCancellation rather than through a
-        // dashboard-driven completion. Both routes end in CompleteInteractionCore, so this covers the second of the
-        // two paths that used to tear the terminal down.
-        cts.Cancel();
-
-        var result = await resultTask.DefaultTimeout();
-
-        Assert.True(result.Canceled);
-        Assert.True(terminalService.TryGetTerminal(terminal.Id, out _));
-    }
-
-    [Fact]
-    public async Task PromptInputsAsync_TerminalShownTwice_Succeeds()
-    {
-        var (interactionService, terminalService) = CreateInteractionService();
-
-        // Caller-owned lifetime is what makes this legal: the terminal survives the first dialog, so the same
-        // session can be surfaced again rather than the caller having to start a second workload.
-        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
-
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        // An invalid executable proves that raising/completing a prompt does not start the terminal.
+        await using var terminal = CreateTerminal(terminals);
         for (var i = 0; i < 2; i++)
         {
-            var input = new InteractionInput
-            {
-                Name = "shell",
-                InputType = InputType.Terminal,
-                Terminal = terminal
-            };
+            var options = new TerminalInteractionOptions { Title = "Title", PrimaryButtonText = "Cancel" };
+            var prompt = service.PromptTerminalAsync("Message", terminal, options);
+            var interaction = Assert.Single(service.GetCurrentInteractions());
+            Assert.Equal(terminal.Id, Assert.IsType<Interaction.TerminalInteractionInfo>(interaction.InteractionInfo).TerminalId);
+            Assert.Equal("Title", interaction.Title);
+            Assert.Equal("Message", interaction.Message);
+            Assert.Same(options, interaction.Options);
+            Assert.False(prompt.IsCompleted);
 
-            var resultTask = interactionService.PromptInputsAsync("Title", "Message", [input]);
-
-            Assert.Equal(terminal.Id, input.TerminalId);
-
-            var interaction = Assert.Single(interactionService.GetCurrentInteractions());
-            await CancelInteractionAsync(interactionService, interaction.InteractionId);
-
-            await resultTask.DefaultTimeout();
+            await CompleteInteractionAsync(service, interaction.InteractionId, completion);
+            var result = await prompt.DefaultTimeout();
+            Assert.Equal(completion != true, result.Canceled);
+            Assert.Equal(completion == true, result.Data);
+            Assert.Empty(service.GetCurrentInteractions());
+            AssertRegistered(terminals, terminal);
         }
-
-        Assert.True(terminalService.TryGetTerminal(terminal.Id, out _));
     }
 
-    /// <summary>
-    /// Dismisses the dialog the way the dashboard does when the user closes it without submitting.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <c>Complete = true</c> with a null <c>State</c> is the dismiss signal, not <c>Complete = false</c>:
-    /// "not complete" means the dialog stays open, which is how a validation failure is reported.
-    /// <c>PromptInputsAsync</c> maps a completion whose state is not an input list onto a cancelled result.
-    /// </para>
-    /// <para>
-    /// The callback returns the state directly instead of routing through
-    /// <c>DashboardServiceData.ProcessInputs</c>. These tests are about the terminal's lifetime rather than
-    /// input marshalling.
-    /// </para>
-    /// </remarks>
-    private static Task CancelInteractionAsync(InteractionService interactionService, int interactionId)
-        => interactionService.ProcessInteractionFromClientAsync(
-            interactionId,
-            (_, _, _) => new InteractionCompletionState { Complete = true },
-            CancellationToken.None);
-
-    private static AspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement)
-        => service.CreateTerminal(new TerminalLaunchOptions
-        {
-            Title = "Terminal",
-            Executable = "bash",
-            Placement = placement
-        });
-
-    private static async Task AssertTerminalRejectedAsync(InteractionService interactionService, IReadOnlyList<InteractionInput> inputs, string invalidInputName)
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PromptTerminalAsync_PreCanceled_DoesNotPublishOrRunWork(bool withWork)
     {
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(terminals);
+        var workCalled = false;
+        var options = withWork ? new TerminalInteractionOptions { Work = _ => { workCalled = true; return Task.CompletedTask; } } : null;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.PromptTerminalAsync("Message", terminal, options, new CancellationToken(canceled: true)));
+
+        Assert.False(workCalled);
+        Assert.Empty(service.GetCurrentInteractions());
+        AssertRegistered(terminals, terminal);
+    }
+
+    [Fact]
+    public async Task PromptTerminalAsync_WithoutWork_ExternalCancellation()
+    {
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(terminals);
         using var cts = new CancellationTokenSource();
-        var prompt = interactionService.PromptInputsAsync("Title", "Message", inputs, cancellationToken: cts.Token);
+        var prompt = service.PromptTerminalAsync("Message", terminal, cancellationToken: cts.Token);
+        var interaction = Assert.Single(service.GetCurrentInteractions());
+        Assert.Equal(string.Empty, interaction.Title);
+        Assert.Null(interaction.Options.PrimaryButtonText);
+        Assert.False(prompt.IsCompleted);
+
+        cts.Cancel();
+        Assert.True((await prompt.DefaultTimeout()).Canceled);
+        Assert.Empty(service.GetCurrentInteractions());
+        AssertRegistered(terminals, terminal);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PromptTerminalAsync_WorkCancellation_SignalsTokenAndJoinsWork(bool external, bool handleCancellation)
+    {
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(terminals);
+        using var cts = new CancellationTokenSource();
+        var canceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishWork = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var prompt = service.PromptTerminalAsync("Message", terminal, new TerminalInteractionOptions
+        {
+            Work = async context =>
+            {
+                using var registration = context.CancellationToken.Register(() => canceled.TrySetResult());
+                await finishWork.Task;
+                if (!handleCancellation)
+                {
+                    context.CancellationToken.ThrowIfCancellationRequested();
+                }
+            }
+        }, cts.Token);
+        var interaction = Assert.Single(service.GetCurrentInteractions());
+        if (external)
+        {
+            cts.Cancel();
+        }
+        else
+        {
+            await CompleteInteractionAsync(service, interaction.InteractionId, false);
+        }
+
         try
         {
-            Assert.Empty(interactionService.GetCurrentInteractions());
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => prompt).DefaultTimeout();
-            Assert.Equal($"The input '{invalidInputName}' must reference the terminal instance registered with this AppHost's TerminalService.", ex.Message);
-            Assert.All(inputs, input => Assert.Null(input.TerminalId));
+            await canceled.Task.DefaultTimeout();
+            Assert.False(prompt.IsCompleted);
+            Assert.Empty(service.GetCurrentInteractions());
+            AssertRegistered(terminals, terminal);
         }
         finally
         {
-            // Unwind any incorrectly published prompt too, so a regression cannot leave an interaction pending.
+            finishWork.TrySetResult();
+        }
+        Assert.True((await prompt.DefaultTimeout()).Canceled);
+    }
+
+    [Theory]
+    [InlineData(false, "success")]
+    [InlineData(false, "fault")]
+    [InlineData(false, "cancel")]
+    [InlineData(false, "handled-cancel")]
+    [InlineData(true, "success")]
+    [InlineData(true, "fault")]
+    [InlineData(true, "cancel")]
+    [InlineData(true, "handled-cancel")]
+    public async Task PromptWorkAsync_CompletesExactlyOnce(bool progress, string outcome)
+    {
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(terminals);
+        using var cts = new CancellationTokenSource();
+        await using var updates = service.SubscribeInteractionUpdates(cts.Token).GetAsyncEnumerator();
+        var firstUpdate = updates.MoveNextAsync().AsTask();
+        var finishWork = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failure = new InvalidOperationException("work failed");
+        Task Work(CancellationToken _) => finishWork.Task;
+        var prompt = progress
+            ? service.PromptProgressAsync("Message", new ProgressInteractionOptions { Work = context => Work(context.CancellationToken) }, cts.Token)
+            : service.PromptTerminalAsync("Message", terminal, new TerminalInteractionOptions { Work = context => Work(context.CancellationToken) }, cts.Token);
+        Assert.True(await firstUpdate.DefaultTimeout());
+        var firstId = updates.Current.InteractionId;
+        Assert.Equal(Interaction.InteractionState.InProgress, updates.Current.State);
+
+        if (outcome == "fault")
+        {
+            finishWork.SetException(failure);
+            Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => prompt).DefaultTimeout());
+        }
+        else if (outcome == "success")
+        {
+            finishWork.SetResult();
+            Assert.True((await prompt.DefaultTimeout()).Data);
+        }
+        else
+        {
+            await CompleteInteractionAsync(service, firstId, false);
+            // Awaiting the signal avoids relying on when CompletionTcs's asynchronous continuation runs.
+            var interaction = updates.Current;
+            var cancellation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var registration = interaction.CancellationToken.Register(() => cancellation.TrySetResult());
+            await cancellation.Task.DefaultTimeout();
+            if (outcome == "cancel")
+            {
+                finishWork.SetCanceled(interaction.CancellationToken);
+            }
+            else
+            {
+                finishWork.SetResult();
+            }
+            Assert.True((await prompt.DefaultTimeout()).Canceled);
+        }
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Equal(firstId, updates.Current.InteractionId);
+        Assert.Equal(Interaction.InteractionState.Complete, updates.Current.State);
+        Assert.Empty(service.GetCurrentInteractions());
+        AssertRegistered(terminals, terminal);
+
+        // Late client cancellation must not emit a second removal. A new prompt is a deterministic stream barrier.
+        await CompleteInteractionAsync(service, firstId, false);
+        var second = service.PromptTerminalAsync("Again", terminal, cancellationToken: cts.Token);
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.NotEqual(firstId, updates.Current.InteractionId);
+        Assert.Equal(Interaction.InteractionState.InProgress, updates.Current.State);
+        cts.Cancel();
+        await second.DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PromptTerminalAsync_WorkThrowsUnrelatedCancellation_Propagates(bool progress)
+    {
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        await using var terminal = CreateTerminal(terminals);
+        var failure = new OperationCanceledException("not the interaction token");
+        var prompt = progress
+            ? service.PromptProgressAsync("Message", new ProgressInteractionOptions { Work = _ => throw failure })
+            : service.PromptTerminalAsync("Message", terminal, new TerminalInteractionOptions { Work = _ => throw failure });
+
+        Assert.Same(failure, await Assert.ThrowsAsync<OperationCanceledException>(() => prompt));
+        Assert.Empty(service.GetCurrentInteractions());
+        AssertRegistered(terminals, terminal);
+    }
+
+    [Fact]
+    public async Task PromptTerminalAsync_CompletionAndViewerDisconnect_LeaveAutomationUsable()
+    {
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        var output = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        await using var terminal = terminals.CreateTerminal("Reusable", TerminalPlacement.Dialog,
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)));
+        terminal.Start();
+
+        foreach (var cancel in new[] { false, true })
+        {
+            var prompt = service.PromptTerminalAsync("Message", terminal);
+            var interaction = Assert.Single(service.GetCurrentInteractions());
+            await using (var viewer = await TestAppHostTerminalViewer.ConnectAsync(terminals, terminal.Id))
+            {
+                await outputWriter.WriteAsync("viewer-ready\r\n"u8.ToArray());
+                await viewer.WaitForTextAsync("viewer-ready").DefaultTimeout();
+            }
+            Assert.False(prompt.IsCompleted);
+            await CompleteInteractionAsync(service, interaction.InteractionId, !cancel);
+            Assert.Equal(cancel, (await prompt.DefaultTimeout()).Canceled);
+
+            var marker = cancel ? "after-cancel" : "after-complete";
+            await outputWriter.WriteAsync(System.Text.Encoding.UTF8.GetBytes(marker + "\r\n"));
+            await terminal.WaitForTextAsync(marker).DefaultTimeout();
+            await terminal.SendTextAsync("still usable");
+            AssertRegistered(terminals, terminal);
+        }
+    }
+
+    [Fact]
+    public async Task PromptTerminalAsync_WorkloadExit_DoesNotCompleteDialog()
+    {
+        await using var terminals = TestTerminalService.Create();
+        var service = CreateInteractionService(terminals);
+        var output = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        var workload = new StreamWorkloadAdapter(outputReader, Stream.Null);
+        await using var terminal = terminals.CreateTerminal("Ending", TerminalPlacement.Dialog,
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload));
+        terminal.Start();
+        var prompt = service.PromptTerminalAsync("Message", terminal);
+        var interaction = Assert.Single(service.GetCurrentInteractions());
+        await outputWriter.WriteAsync("ready\r\n"u8.ToArray());
+        await terminal.WaitForTextAsync("ready").DefaultTimeout();
+        // Stream-backed workloads signal exit separately from EOF. Observe startup before signaling exit.
+        workload.SignalDisconnected();
+        await Assert.IsType<Hex1bAspireTerminal>(terminal.Backend).WorkloadEnded.DefaultTimeout();
+
+        Assert.False(prompt.IsCompleted);
+        Assert.Same(interaction, Assert.Single(service.GetCurrentInteractions()));
+        await CompleteInteractionAsync(service, interaction.InteractionId, false);
+        Assert.True((await prompt.DefaultTimeout()).Canceled);
+    }
+
+    private static Task CompleteInteractionAsync(InteractionService service, int interactionId, object? state)
+        => service.ProcessInteractionFromClientAsync(interactionId,
+            (_, _, _) => new InteractionCompletionState { Complete = true, State = state }, CancellationToken.None);
+
+    private static AspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement = TerminalPlacement.Dialog)
+        => service.CreateTerminal(new TerminalLaunchOptions { Title = "Terminal", Executable = "must-not-be-started", Placement = placement });
+
+    private static async Task AssertTerminalRejectedAsync(InteractionService service, AspireTerminal terminal)
+    {
+        using var cts = new CancellationTokenSource();
+        try
+        {
+            var prompt = service.PromptTerminalAsync("Message", terminal, cancellationToken: cts.Token);
+            Assert.Empty(service.GetCurrentInteractions());
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => prompt).DefaultTimeout();
+            Assert.Equal("The terminal must be the instance registered with this AppHost's TerminalService.", ex.Message);
+        }
+        finally
+        {
             cts.Cancel();
         }
     }
 
-    private static (InteractionService InteractionService, TerminalService TerminalService) CreateInteractionService(bool registerTerminalService = true)
+    private static void AssertRegistered(TerminalService service, AspireTerminal terminal)
     {
-        var terminalService = TestTerminalService.Create();
-        var services = new ServiceCollection();
-        if (registerTerminalService)
-        {
-            services.AddSingleton(terminalService);
-        }
-        var interactionService = new InteractionService(
-            NullLogger<InteractionService>.Instance,
-            new DistributedApplicationOptions(),
-            services.BuildServiceProvider(),
-            new ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore());
+        Assert.True(service.TryGetTerminal(terminal.Id, out var registered));
+        Assert.Same(terminal, registered);
+    }
 
-        return (interactionService, terminalService);
+    private static InteractionService CreateInteractionService(TerminalService? terminals)
+    {
+        var services = new ServiceCollection();
+        if (terminals is not null)
+        {
+            services.AddSingleton(terminals);
+        }
+        return new InteractionService(
+            NullLogger<InteractionService>.Instance, new DistributedApplicationOptions(), services.BuildServiceProvider(),
+            new ConfigurationBuilder().Build(), new TestInteractionFileUploadStore());
     }
 }

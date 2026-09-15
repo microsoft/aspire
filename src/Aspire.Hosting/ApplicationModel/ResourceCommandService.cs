@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.ApplicationModel;
 
 #pragma warning disable ASPIREINTERACTION001 // PromptProgressAsync and related types are experimental.
-#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
 
 /// <summary>
 /// A service to execute resource commands.
@@ -805,9 +804,6 @@ public class ResourceCommandService
             Description = input.Description,
             EnableDescriptionMarkdown = input.EnableDescriptionMarkdown,
             InputType = input.InputType,
-            // Input state belongs to this invocation, but the terminal is borrowed from its caller and may be
-            // intentionally reused across interactions. Preserve its identity without creating or owning a process.
-            Terminal = input.Terminal,
             Required = input.Required,
             Options = input.Options,
             DynamicLoading = input.DynamicLoading,

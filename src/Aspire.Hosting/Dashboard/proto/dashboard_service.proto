@@ -368,6 +368,7 @@ message WatchInteractionsRequestUpdate {
         InteractionInputsDialog inputs_dialog = 4;
         InteractionNotification notification = 5;
         InteractionPromptProgress prompt_progress = 7;
+        InteractionPromptTerminal prompt_terminal = 8;
     }
 
     // A flag indicating that the message is an update and shouldn't complete the interaction.
@@ -393,6 +394,7 @@ message WatchInteractionsResponseUpdate {
         InteractionInputsDialog inputs_dialog = 18;
         InteractionNotification notification = 19;
         InteractionPromptProgress prompt_progress = 20;
+        InteractionPromptTerminal prompt_terminal = 21;
     }
 }
 // Represents the completion of an interaction.
@@ -414,12 +416,21 @@ message InteractionNotification {
 message InteractionPromptProgress {
     optional bool result = 1;
 }
+// A modal view onto a caller-owned terminal. Work completion or cancellation closes the interaction,
+// independently of the terminal process lifetime.
+message InteractionPromptTerminal {
+    string terminal_id = 1;
+    optional bool result = 2;
+}
 // Represents a dialog that collects inputs from the user.
 message InteractionInputsDialog {
     repeated InteractionInput input_items = 1;
 }
 // Represents an input item in an interaction dialog.
 message InteractionInput {
+    reserved 19;
+    reserved "terminal_id";
+
     string label = 1;
     string placeholder = 2;
     InputType input_type = 3;
@@ -438,9 +449,6 @@ message InteractionInput {
     int64 max_file_size = 16;
     bool allow_multiple_files = 17;
     string file_filter = 18;
-    // Identifies the AppHost-owned terminal backing an INPUT_TYPE_TERMINAL input. The dashboard passes this to
-    // /terminal/attach to open the tunnel.
-    string terminal_id = 19;
 }
 enum MessageIntent {
     MESSAGE_INTENT_NONE = 0;
@@ -451,6 +459,9 @@ enum MessageIntent {
     MESSAGE_INTENT_CONFIRMATION = 5;
 }
 enum InputType {
+    reserved 7;
+    reserved "INPUT_TYPE_TERMINAL";
+
     INPUT_TYPE_UNSPECIFIED = 0;
     INPUT_TYPE_TEXT = 1;
     INPUT_TYPE_SECRET_TEXT = 2;
@@ -458,7 +469,6 @@ enum InputType {
     INPUT_TYPE_BOOLEAN = 4;
     INPUT_TYPE_NUMBER = 5;
     INPUT_TYPE_FILE = 6;
-    INPUT_TYPE_TERMINAL = 7;
 }
 
 ////////////////////////////////////////////
@@ -490,7 +500,7 @@ message UploadFileResponse {
 message TerminalClientFrame {
     // Formerly interaction_id/input_name. Terminals are now addressed by an opaque id
     // issued by the AppHost's TerminalService, which lets one tunnel serve both
-    // interaction-input terminals and dashboard terminal dock tabs.
+    // terminal interactions and dashboard terminal dock tabs.
     reserved 1, 2;
     reserved "interaction_id", "input_name";
 

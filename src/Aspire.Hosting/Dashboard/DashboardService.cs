@@ -161,6 +161,10 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                         {
                             change.PromptProgress = new InteractionPromptProgress();
                         }
+                        else if (interaction.InteractionInfo is TerminalInteractionInfo terminal)
+                        {
+                            change.PromptTerminal = new InteractionPromptTerminal { TerminalId = terminal.TerminalId };
+                        }
 
                         await responseStream.WriteAsync(change, cts.Token).ConfigureAwait(false);
                     }
@@ -272,10 +276,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             dto.FileFilter = input.FileFilter;
         }
-        if (!string.IsNullOrEmpty(input.TerminalId))
-        {
-            dto.TerminalId = input.TerminalId;
-        }
         dto.ValidationErrors.AddRange(input.ValidationErrors);
         return dto;
     }
@@ -290,7 +290,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.Hosting.InputType.Boolean => Aspire.DashboardService.Proto.V1.InputType.Boolean,
             Aspire.Hosting.InputType.Number => Aspire.DashboardService.Proto.V1.InputType.Number,
             Aspire.Hosting.InputType.File => Aspire.DashboardService.Proto.V1.InputType.File,
-            Aspire.Hosting.InputType.Terminal => Aspire.DashboardService.Proto.V1.InputType.Terminal,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -305,7 +304,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.DashboardService.Proto.V1.InputType.Boolean => InputType.Boolean,
             Aspire.DashboardService.Proto.V1.InputType.Number => InputType.Number,
             Aspire.DashboardService.Proto.V1.InputType.File => InputType.File,
-            Aspire.DashboardService.Proto.V1.InputType.Terminal => InputType.Terminal,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }

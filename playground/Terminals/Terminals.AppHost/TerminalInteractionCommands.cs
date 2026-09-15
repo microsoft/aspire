@@ -6,16 +6,13 @@ using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-// InputType.Terminal is an experimental spike. PromptInputsAsync is also experimental.
-#pragma warning disable ASPIREINTERACTION001
-
-// AppHost-owned terminals - TerminalService, AspireTerminal, TerminalLaunchOptions - are experimental.
+// AppHost-owned terminals and terminal interactions are experimental.
 #pragma warning disable ASPIRETERMINAL002
 
 namespace Terminals.AppHost;
 
 /// <summary>
-/// Commands that exercise <see cref="InputType.Terminal"/> — an interaction input whose process is owned by the
+/// Commands that exercise <see cref="IInteractionService.PromptTerminalAsync"/> — a dialog whose terminal is owned by the
 /// AppHost itself rather than orchestrated by Aspire.
 /// </summary>
 /// <remarks>
@@ -64,18 +61,10 @@ internal static class TerminalInteractionCommands
 
                 terminal.Start();
 
-                var result = await interactionService.PromptInputsAsync(
-                    "AppHost shell",
-                    "This shell is a child process of the AppHost. Closing the dialog terminates it.",
-                    [
-                        new InteractionInput
-                        {
-                            Name = "shell",
-                            Label = "Shell",
-                            InputType = InputType.Terminal,
-                            Terminal = terminal
-                        }
-                    ],
+                var result = await interactionService.PromptTerminalAsync(
+                    "This shell is a child process of the AppHost. Cancel when finished; this command then disposes the terminal.",
+                    terminal,
+                    new TerminalInteractionOptions { Title = "AppHost shell", PrimaryButtonText = "Cancel" },
                     cancellationToken: commandContext.CancellationToken);
 
                 return result.Canceled
@@ -151,18 +140,10 @@ internal static class TerminalInteractionCommands
 
         terminal.Start();
 
-        var result = await interactionService.PromptInputsAsync(
-            title,
+        var result = await interactionService.PromptTerminalAsync(
             message,
-            [
-                new InteractionInput
-                {
-                    Name = "shell",
-                    Label = "Container shell",
-                    InputType = InputType.Terminal,
-                    Terminal = terminal
-                }
-            ],
+            terminal,
+            new TerminalInteractionOptions { Title = title, PrimaryButtonText = "Cancel" },
             cancellationToken: commandContext.CancellationToken);
 
         return result.Canceled
@@ -174,7 +155,7 @@ internal static class TerminalInteractionCommands
     /// Adds a command that opens a dock terminal shelled into this container and drives it with the automation API.
     /// </summary>
     /// <remarks>
-    /// This is the counterpart to the interaction-input commands above. Instead of a modal dialog bound to a single
+    /// This is the counterpart to the terminal interaction commands above. Instead of a modal dialog bound to a single
     /// dialog lifetime, the terminal becomes a tab in the dashboard's terminal dock (Shift+`) that outlives the command
     /// that created it. It also exercises <c>AspireTerminal</c>'s automation surface — send input, wait for output,
     /// read the screen — which is how AppHost code can script a terminal it owns.
@@ -289,7 +270,7 @@ internal static class TerminalInteractionCommands
     /// <para>
     /// This is the "automate an interactive prompt" scenario. Plenty of tools an AppHost needs to invoke are only
     /// available as interactive console programs — they log in, prompt for confirmation, ask which subscription to
-    /// use — and there is no API to call instead. An <see cref="InputType.Terminal"/> input plus
+    /// use — and there is no API to call instead. A <see cref="IInteractionService.PromptTerminalAsync"/> dialog plus
     /// <see cref="AspireTerminal"/>'s automation members lets AppHost code answer those prompts itself while the
     /// human watches it happen, and step in whenever it cannot.
     /// </para>
@@ -346,41 +327,34 @@ internal static class TerminalInteractionCommands
                 // already compiling the script while the dialog is being raised.
                 terminal.Start();
 
-                using var gameCts = CancellationTokenSource.CreateLinkedTokenSource(commandContext.CancellationToken);
-
-                // Raise the dialog before playing so a browser can attach while the opening moves are still being
-                // made — otherwise the human joins after the game is already won.
-                var dialogTask = interactionService.PromptInputsAsync(
-                    "Number guess",
-                    $"Guessing a number between 1 and {limit}. Every keystroke below is being typed by the AppHost.",
-                    [
-                        new InteractionInput
-                        {
-                            Name = "game",
-                            Label = "Number guess",
-                            InputType = InputType.Terminal,
-                            Terminal = terminal
-                        }
-                    ],
-                    cancellationToken: gameCts.Token);
-
-                var playTask = PlayNumberGuessAsync(terminal, limit, gameCts.Token);
-
-                // The dialog only borrows the terminal. Cancel and join automation before leaving this scope,
-                // where the caller-owned terminal is disposed, and observe failures even after the dialog closes.
-                var dialogClosed = await Task.WhenAny(dialogTask, playTask).ConfigureAwait(false) == dialogTask;
-                if (dialogClosed)
-                {
-                    await gameCts.CancelAsync();
-                }
-
-                int number;
-                int attempts;
+                var number = 0;
+                var attempts = 0;
                 try
                 {
-                    (number, attempts) = await playTask;
+                    // Work begins after the dialog is published and is joined before the caller disposes the
+                    // terminal. Both the cancel button and command cancellation reach all automation calls.
+                    var result = await interactionService.PromptTerminalAsync(
+                        $"Guessing a number between 1 and {limit}. Every keystroke below is being typed by the AppHost.",
+                        terminal,
+                        new TerminalInteractionOptions
+                        {
+                            Title = "Number guess",
+                            PrimaryButtonText = "Cancel",
+                            Work = async context =>
+                            {
+                                (number, attempts) = await PlayNumberGuessAsync(terminal, limit, context.CancellationToken);
+                                // Leave the winning line visible before successful work completion closes the dialog.
+                                await Task.Delay(TimeSpan.FromSeconds(2), context.CancellationToken);
+                            }
+                        },
+                        commandContext.CancellationToken);
+
+                    if (result.Canceled)
+                    {
+                        return CommandResults.Failure("Canceled");
+                    }
                 }
-                catch (OperationCanceledException) when (gameCts.IsCancellationRequested)
+                catch (OperationCanceledException) when (commandContext.CancellationToken.IsCancellationRequested)
                 {
                     return CommandResults.Failure("Canceled");
                 }
@@ -393,23 +367,8 @@ internal static class TerminalInteractionCommands
                         .CreateLogger(nameof(TerminalInteractionCommands))
                         .LogError(ex, "The number guess automation failed unexpectedly.");
 
-                    await gameCts.CancelAsync();
                     return CommandResults.Failure(ex.Message);
                 }
-
-                if (dialogClosed)
-                {
-                    return CommandResults.Failure("Canceled");
-                }
-
-                // Leave the winning line on screen long enough to read before the dialog disappears.
-                await Task.Delay(TimeSpan.FromSeconds(2), commandContext.CancellationToken);
-
-                // Cancelling the token the prompt was started with is how code dismisses its own dialog, so the
-                // result replaces the terminal rather than stacking on top of it. The terminal itself is disposed by
-                // the `await using` above, once the answer has been shown.
-                await gameCts.CancelAsync();
-                await dialogTask;
 
                 await interactionService.PromptMessageBoxAsync(
                     "Number guess",
