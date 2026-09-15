@@ -73,7 +73,8 @@ other publication work, but their titles are still migrated.
 
 Each failed test job's logs artifact is selected within the analyzed run and
 attempt, downloaded by artifact ID, and extracted separately. TRX results from
-that artifact are stamped with the corresponding GitHub Actions job name.
+the reusable test workflow and `mocha.json` results from VS Code extension E2E
+shards are stamped with the corresponding GitHub Actions job name.
 
 Complete evidence requires the agent to report exactly the same unique
 `{test, job}` records. Diagnostic rebinding and flaky-cause validation use that
@@ -83,16 +84,19 @@ The ten-cause budget fails closed rather than silently dropping distinct flaky
 test identities.
 
 Published flaky-test diagnostics use the bounded error, stack trace, standard
-output, and standard error read from the trusted TRX artifact. Agent-provided
+output, and standard error read from trusted test artifacts. Agent-provided
 copies of those fields are replaced before comments or persistent records are
-rendered.
+rendered. Extension E2E diagnostics provide the Mocha error and stack trace;
+their reporter does not capture standard output or standard error per test.
 
 GitHub's artifact API does not expose a producer job ID. The selector therefore
 uses the job and artifact naming contract in
-[`run-tests.yml`](../../.github/workflows/run-tests.yml). Missing, oversized,
-ambiguous, or malformed artifacts make test evidence unavailable rather than
-producing an empty successful result. When no failed job uses the reusable test
-workflow, evidence is explicitly marked not applicable.
+[`run-tests.yml`](../../.github/workflows/run-tests.yml) and
+[`extension-e2e-tests.yml`](../../.github/workflows/extension-e2e-tests.yml).
+Missing, oversized, ambiguous, or malformed artifacts make test evidence
+unavailable rather than producing an empty successful result. When no failed
+job uses either supported workflow, evidence is explicitly marked not
+applicable.
 
 ## Side-effect gates
 

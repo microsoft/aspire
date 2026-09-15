@@ -62,7 +62,7 @@ TOTAL_OCCURRENCE_COUNT=$(jq -er '
     1
   end
 ' "$CAUSE_FILE")
-if ! jq -ne --arg title "$TITLE" '$title | test("[^[:space:]]")'; then
+if ! jq -ne --arg title "$TITLE" '$title | test("[^[:space:]]")' >/dev/null; then
   TITLE="$CAUSE_ID"
 fi
 TITLE_CODE=$(render_code_span "$TITLE")

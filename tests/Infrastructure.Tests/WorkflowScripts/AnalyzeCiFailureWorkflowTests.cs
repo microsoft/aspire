@@ -2266,6 +2266,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             ]);
 
         Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Output);
         using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(metadataPath));
         Assert.Equal(
             "[Main CI Failure] Main branch CI failure at trusted-failure",
@@ -2514,7 +2515,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "The validator replaces `error`, `stack_trace`, `standard_output`, and `standard_error` with bounded trusted TRX values before publication.",
+            "The validator replaces `error`, `stack_trace`, `standard_output`, and `standard_error` with bounded trusted artifact values before publication.",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -2865,8 +2866,13 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "extract-test-results-artifact \"${ARTIFACT_ZIP}\" \"${ARTIFACT_OUTPUT}\" \\\n10000 \"${REMAINING_UNCOMPRESSED_BYTES}\" 104857600 \\\n\"${ARTIFACT_SIZE}\"",
                 normalizedCollectionStep,
                 StringComparison.Ordinal);
+            Assert.Contains("\"${ARTIFACT_SIZE}\" \"${RESULT_FORMAT}\"", normalizedCollectionStep, StringComparison.Ordinal);
             Assert.Contains(
                 "collect-test-failures \"${ARTIFACT_OUTPUT}\" \"${JOB_NAME}\" \\\nci-failure-data/failed-jobs.json \\\n\"ci-failure-data/test-failures/${ARTIFACT_ID}.json\"",
+                normalizedCollectionStep,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "\"ci-failure-data/test-failures/${ARTIFACT_ID}.json\" \\\n\"${RESULT_FORMAT}\"",
                 normalizedCollectionStep,
                 StringComparison.Ordinal);
         });
@@ -2878,6 +2884,16 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("name: ${{ inputs.testShortName }} (${{ inputs.os }})", testRunner, StringComparison.Ordinal);
         Assert.Contains("name: logs-${{ inputs.testShortName }}-${{ inputs.os }}", testRunner, StringComparison.Ordinal);
         Assert.Contains("\"logs-\\(.short)-\\(.runner)\"", s_persistenceScript, StringComparison.Ordinal);
+        var extensionTestRunner = ReadWorkflow("extension-e2e-tests.yml");
+        Assert.Contains(
+            "name: VS Code extension E2E (${{ matrix.name }}, ${{ matrix.shardName }})",
+            extensionTestRunner,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "name: extension-e2e-diagnostics-${{ matrix.rid }}-${{ matrix.shardName }}-attempt${{ github.run_attempt }}",
+            extensionTestRunner,
+            StringComparison.Ordinal);
+        Assert.Contains("extension-e2e-diagnostics-", s_persistenceScript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2900,120 +2916,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Establish the failing test and its diagnostic from the current trusted TRX evidence first.",
+            "Establish the failing test and its diagnostic from the current trusted structured test evidence first.",
             s_sourceWorkflow,
             StringComparison.Ordinal);
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task TestResultsArtifactSelectionIgnoresLaterNoncanonicalArtifacts()
-    {
-        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
-        await File.WriteAllTextAsync(
-            artifactsPath,
-            """
-            [
-              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:01:00Z", "size_in_bytes": 1024},
-              {"id": 20, "name": "deployment-test-results-linux", "expired": false, "created_at": "2026-09-03T12:02:00Z", "size_in_bytes": 1024}
-            ]
-            """);
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            [
-                "select-test-results-artifact",
-                artifactsPath,
-                "2026-09-03T12:00:00Z",
-                "2026-09-03T12:03:00Z",
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal("10", result.Output.Trim());
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task TestResultsArtifactSelectionReturnsEmptyWithoutCanonicalArtifact()
-    {
-        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
-        await File.WriteAllTextAsync(
-            artifactsPath,
-            """
-            [
-              {"id": 20, "name": "deployment-test-results-linux", "expired": false, "created_at": "2026-09-03T12:02:00Z"}
-            ]
-            """);
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            [
-                "select-test-results-artifact",
-                artifactsPath,
-                "2026-09-03T12:00:00Z",
-                "2026-09-03T12:03:00Z",
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Empty(result.Output);
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task TestResultsArtifactSelectionRejectsOversizedNewestArtifactWithoutFallingBack()
-    {
-        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
-        await File.WriteAllTextAsync(
-            artifactsPath,
-            """
-            [
-              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:01:00Z", "size_in_bytes": 1024},
-              {"id": 20, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:02:00Z", "size_in_bytes": 104857601}
-            ]
-            """);
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            [
-                "select-test-results-artifact",
-                artifactsPath,
-                "2026-09-03T12:00:00Z",
-                "2026-09-03T12:03:00Z",
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(
-            "::warning::Newest test results artifact exceeds the 104857600-byte download budget",
-            result.Output.Trim());
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task TestResultsArtifactSelectionRejectsMissingSizeMetadataWithoutFallingBack()
-    {
-        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
-        await File.WriteAllTextAsync(
-            artifactsPath,
-            """
-            [
-              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:01:00Z", "size_in_bytes": 1024},
-              {"id": 20, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:02:00Z"}
-            ]
-            """);
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            [
-                "select-test-results-artifact",
-                artifactsPath,
-                "2026-09-03T12:00:00Z",
-                "2026-09-03T12:03:00Z",
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(
-            "::warning::Newest test results artifact has invalid size metadata",
-            result.Output.Trim());
     }
 
     [Fact]
@@ -3036,6 +2941,37 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var extractedFile = Assert.Single(Directory.GetFiles(outputDirectory));
         Assert.Equal("00001.trx", Path.GetFileName(extractedFile));
         Assert.Equal("<TestRun />", await File.ReadAllTextAsync(extractedFile));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "python3"])]
+    public async Task TestResultsArtifactExtractionStreamsOnlyMochaResults()
+    {
+        var archivePath = Path.Combine(_workspace.Path, "test-results.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            await WriteZipEntryAsync(archive, "extension/.test-results/debug/mocha.json", """{"failures":[]}""");
+            await WriteZipEntryAsync(archive, "extension/.test-results/debug/metadata.json", """{"ignored":true}""");
+        }
+        var outputDirectory = Path.Combine(_workspace.Path, "extracted");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "extract-test-results-artifact",
+                archivePath,
+                outputDirectory,
+                "10",
+                "1024",
+                "104857600",
+                "",
+                "mocha",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        var extractedFile = Assert.Single(Directory.GetFiles(outputDirectory));
+        Assert.Equal("00001.json", Path.GetFileName(extractedFile));
+        Assert.Equal("""{"failures":[]}""", await File.ReadAllTextAsync(extractedFile));
     }
 
     [Fact]
@@ -3183,32 +3119,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
-    public async Task TestResultsArtifactSelectionExcludesArtifactAtAttemptStartBoundary()
-    {
-        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
-        await File.WriteAllTextAsync(
-            artifactsPath,
-            """
-            [
-              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:00:00Z", "size_in_bytes": 1024}
-            ]
-            """);
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            [
-                "select-test-results-artifact",
-                artifactsPath,
-                "2026-09-03T12:00:00Z",
-                "2026-09-03T12:03:00Z",
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Empty(result.Output);
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
     public async Task TestResultArtifactSelectorBindsProducingJob()
     {
         var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
@@ -3252,7 +3162,67 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(
             """
-            [{"id":10,"name":"logs-Infrastructure-8-core-ubuntu-latest","size_in_bytes":1024,"job":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)"}]
+            [{"id":10,"name":"logs-Infrastructure-8-core-ubuntu-latest","size_in_bytes":1024,"job":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)","format":"trx"}]
+            """,
+            result.Output.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultArtifactSelectorBindsExtensionE2eShardAndAttempt()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(
+            artifactsPath,
+            """
+            [
+              {
+                "id": 10,
+                "name": "extension-e2e-diagnostics-linux-x64-debug-attempt1",
+                "expired": false,
+                "created_at": "2026-09-04T12:01:00Z",
+                "size_in_bytes": 1024
+              },
+              {
+                "id": 20,
+                "name": "extension-e2e-diagnostics-linux-x64-debug-attempt2",
+                "expired": false,
+                "created_at": "2026-09-04T12:01:00Z",
+                "size_in_bytes": 2048
+              }
+            ]
+            """);
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """
+            [
+              {
+                "id":1,
+                "name":"Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)",
+                "steps":[{"name":"Run extension E2E tests","conclusion":"failure"}]
+              }
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-result-artifacts",
+                artifactsPath,
+                "2026-09-04T12:00:00Z",
+                "2026-09-04T12:02:00Z",
+                jobsPath,
+                "20",
+                "1073741824",
+                "104857600",
+                "2",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            """
+            [{"id":20,"name":"extension-e2e-diagnostics-linux-x64-debug-attempt2","size_in_bytes":2048,"job":"Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)","format":"mocha"}]
             """,
             result.Output.Trim());
     }
@@ -3465,6 +3435,120 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             [{"test":"Tests.Failed","job":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)","error":"boom","stack_trace":"frame","standard_output":"stdout","standard_error":"stderr"}]
             """,
             (await File.ReadAllTextAsync(outputPath)).Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TrustedTestFailureCollectorReadsCompletedMochaFailures()
+    {
+        var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
+        await File.WriteAllTextAsync(
+            Path.Combine(testResultsDirectory.FullName, "00001.json"),
+            """
+            {
+              "tests": [{"fullTitle":"suite fails"}],
+              "failures": [{
+                "fullTitle":"suite fails",
+                "err":{"name":"AssertionError","message":"expected ConnectionString=secret","stack":"frame"}
+              }]
+            }
+            """);
+        var jobName = "Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)";
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            $$"""[{"id":1,"name":{{JsonSerializer.Serialize(jobName)}}}]""");
+        var outputPath = Path.Combine(_workspace.Path, "test-failures.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "collect-test-failures",
+                testResultsDirectory.FullName,
+                jobName,
+                jobsPath,
+                outputPath,
+                "mocha",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            $$"""
+            [{"test":"suite fails","job":{{JsonSerializer.Serialize(jobName)}},"error":"expected ConnectionString=[REDACTED]","stack_trace":"frame","standard_output":"","standard_error":""}]
+            """,
+            (await File.ReadAllTextAsync(outputPath)).Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TrustedTestFailureCollectorExcludesMochaHarnessFailures()
+    {
+        var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
+        await File.WriteAllTextAsync(
+            Path.Combine(testResultsDirectory.FullName, "00001.json"),
+            """
+            {
+              "tests": [{"fullTitle":"suite fails"}],
+              "failures": [{
+                "fullTitle":"suite fails",
+                "err":{"name":"NoSuchSessionError","message":"browser crashed","stack":"frame"}
+              }]
+            }
+            """);
+        var jobName = "Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)";
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            $$"""[{"id":1,"name":{{JsonSerializer.Serialize(jobName)}}}]""");
+        var outputPath = Path.Combine(_workspace.Path, "test-failures.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "collect-test-failures",
+                testResultsDirectory.FullName,
+                jobName,
+                jobsPath,
+                outputPath,
+                "mocha",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("[]", (await File.ReadAllTextAsync(outputPath)).Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TrustedTestFailureCollectorRejectsMalformedMochaReport()
+    {
+        var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
+        await File.WriteAllTextAsync(
+            Path.Combine(testResultsDirectory.FullName, "00001.json"),
+            """{"tests":[]}""");
+        var jobName = "Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)";
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            $$"""[{"id":1,"name":{{JsonSerializer.Serialize(jobName)}}}]""");
+        var outputPath = Path.Combine(_workspace.Path, "test-failures.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "collect-test-failures",
+                testResultsDirectory.FullName,
+                jobName,
+                jobsPath,
+                outputPath,
+                "mocha",
+            ]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.False(File.Exists(outputPath));
+        Assert.Contains(
+            "::error::Unable to parse extracted test result 00001.json",
+            result.Output,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -3938,6 +4022,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var storedCausePath = Path.Combine(_workspace.Path, "stored-main-cause.json");
         var editedBodyPath = Path.Combine(_workspace.Path, "edited-issue-body.md");
         var editedTitlePath = Path.Combine(_workspace.Path, "edited-issue-title.txt");
+        var editedLabelsPath = Path.Combine(_workspace.Path, "edited-issue-labels.txt");
         var currentBody =
             $$"""
             <!-- ci-failure-cause:main-failure -->
@@ -4021,6 +4106,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
               fi
               exit 0
             fi
+            if [ "$1" = "label" ] && [ "$2" = "create" ] && [ "$3" = "main-ci-break" ]; then
+              exit 0
+            fi
             if [ "$1" = "issue" ] && [ "$2" = "edit" ] && [ "$3" = "77" ]; then
               shift 3
               while [ "$#" -gt 0 ]; do
@@ -4031,6 +4119,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                     ;;
                   --body-file)
                     cp "$2" "$EDITED_BODY_PATH"
+                    shift 2
+                    ;;
+                  --add-label)
+                    printf '%s' "$2" > "$EDITED_LABELS_PATH"
                     shift 2
                     ;;
                   *)
@@ -4052,6 +4144,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             {
                 ["CURRENT_BODY_PATH"] = currentBodyPath,
                 ["EDITED_BODY_PATH"] = editedBodyPath,
+                ["EDITED_LABELS_PATH"] = editedLabelsPath,
                 ["EDITED_TITLE_PATH"] = editedTitlePath,
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
                 ["GH_TOKEN"] = "test-token",
@@ -4064,12 +4157,16 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         {
             Assert.False(File.Exists(editedTitlePath));
             Assert.False(File.Exists(editedBodyPath));
+            Assert.False(File.Exists(editedLabelsPath));
             return;
         }
 
         Assert.Equal(
             "[Main CI Failure] Main branch CI failure at trusted-failure",
             await File.ReadAllTextAsync(editedTitlePath));
+        Assert.Equal(
+            "ci-failure-cause,main-ci-break",
+            await File.ReadAllTextAsync(editedLabelsPath));
         if (hasUnsupportedTrailingContent)
         {
             Assert.False(File.Exists(editedBodyPath));
@@ -5545,6 +5642,14 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     [Theory]
     [InlineData("Authorization: Bearer bearer-secret", "Authorization: Bearer [REDACTED]")]
     [InlineData("""{"accessToken":"opaque-secret"}""", """{"accessToken":"[REDACTED]"}""")]
+    [InlineData("ConnectionString=Server=db;Password=secret", "ConnectionString=[REDACTED]")]
+    [InlineData("connection_string: Host=db;Username=user", "connection_string: [REDACTED]")]
+    [InlineData(
+        """{"connection-string":"Server=db;Password=secret"}""",
+        """{"connection-string":"[REDACTED]"}""")]
+    [InlineData(
+        """{"ConnectionStrings":{"Default":"Endpoint=sb://example/;PrimaryKey=secret"}}""",
+        """{"ConnectionStrings":{"Default":"Endpoint=sb://example/;PrimaryKey=[REDACTED]""")]
     [InlineData("Password='secret;tail';Timeout=30", "Password='[REDACTED]';Timeout=30")]
     [InlineData(
         """command --password "prefix\"secret-suffix" --verbose""",

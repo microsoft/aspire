@@ -11,9 +11,9 @@ RUN_CONTEXT_FILE="$CI_FAILURE_DATA_DIR/run-context.json"
 
 JQ_SANITIZE_DEFS=$(cat <<'JQ'
   def sensitive_name:
-    "(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)|pgpassword|_?authToken|_?auth|accessToken|refreshToken)";
+    "(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|primary[_-]?key|secondary[_-]?key|secret|client[_-]?secret|connection[_-]?string|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)|pgpassword|_?authToken|_?auth|accessToken|refreshToken)";
   def option_name:
-    "(?i:password|passwd|pwd|token|auth[_-]?token|access[_-]?token|refresh[_-]?token|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|connection[_-]?string|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)";
+    "(?i:password|passwd|pwd|token|auth[_-]?token|access[_-]?token|refresh[_-]?token|api[_-]?key|access[_-]?key|account[_-]?key|primary[_-]?key|secondary[_-]?key|secret|client[_-]?secret|connection[_-]?string|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)";
   def redact_sensitive:
     gsub("-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)"; "[REDACTED]") |
     gsub("(?<prefix>\\b(?i:authorization|proxy-authorization)\\s*:\\s*(?i:basic|bearer)\\s+)[^\\s,;]+"; "\(.prefix)[REDACTED]") |
@@ -28,6 +28,7 @@ JQ_SANITIZE_DEFS=$(cat <<'JQ'
     gsub("(?<prefix>(^|\\s)--" + option_name + "\\s+\")(?:\\\\[^\\r\\n]|[^\"\\\\\\r\\n])*(?<suffix>\")"; "\(.prefix)[REDACTED]\(.suffix)") |
     gsub("(?<prefix>(^|\\s)--" + option_name + "\\s+')(?:\\\\[^\\r\\n]|[^'\\\\\\r\\n])*(?<suffix>')"; "\(.prefix)[REDACTED]\(.suffix)") |
     gsub("(?<prefix>(^|[^\\S\\r\\n])--" + option_name + "[^\\S\\r\\n]+)(?![\"'])[^\\s]+"; "\(.prefix)[REDACTED]") |
+    gsub("(?<prefix>\\b(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?connection[_-]?string)\\s*[:=]\\s*)(?![\"'])[^\\r\\n]+"; "\(.prefix)[REDACTED]") |
     gsub("(?<prefix>\\b" + sensitive_name + "\\s*[:=]\\s*\")(?:\\\\[^\\r\\n]|[^\"\\\\\\r\\n])*(?<suffix>\")"; "\(.prefix)[REDACTED]\(.suffix)") |
     gsub("(?<prefix>\\b" + sensitive_name + "\\s*[:=]\\s*')(?:\\\\[^\\r\\n]|[^'\\\\\\r\\n])*(?<suffix>')"; "\(.prefix)[REDACTED]\(.suffix)") |
     gsub("(?<prefix>\\b" + sensitive_name + "\\s*[:=]\\s*)(?![\"'])[^;&\\r\\n]+"; "\(.prefix)[REDACTED]");
@@ -154,6 +155,7 @@ collect_test_failures()
   local job_name="$2"
   local failed_jobs_file="$3"
   local output_file="$4"
+  local result_format="${5:-trx}"
   local json_lines
   local parse_failed=false
 
@@ -170,44 +172,133 @@ collect_test_failures()
     return 1
   fi
 
+  case "$result_format" in
+    trx|mocha)
+      ;;
+    *)
+      echo "::error::Trusted test result format is invalid" >&2
+      return 1
+      ;;
+  esac
+
   rm -f "$output_file"
   json_lines=$(mktemp)
-  local trx_count=0
-  while IFS= read -r -d '' extracted_path; do
-    trx_count=$((trx_count + 1))
-    local parsed_lines
-    parsed_lines=$(mktemp)
-    if ! yq -p xml -o json '.' "$extracted_path" 2>/dev/null |
-      jq -cr --arg job "$job_name" "$JQ_SANITIZE_DEFS"'
-      # TRX represents one result as an object and multiple results as an array:
-      #   <UnitTestResult testName="Tests.Failed" outcome="Failed">...</UnitTestResult>
-      if type != "object" or (.TestRun | type) != "object" then
-        error("test result does not have a TRX TestRun root")
+  local result_count=0
+  if [ "$result_format" = "trx" ]; then
+    while IFS= read -r -d '' extracted_path; do
+      result_count=$((result_count + 1))
+      local parsed_lines
+      parsed_lines=$(mktemp)
+      if ! yq -p xml -o json '.' "$extracted_path" 2>/dev/null |
+        jq -cr --arg job "$job_name" "$JQ_SANITIZE_DEFS"'
+        # TRX represents one result as an object and multiple results as an array:
+        #   <UnitTestResult testName="Tests.Failed" outcome="Failed">...</UnitTestResult>
+        if type != "object" or (.TestRun | type) != "object" then
+          error("test result does not have a TRX TestRun root")
+        else
+          .TestRun.Results.UnitTestResult // []
+        end |
+        (if type == "array" then . else [.] end) |
+        map(select(.["+@outcome"] == "Failed")) |
+        .[] |
+        {
+          test: (.["+@testName"] // ""),
+          job: $job,
+          error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end | sanitize_multiline | .[0:1000]),
+          stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | sanitize_multiline | .[0:2000]),
+          standard_output: ((.Output.StdOut // "") | if type == "object" then (.["+content"] // "") else tostring end | sanitize_multiline | .[0:4000]),
+          standard_error: ((.Output.StdErr // "") | if type == "object" then (.["+content"] // "") else tostring end | sanitize_multiline | .[0:4000])
+        }
+      ' > "$parsed_lines"; then
+        echo "::error::Unable to parse extracted test result $(basename "$extracted_path")" >&2
+        parse_failed=true
       else
-        .TestRun.Results.UnitTestResult // []
-      end |
-      (if type == "array" then . else [.] end) |
-      map(select(.["+@outcome"] == "Failed")) |
-      .[] |
-      {
-        test: (.["+@testName"] // ""),
-        job: $job,
-        error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end | sanitize_multiline | .[0:1000]),
-        stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | sanitize_multiline | .[0:2000]),
-        standard_output: ((.Output.StdOut // "") | if type == "object" then (.["+content"] // "") else tostring end | sanitize_multiline | .[0:4000]),
-        standard_error: ((.Output.StdErr // "") | if type == "object" then (.["+content"] // "") else tostring end | sanitize_multiline | .[0:4000])
-      }
-    ' > "$parsed_lines"; then
-      echo "::error::Unable to parse extracted test result $(basename "$extracted_path")" >&2
-      parse_failed=true
-    else
-      cat "$parsed_lines" >> "$json_lines"
-    fi
-    rm -f "$parsed_lines"
-  done < <(find "$test_results_directory" -maxdepth 1 -type f -name "*.trx" -print0)
+        cat "$parsed_lines" >> "$json_lines"
+      fi
+      rm -f "$parsed_lines"
+    done < <(find "$test_results_directory" -maxdepth 1 -type f -name "*.trx" -print0)
+  else
+    while IFS= read -r -d '' extracted_path; do
+      result_count=$((result_count + 1))
+      local parsed_lines
+      parsed_lines=$(mktemp)
+      if ! jq -cr --arg job "$job_name" "$JQ_SANITIZE_DEFS"'
+        def optional_string:
+          if . == null then ""
+          elif type == "string" then .
+          else error("Mocha diagnostic field must be a string")
+          end;
+        def blocking_harness_error:
+          (.name // "") as $name |
+          (.message // "") as $message |
+          ($name == "InvalidSessionIdError" or
+           $name == "NoSuchSessionError" or
+           $name == "NoSuchWindowError" or
+           $name == "SessionNotCreatedError" or
+           ($name == "WebDriverError" and
+            ($message | ascii_downcase | test(
+              "session deleted because of page crash|disconnected: not connected to devtools|chrome not reachable"))));
+        # e2e-mocha-reporter.cjs writes:
+        #   {"tests":[{"fullTitle":"suite test"}],
+        #    "failures":[{"fullTitle":"suite test","err":{"name":"AssertionError","message":"...","stack":"..."}}]}
+        if type != "object" or
+           (.tests | type) != "array" or
+           (.failures | type) != "array" then
+          error("test result does not have the expected Mocha reporter shape")
+        else
+          [.tests[] |
+            if type == "object" and
+               (((.fullTitle // .title) | type) == "string") then
+              .fullTitle // .title
+            else
+              error("Mocha completed test has an invalid shape")
+            end] as $completed_tests |
+          .failures |
+          map(
+            (.fullTitle // .title) as $test |
+            if type == "object" and
+               (($test | type) == "string") and
+               ($test | length) > 0 and
+               (.err | type) == "object" then
+              . + { normalized_test: $test }
+            else
+              error("Mocha failure has an invalid shape")
+            end) |
+          map(select(
+            . as $failure |
+            (($completed_tests | index($failure.normalized_test)) != null) and
+            (($failure.err | blocking_harness_error) | not))) |
+          .[] |
+          {
+            test: (.normalized_test | sanitize_single_line | .[0:500]),
+            job: $job,
+            error: ((.err.message | optional_string) | sanitize_multiline | .[0:1000]),
+            stack_trace: ((.err.stack | optional_string) | sanitize_multiline | .[0:2000]),
+            standard_output: "",
+            standard_error: ""
+          }
+        end
+      ' "$extracted_path" > "$parsed_lines"; then
+        echo "::error::Unable to parse extracted test result $(basename "$extracted_path")" >&2
+        parse_failed=true
+      else
+        cat "$parsed_lines" >> "$json_lines"
+      fi
+      rm -f "$parsed_lines"
+    done < <(find "$test_results_directory" -maxdepth 1 -type f -name "*.json" -print0)
+  fi
 
-  if [ "$trx_count" -eq 0 ]; then
-    echo "::error::Selected test result artifact does not contain any TRX files" >&2
+  if [ "$result_count" -eq 0 ]; then
+    if [ "$result_format" = "trx" ]; then
+      echo "::error::Selected test result artifact does not contain any TRX files" >&2
+    else
+      echo "::error::Selected test result artifact does not contain a Mocha result" >&2
+    fi
+    rm -f "$json_lines"
+    return 1
+  fi
+  if [ "$result_format" = "mocha" ] && [ "$result_count" -ne 1 ]; then
+    echo "::error::Selected extension test artifact must contain exactly one Mocha result" >&2
     rm -f "$json_lines"
     return 1
   fi
@@ -291,54 +382,12 @@ sanitize_untrusted_text()
   ' "$input_file" > "$output_file"
 }
 
-select_test_results_artifact()
-{
-  local artifacts_file="$1"
-  local started_at="$2"
-  local updated_at="$3"
-  local max_archive_bytes="${4:-104857600}"
-  local selected_artifact
-  local artifact_id
-  local artifact_size
-
-  selected_artifact=$(jq -r \
-    --arg started_at "$started_at" \
-    --arg updated_at "$updated_at" '
-    [
-      .[] |
-      select(
-        (.expired == false) and
-        (.name == "All-TestResults") and
-        ((.created_at | type) == "string") and
-        (.created_at > $started_at and .created_at <= $updated_at))
-    ] |
-    sort_by([.created_at, .id]) |
-    last |
-    if . == null then "" else [(.id // ""), (.size_in_bytes // "")] | @tsv end
-  ' "$artifacts_file")
-
-  if [ -z "$selected_artifact" ]; then
-    return 0
-  fi
-
-  IFS=$'\t' read -r artifact_id artifact_size <<< "$selected_artifact"
-  if [[ ! "$artifact_id" =~ ^[1-9][0-9]*$ ]] ||
-     [[ ! "$artifact_size" =~ ^[0-9]+$ ]] ||
-     [[ ! "$max_archive_bytes" =~ ^[1-9][0-9]*$ ]]; then
-    echo "::warning::Newest test results artifact has invalid size metadata" >&2
-    return 0
-  fi
-  if [ "$artifact_size" -gt "$max_archive_bytes" ]; then
-    echo "::warning::Newest test results artifact exceeds the ${max_archive_bytes}-byte download budget" >&2
-    return 0
-  fi
-
-  echo "$artifact_id"
-}
-
 # run-tests.yml names test jobs and their artifacts as:
 #   Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)
 #   logs-Infrastructure-8-core-ubuntu-latest
+# extension-e2e-tests.yml names test jobs and their diagnostic artifacts as:
+#   Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)
+#   extension-e2e-diagnostics-linux-x64-debug-attempt1
 select_test_result_artifacts()
 {
   local artifacts_file="$1"
@@ -348,6 +397,7 @@ select_test_result_artifacts()
   local max_artifacts="${5:-20}"
   local max_total_bytes="${6:-1073741824}"
   local max_artifact_bytes="${7:-104857600}"
+  local run_attempt="${8:-1}"
 
   jq -cer \
     --arg started_at "$started_at" \
@@ -355,34 +405,56 @@ select_test_result_artifacts()
     --argjson max_artifacts "$max_artifacts" \
     --argjson max_total_bytes "$max_total_bytes" \
     --argjson max_artifact_bytes "$max_artifact_bytes" \
+    --argjson run_attempt "$run_attempt" \
     --slurpfile artifacts "$artifacts_file" '
-      def artifact_name:
+      def run_tests_artifact_name:
         .name |
         capture("(^| / )(?<short>[^/]+) \\((?<runner>[^()]*)\\)$") |
         "logs-\(.short)-\(.runner)";
 
-      def is_test_job:
+      def is_run_tests_job:
         # Keep these caller prefixes aligned with the run-tests.yml jobs in tests.yml.
         # The step check covers completed jobs; the prefixes cover force-killed jobs.
         any(.steps[]?; .name == "Upload logs, and test results") or
         (.name | test(
           "^Tests / (No-package tests|Package tests - (Linux|Windows|macOS)|CLI archive tests)( \\(| / )"));
 
+      def is_extension_e2e_job:
+        .name | test("(^| / )VS Code extension E2E( \\(|$)");
+
+      def extension_e2e_artifact_name:
+        .name |
+        capture("(^| / )VS Code extension E2E \\((?<os>Windows|Linux), (?<shard>[^()]+)\\)$") |
+        "extension-e2e-diagnostics-\(if .os == "Windows" then "win-x64" else "linux-x64" end)-\(.shard)-attempt\($run_attempt)";
+
+      def artifact_contract:
+        if is_run_tests_job then
+          if (.name | test("(^| / )[^/]+ \\([^()]*\\)$")) then
+            { name: run_tests_artifact_name, format: "trx" }
+          else
+            error("failed test job name does not match the artifact naming contract")
+          end
+        elif is_extension_e2e_job then
+          if (.name | test("(^| / )VS Code extension E2E \\((Windows|Linux), [^()]+\\)$")) then
+            { name: extension_e2e_artifact_name, format: "mocha" }
+          else
+            error("failed test job name does not match the artifact naming contract")
+          end
+        else
+          empty
+        end;
+
       [
         .[] |
-        select(type == "object" and (.name | type) == "string" and is_test_job) |
+        select(type == "object" and (.name | type) == "string") |
         . as $job |
-        (if ($job.name | test("(^| / )[^/]+ \\([^()]*\\)$")) then
-           ($job | artifact_name)
-         else
-           error("failed test job name does not match the artifact naming contract")
-         end) as $artifact_name |
+        ($job | artifact_contract) as $contract |
         [
           $artifacts[0][] |
           select(
             type == "object" and
             .expired == false and
-            .name == $artifact_name and
+            .name == $contract.name and
             (.created_at | type) == "string" and
             (.created_at > $started_at and .created_at <= $updated_at))
         ] as $matches |
@@ -394,7 +466,8 @@ select_test_result_artifacts()
             id,
             name,
             size_in_bytes,
-            job: $job.name
+            job: $job.name,
+            format: $contract.format
           }
         else
           error("test result artifact does not identify exactly one failed job")
@@ -431,17 +504,20 @@ extract_test_results_artifact()
   local max_uncompressed_bytes="${4:-1073741824}"
   local max_archive_bytes="${5:-104857600}"
   local expected_archive_bytes="${6:-}"
+  local result_format="${7:-trx}"
 
   if [[ ! "$max_entries" =~ ^[1-9][0-9]*$ ]] ||
      [[ ! "$max_uncompressed_bytes" =~ ^[1-9][0-9]*$ ]] ||
      [[ ! "$max_archive_bytes" =~ ^[1-9][0-9]*$ ]] ||
-     { [ -n "$expected_archive_bytes" ] && [[ ! "$expected_archive_bytes" =~ ^[0-9]+$ ]]; }; then
+     { [ -n "$expected_archive_bytes" ] && [[ ! "$expected_archive_bytes" =~ ^[0-9]+$ ]]; } ||
+     [[ ! "$result_format" =~ ^(trx|mocha)$ ]]; then
     echo "::error::Invalid test results extraction budget" >&2
     return 1
   fi
 
   python3 - "$archive_file" "$output_directory" \
-    "$max_entries" "$max_uncompressed_bytes" "$max_archive_bytes" "$expected_archive_bytes" <<'PY'
+    "$max_entries" "$max_uncompressed_bytes" "$max_archive_bytes" "$expected_archive_bytes" \
+    "$result_format" <<'PY'
 import os
 from pathlib import Path, PurePosixPath
 import shutil
@@ -458,6 +534,7 @@ max_entries = int(sys.argv[3])
 max_uncompressed_bytes = int(sys.argv[4])
 max_archive_bytes = int(sys.argv[5])
 expected_archive_bytes = int(sys.argv[6]) if sys.argv[6] else None
+result_format = sys.argv[7]
 temporary_path = None
 
 def read_entry_count(path, archive_size, maximum_entries):
@@ -553,7 +630,7 @@ try:
             raise ValueError("archive entry count does not match its central directory")
 
         written_bytes = 0
-        trx_index = 0
+        result_index = 0
         for entry in entries:
             raw_name = entry.filename
             normalized_name = raw_name.rstrip("/")
@@ -575,11 +652,17 @@ try:
                 raise ValueError("archive contains an unsupported file type")
             if entry.flag_bits & 0x1:
                 raise ValueError("archive contains an encrypted entry")
-            if not raw_name.endswith(".trx"):
+            if result_format == "trx":
+                is_result = raw_name.endswith(".trx")
+                result_extension = "trx"
+            else:
+                is_result = path.name == "mocha.json"
+                result_extension = "json"
+            if not is_result:
                 continue
 
-            trx_index += 1
-            destination = temporary_path / f"{trx_index:05d}.trx"
+            result_index += 1
+            destination = temporary_path / f"{result_index:05d}.{result_extension}"
             with archive.open(entry, "r") as source, destination.open("xb") as target:
                 while chunk := source.read(1024 * 1024):
                     written_bytes += len(chunk)
@@ -938,12 +1021,6 @@ case "$COMMAND" in
     MAX_LENGTH="${4:-10485760}"
     sanitize_untrusted_text "$INPUT_FILE" "$OUTPUT_FILE" "$MAX_LENGTH"
     ;;
-  select-test-results-artifact)
-    ARTIFACTS_FILE="${2:?artifacts file is required}"
-    STARTED_AT="${3:?start time is required}"
-    UPDATED_AT="${4:?update time is required}"
-    select_test_results_artifact "$ARTIFACTS_FILE" "$STARTED_AT" "$UPDATED_AT"
-    ;;
   select-test-result-artifacts)
     ARTIFACTS_FILE="${2:?artifacts file is required}"
     STARTED_AT="${3:?start time is required}"
@@ -951,14 +1028,14 @@ case "$COMMAND" in
     FAILED_JOBS_FILE="${5:?failed jobs file is required}"
     select_test_result_artifacts \
       "$ARTIFACTS_FILE" "$STARTED_AT" "$UPDATED_AT" "$FAILED_JOBS_FILE" \
-      "${6:-20}" "${7:-1073741824}" "${8:-104857600}"
+      "${6:-20}" "${7:-1073741824}" "${8:-104857600}" "${9:-1}"
     ;;
   extract-test-results-artifact)
     ARTIFACT_FILE="${2:?artifact file is required}"
     OUTPUT_DIRECTORY="${3:?output directory is required}"
     extract_test_results_artifact \
       "$ARTIFACT_FILE" "$OUTPUT_DIRECTORY" \
-      "${4:-10000}" "${5:-1073741824}" "${6:-104857600}" "${7:-}"
+      "${4:-10000}" "${5:-1073741824}" "${6:-104857600}" "${7:-}" "${8:-trx}"
     ;;
   render-issue-occurrences)
     CURRENT_BODY_FILE="${2:?current issue body file is required}"
@@ -1011,7 +1088,7 @@ case "$COMMAND" in
     FAILED_JOBS_FILE="${4:?failed jobs file is required}"
     OUTPUT_FILE="${5:?output file is required}"
     collect_test_failures \
-      "$TEST_RESULTS_DIRECTORY" "$JOB_NAME" "$FAILED_JOBS_FILE" "$OUTPUT_FILE"
+      "$TEST_RESULTS_DIRECTORY" "$JOB_NAME" "$FAILED_JOBS_FILE" "$OUTPUT_FILE" "${6:-trx}"
     ;;
   cause-job-names)
     CAUSE_FILE="${2:?cause file is required}"

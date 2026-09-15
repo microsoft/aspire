@@ -391,8 +391,8 @@ jobs:
 
           # Artifact listings are run-scoped and can contain same-named artifacts from
           # multiple attempts. The attempt metadata bounds the upload window. Select each
-          # failed test job's immutable logs artifact by its workflow-defined API name, then
-          # download by ID so TRX paths or contents cannot reassign evidence across artifacts.
+          # failed test job's immutable artifact by its workflow-defined API name, then
+          # download by ID so result paths or contents cannot reassign evidence across artifacts.
           ARTIFACTS_FILE="ci-failure-data/artifacts.json"
           TEST_EVIDENCE_STATE=unavailable
           rm -f ci-failure-data/test-failures.json
@@ -402,7 +402,7 @@ jobs:
             if bash .github/workflows/analyze-ci-failure-persistence.sh \
                 select-test-result-artifacts "${ARTIFACTS_FILE}" \
                 "${RUN_STARTED_AT}" "${RUN_UPDATED_AT}" ci-failure-data/failed-jobs.json \
-                20 1073741824 104857600 \
+                20 1073741824 104857600 "${RUN_ATTEMPT}" \
                 > "${SELECTED_ARTIFACTS_FILE}"; then
               if [ "$(jq 'length' "${SELECTED_ARTIFACTS_FILE}")" -eq 0 ]; then
                 TEST_EVIDENCE_STATE=not-applicable
@@ -418,6 +418,7 @@ jobs:
                   ARTIFACT_NAME=$(jq -r '.name' <<< "${ARTIFACT}")
                   ARTIFACT_SIZE=$(jq -r '.size_in_bytes' <<< "${ARTIFACT}")
                   JOB_NAME=$(jq -r '.job' <<< "${ARTIFACT}")
+                  RESULT_FORMAT=$(jq -r '.format' <<< "${ARTIFACT}")
                   ARTIFACT_ZIP="ci-failure-data/test-result-zips/${ARTIFACT_ID}.zip"
                   ARTIFACT_OUTPUT="ci-failure-data/test-results/${ARTIFACT_ID}"
                   echo "Downloading test results artifact: ${ARTIFACT_NAME} (${ARTIFACT_ID})..."
@@ -426,16 +427,17 @@ jobs:
                       ! bash .github/workflows/analyze-ci-failure-persistence.sh \
                         extract-test-results-artifact "${ARTIFACT_ZIP}" "${ARTIFACT_OUTPUT}" \
                         10000 "${REMAINING_UNCOMPRESSED_BYTES}" 104857600 \
-                        "${ARTIFACT_SIZE}" ||
+                        "${ARTIFACT_SIZE}" "${RESULT_FORMAT}" ||
                       ! bash .github/workflows/analyze-ci-failure-persistence.sh \
                         collect-test-failures "${ARTIFACT_OUTPUT}" "${JOB_NAME}" \
                         ci-failure-data/failed-jobs.json \
-                        "ci-failure-data/test-failures/${ARTIFACT_ID}.json"; then
+                        "ci-failure-data/test-failures/${ARTIFACT_ID}.json" \
+                        "${RESULT_FORMAT}"; then
                     ARTIFACT_DOWNLOAD_FAILED=true
                     break
                   fi
 
-                  EXTRACTED_BYTES=$(find "${ARTIFACT_OUTPUT}" -name "*.trx" -type f -printf '%s\n' \
+                  EXTRACTED_BYTES=$(find "${ARTIFACT_OUTPUT}" -type f -printf '%s\n' \
                     | awk '{ total += $1 } END { print total + 0 }')
                   REMAINING_UNCOMPRESSED_BYTES=$((REMAINING_UNCOMPRESSED_BYTES - EXTRACTED_BYTES))
                 done < <(jq -c '.[]' "${SELECTED_ARTIFACTS_FILE}")
@@ -444,7 +446,7 @@ jobs:
                   jq -s 'add // []' ci-failure-data/test-failures/*.json \
                     > ci-failure-data/test-failures.json
                   TEST_EVIDENCE_STATE=complete
-                  echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from TRX files"
+                  echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from structured test results"
                 else
                   echo "Warning: Failed to download or safely extract per-job test results"
                 fi
@@ -528,7 +530,7 @@ jobs:
               fi
             done
 
-            echo "## Test Failures (from TRX artifacts)"
+            echo "## Test Failures (from structured test artifacts)"
             echo ""
             TEST_EVIDENCE_STATE=$(jq -r '.state // ""' ci-failure-data/test-evidence.json 2>/dev/null || true)
             if [ "${TEST_EVIDENCE_STATE}" = "complete" ] &&
@@ -538,10 +540,10 @@ jobs:
                 bash .github/workflows/analyze-ci-failure-persistence.sh \
                   render-untrusted-json ci-failure-data/test-failures.json 2000 multiline 2>/dev/null || echo "No parseable test failures."
               else
-                echo "No test failures extracted from TRX artifacts."
+                echo "No test failures extracted from structured test artifacts."
               fi
             elif [ "${TEST_EVIDENCE_STATE}" = "not-applicable" ]; then
-              echo "No failed job uses the reusable test workflow."
+              echo "No failed job uses a supported test workflow."
             else
               echo "Test failure evidence is unavailable. Analysis cannot be published or rerun."
             fi
@@ -965,6 +967,13 @@ safe-outputs:
                   fi
                 fi
 
+                if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
+                  gh label create "main-ci-break" --repo "$REPO" \
+                    --color "b60205" \
+                    --description "Deterministic repository breakage on the main branch" \
+                    --force
+                fi
+
                 if [ -n "$EXISTING_ISSUE" ]; then
                   # Store issue URL in the cause file on memory branch
                   ISSUE_URL="https://github.com/${REPO}/issues/${EXISTING_ISSUE}"
@@ -1029,14 +1038,18 @@ safe-outputs:
                       echo "::warning::Unable to migrate publisher-owned details for issue #${EXISTING_ISSUE}. Updating only the fields that can be changed safely."
                     fi
                     ISSUE_TITLE=$(jq -r '.title' "$ISSUE_METADATA_FILE")
+                    ISSUE_LABELS=$(jq -r '.labels' "$ISSUE_METADATA_FILE")
                     if [ "$MIGRATED_BODY_AVAILABLE" = "true" ]; then
                       gh issue edit "$EXISTING_ISSUE" --repo "$REPO" \
-                        --title "$ISSUE_TITLE" --body-file "$MIGRATED_BODY_FILE"
+                        --title "$ISSUE_TITLE" --body-file "$MIGRATED_BODY_FILE" \
+                        --add-label "$ISSUE_LABELS"
                     elif [ "$OCCURRENCE_BODY_AVAILABLE" = "true" ]; then
                       gh issue edit "$EXISTING_ISSUE" --repo "$REPO" \
-                        --title "$ISSUE_TITLE" --body-file "$BODY_FILE"
+                        --title "$ISSUE_TITLE" --body-file "$BODY_FILE" \
+                        --add-label "$ISSUE_LABELS"
                     else
-                      gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --title "$ISSUE_TITLE"
+                      gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --title "$ISSUE_TITLE" \
+                        --add-label "$ISSUE_LABELS"
                     fi
                     rm -f "$CANONICAL_BODY_FILE" "$ISSUE_METADATA_FILE" "$MIGRATED_BODY_FILE"
                   elif [ "$OCCURRENCE_BODY_AVAILABLE" = "true" ]; then
@@ -1072,13 +1085,6 @@ safe-outputs:
                   elif [ "$ISSUE_RENDER_STATUS" -ne 0 ]; then
                     rm -f "$BODY_FILE" "$ISSUE_METADATA_FILE"
                     exit "$ISSUE_RENDER_STATUS"
-                  fi
-
-                  if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
-                    gh label create "main-ci-break" --repo "$REPO" \
-                      --color "b60205" \
-                      --description "Deterministic repository breakage on the main branch" \
-                      --force
                   fi
 
                   ISSUE_TITLE=$(jq -r '.title' "$ISSUE_METADATA_FILE")
@@ -1564,15 +1570,15 @@ Field details:
 - `failed_jobs[].classification`: Per-job classification — one of `"transient-infra"`, `"flaky-test"`, `"code-issue"`, or `"main-repository-breakage"`.
 - `failed_jobs[].reason`: A single-line explanation, limited to 500 characters.
 - `failed_jobs` MUST contain exactly one object for every failed job in the summary, using its exact numeric ID, with no additions, omissions, or duplicates.
-- When trusted TRX evidence is complete, `failed_tests` MUST contain exactly one entry for every `{name, job}` pair in the summary, with no additions, omissions, or duplicates. When no failed job uses the reusable test workflow, use an empty array. Do not infer failed tests from job logs.
-- `failed_tests[].name`: The exact single-line TRX test name, limited to 500 characters.
+- When trusted structured test evidence is complete, `failed_tests` MUST contain exactly one entry for every `{name, job}` pair in the summary, with no additions, omissions, or duplicates. When no failed job uses a supported test workflow, use an empty array. Do not infer failed tests from job logs.
+- `failed_tests[].name`: The exact single-line test name from the structured artifact, limited to 500 characters.
 - `failed_tests[].job`: The exact failed job name from the summary, limited to 500 characters.
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.
-- `failed_tests[].error`: Copy the error message from the matching TRX test failure.
-- `failed_tests[].stack_trace`: Copy the stack trace from the matching TRX test failure, or use `null` when it is absent.
-- `failed_tests[].standard_output`: Copy the standard output from the matching TRX test failure, or use an empty string when it is absent.
-- `failed_tests[].standard_error`: Copy the standard error from the matching TRX test failure, or use an empty string when it is absent.
-- The validator replaces `error`, `stack_trace`, `standard_output`, and `standard_error` with bounded trusted TRX values before publication.
+- `failed_tests[].error`: Copy the error message from the matching structured test failure.
+- `failed_tests[].stack_trace`: Copy the stack trace from the matching structured test failure, or use `null` when it is absent.
+- `failed_tests[].standard_output`: Copy the standard output from the matching structured test failure, or use an empty string when it is absent.
+- `failed_tests[].standard_error`: Copy the standard error from the matching structured test failure, or use an empty string when it is absent.
+- The validator replaces `error`, `stack_trace`, `standard_output`, and `standard_error` with bounded trusted artifact values before publication.
 - `failed_tests[].reason`: A single-line explanation, limited to 500 characters.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
 - `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, every flaky `{name, job}` test identity with an exactly matching `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures only when they have the same underlying root cause and, for flaky failures, the same test identity. The 10-cause publication budget is fail-closed: never combine or omit distinct flaky tests merely to fit within it.
@@ -1599,7 +1605,7 @@ Field details:
 - `type`: One of `"flaky-test"`, `"infra-failure"`, or `"main-repository-breakage"`. Do NOT create cause files for pull-request code-issue classifications.
 - `title`: A brief, single-line human-readable description of at most 238 characters (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: A `flaky-test` cause MUST include a `test_name` that exactly matches a `failed_tests` entry classified as `"flaky"`, limited to 500 characters. Omit this field for infrastructure failures; infrastructure causes MUST NOT include a non-empty `test_name`.
-- `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue, up to 500 characters. Use LF for multiline text and omit ANSI styling or other control characters.
+- `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the structured test data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue, up to 500 characters. Use LF for multiline text and omit ANSI styling or other control characters.
 - `job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred. Use only IDs from the trusted failed-job summary; do not write job names. An `infra-failure` cause may reference only `transient-infra` jobs, and a `main-repository-breakage` cause may reference only `main-repository-breakage` jobs. Every job referenced by a `flaky-test` cause must have a `"flaky"` `failed_tests` entry whose `name` exactly matches the cause's `test_name` and whose `job` exactly matches that trusted job name.
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON. The publisher derives display names from trusted job metadata and removes `job_ids` before storing the stable cause definition.
@@ -1618,7 +1624,7 @@ The file `ci-failure-data/analysis-summary.md` contains the full failure data:
 - Failed jobs and all step conclusions, including failed and skipped steps
 - Job logs (error-focused extracts)
 - Job annotations
-- Test failures extracted from TRX artifacts (test name and error message)
+- Test failures extracted from structured test artifacts (test name and error message)
 - PR changed files
 - Known transient failure patterns from `eng/test-retry-patterns.json`
 - **Prior causes** from the memory branch (previously identified recurring failures with their IDs and occurrence history)
@@ -1648,7 +1654,7 @@ The failure was caused by infrastructure issues outside the PR author's control.
 
 ### 2. Transient Test Failure (Flaky Test)
 
-A test actually ran and failed transiently rather than because repository code changed. Establish the failing test and its diagnostic from the current trusted TRX evidence first. Missing logs, an exit code, a matching job name, or unrelated PR files do not establish a test failure. In particular, HTTP/curl failures in prerequisite downloads are setup failures, not flaky tests.
+A test actually ran and failed transiently rather than because repository code changed. Establish the failing test and its diagnostic from the current trusted structured test evidence first. Missing logs, an exit code, a matching job name, or unrelated PR files do not establish a test failure. In particular, HTTP/curl failures in prerequisite downloads are setup failures, not flaky tests.
 
 PR-file relationships are indicators only for pull-request scope; main-scope `flaky-test` classification requires independent transient evidence. After establishing a real test failure, indicators of flakiness include:
 - The test failure message matches a known transient pattern from `eng/test-retry-patterns.json`
@@ -1657,7 +1663,7 @@ PR-file relationships are indicators only for pull-request scope; main-scope `fl
 - The test name or namespace does not correspond to any file changed in the PR
 - The error message shows environmental issues (Docker connectivity, service availability, port already in use)
 
-Classify a job as `flaky-test` only when the summary contains a specific TRX test failure. Every `flaky-test` cause must identify that validated test.
+Classify a job as `flaky-test` only when the summary contains a specific structured test failure. Every `flaky-test` cause must identify that validated test.
 
 ### 3. Non-Transient Failure (PR Code Issue)
 
