@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Telemetry;
 using Aspire.DashboardService.Proto.V1;
 using Grpc.Core;
 using Microsoft.AspNetCore.Components;
@@ -58,6 +60,11 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     private TerminalWindowButton? _windowButton;
     private bool _popupBlocked;
+
+    internal ComponentTelemetryContext? TelemetryContext { get; private set; }
+
+    [Inject]
+    public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
@@ -122,16 +129,27 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
         else
         {
-            Show();
+            Show(TerminalDockTrigger.User);
+            StateHasChanged();
         }
 
     });
 
-    private void Show()
+    private void Show(TerminalDockTrigger trigger)
     {
+        if (_isVisible)
+        {
+            return;
+        }
+
+        // Construction eagerly starts the subscription, not a user-visible dock session.
+        // Each hidden-to-visible transition needs a fresh correlation and its own closing event.
+        TelemetryContext = new ComponentTelemetryContext(ComponentType.Control, TelemetryComponentIds.TerminalDock);
+        TelemetryContextProvider.Initialize(TelemetryContext);
+        TelemetryContext.UpdateTelemetryProperties(
+            [new(TelemetryPropertyKeys.TerminalDockTrigger, new AspireTelemetryProperty(trigger.ToString()))], Logger);
         _hasBeenOpened = true;
         _isVisible = true;
-        StateHasChanged();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -178,6 +196,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     private void Hide()
     {
+        TelemetryContext?.Dispose();
+        TelemetryContext = null;
         _isVisible = false;
         StateHasChanged();
     }
@@ -353,8 +373,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                         {
                             // An overflow snapshot retains the latest Show() request even if its terminal has
                             // since been removed. Reveal the dock, but never resurrect a removed terminal's tab.
-                            _hasBeenOpened = true;
-                            _isVisible = true;
+                            Show(TerminalDockTrigger.AppHost);
                             if (_terminals.Any(t => t.TerminalId == update.Snapshot.ActivatedTerminalId))
                             {
                                 _activeTerminalId = update.Snapshot.ActivatedTerminalId;
@@ -440,8 +459,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     _terminals.Add(descriptor);
                 }
                 _activeTerminalId = descriptor.TerminalId;
-                _hasBeenOpened = true;
-                _isVisible = true;
+                Show(TerminalDockTrigger.AppHost);
                 break;
         }
 
@@ -474,6 +492,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
 
         _disposed = true;
+        TelemetryContext?.Dispose();
+        TelemetryContext = null;
         ShortcutManager.RemoveGlobalKeydownListener(this);
 
         // Stop updates before releasing browser-side state. A queued dispatcher callback observes _disposed and
@@ -515,5 +535,11 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
 
         _cts.Dispose();
+    }
+
+    private enum TerminalDockTrigger
+    {
+        User,
+        AppHost
     }
 }

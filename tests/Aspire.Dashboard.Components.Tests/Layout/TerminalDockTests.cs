@@ -21,7 +21,7 @@ using INotificationService = Aspire.Dashboard.Model.INotificationService;
 namespace Aspire.Dashboard.Components.Tests.Layout;
 
 [UseCulture("en-US")]
-public class TerminalDockTests : DashboardTestContext
+public partial class TerminalDockTests : DashboardTestContext
 {
     [Theory]
     [InlineData("", "terminal", "terminal")]
