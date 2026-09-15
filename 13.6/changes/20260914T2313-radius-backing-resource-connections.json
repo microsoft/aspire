@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Aspire apps deployed to Radius could not reach their own backing resources (Redis, PostgreSQL, MongoDB, SQL Server, RabbitMQ) because connection values were derived from Aspire's endpoint model instead of the Radius recipe's actual outputs. Connection strings, hosts, ports, usernames, and passwords are now projected from recipe outputs so they always match what the recipe deployed, and misconfigurations that previously failed silently now surface as publish-time diagnostics. Radius is also upgraded to 0.60.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🛰️",
+  "firstMergedAt": "2026-09-14T23:13:44Z",
+  "lastMergedAt": "2026-09-14T23:13:44Z",
+  "name": "Fixed Radius backing resource connections",
+  "owner": "nellshamrell",
+  "prs": [
+    19555
+  ]
+}

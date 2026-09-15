@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CI test-selection/build infrastructure change only; no user or application-developer facing impact",
+  "mergedAt": "2026-09-14T18:43:02Z",
+  "number": 19939,
+  "runDate": "2026-09-15T00:06:57Z",
+  "status": "excluded",
+  "title": "Skip CI entirely for API/ATS baseline-only PRs"
+}

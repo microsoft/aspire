@@ -1,0 +1,9 @@
+{
+  "author": "nellshamrell",
+  "comment": "Fixes broken connections to backing resources (Redis, PostgreSQL, MongoDB, SQL Server, RabbitMQ) deployed to a Radius environment by projecting connection values from recipe outputs; upgrades Radius to 0.60",
+  "mergedAt": "2026-09-14T23:13:44Z",
+  "number": 19555,
+  "runDate": "2026-09-15T00:06:57Z",
+  "status": "included",
+  "title": "Project Radius backing resource connections from recipe outputs, and upgrade to Radius 0.60"
+}
