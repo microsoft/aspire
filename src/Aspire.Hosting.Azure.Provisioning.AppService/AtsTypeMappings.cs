@@ -6,14 +6,5 @@ using Azure.Provisioning.AppService;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(AppServicePlan),
-    IncludeContainingAssemblyTypes = true,
-    // IPAddress collections have no supported ATS element mapping.
-    ExcludedMemberNames = new[]
-    {
-        "IPAddresses",
-        "ExternalInboundIPAddresses",
-        "InternalInboundIPAddresses",
-        "LinuxOutboundIPAddresses",
-        "WindowsOutboundIPAddresses"
-    })]
+    IncludeContainingAssemblyTypes = true)]
 [assembly: GenerateAspireProvisioningProxy(typeof(WebSite))]

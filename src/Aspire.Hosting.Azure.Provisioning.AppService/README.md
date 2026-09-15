@@ -43,7 +43,7 @@ The plan's Bicep identifier has an `_asplan` suffix, so the no-argument root loo
 
 `AppServicePlan` and `WebSite` are the selected roots. Compatible SDK models are projected, not every member. Supported `BicepValue<T>` properties accept the corresponding language value or a shared Bicep expression.
 
-`IPAddresses`, `ExternalInboundIPAddresses`, `InternalInboundIPAddresses`, `LinuxOutboundIPAddresses`, and `WindowsOutboundIPAddresses` are explicitly excluded because their `BicepList<IPAddress>` element type has no supported ATS mapping.
+`IPAddresses`, `ExternalInboundIPAddresses`, `InternalInboundIPAddresses`, `LinuxOutboundIPAddresses`, and `WindowsOutboundIPAddresses` are exposed as IP address collection proxies. Writable lists accept IPv4/IPv6 strings or Bicep value handles for add, insert, and set operations. Element getters preserve literals, expressions, and references as Bicep value handles; invalid address strings fail validation rather than being silently dropped. Azure SDK read-only output restrictions still apply.
 
 To customize supporting SDK resources, also opt into `Aspire.Hosting.Azure.Provisioning.ContainerRegistry`, `.ApplicationInsights`, or `.OperationalInsights` as needed. Shared secret infrastructure uses `.KeyVault`; separately modeled subnets use `.Network` (and private DNS uses `.PrivateDns`). These are separate proxy opt-ins, not additional App Service models.
 

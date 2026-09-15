@@ -45,6 +45,11 @@ await web.publishAsAzureContainerApp(async (infrastructure, app) => {
     const provisionedApp = await infrastructure.getContainerAppByIdentifier("web");
     await provisionedApp.workloadProfileName.set("consumption");
     const _workloadProfile = await provisionedApp.workloadProfileName.get();
+    // Outbound addresses are service outputs, not writable configuration.
+    const outboundAddresses = await provisionedApp.outboundIPAddressList();
+    if (await outboundAddresses.count() !== 0) {
+        throw new Error("Unprovisioned container app outbound address list should be empty");
+    }
 });
 
 // Test publishAsAzureContainerAppJob on an executable resource

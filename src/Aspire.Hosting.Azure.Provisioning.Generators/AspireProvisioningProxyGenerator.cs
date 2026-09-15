@@ -618,7 +618,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         Dictionary<INamedTypeSymbol, string> proxyNames,
         HashSet<INamedTypeSymbol> supportedCollections)
     {
-        if (IsSimpleType(elementType))
+        if (IsSimpleType(elementType) || IsIPAddress(elementType))
         {
             return true;
         }
@@ -1246,7 +1246,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         var elementTypeName = collection.ElementType
             .WithNullableAnnotation(NullableAnnotation.NotAnnotated)
             .ToDisplayString(s_typeDisplayFormat);
-        var simpleElement = IsSimpleType(collection.ElementType);
+        var simpleElement = IsSimpleType(collection.ElementType) || IsIPAddress(collection.ElementType);
         TryMapType(collection.ElementType, proxyNames, collectionNames, out var mappedElementType);
 
         source.AppendLine("    [global::Aspire.Hosting.AspireExportAttribute]");
@@ -1431,10 +1431,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     {
         if (simpleElement)
         {
+            // ATS carries IP address literals as strings; Convert<IPAddress> parses them for the SDK.
             source.Append("[global::Aspire.Hosting.AspireUnionAttribute(typeof(")
                 .Append(BicepValueProxyTypeName)
                 .Append("), typeof(")
-                .Append(elementTypeName)
+                .Append(elementTypeName == "global::System.Net.IPAddress" ? "string" : elementTypeName)
                 .Append("))] object value");
         }
         else
@@ -2647,6 +2648,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         }
 
         return false;
+    }
+
+    private static bool IsIPAddress(ITypeSymbol type)
+    {
+        return type.ToDisplayString(s_typeDisplayFormat) == "global::System.Net.IPAddress";
     }
 
     private static bool IsSimpleType(ITypeSymbol type)

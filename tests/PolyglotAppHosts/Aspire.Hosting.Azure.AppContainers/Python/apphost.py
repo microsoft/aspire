@@ -16,6 +16,8 @@ def configure_container_app(infrastructure: AzureResourceInfrastructure, app: Co
     provisioned_app = infrastructure.get_container_app_by_identifier("web")
     provisioned_app.workload_profile_name = "consumption"
     _workload_profile = provisioned_app.workload_profile_name
+    # Outbound addresses are service outputs, not writable configuration.
+    assert provisioned_app.outbound_ip_address_list.count == 0
 
 
 def configure_container_app_job(infrastructure: AzureResourceInfrastructure, job: ContainerAppJob):

@@ -6,8 +6,6 @@ using Azure.Provisioning.AppContainers;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(ContainerAppManagedEnvironment),
-    IncludeContainingAssemblyTypes = true,
-    // IPAddress collections have no supported ATS element mapping.
-    ExcludedMemberNames = new[] { "OutboundIPAddressList" })]
+    IncludeContainingAssemblyTypes = true)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ContainerApp))]
 [assembly: GenerateAspireProvisioningProxy(typeof(ContainerAppJob))]

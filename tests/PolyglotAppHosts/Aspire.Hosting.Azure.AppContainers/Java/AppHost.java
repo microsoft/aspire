@@ -37,6 +37,10 @@ void main() throws Exception {
             var provisionedApp = infrastructure.getContainerAppByIdentifier("web");
             provisionedApp.setWorkloadProfileName("consumption");
             var _workloadProfile = provisionedApp.workloadProfileName();
+            // Outbound addresses are service outputs, not writable configuration.
+            if (provisionedApp.outboundIPAddressList().count() != 0) {
+                throw new IllegalStateException("Unprovisioned container app outbound address list should be empty");
+            }
             app.configureCustomDomain(customDomain, certificateName);
             var scale = new AzureContainerAppScaleConfig();
             scale.setMinReplicas(1.0);

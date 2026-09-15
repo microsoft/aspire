@@ -14,6 +14,35 @@ def configure_environment(infrastructure: AzureResourceInfrastructure) -> None:
     sku.locations.add(infrastructure.create_app_service_azure_location("westus2"))
     location = sku.locations.get(0)
     _location_name = location.name
+    # Mutate a detached connection model; networking output lists stay read-only.
+    connection = infrastructure.create_remote_private_endpoint_connection()
+    addresses = connection.i_p_addresses
+    addresses.add("192.0.2.1")
+    addresses.insert(0, "2001:db8::1")
+    addresses.set(1, "192.0.2.2")
+    literal = addresses.get(0)
+    addresses.set(1, literal)
+    bicep = infrastructure.bicep()
+    # Index creates an untyped expression rather than a typed BicepValue<string>.
+    expression = bicep.index(bicep.parse_json(bicep.string('["192.0.2.3"]')), 0)
+    addresses.add(expression)
+    addresses.insert(1, expression)
+    addresses.set(0, addresses.get(3))
+    assert addresses.count == 4
+    assert [addresses.get(index).kind for index in range(4)] == [
+        "Expression",
+        "Expression",
+        "Literal",
+        "Expression",
+    ]
+    networking = infrastructure.create_ase_v3_networking_config_data()
+    for output in [
+        networking.external_inbound_ip_addresses,
+        networking.internal_inbound_ip_addresses,
+        networking.linux_outbound_ip_addresses,
+        networking.windows_outbound_ip_addresses,
+    ]:
+        assert output.count == 0
 
 
 def configure_app_service(infrastructure: AzureResourceInfrastructure, app_service: WebSite):
