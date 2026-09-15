@@ -1,13 +1,42 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.Language;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
 
 public class IntegrationHostLauncherTests
 {
+    [Fact]
+    public void LogProcessExit_AfterShutdownDisposesProcess_DoesNotThrow()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var resolver = new LanguageSupportResolver(
+            services, () => [], NullLogger<LanguageSupportResolver>.Instance);
+        var logger = new RecordingLogger<IntegrationHostLauncher>();
+        var launcher = new IntegrationHostLauncher(
+            resolver,
+            new ExternalCapabilityRegistry(NullLogger<ExternalCapabilityRegistry>.Instance),
+            new ConfigurationBuilder().Build(),
+            logger);
+        using var process = new Process();
+        process.Dispose();
+
+        launcher.LogProcessExit(process, 42, "test-integration", "host.mts");
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Debug, entry.Level);
+        Assert.Equal("Exit observer for integration host 'test-integration' (PID 42) stopped.", entry.Message);
+        Assert.IsAssignableFrom<InvalidOperationException>(entry.Exception);
+    }
+
     [Fact]
     public void CreateProcessStartInfo_PreservesArgumentBoundariesAndExpandsEntryPoint()
     {

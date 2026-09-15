@@ -83,6 +83,8 @@ internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFac
 {
     public IAppHostServerSession? Session { get; init; }
 
+    public Func<IAppHostServerSession>? CreateCallback { get; init; }
+
     public Dictionary<string, string>? CapturedEnvironmentVariables { get; private set; }
 
     public static FakeAppHostServerSessionFactory CreateForScaffolding(
@@ -112,7 +114,7 @@ internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFac
         CancellationToken stopRequested)
     {
         CapturedEnvironmentVariables = environmentVariables is null ? null : new Dictionary<string, string>(environmentVariables);
-        return Session ?? new FakeAppHostServerSession();
+        return CreateCallback?.Invoke() ?? Session ?? new FakeAppHostServerSession();
     }
 }
 
@@ -125,6 +127,7 @@ internal class FakeAppHostRpcClient : IAppHostRpcClient
 {
     public RuntimeSpec? RuntimeSpec { get; init; }
     public Func<string, string, string?, CancellationToken, Task<Dictionary<string, string>>>? ScaffoldAppHostAsyncCallback { get; init; }
+    public Func<string, CancellationToken, Task<Dictionary<string, string>>>? GenerateCodeAsyncCallback { get; init; }
 
     public virtual Task<RuntimeSpec> GetRuntimeSpecAsync(string languageId, CancellationToken cancellationToken)
         => Task.FromResult(RuntimeSpec ?? new RuntimeSpec
@@ -142,7 +145,8 @@ internal class FakeAppHostRpcClient : IAppHostRpcClient
             : throw new NotSupportedException();
 
     public virtual Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, CancellationToken cancellationToken)
-        => Task.FromResult(new Dictionary<string, string>());
+        => GenerateCodeAsyncCallback?.Invoke(languageId, cancellationToken)
+            ?? Task.FromResult(new Dictionary<string, string>());
 
     public virtual Task<Dictionary<string, string>> GenerateCodeForAssemblyAsync(string languageId, string assemblyName, CancellationToken cancellationToken)
         => Task.FromResult(new Dictionary<string, string>());

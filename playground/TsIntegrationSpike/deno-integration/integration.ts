@@ -373,10 +373,6 @@ export const publishAsDenoDockerFile = AspireExport<PublishAsDenoDockerFileArgs,
         const existingDockerfilePath = path.resolve(fullAppDirectory, dockerfilePath);
         const useExistingDockerfile = options.useExistingDockerfile ?? existsSync(existingDockerfilePath);
 
-        if (useExistingDockerfile) {
-            validateExistingDockerfileOptions(state, options, dockerfilePath);
-        }
-
         const dockerfileState: DenoDockerfileState = {
             ...state,
             runtimeImage: options.runtimeImage ?? state.runtimeImage,
@@ -389,6 +385,10 @@ export const publishAsDenoDockerFile = AspireExport<PublishAsDenoDockerFileArgs,
         };
 
         await resource.publishAsDockerFile(async (container: ContainerResource) => {
+            if (useExistingDockerfile) {
+                validateExistingDockerfileOptions(state, options, dockerfilePath);
+            }
+
             await container.withEnvironment('DENO_ENV', 'production');
             await container.withCertificateTrustEnvironment('DENO_CERT');
             await writeState(container, dockerfileState);

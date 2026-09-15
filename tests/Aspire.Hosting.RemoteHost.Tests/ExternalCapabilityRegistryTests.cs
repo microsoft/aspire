@@ -6,12 +6,88 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging.Abstractions;
+using StreamJsonRpc;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
 
 public class ExternalCapabilityRegistryTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TryInvokeAsync_ReusedCallbackIdsHaveIndependentOwners(bool sameGuest)
+    {
+        var firstRequest = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondRequest = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstResponse = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondResponse = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var connection = new IntegrationHostTestConnection(CreateCallbackCapabilities(), (_, args) =>
+        {
+            var isFirst = args!["name"]!.GetValue<string>() == "first";
+            (isFirst ? firstRequest : secondRequest).TrySetResult(args["configure"]!.GetValue<string>());
+            return (isFirst ? firstResponse : secondResponse).Task;
+        });
+        var registry = new ExternalCapabilityRegistry(NullLogger<ExternalCapabilityRegistry>.Instance);
+        registry.AddIntegrationHost(connection.ServerRpc);
+        await registry.InitializeAllHostsAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        var firstOwner = new JsonRpcCallbackInvoker();
+        var secondOwner = sameGuest ? firstOwner : new JsonRpcCallbackInvoker();
+        var firstArgs = new JsonObject { ["name"] = "first", ["configure"] = "guest_callback" };
+        var secondArgs = new JsonObject { ["name"] = "second", ["configure"] = "guest_callback" };
+
+        try
+        {
+            var firstInvocation = registry.TryInvokeAsync("test.external/callback", firstArgs, firstOwner);
+            var firstRelayId = await firstRequest.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            var secondInvocation = registry.TryInvokeAsync("test.external/callback", secondArgs, secondOwner);
+            var secondRelayId = await secondRequest.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+            Assert.NotEqual(firstRelayId, secondRelayId);
+            Assert.Equal("guest_callback", firstArgs["configure"]!.GetValue<string>());
+            Assert.Equal("guest_callback", secondArgs["configure"]!.GetValue<string>());
+            Assert.Equal((firstOwner, "guest_callback"), registry.ResolveCallbackOwner(firstRelayId));
+            Assert.Equal((secondOwner, "guest_callback"), registry.ResolveCallbackOwner(secondRelayId));
+
+            firstResponse.SetResult(null);
+            Assert.True((await firstInvocation.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken)).Found);
+            Assert.Null(registry.ResolveCallbackOwner(firstRelayId));
+            Assert.Equal((secondOwner, "guest_callback"), registry.ResolveCallbackOwner(secondRelayId));
+
+            secondResponse.SetResult(null);
+            Assert.True((await secondInvocation.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken)).Found);
+            Assert.Null(registry.ResolveCallbackOwner(secondRelayId));
+        }
+        finally
+        {
+            firstResponse.TrySetResult(null);
+            secondResponse.TrySetResult(null);
+        }
+    }
+
+    [Fact]
+    public async Task TryInvokeAsync_FailedInvocationRemovesCallbackOwner()
+    {
+        string? relayId = null;
+        using var connection = new IntegrationHostTestConnection(CreateCallbackCapabilities(), (_, args) =>
+        {
+            relayId = args!["configure"]!.GetValue<string>();
+            throw new InvalidOperationException("Integration callback failed.");
+        });
+        var registry = new ExternalCapabilityRegistry(NullLogger<ExternalCapabilityRegistry>.Instance);
+        registry.AddIntegrationHost(connection.ServerRpc);
+        await registry.InitializeAllHostsAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<RemoteInvocationException>(() => registry.TryInvokeAsync(
+            "test.external/callback",
+            new JsonObject { ["configure"] = "guest_callback" },
+            new JsonRpcCallbackInvoker()).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+
+        Assert.NotNull(relayId);
+        Assert.Null(registry.ResolveCallbackOwner(relayId));
+    }
+
     [Fact]
     public async Task InitializeAllHostsAsync_CancellationStopsPendingDiscovery()
     {
@@ -238,6 +314,21 @@ public class ExternalCapabilityRegistryTests
                 method = "externalMethod",
                 returnType = new { typeId = "string", category = "Primitive" }
             }).ToArray()
+        });
+
+    private static JsonElement CreateCallbackCapabilities()
+        => JsonSerializer.SerializeToElement(new
+        {
+            capabilities = new[]
+            {
+                new
+                {
+                    id = "test.external/callback",
+                    method = "externalCallback",
+                    parameters = new[] { new { name = "configure", isCallback = true } },
+                    returnType = new { typeId = "void", category = "Primitive" }
+                }
+            }
         });
 
     private static AtsContext CreateContext(params AtsCapabilityInfo[] capabilities)

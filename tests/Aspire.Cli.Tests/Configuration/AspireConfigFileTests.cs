@@ -417,6 +417,37 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.Null(kafka.Version);
     }
 
+    [Theory]
+    [InlineData("null", "13.2.0")]
+    [InlineData("\" 9.2.0 \"", "9.2.0")]
+    [InlineData("""{ "source": "nuget", "version": " 9.2.0 " }""", "9.2.0")]
+    public void Load_NormalizesNugetVersions(string packageValue, string expectedVersion)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, $$"""
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": {{packageValue}}
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var reference = Assert.Single(
+            config.GetIntegrationReferences("13.2.0", workspace.WorkspaceRoot.FullName),
+            reference => reference.Name == "Aspire.Hosting.Redis");
+        Assert.Equal(IntegrationSource.Nuget, reference.Source);
+        Assert.Equal(expectedVersion, reference.Version);
+
+        config.Save(workspace.WorkspaceRoot.FullName);
+        var reloaded = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal(config.Packages!["Aspire.Hosting.Redis"].Version, reloaded.Packages!["Aspire.Hosting.Redis"].Version);
+    }
+
     [Fact]
     public void Load_ReturnsConfig_WhenFeaturesAreBooleans()
     {

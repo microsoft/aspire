@@ -388,13 +388,14 @@ Consequences for the registry and dispatcher that are already in place:
 
 A guest AppHost declares its integrations in a single place: the `packages` dictionary in `aspire.config.json`. One source of truth, one parser, regardless of which ecosystem a given integration comes from.
 
-Each entry value is either a **string** (short form) or an **object** (long form). The string short form is always NuGet — empty means the SDK version, non-empty is an explicit version. The object form carries a required `source` discriminator and per-source fields.
+Each entry value is either a **string** (short form) or an **object** (long form). A string ending in `.csproj` is a project reference. Otherwise, empty means the SDK version and non-empty is an explicit NuGet version. The object form carries a required `source` discriminator and per-source fields.
 
 ```jsonc
 "packages": {
-  // String short form: NuGet only.
+  // String short form: NuGet version or project path.
   "Aspire.Hosting.Redis": "",              // NuGet, SDK version
   "Aspire.Hosting.Kafka": "9.2.0",         // NuGet, explicit version
+  "My.Hosting.Project": "../My.Hosting.Project/My.Hosting.Project.csproj",
 
   // Object form: any source, requires a "source" discriminator.
   "Aspire.Hosting.LocalThing": {
@@ -421,7 +422,7 @@ The schema is intentionally open: adding a new ecosystem (pip, cargo, go modules
 
 Parsing lives in a single `JsonConverter<PackageEntry>` that handles the string-or-object polymorphism and produces a strong-typed `PackageEntry` with `Source` (enum), `Version?`, and `Path?`. The whole thing is registered in the CLI's source-generated `JsonSerializerContext` — AOT-safe, no reflection at runtime.
 
-Downstream, `AspireConfigFile.GetIntegrationReferences` materializes each `PackageEntry` into an `IntegrationReference { Name, Source, Version?, Path? }` with paths resolved to absolute against the config directory. Every CLI and server code path that needs to know "is this NuGet, project, or npm?" switches on `IntegrationReference.Source` — no more `IsNpmIntegration` / `IsProjectReference` / `IsPackageReference` triad.
+Downstream, `AspireConfigFile.GetIntegrationReferences` materializes each `PackageEntry` into an `IntegrationReference { Name, Source, Version?, Path? }` with paths resolved to absolute against the config directory, including when the AppHost is in a nested directory. Every CLI and server code path that needs to know "is this NuGet, project, or npm?" switches on `IntegrationReference.Source` — no more `IsNpmIntegration` / `IsProjectReference` / `IsPackageReference` triad.
 
 ### Why not walk the native manifest?
 
@@ -483,14 +484,16 @@ the current TypeScript AppHost layout. They inherit the executing CLI's SDK vers
 and channel instead of pinning an older PR build. Run them with this spike's CLI;
 a stock CLI does not understand npm integration-host declarations.
 
-The CLI restores npm dependencies before starting an AppHost server. A clean
-`aspire restore` uses two separately disposed `IAppHostServerSession` instances:
+The CLI restores integration-host npm dependencies before starting an AppHost server.
+For npm integrations, `aspire restore`, `aspire run`, and `aspire publish` use
+two separately disposed `IAppHostServerSession` instances:
 the first generates the core SDK and installs the AppHost's dependencies. This
 must happen before the second session: the generated transport imports packages
 such as `vscode-jsonrpc` from the AppHost's `node_modules`, not the integration
 host's dependencies. The second session starts those hosts and generates the
-combined SDK. Each session uses the current `Create`/`StartAsync` lifecycle and
-propagates cancellation.
+combined SDK. A failed dependency installation aborts before the second session.
+Run and publish then continue without reinstalling AppHost dependencies. Each
+session uses the current `Create`/`StartAsync` lifecycle and propagates cancellation.
 
 In repository mode, `IntegrationHosts` participates in the AppHost server scaffold
 fingerprint along with `AtsAssemblies`. An unchanged host configuration preserves
@@ -551,7 +554,7 @@ Three capabilities are projected onto every resource and form the language-neutr
 
 On top of the string primitive, each language adds **typed sugar** that serializes a declared DTO:
 
-- **C#** — `WithAnnotation` / `GetAnnotation` / `TryGetAnnotation`, serializing with camelCase property names and string enum values.
+- **C#** — `WithAnnotation` / `GetAnnotation` / `TryGetAnnotation`, serializing with camelCase property names, string enum values, and numeric milliseconds for `TimeSpan`, matching ATS DTO serialization.
 - **TypeScript** — `setAnnotation` / `getAnnotation` / `tryGetAnnotation` over a structural `SerializedAnnotationStore` (every generated resource wrapper satisfies it without nominal inheritance), using `JSON.stringify` / `JSON.parse`.
 
 Because both sides agree on camelCase JSON for JSON-compatible payload shapes, a DTO written from C# deserializes into the matching TypeScript interface and vice-versa. The cross-language guarantee is limited to JSON-compatible values: top-level `undefined` is rejected on the TypeScript side, and ordinary JSON semantics apply to nested values.
@@ -587,6 +590,8 @@ A C# integration could write the same `spike.deno/state` annotation with `WithAn
 
 This flow is validated end-to-end by `aspire run`: the Deno resource launches with run args computed from annotation state read back at run time. The deferred Dockerfile/publish callbacks read annotation state through the same primitive and are covered by the same resource-target handle requirement, but warrant dedicated lower-level regression coverage.
 
+The Deno integration validates conflicts between an existing Dockerfile and Deno-specific publish settings only inside the publish callback. Those settings do not prevent local run mode from starting the executable.
+
 ---
 
 ## Current Limitations
@@ -602,6 +607,7 @@ Annotated integrations (`AspireExport`):
 - `AspireExport`, `defineIntegration`, `getAspireExport`, and the projection schema types are emitted by the TypeScript codegen into `.aspire/modules/base.mts`. Integration authors import them from the same `.aspire/modules/` tree as the generated `Aspire.Hosting` types. No framework package.
 - **Projection metadata is still hand-declared** alongside `AspireExport`'s `projection` field. Integration authors still write out per-type `AspireTypeRef` records because runtime projection cannot be derived from TypeScript types that are erased at runtime. The cheapest near-term fix is to have codegen emit a ready-made `AspireTypeRef` constant next to each generated handle type, so authors reference `DistributedApplicationBuilderTypeRef` by name instead of hand-writing the record. The long-term target is full signature inference via the TypeScript compiler API so the `projection` field disappears entirely.
 - The integration host runtime needs a side-effect import of the generated `aspire.mjs` so the module's top-level `registerHandleWrapper(...)` calls actually execute and populate the transport registry. Required because a bare `import type` is erased by tsc. A gotcha for anyone wiring up a new language's integration host runtime.
+- Guest callback results use the same recursive handle wrapping as capability results, including handles nested in arrays and DTOs.
 - The C# side already has `[AspireExport]` and the cross-assembly export story it rests on (documented in `polyglot-apphost.md`).
 
 Integration host lifetime:

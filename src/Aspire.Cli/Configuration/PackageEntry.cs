@@ -35,7 +35,7 @@ namespace Aspire.Cli.Configuration;
 /// </list>
 ///
 /// On write-back, a NuGet entry is emitted as the short string form when possible. Project and
-/// npm entries are always emitted as objects.
+/// npm entries are always emitted as objects. Legacy null values also use the SDK version.
 /// </summary>
 [JsonConverter(typeof(PackageEntryConverter))]
 internal sealed class PackageEntry
@@ -96,11 +96,20 @@ internal sealed class PackageEntry
 /// </summary>
 internal sealed class PackageEntryConverter : JsonConverter<PackageEntry>
 {
+    public override bool HandleNull => true;
+
     public override PackageEntry Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
+        // Legacy packages such as { "Aspire.Hosting.Redis": null } use the SDK version.
+        // Handle null here instead of leaving a null dictionary entry for callers to dereference.
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return PackageEntry.Nuget(null);
+        }
+
         if (reader.TokenType == JsonTokenType.String)
         {
-            var stringValue = reader.GetString();
+            var stringValue = reader.GetString()?.Trim();
             // Empty string means "use the SDK version" — stored as null so the caller can
             // substitute the effective SDK version at resolution time.
             if (string.IsNullOrWhiteSpace(stringValue))
@@ -112,9 +121,9 @@ internal sealed class PackageEntryConverter : JsonConverter<PackageEntry>
             // not a NuGet version. This mirrors AspireConfigFile.FromLegacy and the original
             // settings.json behavior (AspireJsonConfiguration.GetIntegrationReferences), so configs
             // written with the bare-string project path (e.g. "MyExt/MyExt.csproj") keep working.
-            if (stringValue.Trim().EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            if (stringValue.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             {
-                return PackageEntry.Project(stringValue.Trim());
+                return PackageEntry.Project(stringValue);
             }
 
             return PackageEntry.Nuget(stringValue);
@@ -167,7 +176,7 @@ internal sealed class PackageEntryConverter : JsonConverter<PackageEntry>
         switch (source.ToLowerInvariant())
         {
             case "nuget":
-                return PackageEntry.Nuget(string.IsNullOrWhiteSpace(version) ? null : version);
+                return PackageEntry.Nuget(string.IsNullOrWhiteSpace(version) ? null : version.Trim());
 
             case "project":
                 if (string.IsNullOrWhiteSpace(path))
@@ -193,6 +202,12 @@ internal sealed class PackageEntryConverter : JsonConverter<PackageEntry>
 
     public override void Write(Utf8JsonWriter writer, PackageEntry value, JsonSerializerOptions options)
     {
+        if (value is null)
+        {
+            writer.WriteStringValue(string.Empty);
+            return;
+        }
+
         switch (value.Source)
         {
             case IntegrationSource.Nuget:

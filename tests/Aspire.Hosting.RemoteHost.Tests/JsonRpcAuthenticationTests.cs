@@ -20,6 +20,8 @@ public sealed class JsonRpcAuthenticationTests
     {
         { "cancelToken", ["ct_missing"] },
         { "invokeCapability", ["test-capability", null] },
+        { "registerAsIntegrationHost", [] },
+        { "invokeGuestCallback", ["callback", null] },
         { "getCapabilities", [] },
         { "generateCode", ["TypeScript"] },
         { "scaffoldAppHost", ["TypeScript", "/tmp/apphost", "AppHost"] },

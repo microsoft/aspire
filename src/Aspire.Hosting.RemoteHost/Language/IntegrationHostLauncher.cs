@@ -266,27 +266,9 @@ internal sealed class IntegrationHostLauncher : IHostedService
             // window with a non-zero code, log it loud — that almost always means the host's
             // own startup threw and the registerAsIntegrationHost call never happened, which
             // would otherwise just look like a slow timeout from WaitForHostsAsync.
-            var packageNameForExit = descriptor.PackageName;
-            var entryPointForExit = descriptor.HostEntryPoint;
-            var hostProcessForExit = hostProcess;
+            var processId = hostProcess.Id;
+            hostProcess.Exited += (_, _) => LogProcessExit(hostProcess, processId, descriptor.PackageName, descriptor.HostEntryPoint);
             hostProcess.EnableRaisingEvents = true;
-            hostProcess.Exited += (_, _) =>
-            {
-                if (hostProcessForExit.ExitCode != 0)
-                {
-                    _logger.LogError(
-                        "Integration host '{Name}' (PID {Pid}, entry '{EntryPoint}') exited unexpectedly with code {ExitCode}. " +
-                        "This usually means the host's own startup code threw before it could call registerAsIntegrationHost. " +
-                        "Look for IntegrationHost[{Name}] lines above this for the host's own stdout/stderr.",
-                        packageNameForExit, hostProcessForExit.Id, entryPointForExit, hostProcessForExit.ExitCode, packageNameForExit);
-                }
-                else
-                {
-                    _logger.LogDebug(
-                        "Integration host '{Name}' (PID {Pid}) exited cleanly with code 0.",
-                        packageNameForExit, hostProcessForExit.Id);
-                }
-            };
 
             // Pipe the host's stdout into server logs at Information, stderr at Warning.
             // Tagged IntegrationHost[Name] so the user can find the host's own diagnostics
@@ -322,6 +304,34 @@ internal sealed class IntegrationHostLauncher : IHostedService
                     _logger.LogDebug(ex, "stderr reader for integration host '{Name}' stopped.", packageName);
                 }
             });
+        }
+    }
+
+    internal void LogProcessExit(Process process, int processId, string packageName, string entryPoint)
+    {
+        try
+        {
+            var exitCode = process.ExitCode;
+            if (exitCode != 0)
+            {
+                _logger.LogError(
+                    "Integration host '{Name}' (PID {Pid}, entry '{EntryPoint}') exited unexpectedly with code {ExitCode}. " +
+                    "This usually means the host's own startup code threw before it could call registerAsIntegrationHost. " +
+                    "Look for IntegrationHost[{Name}] lines above this for the host's own stdout/stderr.",
+                    packageName, processId, entryPoint, exitCode, packageName);
+            }
+            else
+            {
+                _logger.LogDebug(
+                    "Integration host '{Name}' (PID {Pid}) exited cleanly with code 0.",
+                    packageName, processId);
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            // StopAsync can dispose the process after its Exited event has been queued.
+            // An exception escaping that ThreadPool callback would terminate the server.
+            _logger.LogDebug(ex, "Exit observer for integration host '{Name}' (PID {Pid}) stopped.", packageName, processId);
         }
     }
 

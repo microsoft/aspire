@@ -37,7 +37,7 @@ public static class ResourceBuilderExtensions
     private const string PersistenceExperimentalDiagnosticId = "ASPIREPERSISTENCE001";
     private static readonly MethodInfo s_dispatchCustomWithReferenceMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithReference), BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    // Mirrors the ATS marshaller's JSON options (camelCase, enums-as-strings, cycle-safe) so that a
+    // Mirrors the ATS marshaller's JSON options (camelCase, string enums, millisecond durations, cycle-safe) so that a
     // typed annotation written from C# produces the exact JSON shape that the generated TypeScript
     // DTO interfaces expect, and vice versa. Aspire.Hosting cannot reference the marshaller (it lives
     // in the higher-level Aspire.Hosting.RemoteHost), so the options are duplicated here intentionally.
@@ -45,7 +45,7 @@ public static class ResourceBuilderExtensions
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new JsonStringEnumConverter(), new TimeSpanMillisecondsJsonConverter() },
         ReferenceHandler = ReferenceHandler.IgnoreCycles
     };
 

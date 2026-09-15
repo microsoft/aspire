@@ -13,6 +13,7 @@ using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -28,6 +29,7 @@ using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Projects;
 
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class GuestAppHostProjectTests : IDisposable
 {
     private readonly TemporaryWorkspace _workspace;
@@ -46,6 +48,164 @@ public class GuestAppHostProjectTests : IDisposable
         _profilingTelemetry.Dispose();
         _workspace.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    [Theory]
+    [InlineData("restore", 0, 0)]
+    [InlineData("restore", 4, 0)]
+    [InlineData("restore", 0, 3)]
+    [InlineData("run", 0, 0)]
+    [InlineData("run", 4, 0)]
+    [InlineData("run", 0, 3)]
+    [InlineData("publish", 0, 0)]
+    [InlineData("publish", 4, 0)]
+    [InlineData("publish", 0, 3)]
+    public async Task NpmIntegrationHosts_BootstrapBeforeFinalServer(string operation, int hostInstallExitCode, int guestInstallExitCode)
+    {
+        var root = _workspace.WorkspaceRoot;
+        var appDirectory = root.CreateSubdirectory("app");
+        var integrationDirectory = root.CreateSubdirectory("integration");
+        var binDirectory = root.CreateSubdirectory("tools");
+        var appHostFile = new FileInfo(Path.Combine(appDirectory.FullName, "apphost.mts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "// test apphost");
+        new AspireConfigFile
+        {
+            Packages = new Dictionary<string, PackageEntry>
+            {
+                ["@test/integration"] = PackageEntry.Npm("integration/host.mts")
+            }
+        }.Save(root.FullName);
+
+        ProcessTestHelpers.CreateScript(
+            binDirectory, "npm",
+            $$"""
+            printf installed > installed.txt
+            exit {{hostInstallExitCode}}
+            """,
+            $$"""
+            @echo off
+            > installed.txt echo installed
+            exit /b {{hostInstallExitCode}}
+            """);
+        var guestInstaller = ProcessTestHelpers.CreateScript(
+            binDirectory, "guest-install",
+            $$"""
+            test -f .aspire/modules/aspire.mts || exit 91
+            printf installed > app-installed.txt
+            exit {{guestInstallExitCode}}
+            """,
+            $$"""
+            @echo off
+            if not exist .aspire\modules\aspire.mts exit /b 91
+            > app-installed.txt echo installed
+            exit /b {{guestInstallExitCode}}
+            """);
+        using var pathOverride = new EnvVarOverride("PATH", binDirectory.FullName + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"));
+        using var pathExtensionsOverride = OperatingSystem.IsWindows() ? new EnvVarOverride("PATHEXT", ".CMD;.EXE;.BAT") : null;
+
+        var sessionCount = 0;
+        var generationCount = 0;
+        var hostRestoredBeforeBootstrap = false;
+        var bootstrapCompletedBeforeFinalServer = false;
+        FakeAppHostServerSession? bootstrapSession = null;
+        var rpcClient = new FakeAppHostRpcClient
+        {
+            RuntimeSpec = new RuntimeSpec
+            {
+                Language = "test/runtime",
+                DisplayName = "Test",
+                CodeGenLanguage = "TypeScript",
+                DetectionPatterns = ["apphost.mts"],
+                Execute = new CommandSpec { Command = guestInstaller, Args = [] },
+                InstallDependencies = new CommandSpec { Command = guestInstaller, Args = [] }
+            },
+            GenerateCodeAsyncCallback = (_, _) =>
+            {
+                generationCount++;
+                return Task.FromResult(new Dictionary<string, string> { ["aspire.mts"] = generationCount == 1 ? "core" : "combined" });
+            }
+        };
+        var sessionFactory = new FakeAppHostServerSessionFactory
+        {
+            CreateCallback = () =>
+            {
+                sessionCount++;
+                if (sessionCount == 1)
+                {
+                    bootstrapSession = new FakeAppHostServerSession(rpcClient)
+                    {
+                        StartAsyncCallback = () =>
+                        {
+                            hostRestoredBeforeBootstrap = File.Exists(Path.Combine(integrationDirectory.FullName, "installed.txt"));
+                            return Task.CompletedTask;
+                        }
+                    };
+                    return bootstrapSession;
+                }
+
+                bootstrapCompletedBeforeFinalServer = bootstrapSession?.HasServerExited == true
+                    && File.Exists(Path.Combine(appDirectory.FullName, "app-installed.txt"));
+                return operation == "restore"
+                    ? new FakeAppHostServerSession(rpcClient)
+                    : new FakeAppHostServerSession
+                    {
+                        GetRpcClientAsyncCallback = _ => Task.FromException<IAppHostRpcClient>(
+                            new InvalidOperationException("Stop after the final server starts."))
+                    };
+            }
+        };
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: projectFactory,
+            serverSessionFactory: sessionFactory,
+            languageId: "test/runtime");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var buildCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var backchannelCompletion = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int result;
+        if (operation == "restore")
+        {
+            result = await project.BuildAndGenerateSdkAsync(appDirectory, cancellationToken: cancellationToken).DefaultTimeout() ? 0 : 1;
+        }
+        else if (operation == "run")
+        {
+            result = await project.RunAsync(new AppHostProjectContext
+            {
+                AppHostFile = appHostFile,
+                WorkingDirectory = appDirectory,
+                EnvironmentVariables = new Dictionary<string, string>(),
+                BuildCompletionSource = buildCompletion
+            }, cancellationToken).DefaultTimeout();
+            Assert.False(await buildCompletion.Task.DefaultTimeout());
+        }
+        else
+        {
+            result = await project.PublishAsync(new PublishContext
+            {
+                AppHostFile = appHostFile,
+                WorkingDirectory = appDirectory,
+                BackchannelCompletionSource = backchannelCompletion
+            }, cancellationToken).DefaultTimeout();
+            Assert.True(backchannelCompletion.Task.IsFaulted);
+        }
+
+        var installsSucceeded = hostInstallExitCode == 0 && guestInstallExitCode == 0;
+        Assert.Equal(hostInstallExitCode != 0 ? 0 : guestInstallExitCode != 0 ? 1 : 2, sessionCount);
+        Assert.Equal(hostInstallExitCode == 0, hostRestoredBeforeBootstrap);
+        Assert.Equal(installsSucceeded, bootstrapCompletedBeforeFinalServer);
+        if (operation == "restore" && installsSucceeded)
+        {
+            Assert.Equal(0, result);
+            Assert.Equal(2, generationCount);
+            Assert.Equal("combined", await File.ReadAllTextAsync(Path.Combine(appDirectory.FullName, ".aspire", "modules", "aspire.mts")));
+        }
+        else
+        {
+            Assert.NotEqual(0, result);
+        }
     }
 
     [Theory]

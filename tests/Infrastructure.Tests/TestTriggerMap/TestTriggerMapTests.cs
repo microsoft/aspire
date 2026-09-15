@@ -531,6 +531,14 @@ public sealed class TestTriggerMapTests
             ["test:Aspire.Playground.Tests", "job:extension-e2e"]
         },
         {
+            "playground/TsIntegrationSpike/deno-integration/integration.ts",
+            ["test:Aspire.Playground.Tests", "job:typescript-sdk"]
+        },
+        {
+            "playground/TsIntegrationSpike/kafka-integration/host-runtime.ts",
+            ["test:Aspire.Playground.Tests", "job:typescript-sdk"]
+        },
+        {
             ".gitignore",
             ["test:Infrastructure.Tests"]
         },

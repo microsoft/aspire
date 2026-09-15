@@ -203,7 +203,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         CancellationToken cancellationToken)
     {
         var defaultSdkVersion = GetEffectiveSdkVersion();
-        var integrations = config.GetIntegrationReferences(defaultSdkVersion, directory.FullName).ToList();
+        var integrations = config.GetIntegrationReferences(defaultSdkVersion, GetConfigDirectory(directory).FullName).ToList();
         var codeGenPackage = await _languageDiscovery.GetPackageForLanguageAsync(_resolvedLanguage.LanguageId, cancellationToken);
 
         // The config can already declare the code generation integration itself, most often as a
@@ -337,10 +337,24 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         // This must happen before guest AppHost dependency installation because the
         // generated code directory (.aspire/modules) may not exist yet and dependency
         // files reference it.
-        await GenerateSdkCodeUsingAppHostServerAsync(installDependencies: true);
+        var installResult = await GenerateSdkAndInstallDependenciesAsync(
+            directory,
+            appHostFile: null,
+            appHostServerProject,
+            integrations,
+            config.SdkVersion,
+            serverEnvironmentVariables: null,
+            guestEnvironmentVariables: new Dictionary<string, string>(),
+            treatMissingJavaScriptToolAsWarning: !hasNpmIntegrationHosts,
+            cancellationToken);
 
         if (hasNpmIntegrationHosts)
         {
+            if (installResult != 0)
+            {
+                return false;
+            }
+
             // npm integration hosts are themselves TypeScript programs that import the
             // generated .aspire/modules SDK in order to call ATS primitives. On a clean restore
             // there is no SDK yet, so the first pass bootstraps the core SDK and installs
@@ -349,13 +363,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // Restart only after those dependencies exist so the hosts can import the
             // transport and contribute their external capabilities.
             _logger.LogDebug("Regenerating SDK after bootstrapping npm integration host dependencies.");
-            await GenerateSdkCodeUsingAppHostServerAsync(installDependencies: false);
-        }
-
-        return true;
-
-        async Task GenerateSdkCodeUsingAppHostServerAsync(bool installDependencies)
-        {
             await using var serverSession = _serverSessionFactory.Create(
                 appHostServerProject,
                 environmentVariables: null,
@@ -375,17 +382,49 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 integrations,
                 targetSdkVersion: config.SdkVersion,
                 cancellationToken);
-
-            if (installDependencies)
-            {
-                await InstallDependenciesAsync(
-                    directory,
-                    rpcClient,
-                    environmentVariables: new Dictionary<string, string>(),
-                    treatMissingJavaScriptToolAsWarning: true,
-                    cancellationToken);
-            }
         }
+
+        return true;
+    }
+
+    private async Task<int> GenerateSdkAndInstallDependenciesAsync(
+        DirectoryInfo directory,
+        FileInfo? appHostFile,
+        IAppHostServerProject appHostServerProject,
+        List<IntegrationReference> integrations,
+        string? targetSdkVersion,
+        Dictionary<string, string>? serverEnvironmentVariables,
+        IDictionary<string, string> guestEnvironmentVariables,
+        bool treatMissingJavaScriptToolAsWarning,
+        CancellationToken cancellationToken)
+    {
+        // Integration hosts may import the generated SDK and its dependencies from the AppHost.
+        // Dispose this bootstrap server before starting the server that loads their capabilities.
+        await using var serverSession = _serverSessionFactory.Create(
+            appHostServerProject,
+            serverEnvironmentVariables,
+            debug: false,
+            gracefulShutdownSignaler: null,
+            shutdownService: null,
+            isolateConsole: false,
+            cancellationToken);
+        await serverSession.StartAsync();
+
+        var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
+        await GenerateCodeViaRpcAsync(
+            directory.FullName,
+            appHostFile,
+            rpcClient,
+            integrations,
+            targetSdkVersion,
+            cancellationToken);
+
+        return await InstallDependenciesAsync(
+            directory,
+            rpcClient,
+            guestEnvironmentVariables,
+            treatMissingJavaScriptToolAsWarning,
+            cancellationToken);
     }
 
     Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride, CancellationToken cancellationToken)
@@ -540,6 +579,32 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
+            var environmentVariables = CreateGuestEnvironmentVariables(
+                context.EnvironmentVariables,
+                launchProfileEnvironmentVariables,
+                certEnvVars,
+                defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
+                args: context.UnmatchedTokens);
+            var hasNpmIntegrationHosts = integrations.Any(integration => integration.Source == IntegrationSource.Npm);
+            if (hasNpmIntegrationHosts)
+            {
+                var bootstrapResult = await GenerateSdkAndInstallDependenciesAsync(
+                    directory,
+                    appHostFile,
+                    appHostServerProject,
+                    integrations,
+                    config.SdkVersion,
+                    launchSettingsEnvVars,
+                    environmentVariables,
+                    treatMissingJavaScriptToolAsWarning: false,
+                    cancellationToken);
+                if (bootstrapResult != 0)
+                {
+                    context.BuildCompletionSource?.TrySetResult(false);
+                    return bootstrapResult;
+                }
+            }
+
             // Step 4: Start the AppHost server process. The linked stop CTS is the only termination
             // trigger we hand to the session; cancelling it (here or via the outer cancellationToken)
             // is how we ask the session to kill its child process. The outer cancellationToken IS
@@ -574,7 +639,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     // This must happen before dependency installation because the generated
                     // code directory (.aspire/modules) may not exist yet (e.g., freshly cloned project)
                     // and dependency files (pylock.toml, requirements.txt) reference it.
-                    if (buildResult.NeedsCodeGen)
+                    if (buildResult.NeedsCodeGen || hasNpmIntegrationHosts)
                     {
                         await GenerateCodeViaRpcAsync(
                             directory.FullName,
@@ -656,23 +721,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var guestAppHostLaunched = false;
             using (var guestStartupActivity = _profilingTelemetry.StartRunAppHostStartGuestAppHost(_resolvedLanguage.LanguageId))
             {
-                // Pass the launch profile and certificate environment variables to both dependency
-                // installation and the guest AppHost so they use the same selected toolchain.
-                var environmentVariables = CreateGuestEnvironmentVariables(
-                    context.EnvironmentVariables,
-                    launchProfileEnvironmentVariables,
-                    certEnvVars,
-                    defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
-                    args: context.UnmatchedTokens);
-
                 // Step 7: Install dependencies (using GuestRuntime)
-                // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
-                var installResult = await InstallDependenciesAsync(
-                    directory,
-                    rpcClient,
-                    environmentVariables,
-                    treatMissingJavaScriptToolAsWarning: false,
-                    cancellationToken);
+                // npm integration hosts already required installation during SDK bootstrapping.
+                var installResult = hasNpmIntegrationHosts ? 0 : await InstallDependenciesAsync(
+                        directory,
+                        rpcClient,
+                        environmentVariables,
+                        treatMissingJavaScriptToolAsWarning: false,
+                        cancellationToken);
                 if (installResult != 0)
                 {
                     context.BuildCompletionSource?.TrySetResult(false);
@@ -1284,6 +1340,41 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // Pass synthetic UserSecretsId so AppHost Server can read secrets set via 'aspire secret'
             launchSettingsEnvVars[KnownConfigNames.AspireUserSecretsId] = UserSecretsPathHelper.ComputeSyntheticUserSecretsId(appHostFile.FullName);
 
+            if (!await RestoreIntegrationHostDependenciesAsync(integrations, cancellationToken))
+            {
+                _interactionService.DisplayError("Failed to restore one or more integration host packages.");
+                context.BackchannelCompletionSource?.TrySetException(
+                    new InvalidOperationException("Failed to restore integration host dependencies."));
+                return CliExitCodes.FailedToBuildArtifacts;
+            }
+
+            var environmentVariables = CreateGuestEnvironmentVariables(
+                context.EnvironmentVariables,
+                launchProfileEnvironmentVariables,
+                defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
+                includeLaunchProfileEnvironmentVariables: false,
+                args: context.Arguments);
+            var hasNpmIntegrationHosts = integrations.Any(integration => integration.Source == IntegrationSource.Npm);
+            if (hasNpmIntegrationHosts)
+            {
+                var bootstrapResult = await GenerateSdkAndInstallDependenciesAsync(
+                    directory,
+                    appHostFile,
+                    appHostServerProject,
+                    integrations,
+                    config.SdkVersion,
+                    launchSettingsEnvVars,
+                    environmentVariables,
+                    treatMissingJavaScriptToolAsWarning: false,
+                    cancellationToken);
+                if (bootstrapResult != 0)
+                {
+                    context.BackchannelCompletionSource?.TrySetException(
+                        new InvalidOperationException($"Failed to install {DisplayName} dependencies."));
+                    return bootstrapResult;
+                }
+            }
+
             // Step 2: Start the AppHost server process(it opens the backchannel for progress reporting)
             // Linked stop CTS is the only termination trigger we hand to the session.
             using var serverStopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -1314,7 +1405,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     // This must happen before dependency installation because the generated
                     // code directory (.aspire/modules) may not exist yet (e.g., freshly cloned project)
                     // and dependency files (pylock.toml, requirements.txt) reference it.
-                    if (needsCodeGen)
+                    if (needsCodeGen || hasNpmIntegrationHosts)
                     {
                         await GenerateCodeViaRpcAsync(
                             directory.FullName,
@@ -1357,23 +1448,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             OutputCollector? guestOutput;
             using (var guestStartupActivity = _profilingTelemetry.StartRunAppHostStartGuestAppHost(_resolvedLanguage.LanguageId))
             {
-                // Publish excludes launch-profile environment selection, but dependency installation
-                // still needs the same effective toolchain environment as the guest AppHost.
-                var environmentVariables = CreateGuestEnvironmentVariables(
-                    context.EnvironmentVariables,
-                    launchProfileEnvironmentVariables,
-                    defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
-                    includeLaunchProfileEnvironmentVariables: false,
-                    args: context.Arguments);
-
                 // Step 5: Install dependencies if needed (using GuestRuntime)
-                // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
-                var installResult = await InstallDependenciesAsync(
-                    directory,
-                    rpcClient,
-                    environmentVariables,
-                    treatMissingJavaScriptToolAsWarning: false,
-                    cancellationToken);
+                // npm integration hosts already required installation during SDK bootstrapping.
+                var installResult = hasNpmIntegrationHosts ? 0 : await InstallDependenciesAsync(
+                        directory,
+                        rpcClient,
+                        environmentVariables,
+                        treatMissingJavaScriptToolAsWarning: false,
+                        cancellationToken);
                 if (installResult != 0)
                 {
                     context.BackchannelCompletionSource?.TrySetException(
@@ -1445,6 +1527,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
         catch (Exception ex)
         {
+            context.BackchannelCompletionSource?.TrySetException(ex);
             _logger.LogError(ex, "Failed to publish {Language} AppHost", DisplayName);
             _interactionService.DisplayError($"Failed to publish {DisplayName} AppHost: {ex.Message}");
             return CliExitCodes.FailedToDotnetRunAppHost;

@@ -114,7 +114,7 @@ export async function runIntegrationHost(host: IntegrationHostDefinition): Promi
         try {
             const result = await connection.sendRequest<TResult>('invokeGuestCallback', callbackId, callArgs);
             log(`Guest callback ${callbackId} completed`);
-            return result;
+            return wrapIfHandle(result, client) as TResult;
         } catch (error) {
             log(`Guest callback ${callbackId} failed: ${error instanceof Error ? error.message : String(error)}`);
             throw error;

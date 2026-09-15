@@ -26,7 +26,7 @@ internal sealed class ExternalCapabilityRegistry
 
     private volatile FrozenDictionary<string, ExternalCapabilityRegistration> _capabilities = FrozenDictionary<string, ExternalCapabilityRegistration>.Empty;
     private readonly ConcurrentBag<JsonRpc> _integrationHosts = new();
-    private readonly ConcurrentDictionary<string, JsonRpcCallbackInvoker> _callbackOwners = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, (JsonRpcCallbackInvoker Invoker, string CallbackId)> _callbackOwners = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _hostRegisteredSignal = new(initialCount: 0);
     private readonly ILogger<ExternalCapabilityRegistry> _logger;
     private InvalidOperationException? _initializationException;
@@ -252,15 +252,17 @@ internal sealed class ExternalCapabilityRegistry
 
         _logger.LogDebug("Forwarding capability {CapabilityId} to integration host", capabilityId);
 
-        // Register callback ownership for any IsCallback parameters in the args so the
-        // integration host can later relay invokeCallback back to the originating guest.
-        var registeredCallbackIds = RegisterCallbackOwners(registration.ProjectedCapability, args, ownerInvoker);
+        // Callback IDs belong to a guest connection, not the singleton registry. Give
+        // each invocation its own relay IDs so overlapping calls cannot overwrite or
+        // unregister one another, even when guests reuse the same callback ID.
+        var forwardedArgs = args?.DeepClone().AsObject();
+        var registeredCallbackIds = RegisterCallbackOwners(registration.ProjectedCapability, forwardedArgs, ownerInvoker);
 
         try
         {
             var rawResult = await registration.ClientRpc.InvokeWithCancellationAsync<object?>(
                 "handleExternalCapability",
-                new object?[] { capabilityId, args },
+                new object?[] { capabilityId, forwardedArgs },
                 CancellationToken.None).ConfigureAwait(false);
 
             // SystemTextJsonFormatter returns JsonElement for object?
@@ -299,11 +301,11 @@ internal sealed class ExternalCapabilityRegistry
     }
 
     /// <summary>
-    /// Returns the <see cref="JsonRpcCallbackInvoker"/> for the guest-side connection that owns
-    /// the given callback id, or <c>null</c> if the id is not currently registered.
+    /// Returns the guest connection and original callback ID for a relay ID,
+    /// or <c>null</c> if the relay ID is not currently registered.
     /// Integration hosts use this to route <c>invokeGuestCallback</c> back to the originating guest.
     /// </summary>
-    public JsonRpcCallbackInvoker? ResolveCallbackOwner(string callbackId)
+    public (JsonRpcCallbackInvoker Invoker, string CallbackId)? ResolveCallbackOwner(string callbackId)
         => _callbackOwners.TryGetValue(callbackId, out var invoker) ? invoker : null;
 
     private List<string> RegisterCallbackOwners(AtsCapabilityInfo? projected, JsonObject? args, JsonRpcCallbackInvoker? ownerInvoker)
@@ -328,8 +330,10 @@ internal sealed class ExternalCapabilityRegistry
 
             if (node is JsonValue value && value.TryGetValue<string>(out var callbackId) && !string.IsNullOrEmpty(callbackId))
             {
-                _callbackOwners[callbackId] = ownerInvoker;
-                registered.Add(callbackId);
+                var relayId = $"external_callback_{Guid.NewGuid():N}";
+                _callbackOwners[relayId] = (ownerInvoker, callbackId);
+                args[parameter.Name] = relayId;
+                registered.Add(relayId);
             }
         }
 

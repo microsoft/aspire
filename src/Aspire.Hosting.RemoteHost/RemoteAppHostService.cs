@@ -220,7 +220,7 @@ internal sealed class RemoteAppHostService
     /// and calls this method to trigger the callback, which is routed back to the originating guest
     /// via the owning scope's <see cref="JsonRpcCallbackInvoker"/>.
     /// </summary>
-    /// <param name="callbackId">The callback id, as originally sent by the guest.</param>
+    /// <param name="callbackId">The relay ID supplied to the integration host.</param>
     /// <param name="args">Positional argument payload shaped as <c>{ p0, p1, ... }</c>.</param>
     /// <returns>The result returned by the guest's callback, or <c>null</c> for void callbacks.</returns>
     [JsonRpcMethod("invokeGuestCallback")]
@@ -234,7 +234,7 @@ internal sealed class RemoteAppHostService
                 $"No owning guest connection is currently registered for callback '{callbackId}'. " +
                 "The callback id must be in scope of an in-flight external capability invocation.");
 
-        var result = await owner.InvokeAsync<JsonNode?>(callbackId, args, CancellationToken.None).ConfigureAwait(false);
+        var result = await owner.Invoker.InvokeAsync<JsonNode?>(owner.CallbackId, args, CancellationToken.None).ConfigureAwait(false);
         _logger.LogDebug("<< invokeGuestCallback({CallbackId})", callbackId);
         return result;
     }

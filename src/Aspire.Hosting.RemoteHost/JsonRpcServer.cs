@@ -241,11 +241,12 @@ internal sealed class JsonRpcServer : BackgroundService
             // Add the shared LanguageService as an additional target for language support methods
             jsonRpc.AddLocalRpcTarget(languageService);
 
+            // Initialize the connection before dispatching requests: a host can register
+            // immediately, and registration and callbacks both require this connection.
+            clientService.SetClientConnection(jsonRpc);
+
             jsonRpc.StartListening();
             activity.AddJsonRpcListening();
-
-            // Enable bidirectional communication - allow .NET to call back to TypeScript
-            clientService.SetClientConnection(jsonRpc);
 
             _logger.LogDebug("JsonRpc connection established for client {ClientId} (bidirectional)", clientId);
 

@@ -96,6 +96,39 @@ public class AtsAnnotationTests
     }
 
     [Fact]
+    public async Task WithAnnotation_SerializesTimeSpanAsMilliseconds()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var definition = new AnnotationDefinition<Dictionary<string, TimeSpan?>>("test/durations");
+        var durations = new Dictionary<string, TimeSpan?>
+        {
+            ["zero"] = TimeSpan.Zero,
+            ["fractional"] = TimeSpan.FromMilliseconds(1250.5),
+            ["negative"] = TimeSpan.FromMilliseconds(-1),
+            ["optional"] = null
+        };
+        var container = builder.AddContainer("container", "image").WithAnnotation(definition, durations);
+
+        await Verify(container.GetSerializedAnnotation(definition.Id), "json");
+        Assert.Equal(durations, container.GetAnnotation(definition));
+    }
+
+    [Fact]
+    public void GetAnnotation_DeserializesMillisecondsFromTypeScript()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var definition = new AnnotationDefinition<Dictionary<string, TimeSpan?>>("test/durations");
+        var container = builder.AddContainer("container", "image")
+            .WithSerializedAnnotation(definition.Id, """{"delay":1250.5,"optional":null}""");
+
+        var durations = container.GetAnnotation(definition);
+        Assert.Equal(TimeSpan.FromMilliseconds(1250.5), durations["delay"]);
+        Assert.Null(durations["optional"]);
+        Assert.True(container.Resource.TryGetAnnotation(definition, out var readByTryGet));
+        Assert.Equal(durations, readByTryGet);
+    }
+
+    [Fact]
     public void TryGetAnnotation_ReturnsFalseWhenAbsentAndTrueWhenPresent()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

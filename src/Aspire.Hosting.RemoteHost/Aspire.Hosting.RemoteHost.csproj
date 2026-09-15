@@ -31,6 +31,7 @@
     <Compile Include="$(SharedDir)ProcessStartInfoHelper.cs" Link="Utils\ProcessStartInfoHelper.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="IntegrationPackageProbeManifest.cs" />
+    <Compile Include="$(SharedDir)TimeSpanMillisecondsJsonConverter.cs" Link="Ats\TimeSpanMillisecondsJsonConverter.cs" />
   </ItemGroup>
 
   <ItemGroup>

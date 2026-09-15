@@ -190,10 +190,12 @@ path_rules:
     reason: Blazor gateway runtime assets must work from both MSBuild output and package-loaded polyglot AppHosts
   - paths:
       - tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**
+      - playground/TsIntegrationSpike/deno-integration/**
+      - playground/TsIntegrationSpike/kafka-integration/**
       - src/Aspire.Cli/Templating/Templates/ts-starter/**
       - .github/workflows/typescript-sdk-tests.yml
     targets: [job:typescript-sdk]
-    reason: vitest over generated TS SDK; ts-starter is a narrow sub-path of Aspire.Cli, not the whole project
+    reason: vitest over the TS SDK, integration-host playgrounds, and ts-starter configuration
   - paths:
       - src/**/*.tscompat.suppression.txt
       - tools/TypeScriptApiCompat/**

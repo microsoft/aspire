@@ -1393,7 +1393,7 @@ The unified config file for polyglot AppHosts. Replaces the legacy split across 
 
 **Language persistence:** On first `aspire run`, if `appHost.language` is not set, the CLI detects it from file patterns and saves it to `aspire.config.json`. Subsequent runs use the persisted value.
 
-**Package entry shape.** Each value in `packages` is either a **string** (short form, always NuGet — empty means the SDK version, non-empty is an explicit version) or an **object** (long form, carries a required `source` discriminator — `nuget`, `project`, or `npm` — with per-source fields). See the [Integration Declaration](./polyglot-integrations.md#integration-declaration) section of the sibling spec for the full schema and examples.
+**Package entry shape.** Each value in `packages` is either a **string** (short form: a `.csproj` path is a project reference; otherwise empty means the SDK version and non-empty is an explicit NuGet version) or an **object** (long form, carries a required `source` discriminator — `nuget`, `project`, or `npm` — with per-source fields). See the [Integration Declaration](./polyglot-integrations.md#integration-declaration) section of the sibling spec for the full schema and examples.
 
 ### Application settings
 
