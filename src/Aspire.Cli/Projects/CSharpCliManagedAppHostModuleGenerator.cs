@@ -46,11 +46,11 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
 
         var configDirectory = ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
         var config = AspireConfigFile.Load(configDirectory.FullName) ?? new AspireConfigFile();
-        return await GenerateAsync(appHostFile, config, configDirectory, packageSourceOverride: null, cancellationToken).ConfigureAwait(false);
+        return await GenerateAsync(appHostFile, config, configDirectory, config.Channel, packageSourceOverride: null, cancellationToken).ConfigureAwait(false);
     }
 
     internal async Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, AspireConfigFile config, DirectoryInfo configDirectory, string? packageSourceOverride, CancellationToken cancellationToken)
-        => (await GenerateAsync(appHostFile, config, configDirectory, packageSourceOverride, cancellationToken).ConfigureAwait(false))?.ModuleProjectFile;
+        => (await GenerateAsync(appHostFile, config, configDirectory, config.Channel, packageSourceOverride, cancellationToken).ConfigureAwait(false))?.ModuleProjectFile;
 
     internal Task<CliManagedAppHostModuleGenerationResult?> TryGenerateWithRestoreConfigurationAsync(
         FileInfo appHostFile,
@@ -58,12 +58,22 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         DirectoryInfo configDirectory,
         string? packageSourceOverride,
         CancellationToken cancellationToken)
-        => GenerateAsync(appHostFile, config, configDirectory, packageSourceOverride, cancellationToken);
+        => GenerateAsync(appHostFile, config, configDirectory, config.Channel, packageSourceOverride, cancellationToken);
+
+    internal Task<CliManagedAppHostModuleGenerationResult?> TryGenerateWithRestoreConfigurationAsync(
+        FileInfo appHostFile,
+        AspireConfigFile config,
+        DirectoryInfo configDirectory,
+        string? restoreChannel,
+        string? packageSourceOverride,
+        CancellationToken cancellationToken)
+        => GenerateAsync(appHostFile, config, configDirectory, restoreChannel, packageSourceOverride, cancellationToken);
 
     private async Task<CliManagedAppHostModuleGenerationResult?> GenerateAsync(
         FileInfo appHostFile,
         AspireConfigFile config,
         DirectoryInfo configDirectory,
+        string? restoreChannel,
         string? packageSourceOverride,
         CancellationToken cancellationToken)
     {
@@ -90,7 +100,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         var restorePlan = await _restorePlanResolver.ResolveAsync(
             appHostDirectory.FullName,
             sdkVersion,
-            config.Channel,
+            restoreChannel,
             packageSourceOverride,
             packageSourceOverridePattern: null,
             cancellationToken)
@@ -190,8 +200,8 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         projectFile.Targets.Add(
             new XElement("Target",
                 new XAttribute("Name", "FailDirectDotnetForCliManagedAppHost"),
-                new XAttribute("BeforeTargets", "Build;Publish"),
-                new XAttribute("Condition", $"'$({BuildPropertyName})' != 'true'"),
+                new XAttribute("BeforeTargets", "Build;Publish;Restore"),
+                new XAttribute("Condition", $"'$({BuildPropertyName})' != 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingInsideVisualStudio)' != 'true'"),
                 new XElement("Error", new XAttribute("Text", "This AppHost is managed by the Aspire CLI. Use 'aspire run', 'aspire restore', or 'aspire publish' instead of direct dotnet commands."))));
 
         await using var stream = moduleProjectFile.Create();
