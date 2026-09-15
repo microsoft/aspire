@@ -88,6 +88,7 @@ public sealed record CustomResourceSnapshot
     /// <remarks>
     /// May be zero or more. If there are no health reports, the resource is considered healthy
     /// so long as no heath checks are registered for the resource.
+    /// Use <see cref="CustomResourceSnapshotExtensions.WithHealthReports"/> to modify.
     /// </remarks>
     public ImmutableArray<HealthReportSnapshot> HealthReports
     {
