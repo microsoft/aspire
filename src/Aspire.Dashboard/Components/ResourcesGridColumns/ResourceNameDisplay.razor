@@ -24,6 +24,11 @@
         <FluentIcon Icon="Icons.Regular.Size16.Pin" Title="@Loc[nameof(Columns.PersistentContainerIconTooltip)]"
             Color="Color.Default" Class="persistent-container-icon" />
     }
+    @if (Resource.IsResourceHidden(showHiddenResources: false))
+    {
+        <FluentIcon Icon="Icons.Regular.Size16.EyeOff" Title="@Loc[nameof(Columns.HiddenResourceIconTooltip)]"
+            Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" Class="resource-hidden-icon" />
+    }
 </span>
 
 @code {

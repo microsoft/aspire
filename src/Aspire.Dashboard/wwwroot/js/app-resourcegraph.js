@@ -40,6 +40,7 @@ class ResourceGraph {
 
         // Static icon (SVG path + tooltip) shared by every node's context-menu affordance (cog).
         this.menuIcon = graphIcons ? graphIcons.menu : null;
+        this.hiddenIcon = graphIcons ? graphIcons.hidden : null;
 
         this.nodes = [];
         this.links = [];
@@ -198,6 +199,9 @@ class ResourceGraph {
         if (r1.displayName !== r2.displayName) {
             return false;
         }
+        if (r1.isHidden !== r2.isHidden) {
+            return false;
+        }
         if (!this.iconEqual(r1.resourceIcon, r2.resourceIcon)) {
             return false;
         }
@@ -272,6 +276,7 @@ class ResourceGraph {
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
                     stateIcon: createIcon(resource.stateIcon),
+                    isHidden: resource.isHidden,
                     degree: degree
                 });
             } else {
@@ -283,6 +288,7 @@ class ResourceGraph {
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
                     stateIcon: createIcon(resource.stateIcon),
+                    isHidden: resource.isHidden,
                     degree: degree
                 });
             }
@@ -429,6 +435,20 @@ class ResourceGraph {
             .append("title")
             .text(n => n.label);
 
+        if (this.hiddenIcon) {
+            var hiddenIconGroup = newNodesContainer
+                .append("g")
+                .attr("class", "resource-hidden-icon")
+                .attr("transform", "translate(-43,-43)")
+                .style("display", n => n.isHidden ? null : "none");
+            hiddenIconGroup
+                .append("path")
+                .attr("d", this.hiddenIcon.path);
+            hiddenIconGroup
+                .append("title")
+                .text(this.hiddenIcon.tooltip);
+        }
+
         // Context menu affordance. A cog positioned on the circle rim directly below the status badge.
         // The status badge sits at the top-right via "scale(1.6) translate(14,-34)" (center ~(35,-42)),
         // so mirroring it vertically puts the cog at the bottom-right ~(35,43). Hidden until the node is
@@ -479,8 +499,13 @@ class ResourceGraph {
             .attr("opacity", 1);
 
         this.nodeElements = newNodes.merge(this.nodeElements);
+        this.nodeElements.classed('resource-group-hidden', n => n.isHidden);
 
         // Set resource values that change.
+        this.nodeElementsG
+            .selectAll(".resource-group")
+            .select(".resource-hidden-icon")
+            .style("display", n => n.isHidden ? null : "none");
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-menu-cog")
@@ -724,6 +749,9 @@ class ResourceGraph {
         // we modify the styles to highlight selected nodes
         this.nodeElements.attr('class', (node) => {
             var classNames = ['resource-group'];
+            if (node.isHidden) {
+                classNames.push('resource-group-hidden');
+            }
             if (this.nodeEquals(node, mouseoverNode)) {
                 classNames.push('resource-group-hover');
             }

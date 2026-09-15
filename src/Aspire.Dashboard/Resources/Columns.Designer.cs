@@ -69,9 +69,16 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        /// <summary>
+        ///   Looks up a localized string similar to This resource is hidden by default. It&apos;s only shown because &quot;Show hidden resources&quot; is turned on..
+        /// </summary>
+        public static string HiddenResourceIconTooltip {
+            get {
+                return ResourceManager.GetString("HiddenResourceIconTooltip", resourceCulture);
+            }
+        }
 
 
-        
         /// <summary>
         ///   Looks up a localized string similar to Resource is running but not in a healthy state..
         /// </summary>
