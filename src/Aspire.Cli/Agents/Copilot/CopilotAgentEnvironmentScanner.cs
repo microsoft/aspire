@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
@@ -16,11 +15,8 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
     private const string McpConfigFileName = "mcp-config.json";
     private const string AspireServerName = "aspire";
-    private static readonly string s_skillBaseDirectory = Path.Combine(".github", "skills");
-
     private readonly ICopilotCliRunner _copilotCliRunner;
     private readonly ICopilotAppInstallationDetector _copilotAppInstallationDetector;
-    private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly CliExecutionContext _executionContext;
     private readonly IEnvironment _environment;
     private readonly ILogger<CopilotAgentEnvironmentScanner> _logger;
@@ -30,27 +26,23 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
     /// </summary>
     /// <param name="copilotCliRunner">The Copilot CLI runner for checking if Copilot CLI is installed.</param>
     /// <param name="copilotAppInstallationDetector">The detector for checking if the Copilot App is installed.</param>
-    /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
     /// <param name="executionContext">The CLI execution context for accessing environment variables and settings.</param>
     /// <param name="environment">The environment abstraction for reading environment variables.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
     public CopilotAgentEnvironmentScanner(
         ICopilotCliRunner copilotCliRunner,
         ICopilotAppInstallationDetector copilotAppInstallationDetector,
-        PlaywrightCliInstaller playwrightCliInstaller,
         CliExecutionContext executionContext,
         IEnvironment environment,
         ILogger<CopilotAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(copilotCliRunner);
         ArgumentNullException.ThrowIfNull(copilotAppInstallationDetector);
-        ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(logger);
         _copilotCliRunner = copilotCliRunner;
         _copilotAppInstallationDetector = copilotAppInstallationDetector;
-        _playwrightCliInstaller = playwrightCliInstaller;
         _executionContext = executionContext;
         _environment = environment;
         _logger = logger;
@@ -117,8 +109,6 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
         {
             _logger.LogDebug("Aspire MCP server is already configured in GitHub Copilot");
         }
-
-        CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
     }
 
     /// <summary>
