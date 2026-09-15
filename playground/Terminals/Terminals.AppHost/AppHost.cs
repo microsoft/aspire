@@ -53,7 +53,9 @@ builder.AddContainer("noderepl", "node", "latest")
 if (OperatingSystem.IsWindows())
 {
     // Local PowerShell launched directly by Hex1b, providing a Docker- and DCP-independent PTY debugging path.
-    shellbox.WithPowerShellDockCommand();
+    shellbox
+        .WithPowerShellDockCommand()
+        .WithCommandPromptDockCommand();
 
     // Single-replica executable wrapping cmd.exe to demonstrate that
     // WithTerminal() also works for arbitrary executables, not just projects.

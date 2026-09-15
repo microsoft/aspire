@@ -252,6 +252,37 @@ internal static class TerminalInteractionCommands
     }
 
     /// <summary>
+    /// Adds a command that opens a local Command Prompt session in the terminal dock.
+    /// </summary>
+    /// <remarks>
+    /// The Command Prompt process is launched directly by the AppHost-owned Hex1b terminal, so this command provides
+    /// another Windows shell for testing terminal behavior without Docker or DCP's PTY implementation.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Uses TerminalService and command handlers that are not ATS-compatible.")]
+    public static IResourceBuilder<ContainerResource> WithCommandPromptDockCommand(this IResourceBuilder<ContainerResource> container)
+    {
+        return container.WithCommand(
+            "terminal-dock-command-prompt",
+            "Open Command Prompt (terminal dock)",
+            executeCommand: commandContext =>
+            {
+                var terminalService = commandContext.Services.GetRequiredService<TerminalService>();
+
+                // The terminal remains open until the user closes its dock tab or the AppHost shuts down.
+                var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+                {
+                    Title = "Command Prompt",
+                    Executable = "cmd.exe"
+                });
+
+                terminal.Start();
+                terminal.Show();
+
+                return Task.FromResult(CommandResults.Success());
+            });
+    }
+
+    /// <summary>
     /// Adds a command that plays a terminal-based guessing game by driving the process from AppHost code.
     /// </summary>
     /// <remarks>
