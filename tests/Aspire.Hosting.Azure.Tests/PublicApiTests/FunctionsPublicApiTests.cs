@@ -1,6 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZUREFUNCTIONS001 // Tests exercise the experimental directory-based Functions APIs.
+
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -8,6 +12,43 @@ namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
 public class FunctionsPublicApiTests
 {
+    [Fact]
+    public void DirectoryBasedFunctionsApisAreExperimental()
+    {
+        var members = new MemberInfo[]
+        {
+            typeof(AzureFunctionsAppResource),
+            typeof(AzureFunctionsLanguage),
+            typeof(AzureFunctionsProjectResourceExtensions).GetMethod(nameof(AzureFunctionsProjectResourceExtensions.AddAzureFunctionsApp))!,
+            typeof(AzureFunctionsProjectResourceExtensions).GetMethods().Single(method =>
+                method.Name == nameof(AzureFunctionsProjectResourceExtensions.WithHostStorage) &&
+                method.ReturnType == typeof(IResourceBuilder<AzureFunctionsAppResource>)),
+            typeof(AzureFunctionsProjectResourceExtensions).GetMethods().Single(method =>
+                method.Name == nameof(AzureFunctionsProjectResourceExtensions.WithReference) &&
+                method.ReturnType == typeof(IResourceBuilder<AzureFunctionsAppResource>))
+        };
+
+        foreach (var member in members)
+        {
+            var attribute = member.GetCustomAttribute<ExperimentalAttribute>();
+            Assert.NotNull(attribute);
+            Assert.Equal("ASPIREAZUREFUNCTIONS001", attribute.DiagnosticId);
+            Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+        }
+    }
+
+    [Fact]
+    public void ProjectBasedFunctionsApisAreNotExperimental()
+    {
+        Assert.Null(typeof(AzureFunctionsProjectResource).GetCustomAttribute<ExperimentalAttribute>());
+
+        var methods = typeof(AzureFunctionsProjectResourceExtensions).GetMethods()
+            .Where(method => method.ReturnType == typeof(IResourceBuilder<AzureFunctionsProjectResource>));
+
+        Assert.NotEmpty(methods);
+        Assert.All(methods, method => Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>()));
+    }
+
     [Fact]
     public void AddAzureFunctionsProjectShouldThrowWhenBuilderIsNull()
     {
@@ -78,6 +119,86 @@ public class FunctionsPublicApiTests
         Assert.Equal(nameof(source), exception.ParamName);
     }
 
+    [Fact]
+    public void AddAzureFunctionsAppShouldThrowWhenBuilderIsNull()
+    {
+        IDistributedApplicationBuilder builder = null!;
+
+        var action = () => builder.AddAzureFunctionsApp("funcapp", "functions", AzureFunctionsLanguage.TypeScript);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddAzureFunctionsAppShouldThrowWhenNameIsNullOrEmpty(bool isNull)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var name = isNull ? null! : string.Empty;
+
+        var action = () => builder.AddAzureFunctionsApp(name, "functions", AzureFunctionsLanguage.TypeScript);
+
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(name), exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddAzureFunctionsAppShouldThrowWhenAppDirectoryIsNullOrEmpty(bool isNull)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var appDirectory = isNull ? null! : string.Empty;
+
+        var action = () => builder.AddAzureFunctionsApp("funcapp", appDirectory, AzureFunctionsLanguage.TypeScript);
+
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(appDirectory), exception.ParamName);
+    }
+
+    [Fact]
+    public void AddAzureFunctionsAppShouldThrowWhenLanguageIsInvalid()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var action = () => builder.AddAzureFunctionsApp("funcapp", "functions", (AzureFunctionsLanguage)42);
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(action);
+        Assert.Equal("language", exception.ParamName);
+    }
+
+    [Fact]
+    public void WithHostStorageForAppShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<AzureFunctionsAppResource> builder = null!;
+        using var hostBuilder = TestDistributedApplicationBuilder.Create();
+        var storage = hostBuilder.AddAzureStorage("funcstorage");
+
+        var action = () => builder.WithHostStorage(storage);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithHostStorageForAppShouldThrowWhenStorageIsNull()
+    {
+        using var hostBuilder = TestDistributedApplicationBuilder.Create();
+        var builder = hostBuilder.AddAzureFunctionsApp("funcstorage", "functions", AzureFunctionsLanguage.TypeScript);
+        IResourceBuilder<AzureStorageResource> storage = null!;
+
+        var action = () => builder.WithHostStorage(storage);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(storage), exception.ParamName);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -91,6 +212,48 @@ public class FunctionsPublicApiTests
             ? Assert.Throws<ArgumentNullException>(action)
             : Assert.Throws<ArgumentException>(action);
         Assert.Equal(nameof(name), exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CtorAzureFunctionsAppResourceShouldThrowWhenNameIsNullOrEmpty(bool isNull)
+    {
+        var name = isNull ? null! : string.Empty;
+
+        var action = () => new AzureFunctionsAppResource(name, "func", "functions", AzureFunctionsLanguage.TypeScript);
+
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(name), exception.ParamName);
+    }
+
+    [Fact]
+    public void CtorAzureFunctionsAppResourceShouldThrowWhenCommandIsEmpty()
+    {
+        var action = () => new AzureFunctionsAppResource("funcapp", string.Empty, "functions", AzureFunctionsLanguage.TypeScript);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+        Assert.Equal("command", exception.ParamName);
+    }
+
+    [Fact]
+    public void CtorAzureFunctionsAppResourceShouldThrowWhenAppDirectoryIsNull()
+    {
+        var action = () => new AzureFunctionsAppResource("funcapp", "func", null!, AzureFunctionsLanguage.TypeScript);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal("workingDirectory", exception.ParamName);
+    }
+
+    [Fact]
+    public void CtorAzureFunctionsAppResourceShouldThrowWhenLanguageIsInvalid()
+    {
+        var action = () => new AzureFunctionsAppResource("funcapp", "func", "functions", (AzureFunctionsLanguage)42);
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(action);
+        Assert.Equal("language", exception.ParamName);
     }
 
     private sealed class TestProject : IProjectMetadata

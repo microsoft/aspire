@@ -2,14 +2,16 @@ import * as fs from 'fs';
 import http = require('http');
 import https = require('https');
 import * as path from 'path';
+import * as net from 'node:net';
 import * as vscode from 'vscode';
 import { azureFunctionsExtensionId, csharpExtensionId } from '../../capabilities';
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration } from '../../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration, isAzureFunctionsNodeLaunchConfiguration } from '../../dcp/types';
 import {
     azureFunctionsCmdDelayedExpansion,
     azureFunctionsCmdPercentArgument,
     azureFunctionsHostStartupTimedOut,
     azureFunctionsInvalidProcessId,
+    azureFunctionsNodeInspectorPortAllocationFailed,
     azureFunctionsTaskExitedBeforeStartup,
     azureFunctionsUnsupportedTaskShell,
     azureFunctionsWorkerStartupTimedOut,
@@ -23,6 +25,8 @@ import { DotNetService } from './dotnet';
 import { cleanupRun, registerRunCleanup } from '../runCleanupRegistry';
 
 const AF_EXTENSION_ID = azureFunctionsExtensionId;
+const NODE_WORKER_ARGUMENTS_ENV = 'languageWorkers__node__arguments';
+const NODE_INSPECTOR_HOST = '127.0.0.1';
 const DEFAULT_PICK_PROCESS_TIMEOUT_SECONDS = 30;
 const FUNC_HOST_DEFAULT_PORT = 7071;
 const POLL_INTERVAL_MS = 100;
@@ -649,6 +653,150 @@ function classifyFuncHostTaskShell(profile: TerminalProfileConfiguration | undef
 function throwUnsupportedTaskShell(): never {
     throw new Error(azureFunctionsUnsupportedTaskShell);
 }
+
+async function allocateNodeInspectorPort(): Promise<number> {
+    return await new Promise<number>((resolve, reject) => {
+        const server = net.createServer();
+
+        server.once('error', error => reject(new Error(azureFunctionsNodeInspectorPortAllocationFailed, { cause: error })));
+        server.listen(0, NODE_INSPECTOR_HOST, () => {
+            const address = server.address();
+            if (typeof address !== 'object' || address === null) {
+                server.close();
+                reject(new Error(azureFunctionsNodeInspectorPortAllocationFailed));
+                return;
+            }
+
+            const port = address.port;
+            server.close(error => {
+                if (error) {
+                    reject(new Error(azureFunctionsNodeInspectorPortAllocationFailed, { cause: error }));
+                    return;
+                }
+
+                resolve(port);
+            });
+        });
+    });
+}
+
+export const azureFunctionsNodeDebuggerExtension: ResourceDebuggerExtension = {
+    resourceType: 'azure-functions-node',
+    debugAdapter: 'pwa-node',
+    extensionId: null,
+    getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => {
+        if (isAzureFunctionsNodeLaunchConfiguration(launchConfig)) {
+            return `Azure Functions: ${path.basename(launchConfig.app_directory)}`;
+        }
+
+        return 'Azure Functions';
+    },
+    getSupportedFileTypes: () => ['.ts', '.js'],
+    getProjectFile: (launchConfig) => {
+        if (isAzureFunctionsNodeLaunchConfiguration(launchConfig)) {
+            return launchConfig.app_directory;
+        }
+
+        throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+    },
+    createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
+        if (!isAzureFunctionsNodeLaunchConfiguration(launchConfig)) {
+            extensionLogOutputChannel.info(`The resource type was not azure-functions-node for ${JSON.stringify(launchConfig)}`);
+            throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+        }
+
+        if (!launchConfig.app_directory || !launchConfig.command) {
+            throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+        }
+
+        const dcpEnv = Object.fromEntries(
+            (env ?? []).filter(e => e.value !== undefined).map(e => [e.name, e.value])
+        );
+
+        if (!launchOptions.debug) {
+            debugConfiguration.type = 'pwa-node';
+            debugConfiguration.request = 'launch';
+            debugConfiguration.runtimeExecutable = launchConfig.command;
+            debugConfiguration.runtimeArgs = args ?? [];
+            debugConfiguration.cwd = launchConfig.app_directory;
+            debugConfiguration.noDebug = true;
+
+            delete debugConfiguration.program;
+            delete debugConfiguration.args;
+            return;
+        }
+
+        const debugPort = await allocateNodeInspectorPort();
+        const debugEnv = {
+            ...dcpEnv,
+            // Microsoft Learn documents Node Functions debugging as the Functions host
+            // passing inspector arguments to the language worker with
+            // `languageWorkers__node__arguments`, and the Azure Functions VS Code
+            // extension uses the same setting for its "Attach to Node Functions" flow.
+            // Keep this scoped to the VS Code debug task instead of modeling a resource
+            // endpoint so normal `aspire start`, service discovery, and publish never
+            // expose an inspector port.
+            // See:
+            // - https://learn.microsoft.com/azure/azure-functions/functions-reference-node#debugging
+            // - https://github.com/microsoft/vscode-azurefunctions/blob/2f16b4b6ac536842ac69d06d088fdff47f7421e4/src/debug/NodeDebugProvider.ts
+            [NODE_WORKER_ARGUMENTS_ENV]: `--inspect=${NODE_INSPECTOR_HOST}:${debugPort}`
+        };
+
+        // The Node worker uses the built-in JavaScript debugger, independently of the
+        // .NET Functions build, worker-PID discovery, and Azure Functions extension.
+        const task = new vscode.Task(
+            { type: 'shell', task: 'azure-functions-node' },
+            vscode.TaskScope.Workspace,
+            `func: ${path.basename(launchConfig.app_directory)}`,
+            'aspire',
+            new vscode.ShellExecution(launchConfig.command, args ?? [], {
+                cwd: launchConfig.app_directory,
+                env: debugEnv
+            })
+        );
+        task.presentationOptions = {
+            reveal: vscode.TaskRevealKind.Always,
+            panel: vscode.TaskPanelKind.Dedicated
+        };
+
+        let taskExecution: vscode.TaskExecution | undefined;
+        let stopped = false;
+        registerRunCleanup(debugConfiguration.runId, () => {
+            stopped = true;
+            taskExecution?.terminate();
+        });
+        try {
+            taskExecution = await vscode.tasks.executeTask(task);
+            // Cleanup can run while executeTask is pending. Do not leave that late
+            // task running after its parent Aspire session has already stopped.
+            if (stopped) {
+                taskExecution.terminate();
+                throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+            }
+        } catch (error) {
+            cleanupRun(debugConfiguration.runId);
+            throw error;
+        }
+
+        debugConfiguration.type = 'pwa-node';
+        debugConfiguration.request = 'attach';
+        debugConfiguration.address = NODE_INSPECTOR_HOST;
+        debugConfiguration.port = debugPort;
+        debugConfiguration.restart = true;
+        debugConfiguration.sourceMaps = true;
+        debugConfiguration.continueOnAttach = true;
+        if (launchConfig.language === 'typescript' && debugConfiguration.outFiles === undefined) {
+            debugConfiguration.outFiles = [path.join(launchConfig.app_directory, 'dist/**/*.js')];
+        }
+        debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**'];
+        debugConfiguration.cwd = launchConfig.app_directory;
+
+        delete debugConfiguration.program;
+        delete debugConfiguration.args;
+        delete debugConfiguration.console;
+        delete debugConfiguration.env;
+    }
+};
 
 export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'azure-functions',

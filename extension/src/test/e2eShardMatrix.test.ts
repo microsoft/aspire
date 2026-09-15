@@ -174,6 +174,19 @@ suite('E2E shard matrix', () => {
         assertAdvisoryRowsAreTracked(workflow, expectedAdvisoryRows);
     });
 
+    test('schedules the Node Functions proof independently with Functions prerequisites', () => {
+        const workflow = fs.readFileSync(workflowPath, 'utf8');
+        const rows = matrixRows(workflow).filter(row => row.shardName === 'azure-functions-node');
+
+        assert.strictEqual(rows.length, 1);
+        assert.strictEqual(rows[0].name, 'Linux');
+        assert.strictEqual(rows[0].runner, 'ubuntu-latest');
+        assert.strictEqual(rows[0].spec, 'out/test-e2e/test-e2e/azureFunctionsNode.e2e.test.js');
+        assert.strictEqual(rows[0].installAzureFunctions, true);
+        assert.strictEqual(rows[0].advisoryIssue, undefined);
+        assert.ok(!fs.readFileSync(path.join(specDirectory, 'azureFunctions.e2e.test.ts'), 'utf8').includes('azureFunctionsNode.e2e.test'));
+    });
+
     test('schedules browser debugger proofs on Chrome and Edge with debugger prerequisites', () => {
         const workflow = fs.readFileSync(workflowPath, 'utf8');
         const browserDebuggerRows = matrixRows(workflow)

@@ -8,7 +8,7 @@ import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, 
 import { pythonDebuggerExtension } from "./languages/python";
 import { nodeDebuggerExtension } from "./languages/node";
 import { browserDebuggerExtension } from "./languages/browser";
-import { azureFunctionsDebuggerExtension } from "./languages/azureFunctions";
+import { azureFunctionsDebuggerExtension, azureFunctionsNodeDebuggerExtension } from "./languages/azureFunctions";
 import { goDebuggerExtension } from "./languages/go";
 import { createDefaultRustDebuggerExtension } from "./languages/rust";
 import { bunDebuggerExtension } from "./languages/bun";
@@ -114,6 +114,8 @@ export function getResourceDebuggerExtensions(platform: NodeJS.Platform = proces
             extensions.push(azureFunctionsDebuggerExtension);
         }
     }
+
+    extensions.push(azureFunctionsNodeDebuggerExtension);
 
     if (isPythonInstalled()) {
         extensions.push(pythonDebuggerExtension);

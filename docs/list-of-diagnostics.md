@@ -22,3 +22,9 @@ Setting `AspireUseCliBundle=true` enables CLI delegation. `AspireCliInvocationMo
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
 | `ASPIRE006` | Error | Application model items must have valid names | [src/Aspire.Hosting.Analyzers/AppHostAnalyzer.Diagnostics.cs](../src/Aspire.Hosting.Analyzers/AppHostAnalyzer.Diagnostics.cs) |
+
+## Experimental APIs
+
+| Diagnostic ID | Description | Location |
+| ------------- | ----------- | -------- |
+| `ASPIREAZUREFUNCTIONS001` | Directory-based Azure Functions app APIs are experimental pending API review and may change or be removed. Suppress this diagnostic to opt in. | [src/Aspire.Hosting.Azure.Functions](../src/Aspire.Hosting.Azure.Functions) |

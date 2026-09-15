@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as https from 'https';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
@@ -10,7 +11,7 @@ import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '
 import { externalBuildProjectDebuggerExtension, projectDebuggerExtension } from '../debugger/languages/dotnet';
 import { redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
-import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
+import type { AspireResourceExtendedDebugConfiguration, DcpServerConnectionInfo, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
 import type { PreparableAppHostLifecycleTool } from '../lm/appHostLifecycleTools';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
@@ -806,6 +807,10 @@ export async function executeE2eControlCommand(
     case 'getExtensionPackageJson': {
       markStarted();
       return context.extension.packageJSON;
+    }
+    case 'getDcpRunSessionInfo': {
+      markStarted();
+      return await getDcpRunSessionInfoForE2E(aspireContext.dcpServer.connectionInfo);
     }
     case 'getExtensionFileStatus': {
       markStarted();
@@ -2715,6 +2720,45 @@ function getE2eBreakpoints(): Array<{ filePath: string; line: number; enabled: b
       line: breakpoint.location.range.start.line,
       enabled: breakpoint.enabled,
     }));
+}
+
+// Verify the packaged extension's externally visible DCP /info response, rather
+// than only calling the in-process capability helper.
+async function getDcpRunSessionInfoForE2E({ address, token }: DcpServerConnectionInfo): Promise<unknown> {
+  return await new Promise((resolve, reject) => {
+    const request = https.get(`https://${address}/info`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'microsoft-developer-dcp-instance-id': 'aspire-extension-e2e',
+      },
+      // The opt-in E2E bridge calls the extension's loopback-only DCP server,
+      // which uses a per-session self-signed certificate.
+      rejectUnauthorized: false,
+    }, response => {
+      const chunks: Buffer[] = [];
+      response.on('data', chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      response.on('error', reject);
+      response.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        if (response.statusCode !== 200) {
+          reject(new Error(`DCP /info returned HTTP ${response.statusCode}: ${body}`));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(body));
+        }
+        catch (error) {
+          reject(error);
+        }
+      });
+    });
+
+    request.on('error', reject);
+    request.setTimeout(10000, () => {
+      request.destroy(new Error('DCP /info request timed out'));
+    });
+  });
 }
 
 function getExtensionFileStatus(context: vscode.ExtensionContext, relativePaths: readonly string[]): Record<string, boolean> {

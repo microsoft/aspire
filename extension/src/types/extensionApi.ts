@@ -240,6 +240,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number }
     | { name: 'getDebugSessionProcessInfo'; appHostPath?: string }
     | { name: 'getExtensionPackageJson' }
+    | { name: 'getDcpRunSessionInfo' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }
     | { name: 'getDefinitions'; filePath: string; line: number; character: number }

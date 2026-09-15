@@ -6,6 +6,18 @@ import { defaultConfigurationNameForWorkspaceFolder, launchingWithAppHost, launc
 import { collapseWhitespace, escapeCodicons, formatText } from '../utils/strings';
 
 suite('utils/strings tests', () => {
+    test('Node Functions inspector failure is present in runtime exports and localization catalogs', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+        const name = 'azureFunctionsNodeInspectorPortAllocationFailed';
+        const message = 'Failed to allocate a Node inspector port.';
+
+        assert.strictEqual(locStrings.azureFunctionsNodeInspectorPortAllocationFailed, message);
+        assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], message);
+        assert.ok(xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
+    });
+
 	test('formatText formats correctly ', () => {
         const input = 'This is a test :ice: :rocket: :bug: :microscope: :linked_paperclips: :chart_increasing: :chart_decreasing: :locked_with_key: :play_button: :check_mark: :cross_mark: :hammer_and_wrench:';
         const expectedOutput = 'This is a test 🧊 🚀 🐛 🔬 🔗 📈 📉 🔒 ▶️ ✅ ❌ 🛠️';

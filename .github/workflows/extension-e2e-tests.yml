@@ -444,6 +444,15 @@ jobs:
             useXvfb: true
             installAzureFunctions: true
           - name: Linux
+            shardName: azure-functions-node
+            spec: out/test-e2e/test-e2e/azureFunctionsNode.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installAzureFunctions: true
+          - name: Linux
             shardName: deno-debugger
             spec: out/test-e2e/test-e2e/denoDebugger.e2e.test.js
             runner: ubuntu-latest
