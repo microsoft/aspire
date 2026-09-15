@@ -3,6 +3,11 @@
 
 namespace Aspire.Cli.Configuration;
 
+/// <summary>
+/// Represents a configuration value and the directory relative values were declared from.
+/// </summary>
+internal sealed record ConfigurationValueWithOrigin(string Value, DirectoryInfo BaseDirectory, bool IsGlobal);
+
 internal interface IConfigurationService
 {
     Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default);
@@ -29,5 +34,11 @@ internal interface IConfigurationService
     /// during the walk cannot be parsed as JSON, matching the behavior of startup-time settings load.
     /// </remarks>
     Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads a directory-scoped configuration value together with its declaring directory.
+    /// </summary>
+    Task<ConfigurationValueWithOrigin?> GetConfigurationFromDirectoryWithOriginAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default);
+
     string GetSettingsFilePath(bool isGlobal);
 }

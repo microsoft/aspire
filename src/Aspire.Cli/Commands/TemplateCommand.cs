@@ -3,23 +3,27 @@
 
 using System.CommandLine;
 using Aspire.Cli.Templating;
+using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Commands;
 
 internal sealed class TemplateCommand : BaseCommand
 {
     private readonly Func<ParseResult, CancellationToken, Task<CommandResult>> _executeCallback;
+    private readonly IConfiguration _configuration;
 
     internal override bool PrefetchesTemplatePackageMetadata => true;
 
-    public TemplateCommand(ITemplate template, Func<ParseResult, CancellationToken, Task<CommandResult>> executeCallback, CommonCommandServices services)
+    public TemplateCommand(ITemplate template, Func<ParseResult, CancellationToken, Task<CommandResult>> executeCallback, IConfiguration configuration, CommonCommandServices services)
         : base(template.Name, template.Description, services)
     {
         ArgumentNullException.ThrowIfNull(template);
         ArgumentNullException.ThrowIfNull(executeCallback);
+        ArgumentNullException.ThrowIfNull(configuration);
 
         template.ApplyOptions(this);
         _executeCallback = executeCallback;
+        _configuration = configuration;
     }
 
     // Template commands are user-facing interactive commands (e.g., `aspire new aspire-starter`)
@@ -28,10 +32,10 @@ internal sealed class TemplateCommand : BaseCommand
 
     internal override void PrepareForExecution(ParseResult parseResult)
     {
-        if (!string.IsNullOrWhiteSpace(parseResult.GetValue(NewCommand.s_sourceOption)))
+        if (NewCommand.GetEffectiveSource(parseResult, _configuration) is not null)
         {
-            // The foreground template lookup applies --source. Background prefetch does not know
-            // about invocation options, so letting it run would still contact fallback feeds.
+            // The foreground template lookup applies either --source or the configured source.
+            // Background prefetch does not know about either input and could contact fallback feeds.
             DisableTemplatePackageMetadataPrefetchingForInvocation();
         }
     }
