@@ -1,0 +1,8 @@
+﻿[
+  {
+    Method: PUT,
+    Uri: https://management.azure.com/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/test-foundry/providers/Microsoft.CognitiveServices/accounts/foundry/projects/project/providers/Microsoft.Authorization/roleAssignments/4d80a1d8-3658-4c9e-9c5e-110b8e7b0111?api-version=2022-04-01,
+    Body: {"properties":{"roleDefinitionId":"/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/providers/Microsoft.Authorization/roleDefinitions/53ca6127-db72-4b80-b1b0-d745d6d5456d","principalId":"55b498a7-c920-47ab-b92c-253a29d2c832","principalType":"ServicePrincipal"}},
+    AuthorizationScheme: Bearer
+  }
+]

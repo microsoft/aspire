@@ -47,6 +47,8 @@
 
   <ItemGroup>
     <Using Include="Aspire.Tests.Utils" />
+    <!-- Verify adds a global Xunit import, but this project already uses explicit imports. -->
+    <Using Remove="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
@@ -55,13 +57,17 @@
     <PackageReference Include="Azure.Search.Documents" />
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
+    <PackageReference Include="System.IO.Hashing" />
+    <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Remove="Snapshots\**\*.cs" />
     <Compile Include="$(TestsSharedDir)CliInstallStrategy.cs" Link="shared\CliInstallStrategy.cs" />
     <Compile Include="$(TestsSharedDir)CliPackageDiscovery.cs" Link="shared\CliPackageDiscovery.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
     <Compile Include="$(TestsSharedDir)Hex1bTestHelpers.cs" Link="shared\Hex1bTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)Hex1bAutomatorTestHelpers.cs" Link="shared\Hex1bAutomatorTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -70,6 +76,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\ConsoleActivityLoggerStrings.resx" Link="Resources\ConsoleActivityLoggerStrings.resx" LogicalName="Aspire.Cli.Resources.ConsoleActivityLoggerStrings.resources" />
+    <EmbeddedResource Include="Helpers\FoundryDeploymentPermissions.cs" LogicalName="FoundryDeploymentPermissions.cs" />
   </ItemGroup>
 
 </Project>

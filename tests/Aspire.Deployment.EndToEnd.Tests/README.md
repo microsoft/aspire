@@ -158,9 +158,29 @@ Sandbox execution requires preview enrollment, appropriate roles, and
 the deployment credential to obtain and use a Sandbox token; a redirect or authentication
 error does not count as workload success.
 
+The protected-port credential is distinct from the Sandbox management-API credential.
+The current headless proxy-authentication contract still needs confirmation before this
+scenario's positive authenticated-ingress check can pass in CI. Do not substitute an
+anonymous request or treat the proxy's rejection as evidence that the protected workload
+is serving requests.
+
 The Foundry echo worker uses no model deployment, chat reference, or TPM quota. It still
-requires Foundry hosted-compute capacity and authorization in `swedencentral`. The
-model-backed test disabled under #16330 is unchanged. Compiling or enumerating these tests
+requires Foundry hosted-compute capacity in `swedencentral`. Its generated AppHost uses
+the Azure CLI identity for both deployment and test-owned permission setup. After the
+Foundry project is provisioned, the fixture assigns that principal **Foundry User**
+(`53ca6127-db72-4b80-b1b0-d745d6d5456d`) at that project's scope and waits for data-plane
+access before creating the hosted agent. The credential must be allowed to create this
+role assignment; ordinary Azure Owner access alone does not grant Foundry `agents/write`.
+This grant is separate from the project and hosted-agent managed identities, and is
+removed with the test resource group. No production authorization defaults are changed.
+See [hosted-agent permissions](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agent-permissions).
+
+The local-only `FoundryPermissions*` and `FoundryEchoAppHost*` methods in the same test
+class cover identity parsing, project-scoped assignment, idempotence, propagation,
+cancellation, and the generated fixture. Select those methods explicitly to run them
+without Azure or terminal automation.
+
+The model-backed test disabled under #16330 is unchanged. Compiling or enumerating these tests
 does not establish that hosted Responses routing or Sandbox authentication works in a
 particular Azure environment; those checks require an actual authorized deployment.
 

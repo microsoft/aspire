@@ -5,6 +5,68 @@ namespace Aspire.Deployment.EndToEnd.Tests.Helpers;
 
 internal static class FoundryEchoTestApp
 {
+    internal static string CreateAppHost(string directives)
+    {
+        using var source = typeof(FoundryEchoTestApp).Assembly.GetManifestResourceStream("FoundryDeploymentPermissions.cs")
+            ?? throw new InvalidOperationException("The compiled Foundry permission helper is missing from the test assembly.");
+        using var reader = new StreamReader(source);
+        return $$"""
+            {{directives}}
+            #pragma warning disable ASPIREDOTNETPROJECT001
+            #pragma warning disable ASPIREPIPELINES001
+            using Aspire.Deployment.EndToEnd.Tests.Helpers;
+            using Aspire.Hosting.Foundry;
+            using Aspire.Hosting.Pipelines;
+            using Azure.AI.Projects;
+            using Azure.Identity;
+            using System.ClientModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+            // Pin both the deployment and its test-owned permission setup to the same CLI identity.
+            builder.Configuration["Azure:CredentialSource"] = "AzureCli";
+            var project = builder.AddFoundry("foundry").AddProject("project");
+            builder.AddDotnetProject("echo", Path.Combine("EchoAgent", "EchoAgent.csproj"))
+                .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+
+            builder.Pipeline.WithFinalAction("provision-project", async context =>
+            {
+                var projectId = await project.Resource.Id.GetValueAsync(context.CancellationToken)
+                    ?? throw new InvalidOperationException("The provisioned Foundry project has no resource ID.");
+                var endpoint = await project.Resource.Endpoint.GetValueAsync(context.CancellationToken)
+                    ?? throw new InvalidOperationException("The provisioned Foundry project has no endpoint.");
+                var credential = new AzureCliCredential(new AzureCliCredentialOptions
+                {
+                    TenantId = builder.Configuration["Azure:TenantId"]
+                });
+                using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+                using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+                var permissions = new FoundryDeploymentPermissions(http, credential);
+                var client = new AIProjectClient(new Uri(endpoint), credential);
+                await permissions.EnsureAsync(projectId, async cancellationToken =>
+                {
+                    try
+                    {
+                        // Probe role propagation without creating a disposable agent/version.
+                        await foreach (var agent in client.AgentAdministrationClient.GetAgentsAsync(cancellationToken: cancellationToken))
+                        {
+                            break;
+                        }
+
+                        return true;
+                    }
+                    catch (ClientResultException ex) when (ex.Status == 403)
+                    {
+                        return false;
+                    }
+                }, context.CancellationToken);
+            });
+
+            builder.Build().Run();
+
+            {{reader.ReadToEnd()}}
+            """;
+    }
+
     internal static void Write(string directory, string marker)
     {
         Directory.CreateDirectory(directory);
