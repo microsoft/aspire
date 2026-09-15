@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTIONS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
@@ -271,12 +272,6 @@ public static class AzureEventHubsExtensions
             .WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 5300)
             .WithEndpoint(EmulatorHealthEndpointName, e => e.ExcludeReferenceEndpoint = true)
             .WithHttpHealthCheck(endpointName: EmulatorHealthEndpointName, path: "/health")
-            .WithAnnotation(new ContainerImageAnnotation
-            {
-                Registry = EventHubsEmulatorContainerImageTags.Registry,
-                Image = EventHubsEmulatorContainerImageTags.Image,
-                Tag = EventHubsEmulatorContainerImageTags.Tag
-            })
             .WithUrlForEndpoint(EmulatorHealthEndpointName, u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly);
 
         // Create a separate storage emulator for the Event Hub one
@@ -284,17 +279,72 @@ public static class AzureEventHubsExtensions
                 .AddAzureStorage($"{builder.Resource.Name}-storage")
                 .WithParentRelationship(builder);
 
-        var surrogate = new AzureEventHubsEmulatorResource(builder.Resource);
-        var surrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(surrogate);
-        if (configureContainer != null)
-        {
-            configureContainer(surrogateBuilder);
-            storageResource = storageResource.RunAsEmulator(c => c.WithLifetimeOf(surrogateBuilder));
-        }
-        else
-        {
-            storageResource = storageResource.RunAsEmulator();
-        }
+        builder.RunAsContainerImage<AzureEventHubsResource, AzureEventHubsEmulatorResource>(
+            $"{EventHubsEmulatorContainerImageTags.Registry}/{EventHubsEmulatorContainerImageTags.Image}:{EventHubsEmulatorContainerImageTags.Tag}",
+            container =>
+            {
+                if (configureContainer is not null)
+                {
+                    configureContainer(container);
+                    storageResource = storageResource.RunAsEmulator(c => c.WithLifetimeOf(container));
+                }
+                else
+                {
+                    storageResource = storageResource.RunAsEmulator();
+                }
+
+                // RunAsEmulator() can be followed by custom model configuration so we need to delay the creation of the Config.json file
+                // until all resources are about to be prepared and annotations can't be updated anymore.
+                container.WithContainerFiles(
+                    AzureEventHubsEmulatorResource.EmulatorConfigFilesPath,
+                    (_, _) =>
+                    {
+                        var customConfigFile = builder.Resource.Annotations.OfType<ConfigFileAnnotation>().FirstOrDefault();
+                        if (customConfigFile != null)
+                        {
+                            return Task.FromResult<IEnumerable<ContainerFileSystemItem>>([
+                                new ContainerFile
+                                {
+                                    Name = AzureEventHubsEmulatorResource.EmulatorConfigJsonFile,
+                                    SourcePath = customConfigFile.SourcePath,
+                                },
+                            ]);
+                        }
+
+                        // Create default Config.json file content
+                        var tempConfig = JsonNode.Parse(CreateEmulatorConfigJson(builder.Resource));
+
+                        if (tempConfig == null)
+                        {
+                            throw new InvalidOperationException("The configuration file mount could not be parsed.");
+                        }
+
+                        // Apply ConfigJsonAnnotation modifications
+                        var configJsonAnnotations = builder.Resource.Annotations.OfType<ConfigJsonAnnotation>();
+
+                        if (configJsonAnnotations.Any())
+                        {
+                            foreach (var annotation in configJsonAnnotations)
+                            {
+                                annotation.Configure(tempConfig);
+                            }
+                        }
+
+                        using var writeStream = new MemoryStream();
+                        using var writer = new Utf8JsonWriter(writeStream, new JsonWriterOptions { Indented = true });
+                        tempConfig.WriteTo(writer);
+
+                        writer.Flush();
+
+                        return Task.FromResult<IEnumerable<ContainerFileSystemItem>>([
+                            new ContainerFile
+                            {
+                                Name = AzureEventHubsEmulatorResource.EmulatorConfigJsonFile,
+                                Contents = Encoding.UTF8.GetString(writeStream.ToArray()),
+                            },
+                        ]);
+                    });
+            });
 
         var storage = storageResource.Resource;
 
@@ -307,58 +357,6 @@ public static class AzureEventHubsExtensions
             context.EnvironmentVariables["BLOB_SERVER"] = $"{blobEndpoint.Resource.Name}:{blobEndpoint.TargetPort}";
             context.EnvironmentVariables["METADATA_SERVER"] = $"{tableEndpoint.Resource.Name}:{tableEndpoint.TargetPort}";
         }));
-
-        // RunAsEmulator() can be followed by custom model configuration so we need to delay the creation of the Config.json file
-        // until all resources are about to be prepared and annotations can't be updated anymore.
-        surrogateBuilder.WithContainerFiles(
-            AzureEventHubsEmulatorResource.EmulatorConfigFilesPath,
-            (_, _) =>
-            {
-                var customConfigFile = builder.Resource.Annotations.OfType<ConfigFileAnnotation>().FirstOrDefault();
-                if (customConfigFile != null)
-                {
-                    return Task.FromResult<IEnumerable<ContainerFileSystemItem>>([
-                        new ContainerFile
-                        {
-                            Name = AzureEventHubsEmulatorResource.EmulatorConfigJsonFile,
-                            SourcePath = customConfigFile.SourcePath,
-                        },
-                    ]);
-                }
-
-                // Create default Config.json file content
-                var tempConfig = JsonNode.Parse(CreateEmulatorConfigJson(builder.Resource));
-
-                if (tempConfig == null)
-                {
-                    throw new InvalidOperationException("The configuration file mount could not be parsed.");
-                }
-
-                // Apply ConfigJsonAnnotation modifications
-                var configJsonAnnotations = builder.Resource.Annotations.OfType<ConfigJsonAnnotation>();
-
-                if (configJsonAnnotations.Any())
-                {
-                    foreach (var annotation in configJsonAnnotations)
-                    {
-                        annotation.Configure(tempConfig);
-                    }
-                }
-
-                using var writeStream = new MemoryStream();
-                using var writer = new Utf8JsonWriter(writeStream, new JsonWriterOptions { Indented = true });
-                tempConfig.WriteTo(writer);
-
-                writer.Flush();
-
-                return Task.FromResult<IEnumerable<ContainerFileSystemItem>>([
-                    new ContainerFile
-                    {
-                        Name = AzureEventHubsEmulatorResource.EmulatorConfigJsonFile,
-                        Contents = Encoding.UTF8.GetString(writeStream.ToArray()),
-                    },
-                ]);
-            });
 
         return builder;
     }

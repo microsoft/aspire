@@ -49,7 +49,7 @@ public class AddBunAppTests(ITestOutputHelper outputHelper)
         var dockerfileContents = File.ReadAllText(dockerfilePath);
         await Verify(dockerfileContents);
 
-        var dockerBuildAnnotation = bunApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        var dockerBuildAnnotation = bunApp.GetDockerfileBuildAnnotation();
         Assert.True(dockerBuildAnnotation.HasEntrypoint);
 
         Assert.Empty(bunApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>());
@@ -101,7 +101,7 @@ public class AddBunAppTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(Path.Combine(appDir, ".dockerignore")), "Aspire should not write a .dockerignore into the user's source tree.");
 
         // The annotation should carry the default content so it can be inspected/overridden by users.
-        var dockerBuildAnnotation = bunApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        var dockerBuildAnnotation = bunApp.GetDockerfileBuildAnnotation();
         Assert.NotNull(dockerBuildAnnotation.BuildContextIgnoreContent);
         Assert.Contains("node_modules", dockerBuildAnnotation.BuildContextIgnoreContent!);
     }

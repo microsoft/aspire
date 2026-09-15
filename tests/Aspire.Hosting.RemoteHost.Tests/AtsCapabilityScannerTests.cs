@@ -165,6 +165,51 @@ public class AtsCapabilityScannerTests
         Assert.Equal(AtsTypeCategory.Array, enumerableReturnCapability.ReturnType.Category);
     }
 
+    [Fact]
+    public void ScanAssemblies_NullableHandleReturnsPreserveNullabilityWithoutChangingOtherReturns()
+    {
+        var result = AtsCapabilityScanner.ScanAssemblies(
+            [typeof(global::Aspire.Hosting.ContainerResourceExtensions).Assembly, typeof(AtsCapabilityScannerTests).Assembly]);
+
+        var asContainer = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/asContainer");
+        var findResourceByName = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/findResourceByName");
+        var getEndpoint = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting.ApplicationModel/getEndpoint");
+        var getConfigValue = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/getConfigValue");
+        var taskHandle = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId.EndsWith("/testNullableTaskHandleReturn", StringComparison.Ordinal));
+        var valueTaskHandle = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId.EndsWith("/testNullableValueTaskHandleReturn", StringComparison.Ordinal));
+
+        Assert.Equal(AtsTypeCategory.Handle, asContainer.ReturnType.Category);
+        Assert.True(asContainer.ReturnType.IsNullable);
+        Assert.Equal(AtsTypeCategory.Handle, findResourceByName.ReturnType.Category);
+        Assert.True(findResourceByName.ReturnType.IsNullable);
+        Assert.Equal(AtsTypeCategory.Handle, getEndpoint.ReturnType.Category);
+        Assert.True(getEndpoint.ReturnType.IsNullable);
+        Assert.Equal(AtsTypeCategory.Primitive, getConfigValue.ReturnType.Category);
+        Assert.Null(getConfigValue.ReturnType.IsNullable);
+        Assert.Equal(AtsTypeCategory.Handle, taskHandle.ReturnType.Category);
+        Assert.True(taskHandle.ReturnType.IsNullable);
+        Assert.Equal(AtsTypeCategory.Handle, valueTaskHandle.ReturnType.Category);
+        Assert.True(valueTaskHandle.ReturnType.IsNullable);
+    }
+
+    [Fact]
+    public void ScanAssembly_ExplicitlyIgnoredInterfacesAreExcludedFromResourceHandles()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var resourceType = Assert.Single(result.HandleTypes,
+            type => type.ClrType == typeof(ResourceWithIgnoredInterface));
+
+        Assert.DoesNotContain(resourceType.ImplementedInterfaces,
+            type => type.ClrType == typeof(IIgnoredImplementationContract<string, int>));
+    }
+
     [Theory]
     [InlineData(typeof(double?[]), AtsConstants.Number)]
     [InlineData(typeof(bool?[]), AtsConstants.Boolean)]
@@ -522,6 +567,86 @@ public class AtsCapabilityScannerTests
                 && d.Message.Contains("has collisions", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void ScanAssembly_ExcludedTargetTypes_AreRemovedFromExpansionAlongWithTheirDescendants()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/excludingExporter", StringComparison.Ordinal));
+
+        // The excluded type is dropped, and so is a type deriving from it: an author hiding a capability from a
+        // base type means the whole hierarchy, otherwise every subclass would have to be listed by hand.
+        Assert.DoesNotContain(capability.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(ExcludedEnvironmentResource)));
+        Assert.DoesNotContain(capability.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(DerivedExcludedEnvironmentResource)));
+
+        // Unrelated implementers of the same target interface still get the capability.
+        Assert.Contains(capability.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(OtherEnvironmentResource)));
+
+        // Both types do expand onto an equivalent capability without the exclusion, so the assertions above are
+        // testing the exclusion rather than a type that was never going to be in the expansion.
+        var unexcluded = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/shadowedExporter", StringComparison.Ordinal));
+        Assert.Contains(unexcluded.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(ExcludedEnvironmentResource)));
+        Assert.Contains(unexcluded.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(DerivedExcludedEnvironmentResource)));
+    }
+
+    [Fact]
+    public void ScanAssembly_ExcludedTargetTypes_RemoveCapabilityWhenNoTargetsRemain()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.Capabilities,
+            capability => capability.CapabilityId.EndsWith("/fullyExcludedExporter", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ExcludedTargetTypeCompatibility_UsesCurrentContract()
+    {
+        Type[] excludedTargetTypes = [typeof(ExcludedEnvironmentResource)];
+        var exportData = new AspireExportData
+        {
+            ExcludeTargetTypes = excludedTargetTypes
+        };
+        var capability = new AtsCapabilityInfo
+        {
+            CapabilityId = "test",
+            MethodName = "test",
+            Parameters = [],
+            ReturnType = new AtsTypeRef
+            {
+                TypeId = AtsConstants.Void,
+                Category = AtsTypeCategory.Primitive
+            }
+        };
+
+        var exclusions = AtsCapabilityScanner.GetExportExcludedTargetTypesIfSupported(exportData);
+        AtsCapabilityScanner.SetCapabilityExcludedTargetTypesIfSupported(capability, exclusions);
+
+        Assert.Same(excludedTargetTypes, exclusions);
+        Assert.Same(excludedTargetTypes, AtsCapabilityScanner.GetCapabilityExcludedTargetTypesIfSupported(capability));
+    }
+
+    [Fact]
+    public void ExcludedTargetTypeCompatibility_IgnoresLegacyContract()
+    {
+        var legacyExportData = new LegacyAspireExportData();
+        var legacyCapability = new LegacyAtsCapabilityInfo();
+
+        var exclusions = AtsCapabilityScanner.GetExportExcludedTargetTypesIfSupported(legacyExportData);
+        var exception = Record.Exception(
+            () => AtsCapabilityScanner.SetCapabilityExcludedTargetTypesIfSupported(legacyCapability, [typeof(ContainerResource)]));
+
+        Assert.Empty(exclusions);
+        Assert.Empty(AtsCapabilityScanner.GetCapabilityExcludedTargetTypesIfSupported(legacyCapability));
+        Assert.Null(exception);
+    }
+
     #endregion
 
     #region Callback Parameter Type Resolution Tests
@@ -770,6 +895,16 @@ public class AtsCapabilityScannerTests
 
     #region Test Types
 
+    [AspireExportIgnore(Reason = "Test-only implementation contract.")]
+    public interface IIgnoredImplementationContract<TFirst, TSecond>
+    {
+    }
+
+    public sealed class ResourceWithIgnoredInterface(string name)
+        : Resource(name), IIgnoredImplementationContract<string, int>
+    {
+    }
+
     private sealed class TestResource : Resource
     {
         public TestResource(string name) : base(name)
@@ -780,6 +915,14 @@ public class AtsCapabilityScannerTests
     private sealed class ShadowedEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
 
     private sealed class OtherEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
+
+    private class ExcludedEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
+
+    private sealed class DerivedExcludedEnvironmentResource(string name) : ExcludedEnvironmentResource(name);
+
+    private sealed class LegacyAspireExportData;
+
+    private sealed class LegacyAtsCapabilityInfo;
 
     private enum TestUnionEnum
     {
@@ -842,11 +985,32 @@ public class AtsCapabilityScannerTests
         }
 
         [AspireExport]
+        public static Task<ContainerResource?> TestNullableTaskHandleReturn(IDistributedApplicationBuilder builder)
+        {
+            _ = builder;
+            return Task.FromResult<ContainerResource?>(null);
+        }
+
+        [AspireExport]
+        public static ValueTask<ContainerResource?> TestNullableValueTaskHandleReturn(IDistributedApplicationBuilder builder)
+        {
+            _ = builder;
+            return ValueTask.FromResult<ContainerResource?>(null);
+        }
+
+        [AspireExport]
         public static IResourceBuilder<TestResource> TestMultiParamHandleCallback(
             IResourceBuilder<TestResource> builder,
             Func<ContainerResource, ProjectResource, Task> callback)
         {
             _ = callback;
+            return builder;
+        }
+
+        [AspireExport]
+        public static IResourceBuilder<ResourceWithIgnoredInterface> TestIgnoredInterface(
+            IResourceBuilder<ResourceWithIgnoredInterface> builder)
+        {
             return builder;
         }
 
@@ -880,6 +1044,34 @@ public class AtsCapabilityScannerTests
 
         [AspireExport("otherEnvironmentProbe")]
         public static IResourceBuilder<OtherEnvironmentResource> OtherEnvironmentProbe(IResourceBuilder<OtherEnvironmentResource> builder)
+        {
+            return builder;
+        }
+
+        // Target expansion only considers concrete types the scanner has seen, so these probes are what put the
+        // excluded types into the type graph. Without them the exclusion assertions would pass vacuously.
+        [AspireExport("excludedEnvironmentProbe")]
+        public static IResourceBuilder<ExcludedEnvironmentResource> ExcludedEnvironmentProbe(IResourceBuilder<ExcludedEnvironmentResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport("derivedExcludedEnvironmentProbe")]
+        public static IResourceBuilder<DerivedExcludedEnvironmentResource> DerivedExcludedEnvironmentProbe(IResourceBuilder<DerivedExcludedEnvironmentResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport("excludingExporter", ExcludeTargetTypes = [typeof(ExcludedEnvironmentResource)])]
+        public static IResourceBuilder<T> ExcludingExporter<T>(IResourceBuilder<T> builder)
+            where T : IResourceWithEnvironment
+        {
+            return builder;
+        }
+
+        [AspireExport("fullyExcludedExporter", ExcludeTargetTypes = [typeof(ExcludedEnvironmentResource)])]
+        public static IResourceBuilder<ExcludedEnvironmentResource> FullyExcludedExporter(
+            IResourceBuilder<ExcludedEnvironmentResource> builder)
         {
             return builder;
         }

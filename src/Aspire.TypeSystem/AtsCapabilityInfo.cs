@@ -338,6 +338,17 @@ public sealed class AtsCapabilityInfo
     public IReadOnlyList<AtsTypeRef> ExpandedTargetTypes { get; set; } = [];
 
     /// <summary>
+    /// Gets the CLR types that must not appear in <see cref="ExpandedTargetTypes"/>, along with anything
+    /// deriving from or implementing them.
+    /// </summary>
+    /// <remarks>
+    /// Populated from <c>AspireExportAttribute.ExcludeTargetTypes</c>. Target expansion is otherwise purely
+    /// mechanical — every concrete type compatible with the declared target is included — so this is the only
+    /// way to keep a capability off a subset of them.
+    /// </remarks>
+    public IReadOnlyList<Type> ExcludedTargetTypes { get; init; } = [];
+
+    /// <summary>
     /// Gets or sets whether the return type is a builder type.
     /// </summary>
     public bool ReturnsBuilder { get; init; }

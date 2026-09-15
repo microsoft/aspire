@@ -17,6 +17,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     private EndpointAnnotation? _endpointAnnotation;
     private bool? _isAllocated;
     private readonly NetworkIdentifier? _contextNetworkId;
+    private readonly IResourceWithEndpoints _resource;
 
     /// <summary>
     /// Gets the endpoint annotation associated with the endpoint reference.
@@ -44,9 +45,16 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// <summary>
     /// Gets the resource owner of the endpoint reference.
     /// </summary>
-    public IResourceWithEndpoints Resource { get; }
+    /// <remarks>
+    /// For a projection, returns the model owner when it implements <see cref="IResourceWithEndpoints"/>;
+    /// otherwise, retains the typed projection that supplies the endpoint contract. Use
+    /// <see cref="ResourceExtensions.GetOwnerOrSelf"/> when logical resource identity is required.
+    /// </remarks>
+    // Custom projections can construct endpoint references before their owner mapping is registered.
+    // Resolve on access, retaining the typed provider when the owner has no endpoint contract.
+    public IResourceWithEndpoints Resource => _resource.GetOwnerOrSelf() as IResourceWithEndpoints ?? _resource;
 
-    IEnumerable<object> IValueWithReferences.References => [Resource];
+    IEnumerable<object> IValueWithReferences.References => [Resource.GetOwnerOrSelf()];
 
     /// <summary>
     /// Gets the name of the endpoint associated with the endpoint reference.
@@ -264,7 +272,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(endpoint);
 
-        Resource = owner;
+        _resource = owner;
         EndpointName = endpoint.Name;
         _endpointAnnotation = endpoint;
         _contextNetworkId = contextNetworkId;
@@ -296,7 +304,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(endpointName);
 
-        Resource = owner;
+        _resource = owner;
         EndpointName = endpointName;
         _contextNetworkId = contextNetworkId;
     }

@@ -136,6 +136,27 @@ public class TestMutableCollectionContext
     public Dictionary<string, int> Counts { get; set; } = [];
 }
 
+[AspireExport(ExposeProperties = true)]
+public class TestHandlePropertyContext
+{
+    public TestResourceContext? OptionalResource { get; set; }
+
+    public TestResourceContext? ReadOnlyOptionalResource => OptionalResource;
+
+    public TestResourceContext RequiredResource { get; set; } = new();
+
+    public TestResourceContext ReadOnlyRequiredResource => RequiredResource;
+
+    // This type has no fluent promise wrapper, unlike TestResourceContext.
+    public TestEnvironmentContext? OptionalContext { get; set; }
+
+    public TestEnvironmentContext? ReadOnlyOptionalContext => OptionalContext;
+
+    public TestEnvironmentContext RequiredContext { get; set; } = new();
+
+    public TestEnvironmentContext ReadOnlyRequiredContext => RequiredContext;
+}
+
 /// <summary>
 /// Test DTO with complex nested types.
 /// </summary>

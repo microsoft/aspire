@@ -17,7 +17,8 @@ internal class ArgumentsExecutionConfigurationGatherer : IExecutionConfiguration
         if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var argumentAnnotations))
         {
             IList<object> args = [.. context.Arguments];
-            var callbackContext = new CommandLineArgsCallbackContext(args, resource, cancellationToken)
+            // Projection annotations are shared, but callbacks must identify the canonical model resource.
+            var callbackContext = new CommandLineArgsCallbackContext(args, resource.GetOwnerOrSelf(), cancellationToken)
             {
                 Logger = resourceLogger,
                 ExecutionContext = executionContext
@@ -66,7 +67,8 @@ internal class ArgumentsExecutionConfigurationGatherer : IExecutionConfiguration
             return;
         }
 
-        var launchToolContext = new CommandLineArgsCallbackContext([], resource, cancellationToken)
+        // Projection annotations are shared, but callbacks must identify the canonical model resource.
+        var launchToolContext = new CommandLineArgsCallbackContext([], resource.GetOwnerOrSelf(), cancellationToken)
         {
             Logger = resourceLogger,
             ExecutionContext = executionContext

@@ -330,7 +330,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
 
         var args = configuration.Arguments.ToList();
-        if (modelContainer is ContainerResource { ShellExecution: true })
+        var containerResource = modelContainer.AsContainer();
+        var shellExecution = containerResource is { ShellExecution: true };
+        if (shellExecution)
         {
             spec.Args = ["-c", $"{string.Join(' ', args.Select(a => a.Value))}"];
         }
@@ -339,17 +341,14 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             spec.Args = args.Select(a => a.Value).ToList();
         }
 
-        var appLaunchArgumentAnnotations = modelContainer is ContainerResource { ShellExecution: true }
+        var appLaunchArgumentAnnotations = shellExecution
             ? args.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive))
             : args.Select((a, index) => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive, effectiveArgumentIndex: index));
         dcpContainer.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, appLaunchArgumentAnnotations);
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
         spec.CreateFiles = createFiles;
-        if (modelContainer is ContainerResource containerResource)
-        {
-            spec.Command = containerResource.Entrypoint;
-        }
+        spec.Command = containerResource?.Entrypoint;
         spec.PemCertificates = pemCertificates;
 
         // Configure the terminal spec if the resource has a TerminalAnnotation.

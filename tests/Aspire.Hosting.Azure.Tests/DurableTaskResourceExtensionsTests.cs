@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREDURABLETASK001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.DurableTask;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 
@@ -150,8 +151,9 @@ public class DurableTaskResourceExtensionsTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
+        DurableTaskSchedulerEmulatorResource? projection = null;
         var dts = builder.AddDurableTaskScheduler("dts")
-            .RunAsEmulator();
+            .RunAsEmulator(container => projection = container.Resource);
 
         Assert.True(dts.Resource.IsEmulator);
 
@@ -179,6 +181,7 @@ public class DurableTaskResourceExtensionsTests
         Assert.NotNull(dashboard);
         Assert.Equal(8082, dashboard.TargetPort);
         Assert.Equal("http", dashboard.UriScheme);
+        ProjectionTestHelpers.AssertProjection(dts, Assert.IsType<DurableTaskSchedulerEmulatorResource>(projection));
     }
 
     [Fact]

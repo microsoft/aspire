@@ -839,4 +839,3 @@ internal sealed class ResourceCommandExecutionOptions
 
     public bool NonInteractive { get; init; }
 }
-

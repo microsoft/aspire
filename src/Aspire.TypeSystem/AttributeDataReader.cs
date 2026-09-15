@@ -197,6 +197,7 @@ public static class AttributeDataReader
         var exposeProperties = false;
         var exposeMethods = false;
         var runSyncOnBackgroundThread = false;
+        IReadOnlyList<Type> excludeTargetTypes = [];
 
         for (var i = 0; i < data.NamedArguments.Count; i++)
         {
@@ -233,6 +234,14 @@ public static class AttributeDataReader
                         runSyncOnBackgroundThread = rs;
                     }
                     break;
+                // An array-valued named argument surfaces as a collection of typed arguments rather than a
+                // Type[], so the elements have to be unwrapped one at a time.
+                case nameof(AspireExportData.ExcludeTargetTypes):
+                    if (named.TypedValue.Value is IReadOnlyList<CustomAttributeTypedArgument> excludedArguments)
+                    {
+                        excludeTargetTypes = [.. excludedArguments.Select(argument => argument.Value).OfType<Type>()];
+                    }
+                    break;
             }
         }
 
@@ -244,7 +253,8 @@ public static class AttributeDataReader
             MethodName = methodName,
             ExposeProperties = exposeProperties,
             ExposeMethods = exposeMethods,
-            RunSyncOnBackgroundThread = runSyncOnBackgroundThread
+            RunSyncOnBackgroundThread = runSyncOnBackgroundThread,
+            ExcludeTargetTypes = excludeTargetTypes
         };
     }
 
@@ -382,6 +392,12 @@ public sealed class AspireExportData
     /// Gets whether exported method invocations should run on a background thread by the ATS dispatcher.
     /// </summary>
     public bool RunSyncOnBackgroundThread { get; init; }
+
+    /// <summary>
+    /// Gets the types to remove from the capability's expanded target types, along with anything deriving from
+    /// or implementing them.
+    /// </summary>
+    public IReadOnlyList<Type> ExcludeTargetTypes { get; init; } = [];
 }
 
 /// <summary>

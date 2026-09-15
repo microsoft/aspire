@@ -45,51 +45,76 @@ public static partial class SqlServerBuilderExtensions
 
         var sqlServer = new SqlServerServerResource(name, passwordParameter);
 
+        return builder.AddResource(sqlServer).ConfigureSqlServer(port);
+    }
+
+    internal static IResourceBuilder<SqlServerServerResource> ConfigureSqlServer(
+        this IResourceBuilder<SqlServerServerResource> builder,
+        int? port = null)
+    {
+        var sqlServer = builder.Resource;
         string? connectionString = null;
 
-        var healthCheckKey = $"{name}_check";
-        builder.Services.AddHealthChecks().AddSqlServer(sp => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"), name: healthCheckKey);
+        var healthCheckKey = $"{sqlServer.Name}_check";
+        builder.ApplicationBuilder.Services.AddHealthChecks().AddSqlServer(sp => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"), name: healthCheckKey);
 
-        return builder.AddResource(sqlServer)
-                      .WithEndpoint(port: port, targetPort: 1433, name: SqlServerServerResource.PrimaryEndpointName)
-                      .WithImage(SqlServerContainerImageTags.Image, SqlServerContainerImageTags.Tag)
-                      .WithImageRegistry(SqlServerContainerImageTags.Registry)
-                      .WithIconName("DatabaseMultiple")
-                      .WithEnvironment("ACCEPT_EULA", "Y")
-                      .WithEnvironment(context =>
-                      {
-                          context.EnvironmentVariables["MSSQL_SA_PASSWORD"] = sqlServer.PasswordParameter;
-                      })
-                      .WithHealthCheck(healthCheckKey)
-                      .OnConnectionStringAvailable(async (sqlServer, @event, ct) =>
-                      {
-                          connectionString = await sqlServer.GetConnectionStringAsync(ct).ConfigureAwait(false);
+        builder
+            .ApplySqlServerContainerDefaults(port)
+            .ApplySqlServerEnvironmentDefaults()
+            .WithHealthCheck(healthCheckKey)
+            .OnConnectionStringAvailable(async (sqlServer, @event, ct) =>
+            {
+                connectionString = await sqlServer.GetConnectionStringAsync(ct).ConfigureAwait(false);
 
-                          if (connectionString == null)
-                          {
-                              throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{sqlServer.Name}' resource but the connection string was null.");
-                          }
-                      })
-                      .OnResourceReady(async (sqlServer, @event, ct) =>
-                      {
-                          if (connectionString is null)
-                          {
-                              throw new DistributedApplicationException($"ResourceReadyEvent was published for the '{sqlServer.Name}' resource but the connection string was null.");
-                          }
+                if (connectionString == null)
+                {
+                    throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{sqlServer.Name}' resource but the connection string was null.");
+                }
+            })
+            .OnResourceReady(async (sqlServer, @event, ct) =>
+            {
+                if (connectionString is null)
+                {
+                    throw new DistributedApplicationException($"ResourceReadyEvent was published for the '{sqlServer.Name}' resource but the connection string was null.");
+                }
 
-                          using var sqlConnection = new SqlConnection(connectionString);
-                          await sqlConnection.OpenAsync(ct).ConfigureAwait(false);
+                using var sqlConnection = new SqlConnection(connectionString);
+                await sqlConnection.OpenAsync(ct).ConfigureAwait(false);
 
-                          if (sqlConnection.State != System.Data.ConnectionState.Open)
-                          {
-                              throw new InvalidOperationException($"Could not open connection to '{sqlServer.Name}'");
-                          }
+                if (sqlConnection.State != System.Data.ConnectionState.Open)
+                {
+                    throw new InvalidOperationException($"Could not open connection to '{sqlServer.Name}'");
+                }
 
-                          foreach (var sqlDatabase in sqlServer.DatabaseResources)
-                          {
-                              await CreateDatabaseAsync(sqlConnection, sqlDatabase, @event.Services, ct).ConfigureAwait(false);
-                          }
-                      });
+                foreach (var sqlDatabase in sqlServer.DatabaseResources)
+                {
+                    await CreateDatabaseAsync(sqlConnection, sqlDatabase, @event.Services, ct).ConfigureAwait(false);
+                }
+            });
+
+        return builder;
+    }
+
+    internal static IResourceBuilder<SqlServerServerResource> ApplySqlServerContainerDefaults(
+        this IResourceBuilder<SqlServerServerResource> builder,
+        int? port = null)
+    {
+        return builder
+            .WithEndpoint(port: port, targetPort: 1433, name: SqlServerServerResource.PrimaryEndpointName)
+            .WithImage(SqlServerContainerImageTags.Image, SqlServerContainerImageTags.Tag)
+            .WithImageRegistry(SqlServerContainerImageTags.Registry)
+            .WithIconName("DatabaseMultiple");
+    }
+
+    internal static IResourceBuilder<SqlServerServerResource> ApplySqlServerEnvironmentDefaults(
+        this IResourceBuilder<SqlServerServerResource> builder)
+    {
+        return builder
+            .WithEnvironment("ACCEPT_EULA", "Y")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["MSSQL_SA_PASSWORD"] = builder.Resource.PasswordParameter;
+            });
     }
 
     /// <summary>

@@ -1831,6 +1831,126 @@ class TestEnvironmentContext:
         )
 
 
+class TestHandlePropertyContext:
+    """Type class for TestHandlePropertyContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"TestHandlePropertyContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_uncached_property
+    def optional_resource(self) -> TestResourceContext | None:
+        """Gets the OptionalResource property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource',
+            {'context': self._handle}
+        )
+        return typing.cast(TestResourceContext | None, result)
+
+    @optional_resource.setter
+    def optional_resource(self, value: TestResourceContext | None) -> None:
+        """Sets the OptionalResource property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalResource',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_cached_property
+    def read_only_optional_resource(self) -> TestResourceContext | None:
+        """Gets the ReadOnlyOptionalResource property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource',
+            {'context': self._handle}
+        )
+        return typing.cast(TestResourceContext | None, result)
+
+    @_uncached_property
+    def required_resource(self) -> TestResourceContext:
+        """Gets the RequiredResource property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource',
+            {'context': self._handle}
+        )
+        return typing.cast(TestResourceContext, result)
+
+    @required_resource.setter
+    def required_resource(self, value: TestResourceContext) -> None:
+        """Sets the RequiredResource property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredResource',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_cached_property
+    def read_only_required_resource(self) -> TestResourceContext:
+        """Gets the ReadOnlyRequiredResource property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource',
+            {'context': self._handle}
+        )
+        return typing.cast(TestResourceContext, result)
+
+    @_uncached_property
+    def optional_context(self) -> TestEnvironmentContext | None:
+        """Gets the OptionalContext property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext',
+            {'context': self._handle}
+        )
+        return typing.cast(TestEnvironmentContext | None, result)
+
+    @optional_context.setter
+    def optional_context(self, value: TestEnvironmentContext | None) -> None:
+        """Sets the OptionalContext property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalContext',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_cached_property
+    def read_only_optional_context(self) -> TestEnvironmentContext | None:
+        """Gets the ReadOnlyOptionalContext property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext',
+            {'context': self._handle}
+        )
+        return typing.cast(TestEnvironmentContext | None, result)
+
+    @_uncached_property
+    def required_context(self) -> TestEnvironmentContext:
+        """Gets the RequiredContext property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext',
+            {'context': self._handle}
+        )
+        return typing.cast(TestEnvironmentContext, result)
+
+    @required_context.setter
+    def required_context(self, value: TestEnvironmentContext) -> None:
+        """Sets the RequiredContext property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredContext',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_cached_property
+    def read_only_required_context(self) -> TestEnvironmentContext:
+        """Gets the ReadOnlyRequiredContext property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext',
+            {'context': self._handle}
+        )
+        return typing.cast(TestEnvironmentContext, result)
+
+
 class TestMutableCollectionContext:
     """Type class for TestMutableCollectionContext."""
 
@@ -3057,6 +3177,7 @@ _register_handle_wrapper("Aspire.Hosting/Dict<string,number>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", TestCallbackContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", TestCollectionContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", TestEnvironmentContext)
+_register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext", TestHandlePropertyContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", TestMutableCollectionContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", TestResourceContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Resource", _BaseResource)

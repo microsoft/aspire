@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTIONS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
@@ -171,21 +172,13 @@ public static class AzureKustoBuilderExtensions
         // Add HTTP endpoint to the original resource so the connection string logic can detect emulator mode
         builder.WithHttpEndpoint(targetPort: AzureKustoEmulatorContainerDefaults.DefaultTargetPort, name: "http");
 
-        var surrogate = new AzureKustoEmulatorResource(builder.Resource);
-        var surrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(surrogate);
-
-        surrogateBuilder
-            .WithAnnotation(new ContainerImageAnnotation
+        return builder.RunAsContainerImage<AzureKustoClusterResource, AzureKustoEmulatorResource>(
+            $"{AzureKustoEmulatorContainerImageTags.Registry}/{AzureKustoEmulatorContainerImageTags.Image}:{AzureKustoEmulatorContainerImageTags.Tag}",
+            container =>
             {
-                Registry = AzureKustoEmulatorContainerImageTags.Registry,
-                Image = AzureKustoEmulatorContainerImageTags.Image,
-                Tag = AzureKustoEmulatorContainerImageTags.Tag
-            })
-            .WithEnvironment("ACCEPT_EULA", "Y");
-
-        configureContainer?.Invoke(surrogateBuilder);
-
-        return builder;
+                container.WithEnvironment("ACCEPT_EULA", "Y");
+                configureContainer?.Invoke(container);
+            });
     }
 
     /// <summary>

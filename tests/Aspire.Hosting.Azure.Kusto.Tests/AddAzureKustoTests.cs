@@ -37,8 +37,10 @@ public class AddAzureKustoTests
         using var builder = TestDistributedApplicationBuilder.Create();
 
         // Act
+        AzureKustoEmulatorResource? projection = null;
         var resourceBuilder = builder.AddAzureKustoCluster("test-kusto").RunAsEmulator(containerBuilder =>
         {
+            projection = containerBuilder.Resource;
             if (!string.IsNullOrEmpty(customTag))
             {
                 containerBuilder.WithImageTag(customTag);
@@ -49,6 +51,13 @@ public class AddAzureKustoTests
         var containerAnnotation = resourceBuilder.Resource.Annotations.OfType<ContainerImageAnnotation>().SingleOrDefault();
         Assert.NotNull(containerAnnotation);
         Assert.Equal(expectedTag, containerAnnotation.Tag);
+        var container = Assert.IsType<AzureKustoEmulatorResource>(projection);
+        Assert.Same(
+            resourceBuilder.Resource,
+            Assert.Single(builder.Resources, resource => resource.Name == resourceBuilder.Resource.Name));
+        Assert.Same(container, resourceBuilder.Resource.AsContainer());
+        Assert.Same(resourceBuilder.Resource, container.GetOwnerOrSelf());
+        Assert.Same(resourceBuilder.Resource.Annotations, container.Annotations);
     }
 
     [Theory]

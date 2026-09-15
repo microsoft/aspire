@@ -119,9 +119,11 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 await WriteResourceObjectAsync(resource, () => manifestPublishingCallbackAnnotation.Callback(this)).ConfigureAwait(false);
             }
         }
-        else if (resource is ContainerResource container)
+        else if (resource.AsContainer() is { } container)
         {
-            await WriteResourceObjectAsync(container, () => WriteContainerAsync(container)).ConfigureAwait(false);
+            // The owner remains the manifest identity, while the selected projection supplies its effective
+            // container shape. Explicit manifest callbacks above remain authoritative for specialized publishers.
+            await WriteResourceObjectAsync(resource, () => WriteContainerAsync(container)).ConfigureAwait(false);
         }
         else if (resource is ProjectResource project)
         {
@@ -314,12 +316,21 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <exception cref="DistributedApplicationException">Thrown if the container resource does not contain a <see cref="ContainerImageAnnotation"/>.</exception>
     public async Task WriteContainerAsync(ContainerResource container)
     {
+        ArgumentNullException.ThrowIfNull(container);
+
         var deploymentTarget = container.GetDeploymentTargetAnnotation();
+
+        // Container-specific fields come from the projection, but the connection string contract belongs to the
+        // owner: the projection facade is a plain ContainerResource, so a projected owner implementing
+        // IResourceWithConnectionString would otherwise silently lose its connectionString field. WriteConnectionString
+        // takes an IResource and re-tests the contract itself, so this only has to pick which resource to hand it.
+        var owner = container.GetOwnerOrSelf();
+        var connectionStringSource = owner is IResourceWithConnectionString ? owner : container;
 
         if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {
             Writer.WriteString("type", "container.v1");
-            WriteConnectionString(container);
+            WriteConnectionString(connectionStringSource);
             await WriteBuildContextAsync(container).ConfigureAwait(false);
         }
         else
@@ -338,7 +349,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 Writer.WriteString("type", "container.v0");
             }
 
-            WriteConnectionString(container);
+            WriteConnectionString(connectionStringSource);
             Writer.WriteString("image", image);
         }
 
@@ -379,7 +390,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 var dockerfileContext = new DockerfileFactoryContext
                 {
                     Services = ExecutionContext.Services,
-                    Resource = container,
+                    Resource = ((IResource)container).GetOwnerOrSelf(),
                     CancellationToken = CancellationToken
                 };
                 await annotation.EmitDockerfileArtifactsAsync(dockerfileContext, resourceDockerfilePath).ConfigureAwait(false);
@@ -532,7 +543,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <param name="resource">The <see cref="IResource"/> which contains <see cref="EnvironmentCallbackAnnotation"/> annotations.</param>
     public async Task WriteEnvironmentVariablesAsync(IResource resource)
     {
-        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource.GetOwnerOrSelf())
             .WithEnvironmentVariablesConfig()
             .BuildAsync(ExecutionContext, NullLogger.Instance, CancellationToken)
             .ConfigureAwait(false);
@@ -570,7 +581,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <returns>The <see cref="Task"/> to await for completion.</returns>
     public async Task WriteCommandLineArgumentsAsync(IResource resource)
     {
-        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource.GetOwnerOrSelf())
             .WithArgumentsConfig()
             .BuildAsync(ExecutionContext, NullLogger.Instance, CancellationToken)
             .ConfigureAwait(false);

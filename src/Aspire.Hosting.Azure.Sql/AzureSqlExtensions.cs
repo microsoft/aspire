@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTIONS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
@@ -11,6 +12,7 @@ using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Sql;
 using Azure.Provisioning.Storage;
+using Microsoft.Extensions.DependencyInjection;
 using static Azure.Provisioning.Expressions.BicepFunction;
 
 namespace Aspire.Hosting;
@@ -122,20 +124,15 @@ public static class AzureSqlExtensions
 
         builder.Resource.AddDatabase(azureSqlDatabase);
 
-        if (azureResource.InnerResource is null)
+        var databaseBuilder = builder.ApplicationBuilder.AddResource(azureSqlDatabase);
+        if (azureResource.InnerResource is not null)
         {
-            return builder.ApplicationBuilder.AddResource(azureSqlDatabase);
+            AttachContainerDatabase(
+                builder.ApplicationBuilder.CreateResourceBuilder(azureResource.InnerResource),
+                databaseBuilder);
         }
-        else
-        {
-            // need to add the database to the InnerResource
-            var innerBuilder = builder.ApplicationBuilder.CreateResourceBuilder(azureResource.InnerResource);
-            var innerDb = innerBuilder.AddDatabase(name, databaseName);
-            azureSqlDatabase.SetInnerResource(innerDb.Resource);
 
-            // create a builder, but don't add the Azure database to the model because the InnerResource already has it
-            return builder.ApplicationBuilder.CreateResourceBuilder(azureSqlDatabase);
-        }
+        return databaseBuilder;
     }
 
     /// <summary>
@@ -182,46 +179,71 @@ public static class AzureSqlExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            return builder;
-        }
-
         var azureResource = builder.Resource;
-        var azureDatabases = builder.ApplicationBuilder.Resources
-            .OfType<AzureSqlDatabaseResource>()
-            .Where(db => db.Parent == azureResource)
-            .ToDictionary(db => db.Name);
-
-        RemoveAzureResources(builder.ApplicationBuilder, azureResource, azureDatabases);
-
-        var sqlContainer = builder.ApplicationBuilder.AddSqlServer(azureResource.Name);
-
-        azureResource.SetInnerResource(sqlContainer.Resource);
-
-        foreach (var database in azureResource.AzureSqlDatabases)
-        {
-            if (!azureDatabases.TryGetValue(database.Key, out var existingDb))
+        return builder.WithContainerProjection(
+            DistributedApplicationOperation.Run,
+            () =>
             {
-                throw new InvalidOperationException($"Could not find a {nameof(AzureSqlDatabaseResource)} with name {database.Key}.");
-            }
+                var password = ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(
+                    builder.ApplicationBuilder,
+                    $"{azureResource.Name}-password",
+                    minLower: 1,
+                    minUpper: 1,
+                    minNumeric: 1);
+                return new AzureSqlServerContainerResource(azureResource, password);
+            },
+            container =>
+            {
+                if (!container.Resource.IsConfigured)
+                {
+                    azureResource.SetInnerResource(container.Resource);
+                    container.ConfigureSqlServer();
 
-            var innerDb = sqlContainer.AddDatabase(database.Key, database.Value.DatabaseName);
-            existingDb.SetInnerResource(innerDb.Resource);
-        }
+                    foreach (var database in azureResource.AzureSqlDatabases.Values)
+                    {
+                        AttachContainerDatabase(
+                            container,
+                            builder.ApplicationBuilder.CreateResourceBuilder(database));
+                    }
 
-        configureContainer?.Invoke(sqlContainer);
+                    container.Resource.IsConfigured = true;
+                }
+                else
+                {
+                    container
+                        .ApplySqlServerContainerDefaults()
+                        .ApplySqlServerEnvironmentDefaults();
+                }
 
-        return builder;
+                configureContainer?.Invoke(container);
+            });
     }
 
-    private static void RemoveAzureResources(IDistributedApplicationBuilder appBuilder, AzureSqlServerResource azureResource, Dictionary<string, AzureSqlDatabaseResource> azureDatabases)
+    private static void AttachContainerDatabase(
+        IResourceBuilder<SqlServerServerResource> container,
+        IResourceBuilder<AzureSqlDatabaseResource> database)
     {
-        appBuilder.Resources.Remove(azureResource);
-        foreach (var database in azureDatabases)
-        {
-            appBuilder.Resources.Remove(database.Value);
-        }
+        var innerDatabase = new AzureSqlDatabaseContainerResource(database.Resource, container.Resource);
+        container.Resource.AddDatabase(innerDatabase);
+        database.Resource.SetInnerResource(innerDatabase);
+
+        string? connectionString = null;
+        var healthCheckKey = $"{database.Resource.Name}_check";
+        database.ApplicationBuilder.Services.AddHealthChecks().AddSqlServer(
+            _ => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"),
+            name: healthCheckKey);
+
+        database
+            .WithHealthCheck(healthCheckKey)
+            .OnConnectionStringAvailable(async (resource, @event, ct) =>
+            {
+                connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+
+                if (connectionString is null)
+                {
+                    throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{resource.Name}' resource but the connection string was null.");
+                }
+            });
     }
 
     private static void CreateSqlServer(

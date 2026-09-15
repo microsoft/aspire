@@ -236,4 +236,31 @@ public sealed class AspireExportAttribute : Attribute
     /// </para>
     /// </remarks>
     public bool RunSyncOnBackgroundThread { get; set; }
+
+    /// <summary>
+    /// Gets or sets types to remove from the capability's expanded target types, along with anything deriving
+    /// from or implementing them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A capability's target is expanded from the declared type of its target parameter to every compatible
+    /// concrete type, so an export declared on <c>IResourceBuilder&lt;T&gt; where T : IResource</c> is offered on
+    /// every resource. Use this when a subset of those types is not a legal target and C# cannot say so, because
+    /// the language has no negative generic constraint.
+    /// </para>
+    /// <para>
+    /// This only narrows the generated surface. It is not an authorization check, so a method that rejects a
+    /// target must still validate at runtime for callers that reach it dynamically.
+    /// </para>
+    /// <example>
+    /// A container projection is meaningless on a resource that is already a container, so the export is hidden
+    /// from <c>ContainerResource</c> and every type deriving from it:
+    /// <code>
+    /// [AspireExport(ExcludeTargetTypes = [typeof(ContainerResource)])]
+    /// public static IResourceBuilder&lt;T&gt; RunAsContainerImage&lt;T&gt;(this IResourceBuilder&lt;T&gt; builder, string image)
+    ///     where T : IResource
+    /// </code>
+    /// </example>
+    /// </remarks>
+    public Type[]? ExcludeTargetTypes { get; set; }
 }

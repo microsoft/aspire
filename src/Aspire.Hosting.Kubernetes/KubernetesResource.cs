@@ -197,7 +197,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     internal string GetContainerImageName(IResource resourceInstance)
     {
-        if (!resourceInstance.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _) && resourceInstance is not ProjectResource)
+        // Projects normally require an SDK image build, but a selected projection can instead supply a
+        // prebuilt image. Dockerfile annotations remain authoritative because their image is produced later.
+        var requiresImageBuild = resourceInstance.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _) ||
+            resourceInstance is ProjectResource && resourceInstance.AsContainer() is null;
+        if (!requiresImageBuild)
         {
             if (resourceInstance.TryGetContainerImageName(out var containerImageName))
             {

@@ -3,6 +3,7 @@
 
 using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
@@ -114,6 +115,7 @@ public class AzureManagedRedisExtensionsTests
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var cache = builder.AddAzureManagedRedis("cache");
+        RedisResource? projection = null;
 
         if (before)
         {
@@ -122,6 +124,7 @@ public class AzureManagedRedisExtensionsTests
 
         cache.RunAsContainer(c =>
         {
+            projection = c.Resource;
             c.WithAnnotation(new Dummy2Annotation());
         });
 
@@ -137,6 +140,36 @@ public class AzureManagedRedisExtensionsTests
 
         Assert.True(cacheInModel.TryGetAnnotationsOfType<Dummy2Annotation>(out var cacheAnnotations2));
         Assert.Single(cacheAnnotations2);
+        ProjectionTestHelpers.AssertProjection(cache, Assert.IsType<AzureManagedRedisContainerResource>(projection));
+    }
+
+    [Fact]
+    public async Task RunAsContainerReappliesContainerDefaults()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cache = builder.AddAzureManagedRedis("cache").RunAsContainer();
+        var container = Assert.IsAssignableFrom<RedisResource>(cache.Resource.AsContainer());
+        Assert.True(container.TryGetContainerImageName(out var defaultImage));
+
+        cache.RunAsContainer(container => container
+            .WithImage("custom")
+            .WithEnvironment("REDIS_PASSWORD", "incorrect"));
+        Assert.True(cache.Resource.AsContainer()!.TryGetContainerImageName(out var customImage));
+        Assert.Equal("docker.io/custom:latest", customImage);
+
+        cache.RunAsContainer();
+        Assert.True(cache.Resource.AsContainer()!.TryGetContainerImageName(out var reappliedImage));
+        Assert.Equal(defaultImage, reappliedImage);
+        container = Assert.IsAssignableFrom<RedisResource>(cache.Resource.AsContainer());
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            cache.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance);
+        Assert.Equal(
+            await container.PasswordParameter!.GetValueAsync(CancellationToken.None),
+            environment["REDIS_PASSWORD"]);
     }
 
     [Fact]

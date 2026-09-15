@@ -241,6 +241,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         return ShouldApplyNullableType(typeRef) ? $"{mappedType} | None" : mappedType;
     }
 
+    private string MapCapabilityReturnTypeToPython(AtsTypeRef? typeRef)
+    {
+        var mappedType = MapTypeRefToPython(typeRef);
+        return typeRef is { Category: AtsTypeCategory.Handle, IsNullable: true }
+            ? $"{mappedType} | None"
+            : mappedType;
+    }
+
     private static bool ShouldApplyNullableType(AtsTypeRef typeRef) =>
         typeRef.IsNullable == true
         && typeRef.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum
@@ -1279,7 +1287,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 sb.AppendLine();
                 return;
             }
-            var returnType = MapTypeRefToPython(getter.ReturnType);
+            var returnType = MapCapabilityReturnTypeToPython(getter.ReturnType);
             var propertyType = setter != null ? "@_uncached_property" : "@_cached_property";
             if (!string.IsNullOrEmpty(getter.Description))
             {
@@ -1311,7 +1319,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             var valueParam = setter.Parameters.FirstOrDefault(p => p.Name == "value");
             if (valueParam != null)
             {
-                var valueType = MapTypeRefToPython(valueParam.Type);
+                var valueType = MapCapabilityReturnTypeToPython(valueParam.Type);
 
                 if (!string.IsNullOrEmpty(setter.Description))
                 {
@@ -1362,7 +1370,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         var returnType = returnsSelf
             ? "typing.Self"
             : GetReturnTypeId(capability) != null
-            ? MapTypeRefToPython(capability.ReturnType)
+            ? MapCapabilityReturnTypeToPython(capability.ReturnType)
             : "None";
         var isResourceBuilder = capability.ReturnType != null && capability.ReturnType.Category == AtsTypeCategory.Handle &&
             capability.ReturnType.IsResourceBuilder && !capability.ReturnType.IsInterface;
@@ -1665,7 +1673,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         // Determine return type - use the builder's own type for fluent methods
         var returnsBuilder = capability.ReturnsBuilder && capability.ReturnType!.TypeId == capability.TargetTypeId;
         var returnsChildBuilder = capability.ReturnsBuilder && capability.ReturnType != null && IsHandleType(capability.ReturnType) && capability.ReturnType.TypeId != capability.TargetTypeId;
-        var returnType = returnsBuilder ? "typing.Self" : MapTypeRefToPython(capability.ReturnType);
+        var returnType = returnsBuilder ? "typing.Self" : MapCapabilityReturnTypeToPython(capability.ReturnType);
         var requiredParams = userParams.Where(p => !p.IsOptional && !p.IsNullable).ToList();
         var optionalParams = userParams.Where(p => !requiredParams.Contains(p)).ToList();
 
@@ -1842,7 +1850,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         // Determine return type
         var capReturnTypeId = GetReturnTypeId(capability);
         var returnType = !string.IsNullOrEmpty(capReturnTypeId)
-            ? MapTypeRefToPython(capability.ReturnType)
+            ? MapCapabilityReturnTypeToPython(capability.ReturnType)
             : "None";
 
         // Generate JSDoc equivalent
