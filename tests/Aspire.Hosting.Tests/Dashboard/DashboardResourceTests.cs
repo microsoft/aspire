@@ -647,7 +647,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task DashboardIsNotAddedIfDisabled()
+    public async Task DashboardIsAddedWithExplicitStartIfDisabled()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = true,
@@ -658,8 +658,9 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-
-        Assert.Empty(model.Resources);
+        var dashboard = Assert.Single(model.Resources.OfType<ExecutableResource>());
+        Assert.Equal(KnownResourceNames.AspireDashboard, dashboard.Name);
+        Assert.True(dashboard.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
     }
 
     [Fact]
