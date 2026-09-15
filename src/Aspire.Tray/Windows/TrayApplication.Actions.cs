@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Reflection;
-
 namespace Aspire.Tray;
 
 internal sealed partial class TrayApplication
@@ -72,10 +70,8 @@ internal sealed partial class TrayApplication
                 case ActionKind.Documentation:
                     OpenUrl(new Uri("https://aspire.dev"));
                     break;
-                case ActionKind.About:
-                    var version = typeof(TrayApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-                        ?? typeof(TrayApplication).Assembly.GetName().Version?.ToString() ?? "Development build";
-                    ShowMessage("About Aspire", $"Aspire\nVersion {version}\n\nAn experimental companion for Aspire.\nhttps://aspire.dev", 0);
+                case ActionKind.Settings:
+                    ShowSettings();
                     break;
                 case ActionKind.Quit:
                     RequestQuit();
@@ -141,6 +137,8 @@ internal sealed partial class TrayApplication
 
     private bool Confirm(string title, string detail)
     {
+        var previousOwner = _modalOwner;
+        _modalOwner = _settingsWindow != 0 ? _settingsWindow : _window;
         _modalDepth++;
         try
         {
@@ -150,7 +148,7 @@ internal sealed partial class TrayApplication
                     ?? throw new InvalidOperationException("Smoke confirmation handler is missing.");
                 _smokeDialog = new(2, accept ? 1 : 2);
             }
-            var result = NativeMethods.MessageBox(_window, detail, title, NativeMethods.SafeConfirmation);
+            var result = NativeMethods.MessageBox(_modalOwner, detail, title, NativeMethods.SafeConfirmation);
             NativeCallException.Require(result != 0, "MessageBoxW(confirm)");
             return result == 1 && !_quitRequested;
         }
@@ -159,12 +157,15 @@ internal sealed partial class TrayApplication
             _smokeDialog = null;
             DialogReadyForSmoke = null;
             _modalDepth--;
+            _modalOwner = previousOwner;
             RequestRefresh();
         }
     }
 
     private void ShowMessage(string title, string detail, uint flags)
     {
+        var previousOwner = _modalOwner;
+        _modalOwner = _settingsWindow != 0 ? _settingsWindow : _window;
         _modalDepth++;
         try
         {
@@ -172,12 +173,13 @@ internal sealed partial class TrayApplication
             {
                 _smokeDialog = new(1, 1);
             }
-            NativeCallException.Require(NativeMethods.MessageBox(_window, detail, title, flags) != 0, "MessageBoxW");
+            NativeCallException.Require(NativeMethods.MessageBox(_modalOwner, detail, title, flags) != 0, "MessageBoxW");
         }
         finally
         {
             _smokeDialog = null;
             _modalDepth--;
+            _modalOwner = previousOwner;
             RequestRefresh();
         }
     }

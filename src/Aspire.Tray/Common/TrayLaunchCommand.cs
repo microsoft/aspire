@@ -39,6 +39,7 @@ internal static class TrayLaunchCommand
         {
             startInfo.ArgumentList.Add(argument);
         }
+        AddStartupCli(startInfo, options.StartupCliPath);
 
         return startInfo;
     }
@@ -110,7 +111,17 @@ internal static class TrayLaunchCommand
         {
             startInfo.ArgumentList.Add(argument);
         }
+        AddStartupCli(startInfo, options.StartupCliPath);
 
         return startInfo;
+    }
+
+    private static void AddStartupCli(ProcessStartInfo startInfo, string? startupCli)
+    {
+        if (startupCli is not null)
+        {
+            startInfo.ArgumentList.Add("--startup-cli");
+            startInfo.ArgumentList.Add(startupCli);
+        }
     }
 }

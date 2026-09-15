@@ -15,7 +15,7 @@ public class WindowsTrayLaunchCommandTests
         var executable = Path.Combine(bundle.Root, "tray", "aspire-tray.exe");
         File.WriteAllText(executable, "");
 
-        var start = TrayLaunchCommand.CreateWindowsStartInfo(new(bundle.CliPath, null, bundle.Root));
+        var start = TrayLaunchCommand.CreateWindowsStartInfo(new(bundle.CliPath, null, bundle.Root, null));
 
         Assert.Equal(executable, start.FileName);
         Assert.Equal(Path.Combine(bundle.Root, "tray"), start.WorkingDirectory);
@@ -32,7 +32,7 @@ public class WindowsTrayLaunchCommandTests
     {
         using var bundle = new TestTrayBundle();
         var error = Assert.Throws<FileNotFoundException>(() =>
-            TrayLaunchCommand.CreateWindowsStartInfo(new(bundle.CliPath, null, bundle.Root)));
+            TrayLaunchCommand.CreateWindowsStartInfo(new(bundle.CliPath, null, bundle.Root, null)));
         Assert.Equal(Path.Combine(bundle.Root, "tray", "aspire-tray.exe"), error.FileName);
     }
 
@@ -44,7 +44,7 @@ public class WindowsTrayLaunchCommandTests
         File.Delete(bundle.CliPath);
 
         var error = Assert.Throws<FileNotFoundException>(() =>
-            TrayLaunchCommand.CreateWindowsStartInfo(new(bundle.CliPath, null, bundle.Root)));
+            TrayLaunchCommand.CreateWindowsStartInfo(new(bundle.CliPath, null, bundle.Root, null)));
         Assert.Equal(bundle.CliPath, error.FileName);
     }
 
@@ -53,9 +53,9 @@ public class WindowsTrayLaunchCommandTests
     {
         using var bundle = new TestTrayBundle();
         Assert.Throws<ArgumentException>(() =>
-            TrayLaunchCommand.CreateWindowsStartInfo(new(bundle.CliPath, null, null)));
+            TrayLaunchCommand.CreateWindowsStartInfo(new(bundle.CliPath, null, null, null)));
         Assert.Throws<ArgumentException>(() =>
-            TrayLaunchCommand.CreateWindowsStartInfo(new(bundle.CliPath, 1, bundle.Root)));
+            TrayLaunchCommand.CreateWindowsStartInfo(new(bundle.CliPath, 1, bundle.Root, null)));
     }
 
     [Theory]

@@ -10,6 +10,7 @@ namespace Aspire.Tray;
 internal sealed class NativeSmokeHarness
 {
     private readonly SmokeAppHostClient _client = new();
+    private readonly MemoryTrayStartupSettings _startupSettings = new();
     private readonly AppHostInfo _first = new("/smoke/First/AppHost.cs", 41001, "http://localhost:19001/")
     {
         ProcessStartTimeUnixMilliseconds = 1_700_000_000_001
@@ -38,6 +39,7 @@ internal sealed class NativeSmokeHarness
     private TrayController? _discovery;
     private int _phase;
     private int _dashboardCalls;
+    private int _documentationCalls;
     private int _confirmations;
     private bool _finished;
     private bool _trackingInProgress;
@@ -47,6 +49,7 @@ internal sealed class NativeSmokeHarness
     private int _clearConfirmations;
     private int _removeConfirmations;
     private bool _inspectionMode;
+    private bool _settingsSmokeInProgress;
 
     private NativeSmokeHarness()
     {
@@ -67,7 +70,7 @@ internal sealed class NativeSmokeHarness
         // The normal tray's single-instance lock is intentionally not acquired: deterministic
         // smoke never uses real AppHost actions and may coexist with the user's running tray.
         using var application = new MacTrayApplication(_controller, "AspireTray.Smoke",
-            OpenDashboard, ConfirmStop, ConfirmAction);
+            _startupSettings, OpenDashboard, ConfirmStop, ConfirmAction);
         _application = application;
         try
         {
@@ -117,7 +120,7 @@ internal sealed class NativeSmokeHarness
 
     private void Advance(TrayViewState state)
     {
-        if (_finished)
+        if (_finished || _settingsSmokeInProgress)
         {
             return;
         }
@@ -357,6 +360,18 @@ internal sealed class NativeSmokeHarness
                     $"Icon restoration incomplete: visible={menu.IsStatusItemVisible}, acknowledgement={_restoreTask?.Status}, recoveryPreference={restoredPlacement}.");
                 _application.VerifyInformationItemsForSmoke();
                 _application.VerifyStatusArtworkForSmoke();
+                // NSButton's native click animation can pump a nested run loop. Continue
+                // rendering real updates, but do not re-enter this synchronous test phase.
+                _settingsSmokeInProgress = true;
+                try
+                {
+                    _application.VerifySettingsForSmoke(_startupSettings);
+                }
+                finally
+                {
+                    _settingsSmokeInProgress = false;
+                }
+                Require(_documentationCalls == 2, "Root and Settings documentation did not use the native callback.");
                 _controller.ClearRecent();
                 _phase++;
                 Publish([_savedHost]);
@@ -470,7 +485,7 @@ internal sealed class NativeSmokeHarness
                     is { IsRunning: false, CanStart: true, Health: AppHostHealth.Unknown },
                     "The preview must include a stopped pin with a white status icon.");
                 _finished = true;
-                Console.WriteLine($"Native smoke passed: 36 phases; supplied tray assets at 1x/2x with preserved alpha; lower-right purple badge with transparent border; solid status circles; white not-started preview example; context pin/unpin; missing-pin pruning; explicit start; filtered recents; safe clear/remove dialogs; top-level Documentation/About; standard Stop contrast; identity and tracking regressions; CLI discovery: {(_discovery is null ? "not requested" : "live")}.");
+                Console.WriteLine($"Native smoke passed: 36 phases; supplied tray assets at 1x/2x with preserved alpha; lower-right purple badge with transparent border; solid status circles; white not-started preview example; context pin/unpin; missing-pin pruning; explicit start; filtered recents; safe clear/remove dialogs; top-level Documentation/Settings; native Settings default off, enable/disable/re-read, non-mutating open/close, reuse, Command-comma, About and documentation callbacks; standard Stop contrast; identity and tracking regressions; CLI discovery: {(_discovery is null ? "not requested" : "live")}.");
                 if (Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_INTERACTIVE") == "1")
                 {
                     _inspectionMode = true;
@@ -537,6 +552,11 @@ internal sealed class NativeSmokeHarness
 
     private void OpenDashboard(Uri uri)
     {
+        if (uri == new Uri("https://aspire.dev"))
+        {
+            _documentationCalls++;
+            return;
+        }
         Require(uri == _first.DashboardUri, "Dashboard callback used the wrong identity.");
         _dashboardCalls++;
     }

@@ -6,6 +6,7 @@ namespace Aspire.Tray;
 internal sealed partial class MacTrayApplication : IDisposable
 {
     private readonly TrayController _controller;
+    private readonly ITrayStartupSettings _startupSettings;
     private readonly Action<Uri> _openDashboard;
     private readonly Func<StopConfirmation, bool>? _confirmStop;
     private readonly Func<TrayConfirmation, bool>? _confirmAction;
@@ -16,13 +17,16 @@ internal sealed partial class MacTrayApplication : IDisposable
     public MacTrayApplication(
         TrayController controller,
         string autosaveName,
+        ITrayStartupSettings startupSettings,
         Action<Uri>? openDashboard = null,
         Func<StopConfirmation, bool>? confirmStop = null,
         Func<TrayConfirmation, bool>? confirmAction = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(autosaveName);
+        ArgumentNullException.ThrowIfNull(startupSettings);
         _autosaveName = autosaveName;
         _controller = controller;
+        _startupSettings = startupSettings;
         _openDashboard = openDashboard ?? OpenDashboardInBrowser;
         _confirmStop = confirmStop;
         _confirmAction = confirmAction;

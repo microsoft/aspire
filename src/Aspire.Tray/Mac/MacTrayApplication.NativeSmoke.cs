@@ -250,7 +250,7 @@ internal sealed partial class MacTrayApplication
 
     internal void VerifyInformationItemsForSmoke()
     {
-        var expected = new[] { "", "Open Recent", "Documentation", "About Aspire", "", "Quit Aspire" };
+        var expected = new[] { "", "Open Recent", "Documentation", "Settings\u2026", "", "Quit Aspire" };
         for (var i = 0; i < expected.Length; i++)
         {
             var item = AppKit.Get(_menu, "itemAtIndex:", AppKit.Get(_menu, "numberOfItems") - expected.Length + i);
@@ -272,7 +272,129 @@ internal sealed partial class MacTrayApplication
                     throw new InvalidOperationException("Documentation must use the same icon as Open Dashboard.");
                 }
             }
+            if (i == 3 && (AppKit.Text(AppKit.Get(item, "keyEquivalent")) != ","
+                || AppKit.Get(item, "keyEquivalentModifierMask") != 1 << 20
+                || AppKit.Get(item, "action") != AppKit.Selector("showSettings:")))
+            {
+                throw new InvalidOperationException("Settings must use the normal Command-comma menu shortcut.");
+            }
         }
+    }
+
+    internal void VerifySettingsForSmoke(MemoryTrayStartupSettings startupSettings)
+    {
+        VerifyUIThread();
+        if (!ReferenceEquals(_startupSettings, startupSettings) || startupSettings.Read().Enabled || _settingsWindow != 0)
+        {
+            throw new InvalidOperationException("Settings smoke must start with untouched, disabled in-memory settings.");
+        }
+
+        void OpenFromStatusMenu()
+            => AppKit.Set(_menu, "performActionForItemAtIndex:", AppKit.Get(_menu, "numberOfItems") - 3);
+
+        void VerifyState(bool enabled)
+        {
+            var expected = startupSettings.Read();
+            var status = $"Launch at sign-in is {(enabled ? "on" : "off")}.\n{expected.Detail}";
+            if (expected.Enabled != enabled || AppKit.Get(_startupCheckbox, "state") != (enabled ? 1 : 0)
+                || !Enabled(_startupCheckbox) || AppKit.Text(AppKit.Get(_startupStatus, "stringValue")) != status)
+            {
+                throw new InvalidOperationException("The native launch-at-sign-in control disagrees with the in-memory registration.");
+            }
+        }
+
+        SetTrackingForSmoke(null, open: true);
+        OpenFromStatusMenu();
+        if (_settingsWindow != 0 || !_settingsRequested || startupSettings.Read().Enabled)
+        {
+            throw new InvalidOperationException("Opening Settings must defer while the status menu is tracking.");
+        }
+        SetTrackingForSmoke(null, open: false);
+        _modalDepth++;
+        try
+        {
+            ShowPendingSettings();
+            if (_settingsWindow != 0 || !_settingsRequested)
+            {
+                throw new InvalidOperationException("Opening Settings must defer during a modal confirmation.");
+            }
+        }
+        finally
+        {
+            _modalDepth--;
+        }
+        ShowPendingSettings();
+        VerifyState(false);
+        var window = _settingsWindow;
+        if (window == 0 || AppKit.GetBool(window, AppKit.Selector("isVisible")) == 0
+            || AppKit.GetBool(window, AppKit.Selector("canBecomeKeyWindow")) == 0
+            || AppKit.Text(AppKit.Get(_startupCheckbox, "title")) != "Launch Aspire Tray when I sign in"
+            || AppKit.Text(AppKit.Get(_settingsAbout, "stringValue")) != SettingsAboutText
+            || AppKit.Text(AppKit.Get(_settingsDocumentation, "title")) != "Documentation - https://aspire.dev")
+        {
+            throw new InvalidOperationException("Settings is missing its native window, startup control, About information, or documentation.");
+        }
+        var subviews = AppKit.Get(AppKit.Get(window, "contentView"), "subviews");
+        var labels = new List<string>();
+        for (nint i = 0; i < AppKit.Get(subviews, "count"); i++)
+        {
+            var view = AppKit.Get(subviews, "objectAtIndex:", i);
+            if (AppKit.Supports(view, "stringValue"))
+            {
+                labels.Add(AppKit.Text(AppKit.Get(view, "stringValue")));
+            }
+        }
+        if (!labels.Contains("General") || !labels.Contains("About")
+            || !labels.Contains("Only the tray starts at sign-in. AppHosts are not started."))
+        {
+            throw new InvalidOperationException("Settings must label its sections and explain that startup never starts AppHosts.");
+        }
+
+        // performClick: changes the actual NSButton state and invokes its registered
+        // Objective-C target/action; setting state directly would not test user interaction.
+        AppKit.Set(_startupCheckbox, "performClick:", 0);
+        VerifyState(true);
+        OpenFromStatusMenu();
+        VerifyState(true);
+        AppKit.Set(window, "performClose:", 0);
+        if (AppKit.GetBool(window, AppKit.Selector("isVisible")) != 0 || !startupSettings.Read().Enabled)
+        {
+            throw new InvalidOperationException("Closing Settings changed the startup preference or left the window visible.");
+        }
+        OpenFromStatusMenu();
+        VerifyState(true);
+        AppKit.Set(_startupCheckbox, "performClick:", 0);
+        VerifyState(false);
+
+        // Deliver an app-local key event through AppKit, not a system-wide hotkey.
+        // Also change the fake registration externally to verify the window re-reads it.
+        startupSettings.SetEnabled(true);
+        var keyEvent = AppKit.CreateKeyEvent(AppKit.Class("NSEvent"),
+            AppKit.Selector("keyEventWithType:location:modifierFlags:timestamp:windowNumber:context:characters:charactersIgnoringModifiers:isARepeat:keyCode:"),
+            10, new(0, 0), 1 << 20, 0, AppKit.Get(window, "windowNumber"), 0, AppKit.String(","), AppKit.String(","), 0, 43);
+        if (AppKit.SendReturningBool(_applicationMenu, AppKit.Selector("performKeyEquivalent:"), keyEvent) == 0)
+        {
+            throw new InvalidOperationException("The focused application's Command-comma shortcut did not invoke Settings.");
+        }
+        VerifyState(true);
+        var orderedWindows = AppKit.Get(_application, "orderedWindows");
+        if (_settingsWindow != window || AppKit.Get(orderedWindows, "count") == 0
+            || AppKit.Get(orderedWindows, "objectAtIndex:", 0) != window)
+        {
+            throw new InvalidOperationException("Reopening Settings must order the same retained native window first.");
+        }
+        if (AppKit.GetBool(window, AppKit.Selector("isKeyWindow")) == 0)
+        {
+            // A background harness cannot require macOS to transfer foreground focus.
+            // Do not bypass that policy or claim the interactive focus check passed.
+            Console.WriteLine("Settings window reuse, ordering, and app-local shortcut verified; macOS did not grant foreground focus to the background smoke process. Interactive focus verification remains required.");
+        }
+        AppKit.Set(_startupCheckbox, "performClick:", 0);
+        VerifyState(false);
+        AppKit.Set(_settingsDocumentation, "performClick:", 0);
+        AppKit.Set(_menu, "performActionForItemAtIndex:", AppKit.Get(_menu, "numberOfItems") - 4);
+        AppKit.Set(window, "performClose:", 0);
+        VerifyState(false);
     }
 
     internal void VerifyStatusArtworkForSmoke()
@@ -493,8 +615,16 @@ internal sealed partial class MacTrayApplication
     {
         // Failure or the global watchdog must close a real tracked menu before quitting.
         CancelSmokeTracking();
+        if (success && _settingsWindow != 0)
+        {
+            ShowSettings();
+        }
         _exitCode = success ? 0 : 1;
         AppKit.Set(_menu, "performActionForItemAtIndex:", AppKit.Get(_menu, "numberOfItems") - 1);
+        if (_settingsWindow != 0 && AppKit.GetBool(_settingsWindow, AppKit.Selector("isVisible")) != 0)
+        {
+            throw new InvalidOperationException("Quit left the Settings window visible.");
+        }
     }
 
     private void DisposeSmokeTimer()
@@ -538,7 +668,7 @@ internal sealed partial class MacTrayApplication
         => Route(self, sender, static (app, _) =>
         {
             ReleaseSmokeTimer(ref app._smokePreviewTimer);
-            app.ShowAbout();
+            app.ShowSettings();
         });
 
     private static bool Enabled(nint item) => AppKit.GetBool(item, AppKit.Selector("isEnabled")) != 0;

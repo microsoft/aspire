@@ -79,7 +79,8 @@ internal sealed unsafe partial class TrayApplication
             root.ClearCommand = AddAction(root, recent, "Clear Recently Opened", new(ActionKind.ClearRecent), state.CanClearRecent);
             Append(root.Handle, NativeMethods.MfSeparator, 0, null);
             AddAction(root, root.Handle, "Documentation", new(ActionKind.Documentation), true, _artwork!.Globe);
-            AddAction(root, root.Handle, "About Aspire", new(ActionKind.About), true);
+            var settings = AddAction(root, root.Handle, "Settings...", new(ActionKind.Settings), true);
+            SetSettingsMenuLabel(root.Handle, settings);
             AddAction(root, root.Handle, "Quit Aspire", new(ActionKind.Quit), true);
             return root;
         }
@@ -325,7 +326,7 @@ internal sealed unsafe partial class TrayApplication
         }
     }
 
-    private enum ActionKind { Dashboard, Stop, Start, TogglePin, Explorer, OpenIn, ClearRecent, Documentation, About, Quit }
+    private enum ActionKind { Dashboard, Stop, Start, TogglePin, Explorer, OpenIn, ClearRecent, Documentation, Settings, Quit }
 
     private sealed record ActionTarget(ActionKind Kind, AppHostId Id = default, FolderApplication? Application = null);
 

@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using Aspire.Shared;
+using Microsoft.Win32;
 
 namespace Aspire.Tray;
 
@@ -30,10 +32,23 @@ internal static class Program
     private static int RunWindows(string[] args)
     {
         var smoke = args.Contains("--smoke-seconds", StringComparer.Ordinal);
-        var helper = args.FirstOrDefault() is "start" or "stop";
+        var helper = args.FirstOrDefault() is "start" or "stop" or "login-start";
         WindowsTrayLog? log = null;
         try
         {
+            // This mode also runs from the stable copied WinExe. Keep it ahead of UI,
+            // icon, singleton, bundle, and startup-settings initialization.
+            if (args is ["login-start", "--cli", var startupCli])
+            {
+                log = new WindowsTrayLog();
+                WindowsLoginBootstrap.RunAsync(startupCli).GetAwaiter().GetResult();
+                Log("Sign-in tray start completed.");
+                return 0;
+            }
+            if (args.FirstOrDefault() == "login-start")
+            {
+                throw new ArgumentException("Usage: aspire-tray-login.exe login-start --cli <absolute native Aspire CLI path>");
+            }
             if (args is ["stop"])
             {
                 WindowsTrayLauncher.StopAsync().GetAwaiter().GetResult();
@@ -71,7 +86,12 @@ internal static class Program
             TrayActivation? activation = null;
             try
             {
-                tray = new TrayApplication(controller, smokeSeconds: null);
+                var startupSettings = new WindowsTrayStartupSettings(options, !RuntimeFeature.IsDynamicCodeSupported,
+                    Environment.ProcessPath ?? string.Empty,
+                    Path.Combine(WindowsSingleInstance.DirectoryPath, "Startup", "aspire-tray-login.exe"),
+                    new WindowsRunStartupRegistrationStore(Registry.CurrentUser,
+                        WindowsRunStartupRegistrationStore.RunKeyPath, WindowsRunStartupRegistrationStore.RunValueName));
+                tray = new TrayApplication(controller, smokeSeconds: null, startupSettings);
                 activation = new TrayActivation(WindowsSingleInstance.ActivationPipeName,
                     tray.RestoreIconAsync, tray.WaitUntilReadyAsync, tray.RequestQuit);
                 Log("Starting the Windows Aspire tray.");

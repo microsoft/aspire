@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -256,34 +255,6 @@ internal sealed partial class MacTrayApplication
         }
     }
 
-    private void ShowAbout()
-    {
-        var version = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Development build";
-        var alert = AppKit.Get(AppKit.Class("NSAlert"), "new");
-        _modalDepth++;
-        try
-        {
-            AppKit.Set(alert, "setMessageText:", AppKit.String(_interactiveSmoke ? "Aspire Tray Preview" : "Aspire Tray"));
-            var detail = $"Version {version}\n\nAn experimental companion for Aspire.\nhttps://aspire.dev";
-            if (_interactiveSmoke)
-            {
-                detail += "\n\nThis preview uses fake AppHosts. Start/Stop do not affect real applications.\nUse Quit Aspire in the menu bar to close the preview.";
-            }
-            AppKit.Set(alert, "setInformativeText:", AppKit.String(detail));
-            AppKit.Set(alert, "setIcon:", _brandImage);
-            AppKit.Get(alert, "addButtonWithTitle:", AppKit.String("OK"));
-            AppKit.SendBool(_application, AppKit.Selector("activateIgnoringOtherApps:"), 1);
-            AppKit.Get(alert, "runModal");
-        }
-        finally
-        {
-            _modalDepth--;
-            AppKit.Release(alert);
-            RequestRefresh();
-        }
-    }
-
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnStartAppHost(nint self, nint selector, nint sender)
         => Route(self, sender, static (app, item) => app.RunAction(() => app.StartAppHost(SelectedPath(item))));
@@ -310,11 +281,7 @@ internal sealed partial class MacTrayApplication
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnOpenDocumentation(nint self, nint selector, nint sender)
-        => Route(self, sender, static (app, _) => app.RunAction(() => OpenDashboardInBrowser(new Uri("https://aspire.dev"))));
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnShowAbout(nint self, nint selector, nint sender)
-        => Route(self, sender, static (app, _) => app.RunAction(app.ShowAbout));
+        => Route(self, sender, static (app, _) => app.RunAction(() => app._openDashboard(new Uri("https://aspire.dev"))));
 
     private static readonly (string BundleId, string Title)[] s_folderApplications =
     [

@@ -24,8 +24,9 @@ internal sealed unsafe partial class TrayApplication
         {
             return;
         }
-        var dialog = NativeMethods.GetLastActivePopup(_window);
-        if (dialog == 0 || dialog == _window)
+        var owner = _modalOwner != 0 ? _modalOwner : _window;
+        var dialog = NativeMethods.GetLastActivePopup(owner);
+        if (dialog == 0 || dialog == owner)
         {
             return;
         }
@@ -99,7 +100,7 @@ internal sealed unsafe partial class TrayApplication
                 "Root menu contains an unexpected header or item.");
         }
         var rootTitles = ReadMenuTitles(menu.Handle);
-        NativeSmokeHarness.Require(rootTitles.TakeLast(3).SequenceEqual(new[] { "Documentation", "About Aspire", "Quit Aspire" }),
+        NativeSmokeHarness.Require(rootTitles.TakeLast(3).SequenceEqual(new[] { "Documentation", SettingsMenuLabel, "Quit Aspire" }),
             "Root utility actions are missing.");
         foreach (var row in menu.Rows)
         {
@@ -169,6 +170,63 @@ internal sealed unsafe partial class TrayApplication
         if (smokeSeconds is null)
         {
             throw new InvalidOperationException("Native smoke hooks are unavailable in normal mode.");
+        }
+    }
+
+    internal nint SettingsWindowForSmoke => _settingsWindow;
+
+    internal void ClickSettingsControlForSmoke(string control)
+    {
+        RequireSmoke();
+        FocusSettings();
+        var target = control switch
+        {
+            "Startup" => _settingsCheckbox,
+            "Refresh" => _settingsRefresh,
+            "Documentation" => _settingsDocumentation,
+            _ => throw new ArgumentException("Unknown Settings smoke control.", nameof(control))
+        };
+        NativeSmokeHarness.Require(target != 0, "The Settings control does not exist.");
+        NativeMethods.SendMessage(target, NativeMethods.BmClick, 0, 0);
+    }
+
+    internal void CloseSettingsForSmoke()
+    {
+        RequireSmoke();
+        NativeMethods.SendMessage(_settingsWindow, NativeMethods.WmClose, 0, 0);
+        NativeSmokeHarness.Require(_settingsWindow == 0 && _settingsIcon == 0, "Closing Settings did not release its native window/icon.");
+    }
+
+    internal void VerifySettingsForSmoke(uint checkState, bool enabled, string status)
+    {
+        RequireSmoke();
+        NativeSmokeHarness.Require(_settingsWindow != 0 && _settingsIcon != 0 && _settingsMenuFilter != 0,
+            "The modeless Settings window, icon, or local shortcut hook is missing.");
+        NativeSmokeHarness.Require(ReadControlText(_settingsWindow) == "Aspire Settings"
+            && ReadControlText(NativeMethods.GetDlgItem(_settingsWindow, SettingsGeneralId)) == "General"
+            && ReadControlText(NativeMethods.GetDlgItem(_settingsWindow, SettingsAboutId)) == "About"
+            && ReadControlText(NativeMethods.GetDlgItem(_settingsWindow, SettingsExplanationId))
+                == "Only Aspire Tray launches at sign-in. AppHosts are not started.", "Settings sections or startup explanation are missing.");
+        NativeSmokeHarness.Require(NativeMethods.SendMessage(_settingsCheckbox, NativeMethods.BmGetCheck, 0, 0) == (nint)checkState
+            && (NativeMethods.IsWindowEnabled(_settingsCheckbox) != 0) == enabled, "The native startup checkbox misrepresents backend state.");
+        NativeSmokeHarness.Require(ReadControlText(_settingsStatus) == status, "The Settings status/error text is incorrect.");
+        NativeSmokeHarness.Require(ReadControlText(_settingsVersion) == AboutVersionText
+            && ReadControlText(_settingsDocumentation) == "Open &Documentation (aspire.dev)", "Settings About information is incomplete.");
+        NativeSmokeHarness.Require(ReadControlText(_settingsCheckbox) == "&Launch Aspire Tray when I sign in",
+            "The native checkbox is not clearly labeled.");
+        NativeSmokeHarness.Require(NativeMethods.IsChild(_settingsWindow, NativeMethods.GetFocus()) != 0,
+            "Settings did not retain keyboard focus.");
+    }
+
+    private static string ReadControlText(nint control)
+    {
+        var length = NativeMethods.GetWindowTextLength(control);
+        var text = new char[length + 1];
+        fixed (char* buffer = text)
+        {
+            var count = NativeMethods.GetWindowText(control, buffer, text.Length);
+            NativeCallException.Require(count == length, "GetWindowTextW(Settings smoke)");
+            return new string(buffer, 0, count);
         }
     }
 

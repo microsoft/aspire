@@ -5,12 +5,12 @@ using System.Globalization;
 
 namespace Aspire.Tray;
 
-internal sealed record TrayOptions(string CliPath, int? SmokeSeconds, string? BundleRoot)
+internal sealed record TrayOptions(string CliPath, int? SmokeSeconds, string? BundleRoot, string? StartupCliPath)
 {
     public const string Usage = """
-        aspire-tray start --cli <absolute Aspire executable path> --bundle-root <absolute bundle directory>
+        aspire-tray start --cli <absolute Aspire executable path> --bundle-root <absolute bundle directory> [--startup-cli <stable native Aspire executable path>]
         aspire-tray stop
-        aspire-tray --cli <absolute Aspire executable path> [--bundle-root <absolute bundle directory>] [--smoke-seconds <1-120>]
+        aspire-tray --cli <absolute Aspire executable path> [--bundle-root <absolute bundle directory>] [--startup-cli <stable native Aspire executable path>] [--smoke-seconds <1-120>]
         """;
 
     public static TrayOptions Parse(string[] args)
@@ -18,6 +18,7 @@ internal sealed record TrayOptions(string CliPath, int? SmokeSeconds, string? Bu
         string? cli = null;
         int? smokeSeconds = null;
         string? bundleRoot = null;
+        string? startupCli = null;
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i] == "--cli" && i + 1 < args.Length && cli is null)
@@ -27,6 +28,10 @@ internal sealed record TrayOptions(string CliPath, int? SmokeSeconds, string? Bu
             else if (args[i] == "--bundle-root" && i + 1 < args.Length && bundleRoot is null)
             {
                 bundleRoot = args[++i];
+            }
+            else if (args[i] == "--startup-cli" && i + 1 < args.Length && startupCli is null)
+            {
+                startupCli = args[++i];
             }
             else if (args[i] == "--smoke-seconds" && i + 1 < args.Length && smokeSeconds is null
                 && int.TryParse(args[++i], NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
@@ -49,11 +54,15 @@ internal sealed record TrayOptions(string CliPath, int? SmokeSeconds, string? Bu
         {
             throw new ArgumentException("The bundle root must be an existing absolute directory.");
         }
-        if (smokeSeconds is not null && bundleRoot is not null)
+        if (startupCli is not null && !Path.IsPathFullyQualified(startupCli))
         {
-            throw new ArgumentException("Native smoke must not use a live bundle lease.");
+            throw new ArgumentException("The startup CLI must be an absolute path.");
+        }
+        if (smokeSeconds is not null && (bundleRoot is not null || startupCli is not null))
+        {
+            throw new ArgumentException("Native smoke must not use a live bundle lease or startup registration.");
         }
 
-        return new(cli, smokeSeconds, bundleRoot);
+        return new(cli, smokeSeconds, bundleRoot, startupCli);
     }
 }

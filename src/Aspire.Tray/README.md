@@ -164,8 +164,11 @@ Rider, and Xcode; only installed applications appear. The selected app opens the
 AppHost's directory without starting the AppHost. **Show in Finder** reveals the
 project file. This intentionally uses a tray-owned menu: Finder's Services menu
 requires a document selection/responder contract that a status-menu row does not
-provide. **Documentation** opens [aspire.dev](https://aspire.dev), and **About Aspire**
-shows the build version. Both are directly available in the main tray menu.
+provide. **Documentation** opens [aspire.dev](https://aspire.dev). **Settings...**
+replaces the top-level About action and opens General and About information,
+including the build version and a documentation link. Its shortcut is Command-comma
+on macOS or Control-comma on Windows while the tray's menu or window has focus;
+it is not a system-wide hotkey.
 A repeated launch restores the existing tray icon instead of starting another
 instance or watcher. It sends a same-user activation request, waits for native
 restoration to complete, and exits successfully. An unresponsive or older
@@ -193,13 +196,52 @@ The official pipeline signs/notarizes the whole app before copying it into the
 payload and embeds it without republishing. That official signing path still
 requires release-pipeline validation; this remains a draft feedback POC.
 
+## Launch at sign-in
+
+The General section in **Settings...** offers **Launch Aspire Tray when I sign in**.
+It is off by default. Opening Settings, reading the preference, and closing the
+dialog never register startup or launch anything. Enabling it starts only the
+companion at the next sign-in; it does not start pinned or recent AppHosts.
+**Quit Aspire** keeps the companion closed until the next sign-in or an explicit
+manual start.
+
+Startup invokes the selected CLI installation's stable entry point, which then
+extracts and launches its current tray payload. It does not point directly at an
+extracted version directory that CLI cleanup can remove. Managed development and
+other launch modes without a verified startup entry point cannot enable startup;
+Settings explains that limitation. Currently, startup supports script, PR, and
+localhive installations whose installation metadata identifies a stable `bin/`
+entry point. Package-manager installations and installations with missing or
+unrecognized metadata remain available for manual tray startup, but cannot enable
+launch at sign-in. Removing or moving the selected CLI installation can break its
+startup registration.
+
+Registration is per user and does not require administrator privileges. The
+dialog reads the registration rather than a separate, potentially stale enabled
+flag. Operating-system startup/background-app policy can still override that
+registration. Read or write failures are shown explicitly without presenting a
+failed change as successfully saved. Native smoke uses an in-memory preference,
+so its checkbox never changes the real account's startup registration.
+
+On macOS, the setting manages
+`~/Library/LaunchAgents/dev.aspire.tray.login.plist`. The agent invokes
+`aspire tray start --non-interactive --nologo` once at the next sign-in, without
+KeepAlive or immediately starting a launchd job when the checkbox changes.
+On Windows, the `AspireTray` value under
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` invokes an owned GUI bootstrap
+at `%LocalAppData%\Aspire\Tray\Startup\aspire-tray-login.exe`. This bootstrap calls
+the installed CLI without displaying a console and exits after startup completes.
+Disabling removes the registration; the idle bootstrap can remain on disk.
+Unrelated or externally modified registrations are left unchanged and reported
+in Settings.
+
 ## Windows companion
 
 Windows uses the original colored `src/Shared/Aspire.ico`, not the macOS wave
 artwork. Its notification icon indicates whether an AppHost is connected, without
 a numeric count. The AppHost menus use the same shared health, history, pinning,
 explicit Start, and exact-instance Stop behavior described above. Documentation
-and About are top-level actions; Documentation and Open Dashboard use the same
+and Settings are top-level actions; Documentation and Open Dashboard use the same
 external-link artwork.
 
 The Windows adapter uses native popup menus and confirmation dialogs.
@@ -313,7 +355,7 @@ process exit. Human-readable diagnostics are not part of the protocol.
 The opt-in protocol does not change existing `ps --follow --format json`
 consumers. See [CLI output formats](../../docs/specs/cli-output-formats.md).
 
-Restarting AppHosts, resource details, search, login startup, and automatic tray
+Restarting AppHosts, resource details, search, and automatic tray
 upgrade handoff are outside this POC. The companion's own projects remain
 workload-free and isolated from the product's managed build configuration, but
 the macOS and Windows native bundles build and ship them.
@@ -359,7 +401,7 @@ For a manual inspection, set `ASPIRE_TRAY_SMOKE_INTERACTIVE=1` and use
 fake running AppHosts with healthy/waiting/failed icons and a stopped, pinned
 **Not started** example with a white icon. It enables real native
 confirmation dialogs until **Quit Aspire**. The watchdog still bounds the automated
-checks but is removed when the interactive preview is ready. An About window
+checks but is removed when the interactive preview is ready. A Settings window
 identifies the preview so it is easy to find. History remains isolated from
 the normal tray. Its Start/Stop backend remains fake; explicit Open In actions
 can open the temporary fixture folder in a real installed application.

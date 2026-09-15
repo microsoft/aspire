@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
@@ -34,6 +35,7 @@ internal sealed class TrayLifecycleService(
         }
 
         string? cliPath = null;
+        string? startupCliPath = null;
         if (start)
         {
             var processPath = processPathProvider.ProcessPath;
@@ -47,6 +49,7 @@ internal sealed class TrayLifecycleService(
 
             // Capture the actual executable once; never re-resolve PATH or install a private CLI.
             cliPath = Path.GetFullPath(CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, logger));
+            startupCliPath = GetStartupCliPath(processPath, cliPath);
         }
 
         var action = start ? "start" : "stop";
@@ -80,7 +83,11 @@ internal sealed class TrayLifecycleService(
                     RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "win-arm64" : "win-x64");
             }
 
-            string[] arguments = start ? ["start", "--cli", cliPath!, "--bundle-root", bundleRoot] : ["stop"];
+            string[] arguments = start
+                ? startupCliPath is null
+                    ? ["start", "--cli", cliPath!, "--bundle-root", bundleRoot]
+                    : ["start", "--cli", cliPath!, "--bundle-root", bundleRoot, "--startup-cli", startupCliPath]
+                : ["stop"];
             var variables = new Dictionary<string, string>();
             lease.AddEnvironment(variables);
             cancellationToken.ThrowIfCancellationRequested();
@@ -121,4 +128,31 @@ internal sealed class TrayLifecycleService(
             return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, TrayCommandStrings.OperationFailed, action, ex.Message));
         }
     }
+
+    private string? GetStartupCliPath(string invokingPath, string resolvedPath)
+    {
+        var directory = Path.GetDirectoryName(resolvedPath)!;
+        var source = InstallSidecarReader.ReadSourceField(Path.Combine(directory, InstallSidecarReader.SidecarFileName));
+        // Script/PR installers replace <prefix>/bin/aspire in place. Package-manager
+        // binaries (npm node_modules, .NET tools/.store, Homebrew/Nix stores, etc.)
+        // may be versioned even when the process is NativeAOT. Do not register those
+        // paths or guess a shim from PATH. Preserve a supplied installation symlink
+        // only when its actual binary has the stable portable-install contract.
+        // https://github.com/microsoft/aspire/blob/main/docs/specs/install-routes.md
+        if (source is not (InstallSourceExtensions.ScriptWire or InstallSourceExtensions.PrWire or InstallSourceExtensions.LocalHiveWire)
+            || !string.Equals(Path.GetFileName(directory), "bin", StringComparison.OrdinalIgnoreCase)
+            || IsPackageStorePath(invokingPath) || IsPackageStorePath(resolvedPath))
+        {
+            logger.LogDebug("Tray launch-at-sign-in is unavailable: the invoking CLI has no verified stable portable installation entry point.");
+            return null;
+        }
+
+        return Path.GetFullPath(invokingPath);
+    }
+
+    private static bool IsPackageStorePath(string path)
+        => Path.GetFullPath(path).Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries).Any(component =>
+                component.Equals("node_modules", StringComparison.OrdinalIgnoreCase)
+                || component.Equals(".store", StringComparison.OrdinalIgnoreCase));
 }

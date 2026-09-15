@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Layout;
@@ -18,6 +19,94 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class TrayCommandTests(ITestOutputHelper outputHelper)
 {
+    public static bool SupportsSymlinks => !OperatingSystem.IsWindows();
+
+    [Theory]
+    [InlineData("script", true)]
+    [InlineData("pr", true)]
+    [InlineData("localhive", true)]
+    [InlineData("dotnet-tool", false)]
+    [InlineData("npm", false)]
+    [InlineData("brew", false)]
+    [InlineData("winget", false)]
+    [InlineData("nix", false)]
+    [InlineData("unknown", false)]
+    [InlineData(null, false)]
+    public async Task StartupEntryRequiresVerifiedStableInstallationMetadata(string? source, bool expectedStartup)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, _, cliPath) = CreateServices(workspace);
+        var sidecar = Path.Combine(Path.GetDirectoryName(cliPath)!, InstallSidecarReader.SidecarFileName);
+        if (source is null)
+        {
+            File.Delete(sidecar);
+        }
+        else
+        {
+            File.WriteAllText(sidecar, $$"""{"source":"{{source}}"}""");
+        }
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>()
+            .Parse("tray start --non-interactive --nologo").InvokeAsync().DefaultTimeout());
+        Assert.NotNull(factory.LastArguments);
+        Assert.Equal(expectedStartup
+            ? ["start", "--cli", cliPath, "--bundle-root", bundle.Layout!.LayoutPath!, "--startup-cli", cliPath]
+            : ["start", "--cli", cliPath, "--bundle-root", bundle.Layout!.LayoutPath!], factory.LastArguments);
+    }
+
+    [Theory]
+    [InlineData("node_modules")]
+    [InlineData(".store")]
+    public async Task VersionedPackageStoresDoNotBecomeStartupEntriesEvenWithPortableMetadata(string store)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, _, cliPath) = CreateServices(workspace);
+        var packageBin = Path.Combine(workspace.WorkspaceRoot.FullName, store, "aspire", "1.0.0", "bin");
+        Directory.CreateDirectory(packageBin);
+        var packagedCli = Path.Combine(packageBin, "aspire");
+        File.Copy(cliPath, packagedCli);
+        File.WriteAllText(Path.Combine(packageBin, InstallSidecarReader.SidecarFileName), """{"source":"script"}""");
+        services.AddSingleton<Aspire.Cli.Utils.IProcessPathProvider>(new TestProcessPathProvider(packagedCli) { IsNativeAot = true });
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>()
+            .Parse("tray start --non-interactive --nologo").InvokeAsync().DefaultTimeout());
+        Assert.NotNull(factory.LastArguments);
+        Assert.Equal(["start", "--cli", packagedCli, "--bundle-root", bundle.Layout!.LayoutPath!], factory.LastArguments);
+    }
+
+    [Fact]
+    public async Task MalformedInstallationMetadataDoesNotPreventManualTrayStart()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, _, cliPath) = CreateServices(workspace);
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(cliPath)!, InstallSidecarReader.SidecarFileName), "{");
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>()
+            .Parse("tray start --non-interactive --nologo").InvokeAsync().DefaultTimeout());
+        Assert.NotNull(factory.LastArguments);
+        Assert.Equal(["start", "--cli", cliPath, "--bundle-root", bundle.Layout!.LayoutPath!], factory.LastArguments);
+    }
+
+    [Fact(Skip = "Creating installation symlinks does not require elevation on Unix.", SkipUnless = nameof(SupportsSymlinks))]
+    public async Task StartupUsesTheInvokingInstallationSymlinkWhileBackendUsesResolvedExecutable()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, _, cliPath) = CreateServices(workspace);
+        var installed = Path.Combine(workspace.WorkspaceRoot.FullName, "stable & installed aspire");
+        File.CreateSymbolicLink(installed, cliPath);
+        services.AddSingleton<Aspire.Cli.Utils.IProcessPathProvider>(new TestProcessPathProvider(installed) { IsNativeAot = true });
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>()
+            .Parse("tray start --non-interactive --nologo").InvokeAsync().DefaultTimeout());
+        Assert.NotNull(factory.LastArguments);
+        Assert.Equal(["start", "--cli", cliPath, "--bundle-root", bundle.Layout!.LayoutPath!, "--startup-cli", installed],
+            factory.LastArguments);
+    }
+
     [Fact]
     public void ManagedBuildIsNotClassifiedAsNative()
     {
@@ -64,7 +153,7 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
             Assert.Empty(interaction.DisplayedSuccess);
             Assert.True(BundleVersionLease.HasActiveLease(root));
             Assert.Equal(layout.GetTrayPath(), factory.LastFileName);
-            Assert.Equal(action == "start" ? ["start", "--cli", cliPath, "--bundle-root", root] : ["stop"], factory.LastArguments);
+            Assert.Equal(action == "start" ? ["start", "--cli", cliPath, "--bundle-root", root, "--startup-cli", cliPath] : ["stop"], factory.LastArguments);
             Assert.Equal(root, factory.LastEnvironmentVariables![BundleDiscovery.BundleVersionDirectoryEnvVar]);
             Assert.Equal(root, factory.LastWorkingDirectory!.FullName);
             Assert.False(factory.LastProcessInvocationOptions!.Detached);
@@ -99,7 +188,7 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
         for (var i = 0; i < 2; i++)
         {
             Assert.Equal(CliExitCodes.Success, await command.Parse("tray start --non-interactive --nologo").InvokeAsync().DefaultTimeout());
-            Assert.Equal(["start", "--cli", cliPath, "--bundle-root", bundle.Layout!.LayoutPath!], factory.LastArguments!);
+            Assert.Equal(["start", "--cli", cliPath, "--bundle-root", bundle.Layout!.LayoutPath!, "--startup-cli", cliPath], factory.LastArguments!);
             Assert.False(BundleVersionLease.HasActiveLease(bundle.Layout.LayoutPath!));
         }
         Assert.Equal(2, factory.AttemptCount);
@@ -430,7 +519,10 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
         var trayPath = layout.GetTrayPath()!;
         Directory.CreateDirectory(Path.GetDirectoryName(trayPath)!);
         File.WriteAllText(trayPath, "fake native helper");
-        var cliPath = Path.Combine(workspace.WorkspaceRoot.FullName, "invoking aspire");
+        var binaryDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "installed aspire", "bin");
+        Directory.CreateDirectory(binaryDirectory);
+        File.WriteAllText(Path.Combine(binaryDirectory, InstallSidecarReader.SidecarFileName), """{"source":"script"}""");
+        var cliPath = Path.Combine(binaryDirectory, "aspire");
         File.WriteAllText(cliPath, "fake native CLI");
         var bundle = new TestBundleService(isBundle: true)
         {

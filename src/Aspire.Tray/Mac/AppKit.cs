@@ -138,6 +138,12 @@ internal static partial class AppKit
     public static partial nint SendRect(nint receiver, nint selector, NativeRect rect);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SetRect(nint receiver, nint selector, NativeRect rect);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint CreateWindow(nint receiver, nint selector, NativeRect rect, nuint styleMask, nuint backing, byte defer);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial void DrawImage(nint receiver, nint selector, NativeRect destination, NativeRect source,
         nuint operation, double fraction);
 
@@ -163,6 +169,11 @@ internal static partial class AppKit
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial nint CreateEvent(nint receiver, nint selector, nuint type, NativePoint location,
         nuint modifierFlags, double timestamp, nint windowNumber, nint context, short subtype, nint data1, nint data2);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint CreateKeyEvent(nint receiver, nint selector, nuint type, NativePoint location,
+        nuint modifierFlags, double timestamp, nint windowNumber, nint context, nint characters,
+        nint charactersIgnoringModifiers, byte isRepeat, ushort keyCode);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial void PostEvent(nint receiver, nint selector, nint nativeEvent, byte atStart);

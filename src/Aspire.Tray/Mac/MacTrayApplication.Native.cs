@@ -72,7 +72,8 @@ internal sealed partial class MacTrayApplication
             AddCallback(callbackClass, "openIn:", &OnOpenIn);
             AddCallback(callbackClass, "showInFinder:", &OnShowInFinder);
             AddCallback(callbackClass, "openDocumentation:", &OnOpenDocumentation);
-            AddCallback(callbackClass, "showAbout:", &OnShowAbout);
+            AddCallback(callbackClass, "showSettings:", &OnShowSettings);
+            AddCallback(callbackClass, "changeStartup:", &OnChangeStartup);
             AddCallback(callbackClass, "quit:", &OnQuit);
             AddCallback(callbackClass, "menuWillOpen:", &OnMenuWillOpen);
             AddCallback(callbackClass, "menuDidClose:", &OnMenuDidClose);
@@ -83,6 +84,7 @@ internal sealed partial class MacTrayApplication
             AddCallback(callbackClass, "smokeTrackingDeadline:", &OnSmokeTrackingDeadline);
             AppKit.RegisterClass(callbackClass);
             _target = AppKit.Get(callbackClass, "new");
+            CreateApplicationMenu();
 
             _runLoop = AppKit.CFRetain(AppKit.CFRunLoopGetMain());
             var context = new AppKit.RunLoopSourceContext
@@ -200,6 +202,7 @@ internal sealed partial class MacTrayApplication
         TraceSmokeTracking("refresh-begin");
         UpdateMenu(state);
         ShowPendingPinContextMenu();
+        ShowPendingSettings();
         _ready.TrySetResult();
         TraceSmokeTracking("refresh-end");
         MenuUpdated?.Invoke(state);
@@ -386,7 +389,7 @@ internal sealed partial class MacTrayApplication
         }
         var documentation = AddItem(_menu, "Documentation", "openDocumentation:", enabled: true);
         SetSymbol(documentation, "arrow.up.right.square", "Open documentation");
-        AddItem(_menu, "About Aspire", "showAbout:", enabled: true);
+        AddSettingsItem(_menu);
         AddSeparator(_menu);
         var quit = AddItem(_menu, "Quit Aspire", "quit:", enabled: true);
         AppKit.Set(quit, "setKeyEquivalent:", AppKit.String("q"));
@@ -673,6 +676,7 @@ internal sealed partial class MacTrayApplication
         {
             AppKit.SendVoid(_application, AppKit.Selector("abortModal"));
         }
+        CloseSettings();
         AppKit.Set(_application, "stop:", 0);
         // stop: alone does not wake nextEventMatchingMask: when invoked by a run-loop source
         // or timer. A harmless application-defined event lets run return for managed cleanup.
@@ -705,6 +709,7 @@ internal sealed partial class MacTrayApplication
         }
         DisposeSmokeTimer();
         DisposeContextMenuMonitor();
+        DisposeSettings();
         if (_refreshSource != 0)
         {
             AppKit.CFRunLoopSourceInvalidate(_refreshSource);

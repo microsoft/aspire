@@ -22,6 +22,14 @@ internal static unsafe partial class NativeMethods
     internal const uint RestoreMessage = 0x8004;
     internal const uint QuitMessage = 0x8005;
     internal const uint SmokeMessage = 0x8006;
+    internal const uint SettingsMessage = 0x8007;
+    internal const uint WmKeyDown = 0x100;
+    internal const uint WmCommand = 0x111;
+    internal const uint WmInitDialog = 0x110;
+    internal const uint WmNcDestroy = 0x82;
+    internal const uint BmGetCheck = 0xF0;
+    internal const uint BmSetCheck = 0xF1;
+    internal const uint BmClick = 0xF5;
     internal const uint WmDpiChanged = 0x02E0;
     internal const uint WmSettingChange = 0x001A;
     internal const uint WmMenuRightButtonUp = 0x0122;
@@ -119,6 +127,15 @@ internal static unsafe partial class NativeMethods
     {
         public int X;
         public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -312,6 +329,62 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport("shell32.dll", EntryPoint = "SHOpenFolderAndSelectItems")]
     internal static partial int OpenFolderAndSelectItems(nint itemIdList, uint count, nint items, uint flags);
+
+    [LibraryImport("user32.dll", EntryPoint = "CreateDialogIndirectParamW", SetLastError = true)]
+    internal static partial nint CreateDialogIndirectParam(nint instance, byte* template, nint owner,
+        delegate* unmanaged[Stdcall]<nint, uint, nuint, nint, nint> dialogProcedure, nint parameter);
+
+    [LibraryImport("user32.dll", EntryPoint = "IsDialogMessageW")]
+    internal static partial int IsDialogMessage(nint dialog, ref Message message);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int MapDialogRect(nint dialog, ref Rect rect);
+
+    [LibraryImport("user32.dll")]
+    internal static partial int ShowWindow(nint window, int command);
+
+    [LibraryImport("user32.dll")]
+    internal static partial nint SetFocus(nint window);
+
+    [LibraryImport("user32.dll")]
+    internal static partial nint GetFocus();
+
+    [LibraryImport("user32.dll")]
+    internal static partial int IsChild(nint parent, nint child);
+
+    [LibraryImport("user32.dll")]
+    internal static partial int EnableWindow(nint window, int enabled);
+
+    [LibraryImport("user32.dll")]
+    internal static partial int IsWindowEnabled(nint window);
+
+    [LibraryImport("user32.dll", EntryPoint = "SetWindowTextW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    internal static partial int SetWindowText(nint window, string text);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowTextW", SetLastError = true)]
+    internal static partial int GetWindowText(nint window, char* text, int capacity);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowTextLengthW", SetLastError = true)]
+    internal static partial int GetWindowTextLength(nint window);
+
+    [LibraryImport("user32.dll")]
+    internal static partial short GetKeyState(int key);
+
+    [LibraryImport("user32.dll", EntryPoint = "SetWindowsHookExW", SetLastError = true)]
+    internal static partial nint SetWindowsHookEx(int hook, delegate* unmanaged[Stdcall]<int, nuint, nint, nint> procedure,
+        nint instance, uint threadId);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int UnhookWindowsHookEx(nint hook);
+
+    [LibraryImport("user32.dll")]
+    internal static partial nint CallNextHookEx(nint hook, int code, nuint wParam, nint lParam);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial nint CopyIcon(nint icon);
+
+    [LibraryImport("user32.dll")]
+    internal static partial nint GetDlgItem(nint dialog, int id);
 }
 
 internal sealed class NativeCallException(string operation, int? error = null)

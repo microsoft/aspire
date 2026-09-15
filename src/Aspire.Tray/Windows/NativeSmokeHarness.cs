@@ -17,6 +17,7 @@ internal sealed class NativeSmokeHarness
     private readonly SmokeClient _client = new();
     private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("aspire-tray-smoke-");
     private readonly MemoryTraySavedStateStore _store = new();
+    private readonly SmokeStartupSettings _startupSettings = new();
     private readonly CancellationTokenSource _shutdown = new();
     private readonly AppHostInfo[] _hosts;
     private readonly string _pinned;
@@ -73,7 +74,7 @@ internal sealed class NativeSmokeHarness
     private int RunCore(int seconds)
     {
         _controller = new(_client, _store);
-        _application = new(_controller, seconds)
+        _application = new(_controller, seconds, _startupSettings)
         {
             SmokeTick = Advance,
             OpenUrlForSmoke = uri =>
@@ -152,6 +153,7 @@ internal sealed class NativeSmokeHarness
                 _restore.GetAwaiter().GetResult();
                 _application.VerifyNativeStateForSmoke();
                 Require(state.Discovery == DiscoveryState.Connecting && !state.HasActiveAppHosts, "Initial native state is incorrect.");
+                VerifySettings();
                 _phase = 1;
                 Publish(_hosts);
                 break;
@@ -165,8 +167,7 @@ internal sealed class NativeSmokeHarness
                 Invoke("Dashboard", _hosts[0].Id);
                 Require(_dashboardCalls == 1, "Native dashboard dispatch did not reach the URL handler.");
                 Invoke("Documentation");
-                Require(_documentationCalls == 1, "Documentation did not use aspire.dev.");
-                Invoke("About");
+                Require(_documentationCalls == 2, "Documentation did not use aspire.dev.");
                 _retainedStop = _application.CaptureActionForSmoke("Stop", _hosts[0].Id);
                 _application.InvokeActionForSmoke(_retainedStop);
                 Require(_confirmations == 1 && _client.Stops.IsEmpty, "Cancel dispatched a stop operation.");
@@ -281,7 +282,7 @@ internal sealed class NativeSmokeHarness
                 Require(state.AppHosts.All(host => !host.CanStop && !host.CanStart), "Disconnected rows allow lifecycle actions.");
                 _finished = true;
                 _phase = 11;
-                Program.Log("Windows native smoke passed: menu tracking, immutable actions, confirmations, pins/history, health icons, artwork invalidation, Explorer recovery, activation, terminal arguments.");
+                Program.Log("Windows native smoke passed: menu tracking, immutable actions, confirmations, pins/history, health icons, artwork invalidation, Explorer recovery, activation, terminal arguments, modeless Settings and isolated startup preferences.");
                 Program.Log("Not covered by synthetic smoke: real per-monitor DPI transitions; verify these on the Windows desktop.");
                 _quit = Task.Run(_application.RequestQuit);
                 break;
@@ -294,6 +295,78 @@ internal sealed class NativeSmokeHarness
     private void Invoke(string kind, AppHostId id = default)
         => _application.InvokeActionForSmoke(_application.CaptureActionForSmoke(kind, id));
 
+    private void VerifySettings()
+    {
+        const string off = "Launch at sign-in is off.\r\nIsolated smoke setting; no startup registration is changed.";
+        const string on = "Launch at sign-in is on.\r\nIsolated smoke setting; no startup registration is changed.";
+        Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 0, "Smoke startup preferences must default off.");
+        Invoke("Settings");
+        _application.VerifySettingsForSmoke(0, true, off);
+        var firstWindow = _application.SettingsWindowForSmoke;
+        Invoke("Settings");
+        Require(_application.SettingsWindowForSmoke == firstWindow && _startupSettings.WriteCount == 0,
+            "Opening Settings created a duplicate window or registered startup.");
+        _application.ClickSettingsControlForSmoke("Startup");
+        _application.VerifySettingsForSmoke(1, true, on);
+        Require(_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 1, "The native checkbox did not enable the isolated setting.");
+        _application.CloseSettingsForSmoke();
+        Invoke("Settings");
+        _application.VerifySettingsForSmoke(1, true, on);
+        Require(_startupSettings.WriteCount == 1, "Reopening Settings changed startup registration.");
+        _application.ClickSettingsControlForSmoke("Startup");
+        _application.VerifySettingsForSmoke(0, true, off);
+        Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 2, "The native checkbox did not disable the setting.");
+
+        _startupSettings.CanEnable = false;
+        _application.ClickSettingsControlForSmoke("Refresh");
+        _application.VerifySettingsForSmoke(0, false,
+            "Launch at sign-in is off. Enabling launch at sign-in is unavailable.\r\nIsolated smoke setting; no startup registration is changed.");
+        _application.ClickSettingsControlForSmoke("Startup");
+        Require(_startupSettings.WriteCount == 2, "An unavailable startup setting was enabled.");
+        _startupSettings.Store.SetEnabled(true);
+        _application.ClickSettingsControlForSmoke("Refresh");
+        _application.VerifySettingsForSmoke(1, true, on);
+        _application.ClickSettingsControlForSmoke("Startup");
+        Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 3,
+            "An existing registration could not be disabled when enabling was unavailable.");
+
+        _startupSettings.CanEnable = true;
+        _startupSettings.FailWrite = true;
+        _application.ClickSettingsControlForSmoke("Refresh");
+        _application.ClickSettingsControlForSmoke("Startup");
+        _application.VerifySettingsForSmoke(0, true,
+            $"Could not change launch at sign-in: Simulated startup write failure.\r\nReview the status below, then retry.\r\n{off}");
+        Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 4,
+            "A failed write produced a phantom enabled setting.");
+        _startupSettings.FailWrite = false;
+        _startupSettings.FailAfterWrite = true;
+        _application.ClickSettingsControlForSmoke("Startup");
+        _application.VerifySettingsForSmoke(1, true,
+            $"Could not change launch at sign-in: Simulated partial startup write failure.\r\nReview the status below, then retry.\r\n{on}");
+        Require(_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 5,
+            "A partially completed write was not re-read from the backing store.");
+        _startupSettings.FailAfterWrite = false;
+        _application.ClickSettingsControlForSmoke("Startup");
+        _application.VerifySettingsForSmoke(0, true, off);
+        _startupSettings.FailRead = true;
+        _application.ClickSettingsControlForSmoke("Refresh");
+        const string unknown = "Startup state is unknown. Could not read the sign-in setting: Simulated startup read failure.\r\nSelect Refresh startup status to retry.";
+        _application.VerifySettingsForSmoke(2, false, unknown);
+        _application.CloseSettingsForSmoke();
+        Invoke("Settings");
+        _application.VerifySettingsForSmoke(2, false, unknown);
+        Require(_startupSettings.WriteCount == 6, "Opening an unknown startup state attempted registration.");
+        _startupSettings.FailRead = false;
+        _startupSettings.FailWrite = false;
+        _application.ClickSettingsControlForSmoke("Refresh");
+        _application.VerifySettingsForSmoke(0, true, off);
+        _application.ClickSettingsControlForSmoke("Documentation");
+        Require(_documentationCalls == 1, "Settings documentation did not open aspire.dev.");
+        _application.CloseSettingsForSmoke();
+        Require(_startupSettings.WriteCount == 6 && !_startupSettings.Store.Read().Enabled,
+            "Closing Settings changed startup state.");
+    }
+
     private void Publish(IReadOnlyList<AppHostInfo> hosts, DiscoveryState discovery = DiscoveryState.Live)
         => _client.Publish(new(hosts, discovery));
 
@@ -305,6 +378,43 @@ internal sealed class NativeSmokeHarness
         if (!condition)
         {
             throw new InvalidOperationException(message);
+        }
+    }
+
+    // Fault injection wraps only MemoryTrayStartupSettings. This harness cannot register
+    // startup with the OS, including when simulating a registration that already exists.
+    private sealed class SmokeStartupSettings : ITrayStartupSettings
+    {
+        internal MemoryTrayStartupSettings Store { get; } = new();
+        internal bool CanEnable { get; set; } = true;
+        internal bool FailRead { get; set; }
+        internal bool FailWrite { get; set; }
+        internal bool FailAfterWrite { get; set; }
+        internal int WriteCount { get; private set; }
+
+        public TrayStartupState Read()
+        {
+            if (FailRead)
+            {
+                throw new IOException("Simulated startup read failure.");
+            }
+            return Store.Read() with { CanEnable = CanEnable };
+        }
+
+        public TrayStartupState SetEnabled(bool enabled)
+        {
+            WriteCount++;
+            if (FailWrite)
+            {
+                throw new IOException("Simulated startup write failure.");
+            }
+            Require(!enabled || CanEnable, "Startup enabling is unavailable.");
+            var state = Store.SetEnabled(enabled) with { CanEnable = CanEnable };
+            if (FailAfterWrite)
+            {
+                throw new IOException("Simulated partial startup write failure.");
+            }
+            return state;
         }
     }
 

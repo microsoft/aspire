@@ -8,7 +8,7 @@ using System.Runtime.Versioning;
 namespace Aspire.Tray;
 
 [SupportedOSPlatform("windows")]
-internal sealed unsafe partial class TrayApplication(TrayController controller, int? smokeSeconds) : IDisposable
+internal sealed unsafe partial class TrayApplication(TrayController controller, int? smokeSeconds, ITrayStartupSettings startupSettings) : IDisposable
 {
     private const string ClassName = "Aspire.Tray.MessageWindow";
     private const nuint TimerId = 1;
@@ -29,6 +29,7 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
     private bool _loopEnded;
     private bool _disposed;
     private int _modalDepth;
+    private nint _modalOwner;
     private int _dispatchDepth;
     private int _refreshPosted;
     private int _restoreAttempts;
@@ -110,6 +111,11 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
                 {
                     break;
                 }
+                if (HandleSettingsShortcut(in message)
+                    || (_settingsWindow != 0 && NativeMethods.IsDialogMessage(_settingsWindow, ref message) != 0))
+                {
+                    continue;
+                }
                 NativeMethods.TranslateMessage(in message);
                 NativeMethods.DispatchMessage(in message);
             }
@@ -168,6 +174,7 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
         NativeCallException.Require(TryAddIcon(), "Shell_NotifyIconW(NIM_ADD)");
         _timerAdded = NativeMethods.SetTimer(window, TimerId, 200, 0) != 0;
         NativeCallException.Require(_timerAdded, "SetTimer");
+        InstallSettingsMenuFilter();
         _smokeDeadline = smokeSeconds is int seconds ? Environment.TickCount64 + seconds * 1000L : null;
         controller.Changed += RequestRefresh;
         // Allocation is not readiness: this message must actually pass through DispatchMessage.
@@ -305,6 +312,10 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
             case NativeMethods.QuitMessage:
                 QuitOnLoop();
                 return 0;
+            case NativeMethods.SettingsMessage when !_quitRequested:
+                _settingsShortcutPending = false;
+                Dispatch(new(ActionKind.Settings));
+                return 0;
             case NativeMethods.SmokeMessage when smokeSeconds is not null:
                 Dispatch(_smokeActions[checked((int)wParam)]);
                 return 0;
@@ -390,8 +401,9 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
         {
             // WM_QUIT alone does not dismiss an owned MessageBox reliably. Close its popup
             // as Cancel before ending the main loop; never target another application's UI.
-            var popup = NativeMethods.GetLastActivePopup(_window);
-            if (popup != 0 && popup != _window)
+            var owner = _modalOwner != 0 ? _modalOwner : _window;
+            var popup = NativeMethods.GetLastActivePopup(owner);
+            if (popup != 0 && popup != owner)
             {
                 Cleanup(NativeMethods.PostMessage(popup, NativeMethods.WmClose, 0, 0) != 0, "PostMessageW(close dialog)");
             }
@@ -439,6 +451,10 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
                 Cleanup(NativeMethods.ShellNotifyIcon(NativeMethods.NimDelete, ref _iconData) != 0, "Shell_NotifyIconW(NIM_DELETE)");
             }
             _menu?.Dispose();
+            if (!DisposeSettings())
+            {
+                return;
+            }
             if (_window != 0)
             {
                 // Keep the static receiver if destruction fails; native code could still call it.

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
 using Aspire.Shared;
 
 namespace Aspire.Tray;
@@ -58,7 +59,9 @@ internal static class Program
                 ? null : BundleVersionLease.Acquire(options.BundleRoot, "tray", "tray");
             var controller = new TrayController(new CliAppHostClient(options.CliPath),
                 new FileTraySavedStateStore(Path.Combine(SingleInstance.DirectoryPath, "apphosts.json")));
-            using var application = new MacTrayApplication(controller, "AspireTray");
+            var startupSettings = new MacTrayStartupSettings(options, !RuntimeFeature.IsDynamicCodeSupported,
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "LaunchAgents"));
+            using var application = new MacTrayApplication(controller, "AspireTray", startupSettings);
             TrayActivation? activation = null;
             try
             {

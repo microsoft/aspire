@@ -35,7 +35,7 @@ public class TrayLaunchCommandTests
         File.Delete(Path.Combine(bundle.AppPath, "Contents", "MacOS", "aspire-tray"));
 
         Assert.Throws<FileNotFoundException>(() => TrayLaunchCommand.CreateStartInfo(
-            new(bundle.CliPath, null, bundle.Root), Path.Combine(bundle.Root, "tray.log")));
+            new(bundle.CliPath, null, bundle.Root, null), Path.Combine(bundle.Root, "tray.log")));
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class TrayLaunchCommandTests
         File.Delete(Path.Combine(bundle.AppPath, "Contents", "Info.plist"));
 
         Assert.Throws<FileNotFoundException>(() => TrayLaunchCommand.CreateStartInfo(
-            new(bundle.CliPath, null, bundle.Root), Path.Combine(bundle.Root, "tray.log")));
+            new(bundle.CliPath, null, bundle.Root, null), Path.Combine(bundle.Root, "tray.log")));
     }
 
     [Fact]
@@ -53,14 +53,14 @@ public class TrayLaunchCommandTests
     {
         using var bundle = new TestTrayBundle();
         Assert.Throws<ArgumentException>(() =>
-            TrayLaunchCommand.CreateStartInfo(new(bundle.CliPath, null, bundle.Root), "tray.log"));
+            TrayLaunchCommand.CreateStartInfo(new(bundle.CliPath, null, bundle.Root, null), "tray.log"));
     }
 
     [Fact]
     public void ForegroundDevelopmentLaunchDoesNotRequireABundle()
     {
         using var bundle = new TestTrayBundle();
-        Assert.Equal(new(bundle.CliPath, null, null), TrayOptions.Parse(["--cli", bundle.CliPath]));
+        Assert.Equal(new(bundle.CliPath, null, null, null), TrayOptions.Parse(["--cli", bundle.CliPath]));
     }
 
     [Theory]

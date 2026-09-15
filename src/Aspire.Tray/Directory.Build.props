@@ -9,6 +9,7 @@
     <EnablePackageValidation>false</EnablePackageValidation>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.IO.Hashing" />
     <Compile Include="$(MSBuildThisFileDirectory)Common/*.cs" Link="Common/%(Filename)%(Extension)" />
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="Common/TrayCliProtocol.cs" />
   </ItemGroup>
