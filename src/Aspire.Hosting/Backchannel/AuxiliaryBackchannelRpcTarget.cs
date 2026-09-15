@@ -1383,7 +1383,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         };
     }
 
-    private static JsonNode? ConvertPropertyValueToJsonNode(object? value)
+    internal static JsonNode? ConvertPropertyValueToJsonNode(object? value)
     {
         return value switch
         {

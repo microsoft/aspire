@@ -158,6 +158,73 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         Assert.False(appHostStarted);
     }
 
+    [Fact]
+    public async Task DestroyCommandListStepsDoesNotRequireYesAndTargetsDestroyStep()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var publishingActivitiesRequested = false;
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        Assert.Contains("--step", args);
+                        Assert.Contains("destroy", args);
+                        Assert.DoesNotContain("--yes", args);
+
+                        var completed = new TaskCompletionSource();
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetCapabilitiesAsyncCallback = cancellationToken => Task.FromResult(new[] { "baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2" }),
+                            GetPipelineStepsAsyncCallback = (step, cancellationToken) =>
+                            {
+                                Assert.Equal("destroy", step);
+                                return Task.FromResult(new GetPipelineStepsResponse
+                                {
+                                    Steps =
+                                    [
+                                        new PipelineStepInfo
+                                        {
+                                            Name = "destroy",
+                                            Description = "Destroy resources.",
+                                            DependsOn = []
+                                        }
+                                    ]
+                                });
+                            },
+                            GetPublishingActivitiesAsyncCallback = cancellationToken =>
+                            {
+                                publishingActivitiesRequested = true;
+                                return AsyncEnumerable.Empty<PublishingActivity>();
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("destroy --list-steps --non-interactive");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(publishingActivitiesRequested);
+    }
+
     [Theory]
     [InlineData("destroy --yes")]
     [InlineData("destroy --non-interactive --yes")]

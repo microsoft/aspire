@@ -2075,6 +2075,68 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ProcessParametersStep_WithTargetStep_ProcessesOnlyScopedParameters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "target-step").WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        var targetParameter = builder.AddParameter("target-param", () => "target-value");
+        var unrelatedParameter = builder.AddParameter("unrelated-param", () => "unrelated-value");
+
+        builder.AddContainer("target", "nginx")
+            .WithEnvironment("TARGET_PARAM", targetParameter)
+            .WithPipelineStepFactory(_ => new PipelineStep
+            {
+                Name = "target-step",
+                Action = _ => Task.CompletedTask,
+                DependsOnSteps = [WellKnownPipelineSteps.ProcessParameters]
+            });
+
+        builder.AddContainer("unrelated", "nginx")
+            .WithEnvironment("UNRELATED_PARAM", unrelatedParameter);
+
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(builder.Build());
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        var targetParameterResource = builder.Resources.OfType<ParameterResource>().Single(p => p.Name == "target-param");
+        var unrelatedParameterResource = builder.Resources.OfType<ParameterResource>().Single(p => p.Name == "unrelated-param");
+
+        Assert.NotNull(targetParameterResource.WaitForValueTcs);
+        Assert.True(targetParameterResource.WaitForValueTcs.Task.IsCompletedSuccessfully);
+        Assert.Null(unrelatedParameterResource.WaitForValueTcs);
+    }
+
+    [Fact]
+    public async Task ProcessParametersStep_WhenTargetIsProcessParameters_ProcessesFullModel()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.ProcessParameters).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        builder.AddParameter("explicit-param", () => "explicit-value");
+        var referencedParameter = builder.AddParameter("referenced-param", () => "referenced-value");
+
+        builder.AddContainer("referencing", "nginx")
+            .WithEnvironment("REFERENCED_PARAM", referencedParameter);
+
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(builder.Build());
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        var explicitParameterResource = builder.Resources.OfType<ParameterResource>().Single(p => p.Name == "explicit-param");
+        var referencedParameterResource = builder.Resources.OfType<ParameterResource>().Single(p => p.Name == "referenced-param");
+
+        Assert.NotNull(explicitParameterResource.WaitForValueTcs);
+        Assert.True(explicitParameterResource.WaitForValueTcs.Task.IsCompletedSuccessfully);
+        Assert.NotNull(referencedParameterResource.WaitForValueTcs);
+        Assert.True(referencedParameterResource.WaitForValueTcs.Task.IsCompletedSuccessfully);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_PassesStepHierarchyMetadataToActivityReporter()
     {
         var activityReporter = new TestPipelineActivityReporter(testOutputHelper);

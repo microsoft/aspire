@@ -65,4 +65,7 @@ public sealed class PipelineContext(
     /// </code>
     /// </example>
     public PipelineSummary Summary { get; } = new();
+
+    [AspireExportIgnore(Reason = "Internal execution state.")]
+    internal IReadOnlyList<PipelineStep> ResolvedSteps { get; set; } = [];
 }

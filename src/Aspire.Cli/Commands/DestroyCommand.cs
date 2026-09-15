@@ -29,7 +29,15 @@ internal sealed class DestroyCommand : PipelineCommandBase
         };
         Options.Add(_yesOption);
 
-        AddNonInteractiveRequiresYesValidator(this, _yesOption);
+        Validators.Add(result =>
+        {
+            var nonInteractive = result.GetValue(RootCommand.NonInteractiveOption);
+            var yes = result.GetValue(_yesOption);
+            if (nonInteractive && !yes && !IsListOperation(result))
+            {
+                result.AddError(string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, Name));
+            }
+        });
     }
 
     protected override string OperationCompletedPrefix => DestroyCommandStrings.OperationCompletedPrefix;
@@ -76,8 +84,10 @@ internal sealed class DestroyCommand : PipelineCommandBase
 
     protected override string GetCanceledMessage() => DestroyCommandStrings.DestroyCanceled;
 
+    protected override string? GetTargetStepName(ParseResult parseResult) => "destroy";
+
     protected override string GetProgressMessage(ParseResult parseResult)
     {
-        return "Executing step destroy";
+        return GetListProgressMessage(parseResult) ?? "Executing step destroy";
     }
 }

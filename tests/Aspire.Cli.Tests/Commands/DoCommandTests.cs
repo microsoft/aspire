@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
+using InvocationConfiguration = System.CommandLine.InvocationConfiguration;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -58,6 +59,28 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Cancelled, exitCode);
         Assert.Empty(displayedErrors);
+    }
+
+    [Fact]
+    public async Task DoCommandHelpDescribesPipelineInputArguments()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("do --help");
+        var helpWriter = new StringWriter();
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        var helpOutput = string.Join(' ', helpWriter.ToString().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        Assert.Contains("aspire do [<step>] [options] [[--] <pipeline-input-arguments>...]", helpOutput);
+        Assert.Contains("Pipeline input arguments:", helpOutput);
+        Assert.Contains("Supplies parameter-backed pipeline inputs discovered with --list-inputs.", helpOutput);
+        Assert.DoesNotContain("Arguments passed to the application that is being run.", helpOutput);
     }
 
     [Fact]
@@ -169,6 +192,170 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task DoCommandAppliesPipelineParameterArgumentsForSelectedStep()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        TestAppHostBackchannel? capturedBackchannel = null;
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var completed = new TaskCompletionSource();
+                        capturedBackchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetCapabilitiesAsyncCallback = cancellationToken => Task.FromResult(new[] { "baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "pipeline-inputs.v1" }),
+                            GetPipelineInputsAsyncCallback = (step, cancellationToken) =>
+                            {
+                                Assert.Equal("deploy", step);
+                                return Task.FromResult(new GetPipelineInputsResponse
+                                {
+                                    Inputs = [new PipelineInput { Name = "environmentName", InputType = "Text", Required = true }]
+                                });
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(capturedBackchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do deploy --environment-name prod");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedBackchannel?.AppliedPipelineParameterValues);
+        Assert.Equal("prod", capturedBackchannel.AppliedPipelineParameterValues["environmentName"]);
+    }
+
+    [Fact]
+    public async Task DoCommandListsPipelineInputsForSelectedStep()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.InteractionServiceFactory = (sp) => interactionService;
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var completed = new TaskCompletionSource();
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetCapabilitiesAsyncCallback = cancellationToken => Task.FromResult(new[] { "baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "pipeline-inputs.v1" }),
+                            GetPipelineInputsAsyncCallback = (step, cancellationToken) =>
+                            {
+                                Assert.Equal("deploy", step);
+                                return Task.FromResult(new GetPipelineInputsResponse
+                                {
+                                    Inputs = [new PipelineInput { Name = "environmentName", ConfigurationKey = "Parameters:environmentName", InputType = "Text", Required = true }]
+                                });
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do deploy --list-inputs --format json");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var output = Assert.Single(interactionService.DisplayedRawText).Text;
+        Assert.Contains("\"operation\": \"do\"", output);
+        Assert.Contains("\"step\": \"deploy\"", output);
+        Assert.Contains("\"name\": \"environmentName\"", output);
+    }
+
+    [Theory]
+    [InlineData("do --list-inputs --format json")]
+    [InlineData("do --format=json --list-inputs")]
+    public async Task DoCommandListsPipelineInputsWithoutStep(string invocation)
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.InteractionServiceFactory = (sp) => interactionService;
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        Assert.DoesNotContain("--step", args);
+                        Assert.Contains("inspect", args);
+                        Assert.DoesNotContain("--format", args);
+
+                        var completed = new TaskCompletionSource();
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetPipelineInputsAsyncCallback = (step, cancellationToken) =>
+                            {
+                                Assert.Null(step);
+                                return Task.FromResult(new GetPipelineInputsResponse
+                                {
+                                    Inputs = [new PipelineInput { Name = "environmentName", ConfigurationKey = "Parameters:environmentName", InputType = "Text", Required = true }]
+                                });
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse(invocation);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var output = Assert.Single(interactionService.DisplayedRawText).Text;
+        Assert.Contains("\"operation\": \"do\"", output);
+        Assert.DoesNotContain("\"step\":", output);
+        Assert.Contains("\"name\": \"environmentName\"", output);
     }
 
     [Fact]
@@ -563,6 +750,126 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DoCommandWithListStepsAsJsonPreservesStepArray()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var requestStopCalled = new TaskCompletionSource();
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.InteractionServiceFactory = (sp) => interactionService;
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = requestStopCalled,
+                            GetPipelineStepsAsyncCallback = (step, cancellationToken) =>
+                            {
+                                Assert.Equal("deploy", step);
+                                return Task.FromResult(new GetPipelineStepsResponse
+                                {
+                                    Steps =
+                                    [
+                                        new PipelineStepInfo { Name = "process-parameters" },
+                                        new PipelineStepInfo { Name = "deploy-api", DependsOn = ["process-parameters"], Tags = ["deploy-compute"], ResourceName = "api" }
+                                    ]
+                                });
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await requestStopCalled.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do deploy --list-steps --format json");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        var output = Assert.Single(interactionService.DisplayedRawText).Text;
+        using var document = JsonDocument.Parse(output);
+        Assert.Equal(JsonValueKind.Array, document.RootElement.ValueKind);
+        Assert.Contains("\"name\": \"deploy-api\"", output);
+        Assert.Contains("\"resourceName\": \"api\"", output);
+    }
+
+    [Fact]
+    public async Task DoCommandListsPipelineResourcesWithoutStep()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var requestStopCalled = new TaskCompletionSource();
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.InteractionServiceFactory = (sp) => interactionService;
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        Assert.DoesNotContain("--step", args);
+
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = requestStopCalled,
+                            GetPipelineResourcesAsyncCallback = (includeHidden, cancellationToken) =>
+                            {
+                                Assert.False(includeHidden);
+                                return Task.FromResult(new GetPipelineResourcesResponse
+                                {
+                                    Resources =
+                                    [
+                                        new ResourceSnapshot
+                                        {
+                                            Name = "api",
+                                            DisplayName = "api",
+                                            ResourceType = "Project"
+                                        }
+                                    ]
+                                });
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await requestStopCalled.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do --list-resources --format json");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var output = Assert.Single(interactionService.DisplayedRawText).Text;
+        Assert.Contains("\"resources\":", output);
+        Assert.Contains("\"name\": \"api\"", output);
+    }
+
+    [Fact]
     public async Task DoCommandWithListStepsDoesNotExecutePipeline()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -735,8 +1042,11 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         Assert.False(runCalled);
     }
 
-    [Fact]
-    public async Task DoCommandWithListStepsStopsAppHostWhenCapabilityIsMissing()
+    [Theory]
+    [InlineData("--list-steps")]
+    [InlineData("--list-inputs")]
+    [InlineData("--list-resources")]
+    public async Task DoCommandWithListOperationStopsAppHostWhenCapabilityIsMissing(string listOption)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var requestStopCalled = new TaskCompletionSource();
@@ -765,7 +1075,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var exitCode = await command.Parse("do --list-steps --format json").InvokeAsync().DefaultTimeout();
+        var exitCode = await command.Parse($"do {listOption} --format json").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
         Assert.True(requestStopCalled.Task.IsCompleted);
@@ -825,6 +1135,21 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public void DoCommandRejectsMultipleListOptions()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do --list-steps --list-inputs");
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("The '--list-steps', '--list-inputs', and '--list-resources' options cannot be used together.", error.Message);
     }
 
     [Fact]

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Commands;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
@@ -25,6 +26,140 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task PublishCommandListsPipelineInputsAsJson()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var publishingActivitiesRequested = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.InteractionServiceFactory = (sp) => interactionService;
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        Assert.Contains("--step", args);
+                        Assert.Contains("publish", args);
+
+                        var completed = new TaskCompletionSource();
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetPipelineInputsAsyncCallback = (step, cancellationToken) =>
+                            {
+                                Assert.Equal("publish", step);
+                                return Task.FromResult(new GetPipelineInputsResponse
+                                {
+                                    Inputs = [new PipelineInput { Name = "imageTag", ConfigurationKey = "Parameters:imageTag", InputType = "Text" }]
+                                });
+                            },
+                            GetPublishingActivitiesAsyncCallback = cancellationToken =>
+                            {
+                                publishingActivitiesRequested = true;
+                                return AsyncEnumerable.Empty<PublishingActivity>();
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --list-inputs --format json");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(publishingActivitiesRequested);
+        var output = Assert.Single(interactionService.DisplayedRawText).Text;
+        Assert.Contains("\"operation\": \"publish\"", output);
+        Assert.Contains("\"step\": \"publish\"", output);
+        Assert.Contains("\"name\": \"imageTag\"", output);
+    }
+
+    [Fact]
+    public async Task PublishCommandListsPipelineResourcesAsJson()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var publishingActivitiesRequested = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.InteractionServiceFactory = (sp) => interactionService;
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        Assert.Contains("--step", args);
+                        Assert.Contains("publish", args);
+
+                        var completed = new TaskCompletionSource();
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetPipelineResourcesAsyncCallback = (includeHidden, cancellationToken) =>
+                            {
+                                Assert.False(includeHidden);
+                                return Task.FromResult(new GetPipelineResourcesResponse
+                                {
+                                    Resources =
+                                    [
+                                        new ResourceSnapshot
+                                        {
+                                            Name = "web",
+                                            DisplayName = "web",
+                                            ResourceType = "Project"
+                                        }
+                                    ]
+                                });
+                            },
+                            GetPublishingActivitiesAsyncCallback = cancellationToken =>
+                            {
+                                publishingActivitiesRequested = true;
+                                return AsyncEnumerable.Empty<PublishingActivity>();
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --list-resources --format json");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(publishingActivitiesRequested);
+        var output = Assert.Single(interactionService.DisplayedRawText).Text;
+        Assert.Contains("\"resources\":", output);
+        Assert.Contains("\"name\": \"web\"", output);
+        Assert.Contains("\"resourceType\": \"Project\"", output);
     }
 
     [Fact]

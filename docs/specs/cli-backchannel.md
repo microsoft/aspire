@@ -126,6 +126,58 @@ Older AppHosts omit `ResourceSnapshot.Version`, which deserializes as `0`. Witho
 | New | Old | Works (CLI detects missing capability, falls back) |
 | New | New | Works (uses the highest shared capability) |
 
+## Pipeline discovery on the primary backchannel
+
+Pipeline commands (`publish`, `deploy`, `destroy`, and `do`) use the CLI-owned
+primary backchannel, rather than attaching through the auxiliary backchannel.
+They support three mutually exclusive inspection options:
+
+```bash
+aspire do --list-steps --format json
+aspire deploy --list-inputs --format json
+aspire deploy --list-resources --format json
+```
+
+All three launch the AppHost with `--operation inspect --list-steps true`, using
+the existing `pipeline-steps.v2` inspection lifecycle. Inspection skips the
+before-start lifecycle hooks and pipeline execution; metadata resolution may
+still invoke user step-resolution callbacks. The CLI stops the AppHost after
+inspection, including when discovery fails, and propagates its exit code.
+
+Additional primary backchannel capabilities:
+
+| Capability | Methods | Purpose |
+|------------|---------|---------|
+| `pipeline-inputs.v1` | `GetPipelineInputsAsync`, `ApplyPipelineInputValuesAsync` | Discover parameter-backed inputs and apply supplied values before execution |
+| `pipeline-resources.v1` | `GetPipelineResourcesAsync` | Describe resources present before pipeline execution |
+
+Input discovery and runtime parameter processing use the same target-step
+resource dependency scope. `aspire do --list-inputs` without a target, and the
+explicit `process-parameters` step, include all parameters. Provider prompts and
+custom step interactions that are not backed by parameters are not enumerated.
+
+Input JSON includes CLI aliases, configuration keys, environment variable names,
+required status, validation metadata, and current value availability/source.
+Secret parameter values are redacted even when a configured value is present.
+Resource discovery redacts sensitive properties and preserves JSON property types.
+The existing `--list-steps --format json` output remains an array of steps.
+The `--format` option is consumed only in inspection mode; other invocations
+continue forwarding it to the AppHost.
+
+Supply discovered inputs using their named flags, for example:
+
+```bash
+aspire deploy --environment-name production
+aspire do process-parameters --custom-input 42
+```
+
+Use `--` before input arguments when a parameter flag conflicts with a CLI
+option. In non-interactive mode, missing required parameter inputs fail before
+pipeline execution. On AppHosts advertising `pipeline-inputs.v1`, execution waits
+until the owning CLI subscribes to publishing activities, allowing discovery and
+configuration updates to complete first. Older AppHosts retain the existing
+argument-forwarding behavior without the new discovery/application RPCs.
+
 ## Adding New Methods
 
 ### Step 1: Define the Request/Response Types
