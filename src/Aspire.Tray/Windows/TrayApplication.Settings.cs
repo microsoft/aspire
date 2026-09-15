@@ -138,7 +138,13 @@ internal sealed unsafe partial class TrayApplication
     private void FocusSettings()
     {
         NativeMethods.ShowWindow(_settingsWindow, 9); // SW_RESTORE, including minimized windows.
-        NativeCallException.Require(NativeMethods.SetForegroundWindow(_settingsWindow) != 0, "SetForegroundWindow(Settings)");
+        // Windows may deny foreground activation when another application owns input.
+        // Keep the visible Settings window instead of treating that policy as a creation failure.
+        // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setforegroundwindow
+        if (NativeMethods.SetForegroundWindow(_settingsWindow) == 0)
+        {
+            Program.Log("Windows kept Aspire Settings in the background.");
+        }
         var focus = NativeMethods.GetFocus();
         if (NativeMethods.IsChild(_settingsWindow, focus) == 0 || NativeMethods.IsWindowEnabled(focus) == 0)
         {

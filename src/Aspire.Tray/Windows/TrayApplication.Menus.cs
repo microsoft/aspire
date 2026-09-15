@@ -267,7 +267,12 @@ internal sealed unsafe partial class TrayApplication
         NativeCallException.Require(NativeMethods.SetWindowPos(_window, 0, point.X, point.Y, 0, 0, 0x1 | 0x4 | 0x10) != 0, "SetWindowPos(tray monitor)");
         RefreshMenu();
         var menu = _menu!;
-        NativeCallException.Require(NativeMethods.SetForegroundWindow(_window) != 0, "SetForegroundWindow");
+        // Foreground activation is a request, not a prerequisite for owning a popup menu.
+        // Background smoke runs can be denied activation by Windows' foreground lock.
+        if (NativeMethods.SetForegroundWindow(_window) == 0)
+        {
+            Program.Log("Windows kept the Aspire tray menu in the background.");
+        }
         _menuOpen = true;
         try
         {

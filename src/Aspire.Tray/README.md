@@ -250,6 +250,9 @@ starting it. Missing pinned projects are pruned, while missing recent projects
 offer removal and clearing history requires confirmation. The adapter retains
 native menu resources while a popup is being tracked, restores the notification
 icon after Explorer restarts, and responds to display scaling changes.
+If Explorer's notification area is still initializing at startup, icon creation
+retries on the UI timer using the bounded Explorer recovery attempts. Startup is acknowledged only after
+the icon has been added; an unavailable notification area still fails explicitly.
 
 State and timestamped diagnostics are stored in
 `%LocalAppData%\Aspire\Tray\apphosts.json` and `aspire-tray.log`. The current-user
@@ -279,7 +282,8 @@ The publishing helper also validates the original icon and native PE architectur
 
 Smoke requires an interactive Windows desktop with Explorer. It exercises real
 menus, safe-default dialogs, immutable actions, pin/history operations, connection
-and health artwork, Explorer recovery, activation, and artwork invalidation.
+and health artwork, delayed initial icon creation, Explorer recovery, activation,
+single-button message dismissal, and artwork invalidation.
 Synthetic invalidation is not a real monitor-DPI transition; verify display-scale
 changes separately on the desktop. Smoke uses only isolated fake AppHosts and
 captures output under `artifacts/log/Release/tray-win-x64`.

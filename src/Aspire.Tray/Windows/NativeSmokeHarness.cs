@@ -77,6 +77,7 @@ internal sealed class NativeSmokeHarness
         _controller = new(_client, _store);
         _application = new(_controller, seconds, _startupSettings)
         {
+            IconAddFailuresForSmoke = 3,
             SmokeTick = Advance,
             OpenUrlForSmoke = uri =>
             {
@@ -157,6 +158,7 @@ internal sealed class NativeSmokeHarness
                     return;
                 }
                 _restore.GetAwaiter().GetResult();
+                Require(_application.IconAddFailuresForSmoke == 0, "Readiness was acknowledged before icon creation recovered.");
                 _application.VerifyNativeStateForSmoke();
                 Require(state.Discovery == DiscoveryState.Connecting && !state.HasActiveAppHosts, "Initial native state is incorrect.");
                 VerifySettings();
@@ -174,9 +176,11 @@ internal sealed class NativeSmokeHarness
                 Require(_dashboardCalls == 1, "Native dashboard dispatch did not reach the URL handler.");
                 Invoke("Documentation");
                 Require(_documentationCalls == 2, "Documentation did not use aspire.dev.");
+                _application.ShowMessageForSmoke();
                 _retainedStop = _application.CaptureActionForSmoke("Stop", _hosts[0].Id);
                 _application.InvokeActionForSmoke(_retainedStop);
-                Require(_confirmations == 1 && _client.Stops.IsEmpty, "Cancel dispatched a stop operation.");
+                Require(_confirmations == 1, "The stop confirmation was not shown exactly once.");
+                Require(_client.Stops.IsEmpty, "Cancel dispatched a stop operation.");
                 Invoke("TogglePin", _hosts[0].Id);
                 Require(_controller.State.AppHosts.Single(host => host.Id == _hosts[0].Id).IsPinned, "Pin action did not persist.");
                 _accept = true;
@@ -276,10 +280,29 @@ internal sealed class NativeSmokeHarness
                 }
                 _restore.GetAwaiter().GetResult();
                 _client.CompleteStart();
-                Publish([], DiscoveryState.Disconnected);
+                // A successful start remains pending until discovery sees its instance.
+                Publish([new(_pinned, 42001, null) { ProcessStartTimeUnixMilliseconds = 1_700_000_000_100 }]);
                 _phase = 10;
                 break;
             case 10:
+                if (!state.AppHosts.Any(host => host.IsRunning && TrayAppHostPath.Comparer.Equals(host.Id.AppHostPath, _pinned)))
+                {
+                    return;
+                }
+                // Disconnection preserves the last live rows. Observe an empty live
+                // snapshot before checking the disconnected, inactive presentation.
+                Publish([]);
+                _phase = 11;
+                break;
+            case 11:
+                if (state.HasActiveAppHosts)
+                {
+                    return;
+                }
+                Publish([], DiscoveryState.Disconnected);
+                _phase = 12;
+                break;
+            case 12:
                 if (state.Discovery != DiscoveryState.Disconnected || state.HasActiveAppHosts)
                 {
                     return;
@@ -287,12 +310,12 @@ internal sealed class NativeSmokeHarness
                 _application.VerifyNativeStateForSmoke();
                 Require(state.AppHosts.All(host => !host.CanStop && !host.CanStart), "Disconnected rows allow lifecycle actions.");
                 _finished = true;
-                _phase = 11;
+                _phase = 13;
                 Program.Log("Windows native smoke passed: menu tracking, immutable actions, confirmations, pins/history, health icons, artwork invalidation, Explorer recovery, activation, terminal arguments, modeless Settings and isolated startup preferences.");
                 Program.Log("Not covered by synthetic smoke: real per-monitor DPI transitions; verify these on the Windows desktop.");
                 _quit = Task.Run(_application.RequestQuit);
                 break;
-            case 11:
+            case 13:
                 _quit?.GetAwaiter().GetResult();
                 break;
         }

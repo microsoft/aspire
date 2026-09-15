@@ -171,7 +171,12 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
             controller.ReportActionError(message);
         });
         RefreshMenu();
-        NativeCallException.Require(TryAddIcon(), "Shell_NotifyIconW(NIM_ADD)");
+        if (!TryAddIcon())
+        {
+            // An Explorer window can exist before its notification area accepts icons.
+            // Retry on the UI timer, just as for TaskbarCreated, without acknowledging readiness.
+            Program.Log("Windows notification area is not ready. Retrying tray icon creation.");
+        }
         _timerAdded = NativeMethods.SetTimer(window, TimerId, 200, 0) != 0;
         NativeCallException.Require(_timerAdded, "SetTimer");
         InstallSettingsMenuFilter();
@@ -201,6 +206,11 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
 
     private bool TryAddIcon()
     {
+        if (smokeSeconds is not null && IconAddFailuresForSmoke > 0)
+        {
+            IconAddFailuresForSmoke--;
+            return false;
+        }
         // Shell_NotifyIcon does not promise a last-error value.
         if (NativeMethods.ShellNotifyIcon(NativeMethods.NimAdd, ref _iconData) == 0)
         {
@@ -239,6 +249,12 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
         }
         lock (_lifecycleGate)
         {
+            if (_shutdownRequested)
+            {
+                FailRestoreRequests(new InvalidOperationException("The tray is shutting down."));
+                return;
+            }
+            _ready.TrySetResult();
             foreach (var request in _restoreRequests)
             {
                 request.TrySetResult();
@@ -295,7 +311,6 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
                         QuitOnLoop();
                         return 0;
                     }
-                    _ready.TrySetResult();
                 }
                 RestoreOnLoop();
                 return 0;

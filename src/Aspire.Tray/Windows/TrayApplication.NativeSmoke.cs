@@ -13,6 +13,13 @@ internal sealed unsafe partial class TrayApplication
     internal nint IconForSmoke => _iconData.Icon;
     internal IReadOnlyList<AppHostId> RowIdsForSmoke => _menu!.Rows.Select(row => row.Id).ToArray();
     internal Func<bool>? DialogReadyForSmoke { get; set; }
+    internal int IconAddFailuresForSmoke { get; set; }
+
+    internal void ShowMessageForSmoke()
+    {
+        RequireSmoke();
+        ShowMessage("Aspire smoke", "Native message dialog.", 0);
+    }
 
     private void CompleteDialogForSmoke()
     {
@@ -35,7 +42,11 @@ internal sealed unsafe partial class TrayApplication
         var defaultId = (nuint)NativeMethods.SendMessage(dialog, 0x400, 0, 0);
         NativeSmokeHarness.Require((defaultId & 0xFFFF) == (uint)pending.DefaultId && (defaultId >> 16) == 0x534B,
             "The actual native dialog has an unsafe default button.");
-        NativeCallException.Require(NativeMethods.PostMessage(dialog, 0x111, (nuint)pending.Response, 0) != 0, "PostMessageW(smoke dialog response)");
+        var button = NativeMethods.GetDlgItem(dialog, pending.Response);
+        NativeCallException.Require(button != 0, "GetDlgItem(smoke dialog response)");
+        // WM_COMMAND/BN_CLICKED includes the button HWND in lParam.
+        // https://learn.microsoft.com/windows/win32/controls/bn-clicked
+        NativeCallException.Require(NativeMethods.PostMessage(dialog, NativeMethods.WmCommand, (nuint)pending.Response, button) != 0, "PostMessageW(smoke dialog response)");
         _smokeDialog = null;
     }
 

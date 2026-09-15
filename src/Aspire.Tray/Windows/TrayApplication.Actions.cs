@@ -171,7 +171,9 @@ internal sealed partial class TrayApplication
         {
             if (smokeSeconds is not null)
             {
-                _smokeDialog = new(1, 1);
+                // MB_OK reports IDOK as its default, but its sole button uses IDCANCEL
+                // so Escape can dismiss it. Sending IDOK leaves the native dialog open.
+                _smokeDialog = new(1, 2);
             }
             NativeCallException.Require(NativeMethods.MessageBox(_modalOwner, detail, title, flags) != 0, "MessageBoxW");
         }
