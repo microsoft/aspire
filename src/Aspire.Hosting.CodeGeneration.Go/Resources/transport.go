@@ -8,10 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -845,26 +843,6 @@ func getString(m map[string]any, key string) string {
 		}
 	}
 	return ""
-}
-
-func openConnection(socketPath string, timeout time.Duration) (io.ReadWriteCloser, error) {
-	if runtime.GOOS == "windows" {
-		pipePath := `\\.\pipe\` + socketPath
-		return openNamedPipe(pipePath)
-	}
-	dialer := net.Dialer{}
-	if timeout > 0 {
-		dialer.Timeout = timeout
-	}
-	return dialer.Dial("unix", socketPath)
-}
-
-func openNamedPipe(path string) (io.ReadWriteCloser, error) {
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
-	if err != nil {
-		return nil, err
-	}
-	return f, nil
 }
 
 // validateCapabilityArgs checks for circular references in arguments before sending to the server.
