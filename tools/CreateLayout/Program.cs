@@ -157,9 +157,8 @@ internal sealed class LayoutBuilder : IDisposable
         var managedDir = Path.Combine(_outputPath, "managed");
         Directory.CreateDirectory(managedDir);
 
-        // Copy only the aspire-managed executable and required assets (wwwroot for Dashboard).
-        // Skip other .exe files — they are native host stubs from referenced Exe projects
-        // that leak into the publish output but are not needed (everything is in aspire-managed.exe).
+        // Copy the managed executable and known sidecars, not the apphost stubs from referenced
+        // Exe projects that also appear in publish output.
         var isWindows = _rid.StartsWith("win", StringComparison.OrdinalIgnoreCase);
         var managedExeName = isWindows ? "aspire-managed.exe" : "aspire-managed";
 
@@ -170,6 +169,24 @@ internal sealed class LayoutBuilder : IDisposable
         }
 
         File.Copy(managedExePath, Path.Combine(managedDir, managedExeName), overwrite: true);
+
+        if (isWindows)
+        {
+            // Hex1b launches hex1bpty.exe beside the app; conpty.dll must stay beside that helper.
+            // ConPTY selects OpenConsole by OS architecture, so win-x64 also needs the ARM64 host
+            // when running under emulation. These files cannot live inside the managed single-file.
+            // https://github.com/microsoft/terminal/blob/main/src/winconpty/winconpty.cpp
+            string[] ptyFiles = _rid == "win-x64"
+                ? ["hex1bpty.exe", "conpty.dll", "x64/OpenConsole.exe", "arm64/OpenConsole.exe"]
+                : ["hex1bpty.exe", "conpty.dll", "arm64/OpenConsole.exe"];
+
+            foreach (var relativePath in ptyFiles)
+            {
+                var destination = Path.Combine(managedDir, relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.Copy(Path.Combine(managedPublishPath, relativePath), destination, overwrite: true);
+            }
+        }
 
         // Copy wwwroot (required for Dashboard static web assets)
         var wwwrootPath = Path.Combine(managedPublishPath, "wwwroot");

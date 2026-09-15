@@ -1,14 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf.WellKnownTypes;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 
-public sealed class MockDashboardClient : IDashboardClient
+public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryWriter
 {
     public static readonly ResourceViewModel TestResource1 = ModelTestHelpers.CreateResource(
         resourceName: "TestResource",
@@ -50,8 +52,20 @@ public sealed class MockDashboardClient : IDashboardClient
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken) => throw new NotImplementedException();
-    public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
-    public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
+    public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();
+    public IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken) => throw new NotImplementedException();
+    public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();
+    public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
+
+    public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
 
     /// <inheritdoc/>
     public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) => Task.CompletedTask;
@@ -83,4 +97,25 @@ public sealed class MockDashboardClient : IDashboardClient
     public ResourceViewModel? GetResource(string resourceName) => null;
 
     public IReadOnlyList<ResourceViewModel> GetResources() => _resources ?? [];
+
+    public Task ReplaceResourcesAsync(IReadOnlyList<Resource> resources) => Task.CompletedTask;
+
+    public Task ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes) => Task.CompletedTask;
+
+    public Task MarkConsoleLogsLoadedAsync(string resourceName) => Task.CompletedTask;
+
+    public Task AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines) => Task.CompletedTask;
+}
+
+internal sealed class MockRepositoryFactory(
+    IServiceProvider serviceProvider,
+    IResourceRepository resourceRepository) : IRepositoryFactory
+{
+    private readonly RepositoryFactory _inner = new(serviceProvider);
+
+    public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) =>
+        _inner.CreateTelemetryRepository(database);
+
+    public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) =>
+        resourceRepository;
 }

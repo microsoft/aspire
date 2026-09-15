@@ -41,6 +41,11 @@
     <!-- NU1510: The project does not reference any target framework and will not be restored. -->
     <!-- TODO: Re-enable and remove this. -->
     <NoWarn>$(NoWarn);xUnit1051;NU1510</NoWarn>
+
+    <!-- Temporarily suppress moderate- and high-severity NuGet audit warnings while Hex1b requires nuget.org.
+         Remove this suppression once stable Hex1b packages are available from the upstream feeds and the
+         nuget-hex1b source and mapping can be removed from NuGet.config. -->
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
   </PropertyGroup>
 
   <!-- OS/Architecture properties for local development resources -->

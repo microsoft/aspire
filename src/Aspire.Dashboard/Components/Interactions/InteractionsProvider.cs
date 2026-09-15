@@ -31,6 +31,8 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
     }
     internal record InteractionDialogReference(int InteractionId, DashboardDialogReference Dialog, ComponentTelemetryContext TelemetryContext) : IDisposable
     {
+        public bool CompletedByServer { get; set; }
+
         public void Dispose()
         {
             TelemetryContext.Dispose();
@@ -200,7 +202,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     dialogComponentId = TelemetryComponentIds.InteractionMessageBox;
                     openDialog = dialogService => dialogService.ShowDialogAsync<InteractionMessageBoxDialog>(content, dialogParameters);
                 }
-                else if (item.InputsDialog is { } inputs)
+                else if (item.InputsDialog is not null)
                 {
                     var vm = new InteractionsInputsDialogViewModel
                     {
@@ -242,10 +244,11 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     dialogComponentId = TelemetryComponentIds.InteractionInputsDialog;
                     openDialog = dialogService => dialogService.ShowDialogAsync<InteractionsInputDialog>(vm, dialogParameters);
                 }
-                else if (item.PromptProgress is { } promptProgress)
+                else if (item.PromptProgress is not null || item.PromptTerminal is not null)
                 {
                     var dialogParameters = CreateDialogParameters(item, intent: null);
-                    dialogParameters.Width = "500px";
+                    // A terminal needs more horizontal space than the progress indicator or ordinary form fields.
+                    dialogParameters.Width = item.PromptTerminal is not null ? "75vw" : "500px";
                     dialogParameters.ShowDismiss = false;
                     dialogParameters.SecondaryAction = null;
 
@@ -259,6 +262,13 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     dialogParameters.OnDialogResult = EventCallback.Factory.Create<DialogResult>(this, async dialogResult =>
                     {
                         // When the user clicks the cancel button, notify the server.
+                        // Server completion also closes the view, but must not echo cancellation back to the AppHost.
+                        if (_cts.IsCancellationRequested ||
+                            (_interactionDialogReference is { CompletedByServer: true } reference && reference.InteractionId == item.InteractionId))
+                        {
+                            return;
+                        }
+
                         var request = new WatchInteractionsRequestUpdate
                         {
                             InteractionId = item.InteractionId
@@ -268,22 +278,44 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                         {
                             request.Complete = new InteractionComplete();
                         }
+                        else if (item.PromptTerminal is { } terminal)
+                        {
+                            request.PromptTerminal = new InteractionPromptTerminal
+                            {
+                                TerminalId = terminal.TerminalId,
+                                Result = false
+                            };
+                        }
                         else
                         {
-                            promptProgress.Result = false;
-                            request.PromptProgress = promptProgress;
+                            request.PromptProgress = new InteractionPromptProgress { Result = false };
                         }
 
                         await DashboardClient.SendInteractionRequestAsync(request, _cts.Token).ConfigureAwait(false);
                     });
 
-                    var vm = new InteractionsProgressDialogViewModel
+                    if (item.PromptTerminal is { } promptTerminal)
                     {
-                        Message = GetMessageHtml(item)
-                    };
+                        dialogParameters.Id = "interactions-terminal-dialog";
+                        var vm = new InteractionsTerminalDialogViewModel
+                        {
+                            TerminalId = promptTerminal.TerminalId,
+                            Message = GetMessageHtml(item)
+                        };
 
-                    dialogComponentId = TelemetryComponentIds.InteractionProgressDialog;
-                    openDialog = dialogService => dialogService.ShowDialogAsync<InteractionsProgressDialog>(vm, dialogParameters);
+                        dialogComponentId = TelemetryComponentIds.InteractionTerminalDialog;
+                        openDialog = dialogService => dialogService.ShowDialogAsync<InteractionsTerminalDialog>(vm, dialogParameters);
+                    }
+                    else
+                    {
+                        var vm = new InteractionsProgressDialogViewModel
+                        {
+                            Message = GetMessageHtml(item)
+                        };
+
+                        dialogComponentId = TelemetryComponentIds.InteractionProgressDialog;
+                        openDialog = dialogService => dialogService.ShowDialogAsync<InteractionsProgressDialog>(vm, dialogParameters);
+                    }
                 }
                 else
                 {
@@ -364,14 +396,24 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     case WatchInteractionsResponseUpdate.KindOneofCase.MessageBox:
                     case WatchInteractionsResponseUpdate.KindOneofCase.InputsDialog:
                     case WatchInteractionsResponseUpdate.KindOneofCase.PromptProgress:
+                    case WatchInteractionsResponseUpdate.KindOneofCase.PromptTerminal:
                         if (_interactionDialogReference != null &&
-                            _interactionDialogReference.InteractionId == item.InteractionId &&
-                            _interactionDialogReference.Dialog.Instance is { } dialogInstance &&
-                            dialogInstance.Options.Parameters.TryGetValue("Content", out var content) &&
-                            content is InteractionsInputsDialogViewModel inputsVM)
+                            _interactionDialogReference.InteractionId == item.InteractionId)
                         {
-                            // If the dialog is already open for this interaction, update it with the new data.
-                            await inputsVM.UpdateInteractionAsync(item);
+                            // Reconnection replays pending interactions. Update the open view instead of queuing
+                            // another copy, even for dialogs without mutable content.
+                            if (_interactionDialogReference.Dialog.Instance is { } dialogInstance &&
+                                dialogInstance.Options.Parameters.TryGetValue("Content", out var content))
+                            {
+                                if (content is InteractionsInputsDialogViewModel inputsVM)
+                                {
+                                    await inputsVM.UpdateInteractionAsync(item);
+                                }
+                                else if (content is InteractionsTerminalDialogViewModel terminalVM)
+                                {
+                                    await terminalVM.UpdateMessageAsync(GetMessageHtml(item));
+                                }
+                            }
                         }
                         else
                         {
@@ -443,6 +485,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                         // Close the interaction's dialog if it is open.
                         if (_interactionDialogReference?.InteractionId == item.InteractionId)
                         {
+                            _interactionDialogReference.CompletedByServer = true;
                             try
                             {
                                 await InvokeAsync(_interactionDialogReference.Dialog.CloseAsync);
@@ -606,6 +649,12 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
         await TaskHelpers.WaitIgnoreCancelAsync(_dialogDisplayTask);
         await TaskHelpers.WaitIgnoreCancelAsync(_watchInteractionsTask);
+
+        _interactionDialogReference?.Dispose();
+        foreach (var messageBar in _openMessageBars)
+        {
+            messageBar.Dispose();
+        }
     }
 
     private class KeyedInteractionCollection : KeyedCollection<int, WatchInteractionsResponseUpdate>

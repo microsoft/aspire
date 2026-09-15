@@ -10,6 +10,36 @@ namespace Infrastructure.Tests;
 public sealed class NuGetConfigTests
 {
     [Fact]
+    public void TemplateRestoresLimitNuGetOrgToHex1bAndPreserveExistingFeeds()
+    {
+        var document = XDocument.Load(Path.Combine(RepoRoot.Path, "tests", "Shared", "TemplatesTesting", "data", "nuget8.config"));
+        var root = document.Root;
+        Assert.NotNull(root);
+        var sources = root.Element("packageSources")!.Elements("add")
+            .ToDictionary(element => element.Attribute("key")!.Value, element => element.Attribute("value")!.Value, StringComparer.Ordinal);
+        string[] expectedSources = ["built-local", "dotnet-eng", "dotnet-public", "dotnet10", "dotnet9", "nuget-hex1b"];
+        Assert.Equal(expectedSources, sources.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("https://api.nuget.org/v3/index.json", sources["nuget-hex1b"]);
+
+        var mappings = root.Element("packageSourceMapping")!.Elements("packageSource")
+            .ToDictionary(element => element.Attribute("key")!.Value,
+                element => element.Elements("package").Select(package => package.Attribute("pattern")!.Value).ToArray(),
+                StringComparer.Ordinal);
+        Assert.Equal(expectedSources, mappings.Keys.Order(StringComparer.Ordinal));
+        foreach (var (source, patterns) in mappings)
+        {
+            if (source == "nuget-hex1b")
+            {
+                Assert.Equal(["Hex1b"], patterns);
+            }
+            else
+            {
+                Assert.Equal(["*"], patterns);
+            }
+        }
+    }
+
+    [Fact]
     public void DiagnosticsPackagesAreMappedToPublicAndToolsFeeds()
     {
         var document = XDocument.Load(Path.Combine(RepoRoot.Path, "NuGet.config"));

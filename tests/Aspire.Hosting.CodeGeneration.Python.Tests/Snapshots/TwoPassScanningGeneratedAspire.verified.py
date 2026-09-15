@@ -1555,7 +1555,7 @@ IconVariant = typing.Literal["Regular", "Filled"]
 
 ImagePullPolicy = typing.Literal["Default", "Always", "Missing", "Never"]
 
-InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number", "File"]
+InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number", "File", "Terminal"]
 
 MessageIntent = typing.Literal["None", "Success", "Warning", "Error", "Information", "Confirmation"]
 

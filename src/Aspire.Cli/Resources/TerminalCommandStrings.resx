@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms</value>
+  </resheader>
+  <data name="LookingUpResource" xml:space="preserve">
+    <value>Looking up resource...</value>
+  </data>
+  <data name="ResourceNotFound" xml:space="preserve">
+    <value>Resource '{0}' was not found.</value>
+  </data>
+  <data name="DiscoveringSessions" xml:space="preserve">
+    <value>Discovering terminal sessions...</value>
+  </data>
+  <data name="TerminalUnavailable" xml:space="preserve">
+    <value>Resource '{0}' is not available for terminal attachment. Make sure the resource was registered with '.WithTerminal()' and that the terminal host has started.</value>
+  </data>
+  <data name="ReplicaNotFound" xml:space="preserve">
+    <value>Replica index {0} is not available for resource '{1}'. Available indices: {2}.</value>
+  </data>
+  <data name="ReplicaRequired" xml:space="preserve">
+    <value>Resource '{0}' has {1} replicas. Pass --replica &lt;index&gt; to choose one in non-interactive mode.</value>
+  </data>
+  <data name="SelectReplica" xml:space="preserve">
+    <value>Select a replica of '{0}' to attach to:</value>
+  </data>
+  <data name="ReplicaRunning" xml:space="preserve">
+    <value>{0} (running)</value>
+  </data>
+  <data name="ReplicaExited" xml:space="preserve">
+    <value>{0} (exited code={1})</value>
+  </data>
+  <data name="TapeDescription" xml:space="preserve">
+    <value>Run VHS tape scripts against resource terminals.</value>
+  </data>
+  <data name="TapePlayDescription" xml:space="preserve">
+    <value>Play a VHS tape against a running resource terminal and print its final screen.</value>
+  </data>
+  <data name="ResourceArgumentDescription" xml:space="preserve">
+    <value>The name of the resource whose terminal runs the tape.</value>
+  </data>
+  <data name="ResourceRequired" xml:space="preserve">
+    <value>A resource name is required.</value>
+  </data>
+  <data name="TapeFileDescription" xml:space="preserve">
+    <value>The path to the VHS .tape file to play.</value>
+  </data>
+  <data name="ReplicaOptionDescription" xml:space="preserve">
+    <value>The 0-based replica index. Required for replicated resources in non-interactive mode.</value>
+  </data>
+  <data name="TapeSelectAppHostAction" xml:space="preserve">
+    <value>play a terminal tape</value>
+  </data>
+  <data name="TerminalIncompatible" xml:space="preserve">
+    <value>The connected AppHost does not support 'aspire terminal'. Update Aspire.Hosting to 13.4 or later.</value>
+  </data>
+  <data name="TapeFileReadFailed" xml:space="preserve">
+    <value>Could not read tape file '{0}': {1}</value>
+  </data>
+  <data name="TapeReplicaExited" xml:space="preserve">
+    <value>Replica {0} of '{1}' has exited. A tape requires a live terminal.</value>
+  </data>
+  <data name="TapePlaybackFailed" xml:space="preserve">
+    <value>Tape playback failed: {0}</value>
+  </data>
+  <data name="TapeConnectionClosed" xml:space="preserve">
+    <value>The terminal connection closed before tape playback completed.</value>
+  </data>
+  <data name="TapeTimeoutDescription" xml:space="preserve">
+    <value>Maximum time in seconds to connect and play the tape. Defaults to 120 seconds.</value>
+  </data>
+  <data name="TapeTimeout" xml:space="preserve">
+    <value>Terminal tape playback did not finish within {0} seconds.</value>
+  </data>
+  <data name="TapeTimeoutInvalid" xml:space="preserve">
+    <value>The timeout must be between 1 and {0} seconds.</value>
+  </data>
+</root>

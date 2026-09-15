@@ -422,6 +422,8 @@ pub enum InputType {
     Number,
     #[serde(rename = "File")]
     File,
+    #[serde(rename = "Terminal")]
+    Terminal,
 }
 
 impl std::fmt::Display for InputType {
@@ -433,6 +435,7 @@ impl std::fmt::Display for InputType {
             Self::Boolean => write!(f, "Boolean"),
             Self::Number => write!(f, "Number"),
             Self::File => write!(f, "File"),
+            Self::Terminal => write!(f, "Terminal"),
         }
     }
 }

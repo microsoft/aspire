@@ -1795,8 +1795,8 @@ internal sealed class TerminalSummary
 }
 
 /// <summary>
-/// Response from <c>ListTerminalsAsync</c>. Lists every <c>WithTerminal</c>-enabled resource in the
-/// AppHost. Empty array when no resource is configured for terminals.
+/// Response from <c>ListTerminalsAsync</c>. Lists every terminal in the AppHost, whether it belongs to a
+/// resource or to the AppHost itself.
 /// </summary>
 internal sealed class ListTerminalsResponse
 {
@@ -1804,6 +1804,46 @@ internal sealed class ListTerminalsResponse
     /// Gets the per-resource summaries. Empty (not null) when there are no terminal-enabled resources.
     /// </summary>
     public required TerminalSummary[] Terminals { get; init; }
+
+    /// <summary>
+    /// Gets the terminals owned by the AppHost process rather than by a resource.
+    /// </summary>
+    /// <remarks>
+    /// Carried separately from <see cref="Terminals"/> rather than folded into it because the resource
+    /// summaries are shaped around replicas and terminal hosts, neither of which an AppHost terminal has.
+    /// Null when the AppHost predates AppHost-owned terminals, which is distinct from an AppHost that has
+    /// none right now.
+    /// </remarks>
+    public AppHostTerminalSummary[]? AppHostTerminals { get; init; }
+}
+
+/// <summary>
+/// One terminal whose workload runs in the AppHost process.
+/// </summary>
+/// <remarks>
+/// These have no replicas and no terminal host: the workload runs in-process and reaches the dashboard over
+/// the gRPC tunnel, so there is no liveness to report beyond the terminal's presence in this list.
+/// </remarks>
+internal sealed class AppHostTerminalSummary
+{
+    /// <summary>
+    /// Gets the identifier used to address this terminal.
+    /// </summary>
+    public required string TerminalId { get; init; }
+
+    /// <summary>
+    /// Gets the terminal's title, as shown on its dock tab or in its dialog.
+    /// </summary>
+    public required string Title { get; init; }
+
+    /// <summary>
+    /// Gets where the terminal is displayed: <c>Dock</c>, <c>Dialog</c>, <c>ResourceView</c>, or <c>None</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sent as a string rather than an enum so that a value added later deserializes on an older CLI instead
+    /// of failing the whole listing.
+    /// </remarks>
+    public required string Placement { get; init; }
 }
 
 #endregion

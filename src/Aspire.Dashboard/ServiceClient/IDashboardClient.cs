@@ -65,6 +65,30 @@ public interface IDashboardClient : IResourceRepository, IAsyncDisposable
     Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken);
 
     Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Opens a duplex byte stream to an AppHost-owned terminal.
+    /// </summary>
+    /// <remarks>
+    /// Used by terminal interactions, docked terminals, and detached terminal windows.
+    /// The returned stream carries HMP1 frames between the dashboard and the AppHost. The dashboard's terminal
+    /// replica bridges this stream to the browser's HWT1 WebSocket connection.
+    /// </remarks>
+    Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Watches the set of AppHost-owned terminals shown as tabs in the dashboard's terminal dock.
+    /// </summary>
+    /// <remarks>
+    /// The first update is always a snapshot; subsequent updates are individual changes. Interaction terminals are
+    /// deliberately excluded — they belong to a dialog, not to the dock.
+    /// </remarks>
+    IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Asks the AppHost to close a terminal, terminating its workload.
+    /// </summary>
+    Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken);
 }
 
 /// <summary>

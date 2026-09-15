@@ -1,0 +1,206 @@
+/* The dock is fixed to the viewport bottom and taken out of layout flow so collapsing it cannot reflow the page.
+   Collapsing translates it fully off-screen instead of hiding it: the element keeps its box dimensions, so xterm's
+   measured cell metrics and column count stay valid and reopening does not need a re-fit or a repaint. */
+.terminal-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    max-height: 100vh;
+    background-color: #0d1117;
+    border-top: 1px solid var(--colorNeutralStroke1);
+    transition: transform 120ms ease-out;
+    /* The dock stays dark in both dashboard themes. Pin the Fluent tokens its buttons and icons
+       consume so a light dashboard theme cannot paint dark icons or light controls on the tabstrip. */
+    --colorNeutralForeground1: #c9d1d9;
+    --colorNeutralForeground1Hover: #f0f6fc;
+    --colorNeutralForeground1Pressed: #8b949e;
+    --colorNeutralForeground2: #c9d1d9;
+    --colorNeutralForeground2Hover: #f0f6fc;
+    --colorNeutralForeground2Pressed: #8b949e;
+    --colorNeutralForeground2BrandHover: #58a6ff;
+    --colorNeutralForeground2BrandPressed: #58a6ff;
+    --colorTransparentBackground: transparent;
+    --colorTransparentBackgroundPressed: #30363d;
+    --colorNeutralBackground1: #21262d;
+    --colorNeutralBackground1Hover: #30363d;
+    --colorNeutralBackground1Pressed: #282e33;
+    --colorNeutralBackground2: #21262d;
+    --colorNeutralBackground3: #30363d;
+    --colorNeutralStroke1: #30363d;
+    /* Fluent's purple focus ring is close to unreadable on #0d1117; reuse the dock's own accent instead. */
+    --colorBrandStroke1: #58a6ff;
+    --colorStrokeFocus2: #58a6ff;
+}
+
+.terminal-dock.visible {
+    transform: translateY(0);
+}
+
+.terminal-dock.collapsed {
+    transform: translateY(100%);
+    pointer-events: none;
+}
+
+.terminal-dock-tabstrip {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px;
+    background-color: #161b22;
+    border-bottom: 1px solid var(--colorNeutralStroke1);
+    flex: 0 0 auto;
+}
+
+.terminal-dock-tablist {
+    display: flex;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.terminal-dock-tab {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    border-radius: 4px 4px 0 0;
+    color: #c9d1d9;
+    font-size: 12px;
+    max-width: 220px;
+    flex: 0 0 auto;
+}
+
+.terminal-dock-tab.active {
+    background-color: #0d1117;
+    color: #58a6ff;
+}
+
+.terminal-dock-tab-select {
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    min-width: 0;
+    padding: 2px 4px 2px 6px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.terminal-dock-tab-select:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.terminal-dock-tab-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.terminal-dock-filler {
+    flex: 1 1 auto;
+}
+
+.terminal-dock-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.terminal-dock-pane {
+    position: absolute;
+    inset: 0;
+}
+
+/* visibility, not display: an inactive pane must keep real dimensions or xterm refits itself to zero columns. */
+.terminal-dock-pane.inactive {
+    visibility: hidden;
+}
+
+.terminal-dock-panel {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #0d1117;
+    overflow: auto;
+}
+
+.terminal-dock-panel-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-width: 420px;
+    padding: 24px;
+    text-align: center;
+    color: #8b949e;
+}
+
+.terminal-dock-panel-heading {
+    margin: 0;
+    color: #c9d1d9;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.terminal-dock-panel-body,
+.terminal-dock-panel-hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.terminal-dock-panel-hint {
+    /* Dimmer than the body copy, but not below the 4.5:1 AA floor against #0d1117 (#6e7681 measured 4.12:1). */
+    color: #7d8590;
+}
+
+.terminal-dock-resize-handle {
+    flex: 0 0 auto;
+    height: 6px;
+    cursor: ns-resize;
+    background-color: transparent;
+    touch-action: none;
+}
+
+.terminal-dock-resize-handle:hover {
+    background-color: var(--colorBrandStroke1);
+}
+
+.terminal-dock-resize-handle:focus-visible {
+    background-color: var(--colorStrokeFocus2);
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+/* Shown in place of the terminal while it is running in a detached window. */
+.terminal-dock-detached {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 100%;
+    color: #8b949e;
+    font-size: 13px;
+}
+
+.terminal-dock-detached-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.terminal-dock-popup-blocked {
+    align-self: center;
+    padding-right: 8px;
+    color: #f0883e;
+    font-size: 12px;
+}

@@ -1021,7 +1021,8 @@ public partial class MainLayoutTests : DashboardTestContext
         IDialogService? dialogService = null,
         BrowserTimeProvider? browserTimeProvider = null,
         IDashboardRunStore? dashboardRunStore = null,
-        ISessionStorage? sessionStorage = null)
+        ISessionStorage? sessionStorage = null,
+        TestDashboardClient? dashboardClient = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(
             this,
@@ -1037,7 +1038,7 @@ public partial class MainLayoutTests : DashboardTestContext
 
         Services.AddOptions();
         Services.AddSingleton<IThemeResolver, TestThemeResolver>();
-        var dashboardClient = new TestDashboardClient();
+        dashboardClient ??= new TestDashboardClient();
         Services.AddSingleton<IDashboardClient>(dashboardClient);
         Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient);
         Services.AddSingleton<ITooltipService, TooltipService>();
@@ -1072,6 +1073,8 @@ public partial class MainLayoutTests : DashboardTestContext
 
         JSInterop.SetupModule("window.registerGlobalKeydownListener", _ => true);
         JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);
+        JSInterop.SetupVoid("registerResourceServiceConnectionProvider", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("updateResourceServiceConnectionState", _ => true).SetVoidResult();
         LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
 
         JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });

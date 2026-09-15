@@ -3,16 +3,26 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net.WebSockets;
+using System.Threading.Channels;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Terminal;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Tests;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Semver;
@@ -23,6 +33,177 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
+    [Fact]
+    public async Task TerminalStream_EndedBeforeHandshakeClosesWithCompletionStatusAndDisposesCall()
+    {
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryWrite(new TerminalServerFrame { Ended = true });
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writes = new ConcurrentQueue<TerminalClientFrame>();
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>
+            {
+                OnWrite = frame =>
+                {
+                    writes.Enqueue(frame);
+                    return Task.CompletedTask;
+                }
+            },
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => disposed.TrySetResult());
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+        var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
+        var sessions = new TerminalViewSessionRegistry();
+        using var session = sessions.Create("/api/apphost-terminal?terminalId=terminal", readOnly: false);
+        using var server = new TestServer(new WebHostBuilder().Configure(app =>
+        {
+            app.UseWebSockets();
+            app.Run(context =>
+            {
+                context.Request.Scheme = "https";
+                context.Request.Host = new HostString("dashboard.example.com");
+                return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
+            });
+        }));
+        var client = server.CreateWebSocketClient();
+        client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
+        using var socket = await client.ConnectAsync(
+            new Uri($"wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal&viewId={session.Id}"), CancellationToken.None).DefaultTimeout();
+        var buffer = new byte[64];
+
+        Assert.True(stream.TerminalEnded);
+        await session.Ended.DefaultTimeout();
+        Assert.True(session.ReadOnly);
+        var handshakeWrites = writes.ToArray();
+        Assert.NotEmpty(handshakeWrites);
+        // Input already in flight must not reach the AppHost after authoritative completion.
+        await socket.SendAsync("""{"type":"input","text":"ignored"}"""u8.ToArray(), WebSocketMessageType.Text,
+            true, CancellationToken.None).DefaultTimeout();
+        var message = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None).DefaultTimeout();
+        Assert.Equal(WebSocketMessageType.Close, message.MessageType);
+        Assert.Equal((WebSocketCloseStatus)4000, message.CloseStatus);
+        Assert.Equal("Terminal ended", message.CloseStatusDescription);
+        await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", CancellationToken.None).DefaultTimeout();
+        await disposed.Task.DefaultTimeout();
+        Assert.Equal(handshakeWrites, writes);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalStream_EndedFrameIsDistinctFromTransportEof(bool ended)
+    {
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>(),
+            new AsyncStreamReader<TerminalServerFrame>(
+            [
+                new TerminalServerFrame(),
+                new TerminalServerFrame { Data = ByteString.CopyFromUtf8("output") },
+                new TerminalServerFrame { Ended = ended }
+            ]),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => { });
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+        var buffer = new byte[3];
+
+        Assert.Equal(3, await stream.ReadAsync(buffer));
+        Assert.Equal("out"u8.ToArray(), buffer);
+        Assert.False(stream.TerminalEnded);
+        Assert.Equal(3, await stream.ReadAsync(buffer));
+        Assert.Equal("put"u8.ToArray(), buffer);
+        Assert.False(stream.TerminalEnded);
+        Assert.Equal(0, await stream.ReadAsync(buffer));
+        Assert.Equal(ended, stream.TerminalEnded);
+        Assert.Equal(0, await stream.ReadAsync(buffer));
+    }
+
+    [Fact]
+    public async Task TerminalStream_EndedBeforeHandshakeDoesNotWaitForMoreFrames()
+    {
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryWrite(new TerminalServerFrame { Ended = true });
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>(),
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => { });
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+
+        // The server keeps the RPC open until the proxy consumes this status and disconnects.
+        Assert.Equal(0, await stream.ReadAsync(new byte[1]).AsTask().DefaultTimeout());
+        Assert.True(stream.TerminalEnded);
+    }
+
+    [Theory]
+    [InlineData(StatusCode.Unavailable)]
+    [InlineData(StatusCode.Cancelled)]
+    [InlineData(StatusCode.NotFound)]
+    public async Task TerminalStream_RpcReadFailurePreservesStatusAsStreamError(StatusCode statusCode)
+    {
+        var error = new RpcException(new Status(statusCode, "Terminal transport failed."));
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryComplete(error);
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>(),
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => { });
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+
+        var exception = await Assert.ThrowsAsync<IOException>(() => stream.ReadAsync(new byte[1]).AsTask());
+
+        Assert.Same(error, exception.InnerException);
+        Assert.False(stream.TerminalEnded);
+    }
+
+    [Theory]
+    [InlineData(StatusCode.NotFound, StatusCodes.Status404NotFound)]
+    [InlineData(StatusCode.Unavailable, StatusCodes.Status503ServiceUnavailable)]
+    public async Task TerminalStream_HandshakeFailureReturnsHttpErrorBeforeUpgrade(StatusCode statusCode, int expectedStatus)
+    {
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryComplete(new RpcException(new Status(statusCode, "Terminal is unavailable.")));
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame> { OnWrite = _ => Task.CompletedTask },
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => disposed.TrySetResult());
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+        var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
+        var sessions = new TerminalViewSessionRegistry();
+        using var server = new TestServer(new WebHostBuilder().Configure(app =>
+        {
+            app.UseWebSockets();
+            app.Run(context =>
+            {
+                context.Request.Scheme = "https";
+                context.Request.Host = new HostString("dashboard.example.com");
+                return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
+            });
+        }));
+        var client = server.CreateWebSocketClient();
+        client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.ConnectAsync(
+            new Uri("wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal"), CancellationToken.None).DefaultTimeout());
+
+        Assert.Contains(expectedStatus.ToString(System.Globalization.CultureInfo.InvariantCulture), exception.Message);
+        await disposed.Task.DefaultTimeout();
+        Assert.False(stream.TerminalEnded);
+    }
+
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder =>
     {
         builder.AddXunit(testOutputHelper, LogLevel.Trace, DateTimeOffset.UtcNow);
@@ -592,6 +773,138 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         Assert.Equal(response.Message, response.ErrorMessage);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SubscribeTerminals_StreamEnds_ResubscribesWithSnapshot(bool failStream)
+    {
+        var first = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var second = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var disposed = Channel.CreateUnbounded<bool>();
+        var subscriptions = 0;
+        var service = new MockDashboardServiceClient
+        {
+            ResourceUpdatesChannel = Channel.CreateUnbounded<WatchResourcesUpdate>().Reader,
+            TerminalUpdatesProvider = () => Interlocked.Increment(ref subscriptions) == 1 ? first.Reader : second.Reader,
+            OnTerminalWatchDisposed = () => disposed.Writer.TryWrite(true)
+        };
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(service);
+        await using var updates = client.SubscribeTerminalsAsync(CancellationToken.None).GetAsyncEnumerator();
+
+        var initial = new WatchTerminalsUpdate { Snapshot = new TerminalDescriptorList() };
+        await first.Writer.WriteAsync(initial);
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Same(initial, updates.Current);
+
+        var recovery = new WatchTerminalsUpdate
+        {
+            Snapshot = new TerminalDescriptorList
+            {
+                Terminals = { new TerminalDescriptor { TerminalId = "recovered", Title = "Recovered" } },
+                ActivatedTerminalId = "recovered"
+            }
+        };
+        await first.Writer.WriteAsync(recovery);
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Same(recovery, updates.Current);
+        Assert.Equal(1, Volatile.Read(ref subscriptions));
+
+        first.Writer.Complete(failStream ? new RpcException(new Status(StatusCode.Unavailable, "Disconnected")) : null);
+        var replacement = new WatchTerminalsUpdate
+        {
+            Snapshot = new TerminalDescriptorList
+            {
+                Terminals = { new TerminalDescriptor { TerminalId = "replacement", Title = "Replacement" } }
+            }
+        };
+        await second.Writer.WriteAsync(replacement);
+
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Same(replacement, updates.Current);
+        Assert.Equal(2, Volatile.Read(ref subscriptions));
+        Assert.True(await disposed.Reader.ReadAsync().AsTask().DefaultTimeout());
+        await updates.DisposeAsync().DefaultTimeout();
+        Assert.True(await disposed.Reader.ReadAsync().AsTask().DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task SubscribeTerminals_Cancellation_StopsActiveStreamOrRecovery(bool disposeClient, bool duringRecovery)
+    {
+        var channel = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var streamDisposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new MockDashboardServiceClient
+        {
+            ResourceUpdatesChannel = Channel.CreateUnbounded<WatchResourcesUpdate>().Reader,
+            TerminalUpdatesProvider = () => channel.Reader,
+            OnTerminalWatchDisposed = () => streamDisposed.TrySetResult()
+        };
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(service);
+        using var cts = new CancellationTokenSource();
+        await using var updates = client.SubscribeTerminalsAsync(cts.Token).GetAsyncEnumerator();
+        await channel.Writer.WriteAsync(new WatchTerminalsUpdate { Snapshot = new TerminalDescriptorList() });
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+
+        var next = updates.MoveNextAsync().AsTask();
+        if (duringRecovery)
+        {
+            channel.Writer.Complete();
+            await streamDisposed.Task.DefaultTimeout();
+        }
+
+        if (disposeClient)
+        {
+            await client.DisposeAsync().DefaultTimeout();
+        }
+        else
+        {
+            await cts.CancelAsync();
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+        await streamDisposed.Task.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task SubscribeTerminals_Cancellation_StopsConnectionWait()
+    {
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnGetApplicationInformation = true });
+        using var cts = new CancellationTokenSource();
+        await using var updates = client.SubscribeTerminalsAsync(cts.Token).GetAsyncEnumerator();
+
+        var next = updates.MoveNextAsync().AsTask();
+        await cts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task SubscribeTerminals_Unimplemented_CompletesWithoutRetry()
+    {
+        var channel = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        channel.Writer.Complete(new RpcException(new Status(StatusCode.Unimplemented, "Older AppHost")));
+        var subscriptions = 0;
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(new MockDashboardServiceClient
+        {
+            ResourceUpdatesChannel = Channel.CreateUnbounded<WatchResourcesUpdate>().Reader,
+            TerminalUpdatesProvider = () =>
+            {
+                Interlocked.Increment(ref subscriptions);
+                return channel.Reader;
+            }
+        });
+        await using var updates = client.SubscribeTerminalsAsync(CancellationToken.None).GetAsyncEnumerator();
+
+        Assert.False(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Equal(1, Volatile.Read(ref subscriptions));
+    }
+
     private sealed class MockDashboardServiceClient : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient
     {
         public bool FailOnWatchResources { get; init; }
@@ -601,8 +914,21 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         public string MinDashboardVersion { get; init; } = "";
         public IReadOnlyList<WatchResourceConsoleLogsUpdate> ConsoleLogUpdates { get; init; } = [];
         public IReadOnlyList<WatchResourcesUpdate> ResourceUpdates { get; init; } = [];
+        public ChannelReader<WatchResourcesUpdate>? ResourceUpdatesChannel { get; init; }
+        public Func<ChannelReader<WatchTerminalsUpdate>>? TerminalUpdatesProvider { get; init; }
+        public Action? OnTerminalWatchDisposed { get; init; }
         public Activity? ActivityOnGetApplicationInformation { get; private set; }
         private int _resourceUpdatesReturned;
+
+        public override AsyncServerStreamingCall<WatchTerminalsUpdate> WatchTerminals(WatchTerminalsRequest request, CallOptions options)
+        {
+            return new AsyncServerStreamingCall<WatchTerminalsUpdate>(
+                new AsyncStreamReader<WatchTerminalsUpdate>(channel: TerminalUpdatesProvider?.Invoke()),
+                Task.FromResult(new Metadata()),
+                () => Status.DefaultSuccess,
+                () => new Metadata(),
+                () => OnTerminalWatchDisposed?.Invoke());
+        }
 
         public override AsyncServerStreamingCall<WatchResourceConsoleLogsUpdate> WatchResourceConsoleLogs(WatchResourceConsoleLogsRequest request, CallOptions options)
         {
@@ -701,7 +1027,9 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         {
             var reader = FailOnWatchResources
                 ? (IAsyncStreamReader<WatchResourcesUpdate>)new FailingAsyncStreamReader<WatchResourcesUpdate>()
-                : new AsyncStreamReader<WatchResourcesUpdate>(Interlocked.Exchange(ref _resourceUpdatesReturned, 1) == 0 ? ResourceUpdates : []);
+                : new AsyncStreamReader<WatchResourcesUpdate>(
+                    Interlocked.Exchange(ref _resourceUpdatesReturned, 1) == 0 ? ResourceUpdates : [],
+                    ResourceUpdatesChannel);
 
             return new AsyncServerStreamingCall<WatchResourcesUpdate>(
                 reader,
@@ -725,23 +1053,37 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     private sealed class AsyncStreamReader<T> : IAsyncStreamReader<T>
     {
         private readonly Queue<T> _items;
+        private readonly ChannelReader<T>? _channel;
 
-        public AsyncStreamReader(IEnumerable<T>? items = null)
+        public AsyncStreamReader(IEnumerable<T>? items = null, ChannelReader<T>? channel = null)
         {
             _items = new Queue<T>(items ?? []);
+            _channel = channel;
         }
 
         public T Current { get; private set; } = default!;
 
-        public Task<bool> MoveNext(CancellationToken cancellationToken)
+        public async Task<bool> MoveNext(CancellationToken cancellationToken)
         {
             if (_items.TryDequeue(out var item))
             {
                 Current = item;
-                return Task.FromResult(true);
+                return true;
             }
 
-            return Task.FromResult(false);
+            if (_channel is { } channel)
+            {
+                while (await channel.WaitToReadAsync(cancellationToken))
+                {
+                    if (channel.TryRead(out var update))
+                    {
+                        Current = update;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
     }
 
@@ -778,6 +1120,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     private sealed class ClientStreamWriter<T> : IClientStreamWriter<T>
     {
         public WriteOptions? WriteOptions { get; set; }
+        public Func<T, Task>? OnWrite { get; init; }
 
         public Task CompleteAsync()
         {
@@ -786,7 +1129,13 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
 
         public Task WriteAsync(T message)
         {
-            throw new NotImplementedException();
+            return OnWrite?.Invoke(message) ?? throw new NotImplementedException();
+        }
+
+        public Task WriteAsync(T message, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return WriteAsync(message);
         }
     }
 
