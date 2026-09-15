@@ -22,11 +22,49 @@ public partial class MainLayoutTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task TerminalDock_RequiresResourceService(bool isEnabled)
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(isEnabled: isEnabled, terminalChannelProvider: () => updates);
+        TerminalSetupHelpers.SetupTerminalView(this);
+        TerminalSetupHelpers.SetupTerminalDock(this);
+        SetupMainLayoutServices(dashboardClient: client);
+
+        var cut = RenderComponent<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        var label = Services.GetRequiredService<IStringLocalizer<Resources.Layout>>()[nameof(Resources.Layout.MainLayoutToggleTerminalDock)].Value;
+        var shortcuts = Services.GetRequiredService<ShortcutManager>();
+
+        Assert.Equal(isEnabled ? 1 : 0, cut.FindComponents<TerminalDock>().Count);
+        Assert.Equal(isEnabled ? 1 : 0, cut.FindAll($"fluent-button[aria-label='{label}']").Count);
+        await cut.InvokeAsync(() => shortcuts.OnGlobalKeyDown(AspireKeyboardShortcut.ToggleTerminalDock));
+
+        if (isEnabled)
+        {
+            cut.WaitForAssertion(() => Assert.Equal(1, client.ActiveTerminalSubscriptionCount));
+            Assert.Single(cut.FindAll(".terminal-dock"));
+            var dock = cut.FindComponent<TerminalDock>().Instance;
+            await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Disconnected));
+            cut.Render();
+            Assert.Same(dock, cut.FindComponent<TerminalDock>().Instance);
+            Assert.Single(cut.FindAll($"fluent-button[aria-label='{label}']"));
+            await cut.InvokeAsync(() => dock.DisposeAsync().AsTask()).DefaultTimeout();
+        }
+        else
+        {
+            Assert.Empty(cut.FindAll(".terminal-dock"));
+            Assert.Equal(0, client.TerminalSubscriptionCount);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task TerminalDock_RunSelection_OnlySubscribesWhileLive(bool startHistorical)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var subscriptionDisposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates)
+        var client = new TestDashboardClient(isEnabled: true, terminalChannelProvider: () => updates)
         {
             OnTerminalSubscriptionDisposed = () => subscriptionDisposed.TrySetResult()
         };
