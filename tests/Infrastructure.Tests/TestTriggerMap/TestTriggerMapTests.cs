@@ -434,7 +434,39 @@ public sealed class TestTriggerMapTests
             // These paths do not exist intentionally: they prove new packaging inputs stay covered
             // without requiring this test to enumerate every current RID-specific project.
             "eng/dashboardpack/future-package-input.targets",
-            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "job:extension-e2e"]
+            [
+                "test:Aspire.Hosting.Sdk.Tests",
+                "test:Aspire.Templates.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "job:cli-starter-validation",
+                "job:extension-e2e",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
+        },
+        {
+            "eng/dashboardpack/Sdk.targets",
+            [
+                "test:Aspire.Hosting.Sdk.Tests",
+                "test:Aspire.Templates.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "job:cli-starter-validation",
+                "job:extension-e2e",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
+        },
+        {
+            "eng/dashboardpack/Common.projitems",
+            [
+                "test:Aspire.Hosting.Sdk.Tests",
+                "test:Aspire.Templates.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "job:cli-starter-validation",
+                "job:extension-e2e",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
         },
         {
             "eng/dcppack/future-package-input.targets",
@@ -616,6 +648,7 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData("eng/scripts/verify-cli-npm-package.ps1")]
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
+    [InlineData("eng/scripts/test-native-dashboard.ps1")]
     [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
     [InlineData("eng/scripts/update-aspire-skills-bundle.ps1")]

@@ -18,8 +18,7 @@
 <div id="metric-table-container" class="metric-table-container">
     @* ItemKey is to preserve row focus by associating rows with their associated time *@
     <FluentDataGrid Class="aspire-spaced-grid"
-        @ref="_dataGrid"
-        Items="@_metricsView"
+        ItemsProvider="@EnumerableGridItemsProvider.Create(() => _metricsView)"
         ItemSize="46"
         Virtualize="true"
         GridTemplateColumns="@string.Join(" ", Enumerable.Repeat("1fr", columnCount))"
