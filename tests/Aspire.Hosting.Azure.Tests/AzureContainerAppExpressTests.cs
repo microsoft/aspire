@@ -97,42 +97,40 @@ public class AzureContainerAppExpressTests
         await Verify(expressBicep, "bicep").AppendContentAsFile(standardBicep, "bicep", "standard");
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task AsExpressPublishesEnvironment(bool existing)
+    [Fact]
+    public async Task AsExpressPublishesExistingEnvironment()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        // The new-environment module is covered by AsExpressDefaultsAreEnvironmentLocal; this
+        // covers only the thin existing-environment module, which has a different shape.
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress()
             .WithHttpsUpgrade(false)
-            .WithHttpsUpgrade(true);
-        if (existing)
-        {
-            environment.AsExisting(builder.AddParameter("existing-name"), builder.AddParameter("existing-resource-group"));
-        }
+            .WithHttpsUpgrade(true)
+            .AsExisting(builder.AddParameter("existing-name"), builder.AddParameter("existing-resource-group"));
 
         var (manifest, bicep) = await GetManifestWithBicep(environment.Resource);
 
         await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task AsExpressPreservesExplicitDashboardRegardlessOfCallOrder(bool expressFirst)
+    [Fact]
+    public async Task AsExpressPreservesExplicitDashboardRegardlessOfCallOrder()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var environment = builder.AddAzureContainerAppEnvironment("env");
-        if (expressFirst)
-        {
-            environment.AsExpress().WithDashboard();
-        }
-        else
-        {
-            environment.WithDashboard().AsExpress();
-        }
+        var expressFirst = builder.AddAzureContainerAppEnvironment("env");
+        expressFirst.AsExpress().WithDashboard();
 
-        await Verify(environment.Resource.GetBicepTemplateString(), "bicep");
+        using var reversedBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var dashboardFirst = reversedBuilder.AddAzureContainerAppEnvironment("env");
+        dashboardFirst.WithDashboard().AsExpress();
+
+        var expressFirstBicep = expressFirst.Resource.GetBicepTemplateString();
+
+        // Call order is the whole point of this test, so assert equivalence directly rather than
+        // maintaining two snapshots that must stay byte-identical to prove it.
+        Assert.Equal(expressFirstBicep, dashboardFirst.Resource.GetBicepTemplateString());
+
+        await Verify(expressFirstBicep, "bicep");
     }
 
     [Fact]
@@ -190,9 +188,10 @@ public class AzureContainerAppExpressTests
         using var application = builder.Build();
         await ExecuteBeforeStartHooksAsync(application, default);
         var target = Assert.IsType<AzureContainerAppResource>(project.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
-        var (manifest, bicep) = await GetManifestWithBicep(target, skipPreparer: true);
 
-        await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
+        // Only the scale block varies across these cases. The manifest is identical for all of
+        // them and its shape is already covered by the manual-secret and existing-environment tests.
+        await Verify(target.GetBicepTemplateString(), "bicep");
     }
 
     [Fact]
