@@ -34,10 +34,14 @@ with create_builder() as builder:
     mongo_chained.add_database("analytics-db", database_name="analytics")
     # Test 11: Test with_bind_ip_all
     builder.add_mongo_db("mongo-bind-all").with_bind_ip_all()
-    # Test 12: Test with_replica_set with with_key_file, with_tls_mode and with_tls_allow_invalid_certificates
-    key_file_param = builder.add_parameter("rs-keyfile", secret=True, value="my-secret-key")
-    builder.add_mongo_db("mongo-rs-member").with_replica_set("rs0").with_key_file(key_file_param, key_file_path="/etc/rs.key").with_tls_mode().with_tls_allow_invalid_certificates()
-    # Test 13: Test add_mongo_db_replica_set with with_member
+    # Test 12: Initialize a single-member replica set with the resource name and a generated keyfile.
+    builder.add_mongo_db("mongo-single").with_replica_set().add_database("single-db")
+    # Test 13: Initialize a single-member replica set with an explicit set name.
+    builder.add_mongo_db("mongo-single-named").with_replica_set(name="app-rs").add_database("single-named-db")
+    # Test 14: Supply a keyfile before initialization; TLS options are separate export coverage, not prerequisites.
+    key_file_param = builder.add_parameter("rs-keyfile", secret=True, value="bW9uZ29kYmtleWZpbGUxMjM0")
+    builder.add_mongo_db("mongo-rs-configured").with_key_file(key_file_param, key_file_path="/etc/rs.key").with_replica_set(name="configured-rs").with_tls_mode().with_tls_allow_invalid_certificates()
+    # Test 15: Advanced local multi-member experiments use plain servers, not with_replica_set single-member sets.
     # NOTE: The members are not given a key file of their own here. with_member gives them the replica set's shared one,
     # and a member carrying a different key file is rejected.
     mongo1 = builder.add_mongo_db("mongo-rs-1")
