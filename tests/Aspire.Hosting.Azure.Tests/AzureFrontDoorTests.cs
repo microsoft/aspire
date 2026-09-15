@@ -6,12 +6,35 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Azure.Provisioning;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureFrontDoorTests
 {
+    [Fact]
+    public async Task IdOutputReferenceCanBeConsumedByAnotherResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+        var module = builder.AddAzureInfrastructure("consumer", infrastructure =>
+        {
+            infrastructure.Add(new ProvisioningOutput("frontDoorId", typeof(string))
+            {
+                Value = frontDoor.Resource.Id.AsProvisioningParameter(infrastructure)
+            });
+        });
+
+        var (_, frontDoorBicep) = await GetManifestWithBicep(frontDoor.Resource);
+        var (manifest, bicep) = await GetManifestWithBicep(module.Resource);
+
+        await Verify(manifest.ToString(), "json")
+            .AppendContentAsFile(bicep, "bicep")
+            .AppendContentAsFile(frontDoorBicep, "bicep");
+    }
+
     [Fact]
     public void AddAzureFrontDoorCreatesResource()
     {
