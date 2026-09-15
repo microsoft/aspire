@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASELINE_COMMIT: 13f0541fa7fc266932887657e44d3ab788057c2a
-  FIXED_COMMIT: 103ae5d528b9002875b9fd9b322798d51d706cef
+  BASELINE_COMMIT: 103ae5d528b9002875b9fd9b322798d51d706cef
+  FIXED_COMMIT: 3489dec97000d1fe3795e82a0643e5dccb4ce7c3
   ITERATIONS_PER_RUNNER: '3'
   NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
   COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
@@ -122,6 +122,7 @@ jobs:
 
           $suiteBlob = (git rev-parse "$($env:FIXED_COMMIT):extension/src/test/e2eStorageDiagnostics.test.ts").Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($suiteBlob -ne '5fd895122b4a68af7b57c08bbd96fe888c542598') { throw 'Not the final eighteen-test regression suite.' }
           $collectorBlob = (git rev-parse "$($collectorRevision):extension/scripts/run-e2e.js").Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $context = [ordered]@{
@@ -155,7 +156,7 @@ jobs:
         timeout-minutes: 5
         working-directory: extension
         run: |
-          # Expected baseline exit 5 must reach the parser, not PowerShell's native-error handling.
+          # Expected baseline exit 13 must reach the parser, not PowerShell's native-error handling.
           $PSNativeCommandUseErrorActionPreference = $false
           $unexpected = $false
           for ($iteration = 1; $iteration -le [int]$env:ITERATIONS_PER_RUNNER; $iteration++) {

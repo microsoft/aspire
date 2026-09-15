@@ -5,16 +5,61 @@ import { join, win32 } from 'node:path';
 
 type Variant = 'baseline' | 'fixed';
 
+const revisions = {
+    baseline: { commit: '103ae5d528b9002875b9fd9b322798d51d706cef', collectorBlob: 'b105cbf4fc6a0ca69553a73e14234eb0a83e878f' },
+    fixed: { commit: '3489dec97000d1fe3795e82a0643e5dccb4ce7c3', collectorBlob: '47adf205b5146872ea6d5d5aef0dde81b010222d' },
+};
+const suiteBlob = '5fd895122b4a68af7b57c08bbd96fe888c542598';
 const titles = [
-    'retains and redacts diagnostics while excluding Dashboard persistence and CLI leases',
-    'does not descend into Dashboard persistence when run files disappear',
-    'uses case-insensitive exclusions on Windows',
-    'collects VS Code and Aspire diagnostics with an exclusively held Dashboard runs lock',
-    'collects VS Code and Aspire diagnostics with an exclusively held Dashboard resumes lock',
-    'does not suppress an unexpected locked diagnostic',
-    'does not suppress an unexpected diagnostic disappearing during copy',
+    'collects only intended storage diagnostics and redacts them',
+    'does not enumerate unselected runtime state as files disappear',
+    'uses case-insensitive lease exclusions on Windows',
+    'collects storage diagnostics with an exclusively held Dashboard runs lock',
+    'collects storage diagnostics with an exclusively held Dashboard resumes lock',
+    'collects storage diagnostics with an exclusively held workspace configuration cache lock',
+    'collects storage diagnostics with an exclusively held bundle extraction lock',
+    'reports a locked diagnostic while retaining and redacting other files and sources',
+    'reports failures from multiple sources without skipping later sources',
+    'reports a diagnostic disappearing after enumeration and collects other sources',
+    'reports redaction read failures without writing unredacted text or skipping other diagnostics',
+    'preserves original log bytes when no redaction is needed',
+    'does not follow diagnostic symlinks outside selected inputs',
     'tolerates diagnostics sources that were never created',
+    'collects and redacts workspace configuration and fixture sources without runtime state',
+    'collects workspace diagnostics with an exclusively held package restore lock',
+    'collects workspace diagnostics with an exclusively held project layout lock',
+    'retains workspace settings and remaining fixture sources when a source fails',
 ].map(title => `E2E storage diagnostics ${title}`);
+// The original fix already handled Dashboard locks and lease casing. Log bytes and absent sources
+// also pass unchanged; every other case is an exact regression against the expanded collector.
+const baselinePassTitles = [titles[2], titles[3], titles[4], titles[11], titles[13]];
+const baselineFailureTitles = titles.filter(title => !baselinePassTitles.includes(title));
+const nativeLocks = [
+    {
+        title: titles[5],
+        source: '\\aspire-home\\cache\\workspace-config-locks\\workspace.lock',
+        destination: '\\diagnostics\\aspire-home\\cache\\workspace-config-locks\\workspace.lock',
+        collector: 'copyStorageDiagnostics',
+    },
+    {
+        title: titles[6],
+        source: '\\aspire-home\\packages\\.aspire-bundle-lock',
+        destination: '\\diagnostics\\aspire-home\\packages\\.aspire-bundle-lock',
+        collector: 'copyStorageDiagnostics',
+    },
+    {
+        title: titles[15],
+        source: '\\workspace\\.aspire\\integrations\\package-restore\\hash\\restore.lock',
+        destination: '\\workspace-diagnostics\\.aspire\\integrations\\package-restore\\hash\\restore.lock',
+        collector: 'copyWorkspaceDiagnostics',
+    },
+    {
+        title: titles[16],
+        source: '\\workspace\\.aspire\\integrations\\apphosts\\hash\\project-layouts\\prepare.lock',
+        destination: '\\workspace-diagnostics\\.aspire\\integrations\\apphosts\\hash\\project-layouts\\prepare.lock',
+        collector: 'copyWorkspaceDiagnostics',
+    },
+];
 
 function isObject(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -52,39 +97,46 @@ function testSet(value: unknown, expectedTitles: string[]): Map<string, Record<s
     return errors;
 }
 
-function assertionDiff(error: Record<string, unknown> | undefined, extraFiles: Record<string, string>): void {
+function assertion(error: Record<string, unknown> | undefined, operator: string): Record<string, unknown> {
     assert.ok(error);
     assert.equal(error.name, 'AssertionError');
     assert.equal(error.code, 'ERR_ASSERTION');
-    assert.equal(error.operator, 'deepStrictEqual');
+    assert.equal(error.operator, operator);
+    return error;
+}
+
+function assertionDiff(error: Record<string, unknown> | undefined, actualOnly: Record<string, string>, expectedOnly: Record<string, string>): void {
+    error = assertion(error, 'deepStrictEqual');
     // Mocha's JSON reporter serializes actual/expected with its own stringify(), not JSON:
-    //   {\n  "aspire-home/dashboard/runs/example.lock": ""\n}
-    // There are no commas. Require exactly the known extra files, preserving every other line.
+    //   {\n  "aspire-home/packages/.aspire-bundle-lock": ""\n}
+    // There are no commas. Require exactly the known added/omitted/unredacted files while
+    // preserving every other line; array values use the same newline-separated representation.
     // https://mochajs.org/next/reporters/json/
-    const extras = Object.entries(extraFiles).map(([name, value]) => `  ${JSON.stringify(name)}: ${JSON.stringify(value)}`);
+    const fileLines = (files: Record<string, string>) => Object.entries(files)
+        .map(([name, value]) => `  ${JSON.stringify(name)}: ${JSON.stringify(value)}`);
     assert.deepEqual(
-        text(error.actual).split(/\r?\n/).sort(),
-        [...text(error.expected).split(/\r?\n/), ...extras].sort(),
-        'Baseline assertion changed for reasons other than the known unwanted files',
+        [...text(error.actual).split(/\r?\n/), ...fileLines(expectedOnly)].sort(),
+        [...text(error.expected).split(/\r?\n/), ...fileLines(actualOnly)].sort(),
+        'Baseline assertion changed for reasons other than the known file-selection/redaction differences',
     );
 }
 
 function validate(reportValue: unknown, mode: Variant, exitCode: number) {
     const report = object(reportValue);
     const stats = object(report.stats);
-    const failureCount = mode === 'baseline' ? 5 : 0;
+    const failureCount = mode === 'baseline' ? 13 : 0;
     assert.equal(exitCode, failureCount, 'Unexpected Mocha exit code');
     assert.equal(stats.suites, 1);
-    assert.equal(stats.tests, 8, 'All eight tests must execute');
-    assert.equal(stats.passes, 8 - failureCount);
+    assert.equal(stats.tests, 18, 'All eighteen tests must execute');
+    assert.equal(stats.passes, 18 - failureCount);
     assert.equal(stats.pending, 0, 'Skipped tests are not evidence');
     assert.equal(stats.failures, failureCount);
     assert.ok(typeof stats.duration === 'number' && stats.duration > 0);
     assert.deepEqual(report.pending, []);
 
     const all = testSet(report.tests, titles);
-    const failures = testSet(report.failures, mode === 'baseline' ? titles.slice(0, 5) : []);
-    const passes = testSet(report.passes, mode === 'baseline' ? titles.slice(5) : titles);
+    const failures = testSet(report.failures, mode === 'baseline' ? baselineFailureTitles : []);
+    const passes = testSet(report.passes, mode === 'baseline' ? baselinePassTitles : titles);
     for (const [title, error] of all) {
         assert.deepEqual(error, failures.get(title) ?? passes.get(title), 'Inconsistent Mocha result arrays');
     }
@@ -94,44 +146,65 @@ function validate(reportValue: unknown, mode: Variant, exitCode: number) {
 
     if (mode === 'baseline') {
         assertionDiff(failures.get(titles[0]), {
-            'aspire-home/dashboard/resumes/app.lock': '',
-            'aspire-home/dashboard/resumes/app/dashboard.db-wal': 'live WAL',
-            'aspire-home/dashboard/runs/20260914T045039914Z.lock': '',
-            'aspire-home/dashboard/runs/20260914T045039914Z/dashboard.db': 'run database',
-            'aspire-home/dashboard/runs/20260914T045039914Z/run.json': '{"runId":"20260914T045039914Z"}',
-        });
-        const disappearing = failures.get(titles[1]);
-        assert.ok(disappearing);
-        assert.equal(disappearing.name, 'AssertionError');
-        assert.equal(disappearing.code, 'ERR_ASSERTION');
-        assert.equal(disappearing.operator, 'strictEqual');
-        assert.equal(disappearing.actual, 'true');
-        assert.equal(disappearing.expected, 'false');
-        assertionDiff(failures.get(titles[2]), {
-            'aspire-home/DASHBOARD/runs/app.lock': '',
-            'aspire-home/cache/apphost-info/.LEASES/app.json': 'lease state',
-            'aspire-home/cache/apphost-info/app.LEASE': '',
+            'aspire-home/cache/skills/content.json': 'Cached runtime state.\n',
+            'aspire-home/cache/workspace-config-locks/workspace.lock': '',
+            'aspire-home/dashboard-backup/info.json': 'Not a selected diagnostic.\n',
+            'aspire-home/packages/.aspire-bundle-lock': '',
+            'aspire-home/unrecognized-state.json': 'Not a selected diagnostic.\n',
+            'settings/CrashpadMetrics-active.pma': 'Active runtime state.\n',
+        }, {});
+        const enumeration = assertion(failures.get(titles[1]), 'deepStrictEqual');
+        assert.equal(text(enumeration.actual).replace(/\r\n/g, '\n'),
+            '[\n  "cache/workspace-config-locks"\n  "cache/workspace-config-locks/workspace.lock"\n  "dashboard"\n]');
+        assert.equal(enumeration.expected, '[]');
+
+        for (const title of [titles[7], titles[8], titles[9], titles[12]]) {
+            const error = assertion(failures.get(title), '==');
+            assert.equal(error.actual, 'false');
+            assert.equal(error.expected, 'true');
+            assert.equal(text(error.message).replace(/\r\n/g, '\n'),
+                'The expression evaluated to a falsy value:\n\n  assert.ok(error instanceof AggregateError)\n');
+        }
+        for (const title of [titles[10], titles[17]]) {
+            const error = assertion(failures.get(title), 'rejects');
+            assert.equal(error.message, 'Missing expected rejection.');
+            assert.equal(error.actual, undefined);
+            assert.equal(error.expected, undefined);
+        }
+        assertionDiff(failures.get(titles[14]), {
+            '.aspire/integrations/apphosts/hash/project-layouts/prepare.lock': '',
+            '.aspire/integrations/package-restore/hash/restore.lock': '',
+            '.aspire/modules/generated.ts': 'Generated SDK cache.\n',
+            '.aspire/other-runtime-state.json': 'Not selected diagnostics.\n',
+            'AspireE2E.AppHost/AspireE2E.AppHost.csproj': '<Project url="http://localhost:1234/login?t=private-token" />\n',
+            'AspireE2E.WinUI/App.xaml': '<Application url="http://localhost:1234/login?t=private-token" />\n',
+        }, {
+            'aspire.config.json': '{"appHost":{"path":"AspireE2E.AppHost/AppHost.cs"}}\n',
+            'AspireE2E.AppHost/AspireE2E.AppHost.csproj': '<Project url="http://localhost:1234/login?t=<redacted>" />\n',
+            'AspireE2E.WinUI/App.xaml': '<Application url="http://localhost:1234/login?t=<redacted>" />\n',
         });
 
-        for (const [index, persistenceMode] of ['runs', 'resumes'].entries()) {
-            const error = failures.get(titles[3 + index]);
+        for (const lock of nativeLocks) {
+            const error = failures.get(lock.title);
             assert.ok(error);
             assert.equal(error.code, 'EBUSY');
             assert.equal(error.syscall, 'copyfile');
             const source = win32.normalize(text(error.path));
-            const suffix = `\\aspire-home\\dashboard\\${persistenceMode}\\20260914T045039914Z.lock`;
-            assert.ok(win32.isAbsolute(source) && source.endsWith(suffix), 'Wrong native lock source');
-            const root = source.slice(0, -suffix.length);
+            assert.ok(win32.isAbsolute(source) && source.endsWith(lock.source), 'Wrong native lock source');
+            const root = source.slice(0, -lock.source.length);
             assert.match(win32.basename(root), /^aspire-e2e-storage-diagnostics-[^\\]+$/);
-            assert.equal(win32.normalize(text(error.dest)), `${root}\\diagnostics${suffix}`, 'Wrong copy destination');
+            assert.equal(win32.normalize(text(error.dest)), `${root}${lock.destination}`, 'Wrong copy destination');
             // The workflow pins the unchanged suite. Its control copy must establish EBUSY before
             // collectDiagnostics() is called; control/setup/cleanup assertion failures cannot pass here.
+            // Workspace cases also audit cpSync's filter so the lock goes through copyfile, not the
+            // uninstrumented Node 25 native-cp fast path that can report an unrelated EPIPE instead.
+            assert.ok(text(error.stack).includes(`at Object.${lock.collector} [as collect] (`));
             assert.match(text(error.stack), /\bat collectDiagnostics \(/);
             assert.match(text(error.stack), /\bat withExclusiveFileLock \(/);
         }
     }
 
-    return { tests: 8, passes: 8 - failureCount, pending: 0, failures: failureCount };
+    return { tests: 18, passes: 18 - failureCount, pending: 0, failures: failureCount };
 }
 
 function readJson(file: string): unknown {
@@ -144,6 +217,9 @@ function parseExitCode(value: string): number {
 }
 
 function summarize(root: string): void {
+    assert.equal(process.env.BASELINE_COMMIT, revisions.baseline.commit, 'Wrong baseline revision');
+    assert.equal(process.env.FIXED_COMMIT, revisions.fixed.commit, 'Wrong fixed revision');
+    assert.match(text(process.env.GITHUB_SHA), /^[0-9a-f]{40}$/, 'Missing workflow revision');
     function emit(line: string) {
         console.log(line);
         if (process.env.GITHUB_STEP_SUMMARY) {
@@ -155,16 +231,14 @@ function summarize(root: string): void {
     emit('');
     emit(`Baseline collector: \`${process.env.BASELINE_COMMIT}\`. Fixed collector and unchanged suite: \`${process.env.FIXED_COMMIT}\`.`);
     emit(`Workflow revision: \`${process.env.GITHUB_SHA}\`. Target: windows-latest / x64 / Node 22.`);
-    emit('Three isolated runners per variant, three iterations each: 9 baseline + 9 fixed suite executions, 144 test executions expected, no skips or retries.');
-    emit('A baseline row is accepted only for 3 passes / 5 exact regressions, including both native runs/resumes EBUSY copyfile errors after the OS-lock controls.');
+    emit('Three isolated runners per variant, three iterations each: 9 baseline + 9 fixed suite executions, 324 test executions expected, no skips or retries.');
+    emit('A baseline row requires 5 passes / 13 exact regressions: 9 selection/aggregation/redaction assertions and 4 native EBUSY copyfile errors after the OS-lock controls (workspace configuration cache, bundle extraction, package restore, project layout). Fixed rows require all 18 tests passing.');
     emit('');
     emit('| Variant | Runner | Iteration | OS version | Node | Tests | Pass | Fail | Pending | Contract |');
     emit('|---|---|---|---|---|---|---|---|---|---|');
 
     let accepted = 0;
-    const suiteBlobs = new Set<string>();
-    const collectorBlobs = { baseline: new Set<string>(), fixed: new Set<string>() };
-    for (const mode of ['baseline', 'fixed']) {
+    for (const mode of ['baseline', 'fixed'] as const) {
         for (let runner = 1; runner <= 3; runner++) {
             const directory = join(root, `diagnostics-lock-${mode}-${runner}`);
             for (let iteration = 1; iteration <= 3; iteration++) {
@@ -185,10 +259,8 @@ function summarize(root: string): void {
                     assert.match(text(context.nodeVersion), /^v22\.\d+\.\d+$/);
                     assert.equal(context.corepack, '0.34.7');
                     assert.equal(context.yarn, '1.22.22');
-                    assert.match(text(context.suiteBlob), /^[0-9a-f]{40}$/);
-                    assert.match(text(context.collectorBlob), /^[0-9a-f]{40}$/);
-                    suiteBlobs.add(text(context.suiteBlob));
-                    collectorBlobs[variant(mode)].add(text(context.collectorBlob));
+                    assert.equal(context.suiteBlob, suiteBlob, 'Not the final eighteen-test suite');
+                    assert.equal(context.collectorBlob, revisions[mode].collectorBlob, 'Wrong collector blob');
 
                     const prefix = join(directory, `iteration-${iteration}`);
                     const exitCode = parseExitCode(readFileSync(`${prefix}.exit-code.txt`, 'utf8'));
@@ -209,10 +281,6 @@ function summarize(root: string): void {
     emit('');
     emit(`Accepted suite executions: ${accepted}/18. Matrix job result: ${process.env.REPRODUCE_RESULT}.`);
     assert.equal(accepted, 18, 'Missing, skipped, malformed, or unexpected results; this is not a successful reproduction');
-    assert.equal(suiteBlobs.size, 1, 'Runners did not use the same regression suite');
-    assert.equal(collectorBlobs.baseline.size, 1);
-    assert.equal(collectorBlobs.fixed.size, 1);
-    assert.notDeepEqual([...collectorBlobs.baseline], [...collectorBlobs.fixed], 'Before/after collectors must differ');
     assert.equal(process.env.REPRODUCE_RESULT, 'success', 'A matrix job failed outside the result parser');
 }
 
