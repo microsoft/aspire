@@ -422,10 +422,11 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var logger = NullLoggerFactory.Instance.CreateLogger<CliUpdateNotifier>();
         var nuGetPackageCache = serviceProvider.GetRequiredService<INuGetPackageCache>();
+        var npmRunner = serviceProvider.GetRequiredService<INpmRunner>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         var processPathProvider = serviceProvider.GetRequiredService<IProcessPathProvider>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new CliUpdateNotifier(logger, nuGetPackageCache, interactionService, processPathProvider, executionContext);
+        return new CliUpdateNotifier(logger, nuGetPackageCache, npmRunner, interactionService, processPathProvider, executionContext);
     };
 
     public Func<IServiceProvider, IAddCommandPrompter> AddCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>

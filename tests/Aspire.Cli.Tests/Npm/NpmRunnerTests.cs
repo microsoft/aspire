@@ -7,13 +7,15 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Npm;
 
 [Collection(EnvVarMutatingTestCollection.Name)]
-public class NpmRunnerTests
+public class NpmRunnerTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void PackageRegistry_UsesPublicNpmRegistry()
@@ -186,6 +188,89 @@ public class NpmRunnerTests
     }
 
     [Fact]
+    public async Task GetLatestVersionAsync_UsesNpmGlobalModeFromNeutralDirectory()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-npm-runner-test-");
+
+        try
+        {
+            WriteFakeNpm(tempDirectory);
+            var argumentsPath = Path.Combine(tempDirectory.FullName, "arguments.txt");
+            var workingDirectoryPath = Path.Combine(tempDirectory.FullName, "working-directory.txt");
+            var existingPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            using var pathOverride = new EnvVarOverride("PATH", $"{tempDirectory.FullName}{Path.PathSeparator}{existingPath}");
+            using var pathExtensionsOverride = OperatingSystem.IsWindows() ? new EnvVarOverride("PATHEXT", ".CMD") : null;
+            using var argumentsPathOverride = new EnvVarOverride("NPM_ARGS_FILE", argumentsPath);
+            using var workingDirectoryPathOverride = new EnvVarOverride("NPM_CWD_FILE", workingDirectoryPath);
+            using var outputOverride = new EnvVarOverride("NPM_OUTPUT", "13.4.6");
+            using var profilingTelemetry = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var runner = new NpmRunner(new TestEnvironment(), NullLogger<NpmRunner>.Instance, profilingTelemetry);
+
+            var result = await runner.GetLatestVersionAsync(
+                "@microsoft/aspire-cli",
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal("13.4.6", result.ToString());
+            Assert.Equal(
+                [
+                    "view",
+                    "@microsoft/aspire-cli@latest",
+                    "version",
+                    "--global",
+                    "--json=false",
+                    "--color=false",
+                    "--loglevel=error"
+                ],
+                await File.ReadAllLinesAsync(argumentsPath, TestContext.Current.CancellationToken));
+
+            var workingDirectory = (await File.ReadAllTextAsync(
+                workingDirectoryPath,
+                TestContext.Current.CancellationToken)).Trim();
+            Assert.StartsWith("aspire-npm-", new DirectoryInfo(workingDirectory).Name);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task GetLatestVersionAsync_CallerCancellationAfterProcessExitWhileOutputDrains_ThrowsOperationCanceledException()
+    {
+        using var fakeNpm = FakeNpmScript.BuildExitThenHoldOutputOpen(outputHelper, "13.4.6");
+        using var environmentScope = fakeNpm.UseEnvironment();
+        using var profilingTelemetry = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+        var runner = new NpmRunner(new TestEnvironment(), NullLogger<NpmRunner>.Instance, profilingTelemetry);
+        using var cancellation = new CancellationTokenSource();
+
+        var getVersionTask = runner.GetLatestVersionAsync("@microsoft/aspire-cli", cancellation.Token);
+
+        await fakeNpm.WaitForParentExitAsync().DefaultTimeout();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => getVersionTask).DefaultTimeout();
+    }
+
+    [Fact]
+    public void ResolveLatestVersionLookupResult_TimedOutResultBeatsCallerCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var exception = Assert.Throws<TimeoutException>(() => NpmRunner.ResolveLatestVersionLookupResult(
+            "@microsoft/aspire-cli@latest",
+            new ProcessCaptureResult<string>(
+                ExitCode: -1,
+                Capture: string.Empty,
+                FailureKind: ProcessCaptureFailureKind.TimedOut,
+                FailureMessage: "Process timed out after 0.1s.",
+                Cancelled: false),
+            cancellation.Token));
+
+        Assert.Contains("Timed out after", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TryExtractLastVersion_SingleVersion_ReturnsTrimmedVersion()
     {
         var result = NpmRunner.TryExtractLastVersion("0.1.1\n", out var version);
@@ -254,10 +339,13 @@ public class NpmRunnerTests
                 @echo off
                 type nul > "%NPM_ARGS_FILE%"
                 :loop
-                if "%~1"=="" exit /b 0
+                if "%~1"=="" goto done
                 >> "%NPM_ARGS_FILE%" echo %~1
                 shift
                 goto loop
+                :done
+                if defined NPM_CWD_FILE cd > "%NPM_CWD_FILE%"
+                if defined NPM_OUTPUT echo %NPM_OUTPUT%
                 """);
             return;
         }
@@ -268,6 +356,12 @@ public class NpmRunnerTests
             """
             #!/bin/sh
             printf '%s\n' "$@" > "$NPM_ARGS_FILE"
+            if [ -n "$NPM_CWD_FILE" ]; then
+              pwd > "$NPM_CWD_FILE"
+            fi
+            if [ -n "$NPM_OUTPUT" ]; then
+              printf '%s\n' "$NPM_OUTPUT"
+            fi
             """);
         File.SetUnixFileMode(
             npmPath,
