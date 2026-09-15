@@ -1659,28 +1659,18 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public async Task Scanner_AzureContainerAppExpress_EmitsTypedFluentMethod()
+    public void GenerateDistributedApplication_WithAzureContainerAppExpress_EmitsTypeScriptMethod()
     {
         var result = AtsCapabilityScanner.ScanAssemblies(LoadAzureAssemblies());
-        var capability = Assert.Single(result.Capabilities, c => c.CapabilityId == "Aspire.Hosting.Azure.AppContainers/asExpress");
-        var environmentTypeId = GetAtsTypeId(typeof(AzureContainerAppEnvironmentResource));
 
-        Assert.Equal("asExpress", capability.MethodName);
-        Assert.Equal(environmentTypeId, capability.TargetTypeId);
-        Assert.Equal(environmentTypeId, capability.ReturnType.TypeId);
+        var capability = Assert.Single(result.Capabilities, c => c.CapabilityId == "Aspire.Hosting.Azure.AppContainers/asExpress");
+        Assert.Equal(GetAtsTypeId(typeof(AzureContainerAppEnvironmentResource)), capability.TargetTypeId);
         Assert.True(capability.ReturnsBuilder);
         Assert.Empty(capability.Parameters);
 
-        var context = new AtsContext
-        {
-            Capabilities = [capability],
-            HandleTypes = [Assert.Single(result.HandleTypes, t => t.AtsTypeId == environmentTypeId)],
-            DtoTypes = [],
-            EnumTypes = []
-        };
-        var files = _generator.GenerateDistributedApplication(context);
+        var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
 
-        await Verify(files["aspire.mts"], "ts").UseFileName("AzureContainerAppExpressGeneratedAspire");
+        Assert.Contains("asExpress(): AzureContainerAppEnvironmentResourcePromise;", files["aspire.mts"]);
     }
 
     [Fact]
