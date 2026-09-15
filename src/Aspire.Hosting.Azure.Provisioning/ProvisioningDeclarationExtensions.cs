@@ -36,14 +36,35 @@ internal sealed class ProvisioningParameterProxy
     internal BicepValueProxy Value
     {
         get => BicepValueProxy.Create(Inner.Value, _valueType);
-        set => value.AssignTo(Inner.Value, _valueType);
+        set
+        {
+            ValidateIsSecure(_valueType, value.IsSecure, nameof(value));
+            value.AssignTo(Inner.Value, _valueType);
+        }
     }
 
+    /// <summary>
+    /// Gets or sets whether the parameter is secure. Only string, object, and GUID parameters can be secure.
+    /// </summary>
     [AspireExport]
     internal bool IsSecure
     {
         get => Inner.IsSecure;
-        set => Inner.IsSecure = value;
+        set
+        {
+            ValidateIsSecure(_valueType, value, nameof(value));
+            Inner.IsSecure = value;
+        }
+    }
+
+    internal static void ValidateIsSecure(Type valueType, bool isSecure, string parameterName)
+    {
+        // Bicep permits @secure() only on strings and objects; the CDK maps GUIDs to strings.
+        // https://learn.microsoft.com/azure/azure-resource-manager/bicep/parameters#secure-parameters
+        if (isSecure && valueType != typeof(string) && valueType != typeof(object) && valueType != typeof(Guid))
+        {
+            throw new ArgumentException("Only string, object, and GUID Bicep parameters can be secure.", parameterName);
+        }
     }
 }
 
@@ -91,6 +112,9 @@ internal sealed class ProvisioningVariableProxy
 
 internal static class ProvisioningDeclarationExtensions
 {
+    /// <summary>
+    /// Adds a Bicep parameter. Only string, object, and GUID parameters can be secure.
+    /// </summary>
     [AspireExport]
     internal static ProvisioningParameterProxy AddBicepParameter(
         this AzureResourceInfrastructure infrastructure,
@@ -102,6 +126,7 @@ internal static class ProvisioningDeclarationExtensions
         ArgumentException.ThrowIfNullOrEmpty(bicepIdentifier);
 
         var valueType = GetSystemType(type);
+        ProvisioningParameterProxy.ValidateIsSecure(valueType, isSecure, nameof(isSecure));
         var parameter = new ProvisioningParameter(bicepIdentifier, valueType)
         {
             IsSecure = isSecure

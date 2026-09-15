@@ -182,6 +182,83 @@ public class BicepValueProxyTests
             () => variable.Value);
     }
 
+    [Theory]
+    [InlineData(nameof(ProvisioningValueType.Boolean))]
+    [InlineData(nameof(ProvisioningValueType.Integer))]
+    public void BicepParametersRejectUnsupportedSecureTypes(string typeName)
+    {
+        var infrastructure = CreateInfrastructure();
+        var type = Enum.Parse<ProvisioningValueType>(typeName);
+        var originalResources = infrastructure.GetProvisionableResources().ToArray();
+
+        var creationException = Assert.Throws<ArgumentException>(
+            () => infrastructure.AddBicepParameter("parameter", type, isSecure: true));
+
+        Assert.Equal("isSecure", creationException.ParamName);
+        Assert.Equal(
+            "Only string, object, and GUID Bicep parameters can be secure. (Parameter 'isSecure')",
+            creationException.Message);
+        Assert.Equal(originalResources, infrastructure.GetProvisionableResources());
+
+        var parameter = infrastructure.AddBicepParameter("parameter", type, isSecure: false);
+        Assert.False(parameter.IsSecure);
+
+        var mutationException = Assert.Throws<ArgumentException>(() => parameter.IsSecure = true);
+
+        Assert.Equal("value", mutationException.ParamName);
+        Assert.False(parameter.IsSecure);
+        Assert.False(parameter.Inner.IsSecure);
+
+        parameter.IsSecure = false;
+        Assert.False(parameter.IsSecure);
+    }
+
+    [Theory]
+    [InlineData(nameof(ProvisioningValueType.String))]
+    [InlineData(nameof(ProvisioningValueType.Object))]
+    [InlineData(nameof(ProvisioningValueType.Guid))]
+    public void BicepParametersSupportSecureTypes(string typeName)
+    {
+        var infrastructure = CreateInfrastructure();
+        var type = Enum.Parse<ProvisioningValueType>(typeName);
+        var parameter = infrastructure.AddBicepParameter("parameter", type, isSecure: true);
+
+        Assert.True(parameter.IsSecure);
+        Assert.True(parameter.Inner.IsSecure);
+
+        parameter.IsSecure = false;
+        Assert.False(parameter.IsSecure);
+        Assert.False(parameter.Inner.IsSecure);
+
+        parameter.IsSecure = true;
+        Assert.True(parameter.IsSecure);
+        Assert.True(parameter.Inner.IsSecure);
+    }
+
+    [Theory]
+    [InlineData(nameof(ProvisioningValueType.Boolean), true)]
+    [InlineData(nameof(ProvisioningValueType.Integer), 42)]
+    public void BicepParametersRejectUnsupportedSecureValues(string typeName, object literal)
+    {
+        var parameter = CreateInfrastructure().AddBicepParameter(
+            "parameter", Enum.Parse<ProvisioningValueType>(typeName));
+        IBicepValue initialValue = new BicepValue<object>(literal);
+        parameter.Value = BicepValueProxy.Create(initialValue);
+        var secureValue = literal switch
+        {
+            bool value => BicepValueProxy.Create(new BicepValue<bool>(value), isSecure: true),
+            int value => BicepValueProxy.Create(new BicepValue<int>(value), isSecure: true),
+            _ => throw new ArgumentException("Expected a Boolean or integer literal.", nameof(literal))
+        };
+
+        var exception = Assert.Throws<ArgumentException>(() => parameter.Value = secureValue);
+
+        Assert.Equal("value", exception.ParamName);
+        Assert.Equal(literal, ((IBicepValue)parameter.Inner.Value).LiteralValue);
+        Assert.False(parameter.IsSecure);
+        Assert.False(parameter.Value.IsSecure);
+    }
+
     [Fact]
     public void InterpolatedValuePreservesExpressionAndSecurity()
     {
