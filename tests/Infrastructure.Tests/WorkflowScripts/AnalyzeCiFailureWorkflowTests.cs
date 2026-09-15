@@ -729,6 +729,63 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task PythonTestsPassOnWindows() => PythonTestsPass("python");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task PythonTestsPassOnUnix() => PythonTestsPass("python3");
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PrCommentOmitsJobLinksOutsideTheAnalyzedRun()
+    {
+        var analysis = new
+        {
+            verdict = "flaky-test",
+            rerun = new { eligible = true },
+            run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
+            failed_jobs = new[]
+            {
+                new
+                {
+                    name = "Tests / Linux",
+                    url = "https://example.com/phishing",
+                    classification = "flaky-test",
+                    reason = "The runner timed out."
+                }
+            },
+            failed_tests = Array.Empty<object>()
+        };
+
+        var comment = await InvokeScriptAsync("pr-comment", analysis);
+
+        var expected = string.Join('\n',
+        [
+            "<!-- analyze-ci-failure -->",
+            "⚠️ **CI Failure Analysis: Possible Flaky Test(s)**",
+            "",
+            "The CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.",
+            "",
+            "**Suspected flaky failure(s):**",
+            "- `Tests / Linux`",
+            "  - **Why likely flaky**: The runner timed out.",
+            "",
+            "The analysis requested an automatic rerun of the failed CI jobs.",
+            "",
+            "**Suggested actions:**",
+            "- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using `/quarantine-test <test name> <issue URL>`",
+            "- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky",
+            "",
+            "[View the workflow run](https://github.com/microsoft/aspire/actions/runs/34795444609).",
+        ]);
+
+        Assert.Equal(expected, comment);
+    }
+
+    [Fact]
     [RequiresTools(["node"])]
     public async Task PrCommentListsExtractedFlakyTests()
     {
@@ -942,6 +999,51 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal(0, result.ExitCode);
 
         return result.Output.ReplaceLineEndings("\n");
+    }
+
+    private async Task PythonTestsPass(string python)
+    {
+        var startInfo = new ProcessStartInfo(python)
+        {
+            WorkingDirectory = _repoRoot,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add("-m");
+        startInfo.ArgumentList.Add("unittest");
+        startInfo.ArgumentList.Add("discover");
+        startInfo.ArgumentList.Add("-s");
+        startInfo.ArgumentList.Add(".github/workflows/analyze-ci-failure");
+        startInfo.ArgumentList.Add("-p");
+        startInfo.ArgumentList.Add("test_*.py");
+        startInfo.ArgumentList.Add("-v");
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Failed to start {python}.");
+
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw;
+        }
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        _output.WriteLine(stdout);
+        _output.WriteLine(stderr);
+
+        Assert.True(
+            process.ExitCode == 0,
+            $"{python} exited with code {process.ExitCode}.{Environment.NewLine}{stdout}{Environment.NewLine}{stderr}");
     }
 
     private static async Task<JsonElement> ConvertTrxToJsonAsync(string trxPath)

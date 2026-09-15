@@ -270,6 +270,31 @@ function normalizeIssueTitle(value) {
     return redactSensitiveData(value).replace(/\r\n?|\n/g, ' ').trim();
 }
 
+function getValidatedJobUrl(runUrl, jobUrl) {
+    try {
+        const run = new URL(runUrl);
+        const job = new URL(jobUrl);
+        const escapedRunPath = run.pathname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        if (run.protocol === 'https:'
+            && run.hostname === 'github.com'
+            && !run.username
+            && !run.password
+            && job.origin === run.origin
+            && !job.username
+            && !job.password
+            && !job.search
+            && !job.hash
+            && new RegExp(`^${escapedRunPath}/job/\\d+$`).test(job.pathname)) {
+            return job.href;
+        }
+    } catch {
+        // Model-authored URLs are optional; omit malformed or untrusted values.
+    }
+
+    return '';
+}
+
 function buildJobList(analysis, classification) {
     return (analysis.failed_jobs ?? [])
         .filter(job => !classification || job.classification === classification)
@@ -278,7 +303,8 @@ function buildJobList(analysis, classification) {
                 return `- ${toInlineCode(job.name)} — ${job.reason ?? ''} (${job.classification ?? ''})`;
             }
 
-            const jobLink = job.url ? ` ([job](${job.url}))` : '';
+            const validatedJobUrl = getValidatedJobUrl(analysis.run_url, job.url);
+            const jobLink = validatedJobUrl ? ` ([job](${validatedJobUrl}))` : '';
             return `- ${toInlineCode(job.name)}${jobLink}\n  - **Why likely flaky**: ${job.reason ?? ''}`;
         })
         .join('\n');

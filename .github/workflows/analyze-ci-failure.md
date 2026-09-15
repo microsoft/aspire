@@ -26,6 +26,9 @@ on:
         required: false
         default: false
         type: boolean
+  # The triggering CI run is independently constrained to this repository and
+  # validated below, so PR authors do not need repository write access.
+  roles: all
 
 jobs:
   collect-data:
@@ -67,6 +70,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/workflows/analyze-ci-failure.js
+            .github/workflows/analyze-ci-failure/extract_test_results.py
             eng/test-retry-patterns.json
           sparse-checkout-cone-mode: false
       - name: Collect CI failure data
@@ -325,61 +329,8 @@ jobs:
             echo "Downloading test results artifact: ${ARTIFACT_NAME} (${ARTIFACT_ID})..."
             mkdir -p ci-failure-data/test-results
             if gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" > ci-failure-data/test-results.zip \
-                && timeout 30s python3 - ci-failure-data/test-results.zip ci-failure-data/test-results "${EVIDENCE_GAPS_FILE}" <<'PY'
-          import pathlib
-          import stat
-          import sys
-          import zipfile
-
-          archive_path, destination_path, evidence_gaps_path = sys.argv[1:]
-          destination = pathlib.Path(destination_path).resolve()
-          destination.mkdir(parents=True, exist_ok=True)
-          max_file_bytes = 50 * 1024 * 1024
-          max_total_bytes = 500 * 1024 * 1024
-          total_bytes = 0
-
-          with zipfile.ZipFile(archive_path) as archive:
-              trx_entries = sorted(
-                  (entry for entry in archive.infolist() if not entry.is_dir() and entry.filename.lower().endswith('.trx')),
-                  key=lambda entry: entry.filename)
-              with open(evidence_gaps_path, 'a', encoding='utf-8') as evidence_gaps:
-                  if len(trx_entries) > 200:
-                      evidence_gaps.write(f'Test results artifact contained {len(trx_entries)} TRX files; processing only the first 200\n')
-
-                  for entry in trx_entries[:200]:
-                      relative_path = pathlib.PurePosixPath(entry.filename)
-                      unix_mode = entry.external_attr >> 16
-                      if relative_path.is_absolute() or '..' in relative_path.parts or '\\' in entry.filename or stat.S_ISLNK(unix_mode):
-                          evidence_gaps.write(f'Skipped unsafe test result path: {entry.filename}\n')
-                          continue
-                      if entry.file_size > max_file_bytes:
-                          evidence_gaps.write(f'Skipped test result larger than 50 MB: {relative_path.name}\n')
-                          continue
-                      if total_bytes + entry.file_size > max_total_bytes:
-                          evidence_gaps.write('Stopped extracting test results after reaching the 500 MB aggregate limit\n')
-                          break
-
-                      target = (destination / pathlib.Path(*relative_path.parts)).resolve()
-                      if destination not in target.parents:
-                          evidence_gaps.write(f'Skipped unsafe test result path: {entry.filename}\n')
-                          continue
-
-                      target.parent.mkdir(parents=True, exist_ok=True)
-                      written_for_file = 0
-                      try:
-                          with archive.open(entry) as source, open(target, 'wb') as output:
-                              while chunk := source.read(1024 * 1024):
-                                  written_for_file += len(chunk)
-                                  if written_for_file > max_file_bytes or total_bytes + written_for_file > max_total_bytes:
-                                      raise ValueError('Test result extraction limit exceeded')
-                                  output.write(chunk)
-                      except ValueError:
-                          target.unlink(missing_ok=True)
-                          evidence_gaps.write('Stopped extracting test results after reaching an extraction size limit\n')
-                          break
-                      total_bytes += written_for_file
-          PY
-            then
+              && timeout 30s python3 .github/workflows/analyze-ci-failure/extract_test_results.py \
+                ci-failure-data/test-results.zip ci-failure-data/test-results "${EVIDENCE_GAPS_FILE}"; then
               echo "Download complete."
 
               # List TRX files found
