@@ -474,8 +474,12 @@ fluent-dropdown fluent-option::part(content) {
     transform: translateX(-20px);
 }
 
+/* Fluent's selected checkmark is inside shadow DOM and uses currentColor. Make the host
+   transparent to hide it globally, then restore the option text through its exposed part. */
 fluent-dropdown fluent-option[selected],
-fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover {
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover,
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):state(active),
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):focus-visible {
     position: relative;
     color: transparent;
 }
