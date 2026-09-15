@@ -281,7 +281,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
                 Path.GetFullPath(v1VersionDir),
                 Path.GetFullPath(managedPath!),
                 comparison);
-            var expectedTrayPath = includeTray ? Path.Combine(v1VersionDir, LayoutComponents.MacTrayExecutablePath) : null;
+            var expectedTrayPath = includeTray ? Path.Combine(v1VersionDir, TrayExecutablePath) : null;
             Assert.Equal(expectedTrayPath, layoutLease.Layout.GetTrayPath());
 
             var v2Service = CreateService(new TestBundlePayloadProvider(CreateFakeBundlePayload("v2")), layoutDiscovery, v2BinaryPath);
@@ -621,7 +621,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
 
             if (includeTrayExecutable)
             {
-                var trayEntry = new PaxTarEntry(TarEntryType.RegularFile, $"aspire-payload/{LayoutComponents.MacTrayExecutablePath}")
+                var trayEntry = new PaxTarEntry(TarEntryType.RegularFile, $"aspire-payload/{TrayExecutablePath}")
                 {
                     DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes($"tray-{contentMarker}"))
                 };
@@ -631,6 +631,9 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
 
         return ms.ToArray();
     }
+
+    private static string TrayExecutablePath => OperatingSystem.IsWindows()
+        ? WindowsTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath;
 
     /// <summary>
     /// Removes reparse points created during tests to prevent

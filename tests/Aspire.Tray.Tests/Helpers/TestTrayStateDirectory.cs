@@ -11,7 +11,9 @@ internal sealed class TestTrayStateDirectory : IDisposable
 
     public string CreateAppHost(string relativePath)
     {
-        var path = Path.Combine(_directory.FullName, relativePath);
+        // Fixtures use paths like "project/apphost.cs"; normalize separators before
+        // storing or comparing them with paths returned by the production code.
+        var path = Path.GetFullPath(Path.Combine(_directory.FullName, relativePath));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, "");
         return path;

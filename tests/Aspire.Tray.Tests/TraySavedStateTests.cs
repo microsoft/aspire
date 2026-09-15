@@ -9,6 +9,16 @@ namespace Aspire.Tray.Tests;
 public class TraySavedStateTests
 {
     [Fact]
+    public void AppHostFixtureReturnsNormalizedPaths()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("project/./apphost.cs");
+
+        Assert.Equal(Path.GetFullPath(path), path);
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
     public void StateReloadPreservesPathsRecencyAndPinFlags()
     {
         using var directory = new TestTrayStateDirectory();

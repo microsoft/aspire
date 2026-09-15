@@ -185,7 +185,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         var selector = new TestSelector(
             Path.Combine(RepoRoot.Path, "eng/github-ci/test-trigger-map.yml"),
             new HashSet<string>(["Aspire.Tray.Tests", "Infrastructure.Tests", "Aspire.Cli.EndToEnd.Tests"], StringComparer.Ordinal),
-            new HashSet<string>(StringComparer.Ordinal));
+            new HashSet<string>(StringComparer.Ordinal),
+            affectedTestProjectNames: new HashSet<string>(StringComparer.Ordinal));
 
         var result = selector.Select([], [project], new SelectorOptions());
 

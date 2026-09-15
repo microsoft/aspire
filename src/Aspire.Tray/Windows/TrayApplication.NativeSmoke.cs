@@ -25,7 +25,7 @@ internal sealed unsafe partial class TrayApplication
             return;
         }
         var owner = _modalOwner != 0 ? _modalOwner : _window;
-        var dialog = NativeMethods.GetLastActivePopup(owner);
+        var dialog = GetEnabledPopup(owner);
         if (dialog == 0 || dialog == owner)
         {
             return;

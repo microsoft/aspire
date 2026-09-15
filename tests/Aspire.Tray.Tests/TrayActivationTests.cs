@@ -67,6 +67,10 @@ public class TrayActivationTests
             using var process = Process.GetCurrentProcess();
             Assert.Equal(process.Id, BinaryPrimitives.ReadInt32LittleEndian(response.AsSpan(1)));
             Assert.Equal(process.StartTime.ToUniversalTime().Ticks, BinaryPrimitives.ReadInt64LittleEndian(response.AsSpan(5)));
+            if (OperatingSystem.IsWindows())
+            {
+                await client.WriteAsync(new byte[] { 1 }, TestContext.Current.CancellationToken);
+            }
         }
         Assert.Equal(0, Volatile.Read(ref calls));
         await TrayActivation.ShowExistingAsync(name, TestContext.Current.CancellationToken);
@@ -258,6 +262,14 @@ public class TrayActivationTests
         var response = new byte[13];
         response[0] = 1;
         await server.WriteAsync(response, TestContext.Current.CancellationToken);
+        if (OperatingSystem.IsWindows())
+        {
+            // The Windows control protocol requires the peer to consume the [1] reply
+            // acknowledgement; otherwise the client can block before validating the identity.
+            var acknowledgement = new byte[1];
+            await server.ReadExactlyAsync(acknowledgement, TestContext.Current.CancellationToken);
+            Assert.Equal(1, acknowledgement[0]);
+        }
 
         await Assert.ThrowsAsync<InvalidDataException>(() => request);
     }
