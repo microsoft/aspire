@@ -3,6 +3,7 @@
 
 using System.IO.Hashing;
 using System.Text;
+using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -94,7 +95,8 @@ internal sealed class AppHostServerClosureManifest
     internal IReadOnlyList<string> GetProjectLayoutManifestLines()
     {
         return Entries
-            .Select(GetEntryFingerprint)
+            .Where(static entry => !entry.IsPackageBacked)
+            .Select(GetProjectEntryFingerprint)
             .ToList();
     }
 
@@ -143,6 +145,41 @@ internal sealed class AppHostServerClosureManifest
         };
     }
 
+    public IntegrationPackageProbeManifest CreatePackageProbeManifest()
+    {
+        var managedAssemblies = new List<IntegrationPackageManagedAssembly>();
+        var nativeLibraries = new List<IntegrationPackageNativeLibrary>();
+
+        foreach (var entry in Entries.Where(static entry => entry.IsPackageBacked))
+        {
+            if (string.Equals(entry.AssetType, "native", StringComparison.OrdinalIgnoreCase))
+            {
+                nativeLibraries.Add(new IntegrationPackageNativeLibrary
+                {
+                    FileName = Path.GetFileName(entry.RelativePath),
+                    Path = entry.SourcePath
+                });
+                continue;
+            }
+
+            if (!entry.SourcePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            managedAssemblies.Add(new IntegrationPackageManagedAssembly
+            {
+                Name = Path.GetFileNameWithoutExtension(entry.RelativePath),
+                Culture = TryGetSatelliteCulture(entry),
+                Path = entry.SourcePath,
+                PackageId = entry.PackageId,
+                PackageVersion = entry.PackageVersion
+            });
+        }
+
+        return IntegrationPackageProbeManifest.Create(managedAssemblies, nativeLibraries);
+    }
+
     private static string ComputeManifestFingerprint(
         IReadOnlyList<AppHostServerClosureManifestEntry> entries,
         string appSettingsContent)
@@ -158,9 +195,30 @@ internal sealed class AppHostServerClosureManifest
 
     private static string? ComputeProjectLayoutFingerprint(IReadOnlyList<AppHostServerClosureManifestEntry> entries)
     {
-        var projectEntries = entries.Select(GetEntryFingerprint).ToList();
+        var projectEntries = entries
+            .Where(static entry => !entry.IsPackageBacked)
+            .Select(GetProjectEntryFingerprint)
+            .ToList();
 
         return projectEntries.Count == 0 ? null : ComputeHash(projectEntries);
+    }
+
+    private static string? TryGetSatelliteCulture(AppHostServerClosureManifestEntry entry)
+    {
+        if (!string.Equals(entry.AssetType, "resources", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var normalizedPath = entry.PathInPackage!.Replace('\\', '/');
+        var assemblyFileName = Path.GetFileName(normalizedPath);
+        if (!assemblyFileName.EndsWith(".resources.dll", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var culture = Path.GetFileName(Path.GetDirectoryName(normalizedPath));
+        return string.IsNullOrWhiteSpace(culture) ? null : culture;
     }
 
     private static AppHostServerClosureManifestEntry? TryCreatePackageBackedEntry(
@@ -368,7 +426,7 @@ internal sealed class AppHostServerProjectLayoutStore
 
         try
         {
-            foreach (var entry in manifest.Entries)
+            foreach (var entry in manifest.Entries.Where(static entry => !entry.IsPackageBacked))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -434,15 +492,10 @@ internal sealed class AppHostServerProjectLayoutStore
                 return false;
             }
 
-            foreach (var entry in expectedManifest.Entries)
+            foreach (var entry in expectedManifest.Entries.Where(static entry => !entry.IsPackageBacked))
             {
                 var copiedPath = Path.Combine(libsPath, entry.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-                if (!File.Exists(copiedPath))
-                {
-                    return false;
-                }
-
-                if (!entry.IsPackageBacked &&
+                if (!File.Exists(copiedPath) ||
                     !string.Equals(AppHostServerClosureManifest.ComputeFileHash(copiedPath, CancellationToken.None), entry.FileContentHash, StringComparison.Ordinal))
                 {
                     return false;

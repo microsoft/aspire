@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
@@ -113,7 +115,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
         };
 
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(projectRefs, "13.5.0", "/tmp/libs");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "13.5.0")],
+            projectRefs,
+            "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
         var projectElements = doc.Descendants("ProjectReference").ToList();
@@ -129,18 +134,34 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void GenerateIntegrationProjectFile_UsesOnlyAspireHostingPackageReference()
+    public void GenerateIntegrationProjectFile_IncludesEveryIntegrationPackageReference()
     {
         var projectRefs = new List<IntegrationReference>
         {
             IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
         };
 
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(projectRefs, "13.5.0", "/tmp/libs");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [
+                ("Aspire.Hosting", "13.5.0"),
+                ("Aspire.Hosting.Redis", "13.5.0")
+            ],
+            projectRefs,
+            "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
-        var packageReference = Assert.Single(doc.Descendants("PackageReference"));
-        Assert.Equal("Aspire.Hosting", packageReference.Attribute("Include")?.Value);
+        Assert.Collection(
+            doc.Descendants("PackageReference"),
+            packageReference =>
+            {
+                Assert.Equal("Aspire.Hosting", packageReference.Attribute("Include")?.Value);
+                Assert.Equal("13.5.0", packageReference.Attribute("Version")?.Value);
+            },
+            packageReference =>
+            {
+                Assert.Equal("Aspire.Hosting.Redis", packageReference.Attribute("Include")?.Value);
+                Assert.Equal("13.5.0", packageReference.Attribute("Version")?.Value);
+            });
         Assert.Single(doc.Descendants("ProjectReference"));
     }
 
@@ -148,8 +169,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public void GenerateIntegrationProjectFile_PreservesExactAspireHostingVersion()
     {
         var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "[13.5.0]")],
             [],
-            "[13.5.0]",
             "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
@@ -160,7 +181,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_DoesNotSetOutDir()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/custom/output/path");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "13.5.0")],
+            [],
+            "/custom/output/path");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -170,7 +194,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_DoesNotSetEarlyOutputPathProperties()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/custom/output/path");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "13.5.0")],
+            [],
+            "/custom/output/path");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -250,6 +277,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             RedirectStandardError = true,
             UseShellExecute = false
         };
+        startInfo.Environment.Remove("MSBuildSDKsPath");
         startInfo.ArgumentList.Add("build");
         startInfo.ArgumentList.Add(projectPath);
         startInfo.ArgumentList.Add("--nologo");
@@ -283,13 +311,141 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             await File.ReadAllLinesAsync(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName)));
     }
 
+    [Theory]
+    [InlineData("[1.0.0,)", true)]
+    [InlineData("[1.0.0]", false)]
+    public async Task GenerateIntegrationProjectFile_RestoresPackageAndProjectReferencesInOneNuGetGraph(
+        string directDependencyRange,
+        bool shouldSucceed)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        CreateDependencyPackage(feedDirectory, "Shared.Dependency", "1.0.0");
+        CreateDependencyPackage(feedDirectory, "Shared.Dependency", "2.0.0");
+        CreateDependencyPackage(
+            feedDirectory,
+            "Direct.Integration",
+            "1.0.0",
+            dependencyId: "Shared.Dependency",
+            dependencyVersion: directDependencyRange,
+            packageFiles: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [$"runtimes/{RuntimeInformation.RuntimeIdentifier}/native/hostnative.bin"] = "host-native",
+                ["runtimes/excluded-test-rid/native/othernative.bin"] = "other-native"
+            });
+
+        var projectIntegrationDirectory = workspace.CreateDirectory("ProjectIntegration");
+        var projectIntegrationPath = Path.Combine(projectIntegrationDirectory.FullName, "ProjectIntegration.csproj");
+        await File.WriteAllTextAsync(projectIntegrationPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Shared.Dependency" Version="2.0.0" />
+              </ItemGroup>
+              <Target Name="RejectInheritedRuntimeIdentifier"
+                      BeforeTargets="Build"
+                      Condition="'$(RuntimeIdentifier)' != ''">
+                <Error Text="The generated root's RuntimeIdentifier must not be imposed on referenced projects." />
+              </Target>
+            </Project>
+            """);
+
+        var generatedProjectDirectory = workspace.CreateDirectory("generated-project");
+        var restoreDirectory = workspace.CreateDirectory("integration-restore");
+        var generatedProjectPath = Path.Combine(generatedProjectDirectory.FullName, "IntegrationRestore.csproj");
+        var projectContent = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Direct.Integration", "1.0.0")],
+            [IntegrationReference.FromProject("ProjectIntegration", projectIntegrationPath)],
+            restoreDirectory.FullName);
+        await File.WriteAllTextAsync(generatedProjectPath, projectContent);
+        await File.WriteAllTextAsync(
+            Path.Combine(generatedProjectDirectory.FullName, "Directory.Build.props"),
+            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
+                restoreDirectory.FullName,
+                Path.Combine(restoreDirectory.FullName, "obj"),
+                workspace.WorkspaceRoot.FullName,
+                Path.Combine(workspace.WorkspaceRoot.FullName, "packages")).ToString());
+        await File.WriteAllTextAsync(
+            Path.Combine(generatedProjectDirectory.FullName, "Directory.Packages.props"),
+            """
+            <Project>
+              <PropertyGroup>
+                <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+              </PropertyGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"),
+            $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="test" value="{{feedDirectory.FullName}}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = generatedProjectDirectory.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.Environment.Remove("MSBuildSDKsPath");
+        startInfo.ArgumentList.Add("build");
+        startInfo.ArgumentList.Add(generatedProjectPath);
+        startInfo.ArgumentList.Add("--nologo");
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start dotnet build.");
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        var output = $"{await stdoutTask}{Environment.NewLine}{await stderrTask}";
+
+        if (shouldSucceed)
+        {
+            Assert.True(process.ExitCode == 0, output);
+            using var assets = JsonDocument.Parse(await File.ReadAllTextAsync(
+                Path.Combine(restoreDirectory.FullName, "obj", IntegrationClosureBuilder.ProjectAssetsFileName)));
+            Assert.True(assets.RootElement.GetProperty("libraries").TryGetProperty("Shared.Dependency/2.0.0", out _));
+            Assert.False(assets.RootElement.GetProperty("libraries").TryGetProperty("Shared.Dependency/1.0.0", out _));
+
+            var closureSources = await File.ReadAllLinesAsync(
+                Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureSourcesFileName));
+            var closureMetadata = await File.ReadAllLinesAsync(
+                Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureMetadataFileName));
+            var nativeEntry = Assert.Single(
+                closureSources.Zip(closureMetadata),
+                static entry => entry.Second.EndsWith("|native", StringComparison.Ordinal));
+            Assert.EndsWith(
+                Path.Combine("runtimes", RuntimeInformation.RuntimeIdentifier, "native", "hostnative.bin"),
+                nativeEntry.First,
+                StringComparison.Ordinal);
+            Assert.Equal(
+                $"Direct.Integration|1.0.0|runtimes/{RuntimeInformation.RuntimeIdentifier}/native/hostnative.bin|native",
+                nativeEntry.Second);
+        }
+        else
+        {
+            Assert.False(process.ExitCode == 0, output);
+            Assert.Contains("NU1107", output, StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public void GenerateIntegrationProjectFile_WritesClosureManifestFiles()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/work");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "13.5.0")],
+            [],
+            "/tmp/work");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
+        Assert.Equal(RuntimeInformation.RuntimeIdentifier, doc.Descendants(ns + "RuntimeIdentifier").Single().Value);
         Assert.Equal(Path.Combine("/tmp/work", IntegrationClosureBuilder.ClosureMetadataFileName), doc.Descendants(ns + "AspireClosureMetadataFile").FirstOrDefault()?.Value);
         Assert.Equal(Path.Combine("/tmp/work", IntegrationClosureBuilder.ClosureSourcesFileName), doc.Descendants(ns + "AspireClosureSourcesFile").FirstOrDefault()?.Value);
         Assert.Equal(Path.Combine("/tmp/work", IntegrationClosureBuilder.ClosureTargetsFileName), doc.Descendants(ns + "AspireClosureTargetsFile").FirstOrDefault()?.Value);
@@ -299,7 +455,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_WritesClosureManifestTarget()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/work");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "13.5.0")],
+            [],
+            "/tmp/work");
         var doc = XDocument.Parse(xml);
 
         var target = doc.Descendants("Target")
@@ -313,7 +472,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_HasCopyLocalLockFileAssemblies()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/libs");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "13.5.0")],
+            [],
+            "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -324,7 +486,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_DisablesAnalyzersAndDocGen()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/libs");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "13.5.0")],
+            [],
+            "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -339,7 +504,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_TargetsNet10()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/libs");
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "13.5.0")],
+            [],
+            "/tmp/libs");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -352,8 +520,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var sources = new[] { "/local/packages", "https://my-feed/v3/index.json" };
 
         var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "13.5.0")],
             [],
-            "13.5.0",
             "/tmp/libs",
             sources);
         var doc = XDocument.Parse(xml);
@@ -368,7 +536,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GenerateIntegrationProjectFile_WithEmptyAdditionalSources_OverridesEnvironmentDefault()
     {
-        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], "13.5.0", "/tmp/libs", Enumerable.Empty<string>());
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [("Aspire.Hosting", "13.5.0")],
+            [],
+            "/tmp/libs",
+            Enumerable.Empty<string>());
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
@@ -2669,9 +2841,18 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             // Aspire package versions remain in their original (non-pinned) form when no override
             // is in play; the exact-version pinning only fires when a single source is selected.
-            var packageElement = Assert.Single(generatedProject.Descendants("PackageReference"));
-            Assert.Equal("Aspire.Hosting", packageElement.Attribute("Include")?.Value);
-            Assert.Equal("13.4.0-pr.17141.gf142085f", packageElement.Attribute("Version")?.Value);
+            Assert.Collection(
+                generatedProject.Descendants("PackageReference"),
+                packageElement =>
+                {
+                    Assert.Equal("Aspire.Hosting", packageElement.Attribute("Include")?.Value);
+                    Assert.Equal("13.4.0-pr.17141.gf142085f", packageElement.Attribute("Version")?.Value);
+                },
+                packageElement =>
+                {
+                    Assert.Equal("Aspire.Hosting.Redis", packageElement.Attribute("Include")?.Value);
+                    Assert.Equal("13.4.0-pr.17141.gf142085f", packageElement.Attribute("Version")?.Value);
+                });
         }
         finally
         {
@@ -3313,9 +3494,23 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 buildOptions?.EnvironmentVariables?[PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName]);
             Assert.False(buildOptions?.EnvironmentVariables?.ContainsKey("RestoreAdditionalProjectSources"));
 
-            var packageElement = Assert.Single(generatedProject.Descendants("PackageReference"));
-            Assert.Equal("Aspire.Hosting", packageElement.Attribute("Include")?.Value);
-            Assert.Equal("[13.4.0-pr.17166.ga49d604d]", packageElement.Attribute("Version")?.Value);
+            Assert.Collection(
+                generatedProject.Descendants("PackageReference"),
+                packageElement =>
+                {
+                    Assert.Equal("Aspire.Hosting", packageElement.Attribute("Include")?.Value);
+                    Assert.Equal("[13.4.0-pr.17166.ga49d604d]", packageElement.Attribute("Version")?.Value);
+                },
+                packageElement =>
+                {
+                    Assert.Equal("Aspire.Hosting.Redis", packageElement.Attribute("Include")?.Value);
+                    Assert.Equal("[13.4.0-pr.17166.ga49d604d]", packageElement.Attribute("Version")?.Value);
+                },
+                packageElement =>
+                {
+                    Assert.Equal("CommunityToolkit.Aspire.Hosting.Redis", packageElement.Attribute("Include")?.Value);
+                    Assert.Equal("1.0.0", packageElement.Attribute("Version")?.Value);
+                });
         }
         finally
         {
@@ -3520,7 +3715,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         try
         {
-            var result = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
+            var result = await server.PrepareAsync(
+                "13.2.0",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting", "13.2.0"),
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.2.0"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ]);
             Assert.True(result.Success);
 
             var layoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
@@ -3529,18 +3730,32 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 .OrderBy(static path => path, StringComparer.Ordinal)
                 .ToList();
 
-            Assert.Equal(["Aspire.Hosting.Redis.dll", "MyIntegration.dll"], copiedLibs);
+            Assert.Equal(["MyIntegration.dll"], copiedLibs);
 
             var probeManifestPath = Assert.IsType<string>(server.IntegrationProbeManifestPath);
-            Assert.Contains(
-                Path.Combine(".aspire", "integrations", "package-restore"),
-                probeManifestPath,
-                StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(
+                Path.Combine(workingDirectory, IntegrationPackageProbeManifest.FileName),
+                probeManifestPath);
+            using var probeManifest = JsonDocument.Parse(await File.ReadAllTextAsync(probeManifestPath));
+            var redisAssembly = Assert.Single(
+                probeManifest.RootElement.GetProperty("managedAssemblies").EnumerateArray(),
+                assembly => assembly.GetProperty("name").GetString() == "Aspire.Hosting.Redis");
+            Assert.Equal("Aspire.Hosting.Redis", redisAssembly.GetProperty("packageId").GetString());
+            Assert.Equal("13.2.0", redisAssembly.GetProperty("packageVersion").GetString());
 
             var generatedProject = XDocument.Load(Path.Combine(workingDirectory, "integration-restore", PrebuiltAppHostServer.IntegrationProjectFileName));
-            var packageReference = Assert.Single(generatedProject.Descendants("PackageReference"));
-            Assert.Equal("Aspire.Hosting", packageReference.Attribute("Include")?.Value);
-            Assert.Equal("13.2.0", packageReference.Attribute("Version")?.Value);
+            Assert.Collection(
+                generatedProject.Descendants("PackageReference"),
+                packageReference =>
+                {
+                    Assert.Equal("Aspire.Hosting", packageReference.Attribute("Include")?.Value);
+                    Assert.Equal("13.2.0", packageReference.Attribute("Version")?.Value);
+                },
+                packageReference =>
+                {
+                    Assert.Equal("Aspire.Hosting.Redis", packageReference.Attribute("Include")?.Value);
+                    Assert.Equal("13.2.0", packageReference.Attribute("Version")?.Value);
+                });
             Assert.Single(generatedProject.Descendants("ProjectReference"));
         }
         finally
@@ -3575,7 +3790,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             }
         };
 
-        XDocument? packageRestoreOverlay = null;
         XDocument? projectRestoreOverlay = null;
         var layout = CreateBundleLayout(workspace);
         var nugetExecutionFactory = new TestProcessExecutionFactory
@@ -3584,10 +3798,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             {
                 WriteNuGetConfigOverlayIfRequested(args);
                 WritePackageProbeManifestIfRequested(args);
-                if (args is ["nuget", "restore", ..])
-                {
-                    packageRestoreOverlay = XDocument.Load(GetArgumentValues(args, "--nuget-config")[0]);
-                }
             }
         };
         nugetExecutionFactory.AsyncAttemptCallback = (_, _, _) =>
@@ -3648,7 +3858,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(result.Success);
             Assert.Equal(1, channelLookupCount);
             Assert.Equal(1, settingsLookupCount);
-            Assert.Equal(["*", "Aspire*"], GetPackagePatternsForKey(Assert.IsType<XDocument>(packageRestoreOverlay), "first-alias"));
             Assert.Equal(["*", "Aspire*"], GetPackagePatternsForKey(Assert.IsType<XDocument>(projectRestoreOverlay), "first-alias"));
         }
         finally
@@ -3658,7 +3867,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferences_CopiesRestoreAssetsIntoProjectLayout()
+    public async Task PrepareAsync_WithProjectReferences_SeparatesPackageAssetsFromProjectLayout()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -3691,13 +3900,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 .ToList();
 
             Assert.Equal(
-                [
-                    "Aspire.Hosting.Redis.dll",
-                    "MyIntegration.dll",
-                    "fr/Aspire.Hosting.Redis.resources.dll",
-                    "runtimes/test-rid/native/testnative.so"
-                ],
+                ["MyIntegration.dll"],
                 copiedLibs);
+
+            var probeManifestPath = Assert.IsType<string>(server.IntegrationProbeManifestPath);
+            using var probeManifest = JsonDocument.Parse(await File.ReadAllTextAsync(probeManifestPath));
+            Assert.Equal(2, probeManifest.RootElement.GetProperty("managedAssemblies").GetArrayLength());
+            Assert.Single(probeManifest.RootElement.GetProperty("nativeLibraries").EnumerateArray());
         }
         finally
         {
@@ -3867,7 +4076,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ClosureManifest_ProjectLayoutManifestIncludesPackageBackedEntries()
+    public void ClosureManifest_ProjectLayoutIdentityExcludesPackageBackedEntries()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -3913,8 +4122,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         CancellationToken.None);
 
         Assert.NotEqual(firstManifest.ManifestFingerprint, secondManifest.ManifestFingerprint);
-        Assert.NotEqual(firstManifest.ProjectLayoutFingerprint, secondManifest.ProjectLayoutFingerprint);
-        Assert.NotEqual(firstManifest.GetProjectLayoutManifestLines(), secondManifest.GetProjectLayoutManifestLines());
+        Assert.Equal(firstManifest.ProjectLayoutFingerprint, secondManifest.ProjectLayoutFingerprint);
+        Assert.Equal(firstManifest.GetProjectLayoutManifestLines(), secondManifest.GetProjectLayoutManifestLines());
     }
 
     [Fact]
@@ -4112,6 +4321,52 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         {
             ["Aspire.Hosting.Redis.dll"] = ("Aspire.Hosting.Redis", "13.2.0", "lib/net10.0/Aspire.Hosting.Redis.dll", "runtime")
         };
+    }
+
+    private static void CreateDependencyPackage(
+        DirectoryInfo feedDirectory,
+        string packageId,
+        string packageVersion,
+        string? dependencyId = null,
+        string? dependencyVersion = null,
+        IReadOnlyDictionary<string, string>? packageFiles = null)
+    {
+        var packagePath = Path.Combine(feedDirectory.FullName, $"{packageId}.{packageVersion}.nupkg");
+        using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
+        var nuspecEntry = archive.CreateEntry($"{packageId}.nuspec");
+        using (var writer = new StreamWriter(nuspecEntry.Open()))
+        {
+            var dependencies = dependencyId is null
+                ? string.Empty
+                : $"""
+                      <dependencies>
+                        <group targetFramework="net10.0">
+                          <dependency id="{dependencyId}" version="{dependencyVersion}" />
+                        </group>
+                      </dependencies>
+                  """;
+            writer.Write($$"""
+                <?xml version="1.0" encoding="utf-8"?>
+                <package>
+                  <metadata>
+                    <id>{{packageId}}</id>
+                    <version>{{packageVersion}}</version>
+                    <authors>Aspire tests</authors>
+                    <description>Dependency graph test package.</description>
+                {{dependencies}}
+                  </metadata>
+                </package>
+                """);
+        }
+
+        if (packageFiles is not null)
+        {
+            foreach (var (path, content) in packageFiles)
+            {
+                using var writer = new StreamWriter(archive.CreateEntry(path).Open());
+                writer.Write(content);
+            }
+        }
     }
 
     private static string GetIntermediateOutputPath(DirectoryInfo restoreDirectory)

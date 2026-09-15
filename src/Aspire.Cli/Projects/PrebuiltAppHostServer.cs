@@ -178,7 +178,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                 effectivePackageSourceOverride = restorePlan.EffectivePackageSourceOverride;
             }
 
-            if (packageRefs.Count > 0)
+            if (packageRefs.Count > 0 && projectRefs.Count == 0)
             {
                 _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
                     packageRefs,
@@ -197,6 +197,15 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                     sdkVersion,
                     restorePlan!,
                     cancellationToken).ConfigureAwait(false);
+
+                if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
+                {
+                    _integrationProbeManifestPath = Path.Combine(_workingDirectory, IntegrationPackageProbeManifest.FileName);
+                    await IntegrationPackageProbeManifest.WriteAsync(
+                        _integrationProbeManifestPath,
+                        closureManifest.CreatePackageProbeManifest(),
+                        cancellationToken).ConfigureAwait(false);
+                }
 
                 _selectedProjectLayout = await _projectLayoutStore.GetOrCreateAsync(closureManifest, cancellationToken).ConfigureAwait(false);
                 if (_selectedProjectLayout is not null)
@@ -422,9 +431,21 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             existingValue: null,
             restoreConfiguration.PackageSourceHints);
         var intermediateOutputPath = Path.Combine(restoreDir, "obj");
+        var resolvedPackageRefs = packageRefs
+            .Select(packageRef => (
+                packageRef.Name,
+                Version: restorePlan.GetRestoreVersion(packageRef.Name, packageRef.Version!)))
+            .ToList();
+        if (!resolvedPackageRefs.Any(static packageRef =>
+            packageRef.Name.Equals("Aspire.Hosting", StringComparison.OrdinalIgnoreCase)))
+        {
+            resolvedPackageRefs.Insert(
+                0,
+                ("Aspire.Hosting", restorePlan.GetRestoreVersion("Aspire.Hosting", sdkVersion)));
+        }
         var projectContent = GenerateIntegrationProjectFile(
+            resolvedPackageRefs,
             projectRefs,
-            restorePlan.GetRestoreVersion("Aspire.Hosting", sdkVersion),
             restoreDir,
             restoreConfiguration.RootAdditionalSources);
         var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
@@ -501,26 +522,33 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     }
 
     /// <summary>
-    /// Generates a synthetic .csproj file that pins Aspire.Hosting and references the integration projects.
-    /// Building this project with CopyLocalLockFileAssemblies produces their full copied-local closure.
+    /// Generates a synthetic .csproj file containing every integration package and project reference.
+    /// Building this project with CopyLocalLockFileAssemblies produces one NuGet-resolved closure.
     /// </summary>
     internal static string GenerateIntegrationProjectFile(
+        IReadOnlyList<(string Name, string Version)> packageRefs,
         List<IntegrationReference> projectRefs,
-        string hostingPackageVersion,
         string restoreDir,
         IEnumerable<string>? additionalSources = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(hostingPackageVersion);
+        ArgumentNullException.ThrowIfNull(packageRefs);
 
         var projectFile = IntegrationClosureBuilder.CreateClosureProjectFile(
             restoreDir,
             additionalSources);
+        // Without a root RID, ReferenceCopyLocalPaths includes native assets for every RID in a
+        // package. A project-local property selects the host assets without flowing to project references.
+        projectFile.AddProperty("RuntimeIdentifier", RuntimeInformation.RuntimeIdentifier);
 
-        // Keep the pre-existing compatibility check between the AppHost SDK selected by the CLI and
-        // project-referenced integrations. All other integration packages use the package-only path.
-        projectFile.PackageReferences.Add(new CSharpPackageReference(
-            "Aspire.Hosting",
-            hostingPackageVersion));
+        foreach (var packageRef in packageRefs)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(packageRef.Name);
+            ArgumentException.ThrowIfNullOrWhiteSpace(packageRef.Version);
+
+            projectFile.PackageReferences.Add(new CSharpPackageReference(
+                packageRef.Name,
+                packageRef.Version));
+        }
 
         projectFile.ProjectReferences.AddRange(projectRefs.Select(p => new CSharpProjectReference(
             p.ProjectPath!,

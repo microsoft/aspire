@@ -2,18 +2,18 @@
 
 ## Purpose
 
-A polyglot AppHost can reference Aspire hosting integrations as NuGet packages or as .NET projects. These inputs require different restore behavior.
+A polyglot AppHost can reference Aspire hosting integrations as NuGet packages or as .NET projects. Package-only AppHosts do not require the .NET SDK, while project integrations require normal MSBuild and NuGet project-graph evaluation.
 
 Direct package references need a NuGet restore that works without the .NET SDK and produces a manifest of package assets for the generated AppHost server. Project references need the .NET SDK to evaluate MSBuild imports, conditions, central package management, transitive project references, and copied-local output.
 
-Treating both inputs as one restore closure couples unrelated concerns: adding a project reference can change the restore owner, source policy, cache behavior, and assembly layout used for a direct package. It can also duplicate resolution of direct integration packages across the package and SDK paths. The restore model therefore assigns each input to one owner:
+The restore path is selected for the complete integration set:
 
-| Integration input | Restore owner | Output |
+| Integration set | Restore owner | Output |
 |---|---|---|
-| Direct package reference | Bundled `Aspire.Managed` NuGet implementation | Package probe manifest containing the resolved managed and native package assets |
-| Project reference | Generated `IntegrationRestore.csproj` built by the .NET SDK | Immutable copied-local library layout containing project output and its managed, resource, and native dependencies |
+| Packages only | Bundled `Aspire.Managed` NuGet implementation | Package probe manifest containing the resolved managed and native package assets |
+| Any project references | Generated `IntegrationRestore.csproj` built by the .NET SDK | Package probe manifest for package-backed assets plus an immutable library layout for project-built output |
 
-A mixed AppHost runs both paths. The generated AppHost server consumes both outputs, but only the server requires special assembly probing. The SDK path represents referenced projects and their dependencies through the standard copied-local layout.
+A mixed AppHost uses only the SDK path. Every direct integration package and project reference participates in one NuGet graph. Compatible transitive dependency ranges select one version, and irreconcilable ranges fail during restore with NuGet's normal conflict diagnostics.
 
 In this document:
 
@@ -24,7 +24,7 @@ In this document:
 - **Authoritative mapping** means competing ambient mappings are removed for a package pattern so the selected source controls that pattern.
 - **Source-only policy** means a source is added without introducing a package-source-mapping overlay.
 
-`Aspire.Hosting` intentionally participates in both restores. The package-only result supplies its runtime probe entry, while the generated root carries the selected hosting version so NuGet reports `NU1605` when a project-referenced integration requires a newer hosting version. Every other direct integration package is excluded from the generated project. Both paths apply the same Aspire-selected package source policy while preserving NuGet's native configuration behavior for credentials, trusted signers, fallback folders, audit settings, relative paths, and other user-owned settings.
+Both paths apply the same Aspire-selected package source policy while preserving NuGet's native configuration behavior for credentials, trusted signers, fallback folders, audit settings, relative paths, and other user-owned settings. When the SDK path is required, the generated root includes the selected `Aspire.Hosting` version together with every other direct integration package, so ordinary NuGet graph resolution also enforces hosting-version compatibility.
 
 ## Configuration boundary
 
@@ -41,7 +41,7 @@ This boundary intentionally:
 - Keeps generated projects, intermediate output, and closure artifacts in the centralized integration cache.
 - Keeps referenced projects responsible for their own directory-scoped configuration.
 
-The generated root resolves the selected `Aspire.Hosting` compatibility reference and the copied-local closure for the referenced projects. It does not combine the NuGet configuration of every project in the referenced MSBuild graph.
+The generated root resolves every direct integration package together with the copied-local closure for the referenced projects. It does not combine the NuGet configuration of every project in the referenced MSBuild graph.
 
 NuGet performs one graph restore containing a restore specification for each project. Those project nodes can be processed in parallel, but each writes its own assets file and evaluates its own NuGet configuration. The generated root's restore specification uses the AppHost hierarchy and optional Aspire policy overlay, while a referenced project's restore specification uses the configuration hierarchy discovered from that project's directory. A referenced project's configuration does not modify the generated root's source policy.
 
@@ -49,7 +49,7 @@ The generated root's assets graph still includes packages contributed transitive
 
 ## Effective source policy
 
-`IntegrationRestorePlanResolver` resolves channel, source, and ambient NuGet settings once before the package-only and SDK paths diverge. It returns an immutable `IIntegrationRestorePlan` that owns the resolved data and the standard package-path and project-path configuration projections. The two paths therefore consume the same channel and NuGet settings snapshot without sharing their restore execution or output models. C# AppHosts do not consume this plan; they use their own `dotnet package add` flow and local or PR hive configuration behavior, including package-source mappings emitted when ambient mapping is enabled.
+`IntegrationRestorePlanResolver` resolves channel, source, and ambient NuGet settings before selecting the package-only or SDK path. It returns an immutable `IIntegrationRestorePlan` that owns the resolved data and the standard package-path and project-path configuration projections. The paths therefore apply the same source policy even though they use different restore implementations and output models. C# AppHosts do not consume this plan; they use their own `dotnet package add` flow and local or PR hive configuration behavior, including package-source mappings emitted when ambient mapping is enabled.
 
 ### Source precedence
 
@@ -169,7 +169,7 @@ The overlay never copies arbitrary user settings. Authentication, trusted signer
 
 ## Package-only restore
 
-The package-only path:
+The package-only path is used only when the integration set contains no project references. It:
 
 1. Uses the native settings snapshot resolved from the AppHost directory by the integration restore plan.
 2. Creates a temporary policy overlay at highest precedence when the effective policy requires package-source mappings.
@@ -189,7 +189,7 @@ Successful package-only restores are cached by package identity, target framewor
 
 When package-source mappings require a policy overlay, the SDK path writes `.aspire/NuGet.Config` and sets the generated root's `RestoreRootConfigDirectory` to `.aspire`. When no mapping overlay is required, including ambient-only and source-only policies, that file remains absent and `RestoreRootConfigDirectory` points to the AppHost directory instead.
 
-The generated root contains project references plus the selected `Aspire.Hosting` version; other direct integration package references are never added to it. Keeping `Aspire.Hosting` in the graph establishes a compatibility boundary: NuGet reports `NU1605` when a referenced integration requires a newer hosting version than the AppHost selected.
+The generated root contains every direct integration package and project reference. This produces one NuGet graph for mixed AppHosts: compatible transitive package ranges select one effective version, while irreconcilable ranges fail during restore with the normal NuGet diagnostics.
 
 At the start of each SDK restore, the overlay is deleted and regenerated or left absent so it reflects only the current invocation's policy rather than acting as durable project configuration. When present, normal SDK discovery loads the overlay together with the AppHost hierarchy. Referenced projects continue to discover configuration from their own directories.
 
@@ -199,7 +199,7 @@ The generated root receives non-empty `RestoreAdditionalProjectSources` only for
 
 The generated project's early-imported props explicitly clear `RestoreConfigFile`. This prevents an inherited environment or MSBuild property from bypassing the AppHost-anchored hierarchy while preserving normal directory-based discovery.
 
-The SDK project is always built with implicit restore. Its complete copied-local output, including project assemblies and package-backed managed, resource, and native assets selected by MSBuild, is copied into an immutable library layout. The generated AppHost server first resolves managed assembly candidates from the direct-package manifest, then from the project copied-local layout, and then from its application base directory. After finding a candidate, it defers to an assembly already available from the default load context when that assembly has an equal or higher version; `Aspire.TypeSystem` always uses the default load context. This ordering lets a direct integration package follow NuGet's global-packages resolution when the project graph also uses the same package identity and version without bypassing the server's normal version-unification rules.
+The SDK project is always built with implicit restore. The generated root targets the current host runtime identifier so NuGet selects only the applicable runtime-specific package assets; this project-local setting is not imposed on referenced projects. Package-backed managed, resource, and native assets selected by the unified graph are represented in the package probe manifest and remain in NuGet's package folders. Project-built output is copied into an immutable library layout. The generated AppHost server first resolves managed assembly candidates from the package manifest, then from the project copied-local layout, and then from its application base directory. Because both outputs originate from one restore graph, an assembly identity shared by package and project integrations has already been reconciled by NuGet. After finding a candidate, the server defers to an assembly already available from the default load context when that assembly has an equal or higher version; `Aspire.TypeSystem` always uses the default load context.
 
 ## Referenced-project restore hints
 
