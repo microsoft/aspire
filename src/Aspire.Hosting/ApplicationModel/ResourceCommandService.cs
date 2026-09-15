@@ -604,6 +604,25 @@ public class ResourceCommandService
                 continue;
             }
 
+            if (argument.InputType == InputType.File)
+            {
+                var files = argument.GetFiles();
+                if (argument.Required && files.Count == 0)
+                {
+                    context.AddValidationError(argument, "Value is required.");
+                }
+                else
+                {
+                    var maxFileCount = InteractionHelpers.GetMaxFileCount(argument.AllowMultipleFiles);
+                    if (files.Count > maxFileCount)
+                    {
+                        context.AddValidationError(argument, $"File count exceeds the maximum of {maxFileCount}.");
+                    }
+                }
+
+                continue;
+            }
+
             if (string.IsNullOrEmpty(value))
             {
                 if (argument.Required)
@@ -776,7 +795,20 @@ public class ResourceCommandService
             return arguments;
         }
 
-        return CreateArguments(annotation.Arguments, CreateArgumentValues(arguments));
+        var normalizedArguments = CreateArguments(annotation.Arguments, CreateArgumentValues(arguments));
+        foreach (var argument in normalizedArguments)
+        {
+            if (argument.InputType == InputType.File &&
+                arguments.TryGetByName(argument.Name, out var suppliedArgument) &&
+                suppliedArgument.GetFiles().Count > 0)
+            {
+                // File content is carried separately from scalar argument values. Keep the transferred
+                // collection attached while rebuilding inputs from the command's authoritative metadata.
+                argument.SetFiles(suppliedArgument.GetFiles());
+            }
+        }
+
+        return normalizedArguments;
     }
 
     private static IReadOnlyDictionary<string, string?>? CreateArgumentValues(InteractionInputCollection arguments)
@@ -797,7 +829,7 @@ public class ResourceCommandService
 
     private static InteractionInput CloneInput(InteractionInput input, string? value)
     {
-        return new InteractionInput
+        var clone = new InteractionInput
         {
             Name = input.Name,
             Label = input.Label,
@@ -811,8 +843,13 @@ public class ResourceCommandService
             Placeholder = input.Placeholder,
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
-            MaxLength = input.MaxLength
+            MaxLength = input.MaxLength,
+            AllowMultipleFiles = input.AllowMultipleFiles,
+            FileFilter = input.FileFilter,
+            MaxFileSize = input.MaxFileSize
         };
+
+        return clone;
     }
 
     private static InteractionInputCollection CloneArguments(InteractionInputCollection arguments)
@@ -839,4 +876,3 @@ internal sealed class ResourceCommandExecutionOptions
 
     public bool NonInteractive { get; init; }
 }
-

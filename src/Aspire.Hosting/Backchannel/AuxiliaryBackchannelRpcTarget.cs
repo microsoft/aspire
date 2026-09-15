@@ -22,6 +22,8 @@ using ModelContextProtocol.Protocol;
 
 namespace Aspire.Hosting.Backchannel;
 
+#pragma warning disable ASPIREFILESYSTEM001 // File arguments use the AppHost-managed temporary file service.
+
 /// <summary>
 /// RPC target for the auxiliary backchannel.
 /// </summary>
@@ -56,7 +58,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 AuxiliaryBackchannelCapabilities.V2,
                 AuxiliaryBackchannelCapabilities.V3,
                 AuxiliaryBackchannelCapabilities.Terminals_V1,
-                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1,
+                AuxiliaryBackchannelCapabilities.ResourceCommandFiles_V1
             ]
         });
     }
@@ -290,6 +293,19 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             };
         }
 
+        var fileErrorMessage = await AttachCommandFilesAsync(arguments, request.Files, cancellationToken).ConfigureAwait(false);
+        if (fileErrorMessage is not null)
+        {
+            return new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = fileErrorMessage,
+#pragma warning disable CS0618 // Type or member is obsolete
+                ErrorMessage = fileErrorMessage,
+#pragma warning restore CS0618 // Type or member is obsolete
+            };
+        }
+
         ExecuteCommandResult result;
         InteractionInputCollection? loadedArguments = null;
         if (request.ValidateOnly)
@@ -308,6 +324,11 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                     NonInteractive = request.NonInteractive
                 },
                 cancellationToken).ConfigureAwait(false);
+        }
+
+        if (request.ValidateOnly || result.InvalidArguments is not null)
+        {
+            DisposeCommandFiles(arguments);
         }
 
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -359,6 +380,134 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     private static async Task<(ExecuteCommandResult Result, InteractionInputCollection? Arguments)> ValidateResourceCommandAsync(ResourceCommandService resourceCommandService, string resourceName, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
     {
         return await resourceCommandService.ValidateCommandArgumentsAsync(resourceName, commandName, arguments, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string?> AttachCommandFilesAsync(
+        InteractionInputCollection arguments,
+        ResourceCommandFileArgument[]? files,
+        CancellationToken cancellationToken)
+    {
+        if (files is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        var filesByArgument = files.GroupBy(file => file.ArgumentName, StringComparers.InteractionInputName);
+        var maxUploadSize = FileUploadHelpers.GetMaxFileUploadSize(configuration);
+        long totalFileSize = 0;
+
+        foreach (var group in filesByArgument)
+        {
+            if (!arguments.TryGetByName(group.Key, out var input) || input.InputType != InputType.File)
+            {
+                return $"Argument '{group.Key}' is not a file input.";
+            }
+
+            var suppliedFiles = group.ToArray();
+            var maxFileCount = InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles);
+            if (suppliedFiles.Length > maxFileCount)
+            {
+                return $"File argument '{group.Key}' accepts at most {maxFileCount} file(s).";
+            }
+
+            foreach (var file in suppliedFiles)
+            {
+                var maxFileSize = input.MaxFileSize is { } configuredMax
+                    ? Math.Min(configuredMax, maxUploadSize)
+                    : maxUploadSize;
+                if (file.Data.LongLength > maxFileSize)
+                {
+                    return $"File '{file.FileName}' exceeds the maximum size of {maxFileSize} bytes.";
+                }
+                if (file.Data.LongLength > maxUploadSize - totalFileSize)
+                {
+                    return $"Combined file size exceeds the maximum size of {maxUploadSize} bytes.";
+                }
+
+                if (!MatchesFileFilter(file.FileName, input.FileFilter))
+                {
+                    return $"File '{file.FileName}' does not match the accepted file types ({input.FileFilter}).";
+                }
+
+                totalFileSize += file.Data.LongLength;
+            }
+        }
+
+        var fileSystemService = serviceProvider.GetRequiredService<IFileSystemService>();
+        var createdFiles = new List<TempFile>();
+
+        try
+        {
+            foreach (var group in filesByArgument)
+            {
+                arguments.TryGetByName(group.Key, out var input);
+                var interactionFiles = new List<InteractionFile>();
+                var argumentTempFiles = new List<TempFile>();
+
+                foreach (var file in group)
+                {
+                    var tempFile = fileSystemService.TempDirectory.CreateTempFile();
+                    createdFiles.Add(tempFile);
+                    argumentTempFiles.Add(tempFile);
+                    await File.WriteAllBytesAsync(tempFile.Path, file.Data, cancellationToken).ConfigureAwait(false);
+                    file.Data = [];
+
+                    var lastSeparator = file.FileName.AsSpan().LastIndexOfAny('/', '\\');
+                    var safeName = lastSeparator >= 0 ? file.FileName[(lastSeparator + 1)..] : file.FileName;
+                    interactionFiles.Add(new InteractionFile(Guid.NewGuid().ToString("N"), safeName, tempFile.Path));
+                }
+
+                input!.SetFiles(new InteractionFileCollection(
+                    interactionFiles,
+                    () =>
+                    {
+                        foreach (var tempFile in argumentTempFiles)
+                        {
+                            tempFile.Dispose();
+                        }
+                    }));
+            }
+        }
+        catch
+        {
+            foreach (var file in files)
+            {
+                file.Data = [];
+            }
+            foreach (var tempFile in createdFiles)
+            {
+                tempFile.Dispose();
+            }
+
+            throw;
+        }
+
+        return null;
+    }
+
+    private static void DisposeCommandFiles(InteractionInputCollection arguments)
+    {
+        foreach (var argument in arguments)
+        {
+            if (argument.InputType == InputType.File)
+            {
+                argument.GetFiles().Dispose();
+            }
+        }
+    }
+
+    private static bool MatchesFileFilter(string fileName, string? fileFilter)
+    {
+        if (string.IsNullOrEmpty(fileFilter))
+        {
+            return true;
+        }
+
+        var extensionFilters = fileFilter
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static filter => filter.StartsWith('.'));
+        return !extensionFilters.Any() ||
+            extensionFilters.Any(filter => fileName.EndsWith(filter, StringComparison.OrdinalIgnoreCase));
     }
 
     private static ResourceCommandArgumentValidationError[] CreateValidationErrors(InteractionInputCollection? invalidArguments)
@@ -1379,6 +1528,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
             MaxLength = input.MaxLength,
+            AllowMultipleFiles = input.AllowMultipleFiles,
+            FileFilter = input.FileFilter,
+            MaxFileSize = input.MaxFileSize,
             DynamicLoading = CreateDynamicLoadingMetadata(input.DynamicLoading)
         };
     }

@@ -41,6 +41,7 @@ public class ResourceCommandHelperTests
             "myResource",
             "generate-token",
             arguments: null,
+            files: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -70,6 +71,7 @@ public class ResourceCommandHelperTests
             "myResource",
             "start",
             arguments: null,
+            files: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -106,6 +108,7 @@ public class ResourceCommandHelperTests
             "myResource",
             "validate-config",
             arguments: null,
+            files: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.NotEqual(0, exitCode);
@@ -136,7 +139,8 @@ public class ResourceCommandHelperTests
             "myResource",
             "click",
             arguments,
-            CancellationToken.None).DefaultTimeout();
+            files: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         Assert.NotNull(connection.ExecuteResourceCommandArguments);
@@ -173,6 +177,7 @@ public class ResourceCommandHelperTests
             "myResource",
             "validate",
             arguments: null,
+            files: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
@@ -204,6 +209,7 @@ public class ResourceCommandHelperTests
             "test-resource",
             "ss",
             arguments: null,
+            files: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);

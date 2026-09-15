@@ -13,6 +13,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -26,6 +27,7 @@ internal sealed class ResourceCommand : BaseCommand
     private readonly IProjectLocator _projectLocator;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<ResourceCommand> _logger;
+    private readonly IEnvironment _environment;
 
     private static readonly Argument<string> s_resourceArgument = new("resource")
     {
@@ -80,6 +82,7 @@ internal sealed class ResourceCommand : BaseCommand
         IProjectLocator projectLocator,
         AppHostConnectionResolver connectionResolver,
         ILogger<ResourceCommand> logger,
+        IEnvironment environment,
         CommonCommandServices services)
         : base("resource", ResourceCommandStrings.CommandDescription, services)
     {
@@ -87,6 +90,7 @@ internal sealed class ResourceCommand : BaseCommand
         _projectLocator = projectLocator;
         _connectionResolver = connectionResolver;
         _logger = logger;
+        _environment = environment;
 
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_commandArgument);
@@ -149,10 +153,17 @@ internal sealed class ResourceCommand : BaseCommand
         }
 
         var commandArguments = commandArgumentsResult.Arguments;
+        var fileArgumentsResult = await CreateFileArgumentsAsync(command, commandArguments, connection.SupportsResourceCommandFilesV1, cancellationToken).ConfigureAwait(false);
+        if (fileArgumentsResult.ErrorMessage is { } fileErrorMessage)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, fileErrorMessage);
+        }
+
+        var fileArguments = fileArgumentsResult.Files;
 
         if (loadArguments)
         {
-            return await LoadCommandArgumentsAsync(parseResult, connection, resourceName, commandName, commandArguments, cancellationToken).ConfigureAwait(false);
+            return await LoadCommandArgumentsAsync(parseResult, connection, resourceName, commandName, commandArguments, fileArguments, cancellationToken).ConfigureAwait(false);
         }
 
         // Use display metadata for well-known command names.
@@ -168,6 +179,7 @@ internal sealed class ResourceCommand : BaseCommand
                 knownCommand.BaseVerb,
                 knownCommand.PastTenseVerb,
                 commandArguments,
+                fileArguments,
                 cancellationToken));
         }
 
@@ -178,6 +190,7 @@ internal sealed class ResourceCommand : BaseCommand
             resourceName,
             commandName,
             commandArguments,
+            fileArguments,
             cancellationToken));
     }
 
@@ -187,6 +200,7 @@ internal sealed class ResourceCommand : BaseCommand
         string resourceName,
         string commandName,
         JsonNode? commandArguments,
+        ResourceCommandFileArgument[]? fileArguments,
         CancellationToken cancellationToken)
     {
         var response = await connection.ExecuteResourceCommandAsync(
@@ -195,6 +209,7 @@ internal sealed class ResourceCommand : BaseCommand
             new ExecuteResourceCommandOptions
             {
                 Arguments = commandArguments,
+                Files = fileArguments,
                 ValidateOnly = true,
                 NonInteractive = true,
                 ReturnArgumentInputs = true
@@ -345,6 +360,11 @@ internal sealed class ResourceCommand : BaseCommand
             {
                 arguments[argument.Name] = parseResult.GetValue(stringOption);
             }
+            else if (option is Option<string[]> filesOption)
+            {
+                var filePaths = parseResult.GetValue(filesOption) ?? [];
+                arguments[argument.Name] = new JsonArray(filePaths.Select(static path => JsonValue.Create(path)).ToArray());
+            }
         }
 
         foreach (var unmatchedToken in parseResult.UnmatchedTokens)
@@ -390,13 +410,18 @@ internal sealed class ResourceCommand : BaseCommand
         // Keep their values as strings so stale snapshot metadata cannot reject a value before
         // the AppHost has a chance to enable the input or refresh its choice list.
         var parseAsString = parseMode == CommandArgumentParseMode.LoadArguments || argument.DynamicLoading is not null;
-        Option option = (IsBooleanInput(argument), IsNumberInput(argument), parseAsString) switch
+        Option option = (IsFileInput(argument), argument.AllowMultipleFiles, IsBooleanInput(argument), IsNumberInput(argument), parseAsString) switch
         {
-            (true, _, false) => new Option<bool>($"--{optionName}")
+            (true, true, _, _, _) => new Option<string[]>($"--{optionName}")
+            {
+                Arity = ArgumentArity.OneOrMore,
+                AllowMultipleArgumentsPerToken = false
+            },
+            (_, _, true, _, false) => new Option<bool>($"--{optionName}")
             {
                 DefaultValueFactory = _ => bool.TryParse(argument.Value, out var value) && value
             },
-            (_, true, false) => new Option<double?>($"--{optionName}")
+            (_, _, _, true, false) => new Option<double?>($"--{optionName}")
             {
                 Arity = ArgumentArity.ExactlyOne,
                 AllowMultipleArgumentsPerToken = false,
@@ -484,6 +509,113 @@ internal sealed class ResourceCommand : BaseCommand
     private static bool IsNumberInput(ResourceSnapshotCommandArgument argument)
     {
         return string.Equals(argument.InputType, "Number", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsFileInput(ResourceSnapshotCommandArgument argument)
+    {
+        return string.Equals(argument.InputType, "File", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<(ResourceCommandFileArgument[]? Files, string? ErrorMessage)> CreateFileArgumentsAsync(
+        ResourceSnapshotCommand? command,
+        JsonNode? arguments,
+        bool supportsFileArguments,
+        CancellationToken cancellationToken)
+    {
+        if (command?.ArgumentInputs is not { Length: > 0 } argumentInputs ||
+            arguments is not JsonObject argumentValues)
+        {
+            return (null, null);
+        }
+
+        var fileInputs = argumentInputs.Where(IsFileInput).ToArray();
+        if (fileInputs.Length == 0)
+        {
+            return (null, null);
+        }
+
+        var maxUploadFileSize = long.TryParse(_environment.GetEnvironmentVariable(KnownConfigNames.MaxFileUploadSize), out var configuredMaxUploadFileSize)
+            ? configuredMaxUploadFileSize
+            : FileUploadHelpers.DefaultMaxFileUploadSize;
+        long totalFileSize = 0;
+        var files = new List<ResourceCommandFileArgument>();
+        foreach (var input in fileInputs)
+        {
+            if (!argumentValues.TryGetPropertyValue(input.Name, out var value) || value is null)
+            {
+                continue;
+            }
+
+            if (!supportsFileArguments)
+            {
+                return (null, "The running AppHost does not support file arguments for resource commands. Restart it with a compatible Aspire version.");
+            }
+
+            var paths = value switch
+            {
+                JsonArray values => values.Select(static item => item?.GetValue<string>() ?? string.Empty).ToArray(),
+                _ => [value.GetValue<string>()]
+            };
+
+            if (!input.AllowMultipleFiles && paths.Length > 1)
+            {
+                return (null, $"Option '--{ToKebabCase(input.Name)}' accepts only one file.");
+            }
+
+            foreach (var path in paths)
+            {
+                var fullPath = Path.GetFullPath(path);
+                if (!File.Exists(fullPath))
+                {
+                    return (null, $"File '{path}' does not exist.");
+                }
+
+                var fileName = Path.GetFileName(fullPath);
+                var fileInfo = new FileInfo(fullPath);
+                var maxFileSize = input.MaxFileSize is { } inputMaxFileSize
+                    ? Math.Min(inputMaxFileSize, maxUploadFileSize)
+                    : maxUploadFileSize;
+                if (fileInfo.Length > maxFileSize)
+                {
+                    return (null, $"File '{fileName}' exceeds the maximum size of {FormatHelpers.FormatFileSize(maxFileSize)}.");
+                }
+                if (fileInfo.Length > maxUploadFileSize - totalFileSize)
+                {
+                    return (null, $"Combined file size exceeds the maximum size of {FormatHelpers.FormatFileSize(maxUploadFileSize)}.");
+                }
+
+                if (!MatchesFileFilter(fileName, input.FileFilter))
+                {
+                    return (null, $"File '{fileName}' does not match the accepted file types ({input.FileFilter}).");
+                }
+
+                files.Add(new ResourceCommandFileArgument
+                {
+                    ArgumentName = input.Name,
+                    FileName = fileName,
+                    Data = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false)
+                });
+                totalFileSize += fileInfo.Length;
+            }
+
+            argumentValues.Remove(input.Name);
+        }
+
+        return (files.Count > 0 ? files.ToArray() : null, null);
+    }
+
+    private static bool MatchesFileFilter(string fileName, string? fileFilter)
+    {
+        if (string.IsNullOrEmpty(fileFilter))
+        {
+            return true;
+        }
+
+        var extensionFilters = fileFilter
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static filter => filter.StartsWith('.'));
+        return !extensionFilters.Any() ||
+            extensionFilters.Any(filter => fileName.EndsWith(filter, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsOptionLikeToken(string value)
