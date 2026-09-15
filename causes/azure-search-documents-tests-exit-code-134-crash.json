@@ -1,0 +1,19 @@
+{
+  "id": "azure-search-documents-tests-exit-code-134-crash",
+  "type": "infra-failure",
+  "title": "Azure.Search.Documents (ubuntu-latest) test run crashes with exit code 134 (SIGABRT), triggering hang dump check",
+  "job_name": "Tests / No-package tests (regular, Aspire.Azure.Search.Documents.Tests, Azure.Search.Documents, Azure.Sea... / Azure.Search.Documents (ubuntu-latest)",
+  "error_pattern": "Process completed with exit code 134. (Twice, on 'Check for hang dump files' and 'Generate test results summary' steps; job logs unavailable: 'Failed to fetch logs for job')",
+  "analysis": "Exit code 134 corresponds to SIGABRT, indicating the test host process crashed/aborted during the Azure.Search.Documents test run, which is unrelated to the PR's changes (a cloud icon addition scoped to AzureEnvironmentResourceExtensions.cs). Job logs were unavailable, and the failure surfaced only in post-processing steps ('Check for hang dump files', 'Generate test results summary'), consistent with an environment-level test host crash rather than an assertion failure caused by this PR.",
+  "failure_details": "### Job: Tests / No-package tests (regular, Aspire.Azure.Search.Documents.Tests, Azure.Search.Documents, Azure.Sea... / Azure.Search.Documents (ubuntu-latest)\n- Conclusion: failure\n- Failed Steps: Check for hang dump files, Generate test results summary\n- Annotations: Process completed with exit code 134. (x2)\n- Logs: (Failed to fetch logs for job 104290723437)\nPR changed files (unrelated to Azure.Search.Documents): src/Aspire.Hosting.Azure/AzureEnvironmentResourceExtensions.cs, tests/Aspire.Hosting.Azure.Tests/AzureEnvironmentResourceExtensionsTests.cs",
+  "occurrences": [
+    {
+      "run_id": 34941224700,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/34941224700",
+      "job": "Tests / No-package tests (regular, Aspire.Azure.Search.Documents.Tests, Azure.Search.Documents, Azure.Sea... / Azure.Search.Documents (ubuntu-latest)",
+      "pr_number": 20011,
+      "observed_at": "2026-09-15T07:54:34Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20137"
+}
