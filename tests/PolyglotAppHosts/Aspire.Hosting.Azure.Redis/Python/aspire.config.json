@@ -7,8 +7,8 @@
     "experimentalPolyglot:python": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.Provisioning.Redis": "../../../../src/Aspire.Hosting.Azure.Provisioning.Redis/Aspire.Hosting.Azure.Provisioning.Redis.csproj",
-    "Aspire.Hosting.Azure.Provisioning.RedisEnterprise": "../../../../src/Aspire.Hosting.Azure.Provisioning.RedisEnterprise/Aspire.Hosting.Azure.Provisioning.RedisEnterprise.csproj",
+    "Aspire.Hosting.Azure.Provisioning.Redis": "",
+    "Aspire.Hosting.Azure.Provisioning.RedisEnterprise": "",
     "Aspire.Hosting.Azure.Redis": "",
     "Aspire.Hosting.Azure.KeyVault": ""
   }

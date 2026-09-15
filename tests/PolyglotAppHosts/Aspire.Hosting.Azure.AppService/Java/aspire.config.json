@@ -7,7 +7,7 @@
     "experimentalPolyglot:java": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.Provisioning.AppService": "../../../../src/Aspire.Hosting.Azure.Provisioning.AppService/Aspire.Hosting.Azure.Provisioning.AppService.csproj",
+    "Aspire.Hosting.Azure.Provisioning.AppService": "",
     "Aspire.Hosting.Azure.AppService": ""
   }
 }

@@ -7,7 +7,7 @@
     "experimentalPolyglot:java": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.Provisioning.PostgreSql": "../../../../src/Aspire.Hosting.Azure.Provisioning.PostgreSql/Aspire.Hosting.Azure.Provisioning.PostgreSql.csproj",
+    "Aspire.Hosting.Azure.Provisioning.PostgreSql": "",
     "Aspire.Hosting.Azure.PostgreSQL": ""
   }
 }
