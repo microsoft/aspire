@@ -4,6 +4,12 @@ const builder = await createBuilder();
 
 // 1) addAzurePostgresFlexibleServer — main factory method
 const pg = await builder.addAzurePostgresFlexibleServer("pg");
+await pg.configureInfrastructure(async infrastructure => {
+    const server = await infrastructure.getPostgreSqlFlexibleServer();
+    const backup = await server.backup.get();
+    await backup.backupRetentionDays.set(14);
+    const _backupRetention = await backup.backupRetentionDays.get();
+});
 
 // 2) addDatabase — child resource
 const db = await pg.addDatabase("mydb", { databaseName: "appdb" });
