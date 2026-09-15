@@ -54,7 +54,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal("Password: [REDACTED]", result.GetProperty("failure_details").GetString());
 
         var occurrenceRow = await InvokeScriptAsync("occurrence-row", analysis, cause);
-        Assert.Equal("| 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | Tests / Linux | #18763 |", occurrenceRow);
+        Assert.Equal("| 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | <code>Tests / Linux</code> | #18763 |", occurrenceRow);
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             ## Build Information
 
             Build: https://github.com/microsoft/aspire/actions/runs/987654
-            Build error leg or test failing: Tests / Linux / ``Tests.SampleTheory(`value`) @maintainers``
+            Build error leg or test failing: `Tests / Linux` / ``Tests.SampleTheory(`value`) @maintainers``
             Pull request: #18763
 
             ## Classification Analysis
@@ -153,13 +153,43 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
             | Date | Build | Job | PR |
             |------|-------|-----|----|
-            | 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | Tests / Linux | #18763 |
+            | 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | <code>Tests / Linux</code> | #18763 |
             """.ReplaceLineEndings("\n");
 
         Assert.Equal(expected, body);
 
         var title = await InvokeScriptAsync("issue-title", analysis, cause);
         Assert.Equal("[CI Failure] Sample theory is flaky @maintainers # Heading", title);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task IssueOccurrenceRendersModelAuthoredJobNameAsInertCode()
+    {
+        var analysis = CreateAnalysis();
+        var cause = new
+        {
+            id = "unsafe-job-name",
+            type = "infra-failure",
+            title = "Unsafe job name",
+            job_name = "Tests | [link](https://example.com) @maintainers\n</code>",
+            failure_details = "Failure details"
+        };
+
+        var occurrenceRow = await InvokeScriptAsync("occurrence-row", analysis, cause);
+        Assert.Equal(
+            "| 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | <code>Tests &#124; &#91;link&#93;(https://example.com) &#64;maintainers &lt;/code&gt;</code> | #18763 |",
+            occurrenceRow);
+
+        var body = await InvokeScriptAsync(
+            "issue-body",
+            analysis,
+            cause,
+            "<!-- ci-failure-cause:unsafe-job-name -->");
+        Assert.Contains(
+            "Build error leg: `Tests | [link](https://example.com) @maintainers </code>`",
+            body);
+        Assert.Contains(occurrenceRow, body);
     }
 
     [Fact]
@@ -230,10 +260,10 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             cause,
             "<!-- ci-failure-cause:linux-network-failure -->");
 
-        Assert.Contains("Build error leg: Tests / Linux", body);
+        Assert.Contains("Build error leg: `Tests / Linux`", body);
         Assert.Contains("Linux runner lost &lt;network&gt; connectivity.", body);
         Assert.Contains("Request to &lt;feed&gt; failed &amp; timed out", body);
-        Assert.Contains("| Tests / Linux | #18763 |", body);
+        Assert.Contains("| <code>Tests / Linux</code> | #18763 |", body);
     }
 
     [Fact]

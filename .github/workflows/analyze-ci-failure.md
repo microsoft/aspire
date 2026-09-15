@@ -235,7 +235,8 @@ jobs:
               | grep -oP '\d+$' || echo "")
             if [ -n "${CHECK_RUN_ID}" ]; then
               if ! gh api --paginate "repos/${REPO}/check-runs/${CHECK_RUN_ID}/annotations" \
-                  > "ci-failure-data/annotations-${JOB_ID}.json" 2>/dev/null; then
+                  2>/dev/null | jq -s 'add // []' \
+                  > "ci-failure-data/annotations-${JOB_ID}.json"; then
                 echo "[]" > "ci-failure-data/annotations-${JOB_ID}.json"
                 printf 'Failed to fetch annotations for job %s (%s)\n' "${JOB_NAME}" "${JOB_ID}" >> "${EVIDENCE_GAPS_FILE}"
               fi
@@ -753,6 +754,15 @@ safe-outputs:
 
                 for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                   [ -f "$CAUSE_FILE" ] || continue
+                  CAUSE_BASENAME=$(basename "$CAUSE_FILE")
+                  if ! CAUSE_ID=$(jq -er '.id | select(type == "string" and test("^[a-z0-9][a-z0-9-]*$"))' "$CAUSE_FILE" 2>/dev/null); then
+                    echo "::warning::Cause file '${CAUSE_BASENAME}' has an invalid ID, skipping"
+                    continue
+                  fi
+                  if [ "$CAUSE_BASENAME" != "${CAUSE_ID}.json" ]; then
+                    echo "::warning::Cause filename '${CAUSE_BASENAME}' does not match ID '${CAUSE_ID}', skipping"
+                    continue
+                  fi
                   # Persist only recurring transient/flaky causes. Model-authored
                   # cause files are not trusted to follow the verdict policy.
                   CAUSE_TYPE_CHECK=$(jq -r '.type' "$CAUSE_FILE" 2>/dev/null || echo "")
@@ -760,7 +770,6 @@ safe-outputs:
                     echo "Skipping non-persistable cause type '${CAUSE_TYPE_CHECK}'."
                     continue
                   fi
-                  CAUSE_BASENAME=$(basename "$CAUSE_FILE")
                   EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
 
                   # Add an occurrences array using the job associated with this cause.
@@ -791,14 +800,13 @@ safe-outputs:
             if [ -d "$CAUSES_DIR" ]; then
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
-                jq empty "$CAUSE_FILE" 2>/dev/null || continue
-
-                CAUSE_ID=$(jq -r '.id' "$CAUSE_FILE")
-
-                # Validate CAUSE_ID is a safe slug (lowercase alphanumeric + hyphens)
-                # to prevent HTML comment injection via the marker.
-                if ! echo "$CAUSE_ID" | grep -qP '^[a-z0-9][a-z0-9-]*$'; then
-                  echo "::warning::Invalid cause ID '${CAUSE_ID}', skipping"
+                CAUSE_BASENAME=$(basename "$CAUSE_FILE")
+                if ! CAUSE_ID=$(jq -er '.id | select(type == "string" and test("^[a-z0-9][a-z0-9-]*$"))' "$CAUSE_FILE" 2>/dev/null); then
+                  echo "::warning::Cause file '${CAUSE_BASENAME}' has an invalid ID, skipping"
+                  continue
+                fi
+                if [ "$CAUSE_BASENAME" != "${CAUSE_ID}.json" ]; then
+                  echo "::warning::Cause filename '${CAUSE_BASENAME}' does not match ID '${CAUSE_ID}', skipping"
                   continue
                 fi
 

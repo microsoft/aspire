@@ -395,6 +395,14 @@ def to_code_block(value):
     return f"{fence}\n{content}{trailing_newline}{fence}"
 
 
+def to_table_code(value):
+    normalized = re.sub(r"\r\n?|\n", " ", str(value if value is not None else ""))
+    encoded = escape_html(normalized)
+    for character, entity in (("|", "&#124;"), ("[", "&#91;"), ("]", "&#93;"), ("@", "&#64;")):
+        encoded = encoded.replace(character, entity)
+    return f"<code>{encoded}</code>"
+
+
 def format_test_failures(failures):
     output = []
     for failure in failures:
@@ -450,7 +458,7 @@ def build_occurrence_row(analysis, cause):
     date = occurrence["observed_at"].split("T", 1)[0]
     return (
         f"| {date} | [{occurrence['run_id']}]({occurrence['run_url']}) | "
-        f"{occurrence['job']} | #{occurrence['pr_number']} |"
+        f"{to_table_code(occurrence['job'])} | #{occurrence['pr_number']} |"
     )
 
 
@@ -623,9 +631,9 @@ def build_issue_body(analysis, cause, marker):
     test_name = cause.get("test_name") or ""
     output_summary = "Test output" if cause.get("type") == "flaky-test" else "Job output snippet"
     build_error = (
-        f"Build error leg or test failing: {job_name} / {to_inline_code(test_name)}"
+        f"Build error leg or test failing: {to_inline_code(job_name)} / {to_inline_code(test_name)}"
         if test_name
-        else f"Build error leg: {job_name}"
+        else f"Build error leg: {to_inline_code(job_name)}"
     )
     pull_request = analysis.get("pr") if isinstance(analysis.get("pr"), dict) else {}
     return f"""{marker}
