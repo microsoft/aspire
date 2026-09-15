@@ -848,6 +848,62 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateCallbackTypeSignature_MapsCollectionsAsJsonData()
+    {
+        var projector = new TypeScriptApiProjector(CreateContextFromTestAssembly());
+
+        var stringType = new AtsTypeRef
+        {
+            TypeId = "string",
+            Category = AtsTypeCategory.Primitive
+        };
+        var listType = new AtsTypeRef
+        {
+            TypeId = "list",
+            Category = AtsTypeCategory.List,
+            ElementType = stringType
+        };
+        var dictionaryType = new AtsTypeRef
+        {
+            TypeId = "dictionary",
+            Category = AtsTypeCategory.Dict,
+            KeyType = stringType,
+            ValueType = stringType
+        };
+
+        Assert.Equal("() => Promise<string[]>", projector.GenerateCallbackTypeSignature([], listType));
+        Assert.Equal("() => Promise<Record<string, string>>", projector.GenerateCallbackTypeSignature([], dictionaryType));
+    }
+
+    [Fact]
+    public void GenerateCallbackTypeSignature_MapsNestedNullableCollectionsAsJsonData()
+    {
+        var projector = new TypeScriptApiProjector(CreateContextFromTestAssembly());
+        var nullableNumber = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Number,
+            Category = AtsTypeCategory.Primitive,
+            IsNullable = true
+        };
+        var returnType = new AtsTypeRef
+        {
+            TypeId = "dictionary",
+            Category = AtsTypeCategory.Dict,
+            KeyType = new AtsTypeRef { TypeId = AtsConstants.String, Category = AtsTypeCategory.Primitive },
+            ValueType = new AtsTypeRef
+            {
+                TypeId = "list",
+                Category = AtsTypeCategory.List,
+                ElementType = nullableNumber
+            }
+        };
+
+        Assert.Equal(
+            "() => Promise<Record<string, (number | null)[]>>",
+            projector.GenerateCallbackTypeSignature([], returnType));
+    }
+
+    [Fact]
     public async Task Scanner_BaseTypeHierarchy_IsCollected()
     {
         // Verify that AtsTypeInfo includes base type hierarchy for inheritance expansion.

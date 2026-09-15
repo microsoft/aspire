@@ -1,0 +1,18 @@
+{
+  "name": "ts-kafka-lib-app",
+  "version": "1.0.0",
+  "description": "Model A spike: TS AppHost consuming a reusable TS Kafka integration library",
+  "type": "module",
+  "scripts": {
+    "start": "aspire run"
+  },
+  "dependencies": {
+    "@spike/aspire-kafka-lib": "file:../packages/aspire-kafka",
+    "vscode-jsonrpc": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.3.0"
+  }
+}

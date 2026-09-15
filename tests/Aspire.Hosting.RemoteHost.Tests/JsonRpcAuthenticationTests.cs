@@ -20,6 +20,8 @@ public sealed class JsonRpcAuthenticationTests
     {
         { "cancelToken", ["ct_missing"] },
         { "invokeCapability", ["test-capability", null] },
+        { "registerAsIntegrationHost", [] },
+        { "invokeGuestCallback", ["callback", null] },
         { "getCapabilities", [] },
         { "generateCode", ["TypeScript"] },
         { "scaffoldAppHost", ["TypeScript", "/tmp/apphost", "AppHost"] },
@@ -169,6 +171,10 @@ public sealed class JsonRpcAuthenticationTests
             services.AddScoped<CodeGeneration.CodeGenerationService>();
             services.AddSingleton<Language.LanguageSupportResolver>();
             services.AddScoped<Language.LanguageService>();
+
+            // CodeGenerationService depends on ExternalCapabilityRegistry + IntegrationHostLauncher
+            services.AddSingleton<Ats.ExternalCapabilityRegistry>();
+            services.AddSingleton<Language.IntegrationHostLauncher>();
 
             services.AddScoped<JsonRpcAuthenticationState>();
             services.AddScoped<HandleRegistry>();

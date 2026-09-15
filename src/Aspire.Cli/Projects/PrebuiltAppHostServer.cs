@@ -149,8 +149,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         CancellationToken cancellationToken = default)
     {
         var integrationList = integrations.ToList();
-        var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
-        var projectRefs = integrationList.Where(r => r.IsProjectReference).ToList();
+        var packageRefs = integrationList.Where(r => r.Source == IntegrationSource.Nuget).ToList();
+        var projectRefs = integrationList.Where(r => r.Source == IntegrationSource.Project).ToList();
+        var npmIntegrations = integrationList.Where(r => r.Source == IntegrationSource.Npm).ToList();
         // Lifted to outer scope so the failure footer reflects the source actually used by
         // restore — including the auto-discovered local hive resolved by
         // ResolveLocalPackageSourceOverrideAsync — rather than the unset --source the user
@@ -190,6 +191,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 var closureManifest = await BuildIntegrationClosureManifestAsync(
                     packageRefs,
                     projectRefs,
+                    npmIntegrations,
                     requestedChannel,
                     effectivePackageSourceOverride,
                     cancellationToken).ConfigureAwait(false);
@@ -220,7 +222,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                         packageRefs, requestedChannel, effectivePackageSourceOverride, cancellationToken);
                 }
 
-                var appSettingsContent = CreateAppSettingsContent(packageRefs, []);
+                var appSettingsContent = CreateAppSettingsContent(packageRefs, [], npmIntegrations);
                 await WriteAppSettingsAsync(_workingDirectory, appSettingsContent, cancellationToken).ConfigureAwait(false);
             }
 
@@ -377,7 +379,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
         foreach (var projectRef in projectRefs)
         {
-            if (projectRef.ProjectPath is { } path)
+            if (projectRef.Path is { } path)
             {
                 pending.Enqueue(path);
             }
@@ -733,6 +735,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private async Task<AppHostServerClosureManifest> BuildIntegrationClosureManifestAsync(
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
+        List<IntegrationReference> npmIntegrations,
         string? requestedChannel,
         string? packageSourceOverride,
         CancellationToken cancellationToken)
@@ -831,7 +834,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var projectRefAssemblyNames = await ReadProjectRefAssemblyNamesAsync(
             Path.Combine(restoreDir, ProjectRefAssemblyNamesFileName),
             cancellationToken).ConfigureAwait(false);
-        var appSettingsContent = CreateAppSettingsContent(packageRefs, projectRefAssemblyNames);
+        var appSettingsContent = CreateAppSettingsContent(packageRefs, projectRefAssemblyNames, npmIntegrations);
         var packageFingerprints = await ReadPackageFingerprintsAsync(
             Path.Combine(restoreDir, "obj", ProjectAssetsFileName),
             cancellationToken).ConfigureAwait(false);
@@ -925,7 +928,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         {
             doc.Root!.Add(new XElement("ItemGroup",
                 projectRefs.Select(p => new XElement("ProjectReference",
-                    new XAttribute("Include", p.ProjectPath!)))));
+                    new XAttribute("Include", p.Path!)))));
         }
 
         doc.Root!.Add(
@@ -1660,7 +1663,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
     private static string CreateAppSettingsContent(
         List<IntegrationReference> packageRefs,
-        List<string> projectRefAssemblyNames)
+        List<string> projectRefAssemblyNames,
+        List<IntegrationReference> npmIntegrations)
     {
         var atsAssemblies = new List<string> { "Aspire.Hosting" };
 
@@ -1686,21 +1690,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             }
         }
 
-        var assembliesJson = string.Join(",\n      ", atsAssemblies.Select(a => $"\"{a}\""));
-        return $$"""
-            {
-              "Logging": {
-                "LogLevel": {
-                  "Default": "Information",
-                  "Microsoft.AspNetCore": "Warning",
-                  "Aspire.Hosting.Dcp": "Warning"
-                }
-              },
-              "AtsAssemblies": [
-                {{assembliesJson}}
-              ]
-            }
-            """;
+        var appSettingsJson = AppHostServerAppSettingsWriter.Generate(atsAssemblies, npmIntegrations);
+        return appSettingsJson;
     }
 
     private static async Task WriteAppSettingsAsync(string contentRootPath, string appSettingsContent, CancellationToken cancellationToken)

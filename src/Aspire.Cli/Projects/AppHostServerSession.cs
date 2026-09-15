@@ -327,6 +327,14 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         // cancellation/failure it reports so the losing task cannot raise an unobserved exception.
         connectCts.Cancel();
         ObserveFaultedTask(connectTask);
+        // The exit task drains stdout/stderr. Surface that output even when the server
+        // died too quickly to return its startup failure through RPC.
+        var outputLines = _output?.GetLines().ToArray();
+        if (outputLines is { Length: > 0 })
+        {
+            _logger.LogError("AppHost server startup output:\n{Output}", string.Join(Environment.NewLine, outputLines.Select(line => line.Line)));
+        }
+
         var exitCode = TryGetServerExitCode();
         throw new InvalidOperationException(
             exitCode is { } code

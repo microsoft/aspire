@@ -11,5 +11,6 @@
       "Aspire.Hosting.Redis",
       "Aspire.Hosting.PostgreSQL",
       "Aspire.Hosting.CodeGeneration.TypeScript"
-  ]
+  ],
+  "IntegrationHosts": []
 }

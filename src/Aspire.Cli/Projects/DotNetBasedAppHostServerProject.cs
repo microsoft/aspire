@@ -181,34 +181,43 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         foreach (var integration in integrations)
         {
-            if (integration.IsProjectReference)
+            switch (integration.Source)
             {
-                // Explicit project reference from settings.json
-                if (addedProjects.Add(integration.Name))
-                {
-                    projectRefGroup.Add(new XElement("ProjectReference",
-                        new XAttribute("Include", integration.ProjectPath!),
-                        new XElement("IsAspireProjectResource", "false")));
-                }
-            }
-            else if (integration.Name.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase) &&
-                     !integration.DisableLocalProjectSubstitution)
-            {
-                var projectPath = Path.Combine(_repoRoot, "src", integration.Name, $"{integration.Name}.csproj");
-                if (File.Exists(projectPath) && addedProjects.Add(integration.Name))
-                {
-                    projectRefGroup.Add(new XElement("ProjectReference",
-                        new XAttribute("Include", projectPath),
-                        new XElement("IsAspireProjectResource", "false")));
-                }
-            }
-            else
-            {
-                if (integration.Version is null)
-                {
-                    throw new InvalidOperationException($"Integration '{integration.Name}' is neither a project reference nor a package reference (both Version and ProjectPath are null).");
-                }
-                otherPackages.Add((integration.Name, integration.Version));
+                case IntegrationSource.Npm:
+                    // npm integration hosts are started as separate processes, not .NET references
+                    continue;
+
+                case IntegrationSource.Project:
+                    // Explicit .NET project reference from aspire.config.json
+                    if (addedProjects.Add(integration.Name))
+                    {
+                        projectRefGroup.Add(new XElement("ProjectReference",
+                            new XAttribute("Include", integration.Path!),
+                            new XElement("IsAspireProjectResource", "false")));
+                    }
+                    break;
+
+                case IntegrationSource.Nuget:
+                    if (integration.Name.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase) &&
+                        !integration.DisableLocalProjectSubstitution)
+                    {
+                        var projectPath = Path.Combine(_repoRoot, "src", integration.Name, $"{integration.Name}.csproj");
+                        if (File.Exists(projectPath) && addedProjects.Add(integration.Name))
+                        {
+                            projectRefGroup.Add(new XElement("ProjectReference",
+                                new XAttribute("Include", projectPath),
+                                new XElement("IsAspireProjectResource", "false")));
+                        }
+                    }
+                    else
+                    {
+                        if (integration.Version is null)
+                        {
+                            throw new InvalidOperationException($"NuGet integration '{integration.Name}' has a null Version.");
+                        }
+                        otherPackages.Add((integration.Name, integration.Version));
+                    }
+                    break;
             }
         }
 
@@ -282,7 +291,6 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var programCs = """
             await Aspire.Hosting.RemoteHost.RemoteHostServer.RunAsync(args);
             """;
-        File.WriteAllText(Path.Combine(_projectModelPath, "Program.cs"), programCs);
 
         // Create appsettings.json with ATS assemblies
         var atsAssemblies = new List<string> { "Aspire.Hosting" };
@@ -295,27 +303,21 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                 continue;
             }
 
+            // Only NuGet packages and local .NET project references contribute assemblies the
+            // server will load via CLR reflection. Non-.NET integration hosts (npm, future pip,
+            // etc.) are listed under IntegrationHosts and spawned as separate processes.
+            if (integration.Source != IntegrationSource.Nuget && integration.Source != IntegrationSource.Project)
+            {
+                continue;
+            }
+
             if (!atsAssemblies.Contains(integration.Name, StringComparer.OrdinalIgnoreCase))
             {
                 atsAssemblies.Add(integration.Name);
             }
         }
 
-        var assembliesJson = string.Join(",\n      ", atsAssemblies.Select(a => $"\"{a}\""));
-        var appSettingsJson = $$"""
-            {
-              "Logging": {
-                "LogLevel": {
-                  "Default": "Information",
-                  "Microsoft.AspNetCore": "Warning",
-                  "Aspire.Hosting.Dcp": "Warning"
-                }
-              },
-              "AtsAssemblies": [
-                {{assembliesJson}}
-              ]
-            }
-            """;
+        var appSettingsJson = AppHostServerAppSettingsWriter.Generate(atsAssemblies, integrations);
 
         // Handle NuGet config and channel resolution
         string? channelName = null;

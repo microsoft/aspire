@@ -1,0 +1,17 @@
+{
+  "name": "ts-integration-spike",
+  "version": "1.0.0",
+  "description": "Spike: TS apphost + Node.js integration host",
+  "type": "module",
+  "scripts": {
+    "start": "aspire run"
+  },
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.3.0"
+  }
+}

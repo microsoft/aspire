@@ -3103,10 +3103,11 @@ internal sealed partial class TypeScriptApiProjector
 
         var paramsString = paramList.Count > 0 ? string.Join(", ", paramList) : "";
 
-        // Determine return type
+        // Callback results cross the wire as JSON data, just like DTO properties, rather
+        // than AspireList/AspireDict handles for server-owned mutable collections.
         var returnType = callbackReturnType == null || callbackReturnType.TypeId == AtsConstants.Void
             ? "void"
-            : MapTypeRefToTypeScript(callbackReturnType);
+            : MapDtoPropertyTypeToTypeScript(callbackReturnType);
 
         // Callbacks are always async in TypeScript
         return $"({paramsString}) => Promise<{returnType}>";
