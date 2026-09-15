@@ -7,8 +7,8 @@
     "experimentalPolyglot:java": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.Provisioning.Network": "../../../../src/Aspire.Hosting.Azure.Provisioning.Network/Aspire.Hosting.Azure.Provisioning.Network.csproj",
-    "Aspire.Hosting.Azure.Provisioning.PrivateDns": "../../../../src/Aspire.Hosting.Azure.Provisioning.PrivateDns/Aspire.Hosting.Azure.Provisioning.PrivateDns.csproj",
+    "Aspire.Hosting.Azure.Provisioning.Network": "",
+    "Aspire.Hosting.Azure.Provisioning.PrivateDns": "",
     "Aspire.Hosting.Azure.Storage": "",
     "Aspire.Hosting.Azure.Network": ""
   }

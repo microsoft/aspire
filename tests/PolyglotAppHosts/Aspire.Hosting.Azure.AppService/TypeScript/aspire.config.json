@@ -4,7 +4,7 @@
     "language": "typescript/nodejs"
   },
   "packages": {
-    "Aspire.Hosting.Azure.Provisioning.AppService": "../../../../src/Aspire.Hosting.Azure.Provisioning.AppService/Aspire.Hosting.Azure.Provisioning.AppService.csproj",
+    "Aspire.Hosting.Azure.Provisioning.AppService": "",
     "Aspire.Hosting.Azure.AppService": "",
     "Aspire.Hosting.Azure.Network": ""
   }
