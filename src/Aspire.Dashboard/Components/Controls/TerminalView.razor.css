@@ -78,6 +78,7 @@
     flex: 0 0 30px;
     min-width: 0;
     padding: 0 14px;
+    padding-inline-end: 8px;
     box-sizing: border-box;
     background: linear-gradient(180deg, #1a2029 0%, #161b22 100%);
     border-bottom: 1px solid #30363d;
