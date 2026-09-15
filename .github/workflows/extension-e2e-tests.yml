@@ -1011,13 +1011,24 @@ jobs:
           name: extension-e2e-diagnostics-${{ matrix.rid }}-${{ matrix.shardName }}-attempt${{ github.run_attempt }}
           path: |
             extension/.test-results/**
-            extension/.test-storage/**/settings/User/**
+            extension/.test-storage/**/settings/User/settings.json
             extension/.test-storage/**/settings/logs/**
             extension/.test-storage/**/screenshots/**
             extension/.test-storage/**/aspire-home/logs/**
             extension/.test-storage/**/aspire-home/cache/apphost-info/**
-            extension/.test-workspaces/**/.aspire/**
-            extension/.test-workspaces/**/*.log
+            extension/.test-storage/**/aspire-home/aspire.config.json
+            extension/.test-workspaces/**/.aspire/logs/**
+            extension/.test-workspaces/**/.aspire/settings.json
+            extension/.test-workspaces/**/aspire.config.json
+            extension/.test-workspaces/**/.vscode/settings.json
+            extension/.test-workspaces/**/AspireE2E.*/App.xaml
+            extension/.test-workspaces/**/AspireE2E.*/App.xaml.cs
+            extension/.test-workspaces/**/AspireE2E.*/AppHost.cs
+            extension/.test-workspaces/**/AspireE2E.*/Program.cs
+            extension/.test-workspaces/**/AspireE2E.*/app.manifest
+            extension/.test-workspaces/**/AspireE2E.*/Properties/launchSettings.json
+            extension/.test-workspaces/**/AspireE2E.*/*.csproj
+            extension/.test-workspaces/**/winui-e2e-ready.txt
             extension/.test-recordings/**
           if-no-files-found: ignore
           include-hidden-files: true

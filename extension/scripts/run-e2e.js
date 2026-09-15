@@ -773,11 +773,7 @@ async function main() {
 
     if (cleanupErrors.length > 0) {
       cleanupFailed = true;
-      // Node prints an AggregateError without its `errors`, so a cleanup failure would otherwise
-      // reach CI as a bare "one or more steps failed" with nothing naming the step that broke.
-      const cleanupFailure = new AggregateError(
-        cleanupErrors,
-        `One or more E2E cleanup steps failed:\n  ${cleanupErrors.map(error => error.stack ?? error.message).join('\n  ')}`);
+      const cleanupFailure = createCleanupFailure(cleanupErrors);
       if (testFailure) {
         console.error(cleanupFailure);
       }
@@ -811,6 +807,14 @@ async function runCleanupStep(name, action, cleanupErrors) {
     cleanupError.message = `${name}: ${cleanupError.message}`;
     cleanupErrors.push(cleanupError);
   }
+}
+
+function createCleanupFailure(cleanupErrors) {
+  // Node prints an AggregateError without its `errors`. Include the individual failures so
+  // CI output identifies every failed source, including failures nested in a cleanup step.
+  return new AggregateError(
+    cleanupErrors,
+    `One or more E2E cleanup steps failed:\n  ${cleanupErrors.map(error => error.stack ?? error.message).join('\n  ')}`);
 }
 
 function resolveCliPath() {
@@ -2486,22 +2490,85 @@ function isPartialDownloadArchiveName(name) {
     || lowerCaseName.endsWith('.gz');
 }
 
-function copyStorageDiagnostics() {
+async function copyStorageDiagnostics() {
   removePath(storageDiagnosticsDir, { recursive: true, force: true });
-  copyIfExists(isolatedAspireHome, path.join(storageDiagnosticsDir, 'aspire-home'), skipAspireLeaseFiles);
-  copyIfExists(path.join(storageDir, 'screenshots'), path.join(storageDiagnosticsDir, 'screenshots'));
-  copyIfExists(path.join(storageDir, 'settings', 'CrashpadMetrics-active.pma'), path.join(storageDiagnosticsDir, 'settings', 'CrashpadMetrics-active.pma'));
-  copyIfExists(path.join(storageDir, 'settings', 'logs'), path.join(storageDiagnosticsDir, 'settings', 'logs'));
-  copyIfExists(path.join(storageDir, 'settings', 'User', 'settings.json'), path.join(storageDiagnosticsDir, 'settings', 'User', 'settings.json'));
-  redactTextFilesForArtifacts(storageDiagnosticsDir);
+  const cleanupErrors = [];
+  // Select diagnostic inputs rather than walking Aspire home: Dashboard persistence, package
+  // caches and workspace-config-locks contain live coordination files, not uploadable diagnostics.
+  await copyDiagnosticSource(path.join(isolatedAspireHome, 'logs'), path.join(storageDiagnosticsDir, 'aspire-home', 'logs'), cleanupErrors, skipAspireLeaseFiles);
+  await copyDiagnosticSource(path.join(isolatedAspireHome, 'cache', 'apphost-info'), path.join(storageDiagnosticsDir, 'aspire-home', 'cache', 'apphost-info'), cleanupErrors, skipAspireLeaseFiles);
+  await copyDiagnosticSource(path.join(isolatedAspireHome, 'aspire.config.json'), path.join(storageDiagnosticsDir, 'aspire-home', 'aspire.config.json'), cleanupErrors);
+  await copyDiagnosticSource(path.join(storageDir, 'screenshots'), path.join(storageDiagnosticsDir, 'screenshots'), cleanupErrors);
+  await copyDiagnosticSource(path.join(storageDir, 'settings', 'logs'), path.join(storageDiagnosticsDir, 'settings', 'logs'), cleanupErrors);
+  await copyDiagnosticSource(path.join(storageDir, 'settings', 'User', 'settings.json'), path.join(storageDiagnosticsDir, 'settings', 'User', 'settings.json'), cleanupErrors);
+  if (cleanupErrors.length > 0) {
+    throw createCleanupFailure(cleanupErrors);
+  }
 }
 
-function copyWorkspaceDiagnostics() {
+async function copyWorkspaceDiagnostics() {
   removePath(workspaceDiagnosticsDir, { recursive: true, force: true });
-  copyIfExists(path.join(workspaceRoot, '.aspire'), path.join(workspaceDiagnosticsDir, '.aspire'));
-  copyIfExists(path.join(workspaceRoot, '.vscode', 'settings.json'), path.join(workspaceDiagnosticsDir, '.vscode', 'settings.json'));
-  copyWorkspaceProjectSources();
-  redactTextFilesForArtifacts(workspaceDiagnosticsDir);
+  const cleanupErrors = [];
+  // Workspace .aspire/integrations also contains live restore and project-layout locks.
+  await copyDiagnosticSource(path.join(workspaceRoot, '.aspire', 'logs'), path.join(workspaceDiagnosticsDir, '.aspire', 'logs'), cleanupErrors);
+  await copyDiagnosticSource(path.join(workspaceRoot, '.aspire', 'settings.json'), path.join(workspaceDiagnosticsDir, '.aspire', 'settings.json'), cleanupErrors);
+  await copyDiagnosticSource(path.join(workspaceRoot, 'aspire.config.json'), path.join(workspaceDiagnosticsDir, 'aspire.config.json'), cleanupErrors);
+  await copyDiagnosticSource(path.join(workspaceRoot, '.vscode', 'settings.json'), path.join(workspaceDiagnosticsDir, '.vscode', 'settings.json'), cleanupErrors);
+  await runCleanupStep('find workspace project diagnostics', () => copyWorkspaceProjectSources(cleanupErrors), cleanupErrors);
+  await copyDiagnosticSource(winUiReadyMarkerPath, path.join(workspaceDiagnosticsDir, path.basename(winUiReadyMarkerPath)), cleanupErrors);
+  if (cleanupErrors.length > 0) {
+    throw createCleanupFailure(cleanupErrors);
+  }
+}
+
+async function copyDiagnosticSource(sourcePath, destinationPath, cleanupErrors, filter) {
+  // A source may never have been created if setup failed. Missing descendants discovered during
+  // traversal are different: report those errors rather than hiding an interrupted diagnostic copy.
+  await copyDiagnosticPath(sourcePath, destinationPath, cleanupErrors, filter, true);
+}
+
+async function copyDiagnosticPath(sourcePath, destinationPath, cleanupErrors, filter, optionalSource) {
+  await runCleanupStep(`copy diagnostic ${sourcePath}`, async () => {
+    if (filter && !filter(sourcePath)) {
+      return;
+    }
+
+    let stats;
+    try {
+      stats = fs.lstatSync(sourcePath);
+    }
+    catch (error) {
+      if (optionalSource && error.code === 'ENOENT') {
+        return;
+      }
+      throw error;
+    }
+
+    if (stats.isDirectory()) {
+      fs.mkdirSync(destinationPath, { recursive: true });
+      for (const entry of fs.readdirSync(sourcePath)) {
+        await copyDiagnosticPath(path.join(sourcePath, entry), path.join(destinationPath, entry), cleanupErrors, filter, false);
+      }
+    }
+    else if (stats.isFile()) {
+      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+      if (isTextArtifact(sourcePath)) {
+        // Apply redaction before writing, so a later copy failure cannot bypass it. Preserve the
+        // original bytes when unchanged, rather than re-encoding logs that are not UTF-8.
+        const contents = fs.readFileSync(sourcePath);
+        const text = contents.toString('utf8');
+        const redacted = redactSensitiveArtifactText(text);
+        fs.writeFileSync(destinationPath, redacted === text ? contents : redacted);
+      }
+      else {
+        fs.copyFileSync(sourcePath, destinationPath);
+      }
+    }
+    else {
+      // Do not follow symlinks out of the explicitly selected diagnostic inputs.
+      throw new Error(`Unsupported diagnostic file type: ${sourcePath}`);
+    }
+  }, cleanupErrors);
 }
 
 function copyIfExists(sourcePath, destinationPath, filter) {
@@ -2514,13 +2581,15 @@ function copyIfExists(sourcePath, destinationPath, filter) {
 }
 
 function skipAspireLeaseFiles(sourcePath) {
-  // Aspire CLI lease files can remain locked briefly on Windows after the test
-  // process exits. They are not useful diagnostics, and failing to copy them can
-  // mask the actual E2E failure or prevent artifact upload.
-  return !sourcePath.split(/[\\/]/).includes('.leases') && !sourcePath.endsWith('.lease');
+  const relativePath = path.relative(isolatedAspireHome, sourcePath);
+  const normalizedPath = isWindows ? relativePath.toLowerCase() : relativePath;
+  const segments = normalizedPath.split(path.sep);
+
+  // AppHost metadata can include CLI leases that remain locked after the test process exits.
+  return !segments.includes('.leases') && !normalizedPath.endsWith('.lease');
 }
 
-function copyWorkspaceProjectSources() {
+async function copyWorkspaceProjectSources(cleanupErrors) {
   if (!fs.existsSync(workspaceRoot)) {
     return;
   }
@@ -2532,15 +2601,14 @@ function copyWorkspaceProjectSources() {
 
     const sourceDirectory = path.join(workspaceRoot, entry.name);
     const destinationDirectory = path.join(workspaceDiagnosticsDir, entry.name);
-    copyIfExists(path.join(sourceDirectory, 'App.xaml'), path.join(destinationDirectory, 'App.xaml'));
-    copyIfExists(path.join(sourceDirectory, 'App.xaml.cs'), path.join(destinationDirectory, 'App.xaml.cs'));
-    copyIfExists(path.join(sourceDirectory, 'AppHost.cs'), path.join(destinationDirectory, 'AppHost.cs'));
-    copyIfExists(path.join(sourceDirectory, 'Program.cs'), path.join(destinationDirectory, 'Program.cs'));
-    copyIfExists(path.join(sourceDirectory, 'app.manifest'), path.join(destinationDirectory, 'app.manifest'));
-    copyIfExists(path.join(sourceDirectory, 'Properties', 'launchSettings.json'), path.join(destinationDirectory, 'Properties', 'launchSettings.json'));
-    copyIfExists(path.join(sourceDirectory, `${entry.name}.csproj`), path.join(destinationDirectory, `${entry.name}.csproj`));
+    await copyDiagnosticSource(path.join(sourceDirectory, 'App.xaml'), path.join(destinationDirectory, 'App.xaml'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'App.xaml.cs'), path.join(destinationDirectory, 'App.xaml.cs'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'AppHost.cs'), path.join(destinationDirectory, 'AppHost.cs'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'Program.cs'), path.join(destinationDirectory, 'Program.cs'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'app.manifest'), path.join(destinationDirectory, 'app.manifest'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'Properties', 'launchSettings.json'), path.join(destinationDirectory, 'Properties', 'launchSettings.json'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, `${entry.name}.csproj`), path.join(destinationDirectory, `${entry.name}.csproj`), cleanupErrors);
   }
-  copyIfExists(winUiReadyMarkerPath, path.join(workspaceDiagnosticsDir, path.basename(winUiReadyMarkerPath)));
 }
 
 function redactTextFilesForArtifacts(directory) {
@@ -2569,7 +2637,7 @@ function redactTextFilesForArtifacts(directory) {
 }
 
 function isTextArtifact(file) {
-  return /\.(log|txt|json|jsonl|xml|config|cs|ts|js|md)$/i.test(file) || path.basename(file).toLowerCase() === 'settings';
+  return /\.(log|txt|json|jsonl|xml|config|cs|csproj|xaml|manifest|ts|js|md)$/i.test(file) || path.basename(file).toLowerCase() === 'settings';
 }
 
 function redactSensitiveArtifactText(value) {
