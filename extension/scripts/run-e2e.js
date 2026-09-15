@@ -2725,11 +2725,73 @@ function cleanupTemporaryRunRoot() {
   catch (error) {
     if (process.platform === 'win32' && isRetryableWindowsFileLock(error)) {
       console.warn(`Warning: unable to remove locked E2E path '${shortRunRoot}': ${error.message}`);
+      captureWindowsFileLockDiagnostics(error);
       return;
     }
 
     throw error;
   }
+}
+
+function captureWindowsFileLockDiagnostics(error) {
+  let report = {
+    schemaVersion: 1,
+    status: 'missing-error-path',
+    file: typeof error.path === 'string' ? error.path : null,
+    runRoot: shortRunRoot,
+    query: null,
+  };
+
+  if (typeof error.path === 'string' && error.path.length > 0) {
+    const result = spawnSync('pwsh', [
+      '-NoLogo', '-NoProfile', '-NonInteractive',
+      '-File', path.join(__dirname, 'get-windows-file-lock-owners.ps1'),
+      '-FilePath', error.path,
+      '-RunRoot', shortRunRoot,
+      '-TimeoutMs', '10000',
+    ], {
+      encoding: 'utf8',
+      shell: false,
+      windowsHide: true,
+      // Bound startup/serialization as well as the helper's native-query budget.
+      // This deadline applies only to our query host, never to a reported owner.
+      timeout: 15000,
+      maxBuffer: 1024 * 1024,
+    });
+
+    if (result.error) {
+      report.status = 'invocation-error';
+      report.errorCode = result.error.code ?? null;
+    }
+    else if (result.status !== 0 || result.signal) {
+      report.status = 'invocation-failed';
+      report.exitCode = result.status;
+      report.signal = result.signal ?? null;
+    }
+    else {
+      // The helper emits one report, e.g. {"schemaVersion":1,"status":"timeout","query":{...}}.
+      // Exit 0 only acknowledges that report; it does not cancel the original lock warning.
+      try {
+        const parsed = JSON.parse(result.stdout);
+        if (parsed && parsed.schemaVersion === 1 && typeof parsed.status === 'string') {
+          report = parsed;
+        }
+        else {
+          report.status = 'invalid-response';
+        }
+      }
+      catch (parseError) {
+        if (!(parseError instanceof SyntaxError)) {
+          throw parseError;
+        }
+        report.status = 'invalid-json';
+      }
+    }
+  }
+
+  const reportPath = path.join(resultsDir, 'windows-file-locks.json');
+  fs.writeFileSync(reportPath, `${redactSensitiveArtifactText(JSON.stringify(report, undefined, 2))}\n`);
+  console.warn(`Windows file-lock diagnostics (${report.status}): ${path.relative(extensionRoot, reportPath)}`);
 }
 
 function sanitizePathSegment(value) {

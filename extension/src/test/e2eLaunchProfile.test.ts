@@ -102,6 +102,113 @@ function toPosixRelativePath(from: string, to: string): string {
     return path.relative(from, to).split(path.sep).join('/');
 }
 
+function createRunRootCleanupHarness(platform: NodeJS.Platform, cleanupError?: NodeJS.ErrnoException, diagnosticError?: Error) {
+    const runnerPath = path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js');
+    const source = ts.createSourceFile(runnerPath, fs.readFileSync(runnerPath, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    const cleanup = source.statements.find(statement =>
+        ts.isFunctionDeclaration(statement) && statement.name?.text === 'cleanupTemporaryRunRoot');
+    assert.ok(cleanup);
+    const root = path.resolve('aev-cleanup-fixture');
+    const warnings: string[] = [];
+    const inspectedErrors: NodeJS.ErrnoException[] = [];
+    const operations: string[] = [];
+
+    return {
+        root,
+        warnings,
+        inspectedErrors,
+        operations,
+        run(): void {
+            vm.runInNewContext(`${cleanup.getText(source)}\ncleanupTemporaryRunRoot();`, {
+                process: { platform, env: {} },
+                enableJavaE2E: false,
+                shortRunRoot: root,
+                removePathWithoutFollowingLinks: (target: string) => {
+                    assert.strictEqual(target, root);
+                    operations.push('remove');
+                    if (cleanupError) {
+                        throw cleanupError;
+                    }
+                },
+                isRetryableWindowsFileLock: (error: NodeJS.ErrnoException) => error.code === 'EBUSY',
+                captureWindowsFileLockDiagnostics: (error: NodeJS.ErrnoException) => {
+                    operations.push('inspect');
+                    inspectedErrors.push(error);
+                    if (diagnosticError) {
+                        throw diagnosticError;
+                    }
+                },
+                console: {
+                    warn: (message: string) => {
+                        operations.push('warn');
+                        warnings.push(message);
+                    },
+                },
+            });
+        },
+    };
+}
+
+function createFileLockDiagnosticsHarness() {
+    const extensionRoot = path.resolve(__dirname, '..', '..');
+    const scriptsDirectory = path.join(extensionRoot, 'scripts');
+    const runnerPath = path.join(scriptsDirectory, 'run-e2e.js');
+    const source = ts.createSourceFile(runnerPath, fs.readFileSync(runnerPath, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    const capture = source.statements.find(statement =>
+        ts.isFunctionDeclaration(statement) && statement.name?.text === 'captureWindowsFileLockDiagnostics');
+    assert.ok(capture);
+    const runRoot = 'C:\\E2E & test\\aev-diagnostics';
+    const file = path.win32.join(runRoot, 'storage', 'settings', 'logs', 'exthost.log');
+    const resultsDirectory = path.join(extensionRoot, '.test-results', 'e2e', 'launch-profiles');
+    const result: {
+        status: number | null;
+        stdout: string;
+        stderr: string;
+        signal?: NodeJS.Signals | null;
+        error?: NodeJS.ErrnoException;
+    } = { status: 0, stdout: '', stderr: 'Untrusted process output must not be copied into the report.' };
+    const calls: { command: string; args: string[]; options: Record<string, unknown> }[] = [];
+    const writes: { file: string; report: unknown }[] = [];
+    const warnings: string[] = [];
+    const redactions: string[] = [];
+
+    return {
+        runRoot,
+        file,
+        result,
+        calls,
+        writes,
+        warnings,
+        redactions,
+        helperPath: path.join(scriptsDirectory, 'get-windows-file-lock-owners.ps1'),
+        artifactPath: path.join(resultsDirectory, 'windows-file-locks.json'),
+        run(error: NodeJS.ErrnoException): void {
+            vm.runInNewContext(`${capture.getText(source)}\ncaptureWindowsFileLockDiagnostics(cleanupError);`, {
+                path,
+                __dirname: scriptsDirectory,
+                extensionRoot,
+                resultsDir: resultsDirectory,
+                shortRunRoot: runRoot,
+                cleanupError: error,
+                spawnSync: (command: string, args: string[], options: Record<string, unknown>) => {
+                    calls.push({ command, args: [...args], options: { ...options } });
+                    return result;
+                },
+                fs: {
+                    writeFileSync: (target: string, content: string) => {
+                        writes.push({ file: target, report: JSON.parse(content) });
+                    },
+                },
+                redactSensitiveArtifactText: (content: string) => {
+                    redactions.push(content);
+                    return content;
+                },
+                console: { warn: (message: string) => warnings.push(message) },
+            });
+        },
+    };
+}
+
 function getTestBlock(source: string, testName: string): string {
     const sourceFile = ts.createSourceFile('e2e.test.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     const suiteStatements = getSuiteStatements(sourceFile);
@@ -1822,6 +1929,168 @@ builder.Build().Run();
         assert.ok(cleanupBody.includes('removePathWithoutFollowingLinks(shortRunRoot, {'));
         assert.ok(!cleanupBody.includes('removePath(shortRunRoot'));
         assert.ok(!cleanupBody.includes('fs.rmSync('));
+    });
+
+    test('captures Windows lock ownership without suppressing the original cleanup warning', () => {
+        const lockError = Object.assign(new Error('The extension host log is locked.'), { code: 'EBUSY' });
+        const harness = createRunRootCleanupHarness('win32', lockError);
+
+        harness.run();
+
+        assert.deepStrictEqual(harness.operations, ['remove', 'warn', 'inspect']);
+        assert.deepStrictEqual(harness.inspectedErrors, [lockError]);
+        assert.deepStrictEqual(harness.warnings, [
+            `Warning: unable to remove locked E2E path '${harness.root}': ${lockError.message}`,
+        ]);
+    });
+
+    test('retains the cleanup warning when writing lock diagnostics fails', () => {
+        const lockError = Object.assign(new Error('The extension host log is locked.'), { code: 'EBUSY' });
+        const diagnosticError = new Error('Writing the lock diagnostic artifact failed.');
+        const harness = createRunRootCleanupHarness('win32', lockError, diagnosticError);
+
+        assert.throws(() => harness.run(), error => error === diagnosticError);
+
+        assert.deepStrictEqual(harness.inspectedErrors, [lockError]);
+        assert.deepStrictEqual(harness.warnings, [
+            `Warning: unable to remove locked E2E path '${harness.root}': ${lockError.message}`,
+        ]);
+    });
+
+    test('does not inspect lock owners after successful cleanup', () => {
+        const harness = createRunRootCleanupHarness('win32');
+
+        harness.run();
+
+        assert.deepStrictEqual(harness.operations, ['remove']);
+        assert.deepStrictEqual(harness.inspectedErrors, []);
+        assert.deepStrictEqual(harness.warnings, []);
+    });
+
+    for (const [platform, code] of [['linux', 'EBUSY'], ['win32', 'EIO']] as const) {
+        test(`preserves ${platform} ${code} cleanup errors without querying Windows owners`, () => {
+            const cleanupError = Object.assign(new Error('Cleanup failed.'), { code });
+            const harness = createRunRootCleanupHarness(platform, cleanupError);
+
+            assert.throws(() => harness.run(), error => error === cleanupError);
+
+            assert.deepStrictEqual(harness.operations, ['remove']);
+            assert.deepStrictEqual(harness.inspectedErrors, []);
+            assert.deepStrictEqual(harness.warnings, []);
+        });
+    }
+
+    test('bounds the read-only query and preserves exact owner identities in its artifact', () => {
+        const harness = createFileLockDiagnosticsHarness();
+        const report = {
+            schemaVersion: 1,
+            status: 'completed',
+            file: harness.file,
+            runRoot: harness.runRoot,
+            query: {
+                observations: [{
+                    File: harness.file,
+                    Status: 'owners-observed',
+                    Owners: [{ Pid: 123, StartTimeFileTimeUtc: '134339655293101837', ApplicationName: 'PowerShell 7' }],
+                }],
+            },
+        };
+        harness.result.stdout = JSON.stringify(report);
+
+        harness.run(Object.assign(new Error('Locked.'), { code: 'EBUSY', path: harness.file }));
+
+        assert.deepStrictEqual(harness.calls, [{
+            command: 'pwsh',
+            args: [
+                '-NoLogo', '-NoProfile', '-NonInteractive',
+                '-File', harness.helperPath,
+                '-FilePath', harness.file,
+                '-RunRoot', harness.runRoot,
+                '-TimeoutMs', '10000',
+            ],
+            options: { encoding: 'utf8', shell: false, windowsHide: true, timeout: 15000, maxBuffer: 1024 * 1024 },
+        }]);
+        assert.deepStrictEqual(harness.writes, [{ file: harness.artifactPath, report }]);
+        assert.deepStrictEqual(harness.redactions.map(content => JSON.parse(content)), [report]);
+        assert.deepStrictEqual(harness.warnings, [
+            `Windows file-lock diagnostics (completed): ${path.join('.test-results', 'e2e', 'launch-profiles', 'windows-file-locks.json')}`,
+        ]);
+    });
+
+    test('keeps an incomplete lock-owner observation explicit instead of treating exit zero as success', () => {
+        const harness = createFileLockDiagnosticsHarness();
+        const report = {
+            schemaVersion: 1,
+            status: 'timeout',
+            query: {
+                backgroundQueryStillRunning: true,
+                observations: [{ File: harness.file, Status: 'timeout', Owners: [] }],
+            },
+        };
+        harness.result.stdout = JSON.stringify(report);
+
+        harness.run(Object.assign(new Error('Locked.'), { code: 'EBUSY', path: harness.file }));
+
+        assert.deepStrictEqual(harness.writes, [{ file: harness.artifactPath, report }]);
+    });
+
+    for (const code of ['ENOENT', 'ETIMEDOUT']) {
+        test(`records a ${code} lock-query invocation error without guessing an owner`, () => {
+            const harness = createFileLockDiagnosticsHarness();
+            harness.result.error = Object.assign(new Error('Invocation failed.'), { code });
+
+            harness.run(Object.assign(new Error('Locked.'), { code: 'EBUSY', path: harness.file }));
+
+            assert.deepStrictEqual(harness.writes, [{
+                file: harness.artifactPath,
+                report: {
+                    schemaVersion: 1, status: 'invocation-error', file: harness.file,
+                    runRoot: harness.runRoot, query: null, errorCode: code,
+                },
+            }]);
+        });
+    }
+
+    test('records a failed query host without storing its untrusted stdout or stderr', () => {
+        const harness = createFileLockDiagnosticsHarness();
+        harness.result.status = 1;
+        harness.result.stdout = 'Untrusted output.';
+
+        harness.run(Object.assign(new Error('Locked.'), { code: 'EBUSY', path: harness.file }));
+
+        assert.deepStrictEqual(harness.writes, [{
+            file: harness.artifactPath,
+            report: {
+                schemaVersion: 1, status: 'invocation-failed', file: harness.file,
+                runRoot: harness.runRoot, query: null, exitCode: 1, signal: null,
+            },
+        }]);
+    });
+
+    for (const [stdout, status] of [['not-json', 'invalid-json'], ['null', 'invalid-response'], ['{"schemaVersion":2,"status":"completed"}', 'invalid-response']]) {
+        test(`records ${stdout} as an invalid lock-query response`, () => {
+            const harness = createFileLockDiagnosticsHarness();
+            harness.result.stdout = stdout;
+
+            harness.run(Object.assign(new Error('Locked.'), { code: 'EBUSY', path: harness.file }));
+
+            assert.deepStrictEqual(harness.writes, [{
+                file: harness.artifactPath,
+                report: { schemaVersion: 1, status, file: harness.file, runRoot: harness.runRoot, query: null },
+            }]);
+        });
+    }
+
+    test('records a missing cleanup error path without starting an unscoped query', () => {
+        const harness = createFileLockDiagnosticsHarness();
+
+        harness.run(Object.assign(new Error('Locked.'), { code: 'EBUSY' }));
+
+        assert.deepStrictEqual(harness.calls, []);
+        assert.deepStrictEqual(harness.writes, [{
+            file: harness.artifactPath,
+            report: { schemaVersion: 1, status: 'missing-error-path', file: null, runRoot: harness.runRoot, query: null },
+        }]);
     });
 
     test('pins the VS Code version the download cache is keyed on', () => {
