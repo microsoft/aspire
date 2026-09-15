@@ -6,6 +6,10 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+
+#pragma warning disable ASPIRECERTIFICATES001
 
 namespace Aspire.Hosting.SqlServer.Tests;
 
@@ -93,7 +97,7 @@ public class AddSqlServerTests
         var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
 
         Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=p@ssw0rd1;TrustServerCertificate=true", connectionString);
-        Assert.Equal("Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value};TrustServerCertificate=true", connectionStringResource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal("Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value}{cond-sqlserver-bindings-tcp-tlsenabled-bbec657b.connectionString}", connectionStringResource.ConnectionStringExpression.ValueExpression);
     }
 
     [Fact]
@@ -132,7 +136,7 @@ public class AddSqlServerTests
         var expectedManifest = $$"""
             {
               "type": "container.v0",
-              "connectionString": "Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={sqlserver-password.value};TrustServerCertificate=true",
+              "connectionString": "Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={sqlserver-password.value}{cond-sqlserver-bindings-tcp-tlsenabled-bbec657b.connectionString}",
               "image": "{{SqlServerContainerImageTags.Registry}}/{{SqlServerContainerImageTags.Image}}:{{SqlServerContainerImageTags.Tag}}",
               "env": {
                 "ACCEPT_EULA": "Y",
@@ -172,7 +176,7 @@ public class AddSqlServerTests
         var expectedManifest = $$"""
             {
               "type": "container.v0",
-              "connectionString": "Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value};TrustServerCertificate=true",
+              "connectionString": "Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value}{cond-sqlserver-bindings-tcp-tlsenabled-bbec657b.connectionString}",
               "image": "{{SqlServerContainerImageTags.Registry}}/{{SqlServerContainerImageTags.Image}}:{{SqlServerContainerImageTags.Tag}}",
               "env": {
                 "ACCEPT_EULA": "Y",
@@ -278,6 +282,180 @@ public class AddSqlServerTests
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<SqlServerServerResource>());
         var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
         Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=p@ssw0rd1;TrustServerCertificate=true", connectionString);
-        Assert.Equal("Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value};TrustServerCertificate=true", connectionStringResource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal("Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value}{cond-sqlserver-bindings-tcp-tlsenabled-bbec657b.connectionString}", connectionStringResource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public async Task SqlServerWithCertificateHasCorrectConnectionString()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cert = CreateTestCertificate();
+
+        var pass = builder.AddParameter("pass", "p@ssw0rd1");
+        var sqlServer = builder.AddSqlServer("sqlserver", pass)
+            .WithHttpsCertificate(cert)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 1433));
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, appModel));
+
+        Assert.True(sqlServer.Resource.PrimaryEndpoint.TlsEnabled);
+
+        var connectionString = await sqlServer.Resource.GetConnectionStringAsync(default);
+        Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=p@ssw0rd1;Encrypt=true", connectionString);
+
+        var jdbcConnectionString = await sqlServer.Resource.JdbcConnectionString.GetValueAsync(default);
+        Assert.Equal("jdbc:sqlserver://localhost:1433;encrypt=true", jdbcConnectionString);
+    }
+
+    [Fact]
+    public async Task SqlServerWithoutCertificateHasCorrectConnectionString()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var pass = builder.AddParameter("pass", "p@ssw0rd1");
+        var sqlServer = builder.AddSqlServer("sqlserver", pass)
+            .WithoutHttpsCertificate()
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 1433));
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, appModel));
+
+        Assert.False(sqlServer.Resource.PrimaryEndpoint.TlsEnabled);
+
+        var connectionString = await sqlServer.Resource.GetConnectionStringAsync(default);
+        Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=p@ssw0rd1;TrustServerCertificate=true", connectionString);
+
+        var jdbcConnectionString = await sqlServer.Resource.JdbcConnectionString.GetValueAsync(default);
+        Assert.Equal("jdbc:sqlserver://localhost:1433;trustServerCertificate=true", jdbcConnectionString);
+    }
+
+    [Fact]
+    public async Task SqlServerWritesMssqlConfWhenCertificateIsAvailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sqlServer = builder.AddSqlServer("sqlserver");
+
+        var annotation = Assert.Single(sqlServer.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
+        Assert.Equal("/var/opt/mssql", annotation.DestinationPath);
+
+        var context = new ContainerFileSystemCallbackContext
+        {
+            Model = sqlServer.Resource,
+            Services = new ServiceCollection().BuildServiceProvider(),
+            HttpsCertificateContext = new ContainerFileSystemCallbackHttpsCertificateContext
+            {
+                CertificatePath = ReferenceExpression.Create($"/certs/cert.pem"),
+                KeyPath = ReferenceExpression.Create($"/certs/key.pem"),
+                CertificateWithKeyPath = ReferenceExpression.Create($"/certs/combined.pem"),
+                PfxPath = ReferenceExpression.Create($"/certs/cert.pfx"),
+            },
+        };
+
+        var entries = await annotation.Callback(context, default);
+        var file = Assert.IsType<ContainerFile>(Assert.Single(entries));
+
+        Assert.Equal("mssql.conf", file.Name);
+        Assert.Contains("tlscert = /certs/cert.pem", file.Contents);
+        Assert.Contains("tlskey = /certs/key.pem", file.Contents);
+        Assert.Contains("forceencryption = 1", file.Contents);
+    }
+
+    [Fact]
+    public async Task SqlServerWritesNoMssqlConfFilesWhenNoCertificateIsAvailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sqlServer = builder.AddSqlServer("sqlserver");
+
+        var annotation = Assert.Single(sqlServer.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
+
+        var context = new ContainerFileSystemCallbackContext
+        {
+            Model = sqlServer.Resource,
+            Services = new ServiceCollection().BuildServiceProvider(),
+            HttpsCertificateContext = null,
+        };
+
+        var entries = await annotation.Callback(context, default);
+        Assert.Empty(entries);
+    }
+
+    [Fact]
+    public async Task SqlServerDoesNotEnableTlsWhenDeveloperCertificateIsTooOldForLoopbackAddress()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var oldDevCert = CreateFakeDeveloperCertificate(version: 5);
+
+        builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
+            [oldDevCert], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
+
+        var sqlServer = builder.AddSqlServer("sqlserver")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 1433));
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, appModel));
+
+        Assert.False(sqlServer.Resource.PrimaryEndpoint.TlsEnabled);
+
+        var connectionString = await sqlServer.Resource.GetConnectionStringAsync(default);
+        Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=" + await sqlServer.Resource.PasswordParameter.GetValueAsync(default) + ";TrustServerCertificate=true", connectionString);
+    }
+
+    [Fact]
+    public async Task SqlServerEnablesTlsWhenDeveloperCertificateSupportsLoopbackAddress()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var devCert = CreateFakeDeveloperCertificate(version: 6);
+
+        builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
+            [devCert], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
+
+        var sqlServer = builder.AddSqlServer("sqlserver")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 1433));
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, appModel));
+
+        Assert.True(sqlServer.Resource.PrimaryEndpoint.TlsEnabled);
+
+        var connectionString = await sqlServer.Resource.GetConnectionStringAsync(default);
+        Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=" + await sqlServer.Resource.PasswordParameter.GetValueAsync(default) + ";Encrypt=true", connectionString);
+    }
+
+    private static X509Certificate2 CreateFakeDeveloperCertificate(byte version)
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=localhost", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(
+            X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
+        request.CertificateExtensions.Add(new X509Extension(
+            new AsnEncodedData(new Oid("1.3.6.1.4.1.311.84.1.1", "ASP.NET Core HTTPS development certificate"), [version]),
+            critical: false));
+
+        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+    }
+
+    private static X509Certificate2 CreateTestCertificate()
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(
+            X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
+
+        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
     }
 }

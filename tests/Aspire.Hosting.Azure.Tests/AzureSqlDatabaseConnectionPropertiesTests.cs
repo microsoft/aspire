@@ -106,7 +106,7 @@ public class AzureSqlDatabaseConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("JdbcConnectionString", property.Key);
-                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};trustServerCertificate=true", property.Value.ValueExpression);
+                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port}{cond-sql-bindings-tcp-tlsenabled-9a3d157c.connectionString}", property.Value.ValueExpression);
             },
             property =>
             {
@@ -162,7 +162,7 @@ public class AzureSqlDatabaseConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("JdbcConnectionString", property.Key);
-                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=mydb;trustServerCertificate=true", property.Value.ValueExpression);
+                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=mydb{cond-sql-bindings-tcp-tlsenabled-9a3d157c.connectionString}", property.Value.ValueExpression);
             },
             property =>
             {
