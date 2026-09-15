@@ -276,8 +276,18 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(10));
 
-            // Configure a deterministic default workspace bound to this cluster. `rad install
-            // kubernetes` already ensures the `default` group and environment exist; `rad deploy`
+            // Radius 0.60.2 can finish installing without creating the default group/environment.
+            // Create them explicitly before binding the workspace, as the KinD E2E helper does.
+            output.WriteLine("Step 9a: Creating the default Radius resource group and environment...");
+            await auto.TypeAsync("rad group create default");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            await auto.TypeAsync("rad env create default --group default");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            // Configure a deterministic default workspace bound to this cluster. `rad deploy`
             // (invoked by `aspire deploy`) passes no --workspace/--group/--environment, so it
             // resolves the default workspace scope. Create the workspace explicitly instead of
             // relying on the interactive `rad init`. This (and every other `rad`) goes through the
