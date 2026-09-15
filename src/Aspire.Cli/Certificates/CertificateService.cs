@@ -51,6 +51,7 @@ internal sealed class CertificateService(
     ICertificateToolRunner certificateToolRunner,
     IInteractionService interactionService,
     AspireCliTelemetry telemetry,
+    ICIEnvironmentDetector ciEnvironmentDetector,
     ICliHostEnvironment hostEnvironment,
     IEnvironment environment,
     CliExecutionContext executionContext,
@@ -67,12 +68,15 @@ internal sealed class CertificateService(
         var environmentVariables = new Dictionary<string, string>();
         var isLinux = environment.IsLinux();
 
-        // In non-interactive environments on macOS and Windows we can't successfully
-        // prompt for trust (macOS Keychain password, Windows trust dialog).
+        // In CI and other non-interactive environments on macOS and Windows we can't
+        // successfully prompt for trust (macOS Keychain password, Windows trust dialog).
+        // Check CI separately because PTY-based tests can enable interactive CLI prompts
+        // through playground mode while the runner still cannot handle an OS trust dialog.
         // Skip the trust attempt but still check the current state so we can warn when
         // the environment does not already have a trusted certificate. Linux trust is
         // non-interactive so it's safe to run the full flow there.
-        var canPerformTrust = hostEnvironment.SupportsInteractiveInput || isLinux;
+        var canPerformTrust = isLinux ||
+            (hostEnvironment.SupportsInteractiveInput && !ciEnvironmentDetector.IsCIEnvironment());
 
         if (!canPerformTrust)
         {

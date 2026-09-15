@@ -217,6 +217,60 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task EnsureCertificatesTrustedAsync_InteractivePlaygroundInCI_ChecksButDoesNotTrustOnNonLinux()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var trustCalled = false;
+        var checkCalled = false;
+
+        var toolRunner = new TestCertificateToolRunner
+        {
+            TrustHttpCertificateCallback = () =>
+            {
+                trustCalled = true;
+                return EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+            },
+            CheckHttpCertificateCallback = () =>
+            {
+                checkCalled = true;
+                return CreateTrustResult(CertificateManager.TrustLevel.Full);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CliHostEnvironmentFactory = sp =>
+            {
+                var configuration = sp.GetRequiredService<IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: false);
+            };
+            options.ConfigurationCallback = configuration =>
+            {
+                configuration["ASPIRE_PLAYGROUND"] = "true";
+                configuration["CI"] = "true";
+            };
+        });
+
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateWindows());
+
+        using var sp = services.BuildServiceProvider();
+        var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        Assert.True(hostEnvironment.SupportsInteractiveInput);
+
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.False(trustCalled);
+        Assert.True(checkCalled);
+        Assert.True(result.Success);
+        Assert.False(result.WasCancelled);
+        Assert.Null(result.ResultCode);
+        Assert.Empty(result.EnvironmentVariables);
+    }
+
+    [Fact]
     public async Task CertificatePemExport_IsExplicitAndUsesAspireHomeDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -438,10 +492,11 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             {
                 var interactiveService = sp.GetRequiredService<IInteractionService>();
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
+                var ciEnvironmentDetector = sp.GetRequiredService<ICIEnvironmentDetector>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
                 var executionContext = sp.GetRequiredService<CliExecutionContext>();
                 var logger = sp.GetRequiredService<ILogger<CertificateService>>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, TestEnvironment.CreateLinux(), executionContext, logger);
+                return new CertificateService(toolRunner, interactiveService, telemetry, ciEnvironmentDetector, hostEnvironment, TestEnvironment.CreateLinux(), executionContext, logger);
             };
         });
 
@@ -633,10 +688,11 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             {
                 var interactiveService = sp.GetRequiredService<IInteractionService>();
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
+                var ciEnvironmentDetector = sp.GetRequiredService<ICIEnvironmentDetector>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
                 var executionContext = sp.GetRequiredService<CliExecutionContext>();
                 var logger = sp.GetRequiredService<ILogger<CertificateService>>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, environment ?? sp.GetRequiredService<IEnvironment>(), executionContext, logger);
+                return new CertificateService(toolRunner, interactiveService, telemetry, ciEnvironmentDetector, hostEnvironment, environment ?? sp.GetRequiredService<IEnvironment>(), executionContext, logger);
             };
         });
 
