@@ -474,6 +474,9 @@
   <data name="ResourceGraphNoEndpoints" xml:space="preserve">
     <value>No endpoints</value>
   </data>
+  <data name="ResourceGraphAppHostType" xml:space="preserve">
+    <value>App host</value>
+  </data>
   <data name="PauseButtonTitle" xml:space="preserve">
     <value>Pause incoming data</value>
   </data>

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
+    <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
+    <Description>Azure Monitor health model publishing and managed Prometheus ingestion resources for Aspire.</Description>
+    <PackageTags>aspire integration hosting azure monitoring health prometheus</PackageTags>
+    <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.AppContainers\Aspire.Hosting.Azure.AppContainers.csproj" />
+    <PackageReference Include="System.IO.Hashing" />
+    <Compile Include="$(SharedDir)HealthModels\*.cs" LinkBase="Shared\HealthModels" />
+    <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Shared\KnownRelationshipTypes.cs" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Tests" />
+  </ItemGroup>
+</Project>

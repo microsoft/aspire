@@ -196,6 +196,31 @@
 ::deep .resource-graph-container {
     grid-area: resources-tab-content;
     position: relative; /* So graph buttons are position inside the container */
+    overflow: hidden;
+}
+
+/* The SVG has to fill its container for the viewBox set in script to map 1:1 to on-screen pixels.
+   Without this it falls back to the SVG default size and the visible canvas doesn't match the area the
+   graph is actually laid out in. */
+::deep .resource-graph {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Dot grid drawn under the graph. It lives inside the zoom group so it pans and scales with the content,
+   which makes the extent of the canvas obvious while dragging nodes around. */
+::deep .resource-graph-grid-dot {
+    fill: var(--neutral-stroke-rest);
+    opacity: 0.35;
+}
+
+::deep .resource-graph .nodes {
+    cursor: grab;
+}
+
+::deep .resource-graph .resource-group-pinned {
+    cursor: default;
 }
 
 ::deep .resource-graph-controls {
@@ -231,10 +256,6 @@
     cursor: pointer;
 }
 
-::deep .resource-graph .nodes {
-    cursor: pointer;
-}
-
 ::deep .resource-name {
     fill: var(--colorNeutralForeground1);
     stroke: var(--aspire-page-background);
@@ -251,7 +272,7 @@
 }
 
 ::deep .resource-group-hover .resource-node {
-    fill: var(--resource-graph-hover-background) !important;
+    fill: var(--neutral-fill-hover);
 }
 
 ::deep .resource-group-selected .resource-scale {
@@ -259,7 +280,7 @@
 }
 
 ::deep .resource-group-selected .resource-node {
-    fill: var(--colorNeutralBackground3) !important;
+    fill: var(--neutral-fill-secondary-rest);
 }
 
 ::deep .resource-group-selected .resource-node-border {
@@ -357,28 +378,107 @@
     marker-end: url(#arrow-normal);
 }
 
+/* Links are coloured by the rolled up health of the child they point at, so an unhealthy resource tints
+   every link on the path back to the root. Unknown is intentionally not styled: it is the least severe
+   state, so a resource that hasn't reported yet stays neutral instead of drawing attention. */
+::deep .resource-link[data-health="Healthy"] {
+    stroke: var(--aspire-status-success);
+    stroke-width: 2;
+}
+
+::deep .resource-link[data-health="Degraded"] {
+    stroke: var(--aspire-status-warning);
+    stroke-width: 2;
+}
+
+::deep .resource-link[data-health="Unhealthy"] {
+    stroke: var(--aspire-status-error);
+    stroke-width: 2;
+}
+
+/* Arrow heads take the colour of the line they terminate so health colouring carries through to them.
+   The literal fill is a fallback for browsers without context-stroke support. */
 ::deep .arrow-normal {
-    fill: var(--colorNeutralStroke1);
+    fill: var(--neutral-stroke-rest);
+    fill: context-stroke;
 }
 
 ::deep .arrow-highlight {
-    fill: var(--aspire-button-hover-border);
+    fill: var(--neutral-stroke-hover);
+    fill: context-stroke;
 }
 
 ::deep .arrow-highlight-expand {
-    fill: var(--aspire-button-hover-border);
+    fill: var(--neutral-stroke-hover);
+    fill: context-stroke;
 }
 
+/* Highlighting must not replace the health colour or turn a health path into a dashed line. */
 ::deep .resource-link-highlight {
-    stroke: var(--aspire-button-hover-border);
-    stroke-dasharray: 5,5;
+    stroke: var(--neutral-stroke-hover);
+    stroke-dasharray: none;
     stroke-width: 2;
     marker-end: url(#arrow-highlight);
 }
 
 ::deep .resource-link-highlight-expand {
-    stroke: var(--aspire-button-hover-border);
-    stroke-dasharray: 5,5;
+    stroke: var(--neutral-stroke-hover);
+    stroke-dasharray: none;
     stroke-width: 2;
     marker-end: url(#arrow-highlight-expand);
+}
+
+::deep .resource-link-highlight[data-health="Healthy"],
+::deep .resource-link-highlight-expand[data-health="Healthy"] {
+    stroke: var(--aspire-status-success);
+}
+
+::deep .resource-link-highlight[data-health="Degraded"],
+::deep .resource-link-highlight-expand[data-health="Degraded"] {
+    stroke: var(--aspire-status-warning);
+}
+
+::deep .resource-link-highlight[data-health="Unhealthy"],
+::deep .resource-link-highlight-expand[data-health="Unhealthy"] {
+    stroke: var(--aspire-status-error);
+}
+
+/* A node carries its own rolled up state: a full strength outline plus a 30% tint of the same colour over
+   the node surface. The outline has no competing !important rule, so it survives hover and selection and
+   the health signal is never lost. */
+::deep .resource-group[data-health="Healthy"] .resource-node {
+    fill: color-mix(in srgb, var(--aspire-status-success) 30%, var(--aspire-page-background));
+}
+
+::deep .resource-group[data-health="Healthy"] .resource-node-border {
+    stroke: var(--aspire-status-success);
+    stroke-width: 2;
+}
+
+::deep .resource-group[data-health="Degraded"] .resource-node {
+    fill: color-mix(in srgb, var(--aspire-status-warning) 30%, var(--aspire-page-background));
+}
+
+::deep .resource-group[data-health="Degraded"] .resource-node-border {
+    stroke: var(--aspire-status-warning);
+    stroke-width: 2;
+}
+
+::deep .resource-group[data-health="Unhealthy"] .resource-node {
+    fill: color-mix(in srgb, var(--aspire-status-error) 30%, var(--aspire-page-background));
+}
+
+::deep .resource-group[data-health="Unhealthy"] .resource-node-border {
+    stroke: var(--aspire-status-error);
+    stroke-width: 2;
+}
+
+/* A node the user has dragged is pinned in place. The dashed outline marks it as manually positioned
+   without competing with the health colour, which owns the stroke colour. */
+::deep .resource-group-pinned .resource-node-border {
+    stroke-dasharray: 4 3;
+}
+
+::deep .tab-label > svg {
+    margin-right: calc(var(--design-unit) * 1px);
 }

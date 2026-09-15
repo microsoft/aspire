@@ -101,6 +101,7 @@
     <Project Path="src/Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.EventHubs.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.FrontDoor/Aspire.Hosting.Azure.FrontDoor.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Functions/Aspire.Hosting.Azure.Functions.csproj" />
+    <Project Path="src/Aspire.Hosting.Azure.HealthModels/Aspire.Hosting.Azure.HealthModels.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.KeyVault/Aspire.Hosting.Azure.KeyVault.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.Kusto.csproj" />
@@ -285,6 +286,10 @@
   </Folder>
   <Folder Name="/playground/HealthChecks/">
     <Project Path="playground/HealthChecks/HealthChecksSandbox.AppHost/HealthChecksSandbox.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/HealthModel/">
+    <Project Path="playground/HealthModel/HealthModel.Metrics/HealthModel.Metrics.csproj" />
+    <Project Path="playground/HealthModel/HealthModelSandbox.AppHost/HealthModelSandbox.AppHost.csproj" />
   </Folder>
   <Folder Name="/playground/kafka/">
     <Project Path="playground/kafka/Consumer/Consumer.csproj" />

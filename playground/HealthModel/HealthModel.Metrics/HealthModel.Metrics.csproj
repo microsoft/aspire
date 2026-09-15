@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\HealthModelScenario.cs" Link="HealthModelScenario.cs" />
+    <!-- The linked scenario also compiles in non-web projects with explicit DI imports. -->
+    <Using Remove="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,1 @@
+﻿min(((aspire_health_status{resource_name="api\"\\name",health_check="readiness\ncheck",replica_index="1"} >= 0) <= 2) and (time() - timestamp(aspire_health_status{resource_name="api\"\\name",health_check="readiness\ncheck",replica_index="1"}) < 180))

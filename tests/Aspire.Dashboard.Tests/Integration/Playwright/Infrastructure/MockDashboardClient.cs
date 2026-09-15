@@ -8,7 +8,7 @@ using Google.Protobuf.WellKnownTypes;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 
-public sealed class MockDashboardClient : IDashboardClient
+public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryWriter
 {
     public static readonly ResourceViewModel TestResource1 = ModelTestHelpers.CreateResource(
         resourceName: "TestResource",
@@ -80,7 +80,13 @@ public sealed class MockDashboardClient : IDashboardClient
         throw new NotImplementedException();
     }
 
-    public ResourceViewModel? GetResource(string resourceName) => null;
+    public ResourceViewModel? GetResource(string resourceName) =>
+        GetResources().FirstOrDefault(resource => StringComparers.ResourceName.Equals(resource.Name, resourceName));
 
-    public IReadOnlyList<ResourceViewModel> GetResources() => _resources ?? [];
+    public IReadOnlyList<ResourceViewModel> GetResources() => _resources ?? [TestResource1];
+
+    Task IResourceRepositoryWriter.ReplaceResourcesAsync(IReadOnlyList<Resource> resources) => throw new NotImplementedException();
+    Task IResourceRepositoryWriter.ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes) => throw new NotImplementedException();
+    Task IResourceRepositoryWriter.MarkConsoleLogsLoadedAsync(string resourceName) => throw new NotImplementedException();
+    Task IResourceRepositoryWriter.AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines) => throw new NotImplementedException();
 }
