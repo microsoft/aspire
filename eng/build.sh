@@ -62,6 +62,7 @@ extraargs=()
 warn_as_error=true
 explicit_warning_exemptions=''
 ci=false
+clean=false
 build_bundle=false
 runtime_version=""
 config="Debug"
@@ -178,6 +179,12 @@ while [[ $# > 0 ]]; do
       shift
       ;;
 
+     -clean)
+      clean=true
+      arguments+=("-clean")
+      shift
+      ;;
+
      -warnaserror|-warnnotaserror)
       if [[ $# -lt 2 ]]; then
         echo "No value supplied for $1." >&2
@@ -215,7 +222,9 @@ if [[ "${TreatWarningsAsErrors:-}" == "false" ]]; then
     warn_as_error=false
 fi
 
-if [[ "$warn_as_error" == "true" ]]; then
+# Arcade handles clean before invoking MSBuild, even when other actions are supplied.
+# Preserve SDK-free cleanup instead of bootstrapping just to evaluate unused policy.
+if [[ "$clean" != "true" && "$warn_as_error" == "true" ]]; then
     evaluation_properties=()
     # The guarded expansions also work with empty arrays under macOS Bash 3.2's nounset.
     for argument in ${arguments[@]+"${arguments[@]}"} ${extraargs[@]+"${extraargs[@]}"}; do

@@ -47,32 +47,41 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("pwsh", "default")]
-    [InlineData("bash", "default")]
-    [InlineData("pwsh", "default-actions")]
-    [InlineData("bash", "default-actions")]
-    [InlineData("pwsh", "strict")]
-    [InlineData("bash", "strict")]
-    [InlineData("pwsh", "additional")]
-    [InlineData("bash", "additional")]
-    [InlineData("pwsh", "context")]
-    [InlineData("bash", "context")]
-    [InlineData("pwsh", "mapped-property")]
-    [InlineData("bash", "mapped-property")]
-    [InlineData("pwsh", "property-alias")]
-    [InlineData("bash", "property-alias")]
-    [InlineData("pwsh", "disabled")]
-    [InlineData("bash", "disabled")]
-    [InlineData("pwsh", "environment-disabled")]
-    [InlineData("bash", "environment-disabled")]
-    [InlineData("pwsh", "unrelated")]
-    [InlineData("bash", "unrelated")]
-    [InlineData("pwsh", "empty")]
-    [InlineData("bash", "empty")]
-    [InlineData("pwsh", "invalid-policy")]
-    [InlineData("bash", "invalid-policy")]
+    [InlineData("pwsh", "eng/build.ps1", "default")]
+    [InlineData("bash", "build.sh", "default")]
+    [InlineData("bash", "restore.sh", "default")]
+    [InlineData("pwsh", "eng/build.ps1", "default-actions")]
+    [InlineData("bash", "build.sh", "default-actions")]
+    [InlineData("bash", "restore.sh", "default-actions")]
+    [InlineData("pwsh", "eng/build.ps1", "strict")]
+    [InlineData("bash", "build.sh", "strict")]
+    [InlineData("bash", "restore.sh", "strict")]
+    [InlineData("pwsh", "eng/build.ps1", "additional")]
+    [InlineData("bash", "build.sh", "additional")]
+    [InlineData("bash", "restore.sh", "additional")]
+    [InlineData("pwsh", "eng/build.ps1", "context")]
+    [InlineData("bash", "build.sh", "context")]
+    [InlineData("pwsh", "eng/build.ps1", "mapped-property")]
+    [InlineData("bash", "build.sh", "mapped-property")]
+    [InlineData("pwsh", "eng/build.ps1", "property-alias")]
+    [InlineData("bash", "build.sh", "property-alias")]
+    [InlineData("pwsh", "eng/build.ps1", "disabled")]
+    [InlineData("bash", "build.sh", "disabled")]
+    [InlineData("pwsh", "eng/build.ps1", "environment-disabled")]
+    [InlineData("bash", "build.sh", "environment-disabled")]
+    [InlineData("pwsh", "eng/build.ps1", "unrelated")]
+    [InlineData("bash", "build.sh", "unrelated")]
+    [InlineData("pwsh", "eng/build.ps1", "empty")]
+    [InlineData("bash", "build.sh", "empty")]
+    [InlineData("pwsh", "eng/build.ps1", "invalid-policy")]
+    [InlineData("bash", "build.sh", "invalid-policy")]
+    [InlineData("pwsh", "eng/build.ps1", "clean")]
+    [InlineData("bash", "build.sh", "clean")]
+    [InlineData("bash", "restore.sh", "clean")]
+    [InlineData("pwsh", "eng/build.ps1", "clean-with-build")]
+    [InlineData("bash", "build.sh", "clean-with-build")]
     [RequiresTools(["pwsh", "bash"])]
-    public async Task BuildEntryPointForwardsEvaluatedPolicyToStandaloneMSBuild(string shell, string scenario)
+    public async Task BuildEntryPointForwardsEvaluatedPolicyToStandaloneMSBuild(string shell, string entryPoint, string scenario)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var root = workspace.CreateDirectory("repository with spaces").FullName;
@@ -82,7 +91,13 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
             File.Copy(Path.Combine(RepoRoot.Path, "eng", file), Path.Combine(root, "eng", file));
         }
 
-        await File.WriteAllTextAsync(Path.Combine(root, "Directory.Build.props"), scenario == "invalid-policy" ? "<Project>" : """
+        foreach (var file in new[] { "build.sh", "restore.sh" })
+        {
+            File.Copy(Path.Combine(RepoRoot.Path, file), Path.Combine(root, file));
+        }
+
+        var clean = scenario is "clean" or "clean-with-build";
+        await File.WriteAllTextAsync(Path.Combine(root, "Directory.Build.props"), scenario == "invalid-policy" || clean ? "<Project>" : """
             <Project>
               <PropertyGroup>
                 <WarningsNotAsErrors>$(WarningsNotAsErrors);$(AdditionalWarningsNotAsErrors)</WarningsNotAsErrors>
@@ -105,6 +120,7 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
             function InitializeDotNetCli([bool]$install) {
               if (!$install) { throw 'Expected SDK initialization before evaluation.' }
               Set-Content $env:TEST_BOOTSTRAP 'initialized'
+              if ($env:TEST_CLEAN -eq 'true') { throw 'Clean must not initialize the SDK.' }
               Write-Host 'SDK initialized'
               Split-Path $env:TEST_DOTNET
             }
@@ -117,6 +133,10 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
             function InitializeDotNetCli {
               [[ "$1" == "true" ]] || exit 1
               printf 'initialized\n' > "$TEST_BOOTSTRAP"
+              if [[ "$TEST_CLEAN" == "true" ]]; then
+                echo 'Clean must not initialize the SDK.' >&2
+                exit 1
+              fi
               echo 'SDK initialized'
               _InitializeDotNetCli="$(dirname "$TEST_DOTNET")"
             }
@@ -124,15 +144,17 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(Path.Combine(common, "build.ps1"), """
             [CmdletBinding(PositionalBinding=$false)]
             param(
-              [switch]$restore, [switch]$build, [switch]$ci,
+              [switch]$restore, [switch]$build, [switch]$ci, [switch]$clean,
               [string]$configuration = 'Debug', [string]$projects, [string]$verbosity,
               [bool]$warnAsError = $true, [string]$warnNotAsError = '',
               [Parameter(ValueFromRemainingArguments=$true)][string[]]$properties = @()
             )
             [IO.File]::WriteAllLines($env:TEST_REPORT, @(
               $warnNotAsError, "$warnAsError".ToLowerInvariant(), "$($restore.IsPresent)".ToLowerInvariant(),
-              "$($build.IsPresent)".ToLowerInvariant(), $projects, $configuration
+              "$($build.IsPresent)".ToLowerInvariant(), "$($clean.IsPresent)".ToLowerInvariant(),
+              $projects, $configuration
             ) + @($properties))
+            if ($clean) { exit 0 }
             $msbuildArgs = @('msbuild', 'eng/Logger.proj', '-nologo', '-m', '-v:quiet')
             if ($warnAsError) { $msbuildArgs += '-warnaserror' }
             if ($warnNotAsError) { $msbuildArgs += "-warnnotaserror:$warnNotAsError" }
@@ -147,13 +169,15 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
             warn_as_error=true
             restore=false
             build=false
+            clean=false
             projects=''
             config=Debug
             properties=()
             while [[ $# -gt 0 ]]; do
               case "$1" in
-                -restore) restore=true; shift ;;
+                -restore|--restore) restore=true; shift ;;
                 -build) build=true; shift ;;
+                -clean) clean=true; shift ;;
                 -ci) shift ;;
                 -warnAsError) warn_as_error="$2"; shift 2 ;;
                 -warnNotAsError) warnings="$2"; shift 2 ;;
@@ -162,10 +186,11 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
                 *) properties+=("$1"); shift ;;
               esac
             done
-            printf '%s\n' "$warnings" "$warn_as_error" "$restore" "$build" "$projects" "$config" > "$TEST_REPORT"
+            printf '%s\n' "$warnings" "$warn_as_error" "$restore" "$build" "$clean" "$projects" "$config" > "$TEST_REPORT"
             if [[ ${#properties[@]} -gt 0 ]]; then
               printf '%s\n' "${properties[@]}" >> "$TEST_REPORT"
             fi
+            if [[ "$clean" == true ]]; then exit 0; fi
             msbuild_args=(msbuild eng/Logger.proj -nologo -m -v:quiet)
             if [[ "$warn_as_error" == true ]]; then msbuild_args+=(-warnaserror); fi
             if [[ -n "$warnings" ]]; then msbuild_args+=("-warnnotaserror:$warnings"); fi
@@ -174,9 +199,14 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(commonBash, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            File.SetUnixFileMode(Path.Combine(root, "eng", "build.sh"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
 
-        var arguments = new List<string> { "-restore", "-projects", "a project with spaces.csproj" };
+        var arguments = new List<string> { "-projects", "a project with spaces.csproj" };
+        if (entryPoint != "restore.sh")
+        {
+            arguments.Insert(0, "-restore");
+        }
         var expectedWarnings = new List<string> { "CS1591", "TST1001" };
         var expectedProperties = new List<string>();
         var expectedExitCode = 0;
@@ -184,6 +214,15 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
         {
             case "default-actions":
                 arguments.Clear();
+                break;
+            case "clean":
+            case "clean-with-build":
+                arguments = [shell == "bash" ? "--clean" : "-clean"];
+                if (scenario == "clean-with-build")
+                {
+                    arguments.AddRange(["-restore", "-build"]);
+                }
+                expectedWarnings.Clear();
                 break;
             case "strict":
             case "empty":
@@ -229,9 +268,9 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(harness, """
             $scriptArgs = @($env:TEST_ARGUMENTS | ConvertFrom-Json)
             if ($env:TEST_SHELL -eq 'pwsh') {
-              & pwsh -NoProfile -File eng/build.ps1 @scriptArgs
+              & pwsh -NoProfile -File $env:TEST_ENTRY_POINT @scriptArgs
             } else {
-              & bash eng/build.sh @scriptArgs
+              & bash $env:TEST_ENTRY_POINT @scriptArgs
             }
             exit $LASTEXITCODE
             """);
@@ -239,6 +278,8 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
         var bootstrap = Path.Combine(root, "bootstrap.txt");
         using var command = CreateCommand(harness, root)
             .WithEnvironmentVariable("TEST_SHELL", shell)
+            .WithEnvironmentVariable("TEST_ENTRY_POINT", entryPoint)
+            .WithEnvironmentVariable("TEST_CLEAN", clean ? "true" : "false")
             .WithEnvironmentVariable("TEST_ARGUMENTS", JsonSerializer.Serialize(arguments))
             .WithEnvironmentVariable("TEST_REPORT", report.Replace('\\', '/'))
             .WithEnvironmentVariable("TEST_BOOTSTRAP", bootstrap.Replace('\\', '/'))
@@ -249,7 +290,7 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
         result.EnsureExitCode(expectedExitCode);
 
         var warningsAsErrors = scenario is not ("disabled" or "environment-disabled");
-        Assert.Equal(warningsAsErrors, File.Exists(bootstrap));
+        Assert.Equal(warningsAsErrors && !clean, File.Exists(bootstrap));
         if (scenario == "invalid-policy")
         {
             Assert.False(File.Exists(report), "A failed policy evaluation must not start the build.");
@@ -263,9 +304,10 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
             new[]
             {
                 warningsAsErrors ? "true" : "false",
-                "true",
-                scenario == "default-actions" ? "true" : "false",
-                scenario == "default-actions" ? "" : "a project with spaces.csproj",
+                scenario != "clean" || entryPoint == "restore.sh" ? "true" : "false",
+                scenario == "clean-with-build" || (scenario == "default-actions" && entryPoint != "restore.sh") ? "true" : "false",
+                clean ? "true" : "false",
+                clean || scenario == "default-actions" ? "" : "a project with spaces.csproj",
                 scenario == "context" ? "Release" : "Debug",
             }
                 .Concat(expectedProperties),

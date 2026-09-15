@@ -46,6 +46,8 @@ public sealed class TestTriggerMapTests
     [InlineData("eng/WarningPolicy.proj")]
     [InlineData("eng/build.ps1")]
     [InlineData("eng/build.sh")]
+    [InlineData("build.sh")]
+    [InlineData("restore.sh")]
     public void WarningPolicyChangesSelectAllTests(string path)
     {
         var targets = s_map.PathRules

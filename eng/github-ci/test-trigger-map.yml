@@ -111,6 +111,8 @@ path_rules:
       - Directory.Build.targets
       - Directory.Packages.props
       - Aspire.slnx
+      - build.sh
+      - restore.sh
       - src/Directory.Build.props
       - src/Directory.Build.targets
       - tests/Directory.Build.props
@@ -124,7 +126,7 @@ path_rules:
       - eng/Versions.props
       - eng/*.targets    # any root-level eng build target (Testing, AfterSigning, ReplaceText, ...) -> err toward ALL
       - eng/OuterPreBuild.proj   # build-wide project-name validation traversal -> err toward ALL
-      - eng/WarningPolicy.proj   # evaluated by the build entry points before every warnings-as-errors build
+      - eng/WarningPolicy.proj   # evaluated before warnings-as-errors builds, except SDK-free cleanup
       - eng/build.ps1
       - eng/build.sh
       - eng/Version.Details.xml

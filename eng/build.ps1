@@ -12,6 +12,7 @@ Param(
   [switch]$bundle,
   [string]$runtimeVersion,
   [switch]$ci,
+  [switch]$clean,
   [ValidateSet('true','false')][string]$warnAsError = 'true',
   [string]$warnNotAsError = '',
 
@@ -130,6 +131,7 @@ foreach ($argument in $PSBoundParameters.Keys)
     "buildExtension"         { $arguments += "/p:BuildExtension=true" }
     "mauirestore"            { $arguments += '-restoreMaui' }
     "ci"                    { $arguments += '-ci' }
+    "clean"                 { if ($clean) { $arguments += '-clean' } }
     "warnAsError"            { } # Passed as a boolean below.
     "warnNotAsError"         { } # Merged with the repository policy below.
     "bundle"                 { } # Handled after main build
@@ -147,7 +149,9 @@ if ($env:TreatWarningsAsErrors -eq 'false') {
   $warnAsError = 'false'
 }
 
-if ([bool]::Parse($warnAsError)) {
+# Arcade handles clean before invoking MSBuild, even when other actions are supplied.
+# Preserve SDK-free cleanup instead of bootstrapping just to evaluate unused policy.
+if (!$clean -and [bool]::Parse($warnAsError)) {
   # Arcade restores through a standalone NuGet.targets project that never imports
   # Directory.Build.props. Forward its evaluated policy to the command-line logger too.
   # See https://github.com/dotnet/msbuild/issues/10801.
