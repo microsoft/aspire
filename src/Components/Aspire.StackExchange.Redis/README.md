@@ -96,6 +96,30 @@ You can also setup the [ConfigurationOptions](https://stackexchange.github.io/St
 builder.AddRedisClient("cache", configureOptions: options => options.ConnectTimeout = 3000);
 ```
 
+### RESP protocol
+
+StackExchange.Redis 3 uses RESP3 by default for endpoints that support it. Typed operations are generally transparent, but applications that process `RedisResult` values from `Execute`, `ExecuteAsync`, `ScriptEvaluate`, or `ScriptEvaluateAsync` may observe different result types and structures.
+
+To retain the StackExchange.Redis 2 behavior while migrating result-processing code, set `protocol=resp2` in the connection string:
+
+```json
+{
+  "ConnectionStrings": {
+    "cache": "localhost:6379,protocol=resp2"
+  }
+}
+```
+
+Alternatively, configure the protocol in code:
+
+```csharp
+builder.AddRedisClient(
+    "cache",
+    configureOptions: options => options.Protocol = RedisProtocol.Resp2);
+```
+
+See the [StackExchange.Redis RESP3 migration notes](https://seredis.dev/Resp3.html) for affected commands and result-processing guidance.
+
 ## AppHost extensions
 
 In your AppHost project, install the `Aspire.Hosting.Redis` library with [NuGet](https://www.nuget.org):

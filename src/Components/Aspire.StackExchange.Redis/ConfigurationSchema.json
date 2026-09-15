@@ -128,6 +128,14 @@
                       "type": "boolean",
                       "description": "Indicates whether endpoints should be resolved via DNS before connecting. If enabled the ConnectionMultiplexer will not re-resolve DNS when attempting to re-connect after a connection failure."
                     },
+                    "SentinelPassword": {
+                      "type": "string",
+                      "description": "The password to use to authenticate with Sentinel servers, only when different from the Redis server password (optional). If not specified, 'StackExchange.Redis.ConfigurationOptions.Password' is used when communicating with Sentinels."
+                    },
+                    "SentinelUser": {
+                      "type": "string",
+                      "description": "The username to use to authenticate with Sentinel servers, only when different from the Redis server password (optional). If not specified, 'StackExchange.Redis.ConfigurationOptions.User' is used when communicating with Sentinels."
+                    },
                     "ServiceName": {
                       "type": "string",
                       "description": "The service name used to resolve a service via sentinel."
@@ -160,6 +168,10 @@
                     "SyncTimeout": {
                       "type": "integer",
                       "description": "Specifies the time in milliseconds that the system should allow for synchronous operations (defaults to 5 seconds)."
+                    },
+                    "TcpKeepAlive": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether to enable TCP keep-alive when appropriate (endpoint- and platform-dependent)."
                     },
                     "TieBreaker": {
                       "type": "string",
