@@ -143,7 +143,7 @@ public class TerminalViewTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task TerminalChrome_UsesCurrentDimensionsAndIgnoresStaleCallbacks()
+    public async Task TerminalFooter_UsesCurrentDimensionsAndIgnoresStaleCallbacks()
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var initialization = module.Setup<int>("initTerminal", _ => true);
@@ -154,25 +154,26 @@ public class TerminalViewTests : DashboardTestContext
 
         await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
         {
-            TerminalId = 1, Generation = 2, Cols = 120, Rows = 30, Connected = true
+            TerminalId = 1, Generation = 2, Cols = 120, Rows = 30, SizeKey = "120x30", Connected = true
         }));
-        Assert.Equal("120 \u00d7 30", cut.Find(".terminal-dimensions").TextContent);
+        Assert.Equal("120x30", cut.FindComponent<FluentSelect<TerminalSizePreset, string>>().Instance.Value);
+        Assert.Empty(cut.FindAll(".terminal-dimensions"));
 
         foreach (var state in new[]
         {
-            new TerminalToolbarState { TerminalId = 1, Generation = 1, Cols = 80, Rows = 24 },
-            new TerminalToolbarState { TerminalId = 2, Generation = 3, Cols = 80, Rows = 24 }
+            new TerminalToolbarState { TerminalId = 1, Generation = 1, Cols = 80, Rows = 24, SizeKey = "80x24" },
+            new TerminalToolbarState { TerminalId = 2, Generation = 3, Cols = 80, Rows = 24, SizeKey = "80x24" }
         })
         {
             await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state));
-            Assert.Equal("120 \u00d7 30", cut.Find(".terminal-dimensions").TextContent);
+            Assert.Equal("120x30", cut.FindComponent<FluentSelect<TerminalSizePreset, string>>().Instance.Value);
         }
 
         await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
         {
-            TerminalId = 1, Generation = 2, Cols = 132, Rows = 50, Connected = true
+            TerminalId = 1, Generation = 2, Cols = 132, Rows = 50, SizeKey = "132x50", Connected = true
         }));
-        Assert.Equal("132 \u00d7 50", cut.Find(".terminal-dimensions").TextContent);
+        Assert.Equal("132x50", cut.FindComponent<FluentSelect<TerminalSizePreset, string>>().Instance.Value);
         Assert.Single(initialization.Invocations);
     }
 

@@ -17,10 +17,6 @@
         {
             <div class="terminal-titlebar">
                 <span class="terminal-title">@(ResourceName ?? Loc[nameof(Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)].Value)</span>
-                @if (_state.Cols > 0 && _state.Rows > 0)
-                {
-                    <span class="terminal-dimensions" title="@Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSize)]">@_state.Cols &times; @_state.Rows</span>
-                }
             </div>
         }
         <div class="terminal-body">
