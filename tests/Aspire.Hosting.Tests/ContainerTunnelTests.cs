@@ -25,7 +25,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         var yarp = builder.AddYarp($"{testName}-yarp").WithConfiguration(conf =>
         {
             conf.AddRoute("/servicea/{**catch-all}", servicea).WithTransformPathRemovePrefix("/servicea");
-        });
+        }).WithHttpHealthCheck("/servicea/");
 
         using var app = builder.Build();
 
@@ -33,6 +33,10 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         // getting the base images and building the tunnel (client) proxy image may take a while.
         await app.StartAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutDuration);
         await app.WaitForTextAsync("Application started.").DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+
+        // Wait until the tunnel (and servicea behind it) is actually able to serve traffic, rather than
+        // relying on HTTP client retries to paper over the container/tunnel still starting up.
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(yarp.Resource.Name).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
 
         using var clientA = app.CreateHttpClient(yarp.Resource.Name, "http");
         var response = await clientA.GetAsync("/servicea/").DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
@@ -64,7 +68,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         var yarp = builder.AddYarp($"{testName}-yarp").WithConfiguration(conf =>
         {
             conf.AddRoute("/servicea/{**catch-all}", servicea).WithTransformPathRemovePrefix("/servicea");
-        });
+        }).WithHttpHealthCheck("/servicea/");
 
         await using var app = builder.Build();
 
@@ -72,6 +76,10 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         // getting the base images and building the tunnel (client) proxy image may take a while.
         await app.StartAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutDuration);
         await app.WaitForTextAsync("Application started.").DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+
+        // Wait until the tunnel (and servicea behind it) is actually able to serve traffic, rather than
+        // relying on HTTP client retries to paper over the container/tunnel still starting up.
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(yarp.Resource.Name).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
 
         using var clientA = app.CreateHttpClient(yarp.Resource.Name, "http");
         var response = await clientA.GetAsync("/servicea/").DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
