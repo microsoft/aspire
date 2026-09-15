@@ -24,10 +24,6 @@
       "type": "value.v0",
       "connectionString": "{storage.outputs.blobEndpoint}"
     },
-    "storage-blobs": {
-      "type": "value.v0",
-      "connectionString": "{storage.outputs.blobEndpoint}"
-    },
     "myblobcontainer": {
       "type": "value.v0",
       "connectionString": "Endpoint={storage.outputs.blobEndpoint};ContainerName=myblobcontainer"
