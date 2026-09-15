@@ -371,6 +371,10 @@
     <Project Path="playground/Redis/Redis.ApiService/Redis.ApiService.csproj" />
     <Project Path="playground/Redis/Redis.AppHost/Redis.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/ResourceSubstitution/">
+    <Project Path="playground/ResourceSubstitution/ResourceSubstitution.Api/ResourceSubstitution.Api.csproj" />
+    <Project Path="playground/ResourceSubstitution/ResourceSubstitution.AppHost/ResourceSubstitution.AppHost.csproj" />
+  </Folder>
   <Folder Name="/playground/JavaSpringBoot/">
     <Project Path="playground/JavaSpringBoot/JavaSpringBoot.AppHost/JavaSpringBoot.AppHost.csproj" />
   </Folder>

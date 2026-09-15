@@ -32,8 +32,11 @@ public class RadiusServiceDiscoveryTests
     public void ResolveServicePort_ContainerUsesHostPortAsContainerPort()
     {
         // A container with only a host port listens on that port (ResolveEndpoints treats it as the
-        // implicit container port).
+        // implicit container port). ResolveEndpoints classifies containers by ContainerImageAnnotation
+        // (annotation-based, not the concrete type), so the annotation must be present just like a
+        // resource built via AddContainer would have.
         var resource = new ContainerResource("api");
+        resource.Annotations.Add(new ContainerImageAnnotation { Image = "my-image" });
         resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http", port: 5000));
 
         Assert.Equal(5000, RadiusServiceDiscovery.ResolveServicePort(resource, "http"));
@@ -44,7 +47,10 @@ public class RadiusServiceDiscoveryTests
     {
         // A project's default HTTP endpoint has no resolved port at publish time (the deployment
         // tool would assign one); it must still get a container port so the recipe creates a Service.
+        // ResolveEndpoints classifies projects by IProjectMetadata (annotation-based, not the concrete
+        // type), so the metadata must be present just like a resource built via AddProject would have.
         var resource = new ProjectResource("webapp");
+        resource.Annotations.Add(new TestProjectMetadata());
         resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http"));
 
         Assert.Equal(RadiusServiceDiscovery.DefaultProjectContainerPort, RadiusServiceDiscovery.ResolveServicePort(resource, "http"));
@@ -56,6 +62,7 @@ public class RadiusServiceDiscoveryTests
         // An explicit portless HTTPS endpoint (not the synthetic default) must still get a container
         // port so the recipe creates a Service — matching the Kubernetes publisher's 8080 default.
         var resource = new ProjectResource("webapp");
+        resource.Annotations.Add(new TestProjectMetadata());
         resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https", name: "https"));
 
         Assert.Equal(RadiusServiceDiscovery.DefaultProjectContainerPort, RadiusServiceDiscovery.ResolveServicePort(resource, "https"));
@@ -67,11 +74,17 @@ public class RadiusServiceDiscoveryTests
         // The synthetic default HTTPS endpoint is skipped: containers don't terminate TLS in-cluster
         // and the framework reuses the HTTP port for it, so no separate Service is created.
         var resource = new ProjectResource("webapp");
+        resource.Annotations.Add(new TestProjectMetadata());
         var https = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https", name: "https");
         resource.Annotations.Add(https);
         resource.Annotations.Add(new ProjectLaunchDefaultsAnnotation { DefaultHttpsEndpoint = https });
 
         Assert.Null(RadiusServiceDiscovery.ResolveServicePort(resource, "https"));
+    }
+
+    private sealed class TestProjectMetadata : IProjectMetadata
+    {
+        public string ProjectPath => "/app/webapp.csproj";
     }
 
     [Fact]

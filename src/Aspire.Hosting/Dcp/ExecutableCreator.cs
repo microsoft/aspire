@@ -203,14 +203,14 @@ internal sealed class ExecutableCreator(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        foreach (var project in _model.GetProjectResources())
+        foreach (var project in _model.GetProjectAnnotatedResources())
         {
             if (!project.TryGetProjectMetadata(out var projectMetadata))
             {
-                throw new InvalidOperationException($"Project resource '{project.Name}' is missing required metadata.");
+                throw new InvalidOperationException($"Project resource '{project.Name}' is missing required project metadata annotation, despite being returned from GetProjectAnnotatedResources().");
             }
 
-            EnsureRequiredAnnotations(project);
+            EnsureRequiredAnnotations(project, ProjectExecutableLaunchRecipe.Instance);
             var replicas = project.GetReplicaCount();
 
             for (var i = 0; i < replicas; i++)
@@ -232,13 +232,18 @@ internal sealed class ExecutableCreator(
 
     private void PreparePlainExecutables()
     {
-        foreach (var resource in _model.GetExecutableResources())
+        foreach (var resource in _model.GetExecutableAnnotatedResources())
         {
-            EnsureRequiredAnnotations(resource);
+            if (!resource.TryGetExecutableAnnotation(out var executableAnnotation))
+            {
+                throw new InvalidOperationException($"Executable resource '{resource.Name}' is missing required executable annotation, despite being returned from GetExecutableAnnotatedResources().");
+            }
+
+            EnsureRequiredAnnotations(resource, DirectExecutableLaunchRecipe.Instance);
 
             var instance = DcpExecutor.GetDcpInstance(resource, instanceIndex: 0);
-            var executable = Executable.Create(instance.Name, resource.Command);
-            executable.Spec.WorkingDirectory = resource.WorkingDirectory;
+            var executable = Executable.Create(instance.Name, executableAnnotation.Command);
+            executable.Spec.WorkingDirectory = executableAnnotation.WorkingDirectory;
 
             ApplyCommonAnnotations(executable, resource, instance, replicaCount: 1, replicaIndex: 0);
             ApplyExplicitStart(resource, executable.Spec);
@@ -325,10 +330,19 @@ internal sealed class ExecutableCreator(
             int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaIndex);
     }
 
-    private void EnsureRequiredAnnotations(IResource resource)
+    private void EnsureRequiredAnnotations(IResource resource, IExecutableLaunchRecipe defaultLaunchRecipe)
     {
         resource.AddLifeCycleCommands();
         _nameGenerator.EnsureDcpInstancesPopulated(resource);
+
+        // A resource classified as project/executable purely by annotation (rather than by deriving from
+        // ProjectResource/ExecutableResource, whose constructors add this) has no launch recipe yet. Substitution
+        // helpers (e.g. RunAsProject/RunAsTool) can attach a specific recipe themselves; fall back to the default
+        // recipe for the classification that routed the resource here so it can still produce a launch plan.
+        if (!resource.TryGetLastAnnotation<ExecutableLaunchRecipeAnnotation>(out _))
+        {
+            resource.Annotations.Add(new ExecutableLaunchRecipeAnnotation(defaultLaunchRecipe));
+        }
     }
 
     private void AddRenderedResource(IResource resource, Executable executable)
