@@ -3,6 +3,7 @@ import * as path from 'path';
 import { csharpExtensionId, getCsharpBlazorWasmDebuggingSupport, minimumCsharpBlazorWasmDebuggingVersion } from "../../capabilities";
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isBrowserLaunchConfiguration } from "../../dcp/types";
 import { browserDisplayName, browserLabel, csharpExtensionMissingForBlazorDebugging, csharpExtensionOutdatedForBlazorDebugging, invalidLaunchConfiguration, missingBlazorClientProject, unsupportedBrowserDebugTarget, unsupportedBrowserDebugTargetWithoutUrl } from "../../loc/strings";
+import { deleteEnvironmentVariable } from "../../utils/environment";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 
@@ -68,6 +69,16 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
             throw new Error(url
                 ? unsupportedBrowserDebugTarget(browser, url, supportedBrowsers)
                 : unsupportedBrowserDebugTargetWithoutUrl(browser, supportedBrowsers));
+        }
+
+        if (process.platform === 'win32' && browser === 'msedge') {
+            // Edge can relaunch under Windows compatibility settings, causing js-debug to cancel
+            // target discovery when the original process exits. Explicit null prevents js-debug
+            // from inheriting the variable again; C# forwards env to its Blazor browser launch.
+            // https://github.com/microsoft/aspire/issues/20151
+            const environment = { ...debugConfiguration.env };
+            deleteEnvironmentVariable(environment, '__COMPAT_LAYER');
+            debugConfiguration.env = { ...environment, __COMPAT_LAYER: null };
         }
 
         const projectPath = launchConfig.web_root;

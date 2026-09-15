@@ -52,6 +52,10 @@ suite('Aspire Blazor browser debugger E2E', function () {
             this.skip();
         }
 
+        if (process.platform === 'win32' && browser === 'msedge') {
+            assert.strictEqual(process.env.__COMPAT_LAYER, 'DetectorsAppHealth');
+        }
+
         const deadline = Date.now() + startupTimeoutMs;
         const remaining = () => Math.max(1, deadline - Date.now());
         await openAspireView();
