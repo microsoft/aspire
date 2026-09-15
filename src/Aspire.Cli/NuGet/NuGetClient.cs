@@ -399,16 +399,17 @@ internal sealed class NuGetClient(
                 continue;
             }
 
-            // PackageResolver needs every candidate version to reconcile ranges introduced
-            // by different parents; retaining only the first match can create false conflicts.
-            foreach (var candidate in distinctCandidates)
+            // Walk only the version the resolver can actually select for this range.
+            // `PackageResolverContext` is created with `DependencyBehavior.Lowest`, so that is the
+            // lowest satisfying version. Expanding every candidate version instead makes the pre-walk
+            // fan out across the full version history of every transitive dependency, which turns a
+            // single-package restore into tens of thousands of registration lookups (#19847).
+            // A second range for the same package still walks its own lowest version, so the
+            // resolver keeps the alternatives it needs to reconcile conflicting parents.
+            var selectedCandidate = distinctCandidates[0];
+            if (availablePackages.TryAdd(selectedCandidate, selectedCandidate))
             {
-                if (!availablePackages.TryAdd(candidate, candidate))
-                {
-                    continue;
-                }
-
-                foreach (var dependency in candidate.Dependencies)
+                foreach (var dependency in selectedCandidate.Dependencies)
                 {
                     pendingRanges.Enqueue((dependency.Id, dependency.VersionRange, IsRoot: false));
                 }

@@ -585,6 +585,66 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RestoreAsync_SelectsLowestSatisfyingDependencyVersion()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        var rootPackage = $"Aspire.Test.Package.Root.{Guid.NewGuid():N}";
+        var dependencyPackage = $"Aspire.Test.Package.Dep.{Guid.NewGuid():N}";
+        var missingPackage = $"Aspire.Test.Package.Missing.{Guid.NewGuid():N}";
+
+        CreatePackage(
+            feedDirectory.FullName,
+            rootPackage,
+            dependencies: [(dependencyPackage, "1.0.0")]);
+        CreatePackage(feedDirectory.FullName, dependencyPackage, version: "1.0.0");
+
+        // Newer versions of the dependency are not selectable under DependencyBehavior.Lowest.
+        // Expanding them anyway is what made the pre-walk fan out across the whole version history
+        // of every transitive package and stall restore (#19847), so they declare a dependency that
+        // does not exist to keep them clearly off the selected path.
+        CreatePackage(
+            feedDirectory.FullName,
+            dependencyPackage,
+            version: "2.0.0",
+            dependencies: [(missingPackage, "1.0.0")]);
+        CreatePackage(
+            feedDirectory.FullName,
+            dependencyPackage,
+            version: "3.0.0",
+            dependencies: [(missingPackage, "1.0.0")]);
+
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        var restoredPackages = await client.RestoreAsync(
+            [(rootPackage, "1.0.0")],
+            "net10.0",
+            runtimeIdentifier: null,
+            restoreDirectory.FullName,
+            [feedDirectory.FullName],
+            nugetConfigPath: null,
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken);
+
+        Assert.Collection(
+            restoredPackages.OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase),
+            package =>
+            {
+                Assert.Equal(dependencyPackage, package.Id);
+                Assert.Equal("1.0.0", package.Version);
+            },
+            package =>
+            {
+                Assert.Equal(rootPackage, package.Id);
+                Assert.Equal("1.0.0", package.Version);
+            });
+    }
+
+    [Fact]
     public async Task RestoreAsync_ReplacesIncompleteGlobalPackage()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
