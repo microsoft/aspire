@@ -477,7 +477,6 @@ affected_project_rules:
       - Aspire.Hosting.EntityFrameworkCore
       - Aspire.Hosting.Foundry
       - Aspire.Hosting.Garnet
-      - Aspire.Hosting.GitHub.Models
       - Aspire.Hosting.Kafka
       - Aspire.Hosting.Keycloak
       - Aspire.Hosting.Kubernetes
