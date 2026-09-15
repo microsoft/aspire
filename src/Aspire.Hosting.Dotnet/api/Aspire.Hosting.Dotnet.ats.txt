@@ -6,3 +6,4 @@ Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectResource [ExposePropert
 
 # Capabilities
 Aspire.Hosting.Dotnet/addDotnetProject(name: string, path: string, options?: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions) -> Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectResource
+Aspire.Hosting.Dotnet/withBuildEnvironment(name: string, value: string) -> Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectResource
