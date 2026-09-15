@@ -27,7 +27,9 @@
   },
   "overrides": {
     "esbuild": "0.28.1",
-    "fast-uri": "3.1.5",
-    "@opentelemetry/core": "2.8.0"
+    "fast-uri": "3.1.6",
+    "@opentelemetry/core": "2.8.0",
+    "baseline-browser-mapping": "2.11.0",
+    "browserslist": "4.28.7"
   }
 }
