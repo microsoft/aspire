@@ -247,6 +247,7 @@ public static class MySqlBuilderExtensions
         {
             var builderForExistingResource = builder.ApplicationBuilder.CreateResourceBuilder(existinghpMyAdminResource);
             configureContainer?.Invoke(builderForExistingResource);
+            builderForExistingResource.WithRelationship(builder.Resource, "PhpMyAdmin");
             return builder;
         }
 

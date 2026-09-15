@@ -220,6 +220,11 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Reconnect.resx</DependentUpon>
     </Compile>
+    <Compile Update="Resources\KnownUrlsDisplay.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>KnownUrlsDisplay.resx</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
@@ -327,6 +332,10 @@
       <SubType>Designer</SubType>
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>Reconnect.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\KnownUrlsDisplay.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>KnownUrlsDisplay.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
 

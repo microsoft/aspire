@@ -229,8 +229,8 @@ public class AddKafkaTests(ITestOutputHelper testOutputHelper)
             kafkaUi.WithHostPort(port);
             configureContainerInvocations++;
         };
-        builder.AddKafka("kafka1").WithKafkaUI(configureContainer: kafkaUIConfigurationCallback, containerName: containerName);
-        builder.AddKafka("kafka2").WithKafkaUI();
+        var kafka1 = builder.AddKafka("kafka1").WithKafkaUI(configureContainer: kafkaUIConfigurationCallback, containerName: containerName);
+        var kafka2 = builder.AddKafka("kafka2").WithKafkaUI();
 
         Assert.Single(builder.Resources.OfType<KafkaUIContainerResource>());
         var kafkaUiResource = Assert.Single(builder.Resources, r => r.Name == expectedContainerName);
@@ -238,6 +238,11 @@ public class AddKafkaTests(ITestOutputHelper testOutputHelper)
         var kafkaUiEndpoint = kafkaUiResource.Annotations.OfType<EndpointAnnotation>().Single();
         Assert.Equal(8080, kafkaUiEndpoint.TargetPort);
         Assert.Equal(port, kafkaUiEndpoint.Port);
+
+        // Both Kafka servers called WithKafkaUI() - kafka1 created the shared container, kafka2 reused it via the
+        // early-return path - so both should show as related to it, not just the one that created it.
+        Assert.Single(kafkaUiResource.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "KafkaUI" && r.Resource == kafka1.Resource);
+        Assert.Single(kafkaUiResource.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "KafkaUI" && r.Resource == kafka2.Resource);
     }
 
     [Fact]
