@@ -12,9 +12,17 @@ RUN_CONTEXT_FILE="$CI_FAILURE_DATA_DIR/run-context.json"
 JQ_SANITIZE_DEFS=$(cat <<'JQ'
   def sensitive_name:
     "(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|primary[_-]?key|secondary[_-]?key|secret|client[_-]?secret|connection[_-]?strings?(?:(?:__|[.:])[A-Za-z0-9_.-]+)?|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)|pgpassword|_?authToken|_?auth|accessToken|refreshToken)";
+  def display_sensitive_name:
+    "(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|primary[_-]?key|secondary[_-]?key|secret|client[_-]?secret|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)|pgpassword|_?authToken|_?auth|accessToken|refreshToken)";
+  def connection_name:
+    "(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?connection[_-]?strings?(?:(?:__|[.:])[A-Za-z0-9_.-]+)?)";
+  def bare_connection_name:
+    "(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?connection[_-]?strings?)";
+  def display_connection_name:
+    "(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?connection[_-]?strings?(?:(?:__|[.:])[A-Za-z0-9_.-]+))";
   def option_name:
     "(?i:password|passwd|pwd|token|auth[_-]?token|access[_-]?token|refresh[_-]?token|api[_-]?key|access[_-]?key|account[_-]?key|primary[_-]?key|secondary[_-]?key|secret|client[_-]?secret|connection[_-]?strings?|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)";
-  def redact_sensitive:
+  def redact_sensitive_with($field_names; $connection_names; $bare_connection_equals_only):
     gsub("-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)"; "[REDACTED]") |
     gsub("(?<prefix>\\b(?i:authorization|proxy-authorization)\\s*:\\s*(?i:basic|bearer)\\s+)[^\\s,;]+"; "\(.prefix)[REDACTED]") |
     gsub("(?<prefix>\\b(?i:x-api-key|api-key|access-token|client-secret)\\s*:\\s*)[^\\s,;]+"; "\(.prefix)[REDACTED]") |
@@ -28,10 +36,23 @@ JQ_SANITIZE_DEFS=$(cat <<'JQ'
     gsub("(?<prefix>(^|\\s)--" + option_name + "\\s+\")(?:\\\\[^\\r\\n]|[^\"\\\\\\r\\n])*(?<suffix>\")"; "\(.prefix)[REDACTED]\(.suffix)") |
     gsub("(?<prefix>(^|\\s)--" + option_name + "\\s+')(?:\\\\[^\\r\\n]|[^'\\\\\\r\\n])*(?<suffix>')"; "\(.prefix)[REDACTED]\(.suffix)") |
     gsub("(?<prefix>(^|[^\\S\\r\\n])--" + option_name + "[^\\S\\r\\n]+)(?![\"'])[^\\s]+"; "\(.prefix)[REDACTED]") |
-    gsub("(?<prefix>\\b(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?connection[_-]?strings?(?:(?:__|[.:])[A-Za-z0-9_.-]+)?)\\s*[:=]\\s*)(?![\"'])[^\\r\\n]+"; "\(.prefix)[REDACTED]") |
-    gsub("(?<prefix>\\b" + sensitive_name + "\\s*[:=]\\s*\")(?:\\\\[^\\r\\n]|[^\"\\\\\\r\\n])*(?<suffix>\")"; "\(.prefix)[REDACTED]\(.suffix)") |
-    gsub("(?<prefix>\\b" + sensitive_name + "\\s*[:=]\\s*')(?:\\\\[^\\r\\n]|[^'\\\\\\r\\n])*(?<suffix>')"; "\(.prefix)[REDACTED]\(.suffix)") |
-    gsub("(?<prefix>\\b" + sensitive_name + "\\s*[:=]\\s*)(?![\"'])[^;&\\r\\n]+"; "\(.prefix)[REDACTED]");
+    (if $bare_connection_equals_only then
+       gsub("(?<prefix>\\b" + bare_connection_name + "\\s*=\\s*\")(?:\\\\[^\\r\\n]|[^\"\\\\\\r\\n])*(?<suffix>\")"; "\(.prefix)[REDACTED]\(.suffix)") |
+       gsub("(?<prefix>\\b" + bare_connection_name + "\\s*=\\s*')(?:\\\\[^\\r\\n]|[^'\\\\\\r\\n])*(?<suffix>')"; "\(.prefix)[REDACTED]\(.suffix)") |
+       gsub("(?<prefix>\\b" + $connection_names + "\\s*[:=]\\s*\")(?:\\\\[^\\r\\n]|[^\"\\\\\\r\\n])*(?<suffix>\")"; "\(.prefix)[REDACTED]\(.suffix)") |
+       gsub("(?<prefix>\\b" + $connection_names + "\\s*[:=]\\s*')(?:\\\\[^\\r\\n]|[^'\\\\\\r\\n])*(?<suffix>')"; "\(.prefix)[REDACTED]\(.suffix)") |
+       gsub("(?<prefix>\\b" + bare_connection_name + "\\s*=\\s*)(?![\"'])[^\\r\\n]+"; "\(.prefix)[REDACTED]") |
+       gsub("(?<prefix>\\b" + $connection_names + "\\s*[:=]\\s*)(?![\"'])[^\\r\\n]+"; "\(.prefix)[REDACTED]")
+     else
+       gsub("(?<prefix>\\b" + $connection_names + "\\s*[:=]\\s*)(?![\"'])[^\\r\\n]+"; "\(.prefix)[REDACTED]")
+     end) |
+    gsub("(?<prefix>\\b" + $field_names + "\\s*[:=]\\s*\")(?:\\\\[^\\r\\n]|[^\"\\\\\\r\\n])*(?<suffix>\")"; "\(.prefix)[REDACTED]\(.suffix)") |
+    gsub("(?<prefix>\\b" + $field_names + "\\s*[:=]\\s*')(?:\\\\[^\\r\\n]|[^'\\\\\\r\\n])*(?<suffix>')"; "\(.prefix)[REDACTED]\(.suffix)") |
+    gsub("(?<prefix>\\b" + $field_names + "\\s*[:=]\\s*)(?![\"'])[^;&\\r\\n]+"; "\(.prefix)[REDACTED]");
+  def redact_sensitive:
+    redact_sensitive_with(sensitive_name; connection_name; false);
+  def redact_display_metadata:
+    redact_sensitive_with(display_sensitive_name; display_connection_name; true);
   def strip_unsafe:
     gsub("\u001b\\[[0-9;?]*[ -/]*[@-~]"; "") |
     gsub("\\p{Cf}|\\p{Zl}|\\p{Zp}|[\uFE00-\uFE0F]"; "") |
@@ -1246,7 +1267,10 @@ case "$COMMAND" in
       "$JQ_SANITIZE_DEFS"'
         def persisted_text($max_length):
           if type == "string" then
-            sanitize_single_line | .[0:$max_length]
+            redact_display_metadata |
+            gsub("[\r\n\t]+"; " ") |
+            strip_unsafe |
+            .[0:$max_length]
           else
             ""
           end;

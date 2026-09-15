@@ -5701,7 +5701,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "{}",
             "{}",
             "[]",
-            """{"number":42,"title":"PrimaryKey=pr-secret","state":"open","user":"octocat","head_branch":"ConnectionStrings__branch=branch-secret","base_branch":"main","html_url":"https://github.com/microsoft/aspire/pull/42"}""");
+            """{"number":42,"title":"Fix ConnectionString: preserve named configuration; PrimaryKey=pr-secret; \"ConnectionStrings\": \"Server=db.internal\"; ConnectionString=\"Server=quoted.internal\"; ConnectionStrings__db='Server=named.internal'","state":"open","user":"octocat","head_branch":"ConnectionStrings__branch=branch-secret","base_branch":"main","html_url":"https://github.com/microsoft/aspire/pull/42"}""");
 
         var outputPath = Path.Combine(_workspace.Path, "persisted-pr.json");
         var result = await RunPersistenceScriptAsync("write-run-summary", outputPath);
@@ -5718,7 +5718,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var pr = root.GetProperty("pr");
         Assert.Equal(7, pr.EnumerateObject().Count());
         Assert.Equal(42, pr.GetProperty("number").GetInt32());
-        Assert.Equal("PrimaryKey=[REDACTED]", pr.GetProperty("title").GetString());
+        Assert.Equal(
+            "Fix ConnectionString: preserve named configuration; PrimaryKey=[REDACTED]; \"ConnectionStrings\": \"[REDACTED]\"; ConnectionString=\"[REDACTED]\"; ConnectionStrings__db='[REDACTED]'",
+            pr.GetProperty("title").GetString());
         Assert.Equal("ConnectionStrings__branch=[REDACTED]", pr.GetProperty("head_branch").GetString());
         Assert.Equal("https://github.com/microsoft/aspire/pull/42", pr.GetProperty("url").GetString());
         Assert.Equal("known flaky test", root.GetProperty("failed_jobs")[0].GetProperty("reason").GetString());
