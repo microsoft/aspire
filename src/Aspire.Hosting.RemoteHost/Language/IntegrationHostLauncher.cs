@@ -196,17 +196,12 @@ internal sealed class IntegrationHostLauncher : IHostedService
                 continue;
             }
 
-            var hostDir = Path.GetDirectoryName(descriptor.HostEntryPoint)!;
-
             // Note: dependency restore for the integration host (e.g. `npm install` for TS)
             // is run by the CLI during its restore phase — symmetric with how the CLI runs
             // `dotnet build` on the AppHost server csproj before launching it. By the time
             // we get here the host's deps are already present on disk.
 
             var command = hostSpec.Execute.Command;
-            var argsTemplate = hostSpec.Execute.Args;
-
-            var args = string.Join(" ", argsTemplate.Select(a => a.Replace("{entryPoint}", descriptor.HostEntryPoint)));
 
             // On Windows, executables shipped via npm are .cmd shims (e.g. npx.cmd) — Process.Start
             // cannot find them by bare name without shell execution. Resolve to the full path via
@@ -217,15 +212,9 @@ internal sealed class IntegrationHostLauncher : IHostedService
                 _logger.LogDebug("Resolved integration host command '{Command}' to '{ResolvedCommand}'.", command, resolvedCommand);
             }
 
-            var psi = new ProcessStartInfo
-            {
-                FileName = resolvedCommand,
-                Arguments = args,
-                WorkingDirectory = hostDir,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
+            var psi = CreateProcessStartInfo(resolvedCommand, hostSpec.Execute.Args, descriptor.HostEntryPoint);
+            var hostDir = psi.WorkingDirectory;
+            var args = string.Join(" ", psi.ArgumentList);
 
             psi.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath;
             if (!string.IsNullOrEmpty(token))
@@ -333,6 +322,30 @@ internal sealed class IntegrationHostLauncher : IHostedService
                 }
             });
         }
+    }
+
+    /// <summary>
+    /// Creates launch settings preserving the argument boundaries declared by the language provider.
+    /// </summary>
+    internal static ProcessStartInfo CreateProcessStartInfo(string command, IReadOnlyList<string> argumentTemplates, string entryPoint)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = command,
+            WorkingDirectory = Path.GetDirectoryName(entryPoint)!,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        // Keep paths such as "/work/my integration/host.mts" as one argument.
+        // ArgumentList applies platform-specific escaping for spaces, quotes, and backslashes.
+        foreach (var argument in argumentTemplates)
+        {
+            startInfo.ArgumentList.Add(argument.Replace("{entryPoint}", entryPoint));
+        }
+
+        return startInfo;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

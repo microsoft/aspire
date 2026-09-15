@@ -336,17 +336,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         // This must happen before guest AppHost dependency installation because the
         // generated code directory (.aspire/modules) may not exist yet and dependency
         // files reference it.
-        await GenerateSdkCodeUsingAppHostServerAsync(installDependencies: !hasNpmIntegrationHosts);
+        await GenerateSdkCodeUsingAppHostServerAsync(installDependencies: true);
 
         if (hasNpmIntegrationHosts)
         {
             // npm integration hosts are themselves TypeScript programs that import the
             // generated .aspire/modules SDK in order to call ATS primitives. On a clean restore
-            // there is no SDK yet, so the first pass bootstraps the core SDK. Restart the
-            // server and generate again so those hosts can start and contribute their
-            // external capabilities before the apphost is type-checked.
+            // there is no SDK yet, so the first pass bootstraps the core SDK and installs
+            // the AppHost dependencies. The generated transport resolves packages such as
+            // vscode-jsonrpc from the AppHost, not the integration host's node_modules.
+            // Restart only after those dependencies exist so the hosts can import the
+            // transport and contribute their external capabilities.
             _logger.LogDebug("Regenerating SDK after bootstrapping npm integration host dependencies.");
-            await GenerateSdkCodeUsingAppHostServerAsync(installDependencies: true);
+            await GenerateSdkCodeUsingAppHostServerAsync(installDependencies: false);
         }
 
         return true;

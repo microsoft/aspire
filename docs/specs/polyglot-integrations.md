@@ -468,10 +468,12 @@ a stock CLI does not understand npm integration-host declarations.
 
 The CLI restores npm dependencies before starting an AppHost server. A clean
 `aspire restore` uses two separately disposed `IAppHostServerSession` instances:
-the first generates the core SDK that the integration hosts import, and the
-second starts those hosts and generates the combined SDK before installing the
-AppHost's dependencies. Each session uses the current `Create`/`StartAsync`
-lifecycle and propagates cancellation.
+the first generates the core SDK and installs the AppHost's dependencies. This
+must happen before the second session: the generated transport imports packages
+such as `vscode-jsonrpc` from the AppHost's `node_modules`, not the integration
+host's dependencies. The second session starts those hosts and generates the
+combined SDK. Each session uses the current `Create`/`StartAsync` lifecycle and
+propagates cancellation.
 
 In repository mode, `IntegrationHosts` participates in the AppHost server scaffold
 fingerprint along with `AtsAssemblies`. An unchanged host configuration preserves
