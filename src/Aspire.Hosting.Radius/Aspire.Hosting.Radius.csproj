@@ -25,8 +25,16 @@
     <PackageReference Include="YamlDotNet" />
   </ItemGroup>
 
+  <!--
+    These shared sources are link-compiled rather than consumed from Aspire.Hosting via
+    InternalsVisibleTo. They are plain internal helpers with no public equivalent, so linking
+    them keeps this package building against the public Aspire.Hosting surface only.
+    Aspire.Hosting.DevTunnels links the same two files for the same reason.
+  -->
   <ItemGroup>
     <Compile Include="$(SharedDir)PublishingContextUtils.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" LinkBase="Shared" />
   </ItemGroup>
 
   <ItemGroup>
