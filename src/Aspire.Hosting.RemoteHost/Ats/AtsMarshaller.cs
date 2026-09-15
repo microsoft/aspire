@@ -161,8 +161,28 @@ internal sealed class AtsMarshaller
             AtsTypeCategory.Array => SerializeArray(value, typeRef.ElementType),
             AtsTypeCategory.List => _handles.Marshal(value, typeRef.TypeId),
             AtsTypeCategory.Dict => _handles.Marshal(value, typeRef.TypeId),
+            AtsTypeCategory.Union => MarshalUnion(value, typeRef),
             _ => throw new InvalidOperationException($"Unknown type category: {typeRef.Category}")
         };
+    }
+
+    private JsonNode? MarshalUnion(object value, AtsTypeRef typeRef)
+    {
+        // Union properties can return either a literal or a handle (for example a Bicep
+        // expression). Marshal the matching declared member so handles retain its type ID.
+        if (typeRef.UnionTypes is { } members)
+        {
+            foreach (var member in members)
+            {
+                if (member.ClrType?.IsInstanceOfType(value) == true)
+                {
+                    return MarshalToJson(value, member);
+                }
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Value of type '{value.GetType()}' does not match any member of union '{typeRef.TypeId}'.");
     }
 
     /// <summary>
