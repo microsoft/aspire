@@ -20,7 +20,7 @@ public class FilterDialogTests : DashboardTestContext
     {
         SetupFilterDialogServices();
 
-        var cut = RenderComponent<FilterDialog>(builder =>
+        var cut = Render<FilterDialog>(builder =>
         {
             builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
             {
@@ -50,7 +50,7 @@ public class FilterDialogTests : DashboardTestContext
     {
         SetupFilterDialogServices();
 
-        var cut = RenderComponent<FilterDialog>(builder =>
+        var cut = Render<FilterDialog>(builder =>
         {
             builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
             {
@@ -68,7 +68,7 @@ public class FilterDialogTests : DashboardTestContext
     {
         SetupFilterDialogServices();
 
-        var cut = RenderComponent<FilterDialog>(builder =>
+        var cut = Render<FilterDialog>(builder =>
         {
             builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
             {
@@ -152,7 +152,7 @@ public class FilterDialogTests : DashboardTestContext
             GetFieldValuesAsync = content.GetFieldValuesAsync
         };
 
-        var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
+        var cut = Render<FilterDialog>(builder => builder.Add(p => p.Content, content));
         await loadingStarted.Task.WaitAsync(DefaultWaitTimeout);
 
         Assert.True(cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>().Instance.Disabled);
@@ -194,7 +194,7 @@ public class FilterDialogTests : DashboardTestContext
             }
         };
 
-        var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
+        var cut = Render<FilterDialog>(builder => builder.Add(p => p.Content, content));
         await loadingStarted.Task.WaitAsync(DefaultWaitTimeout);
 
         var valueCombobox = cut.Find("fluent-dropdown[type='combobox']");
@@ -235,7 +235,7 @@ public class FilterDialogTests : DashboardTestContext
             }
         };
 
-        var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
+        var cut = Render<FilterDialog>(builder => builder.Add(p => p.Content, content));
         var parameterSelect = cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>();
         var traceIdOption = parameterSelect.Instance.Items!.Single(item => item.Id == KnownTraceFields.TraceIdField);
 
@@ -274,7 +274,7 @@ public class FilterDialogTests : DashboardTestContext
             }
         };
 
-        var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
+        var cut = Render<FilterDialog>(builder => builder.Add(p => p.Content, content));
         var parameterSelect = cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>();
         var traceIdOption = parameterSelect.Instance.Items!.Single(item => item.Id == KnownTraceFields.TraceIdField);
         var spanIdOption = parameterSelect.Instance.Items!.Single(item => item.Id == KnownTraceFields.SpanIdField);
@@ -329,7 +329,7 @@ public class FilterDialogTests : DashboardTestContext
             GetFieldValuesAsync = content.GetFieldValuesAsync
         };
 
-        var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
+        var cut = Render<FilterDialog>(builder => builder.Add(p => p.Content, content));
         await loadingStarted.Task.WaitAsync(DefaultWaitTimeout);
         Assert.Single(cut.FindComponents<AspireProgressRing>());
 
@@ -368,7 +368,7 @@ public class FilterDialogTests : DashboardTestContext
             }
         };
 
-        var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
+        var cut = Render<FilterDialog>(builder => builder.Add(p => p.Content, content));
         await loadingStarted.Task.WaitAsync(DefaultWaitTimeout);
         Assert.True(cut.Find("fluent-dropdown[type='combobox']").HasAttribute("disabled"));
 
@@ -407,7 +407,7 @@ public class FilterDialogTests : DashboardTestContext
             GetFieldValuesAsync = content.GetFieldValuesAsync
         };
 
-        var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
+        var cut = Render<FilterDialog>(builder => builder.Add(p => p.Content, content));
         await loadingStarted.Task.WaitAsync(DefaultWaitTimeout);
 
         // Telemetry reads run against SQLite on the thread pool. Closing the dialog must cancel them so a scan
@@ -425,7 +425,7 @@ public class FilterDialogTests : DashboardTestContext
     {
         SetupFilterDialogServices();
 
-        var cut = RenderComponent<FilterDialog>(builder =>
+        var cut = Render<FilterDialog>(builder =>
         {
             builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
             {
@@ -451,7 +451,7 @@ public class FilterDialogTests : DashboardTestContext
     {
         SetupFilterDialogServices();
 
-        var cut = RenderComponent<FilterDialog>(builder =>
+        var cut = Render<FilterDialog>(builder =>
         {
             builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
             {
@@ -476,7 +476,7 @@ public class FilterDialogTests : DashboardTestContext
     {
         SetupFilterDialogServices();
 
-        var cut = RenderComponent<FilterDialog>(builder =>
+        var cut = Render<FilterDialog>(builder =>
         {
             builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
             {
@@ -499,7 +499,7 @@ public class FilterDialogTests : DashboardTestContext
     {
         SetupFilterDialogServices();
 
-        var cut = RenderComponent<FilterDialog>(builder =>
+        var cut = Render<FilterDialog>(builder =>
         {
             builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
             {
@@ -520,7 +520,7 @@ public class FilterDialogTests : DashboardTestContext
     {
         SetupFilterDialogServices();
 
-        var cut = RenderComponent<FilterDialog>(builder =>
+        var cut = Render<FilterDialog>(builder =>
         {
             builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
             {
@@ -544,7 +544,7 @@ public class FilterDialogTests : DashboardTestContext
     {
         SetupFilterDialogServices();
 
-        var cut = RenderComponent<FilterDialog>(builder =>
+        var cut = Render<FilterDialog>(builder =>
         {
             builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
             {

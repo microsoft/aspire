@@ -34,8 +34,7 @@ public sealed class RabbitMQContainerFixture : IAsyncLifetime
 
     public static async Task<RabbitMqContainer> CreateContainerAsync()
     {
-        var container = new RabbitMqBuilder()
-            .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{RabbitMQContainerImageTags.Image}:{RabbitMQContainerImageTags.Tag}")
+        var container = new RabbitMqBuilder($"{ComponentTestConstants.AspireTestContainerRegistry}/{RabbitMQContainerImageTags.Image}:{RabbitMQContainerImageTags.Tag}")
             .Build();
         await container.StartAsync();
 

@@ -67,7 +67,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "TestApp");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -97,7 +97,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -137,7 +137,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -175,7 +175,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -214,7 +214,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -245,7 +245,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -264,7 +264,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });

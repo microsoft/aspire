@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls;
@@ -65,7 +65,7 @@ public partial class MainLayoutTests : DashboardTestContext
         };
 
         // Act
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -102,7 +102,7 @@ public partial class MainLayoutTests : DashboardTestContext
         };
 
         // Act
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -138,7 +138,7 @@ public partial class MainLayoutTests : DashboardTestContext
         };
 
         // Act
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -183,7 +183,7 @@ public partial class MainLayoutTests : DashboardTestContext
 
         SetupMainLayoutServices(localStorage: localStorage);
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -214,7 +214,7 @@ public partial class MainLayoutTests : DashboardTestContext
         SetupMainLayoutServices(dialogService: dialogService);
         JSInterop.SetupVoid("focusElement", _ => true);
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -255,7 +255,7 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         SetupMainLayoutServices();
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -295,7 +295,7 @@ public partial class MainLayoutTests : DashboardTestContext
             historicalRun
         ]);
         SetupMainLayoutServices(dashboardRunStore: runStore);
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(
                 component => component.ViewportInformation,
@@ -337,7 +337,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         var getRunsCallCount = runStore.GetRunsCallCount;
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(
                 component => component.ViewportInformation,
@@ -386,7 +386,7 @@ public partial class MainLayoutTests : DashboardTestContext
         JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
         var initializedCount = 0;
         var disposedCount = 0;
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(component => component.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.Add(component => component.Body, bodyBuilder =>
@@ -568,7 +568,7 @@ public partial class MainLayoutTests : DashboardTestContext
             }
         };
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(component => component.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.Add(component => component.Body, bodyBuilder => bodyBuilder.AddMarkupContent(0, "<div id=\"body-content\"></div>"));
@@ -622,7 +622,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var testSink = new TestSink();
         Services.AddSingleton<ILogger<DashboardRunSelect>>(new TestLogger<DashboardRunSelect>(new TestLoggerFactory(testSink, enabled: true)));
         SetupMainLayoutServices(dashboardRunStore: runStore);
-        var cut = RenderComponent<DashboardRunSelect>(builder =>
+        var cut = Render<DashboardRunSelect>(builder =>
         {
             builder.Add(component => component.SelectedRunId, currentRun.RunId);
             builder.Add(component => component.SelectedRunIsCurrent, true);
@@ -671,7 +671,7 @@ public partial class MainLayoutTests : DashboardTestContext
             .ThenByDescending(run => run.StartedAtUtc)
             .Select(run => FormatHelpers.FormatTimeWithOptionalDate(browserTimeProvider, run.StartedAtUtc.UtcDateTime))
             .ToArray();
-        var cut = RenderComponent<DashboardRunSelect>(builder =>
+        var cut = Render<DashboardRunSelect>(builder =>
         {
             builder.Add(component => component.SelectedRunId, currentRun.RunId);
             builder.Add(component => component.SelectedRunIsCurrent, true);
@@ -727,7 +727,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         var getRunsCallCount = runStore.GetRunsCallCount;
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.Add(p => p.Body, bodyBuilder => bodyBuilder.AddMarkupContent(0, "<div id=\"body-content\"></div>"));
@@ -781,7 +781,7 @@ public partial class MainLayoutTests : DashboardTestContext
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.Add(p => p.Body, bodyBuilder => bodyBuilder.AddMarkupContent(0, "<div id=\"body-content\"></div>"));
@@ -846,7 +846,7 @@ public partial class MainLayoutTests : DashboardTestContext
             }
         };
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -897,7 +897,7 @@ public partial class MainLayoutTests : DashboardTestContext
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -937,7 +937,7 @@ public partial class MainLayoutTests : DashboardTestContext
         SetupMainLayoutServices(dialogService: dialogService);
         JSInterop.SetupVoid("focusElement", _ => true);
 
-        var cut = RenderComponent<CascadingValue<ViewportInformation>>(builder =>
+        var cut = Render<CascadingValue<ViewportInformation>>(builder =>
         {
             builder.Add(p => p.Value, new ViewportInformation(IsDesktop: initialIsDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.AddChildContent<MainLayout>();
@@ -961,7 +961,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.NotNull(capturedParameters);
         Assert.Equal(expectedDialogId, capturedParameters.Id);
 
-        cut.SetParametersAndRender(parameters =>
+        cut.Render(parameters =>
         {
             parameters.Add(p => p.Value, new ViewportInformation(IsDesktop: closingIsDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
             parameters.AddChildContent<MainLayout>();
@@ -994,7 +994,7 @@ public partial class MainLayoutTests : DashboardTestContext
         SetupMainLayoutServices(dialogService: dialogService);
         JSInterop.SetupVoid("focusElement", _ => true);
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -1059,7 +1059,7 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
 
-        _messageBarProvider = RenderComponent<FluentMessageBarProvider>(builder =>
+        _messageBarProvider = Render<FluentMessageBarProvider>(builder =>
         {
             builder.Add(p => p.Section, DashboardUIHelpers.MessageBarSection);
         });
