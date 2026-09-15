@@ -16,6 +16,7 @@ using Aspire.Dashboard.Utils;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
@@ -220,11 +221,13 @@ public partial class StructuredLogsTests : DashboardTestContext
         });
 
         var scrollContainer = cut.Find("#structuredLogsScrollContainer");
+        var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
         var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.StructuredLogs>>();
 
         Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
         Assert.Equal("region", scrollContainer.GetAttribute("role"));
         Assert.Equal(loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)].Value, scrollContainer.GetAttribute("aria-label"));
+        Assert.Equal(VirtualizeAnchorMode.End, grid.Instance.AnchorMode);
         cut.WaitForAssertion(() =>
         {
             Assert.Contains(JSInterop.Invocations, invocation =>
@@ -233,6 +236,50 @@ public partial class StructuredLogsTests : DashboardTestContext
                 string.Equals(invocation.Arguments[0]?.ToString(), "structuredLogsScrollContainer", StringComparison.Ordinal) &&
                 string.Equals(invocation.Arguments[1]?.ToString(), bool.TrueString, StringComparison.OrdinalIgnoreCase));
         });
+    }
+
+    [Fact]
+    public async Task ItemsProvider_ZeroCountRefresh_ReturnsData()
+    {
+        SetupStructureLogsServices();
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords =
+                        {
+                            CreateLogRecord(),
+                            CreateLogRecord(),
+                            CreateLogRecord(),
+                            CreateLogRecord(),
+                            CreateLogRecord(),
+                            CreateLogRecord()
+                        }
+                    }
+                }
+            }
+        });
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var cut = RenderComponent<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
+        var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
+
+        var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<LogSummary>
+        {
+            StartIndex = 0,
+            Count = 0
+        }).AsTask());
+
+        Assert.Equal(6, result.TotalItemCount);
+        Assert.Equal(6, result.Items.Count);
     }
 
     [Fact]
@@ -326,7 +373,6 @@ public partial class StructuredLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
         JSInterop.SetupVoid("focusElement", _ => true);
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);

@@ -15,7 +15,7 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class LogViewerTests : DashboardTestContext
 {
     [Fact]
-    public void LogViewer_ItemComparer_PreservesIdentityOfRepeatedEntries()
+    public void LogViewer_VirtualizeUsesIdentityComparerAndEndAnchor()
     {
         SetupLogViewerServices();
 
@@ -27,9 +27,11 @@ public class LogViewerTests : DashboardTestContext
         logEntries.InsertSorted(repeatedEntry);
 
         var cut = RenderComponent<LogViewer>(builder => builder.Add(p => p.LogEntries, logEntries));
-        var comparer = cut.FindComponent<Virtualize<LogEntry>>().Instance.ItemComparer;
+        var virtualize = cut.FindComponent<Virtualize<LogEntry>>().Instance;
+        var comparer = virtualize.ItemComparer;
 
         Assert.NotNull(comparer);
+        Assert.Equal(VirtualizeAnchorMode.End, virtualize.AnchorMode);
         Assert.True(comparer.Equals(entry, logEntries.GetEntries()[0]));
         Assert.False(comparer.Equals(entry, repeatedEntry));
         cut.WaitForAssertion(() => Assert.Equal(
@@ -493,8 +495,6 @@ public class LogViewerTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: new TestTimeProvider());
         Services.AddLogging();
 
-        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
-        JSInterop.SetupVoid("resetContinuousScrollPosition").SetVoidResult();
         JSInterop.SetupVoid("focusElement", _ => true);
     }
 }

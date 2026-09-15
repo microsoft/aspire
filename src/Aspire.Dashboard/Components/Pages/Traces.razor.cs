@@ -24,6 +24,7 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlState<Traces.TracesPageViewModel, Traces.TracesPageState>
 {
+    private const int InitialGridItemCount = 5;
     private const string ScrollContainerId = "tracesScrollContainer";
     private const string TimestampColumn = nameof(TimestampColumn);
     private const string NameColumn = nameof(NameColumn);
@@ -42,11 +43,12 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
     private Subscription? _resourcesSubscription;
     private Subscription? _tracesSubscription;
-    private bool _resourceChanged;
     private string _filter = string.Empty;
     private AspirePageContentLayout? _contentLayout;
     private AspireFluentDataGrid<TraceSummary> _dataGrid = null!;
     private GridColumnManager _manager = null!;
+    private bool _hasReturnedInitialGridResult;
+    private bool _refreshDataAfterRender;
 
     public string SessionStorageKey => BrowserStorageKeys.TracesPageState;
     public string BasePath => DashboardUrls.TracesBasePath;
@@ -86,9 +88,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     [Inject]
     public required ISessionStorage SessionStorage { get; init; }
-
-    [Inject]
-    public required DimensionManager DimensionManager { get; init; }
 
     [Inject]
     public required PauseManager PauseManager { get; init; }
@@ -136,7 +135,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private async ValueTask<GridItemsProviderResult<TraceSummary>> GetData(GridItemsProviderRequest<TraceSummary> request)
     {
         TracesViewModel.StartIndex = request.StartIndex;
-        TracesViewModel.Count = request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount;
+        TracesViewModel.Count = request.Count is > 0 ? request.Count.Value : DashboardUIHelpers.DefaultDataGridResultCount;
         var traces = await TracesViewModel.GetTracesAsync(request.CancellationToken);
 
         if (!TelemetryRepository.IsReadOnly)
@@ -165,6 +164,21 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         // The workaround is to explicitly update and refresh the control.
         _totalItemsCount = traces.TotalItemCount;
         _totalItemsFooter.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
+
+        if (!_hasReturnedInitialGridResult && request.StartIndex == 0 && virtualizedTraceCount > InitialGridItemCount)
+        {
+            var initialItems = traces.Items.Take(InitialGridItemCount).ToArray();
+
+            if (initialItems.Length > 0)
+            {
+                _hasReturnedInitialGridResult = true;
+                _refreshDataAfterRender = true;
+            }
+
+            // Virtualize doesn't treat its initial 0 -> N result as an append. Report a small total
+            // until actual rows render so the following refresh can establish the End anchor.
+            return GridItemsProviderResult.From(initialItems, InitialGridItemCount);
+        }
 
         return GridItemsProviderResult.From(traces.Items, virtualizedTraceCount);
     }
@@ -215,8 +229,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     private Task HandleSelectedResourceChanged()
     {
-        _resourceChanged = true;
-
         return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
 
@@ -262,28 +274,18 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_resourceChanged)
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            _resourceChanged = false;
-        }
         if (firstRender)
         {
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
             // Focus the scroll container without showing the focus ring. The container is a large
             // content area where a visible focus indicator would be visually noisy on initial load.
             await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
-            DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
-    }
 
-    private void OnBrowserResize(object? o, EventArgs args)
-    {
-        InvokeAsync(async () =>
+        if (_refreshDataAfterRender)
         {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-        });
+            _refreshDataAfterRender = false;
+            await _dataGrid.RefreshDataAndRenderAsync();
+        }
     }
 
     private string? PauseText => PauseManager.AreTracesPaused(out var startTime)
@@ -299,7 +301,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         _cts.Dispose();
         _resourcesSubscription?.Dispose();
         _tracesSubscription?.Dispose();
-        DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
     }
 
     public async Task UpdateViewModelFromQueryAsync(TracesPageViewModel viewModel)
