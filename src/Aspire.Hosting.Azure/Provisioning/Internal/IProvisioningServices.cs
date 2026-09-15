@@ -314,6 +314,17 @@ internal interface IRoleAssignmentCollection
         string roleAssignmentName,
         RoleAssignmentCreateOrUpdateContent content,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists the role assignments visible at this collection's scope, optionally narrowed with an
+    /// OData filter (for example <c>principalId eq '{objectId}'</c>).
+    /// </summary>
+    /// <remarks>
+    /// Used to confirm that a freshly created role assignment has propagated through Azure RBAC
+    /// before dependent resources rely on it, since ARM reporting the role assignment PUT as
+    /// succeeded only means the record was written, not that it is visible everywhere yet.
+    /// </remarks>
+    IAsyncEnumerable<RoleAssignmentResource> GetAllAsync(string? filter = null, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

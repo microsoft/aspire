@@ -6,6 +6,7 @@
 #pragma warning disable CS0618 // Type or member is obsolete
 
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -712,6 +713,52 @@ internal sealed class TestRoleAssignmentCollection : IRoleAssignmentCollection
 
         return Task.FromResult<ArmOperation<RoleAssignmentResource>>(new TestArmOperation<RoleAssignmentResource>(default!));
     }
+
+    /// <summary>
+    /// Role assignments returned by <see cref="GetAllAsync"/> when <see cref="GetAllAsyncResultsFactory"/> is not set.
+    /// </summary>
+    public List<RoleAssignmentData> AssignmentsToReturn { get; } = [];
+
+    /// <summary>
+    /// Optional per-call override, keyed by the 1-based call number, used to simulate role assignments
+    /// only becoming visible after a number of polling attempts.
+    /// </summary>
+    public Func<int, IEnumerable<RoleAssignmentData>>? GetAllAsyncResultsFactory { get; set; }
+
+    public int GetAllAsyncCallCount { get; private set; }
+
+    public string? LastFilter { get; private set; }
+
+    public async IAsyncEnumerable<RoleAssignmentResource> GetAllAsync(
+        string? filter = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        GetAllAsyncCallCount++;
+        LastFilter = filter;
+
+        // Yield so the method genuinely runs asynchronously, matching the real SDK's paged behavior.
+        await Task.Yield();
+
+        var results = GetAllAsyncResultsFactory?.Invoke(GetAllAsyncCallCount) ?? AssignmentsToReturn;
+
+        foreach (var data in results)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return new TestRoleAssignmentResource(data);
+        }
+    }
+}
+
+/// <summary>
+/// Test double for <see cref="RoleAssignmentResource"/> that returns preset data without requiring a
+/// real <see cref="ArmClient"/> backing it. The SDK exposes a virtual <c>Data</c> getter specifically to
+/// support this kind of mocking.
+/// </summary>
+internal sealed class TestRoleAssignmentResource(RoleAssignmentData data) : RoleAssignmentResource
+{
+    public override RoleAssignmentData Data => data;
+
+    public override bool HasData => true;
 }
 
 /// <summary>
