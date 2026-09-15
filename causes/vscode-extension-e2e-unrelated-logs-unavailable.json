@@ -2,11 +2,11 @@
   "id": "vscode-extension-e2e-unrelated-logs-unavailable",
   "type": "flaky-test",
   "title": "Flaky: VS Code extension E2E (browser-debugger) times out waiting for pwa-msedge child debug session to attach to Blazor WASM",
-  "test_name": "VS Code extension E2E (matrix shards, e.g. browser-debugger / workspace-target-proof / edge-cases)",
+  "test_name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
-  "error_pattern": "Failed to apply E2E control revision ...: Error: Timed out after 279542ms waiting for pwa-msedge child session for Blazor WASM root '<guid>'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"...\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\", ...}]}",
-  "analysis": "The 'Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone' test timed out after ~279s waiting for the pwa-msedge child debugger session to attach to a Blazor WASM root. This is unrelated to the PR's change (a cloud icon addition in AzureEnvironmentResourceExtensions.cs), and matches a previously observed, recurring flaky pattern of VS Code extension E2E browser-debugger tests timing out waiting for the child debug session under Windows CI load.",
-  "failure_details": "Test: Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone\nJob: Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)\nError: Failed to apply E2E control revision 1789457876402: Error: Timed out after 279542ms waiting for pwa-msedge child session for Blazor WASM root 'b0f815cf-b003-44b1-9246-40b131c36a71'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"1ecec329-5c09-433a-8a17-213e9825de1c\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{...\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":53687,\"platform\":\"browser\",\"isServer\":true,...}}]} \nAnnotation: Process completed with exit code 1.",
+  "error_pattern": "Failed to apply E2E control revision ...: Error: Timed out after 285622ms waiting for pwa-msedge child session for Blazor WASM root '<guid>'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"...\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\", ...}]}",
+  "analysis": "The test timed out (285622ms) waiting for the pwa-msedge child debug session to attach to the Blazor WASM debug target, matching a well-documented recurring timing issue in this E2E shard (13 prior occurrences, most recently the same day). The PR only bumps dependency versions and does not touch the VS Code extension or debugger code, so this failure is unrelated to the PR.",
+  "failure_details": "Error:\nFailed to apply E2E control revision 1789507121544: Error: Timed out after 285622ms waiting for pwa-msedge child session for Blazor WASM root '6520f58a-9374-46e8-bb31-50591765521f'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"efcf0f3f-d1d2-43f3-8f19-3cb69ccd8eb4\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",...,\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":60065,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-niXLHO\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\;...\"}}]}",
   "occurrences": [
     {
       "run_id": 32704259463,
@@ -98,6 +98,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
       "pr_number": 20011,
       "observed_at": "2026-09-15T07:54:34Z"
+    },
+    {
+      "run_id": 35023188186,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35023188186",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "pr_number": 20146,
+      "observed_at": "2026-09-15T21:32:50Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19618"
