@@ -50,6 +50,54 @@ func main() {
 		if _, err := location.Name(); err != nil {
 			log.Fatalf(aspire.FormatError(err))
 		}
+		// Mutate a detached connection model; networking output lists stay read-only.
+		connection := infrastructure.CreateRemotePrivateEndpointConnection()
+		addresses := connection.IPAddresses()
+		if err := addresses.Add("192.0.2.1"); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if err := addresses.Insert(0, "2001:db8::1"); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if err := addresses.Set(1, "192.0.2.2"); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		literal := addresses.Get(0)
+		if err := addresses.Set(1, literal); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		bicep := infrastructure.Bicep()
+		// Index creates an untyped expression rather than a typed BicepValue<string>.
+		expression := bicep.Index(bicep.ParseJson(bicep.String(`["192.0.2.3"]`)), float64(0))
+		if err := addresses.Add(expression); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if err := addresses.Insert(1, expression); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if err := addresses.Set(0, addresses.Get(3)); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if count, err := addresses.Count(); err != nil || count != 4 {
+			log.Fatalf("IP address count = %v, error = %v; want 4", count, err)
+		}
+		for index, expected := range []aspire.BicepValueKind{
+			aspire.BicepValueKindExpression, aspire.BicepValueKindExpression,
+			aspire.BicepValueKindLiteral, aspire.BicepValueKindExpression,
+		} {
+			if kind, err := addresses.Get(float64(index)).Kind(); err != nil || kind != expected {
+				log.Fatalf("IP address %d kind = %v, error = %v; want %v", index, kind, err, expected)
+			}
+		}
+		networking := infrastructure.CreateAseV3NetworkingConfigurationData()
+		for _, output := range []interface{ Count() (float64, error) }{
+			networking.ExternalInboundIPAddresses(), networking.InternalInboundIPAddresses(),
+			networking.LinuxOutboundIPAddresses(), networking.WindowsOutboundIPAddresses(),
+		} {
+			if count, err := output.Count(); err != nil || count != 0 {
+				log.Fatalf("Detached networking output count = %v, error = %v; want 0", count, err)
+			}
+		}
 	})
 	if environment.Err() != nil {
 		log.Fatalf(aspire.FormatError(environment.Err()))

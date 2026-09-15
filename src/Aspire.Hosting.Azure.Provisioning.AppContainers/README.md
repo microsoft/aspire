@@ -40,7 +40,7 @@ await environment.configureInfrastructure(async infrastructure => {
 
 The selected roots are `ContainerAppManagedEnvironment`, `ContainerApp`, and `ContainerAppJob`. App and job customizations belong in their publish callbacks; use identifier-based lookups when their Bicep identifiers differ from the callback's Aspire resource identifier. Compatible SDK models are projected, not every member. Supported `BicepValue<T>` properties accept the corresponding language value or a shared Bicep expression.
 
-`OutboundIPAddressList` is explicitly excluded because `BicepList<IPAddress>` has no supported ATS element mapping.
+`OutboundIPAddressList` is exposed as an IP address collection proxy. IP address lists accept IPv4/IPv6 strings or Bicep value handles; element getters preserve literals, expressions, and references as Bicep value handles. Invalid address strings fail validation rather than being silently dropped. Azure SDK read-only output restrictions still apply.
 
 To customize supporting SDK resources, opt into the corresponding `Aspire.Hosting.Azure.Provisioning.ContainerRegistry`, `.OperationalInsights`, `.Storage`, or `.KeyVault` integration. Add `.Network` and, when needed, `.PrivateDns` for separately modeled networking. Referencing their hosting dependencies alone does not enable those SDK proxies.
 

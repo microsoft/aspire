@@ -72,6 +72,10 @@ func main() {
 		if _, err := provisionedApp.WorkloadProfileName(); err != nil {
 			log.Fatalf(aspire.FormatError(err))
 		}
+		// Outbound addresses are service outputs, not writable configuration.
+		if count, err := provisionedApp.OutboundIPAddressList().Count(); err != nil || count != 0 {
+			log.Fatalf("Unprovisioned container app outbound address count = %v, error = %v; want 0", count, err)
+		}
 		err := app.ConfigureCustomDomain(customDomain, certificateName)
 		if err != nil {
 			log.Fatalf(aspire.FormatError(err))
