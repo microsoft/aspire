@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Verify Docker is running
-        run: docker info
+        uses: ./.github/actions/verify-docker
 
       - name: Export GitHub Actions cache runtime
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -75,32 +75,29 @@ jobs:
               echo "Building $display_name with the default Ubuntu apt sources"
             fi
 
-            docker buildx build \
-              --load \
-              --cache-from "type=gha,scope=$cache_scope" \
-              --cache-to "type=gha,scope=$cache_scope,mode=max,ignore-error=true" \
-              "${build_args[@]}" \
-              -f "$dockerfile" \
-              -t "$tag" \
-              .
-          }
-
-          build_java_image() {
-            local mirror="$1"
-            local -a build_args=()
-
-            if [[ -n "$mirror" ]]; then
-              echo "Building Java polyglot image with Ubuntu apt mirror: $mirror"
-              build_args+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
+            if [[ -n "$cache_scope" ]]; then
+              # Cached path: use the buildx docker-container builder so we can read/write
+              # BuildKit layers from the GitHub Actions cache.
+              docker buildx build \
+                --load \
+                --cache-from "type=gha,scope=$cache_scope" \
+                --cache-to "type=gha,scope=$cache_scope,mode=max,ignore-error=true" \
+                "${build_args[@]}" \
+                -f "$dockerfile" \
+                -t "$tag" \
+                .
             else
-              echo "Building Java polyglot image with the default Ubuntu apt sources"
+              # Uncached path: build through the default docker daemon driver so the
+              # image can reference other locally-loaded images via FROM (e.g. the
+              # polyglot base built earlier in this step). The docker-container buildx
+              # driver does not have access to the daemon's image store and would try
+              # to pull such references from a registry.
+              DOCKER_BUILDKIT=1 docker build \
+                "${build_args[@]}" \
+                -f "$dockerfile" \
+                -t "$tag" \
+                .
             fi
-
-            DOCKER_BUILDKIT=1 docker build \
-              "${build_args[@]}" \
-              -f tests/Shared/Docker/Dockerfile.e2e-polyglot-java \
-              -t "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" \
-              .
           }
 
           build_with_mirror_retry() {
@@ -121,10 +118,11 @@ jobs:
             build_with_mirror_retry "polyglot base image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-base" "$CLI_E2E_POLYGLOT_BASE_IMAGE_TAG" "$CLI_E2E_POLYGLOT_BASE_IMAGE_CACHE_SCOPE"
             docker tag "$CLI_E2E_POLYGLOT_BASE_IMAGE_TAG" "$CLI_E2E_POLYGLOT_IMAGE_TAG"
 
-            if ! build_java_image "http://azure.archive.ubuntu.com/ubuntu/"; then
-              echo "Java polyglot image build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
-              build_java_image ""
-            fi
+            # The Java polyglot image extends the polyglot base via `FROM
+            # aspire-e2e-polyglot-base`, which only exists in the local docker daemon.
+            # Pass an empty cache scope so build_image uses the daemon-backed
+            # `docker build` path instead of the docker-container buildx driver.
+            build_with_mirror_retry "Java polyglot image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-java" "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" ""
           fi
 
       - name: Save CLI E2E Docker image tarballs
