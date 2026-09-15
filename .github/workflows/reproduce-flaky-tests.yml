@@ -454,6 +454,345 @@ jobs:
           # Nonzero native exits are data until all iterations have been recorded.
           # Finish with our aggregate exit, never the last runner's exit or a retry.
           $PSNativeCommandUseErrorActionPreference = $false
+          $script:lockOwnerQuery = $null
+
+          function Get-LockWarningScope([string] $Output, [string] $StateFile, [string] $TemporaryDirectory) {
+            $scope = [ordered]@{ status = 'scope-unavailable'; runId = $null; runRoot = $null; files = @(); error = $null }
+            # The pinned runner emits (apostrophes inside paths are deliberately not guessed):
+            # Warning: unable to remove locked E2E path 'C:\Temp\aev-ABC123': EBUSY: resource busy or locked, unlink 'C:\Temp\aev-ABC123\storage\settings\logs\...\exthost.log'
+            $warnings = @($Output -split '\r?\n' | Where-Object { $_.Contains('Warning: unable to remove locked E2E path') })
+            $scope.files = @($warnings | Select-Object -First 4 | ForEach-Object {
+              $match = [regex]::Match($_, "^Warning: unable to remove locked E2E path '(?<root>[^'\r\n]+)': (?<code>[A-Z_]+): [^'\r\n]+, (?<operation>[a-z]+) '(?<file>[^'\r\n]+)'$")
+              [ordered]@{
+                file = if ($match.Success) { $match.Groups['file'].Value } else { $null }
+                warningRoot = if ($match.Success) { $match.Groups['root'].Value } else { $null }
+                warningCode = if ($match.Success) { $match.Groups['code'].Value } else { $null }
+                operation = if ($match.Success) { $match.Groups['operation'].Value } else { $null }
+                status = if ($match.Success) { 'scope-unavailable' } else { 'unparsed-warning' }
+              }
+            })
+            $scope.omittedWarnings = [Math]::Max(0, $warnings.Count - 4)
+            try {
+              $state = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
+              $runIds = [regex]::Matches($Output, '(?m)^  storage diagnostics: \.test-storage[\\/]launch-profiles[\\/](?<id>[0-9]+-[0-9]+)\r?$')
+              if ($runIds.Count -ne 1 -or $state.runId -cne $runIds[0].Groups['id'].Value) {
+                $scope.error = 'State does not identify this runner invocation.'
+                return $scope
+              }
+              $scope.runId = $state.runId
+              $temporaryRoot = [IO.Path]::GetFullPath($TemporaryDirectory).TrimEnd('\')
+              $appHost = $state.state.workspaceAppHostPath
+              if ($appHost -notmatch '^[A-Za-z]:\\' -or $temporaryRoot -notmatch '^[A-Za-z]:\\') {
+                $scope.error = 'No local absolute AppHost/temp path in current-run evidence.'
+                return $scope
+              }
+              $relative = [IO.Path]::GetRelativePath($temporaryRoot, [IO.Path]::GetFullPath($appHost))
+              $fixture = [regex]::Match($relative, '^(?<root>aev-[A-Za-z0-9]+)\\workspace\\.+$')
+              if (-not $fixture.Success) {
+                $scope.error = 'The current-run AppHost is not in a generated fixture under the configured temp directory.'
+                return $scope
+              }
+              $scope.runRoot = Join-Path $temporaryRoot $fixture.Groups['root'].Value
+              $scope.status = 'scoped'
+              foreach ($file in $scope.files) {
+                if ($file.status -eq 'unparsed-warning') { continue }
+                $file.status = 'out-of-scope'
+                if ($file.operation -ne 'unlink') {
+                  $file.status = 'not-a-file-warning'
+                  continue
+                }
+                # Reject device/UNC paths, alternate streams and traversal before any filesystem/API
+                # lookup. Prefix checks include the separator so a sibling aev-* root cannot match.
+                if ($file.file -notmatch '^[A-Za-z]:\\' -or $file.warningRoot -notmatch '^[A-Za-z]:\\' -or
+                    $file.file.Substring(2) -match '[:*?"<>|]|(^|\\)\.\.?($|\\)' -or
+                    $file.warningRoot.Substring(2) -match '[:*?"<>|]|(^|\\)\.\.?($|\\)') { continue }
+                $candidateRoot = [IO.Path]::GetFullPath($file.warningRoot).TrimEnd('\')
+                $candidate = [IO.Path]::GetFullPath($file.file)
+                if ($candidateRoot.Equals($scope.runRoot, [StringComparison]::OrdinalIgnoreCase) -and
+                    $candidate.StartsWith($scope.runRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+                  $file.file = $candidate
+                  $file.status = 'scoped'
+                }
+              }
+            }
+            catch {
+              # Never serialize state contents or the exception's potentially data-bearing message.
+              $scope.status = 'scope-error'
+              $scope.error = $_.Exception.GetType().FullName
+            }
+            return $scope
+          }
+
+          function Initialize-LockOwnerQuery {
+            if ('AspireRepro.LockOwners' -as [type]) { return }
+            Add-Type -TypeDefinition @'
+          using System;
+          using System.Collections.Concurrent;
+          using System.Collections.Generic;
+          using System.Globalization;
+          using System.IO;
+          using System.Runtime.InteropServices;
+          using System.Text;
+          using System.Threading;
+          using System.Threading.Tasks;
+
+          namespace AspireRepro;
+
+          public static class LockOwners
+          {
+              public sealed class Owner
+              {
+                  public uint Pid { get; init; }
+                  public string StartTimeFileTimeUtc { get; init; }
+                  public string StartedUtc { get; init; }
+                  public string ApplicationName { get; init; }
+              }
+
+              public sealed class Observation
+              {
+                  public string File { get; init; }
+                  public string Status { get; set; } = "query-error";
+                  public string ObservedUtc { get; set; }
+                  public string Stage { get; set; } = "path-check";
+                  public uint? NativeCode { get; set; }
+                  public uint? SessionEndCode { get; set; }
+                  public string ErrorType { get; set; }
+                  public Owner[] Owners { get; set; } = [];
+              }
+
+              public sealed class Capture
+              {
+                  public Task Worker { get; internal set; }
+                  public CancellationTokenSource Cancellation { get; } = new();
+                  public ConcurrentQueue<Observation> Observations { get; } = new();
+              }
+
+              public static Capture Begin(string root, string[] files)
+              {
+                  var capture = new Capture();
+                  // Native queries have no cancellable timeout. A background task cannot hold up
+                  // pwsh exit; cancellation only prevents subsequent queries, never touches owners.
+                  capture.Worker = Task.Run(() =>
+                  {
+                      foreach (var file in files)
+                      {
+                          if (capture.Cancellation.IsCancellationRequested) { break; }
+                          capture.Observations.Enqueue(Query(root, file, capture.Cancellation.Token));
+                      }
+                  });
+                  // A timed-out caller will never await this worker again. Observe unexpected
+                  // late faults without logging, mutating a snapshot, or changing test outcomes.
+                  _ = capture.Worker.ContinueWith(task => { _ = task.Exception; },
+                      CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted |
+                      TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                  return capture;
+              }
+
+              private static Observation Query(string root, string file, CancellationToken cancellation)
+              {
+                  var result = new Observation { File = file };
+                  try
+                  {
+                      if (!Path.IsPathFullyQualified(file) ||
+                          !Path.GetFullPath(file).StartsWith(Path.GetFullPath(root).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
+                      {
+                          result.Status = "out-of-scope";
+                          return result;
+                      }
+                      var current = root;
+                      var segments = Path.GetRelativePath(root, file).Split(Path.DirectorySeparatorChar);
+                      // Do not follow junctions/symlinks into an unrelated directory. Check from
+                      // the known root outward, not by opening a potentially redirected final path.
+                      if ((System.IO.File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0)
+                      {
+                          result.Status = "reparse-point-rejected";
+                          return result;
+                      }
+                      for (var i = 0; i < segments.Length; i++)
+                      {
+                          if (segments[i].EndsWith(' ') || segments[i].EndsWith('.'))
+                          {
+                              result.Status = "ambiguous-path-rejected";
+                              return result;
+                          }
+                          current = Path.Combine(current, segments[i]);
+                          var attributes = System.IO.File.GetAttributes(current);
+                          if ((attributes & FileAttributes.ReparsePoint) != 0)
+                          {
+                              result.Status = "reparse-point-rejected";
+                              return result;
+                          }
+                          if (i == segments.Length - 1 && (attributes & FileAttributes.Directory) != 0)
+                          {
+                              result.Status = "not-a-file";
+                              return result;
+                          }
+                      }
+                      result.Stage = "RmStartSession";
+                      var code = RmStartSession(out var session, 0, new StringBuilder(33));
+                      result.NativeCode = code;
+                      if (code != 0) { return result; }
+                      try
+                      {
+                          if (cancellation.IsCancellationRequested) { result.Status = "cancelled-between-queries"; return result; }
+                          result.Stage = "RmRegisterResources";
+                          // One file per session makes each owner attribution unambiguous.
+                          code = RmRegisterResources(session, 1, [file], 0, IntPtr.Zero, 0, IntPtr.Zero);
+                          result.NativeCode = code;
+                          if (code != 0) { return result; }
+                          uint count = 0;
+                          ProcessInfo[] processes = null;
+                          result.Stage = "RmGetList";
+                          // ERROR_MORE_DATA can recur as processes enter/leave; bound both the
+                          // resize count and allocation. This is enumeration, not a test retry.
+                          // https://learn.microsoft.com/windows/win32/api/restartmanager/nf-restartmanager-rmgetlist
+                          for (var read = 0; read < 3; read++)
+                          {
+                              if (cancellation.IsCancellationRequested) { result.Status = "cancelled-between-queries"; return result; }
+                              code = RmGetList(session, out var needed, ref count, processes, out _);
+                              result.NativeCode = code;
+                              if (code == 234)
+                              {
+                                  if (needed == 0 || needed > 256) { result.Status = "owner-buffer-limit"; return result; }
+                                  count = needed;
+                                  processes = new ProcessInfo[count];
+                                  continue;
+                              }
+                              if (code != 0) { return result; }
+                              var owners = new List<Owner>();
+                              for (var i = 0; i < count; i++)
+                              {
+                                  var process = processes[i];
+                                  var started = ((long)process.Process.StartHigh << 32) | process.Process.StartLow;
+                                  // RM_UNIQUE_PROCESS is PID + creation FILETIME, not PID alone.
+                                  // No command line, environment, system-wide process sweep or handle mutation.
+                                  // https://learn.microsoft.com/windows/win32/api/restartmanager/ns-restartmanager-rm_unique_process
+                                  owners.Add(new Owner
+                                  {
+                                      Pid = process.Process.Pid,
+                                      StartTimeFileTimeUtc = started.ToString(CultureInfo.InvariantCulture),
+                                      StartedUtc = DateTime.FromFileTimeUtc(started).ToString("O"),
+                                      ApplicationName = process.ApplicationName
+                                  });
+                              }
+                              result.Owners = owners.ToArray();
+                              result.Status = count == 0 ? "no-owners-observed" : "owners-observed";
+                              return result;
+                          }
+                          result.Status = "owner-list-kept-changing";
+                      }
+                      finally
+                      {
+                          // Ends only our query session. Never shut down/restart an application.
+                          result.SessionEndCode = RmEndSession(session);
+                          if (result.SessionEndCode != 0) { result.Status = "session-end-error"; }
+                      }
+                  }
+                  catch (FileNotFoundException) { result.Status = "file-missing"; }
+                  catch (DirectoryNotFoundException) { result.Status = "file-missing"; }
+                  catch (Exception error) { result.Status = "query-error"; result.ErrorType = error.GetType().FullName; }
+                  finally { result.ObservedUtc = DateTime.UtcNow.ToString("O"); }
+                  return result;
+              }
+
+              [StructLayout(LayoutKind.Sequential)]
+              private struct UniqueProcess
+              {
+                  public uint Pid;
+                  public uint StartLow;
+                  public uint StartHigh;
+              }
+
+              [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+              private struct ProcessInfo
+              {
+                  public UniqueProcess Process;
+                  [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string ApplicationName;
+                  [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string ServiceName;
+                  public int ApplicationType;
+                  public uint ApplicationStatus;
+                  public uint SessionId;
+                  [MarshalAs(UnmanagedType.Bool)] public bool Restartable;
+              }
+
+              [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+              private static extern uint RmStartSession(out uint session, uint flags, StringBuilder key);
+              [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+              private static extern uint RmRegisterResources(uint session, uint fileCount,
+                  [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] files,
+                  uint applicationCount, IntPtr applications, uint serviceCount, IntPtr services);
+              [DllImport("rstrtmgr.dll", ExactSpelling = true)]
+              private static extern uint RmGetList(uint session, out uint needed, ref uint count,
+                  [In, Out] ProcessInfo[] processes, out uint rebootReasons);
+              [DllImport("rstrtmgr.dll", ExactSpelling = true)]
+              private static extern uint RmEndSession(uint session);
+          }
+          '@
+          }
+
+          function Wait-LockOwnerQuery($Query, [string[]] $Files, [int] $TimeoutMilliseconds) {
+            $status = 'completed'
+            try {
+              if (-not $Query.Worker.Wait($TimeoutMilliseconds)) {
+                $status = 'timeout'
+                $Query.Cancellation.Cancel()
+              }
+            }
+            catch {
+              $status = 'query-task-error'
+              $Query.Cancellation.Cancel()
+            }
+            $observations = @($Query.Observations.ToArray())
+            foreach ($file in $Files) {
+              if ($file -notin $observations.File) {
+                $missingStatus = if ($status -eq 'completed') { 'missing-query-result' } else { $status }
+                $observations += [ordered]@{ File = $file; Status = $missingStatus; Owners = @(); SessionEndCode = $null }
+              }
+            }
+            if ($status -eq 'completed' -and @($observations | Where-Object { $_.Status -notin @('owners-observed', 'no-owners-observed') }).Count -gt 0) {
+              $status = 'completed-with-query-errors'
+            }
+            return [ordered]@{
+              status = $status
+              backgroundQueryStillRunning = -not $Query.Worker.IsCompleted
+              observations = $observations
+            }
+          }
+
+          function Write-WindowsLockDiagnostics([string] $Output, [string] $StateFile, [string] $Destination) {
+            $report = [ordered]@{
+              capturedUtc = [DateTime]::UtcNow.ToString('o')
+              status = 'diagnostic-error'
+              interpretation = 'Point-in-time Restart Manager observation only. Empty lists, missing files, errors and timeouts do not establish that the original lock was absent or unrelated.'
+              timeoutMilliseconds = 10000
+              scope = $null
+              query = $null
+              errorType = $null
+            }
+            try {
+              $temporaryDirectory = if ($env:ASPIRE_EXTENSION_E2E_TEMP_ROOT) { $env:ASPIRE_EXTENSION_E2E_TEMP_ROOT } else { [IO.Path]::GetTempPath() }
+              $report.scope = Get-LockWarningScope $Output $StateFile $temporaryDirectory
+              $files = @($report.scope.files | Where-Object { $_.status -eq 'scoped' } | ForEach-Object { $_.file } | Select-Object -Unique)
+              if ($report.scope.status -ne 'scoped' -or $files.Count -eq 0) {
+                $report.status = 'no-scoped-files'
+              } elseif ($null -ne $script:lockOwnerQuery -and -not $script:lockOwnerQuery.Worker.IsCompleted) {
+                $report.status = 'previous-query-still-running'
+              } else {
+                Initialize-LockOwnerQuery
+                $script:lockOwnerQuery = [AspireRepro.LockOwners]::Begin($report.scope.runRoot, [string[]]$files)
+                $report.query = Wait-LockOwnerQuery $script:lockOwnerQuery $files $report.timeoutMilliseconds
+                $report.status = $report.query.status
+              }
+            }
+            catch {
+              $report.errorType = $_.Exception.GetType().FullName
+            }
+            # No query thread writes artifacts: the snapshot is final before the next iteration.
+            # A timed-out native call may finish later; no further calls start while it is outstanding.
+            $report | ConvertTo-Json -Depth 20 | Set-Content (Join-Path $Destination lock-owners.json) -Encoding utf8
+            Write-Host "Windows lock-owner diagnostic: $($report.status). Original cleanup failure remains blocking."
+          }
+
           $expectedTitles = @(
             'Aspire launch profiles E2E debugs a Deno AppHost through the built-in JavaScript debugger'
             'Aspire launch profiles E2E uses the AppHost launch profile selected by launch.json'
@@ -520,6 +859,30 @@ jobs:
               # Persist the native exit before touching or parsing any diagnostics.
               $result | ConvertTo-Json -Depth 20 | Set-Content $resultPath -Encoding utf8
 
+              if (Test-Path -LiteralPath $log) {
+                $output = Get-Content -LiteralPath $log -Raw
+                # These are exact warning/error prefixes in the pinned runner and teardown.
+                # For example, "Aspire E2E AppHost cleanup exited with code 1" can otherwise
+                # accompany exit 0 and three passes. A shutdown failure is never green here.
+                if ($output -match 'One or more E2E cleanup steps failed:|Failed to stop Aspire E2E AppHost during cleanup:|Aspire E2E AppHost cleanup exited with code|Warning: unable to remove locked E2E path|Launch profiles E2E teardown failed\.') {
+                  $result.categories.Add('cleanup-failure')
+                }
+                if ($IsWindows -and $output.Contains('Warning: unable to remove locked E2E path')) {
+                  # Query before copying/printing diagnostics adds delay or the next run starts.
+                  # Persist the original failure first; diagnostic success cannot change it.
+                  $result | ConvertTo-Json -Depth 20 | Set-Content $resultPath -Encoding utf8
+                  try {
+                    Write-WindowsLockDiagnostics $output '.test-results/e2e/launch-profiles/extension-state.json' $destination
+                  }
+                  catch {
+                    $evidenceSafe = $false
+                    $result.categories.Add('lock-diagnostic-write-failure')
+                    $result.errors.Add(($_ | Out-String))
+                  }
+                }
+                Get-Content -LiteralPath $log | Write-Host
+              }
+
               foreach ($relative in $diagnosticPaths) {
                 try {
                   if (Test-Path -LiteralPath $relative) {
@@ -535,16 +898,6 @@ jobs:
                 }
               }
 
-              if (Test-Path -LiteralPath $log) {
-                $output = Get-Content -LiteralPath $log -Raw
-                Get-Content -LiteralPath $log | Write-Host
-                # These are exact warning/error prefixes in the pinned runner and teardown.
-                # For example, "Aspire E2E AppHost cleanup exited with code 1" can otherwise
-                # accompany exit 0 and three passes. A shutdown failure is never green here.
-                if ($output -match 'One or more E2E cleanup steps failed:|Failed to stop Aspire E2E AppHost during cleanup:|Aspire E2E AppHost cleanup exited with code|Warning: unable to remove locked E2E path|Launch profiles E2E teardown failed\.') {
-                  $result.categories.Add('cleanup-failure')
-                }
-              }
               $mochaPath = Join-Path $destination 'extension/.test-results/e2e/launch-profiles/mocha.json'
               if (-not (Test-Path -LiteralPath $mochaPath)) {
                 $result.categories.Add('no-mocha')
@@ -685,6 +1038,7 @@ jobs:
           path: |
             repro-results/**/result.json
             repro-results/**/runner.log
+            repro-results/**/lock-owners.json
             repro-results/**/cli-version.txt
             repro-results/**/tested-source.json
             repro-results/**/job-steps.json
