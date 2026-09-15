@@ -89,6 +89,14 @@
     text-overflow: ellipsis;
 }
 
+.terminal-titlebar ::deep .terminal-open-window {
+    color: inherit;
+}
+
+.terminal-titlebar ::deep .terminal-open-window svg {
+    fill: currentColor;
+}
+
 .terminal-dimensions {
     flex: 0 0 auto;
     margin-inline-start: 12px;

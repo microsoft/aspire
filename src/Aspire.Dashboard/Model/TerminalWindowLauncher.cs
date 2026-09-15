@@ -1,9 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Model;
@@ -27,7 +25,12 @@ public enum TerminalWindowOpenResult
     /// The browser blocked the popup. The caller is expected to tell the user, because from their point of view
     /// nothing happened.
     /// </summary>
-    Blocked
+    Blocked,
+
+    /// <summary>
+    /// The browser could not open or focus the window.
+    /// </summary>
+    Failed
 }
 
 /// <summary>
@@ -47,79 +50,76 @@ public enum TerminalWindowOpenResult
 /// </remarks>
 public sealed class TerminalWindowLauncher : IAsyncDisposable
 {
-    private const int DefaultWindowWidthPx = 960;
-    private const int DefaultWindowHeightPx = 600;
-
     private readonly IJSRuntime _js;
     private readonly NavigationManager _navigationManager;
+    private readonly Func<string, TerminalWindowOpenResult, Task> _onWindowOpened;
     private readonly Func<string, Task> _onWindowClosed;
-    private readonly HashSet<string> _tracked = [];
+    private readonly string _id = Guid.NewGuid().ToString("N");
 
     private DotNetObjectReference<TerminalWindowLauncher>? _selfRef;
     private IJSObjectReference? _module;
+    private Task? _registrationTask;
+    private bool _disposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TerminalWindowLauncher"/> class.
     /// </summary>
     /// <param name="js">The JS runtime for the owning component's circuit.</param>
     /// <param name="navigationManager">The navigation manager providing the dashboard's base URI.</param>
+    /// <param name="onWindowOpened">Invoked after a native click opens or focuses a window, with its captured key and outcome.</param>
     /// <param name="onWindowClosed">
     /// Invoked with the terminal key when the user closes a detached window. Not raised for windows closed through
     /// <see cref="CloseAsync"/>, because the caller already knows about those.
     /// </param>
-    public TerminalWindowLauncher(IJSRuntime js, NavigationManager navigationManager, Func<string, Task> onWindowClosed)
+    public TerminalWindowLauncher(
+        IJSRuntime js,
+        NavigationManager navigationManager,
+        Func<string, TerminalWindowOpenResult, Task> onWindowOpened,
+        Func<string, Task> onWindowClosed)
     {
         ArgumentNullException.ThrowIfNull(js);
         ArgumentNullException.ThrowIfNull(navigationManager);
+        ArgumentNullException.ThrowIfNull(onWindowOpened);
         ArgumentNullException.ThrowIfNull(onWindowClosed);
 
         _js = js;
         _navigationManager = navigationManager;
+        _onWindowOpened = onWindowOpened;
         _onWindowClosed = onWindowClosed;
     }
 
     /// <summary>
-    /// Opens <paramref name="url"/> in a window dedicated to the terminal identified by <paramref name="key"/>, or
-    /// focuses the existing window if one is already open for it.
+    /// Registers a native click listener before the owning component enables its button.
     /// </summary>
-    /// <param name="key">
-    /// An opaque, page-stable identifier for the terminal — a dock terminal id, or a resource name and replica index.
-    /// </param>
-    /// <param name="url">The dashboard URL that renders the detached terminal.</param>
-    /// <param name="fontSize">The originating view's font size, or null if the view has not reported one yet.</param>
-    /// <param name="widthPx">Requested window width, in pixels.</param>
-    /// <param name="heightPx">Requested window height, in pixels.</param>
-    public async Task<TerminalWindowOpenResult> OpenAsync(
-        string key,
-        string url,
-        int? fontSize,
-        int widthPx = DefaultWindowWidthPx,
-        int heightPx = DefaultWindowHeightPx)
+    /// <param name="buttonId">The ID of the Fluent button carrying the current terminal key and complete URL.</param>
+    /// <returns>A task that completes when the listener is registered.</returns>
+    public Task RegisterAsync(string buttonId)
+        => _registrationTask ??= RegisterCoreAsync(buttonId);
+
+    private async Task RegisterCoreAsync(string buttonId)
     {
-        var module = await GetModuleAsync().ConfigureAwait(false);
-
-        // Carry only the font preference across browser contexts, not the source grid dimensions:
-        // the new primary must calculate its own rows and columns from the popup's viewport.
-        if (fontSize is { } size)
+        _selfRef = DotNetObjectReference.Create(this);
+        var moduleUri = new Uri(new Uri(_navigationManager.BaseUri), "js/app-terminalwindow.js");
+        _module = await _js.InvokeAsync<IJSObjectReference>("import", moduleUri.PathAndQuery).ConfigureAwait(false);
+        if (!_disposed)
         {
-            url = QueryHelpers.AddQueryString(url, "fontSize", size.ToString(CultureInfo.InvariantCulture));
+            await _module.InvokeVoidAsync("registerTerminalWindowButton", buttonId, _id, _selfRef).ConfigureAwait(false);
         }
+    }
 
-        var result = await module.InvokeAsync<string>(
-            "openTerminalWindow", key, url, widthPx, heightPx, _selfRef).ConfigureAwait(false);
-
-        if (result is not "blocked")
-        {
-            _tracked.Add(key);
-        }
-
-        return result switch
+    /// <summary>Receives the captured terminal key and browser result after the synchronous native launch.</summary>
+    /// <param name="key">The terminal key at the time of the click, not the current selection.</param>
+    /// <param name="result">The browser's launch outcome.</param>
+    /// <returns>A task that completes when the owning component has reconciled the outcome.</returns>
+    [JSInvokable]
+    public Task OnTerminalWindowOpenedAsync(string key, string result)
+        => _disposed ? Task.CompletedTask : _onWindowOpened(key, result switch
         {
             "opened" => TerminalWindowOpenResult.Opened,
             "focused" => TerminalWindowOpenResult.Focused,
-            _ => TerminalWindowOpenResult.Blocked
-        };
-    }
+            "blocked" => TerminalWindowOpenResult.Blocked,
+            _ => TerminalWindowOpenResult.Failed
+        });
 
     /// <summary>
     /// Brings the window for <paramref name="key"/> to the front. Returns <see langword="false"/> if no window is open
@@ -127,8 +127,8 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
     /// </summary>
     public async Task<bool> FocusAsync(string key)
     {
-        var module = await GetModuleAsync().ConfigureAwait(false);
-        return await module.InvokeAsync<bool>("focusTerminalWindow", key).ConfigureAwait(false);
+        return !_disposed && _module is { } module &&
+            await module.InvokeAsync<bool>("focusTerminalWindow", key).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -136,10 +136,10 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
     /// </summary>
     public async Task CloseAsync(string key)
     {
-        _tracked.Remove(key);
-
-        var module = await GetModuleAsync().ConfigureAwait(false);
-        await module.InvokeVoidAsync("closeTerminalWindow", key).ConfigureAwait(false);
+        if (!_disposed && _module is { } module)
+        {
+            await module.InvokeVoidAsync("closeTerminalWindow", key).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -147,35 +147,36 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
     /// </summary>
     [JSInvokable]
     public Task OnTerminalWindowClosedAsync(string key)
-    {
-        _tracked.Remove(key);
-        return _onWindowClosed(key);
-    }
-
-    private async Task<IJSObjectReference> GetModuleAsync()
-    {
-        // Imported lazily: most sessions never detach a terminal, and the import is only legal once the circuit can
-        // reach the browser, which rules out doing it in a constructor.
-        _selfRef ??= DotNetObjectReference.Create(this);
-        var moduleUri = new Uri(new Uri(_navigationManager.BaseUri), "js/app-terminalwindow.js");
-        return _module ??= await _js.InvokeAsync<IJSObjectReference>(
-            "import", moduleUri.PathAndQuery).ConfigureAwait(false);
-    }
+        => _disposed ? Task.CompletedTask : _onWindowClosed(key);
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+
+        if (_registrationTask is { } registration)
+        {
+            try
+            {
+                await registration.ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // The component reports registration failures. Still release a partially initialized module.
+            }
+        }
+
         if (_module is { } module)
         {
             try
             {
                 // Stop watching, but leave the windows open. They are independent viewers of an AppHost-owned
                 // terminal, so closing them because the opener navigated away would throw away live work.
-                foreach (var key in _tracked)
-                {
-                    await module.InvokeVoidAsync("untrackTerminalWindow", key).ConfigureAwait(false);
-                }
-
+                await module.InvokeVoidAsync("unregisterTerminalWindowButton", _id).ConfigureAwait(false);
                 await module.DisposeAsync().ConfigureAwait(false);
             }
             catch (JSDisconnectedException)
@@ -184,7 +185,6 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
             }
         }
 
-        _tracked.Clear();
         _selfRef?.Dispose();
     }
 }

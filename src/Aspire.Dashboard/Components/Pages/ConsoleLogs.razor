@@ -168,6 +168,7 @@
                 <div style="@(_activeView == ConsoleLogsView.Terminal ? "display: contents;" : "display: none;")">
                     <TerminalView
                         @ref="_terminalViewRef"
+                        ShowOpenInWindow="@(_activeView == ConsoleLogsView.Terminal)"
                         ResourceName="@_terminalResourceName"
                         ReplicaIndex="@_terminalReplicaIndex" />
                 </div>

@@ -551,12 +551,12 @@ public class TerminalDockTests : DashboardTestContext
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", terminalId, "third"));
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindComponents<TerminalView>().Count));
 
-        await cut.Find(".terminal-dock-detach").ClickAsync(new());
-        var open = Assert.Single(JSInterop.Invocations, i => i.Identifier == "openTerminalWindow");
-        Assert.Equal(terminalId, open.Arguments[0]);
-        Assert.Equal($"http://localhost{pathBase}/terminal-window/apphost/{escapedTerminalId}?fontSize=19", open.Arguments[1]);
-        Assert.Equal(960, open.Arguments[2]);
-        Assert.Equal(600, open.Arguments[3]);
+        var open = cut.Find(".terminal-dock-detach");
+        Assert.Equal(terminalId, open.GetAttribute("data-terminal-window-key"));
+        Assert.Equal($"http://localhost{pathBase}/terminal-window/apphost/{escapedTerminalId}?fontSize=19", open.GetAttribute("data-terminal-window-url"));
+        Assert.False(open.HasAttribute("disabled"));
+        var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync(terminalId, "opened"));
         var moduleImport = Assert.Single(JSInterop.Invocations, i => i.Identifier == "import"
             && i.Arguments[0] is string path && path.EndsWith("/js/app-terminalwindow.js", StringComparison.Ordinal));
         Assert.Equal($"{pathBase}/js/app-terminalwindow.js", moduleImport.Arguments[0]);
@@ -584,7 +584,8 @@ public class TerminalDockTests : DashboardTestContext
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "detached"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
 
-        await cut.Find(".terminal-dock-detach").ClickAsync(new());
+        var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("detached", "opened"));
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll(".terminal-dock-detached"));
@@ -598,11 +599,81 @@ public class TerminalDockTests : DashboardTestContext
         });
 
         // The snapshot renders before window cleanup, and the JS call does not itself cause another render.
-        // Wait for that side effect independently of bUnit's render-triggered assertions.
+        // Wait independently of render-triggered assertions, on the renderer because bUnit's invocation
+        // dictionary is not safe to enumerate concurrently with the watch update's JS calls.
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => JSInterop.Invocations.Any(i => i.Identifier == "closeTerminalWindow"),
+            () => cut.InvokeAsync(() => JSInterop.Invocations.Any(i => i.Identifier == "closeTerminalWindow")),
             "The removed terminal's detached window was not closed.");
-        var close = Assert.Single(JSInterop.Invocations, i => i.Identifier == "closeTerminalWindow");
+        var close = await cut.InvokeAsync(() => Assert.Single(JSInterop.Invocations, i => i.Identifier == "closeTerminalWindow"));
         Assert.Equal("detached", close.Arguments[0]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DelayedDetachNotification_ReconcilesCapturedTerminalRatherThanActiveTab(bool removeClickedTerminal)
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = RenderComponent<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
+        var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
+
+        await cut.FindAll(".terminal-dock-tab-select")[1].ClickAsync(new());
+        if (removeClickedTerminal)
+        {
+            await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Removed, "first"));
+            cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-tab")));
+        }
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("first", "opened"));
+        Assert.Equal("second", cut.Find(".terminal-dock-tab.active .terminal-dock-tab-title").TextContent);
+        Assert.Single(cut.FindAll(".terminal-dock-pane.active .terminal-view"));
+        Assert.Empty(cut.FindAll(".terminal-dock-pane.active .terminal-dock-detached"));
+        Assert.Empty(client.ClosedTerminals);
+
+        if (removeClickedTerminal)
+        {
+            Assert.Empty(cut.FindAll(".terminal-dock-detached"));
+            var close = Assert.Single(JSInterop.Invocations, i => i.Identifier == "closeTerminalWindow");
+            Assert.Equal("first", close.Arguments[0]);
+        }
+        else
+        {
+            Assert.Single(cut.FindAll(".terminal-dock-pane.inactive .terminal-dock-detached"));
+            await cut.InvokeAsync(() => launcher.OnTerminalWindowClosedAsync("first"));
+            Assert.Empty(cut.FindAll(".terminal-dock-detached"));
+            Assert.Equal(2, cut.FindComponents<TerminalView>().Count);
+        }
+    }
+
+    [Fact]
+    public async Task BlockedDetach_KeepsInlineViewAndDisplaysFeedback()
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = RenderComponent<TerminalDock>();
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "terminal"));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        Assert.True(cut.Find(".terminal-dock-detach").HasAttribute("disabled"));
+        var view = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => view.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true, FontPx = 19
+        }));
+        Assert.False(cut.Find(".terminal-dock-detach").HasAttribute("disabled"));
+        var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("terminal", "blocked"));
+        Assert.Equal(Resources.Layout.TerminalDockDetachBlocked, cut.Find(".terminal-dock-popup-blocked").TextContent);
+        Assert.Same(view, cut.FindComponent<TerminalView>().Instance);
+        Assert.Empty(cut.FindAll(".terminal-dock-detached"));
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("terminal", "opened"));
+        Assert.Empty(cut.FindAll(".terminal-dock-popup-blocked"));
+        Assert.Single(cut.FindAll(".terminal-dock-detached"));
+        Assert.True(cut.Find(".terminal-dock-detach").HasAttribute("disabled"));
+        Assert.Empty(client.ClosedTerminals);
     }
 }

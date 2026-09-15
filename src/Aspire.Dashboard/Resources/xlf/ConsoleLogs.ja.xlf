@@ -202,6 +202,11 @@
         <target state="new">The browser blocked the terminal window. Allow pop-ups for this site and try again.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalToolbarOpenInWindowFailed">
+        <source>Unable to open the terminal window. Reload the dashboard and try again.</source>
+        <target state="new">Unable to open the terminal window. Reload the dashboard and try again.</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

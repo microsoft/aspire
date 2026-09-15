@@ -63,15 +63,15 @@
             {
                 <span class="terminal-dock-popup-blocked">@Loc[nameof(Resources.Layout.TerminalDockDetachBlocked)]</span>
             }
-            <FluentButton Appearance="ButtonAppearance.Transparent"
-                          IconOnly="true"
-                          Class="aspire-icon-button terminal-dock-detach"
-                          Title="@Loc[nameof(Resources.Layout.TerminalDockDetach)]"
-                          aria-label="@Loc[nameof(Resources.Layout.TerminalDockDetach)]"
-                          Disabled="@(IsPanelVisible || _activeTerminalId is null || _detachedTerminalIds.Contains(_activeTerminalId))"
-                          OnClick="@DetachActiveAsync">
-                <FluentIcon Value="@(new Icons.Regular.Size16.WindowNew())" Color="Color.Default" />
-            </FluentButton>
+            <TerminalWindowButton @ref="_windowButton"
+                                  Class="terminal-dock-detach"
+                                  Label="@Loc[nameof(Resources.Layout.TerminalDockDetach)]"
+                                  TerminalKey="@_activeTerminalId"
+                                  Url="@ActiveTerminalWindowUrl"
+                                  FontSize="@ActiveTerminalFontSize"
+                                  Disabled="@(!_isVisible || IsPanelVisible || _activeTerminalId is null || _detachedTerminalIds.Contains(_activeTerminalId))"
+                                  OnWindowOpened="@OnDetachedWindowOpenedAsync"
+                                  OnWindowClosed="@OnDetachedWindowClosedAsync" />
             <FluentButton Appearance="ButtonAppearance.Transparent"
                           IconOnly="true"
                           Class="aspire-icon-button terminal-dock-collapse"
@@ -121,6 +121,7 @@
                                       Chromeless="true"
                                       ShowDimensionsPicker="false"
                                       AutoFit="@(_isVisible && IsPaneActive(terminal.TerminalId))"
+                                      OnToolbarStateChanged="@OnTerminalToolbarStateChanged"
                                       SizeMemoryKey="@($"dock:{terminal.TerminalId}")" />
                     }
                 </div>

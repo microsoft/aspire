@@ -272,6 +272,20 @@ rendered inside the toolbar's options (⋯) `AspireMenuButton`:
   visible` transition the page calls `refreshLayout` on the JS terminal
   to fit the terminal to the new available space.
 
+The resource Terminal view offers an icon-only **Open in new window** button
+at the right of its title bar, not in the page's Options menu or Console view.
+The dock keeps its detach button in the tab strip; dialogs and detached windows
+do not offer another launch button. Launch buttons stay disabled until their
+native click listener, terminal key, complete URL, and font preference are ready.
+The browser opens or focuses the named window before notifying Blazor, so a
+pending server response cannot delay popup creation. Browser popup policy can
+still block the launch, in which case the dashboard shows feedback.
+
+Resource terminals keep their inline viewer while the extra window is open.
+Dock terminals show a detached placeholder until the window closes or the user
+chooses **Return to dock**. Disposing the opener leaves independent windows and
+their AppHost-owned producers running.
+
 The terminal frame keeps font decrease/increase buttons, the current font
 size, and the live columns-by-rows selector together in its bottom-right
 footer. A separate Fit button switches to container-sized rows and columns

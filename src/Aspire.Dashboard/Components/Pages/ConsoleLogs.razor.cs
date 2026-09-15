@@ -162,7 +162,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _selectedResourceHasTerminal;
     private string? _terminalResourceName;
     private int _terminalReplicaIndex;
-    private TerminalWindowLauncher? _terminalWindowLauncher;
 
     // View toggle for terminal resources. The page surfaces both LogViewer
     // and TerminalView in MainSection (both stay mounted so flipping does
@@ -646,14 +645,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     IsDivider = true
                 });
             }
-
-            _logsMenuItems.Add(new()
-            {
-                OnClick = OpenTerminalWindowAsync,
-                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarOpenInWindow)],
-                Icon = new Icons.Regular.Size16.WindowNew(),
-                IsDisabled = _terminalResourceName is null,
-            });
         }
 
         if (_activeView == ConsoleLogsView.Console)
@@ -1252,11 +1243,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         await CancelAllSubscriptionsAsync();
 
-        if (_terminalWindowLauncher is not null)
-        {
-            await _terminalWindowLauncher.DisposeAsync();
-        }
-
         TelemetryContext.Dispose();
     }
 
@@ -1365,45 +1351,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // because the update hasn't been processed yet.
     internal ResourceViewModel? GetResourceSnapshotForTest(string resourceName) =>
         _resourceByName.TryGetValue(resourceName, out var resource) ? resource : null;
-
-    // Resource terminals never reattach, so the close callback has nothing to do: the inline view was live the
-    // whole time the window was open.
-    private TerminalWindowLauncher TerminalWindowLauncher
-        => _terminalWindowLauncher ??= new TerminalWindowLauncher(JS, NavigationManager, _ => Task.CompletedTask);
-
-    /// <summary>
-    /// Opens the selected resource's terminal in its own resizable window.
-    /// </summary>
-    /// <remarks>
-    /// Unlike the terminal dock, the inline view keeps rendering. Resource terminals are multi-headed, so the window
-    /// is an additional viewer rather than a relocation, and seeing the session on the resource page while working in
-    /// a larger window is the point of detaching it.
-    /// </remarks>
-    private async Task OpenTerminalWindowAsync()
-    {
-        if (_terminalResourceName is not { Length: > 0 } resourceName)
-        {
-            return;
-        }
-
-        try
-        {
-            var path = $"terminal-window/resource/{Uri.EscapeDataString(resourceName)}/{_terminalReplicaIndex}";
-            var result = await TerminalWindowLauncher.OpenAsync(
-                key: $"resource:{resourceName}:{_terminalReplicaIndex}",
-                url: NavigationManager.ToAbsoluteUri(path).AbsoluteUri,
-                fontSize: _terminalViewRef?.FontSize).ConfigureAwait(true);
-
-            if (result is TerminalWindowOpenResult.Blocked)
-            {
-                await ToastService.ShowErrorToastAsync(Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarOpenInWindowBlocked)]);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Logger.LogWarning(ex, "Failed to open a terminal window for resource {ResourceName}.", resourceName);
-        }
-    }
 
     // IComponentWithTelemetry impl
     public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Page, TelemetryComponentIds.ConsoleLogs);

@@ -56,7 +56,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     /// </summary>
     private readonly HashSet<string> _detachedTerminalIds = [];
 
-    private TerminalWindowLauncher? _windowLauncher;
+    private TerminalWindowButton? _windowButton;
     private bool _popupBlocked;
 
     [Inject]
@@ -203,44 +203,40 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     private string GetPaneId(string terminalId) => $"{_elementIdPrefix}-pane-{terminalId}";
 
-    private TerminalWindowLauncher WindowLauncher
-        => _windowLauncher ??= new TerminalWindowLauncher(JS, NavigationManager, OnDetachedWindowClosedAsync);
+    private string? ActiveTerminalWindowUrl => _activeTerminalId is { } id
+        ? $"terminal-window/apphost/{Uri.EscapeDataString(id)}"
+        : null;
 
-    /// <summary>
-    /// Pops the active terminal out into its own window.
-    /// </summary>
-    private async Task DetachActiveAsync()
+    private int? ActiveTerminalFontSize => _activeTerminalId is { } id && _terminalViews.TryGetValue(id, out var view)
+        ? view.FontSize
+        : null;
+
+    private void OnTerminalToolbarStateChanged(TerminalToolbarState state) => StateHasChanged();
+
+    private async Task OnDetachedWindowOpenedAsync((string Key, TerminalWindowOpenResult Result) launch)
     {
-        if (_activeTerminalId is not { } terminalId)
+        if (_disposed)
         {
             return;
         }
 
-        _popupBlocked = false;
-
-        try
+        var (terminalId, result) = launch;
+        if (!_terminals.Any(t => t.TerminalId == terminalId))
         {
-            var url = NavigationManager.ToAbsoluteUri($"terminal-window/apphost/{Uri.EscapeDataString(terminalId)}").AbsoluteUri;
-            var fontSize = _terminalViews.TryGetValue(terminalId, out var view) ? view.FontSize : null;
-            var result = await WindowLauncher.OpenAsync(terminalId, url, fontSize).ConfigureAwait(true);
-
-            if (result is TerminalWindowOpenResult.Blocked)
-            {
-                // Surfaced in the tab strip rather than swallowed: to the user, detaching just did nothing.
-                _popupBlocked = true;
-            }
-            else
-            {
-                _detachedTerminalIds.Add(terminalId);
-                _terminalViews.Remove(terminalId);
-            }
-
-            StateHasChanged();
+            // The watch stream can remove a terminal while its native launch notification is in flight.
+            // Reconcile the captured key; never detach the newly active tab in its place.
+            await CloseDetachedWindowAsync(terminalId);
+            return;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+
+        _popupBlocked = result == TerminalWindowOpenResult.Blocked;
+        if (result is TerminalWindowOpenResult.Opened or TerminalWindowOpenResult.Focused)
         {
-            Logger.LogWarning(ex, "Failed to detach terminal {TerminalId} into a window.", terminalId);
+            _detachedTerminalIds.Add(terminalId);
+            _terminalViews.Remove(terminalId);
         }
+
+        StateHasChanged();
     }
 
     private async Task FocusDetachedWindowAsync(string terminalId)
@@ -249,7 +245,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         {
             // A window the browser closed without us noticing yet would otherwise leave the pane stuck on the
             // placeholder, so a failed focus reattaches instead.
-            if (!await WindowLauncher.FocusAsync(terminalId).ConfigureAwait(true))
+            if (_windowButton is null || !await _windowButton.FocusAsync(terminalId).ConfigureAwait(true))
             {
                 await OnDetachedWindowClosedAsync(terminalId).ConfigureAwait(true);
             }
@@ -264,7 +260,10 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     {
         try
         {
-            await WindowLauncher.CloseAsync(terminalId).ConfigureAwait(true);
+            if (_windowButton is { } button)
+            {
+                await button.CloseAsync(terminalId).ConfigureAwait(true);
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -453,7 +452,10 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     {
         try
         {
-            await WindowLauncher.CloseAsync(terminalId).ConfigureAwait(true);
+            if (_windowButton is { } button)
+            {
+                await button.CloseAsync(terminalId).ConfigureAwait(true);
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -505,11 +507,11 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
         _selfRef?.Dispose();
 
-        if (_windowLauncher is { } launcher)
+        if (_windowButton is { } button)
         {
             // Leaves any detached windows open: they are viewers of AppHost-owned terminals and have no reason to
             // die because this circuit went away.
-            await launcher.DisposeAsync().ConfigureAwait(true);
+            await button.DisposeAsync().ConfigureAwait(true);
         }
 
         _cts.Dispose();

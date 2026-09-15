@@ -2,12 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.JSInterop;
 using Assert = Xunit.Assert;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
@@ -55,11 +57,25 @@ internal static class TerminalSetupHelpers
         dock.SetupVoid("registerTabNavigation", _ => true).SetVoidResult();
         dock.SetupVoid("unregisterTabNavigation", _ => true).SetVoidResult();
 
+        SetupTerminalWindows(context, pathBase);
+    }
+
+    public static BunitJSModuleInterop SetupTerminalWindows(TestContext context, string pathBase = "")
+    {
         var windows = context.JSInterop.SetupModule($"{pathBase}/js/app-terminalwindow.js");
-        windows.Setup<string>("openTerminalWindow", _ => true).SetResult("opened");
+        windows.SetupVoid("registerTerminalWindowButton", _ => true).SetVoidResult();
         windows.Setup<bool>("focusTerminalWindow", _ => true).SetResult(true);
         windows.SetupVoid("closeTerminalWindow", _ => true).SetVoidResult();
-        windows.SetupVoid("untrackTerminalWindow", _ => true).SetVoidResult();
+        windows.SetupVoid("unregisterTerminalWindowButton", _ => true).SetVoidResult();
+        return windows;
+    }
+
+    public static TerminalWindowLauncher GetWindowLauncher(TestContext context, IRenderedFragment component)
+    {
+        // A terminal-watch update can render a child before that child's OnAfterRenderAsync registers its listener.
+        component.WaitForAssertion(() => Assert.Single(context.JSInterop.Invocations, i => i.Identifier == "registerTerminalWindowButton"));
+        var registration = Assert.Single(context.JSInterop.Invocations, i => i.Identifier == "registerTerminalWindowButton");
+        return Assert.IsType<DotNetObjectReference<TerminalWindowLauncher>>(registration.Arguments[2]).Value;
     }
 
     public static void AssertSingleTerminalConnection(TestContext context, string expectedWebSocketUrl)

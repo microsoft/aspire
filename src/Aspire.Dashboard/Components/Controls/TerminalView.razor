@@ -17,6 +17,14 @@
         {
             <div class="terminal-titlebar">
                 <span class="terminal-title">@(ResourceName ?? Loc[nameof(Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)].Value)</span>
+                @if (ShowOpenInWindow && !string.IsNullOrEmpty(ResourceName))
+                {
+                    <TerminalWindowButton Class="terminal-open-window"
+                                          Label="@Loc[nameof(Resources.ConsoleLogs.TerminalToolbarOpenInWindow)]"
+                                          TerminalKey="@($"resource:{ResourceName}:{ReplicaIndex}")"
+                                          Url="@($"terminal-window/resource/{Uri.EscapeDataString(ResourceName)}/{ReplicaIndex}")"
+                                          FontSize="@FontSize" />
+                }
             </div>
         }
         <div class="terminal-body">

@@ -74,6 +74,28 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Equal(Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize, cut.Find(".terminal-font-plus").GetAttribute("aria-label"));
     }
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    public void NewWindowAction_IsOnlyOfferedInAnEnabledResourceTitlebar(bool chromeless, bool showOpenInWindow, bool expected)
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        TerminalSetupHelpers.SetupTerminalWindows(this);
+        var cut = RenderComponent<TerminalView>(builder => builder
+            .Add(p => p.ResourceName, "shell")
+            .Add(p => p.Chromeless, chromeless)
+            .Add(p => p.ShowOpenInWindow, showOpenInWindow));
+        Assert.Equal(expected ? 1 : 0, cut.FindAll(".terminal-titlebar .terminal-open-window").Count);
+        if (expected)
+        {
+            Assert.True(cut.Find(".terminal-open-window").HasAttribute("disabled"));
+        }
+        cut.SetParametersAndRender(builder => builder.Add(p => p.ResourceName, null));
+        Assert.Empty(cut.FindAll(".terminal-open-window"));
+    }
+
     [Fact]
     public async Task InitialFontSize_SeedsMountWithoutResettingCurrentFont()
     {
