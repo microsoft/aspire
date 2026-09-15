@@ -104,14 +104,10 @@ public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
         //   Running dotnet in /tmp/aspire-nuget-configABC123 with args: new install /workspace/.../source-feed/Aspire.ProjectTemplates.13.0.0-preview.1.nupkg
         // Match the argument list instead of the randomly-suffixed temp directory.
         //
-        // The negative guard has to name the search path this CLI would actually take. Shipped (and
-        // CI-installed) CLIs are bundles, so a feed-backed template lookup goes through
-        // BundleNuGetPackageCache -> `aspire-managed nuget search`, which logs:
+        // The negative guard names the legacy bundled search path to ensure this local-source flow
+        // never regresses to spawning aspire-managed. That removed path logged:
         //   Running NuGet search via aspire-managed: Aspire.ProjectTemplates
         //   NuGet search args: nuget search --query Aspire.ProjectTemplates --take 1000 --format json ...
-        // Those two Debug lines are the only trace of it, because the helper process itself is spawned
-        // with SuppressLogging (as is the SDK-backed `dotnet package search` fallback), so asserting on
-        // a logged `package search` command line can never fail and would not catch a regression.
         // Because the positive assertion above matches a Debug line from the same log, an empty or
         // level-filtered log cannot make these negative assertions pass vacuously.
         await auto.RunCommandAsync(

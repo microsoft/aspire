@@ -565,11 +565,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     {
         var executionContext = TestExecutionContextFactory.CreateTestContext();
         var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            new TestEnvironment(),
-            NullLogger<BundleNuGetService>.Instance);
+            NullLogger<BundleNuGetService>.Instance,
+            new FakeNuGetClient());
 
         return new AppHostServerProjectFactory(
             new TestDotNetCliRunner(),
