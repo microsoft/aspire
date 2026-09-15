@@ -4,7 +4,6 @@
 using System.Diagnostics;
 using System.IO.Hashing;
 using System.Net.Sockets;
-using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Certificates;
@@ -1544,159 +1543,21 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return new UpdatePackagesResult { UpdatesApplied = false };
         }
 
-        // Load config - source of truth for SDK version and packages
         var config = LoadConfiguration(directory);
 
-        // Find updates for SDK version and packages
-        string? newSdkVersion = null;
-        ExceptionDispatchInfo? updateCheckFailure = null;
-        var updates = await _interactionService.ShowStatusAsync(
-            UpdateCommandStrings.AnalyzingProjectStatus,
-            async () =>
-            {
-                var packageUpdates = new List<(string PackageId, string CurrentVersion, string NewVersion)>();
-
-                // Check for SDK version update (silently - it's an implementation detail)
-                try
-                {
-                    var latestSdkPackage = await context.Channel.GetLatestGuestAppHostSdkPackageAsync(directory, cancellationToken);
-
-                    if (latestSdkPackage is not null && latestSdkPackage.Version != config.SdkVersion)
-                    {
-                        newSdkVersion = latestSdkPackage.Version;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    updateCheckFailure ??= ExceptionDispatchInfo.Capture(ex);
-                    _logger.LogWarning(ex, "Failed to check for SDK version updates");
-                }
-
-                // Check for package updates
-                if (config.Packages is not null)
-                {
-                    foreach (var (packageId, currentVersion) in config.Packages)
-                    {
-                        try
-                        {
-                            var packages = await context.Channel.GetPackagesAsync(packageId, directory, cancellationToken);
-                            var latestPackage = packages
-                                .Where(p => SemVersion.TryParse(p.Version, SemVersionStyles.Strict, out _))
-                                .OrderByDescending(p => SemVersion.Parse(p.Version, SemVersionStyles.Strict), SemVersion.PrecedenceComparer)
-                                .FirstOrDefault();
-
-                            if (latestPackage is not null && latestPackage.Version != currentVersion)
-                            {
-                                packageUpdates.Add((packageId, currentVersion, latestPackage.Version));
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            updateCheckFailure ??= ExceptionDispatchInfo.Capture(ex);
-                            _logger.LogWarning(ex, "Failed to check for updates to package {PackageId}", packageId);
-                        }
-                    }
-                }
-
-                return packageUpdates;
-            });
-
-        var explicitChannelName = context.Channel.ShouldPersistChannelName() ? context.Channel.Name : null;
-        var clearExplicitChannel = context.Channel.Type is PackageChannelType.Explicit &&
-            string.Equals(context.Channel.Name, PackageChannelNames.Stable, StringComparisons.ChannelName) &&
-            config.Channel is not null;
-        var explicitChannelChanged = clearExplicitChannel ||
-            explicitChannelName is not null &&
-            !string.Equals(config.Channel, explicitChannelName, StringComparisons.CliInputOrOutput);
-
-        if (explicitChannelChanged && updateCheckFailure is not null)
-        {
-            // A channel transition changes the restore policy as well as version selection.
-            // Do not persist a partial transition when any package version could not be evaluated.
-            updateCheckFailure.Throw();
-        }
-
-        var hasVersionUpdates = updates.Count > 0 || newSdkVersion is not null;
-        if (!hasVersionUpdates && !explicitChannelChanged)
-        {
-            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
-            return new UpdatePackagesResult { UpdatesApplied = false };
-        }
-
-        if (hasVersionUpdates)
-        {
-            // Display pending updates
-            _interactionService.DisplayEmptyLine();
-            if (newSdkVersion is not null)
-            {
-                _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]Aspire SDK[/] [bold green]{config.SdkVersion.EscapeMarkup()}[/] to [bold green]{newSdkVersion.EscapeMarkup()}[/]", allowMarkup: true);
-            }
-            foreach (var (packageId, currentVersion, newVersion) in updates)
-            {
-                _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]{packageId.EscapeMarkup()}[/] [bold green]{currentVersion.EscapeMarkup()}[/] to [bold green]{newVersion.EscapeMarkup()}[/]", allowMarkup: true);
-            }
-            _interactionService.DisplayEmptyLine();
-
-            // Confirm with user
-            if (!await _interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken))
-            {
-                return new UpdatePackagesResult { UpdatesApplied = false };
-            }
-        }
-
-        // Apply updates to settings.json
-        if (newSdkVersion is not null)
-        {
-            config.SdkVersion = newSdkVersion;
-        }
-        // Non-stable explicit channels are persisted because their source policy must be
-        // reproducible. Selecting the explicit stable channel clears any previous pin so the
-        // project returns to the ambient stable source policy without persisting "stable".
-        if (explicitChannelChanged)
-        {
-            config.Channel = explicitChannelName;
-        }
-        foreach (var (packageId, _, newVersion) in updates)
-        {
-            config.AddOrUpdatePackage(packageId, newVersion);
-        }
-        // Rebuild and regenerate SDK code with updated packages
-        _interactionService.DisplayEmptyLine();
-        var regenerateResult = await _interactionService.ShowStatusAsync(
-            UpdateCommandStrings.RegeneratingSdkCode,
-            async () =>
-            {
-                var requestedChannel = context.Channel.Type is PackageChannelType.Explicit
-                    ? context.Channel.Name
-                    : config.Channel;
-                var regenerateSuccess = await BuildAndGenerateSdkAsync(
-                    directory,
-                    config,
-                    requestedChannel,
-                    packageSourceOverridePattern: null,
-                    cancellationToken: cancellationToken);
-
-                if (!regenerateSuccess)
-                {
-                    return new UpdatePackagesResult { UpdatesApplied = false };
-                }
-
-                return new UpdatePackagesResult { UpdatesApplied = true };
-            });
-
-        if (!regenerateResult.UpdatesApplied)
-        {
-            return regenerateResult;
-        }
-
-        SaveConfiguration(config, directory);
-
-        _interactionService.DisplayMessage(KnownEmojis.Package, UpdateCommandStrings.RegeneratedSdkCode);
-
-        _interactionService.DisplayEmptyLine();
-        _interactionService.DisplaySuccess(UpdateCommandStrings.UpdateSuccessfulMessage);
-
-        return new UpdatePackagesResult { UpdatesApplied = true };
+        return await AspireConfigPackageUpdater.UpdatePackagesAsync(
+            directory,
+            config,
+            context,
+            _interactionService,
+            _logger,
+            (updatedConfig, requestedChannel, ct) => BuildAndGenerateSdkAsync(
+                directory,
+                updatedConfig,
+                requestedChannel,
+                packageSourceOverridePattern: null,
+                cancellationToken: ct),
+            cancellationToken);
     }
 
     /// <inheritdoc />

@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.Commands;
-using Aspire.Cli.Layout;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Layout;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
@@ -16,8 +19,6 @@ using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using System.Text.Json;
-using System.Xml.Linq;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -854,6 +855,111 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         Assert.False(success);
         Assert.Equal("13.2.1", AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName)?.Packages?["Aspire.Hosting.Redis"]);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_CliManagedSingleFileAppHostUpdatesConfigAndGeneratedModule()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(
+            configPath,
+            """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Example.Integration": "1.0.0" },
+              "features": { "experimentalCliManagedAppHost": true }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner();
+        var packageCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                [
+                    new NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "source" }
+                ])
+        };
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
+            options.NuGetPackageCacheFactory = _ => packageCache;
+        });
+
+        runner.BuildAsyncCallback = (projectFile, _, _, _) =>
+        {
+            var moduleProject = XDocument.Load(projectFile.FullName);
+            var packageReference = Assert.Single(
+                moduleProject.Descendants().Where(element => element.Name.LocalName == "PackageReference"),
+                reference => reference.Attribute("Include")?.Value == "Example.Integration");
+            Assert.Equal("2.0.0", packageReference.Attribute("Version")?.Value);
+            Assert.Equal("1.0.0", AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName)?.SdkVersion);
+            TestHelpers.WriteEmptyIntegrationClosureFiles(appHostFile);
+            return 0;
+        };
+
+        var result = await project.UpdatePackagesAsync(new UpdatePackagesContext
+        {
+            AppHostFile = appHostFile,
+            Channel = PackageChannel.CreateImplicitChannel(packageCache, new TestFeatures(), Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance),
+            ConfirmBinding = PromptBinding.CreateDefault(true),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null)
+        }, CancellationToken.None);
+
+        Assert.True(result.UpdatesApplied);
+        var updatedConfig = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(updatedConfig);
+        Assert.Equal("2.0.0", updatedConfig.SdkVersion);
+        Assert.Equal("2.0.0", updatedConfig.Packages!["Example.Integration"]);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_CliManagedSingleFileAppHostDoesNotPersistConfigWhenModuleRestoreFails()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(
+            configPath,
+            """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Example.Integration": "1.0.0" },
+              "features": { "experimentalCliManagedAppHost": true }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 1
+        };
+        var packageCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                [
+                    new NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "source" }
+                ])
+        };
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
+            options.NuGetPackageCacheFactory = _ => packageCache;
+        });
+
+        var result = await project.UpdatePackagesAsync(new UpdatePackagesContext
+        {
+            AppHostFile = appHostFile,
+            Channel = PackageChannel.CreateImplicitChannel(packageCache, new TestFeatures(), Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance),
+            ConfirmBinding = PromptBinding.CreateDefault(true),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null)
+        }, CancellationToken.None);
+
+        Assert.False(result.UpdatesApplied);
+        var unchangedConfig = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(unchangedConfig);
+        Assert.Equal("1.0.0", unchangedConfig.SdkVersion);
+        Assert.Equal("1.0.0", unchangedConfig.Packages!["Example.Integration"]);
     }
 
     [Fact]

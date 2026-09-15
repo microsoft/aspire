@@ -95,6 +95,57 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
     /// <inheritdoc />
     public override bool UsesAspireConfigForPackageResolution => true;
 
+    /// <inheritdoc />
+    public override async Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
+    {
+        var appHostFile = context.AppHostFile;
+        var appHostDirectory = appHostFile.Directory;
+        if (appHostDirectory is null)
+        {
+            return new UpdatePackagesResult { UpdatesApplied = false };
+        }
+
+        var configDirectory = ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
+        var config = AspireConfigFile.LoadOrCreate(configDirectory.FullName, IdentitySdkVersion);
+
+        return await AspireConfigPackageUpdater.UpdatePackagesAsync(
+            appHostDirectory,
+            config,
+            context,
+            InteractionService,
+            Logger,
+            async (updatedConfig, requestedChannel, ct) =>
+            {
+                var outputCollector = new OutputCollector(FileLoggerProvider, CliLogFormat.Categories.Package);
+                var generationResult = await _cliManagedModuleGenerator.TryGenerateWithRestoreConfigurationAsync(
+                    appHostFile,
+                    updatedConfig,
+                    configDirectory,
+                    requestedChannel,
+                    packageSourceOverride: null,
+                    ct);
+                if (generationResult is null)
+                {
+                    return false;
+                }
+
+                var restoreSucceeded = await RestoreIntegrationClosureAsync(
+                    appHostFile,
+                    generationResult.ModuleProjectFile,
+                    CreateModuleBuildInvocationOptions(generationResult),
+                    outputCollector,
+                    generationResult.SensitiveSources,
+                    ct);
+                if (!restoreSucceeded)
+                {
+                    InteractionService.DisplayLines(outputCollector.GetLines());
+                }
+
+                return restoreSucceeded;
+            },
+            cancellationToken);
+    }
+
     protected override bool FallbackToDotNetPackageAdd => false;
 
     public override Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)

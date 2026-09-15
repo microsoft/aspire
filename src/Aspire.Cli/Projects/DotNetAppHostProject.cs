@@ -137,6 +137,14 @@ internal partial class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public virtual bool UsesAspireConfigForPackageResolution => false;
 
+    protected IInteractionService InteractionService => _interactionService;
+
+    protected Diagnostics.FileLoggerProvider FileLoggerProvider => _fileLoggerProvider;
+
+    protected ILogger Logger => _logger;
+
+    protected string IdentitySdkVersion => _executionContext.IdentitySdkVersion;
+
     // ═══════════════════════════════════════════════════════════════
     // DETECTION
     // ═══════════════════════════════════════════════════════════════
@@ -2646,7 +2654,7 @@ internal partial class DotNetAppHostProject : IAppHostProject
         => Task.FromResult(false);
 
     /// <inheritdoc />
-    public async Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
+    public virtual async Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
     {
         var result = await _projectUpdater.UpdateProjectAsync(context, cancellationToken);
         return new UpdatePackagesResult { UpdatesApplied = result.UpdatedApplied };

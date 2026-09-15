@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
@@ -85,8 +86,8 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
             e.Element("IsAspireProjectResource")?.Value == "false");
         Assert.Contains(moduleProject.Descendants("Target"), e =>
             e.Attribute("Name")?.Value == "FailDirectDotnetForCliManagedAppHost" &&
-            e.Attribute("BeforeTargets")?.Value == "Build;Publish" &&
-            e.Attribute("Condition")?.Value == "'$(AspireCliManagedAppHostBuild)' != 'true'");
+            e.Attribute("BeforeTargets")?.Value == "Build;Publish;Restore" &&
+            e.Attribute("Condition")?.Value == "'$(AspireCliManagedAppHostBuild)' != 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingInsideVisualStudio)' != 'true'");
 
         var appHostBuildPropsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.props");
         var appHostBuildTargetsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.targets");
@@ -139,6 +140,41 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         Assert.Equal("$(BaseIntermediateOutputPath)", moduleDirectoryBuildPropertyGroup.Element("MSBuildProjectExtensionsPath")?.Value);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Directory.Build.targets")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Directory.Packages.props")));
+    }
+
+    [Fact]
+    public async Task GeneratedModuleRejectsDirectRestoreButAllowsCliAndDesignTimeRestore()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var appHostFile = CreateCliManagedAppHost(workspace.WorkspaceRoot);
+        var generator = CreateGenerator(workspace);
+
+        var moduleProjectFile = await generator.TryGenerateAsync(
+            appHostFile,
+            new AspireConfigFile { SdkVersion = "13.2.0" },
+            workspace.WorkspaceRoot,
+            packageSourceOverride: null,
+            CancellationToken.None);
+
+        Assert.NotNull(moduleProjectFile);
+        var moduleProject = XDocument.Load(moduleProjectFile.FullName);
+        moduleProject.Root!.Elements("ItemGroup").Remove();
+        moduleProject.Save(moduleProjectFile.FullName);
+
+        var directRestore = await RunRestoreAsync(moduleProjectFile, propertyName: null);
+        Assert.NotEqual(0, directRestore.ExitCode);
+        Assert.Contains("This AppHost is managed by the Aspire CLI.", directRestore.Output);
+
+        foreach (var propertyName in new[]
+        {
+            CSharpCliManagedAppHostModuleGenerator.BuildPropertyName,
+            "DesignTimeBuild",
+            "BuildingInsideVisualStudio"
+        })
+        {
+            var exemptRestore = await RunRestoreAsync(moduleProjectFile, propertyName);
+            Assert.True(exemptRestore.ExitCode == 0, exemptRestore.Output);
+        }
     }
 
     [Fact]
@@ -352,6 +388,53 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
     }
 
     [Fact]
+    public async Task TryGenerateWithRestoreConfigurationAsyncUsesRestoreChannelInsteadOfPersistedChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var appHostFile = CreateCliManagedAppHost(workspace.WorkspaceRoot);
+        var config = new AspireConfigFile
+        {
+            Channel = "daily",
+            SdkVersion = "13.2.0"
+        };
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var daily = PackageChannel.CreateExplicitChannel(
+                    "daily",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("*", "https://example.invalid/daily")],
+                    new FakeNuGetPackageCache(),
+                    new TestFeatures(),
+                    NullLogger.Instance);
+                var staging = PackageChannel.CreateExplicitChannel(
+                    PackageChannelNames.Staging,
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("*", "https://example.invalid/staging")],
+                    new FakeNuGetPackageCache(),
+                    new TestFeatures(),
+                    NullLogger.Instance);
+                return Task.FromResult<IEnumerable<PackageChannel>>([daily, staging]);
+            }
+        };
+        var generator = CreateGenerator(workspace, packagingService);
+
+        var generationResult = await generator.TryGenerateWithRestoreConfigurationAsync(
+            appHostFile,
+            config,
+            workspace.WorkspaceRoot,
+            PackageChannelNames.Staging,
+            packageSourceOverride: null,
+            CancellationToken.None);
+
+        Assert.NotNull(generationResult);
+        Assert.Equal(PackageChannelNames.Staging, packagingService.LastRequestedChannelName);
+        var nugetConfig = XDocument.Load(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "NuGet.Config"));
+        Assert.Equal(["https://example.invalid/staging"], GetPackageSources(nugetConfig));
+    }
+
+    [Fact]
     public async Task TryGenerateAsyncUsesSourceOverrideWithoutResolvingChannelsWhenChannelIsUnset()
     {
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
@@ -462,6 +545,39 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
             "modules",
             CSharpCliManagedAppHostModuleGenerator.AppHostBuildPropsFileName));
         Assert.Empty(appHostBuildProps.Descendants(PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName));
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunRestoreAsync(FileInfo projectFile, string? propertyName)
+    {
+        var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
+        var dotnetPath = string.IsNullOrWhiteSpace(dotnetRoot)
+            ? "dotnet"
+            : Path.Combine(dotnetRoot, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        var startInfo = new ProcessStartInfo(dotnetPath)
+        {
+            WorkingDirectory = projectFile.DirectoryName,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        startInfo.Environment.Remove("MSBuildSDKsPath");
+        startInfo.ArgumentList.Add("restore");
+        startInfo.ArgumentList.Add(projectFile.FullName);
+        startInfo.ArgumentList.Add("--nologo");
+        startInfo.ArgumentList.Add("--verbosity");
+        startInfo.ArgumentList.Add("quiet");
+        if (propertyName is not null)
+        {
+            startInfo.ArgumentList.Add($"-p:{propertyName}=true");
+        }
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start dotnet restore.");
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+
+        return (process.ExitCode, $"{await outputTask}{Environment.NewLine}{await errorTask}");
     }
 
     private static FileInfo CreateCliManagedAppHost(DirectoryInfo directory)
