@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Components\Aspire.Mcp.Client\Aspire.Mcp.Client.csproj" />
+    <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
+    <None Include="$(RepoRoot)src\Components\Aspire.Mcp.Client\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" />
+  </ItemGroup>
+
+</Project>
