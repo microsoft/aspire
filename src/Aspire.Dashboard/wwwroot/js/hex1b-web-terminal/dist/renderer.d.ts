@@ -71,7 +71,8 @@ export declare class TerminalRenderer {
     solid(x: number, y: number, width: number, height: number, color: Vector4): void;
     placement(placement: ImagePlacement): void;
     decorations(cell: TerminalCell, x: number, y: number, width: number, foreground: Vector4): void;
-    render(cells: readonly (TerminalCell | undefined)[], metadata: FrameMetadata, blinkOn: boolean): {
+    private underline;
+    render(cells: readonly (TerminalCell | undefined)[], metadata: FrameMetadata, blinkOn: boolean, linkDecorations?: Uint8Array): {
         cpuMs: number;
         quads: number;
         drawCalls: number;

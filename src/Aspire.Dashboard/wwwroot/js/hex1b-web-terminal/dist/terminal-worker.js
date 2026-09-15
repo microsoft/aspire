@@ -1,5 +1,6 @@
 import { decodeFrame, screenText } from "./protocol.js";
 import { TerminalRenderer } from "./renderer.js";
+import { LinkPresentation } from "./link-presentation.js";
 import { errorMessage } from "./validation.js";
 let renderer;
 let socket;
@@ -20,6 +21,7 @@ let renderPromise = Promise.resolve();
 let metricsTimer;
 let blinkTimer;
 let viewport;
+const links = new LinkPresentation();
 const stats = {
     revision: 0, fullFrames: 0, frames: 0, presentations: 0,
     changedCells: 0, lastChangedCells: 0, discardedFrames: 0,
@@ -85,9 +87,12 @@ async function drawFrame() {
     drawing = true;
     const frame = pendingFrame;
     try {
+        if (frame)
+            links.prepare(cells, metadata);
+        const linkSubmission = links.submission();
         renderer.resize(metadata.columns, metadata.rows, viewport);
         const blink = Math.floor(performance.now() / 600) % 2 === 0;
-        const result = renderer.render(cells, metadata, blink);
+        const result = renderer.render(cells, metadata, blink, linkSubmission.mask);
         // This is bounded completion/backpressure, not GPU readback or a GPU timing measurement.
         await renderer.idle();
         if (failed || stopped)
@@ -126,11 +131,19 @@ async function drawFrame() {
                 history: metadata.history, revision: frame.revision, title: metadata.title,
                 progress: metadata.progress, shellIntegration: metadata.shellIntegration,
                 workingDirectory: metadata.workingDirectory, commandMark: metadata.commandMark,
-                text, hyperlinks: metadata.hyperlinks
+                text, hyperlinks: metadata.hyperlinks, ...links.present(cells, metadata)
             });
             send({ type: "ack", revision: frame.revision });
             emitStats(text);
         }
+        else {
+            const snapshot = links.snapshot();
+            if (snapshot)
+                self.postMessage({ type: "linkSnapshot", generation: links.generation, snapshot });
+        }
+        const acknowledgement = links.acknowledge(linkSubmission.acknowledgement, processing || frameInFlight);
+        if (acknowledgement)
+            self.postMessage({ type: "linkDecorations", ...acknowledgement });
     }
     catch (error) {
         fail(error);
@@ -289,6 +302,30 @@ self.addEventListener("message", event => {
     }
     else if (message.type === "command" && !failed && !stopped) {
         send(message.command);
+    }
+    else if (message.type === "linkDetection" && !failed && !stopped) {
+        try {
+            if (!links.configure(message.enabled, message.generation))
+                return;
+            if (!processing && !drawing && !pendingFrame) {
+                const snapshot = links.snapshot();
+                if (snapshot)
+                    self.postMessage({ type: "linkSnapshot", generation: links.generation, snapshot });
+            }
+            scheduleRender();
+        }
+        catch (error) {
+            fail(error);
+        }
+    }
+    else if (message.type === "linkDecorations" && !failed && !stopped) {
+        try {
+            if (links.accept(message.revision, message.generation, message.serial, message.ranges, processing || frameInFlight || !!pendingFrame, message.underlineStyle))
+                scheduleRender();
+        }
+        catch (error) {
+            fail(error);
+        }
     }
 });
 //# sourceMappingURL=terminal-worker.js.map

@@ -176,6 +176,9 @@ workers, fonts, and the intended WebSocket endpoint.
 | Option | Meaning |
 | --- | --- |
 | `workerUrl` | Optional module-worker entry; useful when worker assets are deployed separately. |
+| `linkDetectionWorkerUrl` | Optional detection module-worker entry (`string \| URL`), parallel to `workerUrl`. |
+| `links` | Opt-in per-view text detection and OSC 8 interaction policy; `false` disables all local links. |
+| `onLinkDetectionError` | Feature-local detection diagnostics; also reported through `onStatus`. |
 | `scale` | GPU backing scale `0.5`–`3`, or `"auto"` (default, bounded device pixel ratio). |
 | `renderer` | `"auto"` (prefer WebGPU), `"webgpu"`, or `"webgl2"`; selected once per mount. |
 | `font` | One family and optional downloadable font faces; see below. |
@@ -500,7 +503,241 @@ Shift and Alt/Option continue to reserve selection gestures.
 Only absolute `http:`, `https:`, and `mailto:` destinations are activated
 (`mailto:` handling depends on the browser). New tabs use `noopener,noreferrer`.
 Script, data, file, relative, and custom-scheme URLs are not activated.
-Plain URL text is not automatically detected; the workload must emit OSC 8.
+This is the default when `links` is omitted: text detection is off and legacy
+allowlisted OSC 8 navigation is preserved.
+
+### Opt-in text links and host actions
+
+Detection is browser-local and per view. It does not create server hyperlinks,
+emit OSC/SGR, change copied text, or modify HWT1. Detected text **never opens a
+browser, application, or file automatically**. Register actions at mount time,
+even if detection starts disabled; `setLinks` does not register actions.
+
+This example creates a plain-text preview, not a navigation or file-access UI:
+
+```ts
+import { WebTerminal, linkAction, type TerminalLinkOptions } from "@hex1b/web-terminal";
+
+const container = document.createElement("div");
+container.style.cssText = "width:800px;height:480px";
+const preview = document.createElement("pre");
+document.body.append(container, preview);
+
+const links: TerminalLinkOptions = {
+  osc8: { action: "previewUri" }, // Optional: replace legacy navigation as well.
+  detection: {
+    activation: "modifierClick",
+    decoration: "always",
+    underlineStyle: "solid",
+    rules: [
+      { id: "web", builtin: "url", action: "previewUri" },
+      { id: "files", builtin: "absolutePath", action: "remoteFile" },
+      { id: "home", builtin: "homePath", action: "remoteFile" },
+      { id: "uris", builtin: "uri", action: "previewUri" },
+      {
+        id: "issues", pattern: /\bPROJ-(?<number>\d+)\b/gu,
+        kind: "custom", text: "logicalLine", action: "issue",
+        resolve(match) {
+          const number = match.groups.number;
+          return number ? { target: number, data: { label: match.text } } : null;
+        }
+      }
+    ]
+  }
+};
+
+const terminal = await WebTerminal.mount(container, {
+  url: "/ws/terminal",
+  links,
+  actions: {
+    previewUri: linkAction((_context, activation, _input) => {
+      preview.textContent = `URI preview: ${activation.target}`;
+    }),
+    remoteFile: linkAction((context, activation) => {
+      preview.textContent = `Remote path: ${activation.target}\n` +
+        `Remote cwd: ${context.terminal.workingDirectory.path ?? "unknown"}`;
+    }),
+    issue: linkAction((_context, activation) => {
+      preview.textContent = `Issue ${activation.target}: ${activation.text}`;
+    })
+  },
+  onLinkDetectionError(error) {
+    console.warn(error.code, error.ruleId, error.revision, error.message);
+  },
+  onStatus(message, level) {
+    console.log(level, message);
+  }
+});
+
+// Replace the entire configuration, disabling only the "home" rule.
+if (links.detection) {
+  terminal.setLinks({
+    ...links,
+    detection: {
+      ...links.detection,
+      rules: links.detection.rules.map(rule =>
+        rule.id === "home" ? { ...rule, enabled: false } : rule)
+    }
+  });
+}
+terminal.setLinks({ detection: false }); // Reset to legacy OSC 8, no detection.
+terminal.setLinks(false);               // Disable every local link interaction.
+terminal.setLinks(links);               // Re-enable the original configuration.
+```
+
+`setLinks(options)` replaces, rather than merges, the complete configuration.
+Omitted fields reset to defaults. Validation occurs before replacing active
+state; malformed rules, duplicate IDs, unsupported regex flags, and missing
+named actions throw. `enabled: false` disables an individual rule.
+`osc8: false` disables OSC 8 interactions while allowing configured detection;
+`osc8: { action }` delegates OSC 8 activation to a consumer action. An omitted
+`osc8` keeps legacy allowlisted navigation, even when detection is configured.
+
+Actions use the existing `actions` registry, not an `onLinkClick` callback.
+`linkAction((context, activation, input) => unknown)` returns an
+`InputActionHandler` that validates and types its activation argument.
+`context` is `TerminalInputContext`; `input` is a readonly `TerminalInput` or
+`undefined`. Async action completion uses the existing dispatcher. A rule or
+OSC 8 action can also be an inline handler. Built-in terminal action names
+cannot serve as link actions; use a registered custom action or callback.
+
+`TerminalLinkActivation` contains `source` (`"detected"` or `"osc8"`), `ruleId`
+(`null` for OSC 8), `kind` (`"uri"`, `"path"`, or `"custom"`), matched `text`,
+resolved `target`, visible end-exclusive cell `ranges`, presented `revision`,
+and optional consumer `data`. Core activation fields and ranges are frozen;
+consumer-owned `data` is not deep-frozen. Targets, OSC 8 destinations, and data remain untrusted: authorize any
+navigation or remote operation in your application and display text with
+`textContent`, not `innerHTML`. A custom OSC 8 action can receive schemes outside
+the legacy allowlist; this is not permission to open them.
+
+#### Rules, text modes, and resolution
+
+Rules compete in array order; the first accepted match owns its cells. Presets
+recognize HTTP/HTTPS URLs (`url`), general including opaque URIs (`uri`), POSIX
+and Windows drive-absolute paths (`absolutePath`), and literal `~/...`
+(`homePath`). Paths are lexical, whitespace-delimited **remote terminal paths**,
+not browser-local files. There is no `~` expansion, percent decoding, existence
+check, home-directory inference, or resolution against the page URL. Use custom
+rules for quoted/spaced paths, UNC paths, or `file:line:column` suffix grammars.
+
+Custom rules supply `pattern: RegExp`, `kind`, and an action. `text` applies to
+built-ins and custom rules:
+
+| `text` | Match input |
+| --- | --- |
+| `"logicalLine"` (default) | Displayed rows joined only across authoritative soft wraps. |
+| `"physicalRow"` | Each displayed physical row independently. |
+| `"viewport"` | Displayed text with soft wraps joined and hard breaks retained as `\n`. |
+
+An optional synchronous `resolve(match)` returns `null` to reject a match, or
+`{ target, action?, data? }` to transform its destination, override the action,
+and attach local data. Without a resolver, `target` is the recognized text.
+`match` exposes matched `text`, UTF-16 `index`, `captures` (excluding the full
+match), named `groups`, and `chunk: { text, mode, start, end }`. Boundary values
+are `"complete"`, `"clipped"`, or `"unknown"`. The full regex match determines
+the highlight; a resolver cannot replace its range. Regexes scan all matches,
+with or without `g`, without changing the caller's `lastIndex`; sticky `y` is
+unsupported. Empty matches have no clickable cells.
+
+#### Visible-only limits and styling
+
+Only the currently displayed text is scanned, including history **while it is
+displayed**. There is no off-screen fetch, unseen-history scan, independent
+reflow, or reconstruction of missing text. HWT1 already carries the soft-wrap
+flag but does not carry wide-wrap padding markers. Such blanks must remain
+spaces, so some Unicode targets wrapped at a wide glyph will not match.
+Candidates depending on uncertain/clipped edges or unavailable continuations
+are not active. Complete visible delimiters are important; false negatives
+are intentional rather than activating truncated destinations.
+
+Cell mapping respects wide/combining characters and rejects partial-grapheme
+matches. Hidden cells and graphics placeholders are barriers, not text to
+silently remove. Authoritative OSC 8 spans reserve cells **even when disabled
+or blocked**; an overlapping detected candidate is rejected in full.
+
+Underline visibility and appearance are independent:
+
+| Option | Values | Default |
+|---|---|---|
+| `decoration` | `"always"`, `"hover"`, `"none"` | `"always"` |
+| `underlineStyle` | `"solid"`, `"dashed"` | `"solid"` |
+
+For example, use `decoration: "hover", underlineStyle: "dashed"` for dashed
+underlines only while the pointer is over a detected link. Hover decorates
+the whole match, including its visible wrapped spans; no modifier key is needed
+to reveal it. `"none"` retains hit-testing/activation without inferred underlines.
+Change either option at runtime by passing the updated configuration to `setLinks`.
+Decorations are local. Existing SGR underline style and color are preserved;
+disabling links cannot erase application-authored underlines.
+
+`activation` defaults to `"modifierClick"` (Ctrl/Cmd+click); `"click"` is an
+explicit alternative that takes ownership only on a link. Input policy retains
+first refusal. Activation occurs on release, is canceled by dragging or stale
+content/configuration, and does not forward the consumed gesture to the
+workload. Read-only views may still invoke local link actions.
+
+#### Detection isolation and deployment
+
+Regex scanning uses a separate, lazily created detection module worker so a
+pathological regex cannot stall the rendering worker. Work is bounded by
+internal text, rule, match, and time budgets; oversized work is diagnosed, not
+silently presented as complete. These are implementation limits, not public
+scheduling options. Disabling detection or disposing the view releases its
+detection worker.
+
+Current internal limits (not benchmark-derived performance guarantees):
+
+| Budget | Limit |
+| --- | --- |
+| Configured rules | 32 |
+| Regex source length | 8,192 UTF-16 code units |
+| One text chunk | 65,536 UTF-16 code units |
+| Total scan text | 262,144 UTF-16 code units |
+| Mapped cells | 262,144 |
+| Matches | 2,048 per rule and 2,048 visible resolved matches |
+| Estimated result payload | 262,144 budget units (bounds capture amplification) |
+| Cache entries / estimated retained payload | 2,048 entries / 1,048,576 budget units, including keys and all matched/captured/group text |
+| Per-rule timeout | 250 ms, including worker startup |
+
+Payload budgets count UTF-16 text units plus estimated overhead (16 units per
+match and 8 per capture/group), including empty captures. They bound estimated
+payload size, not exact JavaScript heap bytes.
+
+The cell budget does not override the chunk budget: oversized logical-line or
+viewport chunks are rejected, not split into apparently complete targets.
+
+The first displayed row's start is treated as unknown, as are full right
+edges. A visible delimiter is required when a candidate would otherwise
+depend on an uncertain edge. Budget diagnostics remain feature-local; a regex
+timeout disables its rule until `setLinks` reconfigures detection.
+
+**Resolvers are trusted synchronous main-thread JavaScript and cannot be
+preempted by the regex watchdog.** Keep them fast, side-effect-free, and
+nonblocking; they can run repeatedly during detection. Promises are invalid.
+Timeouts and resolver failures disable the affected rule until reconfiguration.
+`onLinkDetectionError` receives
+`{ code: "timeout" | "limit" | "resolver" | "worker", ruleId: string | null, revision, message }`;
+errors also use `onStatus`. Detection failure leaves the terminal running.
+Activation failures instead use existing `onInputError`/status handling and
+never fall back to navigation.
+
+Deploy the complete package tree, including the detection worker and its
+relative dependencies. If your bundler requires explicit worker entries:
+
+```ts
+const terminal = await WebTerminal.mount(container, {
+  url: "/ws/terminal",
+  workerUrl: "/web-terminal/terminal-worker.js",
+  linkDetectionWorkerUrl: "/web-terminal/link-detection-worker.js",
+  links: { detection: false }
+});
+```
+
+`linkDetectionWorkerUrl` accepts `string | URL`, resolves relative strings
+against the page like `workerUrl`, and is a mount-time override. Without it the
+entry resolves relative to the package module. Worker origin/CSP restrictions
+still apply. Rules and matched text are not sent to an external service.
+See the [opt-in demo](../../samples/WebTerminalDemo/README.md#try-local-link-previews).
 
 ## Selection UI hooks
 

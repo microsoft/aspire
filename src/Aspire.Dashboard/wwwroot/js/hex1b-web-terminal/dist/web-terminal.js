@@ -8,6 +8,8 @@ import { InputPolicy, InputRoute, TerminalAction, inputModifiers } from "./input
 import { assertCommandSize } from "./protocol.js";
 import { SelectionUI } from "./selection-ui.js";
 import { Hyperlinks } from "./hyperlinks.js";
+import { LinkDetection } from "./link-detection.js";
+import { normalizeLinks } from "./link-options.js";
 import { errorMessage, isRecord } from "./validation.js";
 export { InputRoute, TerminalAction, defaultInputBindings } from "./input-policy.js";
 function requiredElement(root, selector, type) {
@@ -71,6 +73,18 @@ export class WebTerminal {
     #selectionUIError = "";
     #canvasSize = { width: 0, height: 0 };
     #hyperlinks = new Hyperlinks();
+    #links;
+    #linkDetector;
+    #linkGeneration = 1;
+    #linkRevision = 0;
+    #linkSerial = 0;
+    #linkSnapshot;
+    #osc8Rows = new Map();
+    #detectedLinks = [];
+    #presentedLinks = [];
+    #detectedRows = new Map();
+    #hoveredLinkId;
+    #pendingLinks;
     /** Resolves after a connected terminal frame is presented. Supply signal to cancel mounting. */
     static async mount(container, options) {
         if (!(container instanceof HTMLElement))
@@ -105,11 +119,39 @@ export class WebTerminal {
         if (options.workerUrl !== undefined && !(options.workerUrl instanceof URL) &&
             (typeof options.workerUrl !== "string" || !options.workerUrl.trim()))
             throw new TypeError("workerUrl must be a nonempty URL string or URL");
+        if (options.linkDetectionWorkerUrl !== undefined && !(options.linkDetectionWorkerUrl instanceof URL) &&
+            (typeof options.linkDetectionWorkerUrl !== "string" || !options.linkDetectionWorkerUrl.trim()))
+            throw new TypeError("linkDetectionWorkerUrl must be a nonempty URL string or URL");
+        if (options.onLinkDetectionError !== undefined && typeof options.onLinkDetectionError !== "function")
+            throw new TypeError("onLinkDetectionError must be a function");
         if (options.onSelectionUI !== undefined && (typeof options.onSelectionUI !== "function" ||
             options.onSelectionUI.constructor.name === "AsyncFunction"))
             throw new TypeError("onSelectionUI must be a synchronous event handler");
         this.#policy = new InputPolicy(options);
         this.#actions = new Map(Object.entries(options.actions ?? {}));
+        this.#links = normalizeLinks(options.links, new Set(this.#actions.keys()));
+        this.#linkDetector = new LinkDetection({
+            workerUrl: options.linkDetectionWorkerUrl === undefined ? undefined : new URL(options.linkDetectionWorkerUrl, location.href),
+            actions: new Set(this.#actions.keys()),
+            onChange: (revision, links) => {
+                if (this.#disposed || !this.#connected || revision !== this.#linkRevision)
+                    return;
+                this.#detectedLinks = links;
+                this.#replacePresentedLinks([]);
+                this.#requestLinkDecorations();
+            },
+            onError: error => {
+                if (this.#disposed)
+                    return;
+                try {
+                    this.#options.onStatus?.(`Link detection: ${error.message}`, "error");
+                }
+                finally {
+                    this.#options.onLinkDetectionError?.(error);
+                }
+            },
+        });
+        this.#linkDetector.configure(this.#links ? this.#links.detection : false);
         this.#history = new HistoryState(command => this.#send(command), () => this.#inspectionChanged());
         this.element = document.createElement("div");
         this.element.className = "hex1b-terminal";
@@ -236,15 +278,13 @@ export class WebTerminal {
             end: cancelled => this.#history.endGesture(cancelled),
             resolve: input => this.#resolveInput(input),
             execute: (decision, input) => this.#executeInputAction(decision, input),
-            hyperlink: point => this.#connected && !this.viewport.pending ? this.#hyperlinks.at(point) : null,
-            openHyperlink: uri => {
-                try {
-                    window.open(uri, "_blank", "noopener,noreferrer");
-                }
-                catch (error) {
-                    this.#actionFailed(error);
-                }
-            }
+            hyperlink: point => this.#linkAt(point),
+            hoverHyperlink: link => {
+                this.#hoveredLinkId = link?.id;
+                if (this.#links && this.#links.detection && this.#links.detection.decoration === "hover")
+                    this.#requestLinkDecorations();
+            },
+            openHyperlink: (link, input) => this.#activateLink(link, input),
         });
         this.#bindKeyboard();
         requiredElement(this.#inspection, ".return-live", HTMLButtonElement).addEventListener("click", () => {
@@ -287,6 +327,7 @@ export class WebTerminal {
         const canvas = this.#canvas.transferControlToOffscreen();
         this.#post({ type: "init", canvas, url: url.href, scale, font,
             renderer: this.#renderer }, [canvas]);
+        this.#postLinkConfiguration();
     }
     #message(message) {
         if (this.#disposed)
@@ -317,6 +358,15 @@ export class WebTerminal {
             this.#options.onStatus?.(message.message, message.level);
         }
         else if (message.type === "geometry") {
+            this.#linkRevision = message.revision;
+            this.#osc8Rows.clear();
+            for (const range of message.hyperlinks) {
+                const row = this.#osc8Rows.get(range.row) ?? [];
+                row.push(range);
+                this.#osc8Rows.set(range.row, row);
+            }
+            this.#replacePresentedLinks([]);
+            this.#pendingLinks = undefined;
             const first = !this.#hasGeometry;
             const geometryChanged = first || ["columns", "rows", "cellWidth", "cellHeight", "mouseTracking"]
                 .some(field => this.#geometry[field] !== message[field]);
@@ -345,6 +395,15 @@ export class WebTerminal {
             if (Object.hasOwn(message, "history")) {
                 this.#screenText = message.text;
                 this.#history.accept(message.history, message.revision);
+            }
+            if (message.linkGeneration === this.#linkGeneration) {
+                if (message.linkSnapshot)
+                    this.#acceptLinkSnapshot(message.linkSnapshot);
+                else {
+                    if (this.#linkSnapshot)
+                        this.#linkSnapshot = { ...this.#linkSnapshot, revision: message.revision };
+                    this.#linkDetector.advance(message.revision);
+                }
             }
             this.#mouse?.update(message.columns, message.rows, message.mouseTracking);
             if (geometryChanged)
@@ -382,6 +441,20 @@ export class WebTerminal {
                     this.#options.onWorkingDirectoryChange?.(this.workingDirectory);
                 if (!this.#disposed && commandMarkChanged)
                     this.#options.onCommandMarkChange?.(this.commandMark);
+            }
+        }
+        else if (message.type === "linkSnapshot") {
+            if (message.generation === this.#linkGeneration && message.snapshot.revision === this.#linkRevision)
+                this.#acceptLinkSnapshot(message.snapshot);
+        }
+        else if (message.type === "linkDecorations") {
+            const pending = this.#pendingLinks;
+            if (this.#connected && pending && pending.serial === message.serial &&
+                pending.generation === message.generation && message.generation === this.#linkGeneration &&
+                pending.revision === message.revision && message.revision === this.#linkRevision) {
+                this.#pendingLinks = undefined;
+                this.#replacePresentedLinks(pending.links);
+                this.#mouse?.refresh();
             }
         }
         else if (message.type === "history") {
@@ -671,6 +744,122 @@ export class WebTerminal {
             this.focus();
         this.#selectionUI?.refresh();
     }
+    setLinks(options) {
+        if (this.#disposed)
+            throw new Error("Terminal view is disposed");
+        if (options === undefined)
+            throw new TypeError("Link options must be an object or false");
+        const next = normalizeLinks(options, new Set(this.#actions.keys()));
+        this.#links = next;
+        this.#linkGeneration++;
+        this.#detectedLinks = [];
+        this.#replacePresentedLinks([]);
+        this.#pendingLinks = undefined;
+        this.#linkSnapshot = undefined;
+        this.#hoveredLinkId = undefined;
+        this.#linkDetector.configure(next ? next.detection : false);
+        this.#mouse?.cancel();
+        this.#mouse?.refresh();
+        this.#postLinkConfiguration();
+    }
+    #postLinkConfiguration() {
+        const enabled = !!(this.#links && (this.#links.osc8 ||
+            (this.#links.detection && this.#links.detection.rules.some(rule => rule.enabled !== false))));
+        this.#post({ type: "linkDetection", enabled, generation: this.#linkGeneration });
+    }
+    #acceptLinkSnapshot(snapshot) {
+        this.#linkSnapshot = snapshot;
+        this.#detectedLinks = [];
+        this.#replacePresentedLinks([]);
+        this.#pendingLinks = undefined;
+        this.#linkDetector.update(snapshot);
+        this.#mouse?.refresh();
+    }
+    #detectedPointerId(link) {
+        return `detected/${this.#linkGeneration}/${this.#linkRevision}/${link.id}`;
+    }
+    #replacePresentedLinks(links) {
+        this.#presentedLinks = links;
+        this.#detectedRows.clear();
+        for (const link of links) {
+            for (const range of link.activation.ranges) {
+                const row = this.#detectedRows.get(range.row) ?? [];
+                row.push({ startColumn: range.startColumn, endColumn: range.endColumn, link });
+                this.#detectedRows.set(range.row, row);
+            }
+        }
+    }
+    #requestLinkDecorations() {
+        if (!this.#worker || !this.#connected || !this.#linkRevision)
+            return;
+        const detection = this.#links && this.#links.detection;
+        if (!detection)
+            return;
+        const visible = detection.decoration === "none" ? [] : detection.decoration === "hover"
+            ? this.#detectedLinks.filter(link => this.#detectedPointerId(link) === this.#hoveredLinkId)
+            : this.#detectedLinks;
+        this.#pendingLinks = { revision: this.#linkRevision, generation: this.#linkGeneration,
+            serial: ++this.#linkSerial, links: this.#detectedLinks };
+        this.#post({ type: "linkDecorations", revision: this.#linkRevision, generation: this.#linkGeneration,
+            serial: this.#linkSerial, ranges: visible.flatMap(link => link.activation.ranges),
+            underlineStyle: detection.underlineStyle ?? "solid" });
+    }
+    #linkAt(point) {
+        if (!this.#connected || this.viewport.pending || !this.#links)
+            return null;
+        const osc8 = this.#osc8Rows.get(point.y)?.find(range => point.x >= range.startColumn && point.x < range.endColumn);
+        if (osc8) {
+            if (this.#links.osc8 === false)
+                return null;
+            const target = this.#links.osc8
+                ? (!/[\u0000-\u0020\u007f]/u.test(osc8.uri) && URL.canParse(osc8.uri) ? osc8.uri : null)
+                : this.#hyperlinks.at(point);
+            if (!target || (this.#links.osc8 && this.#linkSnapshot?.revision !== this.#linkRevision))
+                return null;
+            return { id: `osc8/${this.#linkGeneration}/${this.#linkRevision}/${osc8.row}/${osc8.startColumn}/${osc8.endColumn}`,
+                target, activation: "modifierClick" };
+        }
+        const detection = this.#links.detection;
+        if (!detection)
+            return null;
+        const link = this.#detectedRows.get(point.y)?.find(range => point.x >= range.startColumn && point.x < range.endColumn)?.link;
+        return link ? { id: this.#detectedPointerId(link), target: link.activation.target,
+            activation: detection.activation ?? "modifierClick" } : null;
+    }
+    #activateLink(pointer, input) {
+        if (input.type !== "pointer" || this.#linkAt(input.point)?.id !== pointer.id || !this.#links)
+            return;
+        const detected = this.#presentedLinks.find(link => this.#detectedPointerId(link) === pointer.id);
+        if (detected) {
+            this.#performAction(detected.action, detected.activation, input).catch(error => this.#actionFailed(error));
+            return;
+        }
+        if (!this.#links.osc8) {
+            try {
+                window.open(pointer.target, "_blank", "noopener,noreferrer");
+            }
+            catch (error) {
+                this.#actionFailed(error);
+            }
+            return;
+        }
+        const range = this.#osc8Rows.get(input.point.y)?.find(range => input.point.x >= range.startColumn && input.point.x < range.endColumn);
+        const snapshot = this.#linkSnapshot;
+        if (!range || !snapshot)
+            return;
+        let text = "";
+        for (let column = range.startColumn; column < range.endColumn; column++) {
+            const cell = snapshot.cells[range.row * snapshot.columns + column];
+            if (cell?.width && !(cell.attributes & 64))
+                text += cell.text;
+        }
+        const activation = Object.freeze({
+            source: "osc8", ruleId: null, kind: "uri", target: pointer.target, text,
+            revision: this.#linkRevision,
+            ranges: Object.freeze([Object.freeze({ row: range.row, startColumn: range.startColumn, endColumn: range.endColumn })]),
+        });
+        this.#performAction(this.#links.osc8.action, activation, input).catch(error => this.#actionFailed(error));
+    }
     #forwardInput(input) {
         if (input.type === "key") {
             if (input.meta)
@@ -822,6 +1011,12 @@ export class WebTerminal {
         this.#inputSerial++;
         this.#connected = false;
         this.#hyperlinks.update([]);
+        this.#osc8Rows.clear();
+        this.#detectedLinks = [];
+        this.#replacePresentedLinks([]);
+        this.#linkSnapshot = undefined;
+        this.#pendingLinks = undefined;
+        this.#linkDetector.clear();
         if (this.#input)
             this.#input.disabled = true;
         this.#mouse?.update(1, 1, 0);
@@ -842,6 +1037,7 @@ export class WebTerminal {
             return;
         this.#disposed = true;
         this.#disconnect();
+        this.#linkDetector.dispose();
         this.#ready.reject(new DOMException("Terminal view was disposed", "AbortError"));
         clearTimeout(this.#readyTimer);
         clearTimeout(this.#compositionTimer);

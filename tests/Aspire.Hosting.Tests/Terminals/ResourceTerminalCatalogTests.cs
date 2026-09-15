@@ -43,7 +43,7 @@ public class ResourceTerminalCatalogTests : IAsyncLifetime
         var terminal = service.CreateTerminal(new TerminalLaunchOptions
         {
             Title = "Shell",
-            Command = new TerminalCommand("bash"),
+            Executable = "bash",
         });
 
         Assert.False(ResourceTerminalCatalog.IsResourceTerminalId(terminal.Id));

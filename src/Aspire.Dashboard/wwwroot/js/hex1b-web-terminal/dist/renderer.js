@@ -344,7 +344,9 @@ export class TerminalRenderer {
         if (cell.attributes & 256)
             this.solid(x, y + 1, width, 1, foreground);
         const style = cell.underlineStyle || (cell.attributes & 8 ? 1 : 0);
-        const color = rgba(cell.underlineColor);
+        this.underline(style, x, y, width, rgba(cell.underlineColor));
+    }
+    underline(style, x, y, width, color) {
         if (style === 1)
             this.solid(x, y + 18, width, 1, color);
         else if (style === 2) {
@@ -363,7 +365,7 @@ export class TerminalRenderer {
                 this.solid(x + dx, y + 18, Math.min(segment, width - dx), 1, color);
         }
     }
-    render(cells, metadata, blinkOn) {
+    render(cells, metadata, blinkOn, linkDecorations) {
         const start = performance.now();
         this.quadCount = 0;
         this.batches = [];
@@ -399,6 +401,9 @@ export class TerminalRenderer {
             }
             // Reverse and dim are already reflected in server-projected colors.
             this.decorations(cell, x, y, width, foreground);
+            if (linkDecorations?.[i] && !cell.underlineStyle && !(cell.attributes & 8) && !isKgpPlaceholder(cell)) {
+                this.underline(linkDecorations[i], x, y, width, foreground);
+            }
         }
         for (const item of placements)
             if (item.z >= 0)

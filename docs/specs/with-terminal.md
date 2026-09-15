@@ -18,6 +18,50 @@ builder.AddProject<Projects.MyAgent>("agent")
 The dashboard then renders a Hex1b web terminal per replica, and the CLI
 exposes the same session as `aspire terminal agent --replica 0`.
 
+## AppHost-owned terminals
+
+For processes that the AppHost launches directly rather than as resources, use
+the experimental `TerminalService` API (`ASPIRETERMINAL002`).
+`TerminalLaunchOptions` holds the executable, arguments, working directory,
+environment variables, initial grid dimensions, title, and dashboard placement:
+
+```csharp
+using Aspire.Hosting.Terminals;
+using Microsoft.Extensions.DependencyInjection;
+
+#pragma warning disable ASPIRETERMINAL002
+
+var terminalService = app.Services.GetRequiredService<TerminalService>();
+var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+{
+    Title = "Shell",
+    Executable = "/bin/zsh",
+    Arguments = ["-i", "-l"],
+    WorkingDirectory = builder.AppHostDirectory,
+    EnvironmentVariables =
+    {
+        ["MY_SETTING"] = "value"
+    },
+    Columns = 120,
+    Rows = 32,
+    Placement = TerminalPlacement.Dock
+});
+terminal.Start();
+terminal.Show();
+```
+
+Here, `app` is the built `DistributedApplication`. Environment entries add to or
+override the AppHost's inherited environment. Requested dimensions default to 120
+columns and 32 rows. The current HMP server overrides those initial dimensions to
+80 columns and 24 rows; viewer-driven resizing still applies after attachment.
+Placement defaults to the dock;
+use `Dialog` for terminal interaction inputs or `None` for automation-only terminals.
+
+The creator owns the terminal. A dock terminal can outlive the command that
+created it: closing its tab or shutting down the AppHost disposes it. For a
+dialog-scoped terminal, use `await using` around creation and the interaction;
+closing the interaction alone does not dispose the terminal.
+
 ## Process topology
 
 ```text
@@ -166,7 +210,7 @@ it does not lock the terminal, its creator's automation, or other viewers.
 ### Browser requirements and package pairing
 
 The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
-exactly `0.168.0-alpha.1573.1.2917e83`. HWT1 is experimental state transfer
+exactly `0.168.0-alpha.1585.1.1de7974`. HWT1 is experimental state transfer
 between these paired packages, not a stable wire contract implemented by
 Aspire. Upgrade both together. The full npm `dist` tree is vendored, including
 module workers, relative imports, fonts and licenses.

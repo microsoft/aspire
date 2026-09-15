@@ -1,6 +1,11 @@
 import type { GestureState } from "./selection-input.js";
 import type { InputDecision, MouseTrackingMode, SelectionMode, TerminalInput, TerminalPoint } from "./types.js";
 import type { MouseCommand } from "./wire-types.js";
+export interface PointerHyperlink {
+    id: string;
+    target: string;
+    activation?: "modifierClick" | "click";
+}
 interface MouseInspection {
     state?: () => Omit<GestureState, "tracking">;
     begin?: (point: TerminalPoint, selection: {
@@ -14,8 +19,9 @@ interface MouseInspection {
     execute?: (decision: Extract<InputDecision, {
         action: unknown;
     }>, input: TerminalInput) => void;
-    hyperlink?: (point: TerminalPoint) => string | null;
-    openHyperlink?: (uri: string) => void;
+    hyperlink?: (point: TerminalPoint) => PointerHyperlink | null;
+    hoverHyperlink?: (link: PointerHyperlink | null) => void;
+    openHyperlink?: (link: PointerHyperlink, input: TerminalInput) => void;
 }
 export interface MouseCapture {
     update(columns: number, rows: number, tracking: MouseTrackingMode): void;

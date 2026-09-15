@@ -1,4 +1,4 @@
-import type { CopySelectionOptions, InputActionHandler, InputBinding, TerminalActionName, TerminalGeometry, TerminalInput, TerminalInputContext, TerminalPeer, TerminalSelection, TerminalSizing, TerminalSizingState, TerminalStats, TerminalViewport, TerminalProgress, TerminalShellIntegration, TerminalWorkingDirectory, TerminalCommandMark, WebTerminalHandle, WebTerminalOptions } from "./types.js";
+import type { CopySelectionOptions, InputActionHandler, InputBinding, TerminalActionName, TerminalGeometry, TerminalInput, TerminalInputContext, TerminalPeer, TerminalSelection, TerminalSizing, TerminalSizingState, TerminalStats, TerminalViewport, TerminalProgress, TerminalShellIntegration, TerminalWorkingDirectory, TerminalCommandMark, TerminalLinkOptions, WebTerminalHandle, WebTerminalOptions } from "./types.js";
 export { InputRoute, TerminalAction, defaultInputBindings } from "./input-policy.js";
 /**
  * First-party HWT1 client. Owns only the element it appends, not the caller's
@@ -46,6 +46,7 @@ export declare class WebTerminal implements WebTerminalHandle {
     pasteClipboard(): Promise<string>;
     /** Changes per-view input policy without reconnecting; server authorization remains host-owned. */
     setReadOnly(readOnly: boolean): void;
+    setLinks(options: false | TerminalLinkOptions): void;
     focus(): void;
     /** Request HMP1 primary explicitly; peer notifications confirm the result. */
     requestPrimary(): void;

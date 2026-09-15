@@ -6,11 +6,25 @@ using System.Diagnostics.CodeAnalysis;
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
-/// Describes a terminal to be created by <see cref="TerminalService"/>.
+/// Describes the process, initial grid, and placement of a terminal created by <see cref="TerminalService"/>.
 /// </summary>
+/// <example>
+/// <code language="csharp">
+/// var options = new TerminalLaunchOptions
+/// {
+///     Title = "Container shell",
+///     Executable = "docker",
+///     Arguments = ["exec", "-it", containerName, "/bin/sh"]
+/// };
+/// </code>
+/// </example>
 [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public sealed class TerminalLaunchOptions
 {
+    // Start wider than 80x24 so output is not wrapped before a viewer negotiates its size.
+    private const int DefaultColumns = 120;
+    private const int DefaultRows = 32;
+
     /// <summary>
     /// Gets or sets the title shown on the terminal's dock tab, and in the title bar when the terminal is
     /// detached into its own window.
@@ -21,9 +35,83 @@ public sealed class TerminalLaunchOptions
     public required string Title { get; set; }
 
     /// <summary>
-    /// Gets or sets the process the terminal runs.
+    /// Gets or sets the executable to run. Resolved against <c>PATH</c> when not fully qualified.
     /// </summary>
-    public required TerminalCommand Command { get; set; }
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="value"/> is empty.</exception>
+    public required string Executable
+    {
+        get;
+        set
+        {
+            ArgumentException.ThrowIfNullOrEmpty(value);
+            field = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the arguments passed to <see cref="Executable"/>.
+    /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
+    public IList<string> Arguments
+    {
+        get;
+        set
+        {
+            // Validate on assignment so invalid input fails here rather than later inside the terminal library.
+            ArgumentNullException.ThrowIfNull(value);
+            field = value;
+        }
+    } = [];
+
+    /// <summary>
+    /// Gets or sets the working directory the process starts in. Defaults to the AppHost's working directory.
+    /// </summary>
+    public string? WorkingDirectory { get; set; }
+
+    /// <summary>
+    /// Gets environment variables applied to the process on top of the AppHost's own environment.
+    /// </summary>
+    /// <remarks>
+    /// The process inherits the AppHost's environment. Entries add or override variables without replacing the
+    /// rest of that environment, so interactive workloads retain inherited <c>PATH</c>, <c>HOME</c>, and
+    /// <c>TERM</c> values unless explicitly overridden.
+    /// </remarks>
+    public IDictionary<string, string> EnvironmentVariables { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Gets or sets the requested initial number of columns. Defaults to 120.
+    /// </summary>
+    /// <remarks>
+    /// This is only the initial grid. A viewer that attaches renegotiates the size to fit the space it has,
+    /// so this matters mainly for terminals driven by automation before anyone attaches.
+    /// The current HMP server initializes at 80 columns and 24 rows, overriding these requested dimensions.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> is less than one.</exception>
+    public int Columns
+    {
+        get;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            field = value;
+        }
+    } = DefaultColumns;
+
+    /// <summary>
+    /// Gets or sets the requested initial number of rows. Defaults to 32.
+    /// </summary>
+    /// <inheritdoc cref="Columns" path="/remarks"/>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> is less than one.</exception>
+    public int Rows
+    {
+        get;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            field = value;
+        }
+    } = DefaultRows;
 
     /// <summary>
     /// Gets or sets where the terminal is displayed. Defaults to <see cref="TerminalPlacement.Dock"/>.

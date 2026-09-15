@@ -76,18 +76,6 @@ public class TerminalServiceTests
         Assert.Throws<ArgumentNullException>(() => service.CreateTerminal(null!));
     }
 
-    [Fact]
-    public void CreateTerminal_NullCommand_Throws()
-    {
-        var service = TestTerminalService.Create();
-
-        Assert.Throws<ArgumentNullException>(() => service.CreateTerminal(new TerminalLaunchOptions
-        {
-            Title = "Shell",
-            Command = null!
-        }));
-    }
-
     [Theory]
     [InlineData(null, false)]
     [InlineData(null, true)]
@@ -775,7 +763,7 @@ public class TerminalServiceTests
         var hidden = service.CreateTerminal(new TerminalLaunchOptions
         {
             Title = "Automation",
-            Command = new TerminalCommand("bash"),
+            Executable = "bash",
             Placement = TerminalPlacement.None
         });
 
@@ -829,7 +817,7 @@ public class TerminalServiceTests
             : service.CreateTerminal(new TerminalLaunchOptions
             {
                 Title = title,
-                Command = new TerminalCommand("bash"),
+                Executable = "bash",
                 Placement = placement
             });
 
@@ -837,7 +825,7 @@ public class TerminalServiceTests
         => service.CreateTerminal(new TerminalLaunchOptions
         {
             Title = title,
-            Command = new TerminalCommand("bash"),
+            Executable = "bash",
             Placement = TerminalPlacement.Dialog
         });
 
@@ -845,7 +833,7 @@ public class TerminalServiceTests
         => Assert.IsType<Hex1bAspireTerminal>(service.CreateTerminal(new TerminalLaunchOptions
         {
             Title = title,
-            Command = new TerminalCommand("bash"),
+            Executable = "bash",
             Placement = TerminalPlacement.Dock
         }).Backend);
 

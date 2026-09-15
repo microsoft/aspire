@@ -360,7 +360,7 @@ public class InteractionServiceTerminalTests
         => service.CreateTerminal(new TerminalLaunchOptions
         {
             Title = "Terminal",
-            Command = new TerminalCommand("bash"),
+            Executable = "bash",
             Placement = placement
         });
 

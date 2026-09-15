@@ -1,4 +1,5 @@
-import type { InputModifiers, PointerButton, SelectionMode, SelectionRange, TerminalBuffer, TerminalFont, TerminalGeometry, TerminalPeer, TerminalSize, TerminalStats, TerminalRendererPreference, TerminalStatusLevel, TerminalProgress, TerminalShellIntegration, TerminalWorkingDirectory, TerminalCommandMark, TerminalCloseDetails } from "./types.js";
+import type { InputModifiers, PointerButton, SelectionMode, SelectionRange, TerminalLinkUnderlineStyle, TerminalBuffer, TerminalFont, TerminalGeometry, TerminalPeer, TerminalSize, TerminalStats, TerminalRendererPreference, TerminalStatusLevel, TerminalProgress, TerminalShellIntegration, TerminalWorkingDirectory, TerminalCommandMark, TerminalCloseDetails } from "./types.js";
+import type { LinkDetectionSnapshot } from "./link-detection.js";
 export type SelectionText = {
     status: "valid";
     text: string;
@@ -172,6 +173,17 @@ export type WorkerInputMessage = {
 } | ({
     type: "viewport";
 } & TerminalSize) | {
+    type: "linkDetection";
+    enabled: boolean;
+    generation: number;
+} | {
+    type: "linkDecorations";
+    revision: number;
+    generation: number;
+    serial: number;
+    ranges: readonly SelectionRange[];
+    underlineStyle?: TerminalLinkUnderlineStyle;
+} | {
     type: "command";
     command: TerminalCommand;
 } | {
@@ -225,9 +237,20 @@ export type WorkerOutputMessage = {
     shellIntegration: TerminalShellIntegration;
     workingDirectory: TerminalWorkingDirectory;
     commandMark: TerminalCommandMark | null;
+    linkGeneration?: number;
+    linkSnapshot?: LinkDetectionSnapshot;
     text: string;
     hyperlinks: HyperlinkRange[];
 } & TerminalGeometry) | {
+    type: "linkSnapshot";
+    generation: number;
+    snapshot: LinkDetectionSnapshot;
+} | {
+    type: "linkDecorations";
+    revision: number;
+    generation: number;
+    serial: number;
+} | {
     type: "history";
     history: HistoryMetadata | null;
     revision: number;

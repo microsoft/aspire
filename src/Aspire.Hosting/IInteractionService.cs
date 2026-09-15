@@ -493,7 +493,7 @@ public sealed class InteractionInput
     /// await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
     /// {
     ///     Title = "Setup",
-    ///     Command = new TerminalCommand("./setup.sh"),
+    ///     Executable = "./setup.sh",
     ///     Placement = TerminalPlacement.Dialog
     /// });
     ///

@@ -84,8 +84,7 @@ public sealed class TerminalService : IAsyncDisposable
     /// when the AppHost shuts down.
     /// </returns>
     /// <exception cref="ArgumentNullException">
-    /// <paramref name="options"/>, its <see cref="TerminalLaunchOptions.Command"/>, or its
-    /// <see cref="TerminalLaunchOptions.Title"/> is <see langword="null"/>.
+    /// <paramref name="options"/> or its <see cref="TerminalLaunchOptions.Title"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="ArgumentException">
     /// The <see cref="TerminalLaunchOptions.Title"/> is empty or consists only of white-space characters.
@@ -97,9 +96,8 @@ public sealed class TerminalService : IAsyncDisposable
     public AspireTerminal CreateTerminal(TerminalLaunchOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(options.Command);
 
-        return CreateTerminal(options.Title, options.Placement, CreateBuilder(options.Command));
+        return CreateTerminal(options.Title, options.Placement, CreateBuilder(options));
     }
 
     /// <summary>
@@ -109,23 +107,23 @@ public sealed class TerminalService : IAsyncDisposable
     /// This is the single point where Hex1b enters the picture, which is what keeps it out of the public API.
     /// The process options overload is used rather than <c>WithPtyProcess(file, args)</c> so the working
     /// directory and environment can be set; <c>InheritEnvironment</c> is left at its default of
-    /// <see langword="true"/>, so <see cref="TerminalCommand.EnvironmentVariables"/> layers over the AppHost's
+    /// <see langword="true"/>, so <see cref="TerminalLaunchOptions.EnvironmentVariables"/> layers over the AppHost's
     /// environment rather than replacing it. Interactive workloads need an inherited PATH/HOME/TERM to behave
     /// like a normal shell.
     /// </remarks>
-    private static Hex1bTerminalBuilder CreateBuilder(TerminalCommand command)
+    private static Hex1bTerminalBuilder CreateBuilder(TerminalLaunchOptions options)
     {
         return Hex1bTerminal.CreateBuilder()
-            .WithDimensions(command.Columns, command.Rows)
+            .WithDimensions(options.Columns, options.Rows)
             .WithPtyProcess(process =>
             {
-                process.FileName = command.Executable;
-                process.Arguments = [.. command.Arguments];
-                process.WorkingDirectory = command.WorkingDirectory;
+                process.FileName = options.Executable;
+                process.Arguments = [.. options.Arguments];
+                process.WorkingDirectory = options.WorkingDirectory;
 
-                if (command.EnvironmentVariables.Count > 0)
+                if (options.EnvironmentVariables.Count > 0)
                 {
-                    process.Environment = new Dictionary<string, string>(command.EnvironmentVariables, StringComparer.Ordinal);
+                    process.Environment = new Dictionary<string, string>(options.EnvironmentVariables, StringComparer.Ordinal);
                 }
             });
     }
@@ -135,7 +133,7 @@ public sealed class TerminalService : IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// Internal because the builder is a Hex1b type. This is the path used by workloads that a
-    /// <see cref="TerminalCommand"/> cannot describe — notably the dock's built-in terminal, which runs an
+    /// <see cref="TerminalLaunchOptions"/> cannot describe — notably the dock's built-in terminal, which runs an
     /// in-process Hex1b app rather than a child process.
     /// </remarks>
     internal AspireTerminal CreateTerminal(string title, TerminalPlacement placement, Hex1bTerminalBuilder builder)

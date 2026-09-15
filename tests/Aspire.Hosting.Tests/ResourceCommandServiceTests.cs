@@ -1334,7 +1334,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
         {
             Title = "Shell",
-            Command = new TerminalCommand("bash"),
+            Executable = "bash",
             Placement = TerminalPlacement.Dialog
         });
         var terminalDefinition = new InteractionInput

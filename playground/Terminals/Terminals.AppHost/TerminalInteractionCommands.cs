@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 // InputType.Terminal is an experimental spike. PromptInputsAsync is also experimental.
 #pragma warning disable ASPIREINTERACTION001
 
-// AppHost-owned terminals - TerminalService, AspireTerminal, TerminalCommand - are experimental.
+// AppHost-owned terminals - TerminalService, AspireTerminal, TerminalLaunchOptions - are experimental.
 #pragma warning disable ASPIRETERMINAL002
 
 namespace Terminals.AppHost;
@@ -53,15 +53,12 @@ internal static class TerminalInteractionCommands
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var terminalService = commandContext.Services.GetRequiredService<TerminalService>();
 
-                var command = OperatingSystem.IsWindows()
-                    ? new TerminalCommand("cmd.exe")
-                    : new TerminalCommand("/bin/bash") { Arguments = ["-i", "-l"] };
-
                 // The caller owns the terminal: it starts it, and disposes it here rather than the dialog doing so.
                 await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
                 {
                     Title = "Shell",
-                    Command = command,
+                    Executable = OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/bash",
+                    Arguments = OperatingSystem.IsWindows() ? [] : ["-i", "-l"],
                     Placement = TerminalPlacement.Dialog
                 });
 
@@ -147,10 +144,8 @@ internal static class TerminalInteractionCommands
         await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
         {
             Title = title,
-            Command = new TerminalCommand("docker")
-            {
-                Arguments = ["exec", "-it", containerName, .. command]
-            },
+            Executable = "docker",
+            Arguments = ["exec", "-it", containerName, .. command],
             Placement = TerminalPlacement.Dialog
         });
 
@@ -200,10 +195,8 @@ internal static class TerminalInteractionCommands
                 var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
                 {
                     Title = container.Resource.Name,
-                    Command = new TerminalCommand("docker")
-                    {
-                        Arguments = ["exec", "-it", containerName, "/bin/sh"]
-                    }
+                    Executable = "docker",
+                    Arguments = ["exec", "-it", containerName, "/bin/sh"]
                 });
 
                 // Reveals the dock in every connected browser and switches it to this tab.
@@ -247,10 +240,8 @@ internal static class TerminalInteractionCommands
                 var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
                 {
                     Title = "PowerShell",
-                    Command = new TerminalCommand("pwsh.exe")
-                    {
-                        Arguments = ["-NoLogo"]
-                    }
+                    Executable = "pwsh.exe",
+                    Arguments = ["-NoLogo"]
                 });
 
                 terminal.Start();
@@ -318,12 +309,7 @@ internal static class TerminalInteractionCommands
 
                 // The command owns the terminal for its whole life: it starts it, drives the game through the
                 // handle, and disposes it once the answer has been shown.
-                await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
-                {
-                    Title = "Number guess",
-                    Command = BuildNumberGuessCommand(limit),
-                    Placement = TerminalPlacement.Dialog
-                });
+                await using var terminal = terminalService.CreateTerminal(BuildNumberGuessLaunchOptions(limit));
 
                 // Start before the dialog rather than letting the first attach do it, so `dotnet run --file` is
                 // already compiling the script while the dialog is being raised.
@@ -547,7 +533,7 @@ internal static class TerminalInteractionCommands
     }
 
     /// <summary>
-    /// Builds the command that runs the <c>numberguess.cs</c> file-based app.
+    /// Builds the launch options for the <c>numberguess.cs</c> file-based app.
     /// </summary>
     /// <remarks>
     /// The script is copied next to the AppHost binary (see the <c>Scripts\</c> item group in the project file) so it
@@ -555,13 +541,16 @@ internal static class TerminalInteractionCommands
     /// <c>dotnet</c> so the game runs on the same SDK as the AppHost when one is pinned; file-based apps need .NET 10
     /// or later, which whatever is first on <c>PATH</c> may not be.
     /// </remarks>
-    private static TerminalCommand BuildNumberGuessCommand(int limit)
+    private static TerminalLaunchOptions BuildNumberGuessLaunchOptions(int limit)
     {
         var scriptPath = Path.Combine(AppContext.BaseDirectory, "Scripts", "numberguess.cs");
         var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } hostPath ? hostPath : "dotnet";
 
-        return new TerminalCommand(dotnet)
+        return new TerminalLaunchOptions
         {
+            Title = "Number guess",
+            Placement = TerminalPlacement.Dialog,
+            Executable = dotnet,
             Arguments = ["run", "--file", scriptPath, "--", limit.ToString(CultureInfo.InvariantCulture)]
         };
     }

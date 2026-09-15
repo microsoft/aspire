@@ -10,14 +10,72 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Hex1b;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 
 #pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIREFILESYSTEM001 // Use the hosting temporary directory abstraction.
 
 namespace Aspire.Hosting.Tests.Terminals;
 
 [Trait("Partition", "2")]
 public class Hex1bAspireTerminalTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateTerminal_UsesProcessOptions(bool overrideEnvironment)
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload uses a POSIX shell.");
+
+        var home = Environment.GetEnvironmentVariable("HOME");
+        var path = Environment.GetEnvironmentVariable("PATH");
+        Assert.NotNull(home);
+        Assert.NotNull(path);
+        using var configuration = new ConfigurationManager();
+        var fileSystem = new FileSystemService(configuration);
+        using var directory = fileSystem.TempDirectory.CreateTempSubdirectory("terminal-options-");
+        await File.WriteAllTextAsync(Path.Combine(directory.Path, "working-directory-marker"), string.Empty);
+
+        // Positional arguments preserve spaces without shell interpolation. Keep the process reading after
+        // "ready" so its screen remains available until the test disposes the terminal.
+        const string script = """
+            set -eu
+            printf '%s\n' "$1"
+            test "$HOME" = "$2"
+            printf 'inherited-home\n'
+            test "$PATH" = "$3"
+            test "${ASPIRE_TERMINAL_TEST_SETTING-}" = "$4"
+            printf 'environment-ok\n'
+            test -f working-directory-marker
+            printf 'working-directory-ok\n'
+            printf 'ready\n'
+            read -r input
+            """;
+        var options = new TerminalLaunchOptions
+        {
+            Title = "Launch options",
+            Placement = TerminalPlacement.None,
+            Executable = "/bin/sh",
+            Arguments = ["-c", script, "terminal-options", "argument with spaces", home,
+                overrideEnvironment ? "/usr/bin:/bin" : path, overrideEnvironment ? "value with spaces" : string.Empty],
+            WorkingDirectory = directory.Path
+        };
+        if (overrideEnvironment)
+        {
+            options.EnvironmentVariables["PATH"] = "/usr/bin:/bin";
+            options.EnvironmentVariables["ASPIRE_TERMINAL_TEST_SETTING"] = "value with spaces";
+        }
+
+        await using var service = TestTerminalService.Create();
+        await using var terminal = service.CreateTerminal(options);
+        terminal.Start();
+        await terminal.WaitForTextAsync("ready").DefaultTimeout();
+
+        Assert.Equal(
+            ["argument with spaces", "inherited-home", "environment-ok", "working-directory-ok", "ready"],
+            terminal.GetScreenText().Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -30,11 +88,9 @@ public class Hex1bAspireTerminalTests
         {
             Title = "Signal-resistant process",
             Placement = TerminalPlacement.None,
-            Command = new TerminalCommand("/bin/sh")
-            {
-                // Ignored signals survive exec. The fixed sleep is a backstop if the test host is killed.
-                Arguments = ["-c", "trap '' HUP TERM; printf 'pid:%s\\nprocess-ready\\n' \"$$\"; exec sleep 300"]
-            }
+            Executable = "/bin/sh",
+            // Ignored signals survive exec. The fixed sleep is a backstop if the test host is killed.
+            Arguments = ["-c", "trap '' HUP TERM; printf 'pid:%s\\nprocess-ready\\n' \"$$\"; exec sleep 300"]
         });
         terminal.Start();
         await terminal.WaitForTextAsync("process-ready").DefaultTimeout();

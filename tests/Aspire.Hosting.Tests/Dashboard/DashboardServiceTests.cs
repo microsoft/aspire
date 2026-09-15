@@ -1281,7 +1281,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         {
             Title = "Before",
             Placement = TerminalPlacement.Dock,
-            Command = new TerminalCommand("bash")
+            Executable = "bash"
         }).Backend);
         terminal.Show();
         var service = CreateDashboardService(serviceData, terminalService: terminalService);
@@ -1337,7 +1337,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             {
                 Title = "After recovery",
                 Placement = TerminalPlacement.Dock,
-                Command = new TerminalCommand("bash")
+                Executable = "bash"
             });
             var change = await responses.ReadNextAsync().DefaultTimeout();
             Assert.Equal(Aspire.DashboardService.Proto.V1.TerminalChangeType.Added, change.Change.ChangeType);

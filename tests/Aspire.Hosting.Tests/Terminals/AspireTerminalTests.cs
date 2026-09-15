@@ -90,7 +90,7 @@ public class AspireTerminalTests
         {
             Title = "Before",
             Placement = TerminalPlacement.Dialog,
-            Command = new TerminalCommand("bash")
+            Executable = "bash"
         });
         var backend = Assert.IsType<Hex1bAspireTerminal>(terminal.Backend);
         backend.Retitle("After");
