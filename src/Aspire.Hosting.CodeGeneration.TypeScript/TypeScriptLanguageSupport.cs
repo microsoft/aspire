@@ -258,7 +258,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             InstallDependencies = new CommandSpec
             {
                 Command = "npm",
-                Args = ["install"]
+                // npm's automatic audit request is unrelated to installing the AppHost dependencies and
+                // can stall the entire Aspire command when the advisory service is unavailable.
+                // https://docs.npmjs.com/cli/v11/commands/npm-install#audit
+                Args = ["install", "--no-audit"]
             },
             PreExecute =
             [
