@@ -263,7 +263,7 @@ dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
 
 | Changed file | Test class |
 |--------------|-----------|
-| `.github/workflows/analyze-ci-failure.js` | `AnalyzeCiFailureWorkflowTests` |
+| `.github/workflows/analyze-ci-failure/analyze_ci_failure.py` | `AnalyzeCiFailureWorkflowTests` |
 | `.github/workflows/create-failing-test-issue.js`, `workflow-command-helpers.js` | `CreateFailingTestIssueWorkflowTests`, `CreateFailingTestIssueToolTests` |
 | `eng/scripts/build-test-matrix.ps1` | `BuildTestMatrixTests` |
 | `eng/scripts/split-test-projects-for-ci.ps1` | `SplitTestProjectsTests` |

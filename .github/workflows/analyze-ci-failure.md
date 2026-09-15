@@ -11,8 +11,8 @@ on:
     workflows: ["CI"]
     types:
       - completed
-    # PR head branches are contributor-defined, so include every branch and
-    # enforce pull_request provenance in the collect-data job before activation.
+    # gh-aw requires an explicit workflow_run branch restriction. PR head
+    # branches are contributor-defined, so intentionally match every branch.
     branches:
       - '**'
   workflow_dispatch:
@@ -377,32 +377,39 @@ jobs:
             | @tsv
           ' ci-failure-data/failed-jobs.json | sort -u | while IFS=$'\t' read -r E2E_ARTIFACT_NAME E2E_JOB_NAME; do
             [ -n "${E2E_ARTIFACT_NAME}" ] || continue
-            if ! jq -e --arg name "${E2E_ARTIFACT_NAME}" \
-                'any(.[]; .name == $name and (.expired | not))' ci-failure-data/artifacts.json > /dev/null; then
+            E2E_ARTIFACT=$(python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py \
+              select-artifact ci-failure-data/artifacts.json "${E2E_ARTIFACT_NAME}")
+            E2E_ARTIFACT_ID=$(printf '%s' "${E2E_ARTIFACT}" | jq -r '.id // empty')
+            if [ -z "${E2E_ARTIFACT_ID}" ]; then
               echo "Warning: Extension E2E diagnostic artifact not found: ${E2E_ARTIFACT_NAME}"
               printf 'Extension E2E diagnostic artifact was unavailable: %s\n' "${E2E_ARTIFACT_NAME}" >> "${EVIDENCE_GAPS_FILE}"
               continue
             fi
 
-            E2E_RESULTS_DIR="ci-failure-data/extension-e2e-results/${E2E_ARTIFACT_NAME}"
+            E2E_RESULTS_DIR="ci-failure-data/extension-e2e-results/${E2E_ARTIFACT_ID}"
             mkdir -p "${E2E_RESULTS_DIR}"
-            if gh run download "${RUN_ID}" --repo "${REPO}" --name "${E2E_ARTIFACT_NAME}" --dir "${E2E_RESULTS_DIR}"; then
+            E2E_ARCHIVE="${E2E_RESULTS_DIR}.zip"
+            if gh api "repos/${REPO}/actions/artifacts/${E2E_ARTIFACT_ID}/zip" > "${E2E_ARCHIVE}" \
+                && timeout 30s python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py \
+                  extract-mocha-results "${E2E_ARCHIVE}" "${E2E_RESULTS_DIR}" "${EVIDENCE_GAPS_FILE}"; then
               MOCHA_COUNT=$(find "${E2E_RESULTS_DIR}" -name "mocha.json" -type f 2>/dev/null | wc -l)
               if [ "${MOCHA_COUNT}" -eq 0 ]; then
                 printf 'Extension E2E diagnostics contained no mocha.json: %s\n' "${E2E_ARTIFACT_NAME}" >> "${EVIDENCE_GAPS_FILE}"
               fi
               find "${E2E_RESULTS_DIR}" -name "mocha.json" -type f 2>/dev/null | while IFS= read -r MOCHA_FILE; do
                 echo "Processing extension E2E results: ${E2E_ARTIFACT_NAME}/$(basename "${MOCHA_FILE}")"
-                if ! python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py extract-mocha-failures "${MOCHA_FILE}" "${E2E_JOB_NAME}" \
+                if ! timeout 30s python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py \
+                    extract-mocha-failures "${MOCHA_FILE}" "${E2E_JOB_NAME}" \
                     >> ci-failure-data/test-failures.jsonl; then
                   echo "::warning::Failed to parse extension E2E results: ${E2E_ARTIFACT_NAME}/$(basename "${MOCHA_FILE}")"
                   printf 'Failed to parse extension E2E results: %s/%s\n' "${E2E_ARTIFACT_NAME}" "$(basename "${MOCHA_FILE}")" >> "${EVIDENCE_GAPS_FILE}"
                 fi
               done
             else
-              echo "Warning: Failed to download extension E2E diagnostics: ${E2E_ARTIFACT_NAME}"
-              printf 'Failed to download extension E2E diagnostics: %s\n' "${E2E_ARTIFACT_NAME}" >> "${EVIDENCE_GAPS_FILE}"
+              echo "Warning: Failed to download or safely extract extension E2E diagnostics: ${E2E_ARTIFACT_NAME}"
+              printf 'Failed to download or safely extract extension E2E diagnostics: %s\n' "${E2E_ARTIFACT_NAME}" >> "${EVIDENCE_GAPS_FILE}"
             fi
+            rm -f "${E2E_ARCHIVE}"
           done
 
           jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || \
@@ -746,9 +753,11 @@ safe-outputs:
 
                 for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                   [ -f "$CAUSE_FILE" ] || continue
-                  # Skip code-issue causes — only persist transient/flaky causes.
+                  # Persist only recurring transient/flaky causes. Model-authored
+                  # cause files are not trusted to follow the verdict policy.
                   CAUSE_TYPE_CHECK=$(jq -r '.type' "$CAUSE_FILE" 2>/dev/null || echo "")
-                  if [ "$CAUSE_TYPE_CHECK" = "code-issue" ]; then
+                  if [ "$CAUSE_TYPE_CHECK" != "flaky-test" ] && [ "$CAUSE_TYPE_CHECK" != "infra-failure" ]; then
+                    echo "Skipping non-persistable cause type '${CAUSE_TYPE_CHECK}'."
                     continue
                   fi
                   CAUSE_BASENAME=$(basename "$CAUSE_FILE")
@@ -795,10 +804,9 @@ safe-outputs:
 
                 CAUSE_TYPE=$(jq -r '.type' "$CAUSE_FILE")
 
-                # Skip issue creation for code-issue causes — those are the
-                # PR author's responsibility, not a recurring CI problem.
-                if [ "$CAUSE_TYPE" = "code-issue" ]; then
-                  echo "Skipping issue for code-issue cause: ${CAUSE_ID}"
+                # Create tracking issues only for recurring transient/flaky causes.
+                if [ "$CAUSE_TYPE" != "flaky-test" ] && [ "$CAUSE_TYPE" != "infra-failure" ]; then
+                  echo "Skipping issue for non-persistable cause type '${CAUSE_TYPE}': ${CAUSE_ID}"
                   continue
                 fi
 

@@ -37,6 +37,29 @@ class ExtractTestResultsTests(unittest.TestCase):
             self.assertIn("/absolute.trx", gaps)
             self.assertIn("linked.trx", gaps)
 
+    def test_extracts_only_mocha_results_with_the_same_safety_limits(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = pathlib.Path(temp_directory)
+            archive_path = root / "diagnostics.zip"
+            destination = root / "diagnostics"
+            evidence_gaps = root / "evidence-gaps.txt"
+
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("logs/output.txt", "ignored")
+                archive.writestr("results/mocha.json", "{}")
+                archive.writestr("../mocha.json", "escape")
+
+            analyze_ci_failure.extract_mocha_results(
+                archive_path,
+                destination,
+                evidence_gaps,
+            )
+
+            self.assertEqual("{}", (destination / "results" / "mocha.json").read_text())
+            self.assertFalse((destination / "logs" / "output.txt").exists())
+            self.assertFalse((root / "mocha.json").exists())
+            self.assertIn("../mocha.json", evidence_gaps.read_text())
+
     def test_rejects_windows_path_separator(self):
         entry = zipfile.ZipInfo("safe.trx")
         entry.filename = "windows\\escaped.trx"

@@ -724,7 +724,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Contains("**Suspected flaky failure(s):**", comment);
         Assert.Contains("`VS Code extension E2E (Windows, tree-actions)`", comment);
         Assert.Contains("[job](https://github.com/microsoft/aspire/actions/runs/34795444609/job/103829216057)", comment);
-        Assert.Contains("**Why likely flaky**: The unrelated E2E shard timed out.", comment);
+        Assert.Contains("**Why likely flaky**: `The unrelated E2E shard timed out.`", comment);
         Assert.Contains("The analysis requested an automatic rerun of the failed CI jobs.", comment);
     }
 
@@ -765,7 +765,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             "",
             "**Suspected flaky failure(s):**",
             "- `Tests / Linux`",
-            "  - **Why likely flaky**: The runner timed out.",
+            "  - **Why likely flaky**: `The runner timed out.`",
             "",
             "The analysis requested an automatic rerun of the failed CI jobs.",
             "",
@@ -807,9 +807,80 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
         Assert.Contains("**Suspected flaky test(s):**", comment);
         Assert.Contains("`Aspire tree action E2E routes commands`", comment);
-        Assert.Contains("**Error**: Timed out waiting for E2E control revision", comment);
+        Assert.Contains("**Error**: `Timed out waiting for E2E control revision`", comment);
         Assert.Contains("at treeActions.e2e.test.js:42:1", comment);
-        Assert.Contains("**Why likely flaky**: The test is unrelated to the PR changes.", comment);
+        Assert.Contains("**Why likely flaky**: `The test is unrelated to the PR changes.`", comment);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task PrCommentRendersModelAuthoredMarkdownAsCode()
+    {
+        var analysis = new
+        {
+            verdict = "mixed",
+            rerun = new { eligible = false },
+            run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
+            failed_jobs = new[]
+            {
+                new
+                {
+                    name = "Tests / Linux",
+                    classification = "code-issue](https://example.com)",
+                    reason = "@octocat\n# injected [`link`](https://example.com)"
+                },
+                new
+                {
+                    name = "Tests / Windows",
+                    classification = "flaky-test",
+                    reason = "@github/team `escape` [link](https://example.com)"
+                }
+            },
+            failed_tests = new[]
+            {
+                new
+                {
+                    name = "Tests.Type.Method",
+                    job = "Tests / Windows",
+                    error = "@octocat [error](https://example.com)",
+                    stack_trace = "",
+                    classification = "flaky",
+                    reason = "`escape` @github/team"
+                }
+            },
+            evidence = new { completeness = "complete", gaps = Array.Empty<string>() }
+        };
+
+        var mixedComment = await InvokeScriptAsync("pr-comment", analysis);
+
+        Assert.Contains("``@octocat # injected [`link`](https://example.com)``", mixedComment);
+        Assert.Contains("`code-issue](https://example.com)`", mixedComment);
+        Assert.Contains("``@github/team `escape` [link](https://example.com)``", mixedComment);
+
+        var flakyJobComment = await InvokeScriptAsync("pr-comment", new
+        {
+            analysis.verdict,
+            analysis.rerun,
+            analysis.run_url,
+            failed_jobs = analysis.failed_jobs.Skip(1),
+            failed_tests = Array.Empty<object>(),
+            analysis.evidence
+        } with { verdict = "flaky-test" });
+
+        Assert.Contains("``@github/team `escape` [link](https://example.com)``", flakyJobComment);
+
+        var flakyTestComment = await InvokeScriptAsync("pr-comment", new
+        {
+            analysis.verdict,
+            analysis.rerun,
+            analysis.run_url,
+            failed_jobs = Array.Empty<object>(),
+            analysis.failed_tests,
+            analysis.evidence
+        } with { verdict = "flaky-test" });
+
+        Assert.Contains("`@octocat [error](https://example.com)`", flakyTestComment);
+        Assert.Contains("`` `escape` @github/team ``", flakyTestComment);
     }
 
     [Fact]

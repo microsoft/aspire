@@ -252,7 +252,7 @@ def _parse_timestamp(value):
         return math.nan
 
 
-def select_test_results_artifact(artifacts):
+def select_artifact(artifacts, name, max_size_bytes=MAX_TEST_RESULTS_ARTIFACT_BYTES):
     if not isinstance(artifacts, list):
         return None
 
@@ -260,7 +260,7 @@ def select_test_results_artifact(artifacts):
         artifact
         for artifact in artifacts
         if isinstance(artifact, dict)
-        and artifact.get("name") == "All-TestResults"
+        and artifact.get("name") == name
         and artifact.get("expired") is not True
     ]
     candidates.sort(
@@ -274,10 +274,13 @@ def select_test_results_artifact(artifacts):
     return (
         selected
         if selected
-        and _to_number(selected.get("size_in_bytes"))
-        <= MAX_TEST_RESULTS_ARTIFACT_BYTES
+        and _to_number(selected.get("size_in_bytes")) <= max_size_bytes
         else None
     )
+
+
+def select_test_results_artifact(artifacts):
+    return select_artifact(artifacts, "All-TestResults")
 
 
 def validate_rerun_request(analysis, trusted_context, trusted_evidence, request):
@@ -485,8 +488,9 @@ def _build_job_list(analysis, classification=None):
             continue
         if not classification:
             jobs.append(
-                f"- {to_inline_code(job.get('name'))} — {job.get('reason') or ''} "
-                f"({job.get('classification') or ''})"
+                f"- {to_inline_code(job.get('name'))} — "
+                f"{to_inline_code(job.get('reason') or '')} "
+                f"({to_inline_code(job.get('classification') or '')})"
             )
             continue
         validated_job_url = _get_validated_job_url(
@@ -495,7 +499,7 @@ def _build_job_list(analysis, classification=None):
         job_link = f" ([job]({validated_job_url}))" if validated_job_url else ""
         jobs.append(
             f"- {to_inline_code(job.get('name'))}{job_link}\n"
-            f"  - **Why likely flaky**: {job.get('reason') or ''}"
+            f"  - **Why likely flaky**: {to_inline_code(job.get('reason') or '')}"
         )
     return "\n".join(jobs)
 
@@ -511,8 +515,8 @@ def _build_flaky_test_list(analysis):
             stack_trace = f"\n  - **Stack Trace** (first frames):\n{to_code_block(frames)}"
         tests.append(
             f"- {to_inline_code(test.get('name'))} in job {to_inline_code(test.get('job'))}\n"
-            f"  - **Error**: {test.get('error') or ''}{stack_trace}\n"
-            f"  - **Why likely flaky**: {test.get('reason') or ''}"
+            f"  - **Error**: {to_inline_code(test.get('error') or '')}{stack_trace}\n"
+            f"  - **Why likely flaky**: {to_inline_code(test.get('reason') or '')}"
         )
     return "\n".join(tests)
 
@@ -693,10 +697,12 @@ def _format_size(byte_count):
     return f"{byte_count} bytes"
 
 
-def extract_test_results(
+def _extract_results(
     archive_path,
     destination_path,
     evidence_gaps_path,
+    is_result,
+    result_kind,
     max_files=MAX_FILES,
     max_file_bytes=MAX_FILE_BYTES,
     max_total_bytes=MAX_TOTAL_BYTES,
@@ -706,23 +712,23 @@ def extract_test_results(
     total_bytes = 0
 
     with zipfile.ZipFile(archive_path) as archive:
-        trx_entries = sorted(
+        result_entries = sorted(
             (
                 entry
                 for entry in archive.infolist()
-                if not entry.is_dir() and entry.filename.lower().endswith(".trx")
+                if not entry.is_dir() and is_result(entry.filename)
             ),
             key=lambda entry: entry.filename,
         )
 
         with open(evidence_gaps_path, "a", encoding="utf-8") as evidence_gaps:
-            if len(trx_entries) > max_files:
+            if len(result_entries) > max_files:
                 evidence_gaps.write(
-                    f"Test results artifact contained {len(trx_entries)} TRX files; "
+                    f"Test results artifact contained {len(result_entries)} {result_kind} files; "
                     f"processing only the first {max_files}\n"
                 )
 
-            for entry in trx_entries[:max_files]:
+            for entry in result_entries[:max_files]:
                 relative_path = pathlib.PurePosixPath(entry.filename)
                 if _is_unsafe_entry(entry):
                     evidence_gaps.write(
@@ -767,6 +773,46 @@ def extract_test_results(
                 total_bytes += written
 
 
+def extract_test_results(
+    archive_path,
+    destination_path,
+    evidence_gaps_path,
+    max_files=MAX_FILES,
+    max_file_bytes=MAX_FILE_BYTES,
+    max_total_bytes=MAX_TOTAL_BYTES,
+):
+    _extract_results(
+        archive_path,
+        destination_path,
+        evidence_gaps_path,
+        lambda filename: filename.lower().endswith(".trx"),
+        "TRX",
+        max_files,
+        max_file_bytes,
+        max_total_bytes,
+    )
+
+
+def extract_mocha_results(
+    archive_path,
+    destination_path,
+    evidence_gaps_path,
+    max_files=MAX_FILES,
+    max_file_bytes=MAX_FILE_BYTES,
+    max_total_bytes=MAX_TOTAL_BYTES,
+):
+    _extract_results(
+        archive_path,
+        destination_path,
+        evidence_gaps_path,
+        lambda filename: pathlib.PurePosixPath(filename).name == "mocha.json",
+        "mocha.json",
+        max_files,
+        max_file_bytes,
+        max_total_bytes,
+    )
+
+
 def _read_json(path):
     if path == "-":
         return json.load(sys.stdin)
@@ -780,13 +826,18 @@ def _write_json(value):
 
 def main(args):
     operation = args[0] if args else ""
-    if operation == "extract-test-results":
+    if operation in {"extract-test-results", "extract-mocha-results"}:
         if len(args) != 4:
             raise ValueError(
-                "Usage: analyze_ci_failure.py extract-test-results "
+                f"Usage: analyze_ci_failure.py {operation} "
                 "<archive.zip> <destination> <evidence-gaps.txt>"
             )
-        extract_test_results(*args[1:])
+        extractor = (
+            extract_test_results
+            if operation == "extract-test-results"
+            else extract_mocha_results
+        )
+        extractor(*args[1:])
         return
 
     analysis_path = args[1] if len(args) > 1 else None
@@ -824,6 +875,8 @@ def main(args):
         )
     elif operation == "select-test-results-artifact":
         _write_json(select_test_results_artifact(analysis))
+    elif operation == "select-artifact":
+        _write_json(select_artifact(analysis, cause_path))
     else:
         cause = _read_json(cause_path)
         if operation == "job-name":

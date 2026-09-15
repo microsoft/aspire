@@ -55,7 +55,7 @@ A partial evidence collection does not automatically force `unknown`, but missin
 
 ## Safety checks
 
-The rerun safe-output job treats the analysis as a decision, not as trusted execution context. The JavaScript helper owns deterministic validation of the analysis, collector-owned context, evidence metadata, and safe-output request. The workflow retains orchestration, live GitHub state checks, and side effects. Before calling GitHub's rerun API, it independently verifies:
+The rerun safe-output job treats the analysis as a decision, not as trusted execution context. The Python helper owns deterministic validation of the analysis, collector-owned context, evidence metadata, and safe-output request. The workflow retains orchestration, live GitHub state checks, and side effects. Before calling GitHub's rerun API, it independently verifies:
 
 - the safe-output request, analysis JSON, and collector-owned context identify the same run and PR;
 - the verdict is `transient-infra`, `flaky-test`, `mixed`, or `unknown` and `rerun.eligible` is `true`;
