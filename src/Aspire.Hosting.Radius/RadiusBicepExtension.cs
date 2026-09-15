@@ -24,7 +24,7 @@ internal static class RadiusBicepExtension
     /// <summary>
     /// The pinned Radius Bicep extension version. Format: <c>major.minor</c>.
     /// </summary>
-    internal const string Version = "0.59";
+    internal const string Version = "0.60";
 
     /// <summary>
     /// The OCI reference for the Radius Bicep extension, with the pinned version.

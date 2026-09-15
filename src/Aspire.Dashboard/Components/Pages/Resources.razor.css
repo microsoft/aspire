@@ -122,11 +122,18 @@
     justify-content: flex-end;
 }
 
-::deep .resources-filter-popup::part(dialog) {
+.resources-filter-popup-container {
+    display: contents;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup::part(dialog) {
     transform: translateX(calc(-100% + 32px));
     box-sizing: border-box;
-    max-height: 400px;
+    width: max-content;
+    max-width: 400px;
+    max-height: 500px;
     padding: 0;
+    overflow-x: hidden;
     overflow-y: auto;
     border: 0;
     border-radius: 0;
@@ -134,24 +141,41 @@
     box-shadow: var(--aspire-popup-shadow);
 }
 
-::deep .resources-filter-popup > .fluent-stack-vertical {
+.resources-filter-popup-container ::deep .resources-filter-popup > .fluent-stack-vertical {
+    box-sizing: border-box;
+    max-width: 100%;
     padding: 14px;
 }
 
-::deep .resources-filter-popup .filter-group > legend {
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group {
+    min-width: 0;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group > legend {
     font-family: var(--aspire-font-display);
     font-size: 16px;
     font-weight: 500;
     line-height: 27px;
 }
 
-::deep .resources-filter-popup .filter-group > .fluent-stack-vertical {
-    row-gap: 10px;
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group > .fluent-stack-vertical {
+    min-width: 0;
+    row-gap: 4px;
+    width: 100%;
 }
 
-::deep .resources-filter-popup .filter-group fluent-field {
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group fluent-field {
+    grid-template-columns: auto minmax(0, 1fr);
     height: 20px;
     margin: 0;
+    min-width: 0;
+    width: 100%;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group fluent-field > label[slot="label"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 @container (max-width: 500px) {

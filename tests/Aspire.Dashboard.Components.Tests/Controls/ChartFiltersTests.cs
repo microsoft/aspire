@@ -90,6 +90,13 @@ public class ChartFiltersTests : DashboardTestContext
         Assert.DoesNotContain("(None)", cut.Markup);
         Assert.Single(cut.FindAll(".chart-filter-button-container"));
         Assert.Contains("aria-label=\"All tags\"", cut.Markup);
+        Assert.NotNull(cut.Find(".dimension-popup-container"));
+        Assert.All(cut.FindAll(".dimension-popup fluent-field"), field => Assert.Contains("aspire-checkbox", field.ClassList));
+        var overflowItems = cut.FindAll(".dimension-overflow > div:not(.fluent-overflow-more)");
+        Assert.Equal("ellipsis", overflowItems[0].GetAttribute("behavior"));
+        Assert.Contains("dimension-overflow-ellipsis", overflowItems[0].ClassList);
+        Assert.All(overflowItems.Skip(1), item => Assert.Null(item.GetAttribute("behavior")));
+        Assert.All(overflowItems.Skip(1), item => Assert.DoesNotContain("dimension-overflow-ellipsis", item.ClassList));
     }
 
     [Fact]
