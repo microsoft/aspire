@@ -9,7 +9,7 @@ using Xunit;
 namespace Infrastructure.Tests;
 
 /// <summary>
-/// Tests for .github/workflows/analyze-ci-failure.js.
+/// Tests for .github/workflows/analyze-ci-failure/analyze_ci_failure.py.
 /// </summary>
 public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 {
@@ -25,13 +25,13 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         _output = output;
         _workspace = TemporaryWorkspace.Create(output);
         _repoRoot = RepoRoot.Path;
-        _scriptPath = Path.Combine(_repoRoot, ".github", "workflows", "analyze-ci-failure.js");
+        _scriptPath = Path.Combine(_repoRoot, ".github", "workflows", "analyze-ci-failure", "analyze_ci_failure.py");
     }
 
     public void Dispose() => _workspace.Dispose();
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task AddOccurrenceUsesTheCauseJobInAMultiJobRun()
     {
         var analysis = CreateAnalysis();
@@ -58,7 +58,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task BuildFlakyTestIssueBodyUsesMatchingJobAndEscapesHtml()
     {
         var analysis = CreateAnalysis(
@@ -163,7 +163,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task OccurrenceOperationsUseCurrentTimeWhenAnalysisTimestampIsMissingOrInvalid()
     {
         object[] analyses =
@@ -210,7 +210,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task BuildInfrastructureIssueBodyUsesTheMatchingJob()
     {
         var analysis = CreateAnalysis();
@@ -237,7 +237,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task BuildInfrastructureIssueBodyUsesCauseAnalysisWhenJobDoesNotMatch()
     {
         var analysis = CreateAnalysis();
@@ -261,7 +261,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task FormatTestFailuresUsesSafeMarkdownFences()
     {
         var failures = new[]
@@ -306,7 +306,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task FormatTestFailuresIncludesSourceJob()
     {
         var failures = new[]
@@ -333,7 +333,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("postgresql://dbuser:dbpass@postgres.example/db", "postgresql://[REDACTED]:[REDACTED]@postgres.example/db")]
     [InlineData("mongodb+srv://mongo-user:mongo-pass@mongo.example/db", "mongodb+srv://[REDACTED]:[REDACTED]@mongo.example/db")]
     [InlineData("redis://:redis-pass@redis.example/0", "redis://[REDACTED]:[REDACTED]@redis.example/0")]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task RedactOperationRemovesSensitiveValuesAndPreservesDiagnostics(string credentialUri, string redactedUri)
     {
         var privateKeyAcrossTruncationBoundary = $"{new string('x', 3950)}-----BEGIN PRIVATE KEY-----\n{new string('k', 200)}\n-----END PRIVATE KEY-----\nExpected 42 but got 41";
@@ -379,7 +379,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("PGPASSWORD=database-secret", "PGPASSWORD=[REDACTED]")]
     [InlineData("{\"PGPASSWORD\":\"database-secret\"}", "{\"PGPASSWORD\":\"[REDACTED]\"}")]
     [InlineData("env.PGPASSWORD=\"database-secret\"", "env.PGPASSWORD=\"[REDACTED]\"")]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task RedactOperationRemovesTokenValues(string value, string expected)
     {
         var output = await InvokeScriptAsync("redact", new { diagnostic = value });
@@ -389,7 +389,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task ValidatePublicationReturnsTrustedManifest()
     {
         var (analysis, context, evidence) = CreateValidationData();
@@ -408,7 +408,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("commit")]
     [InlineData("evidence")]
     [InlineData("rerun")]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task ValidatePublicationRejectsUntrustedOrInconsistentAnalysis(string mismatch)
     {
         var (analysis, context, evidence) = CreateValidationData();
@@ -435,7 +435,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("mixed", "pull_request", 1, "open", true)]
     [InlineData("code-issue", "pull_request", 1, "open", false)]
     [InlineData("pr-test-failure", "pull_request", 1, "open", false)]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task ValidatePublicationEnforcesRerunPolicy(
         string verdict,
         string runEvent,
@@ -461,7 +461,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task ValidatePublicationPreservesRerunDecisionForManualDryRun()
     {
         var (analysis, context, evidence) = CreateValidationData();
@@ -475,7 +475,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task SelectTestResultsArtifactReturnsNewestExactArtifactWithinSizeLimit()
     {
         var artifacts = new Dictionary<string, object>[]
@@ -494,7 +494,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [Theory]
     [InlineData(true, 1000)]
     [InlineData(false, 104857601)]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task SelectTestResultsArtifactRejectsExpiredOrOversizedArtifact(bool expired, int size)
     {
         var artifacts = new Dictionary<string, object>[]
@@ -508,7 +508,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task ValidatePublicationRejectsInvalidVerdict()
     {
         var (analysis, context, evidence) = CreateValidationData();
@@ -525,7 +525,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [Theory]
     [InlineData("unknown")]
     [InlineData("mixed")]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task ValidateRerunRequestAcceptsRetryableVerdictWithMatchingReasonAndIdentity(string verdict)
     {
         var (analysis, context, evidence) = CreateValidationData();
@@ -541,7 +541,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("run")]
     [InlineData("pr")]
     [InlineData("reason")]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task ValidateRerunRequestRejectsMismatchedRequest(string mismatch)
     {
         var (analysis, context, evidence) = CreateValidationData();
@@ -558,7 +558,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task PrCommentReportsMixedFailuresAndRequestedRerun()
     {
         var analysis = new
@@ -593,7 +593,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task PrCommentReportsRerunSuppressedByManualDryRun()
     {
         var analysis = new
@@ -615,7 +615,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node", "yq"])]
+    [RequiresTools(["python3", "yq"])]
     public async Task ExtractTestFailuresReadsStandardOutputAndErrorFromTrx()
     {
         var trxPath = Path.Combine(_workspace.Path, "results.trx");
@@ -643,7 +643,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task ExtractMochaFailuresReadsTestAndHookFailures()
     {
         var report = new
@@ -698,7 +698,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task PrCommentListsFlakyJobsWhenNoIndividualTestsWereExtracted()
     {
         var analysis = new
@@ -729,17 +729,11 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["python"])]
-    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
-    public Task PythonTestsPassOnWindows() => PythonTestsPass("python");
+    [RequiresTools(["python3"])]
+    public Task PythonTestsPass() => RunPythonTests("python3");
 
     [Fact]
     [RequiresTools(["python3"])]
-    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
-    public Task PythonTestsPassOnUnix() => PythonTestsPass("python3");
-
-    [Fact]
-    [RequiresTools(["node"])]
     public async Task PrCommentOmitsJobLinksOutsideTheAnalyzedRun()
     {
         var analysis = new
@@ -786,7 +780,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task PrCommentListsExtractedFlakyTests()
     {
         var analysis = new
@@ -819,7 +813,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task PrCommentDistinguishesTestFailuresCausedByThePullRequest()
     {
         var analysis = new
@@ -847,7 +841,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task PrCommentReportsUnknownVerdictAndIncompleteEvidence()
     {
         var analysis = new
@@ -931,7 +925,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         return result.Output.ReplaceLineEndings("\n");
     }
 
-    private async Task<CommandResult> InvokeValidationResultAsync(string operation, params object[] inputs)
+    private async Task<ScriptResult> InvokeValidationResultAsync(string operation, params object[] inputs)
     {
         var inputPaths = new List<string>();
         foreach (var input in inputs)
@@ -941,9 +935,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             inputPaths.Add(inputPath);
         }
 
-        using var command = new NodeCommand(_output, $"analyze-ci-failure-{operation}");
-        command.WithWorkingDirectory(_repoRoot);
-        return await command.ExecuteScriptAsync(_scriptPath, [operation, .. inputPaths]);
+        return await ExecuteScriptAsync(operation, [operation, .. inputPaths]);
     }
 
     private sealed record ValidationAnalysis(
@@ -974,13 +966,10 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         await File.WriteAllTextAsync(analysisPath, JsonSerializer.Serialize(analysis, s_jsonOptions));
         await File.WriteAllTextAsync(causePath, JsonSerializer.Serialize(cause, s_jsonOptions));
 
-        using var command = new NodeCommand(_output, "analyze-ci-failure");
-        command.WithWorkingDirectory(_repoRoot);
-
         var arguments = marker is null
             ? new[] { operation, analysisPath, causePath }
             : new[] { operation, analysisPath, causePath, marker };
-        var result = await command.ExecuteScriptAsync(_scriptPath, arguments);
+        var result = await ExecuteScriptAsync(operation, arguments);
         Assert.Equal(0, result.ExitCode);
 
         return result.Output.ReplaceLineEndings("\n");
@@ -991,17 +980,54 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var inputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-input.json");
         await File.WriteAllTextAsync(inputPath, JsonSerializer.Serialize(input, s_jsonOptions));
 
-        using var command = new NodeCommand(_output, $"analyze-ci-failure-{operation}");
-        command.WithWorkingDirectory(_repoRoot);
-
         var arguments = context is null ? new[] { operation, inputPath } : new[] { operation, inputPath, context };
-        var result = await command.ExecuteScriptAsync(_scriptPath, arguments);
+        var result = await ExecuteScriptAsync(operation, arguments);
         Assert.Equal(0, result.ExitCode);
 
         return result.Output.ReplaceLineEndings("\n");
     }
 
-    private async Task PythonTestsPass(string python)
+    private async Task<ScriptResult> ExecuteScriptAsync(string operation, string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("python3")
+        {
+            WorkingDirectory = _repoRoot,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add(_scriptPath);
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Failed to start analyze-ci-failure-{operation}.");
+
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw;
+        }
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        _output.WriteLine(stdout);
+        _output.WriteLine(stderr);
+
+        return new ScriptResult(process.ExitCode, stdout.TrimEnd('\r', '\n'));
+    }
+
+    private async Task RunPythonTests(string python)
     {
         var startInfo = new ProcessStartInfo(python)
         {
@@ -1071,4 +1097,6 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
         return JsonSerializer.Deserialize<JsonElement>(stdout, s_jsonOptions);
     }
+
+    private sealed record ScriptResult(int ExitCode, string Output);
 }

@@ -69,8 +69,7 @@ jobs:
         uses: actions/checkout@v4.3.1
         with:
           sparse-checkout: |
-            .github/workflows/analyze-ci-failure.js
-            .github/workflows/analyze-ci-failure/extract_test_results.py
+            .github/workflows/analyze-ci-failure/analyze_ci_failure.py
             eng/test-retry-patterns.json
           sparse-checkout-cone-mode: false
       - name: Collect CI failure data
@@ -322,15 +321,15 @@ jobs:
           > ci-failure-data/test-failures.jsonl
 
           # Fetch the aggregate TRX artifact if available and extract test failure info.
-          ARTIFACT=$(node .github/workflows/analyze-ci-failure.js select-test-results-artifact ci-failure-data/artifacts.json)
+          ARTIFACT=$(python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py select-test-results-artifact ci-failure-data/artifacts.json)
           ARTIFACT_ID=$(printf '%s' "${ARTIFACT}" | jq -r '.id // empty')
           ARTIFACT_NAME=$(printf '%s' "${ARTIFACT}" | jq -r '.name // empty')
           if [ -n "${ARTIFACT_ID}" ]; then
             echo "Downloading test results artifact: ${ARTIFACT_NAME} (${ARTIFACT_ID})..."
             mkdir -p ci-failure-data/test-results
             if gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" > ci-failure-data/test-results.zip \
-              && timeout 30s python3 .github/workflows/analyze-ci-failure/extract_test_results.py \
-                ci-failure-data/test-results.zip ci-failure-data/test-results "${EVIDENCE_GAPS_FILE}"; then
+              && timeout 30s python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py \
+                extract-test-results ci-failure-data/test-results.zip ci-failure-data/test-results "${EVIDENCE_GAPS_FILE}"; then
               echo "Download complete."
 
               # List TRX files found
@@ -348,7 +347,7 @@ jobs:
               while IFS= read -r TRX_FILE; do
                 echo "Processing: $(basename "$TRX_FILE")"
                 if ! timeout 30s yq -p xml -o json '.' "${TRX_FILE}" 2>/dev/null |
-                    timeout 30s node .github/workflows/analyze-ci-failure.js extract-test-failures - \
+                    timeout 30s python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py extract-test-failures - \
                       >> ci-failure-data/test-failures.jsonl 2>/dev/null; then
                   printf 'Failed to parse test results: %s\n' "$(basename "$TRX_FILE")" >> "${EVIDENCE_GAPS_FILE}"
                 fi
@@ -394,7 +393,7 @@ jobs:
               fi
               find "${E2E_RESULTS_DIR}" -name "mocha.json" -type f 2>/dev/null | while IFS= read -r MOCHA_FILE; do
                 echo "Processing extension E2E results: ${E2E_ARTIFACT_NAME}/$(basename "${MOCHA_FILE}")"
-                if ! node .github/workflows/analyze-ci-failure.js extract-mocha-failures "${MOCHA_FILE}" "${E2E_JOB_NAME}" \
+                if ! python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py extract-mocha-failures "${MOCHA_FILE}" "${E2E_JOB_NAME}" \
                     >> ci-failure-data/test-failures.jsonl; then
                   echo "::warning::Failed to parse extension E2E results: ${E2E_ARTIFACT_NAME}/$(basename "${MOCHA_FILE}")"
                   printf 'Failed to parse extension E2E results: %s/%s\n' "${E2E_ARTIFACT_NAME}" "$(basename "${MOCHA_FILE}")" >> "${EVIDENCE_GAPS_FILE}"
@@ -411,7 +410,7 @@ jobs:
           rm -f ci-failure-data/test-failures.jsonl ci-failure-data/artifacts.json ci-failure-data/test-results.zip ci-failure-data/trx-files.txt
           rm -rf ci-failure-data/test-results ci-failure-data/extension-e2e-results
           # Redact complete values before the script applies field limits so truncation cannot split credential patterns.
-          node .github/workflows/analyze-ci-failure.js redact ci-failure-data/test-failures.json \
+          python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py redact ci-failure-data/test-failures.json \
             > ci-failure-data/test-failures-redacted.json
           mv ci-failure-data/test-failures-redacted.json ci-failure-data/test-failures.json
           echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from result artifacts"
@@ -419,7 +418,7 @@ jobs:
           sort -u "${EVIDENCE_GAPS_FILE}" -o "${EVIDENCE_GAPS_FILE}"
           jq -Rn '[inputs | select(length > 0)] | {completeness: (if length == 0 then "complete" else "partial" end), gaps: .}' \
             < "${EVIDENCE_GAPS_FILE}" > ci-failure-data/evidence.json
-          node .github/workflows/analyze-ci-failure.js redact ci-failure-data/evidence.json \
+          python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py redact ci-failure-data/evidence.json \
             > ci-failure-data/evidence-redacted.json
           mv ci-failure-data/evidence-redacted.json ci-failure-data/evidence.json
           EVIDENCE_COMPLETENESS=$(jq -r '.completeness' ci-failure-data/evidence.json)
@@ -497,7 +496,7 @@ jobs:
             if [ -f "ci-failure-data/test-failures.json" ]; then
               FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
-                node .github/workflows/analyze-ci-failure.js format-test-failures ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
+                python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py format-test-failures ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
               else
                 echo "No test failures extracted from result artifacts."
               fi
@@ -615,7 +614,7 @@ safe-outputs:
         - name: Checkout issue renderer
           uses: actions/checkout@v4
           with:
-            sparse-checkout: .github/workflows/analyze-ci-failure.js
+            sparse-checkout: .github/workflows/analyze-ci-failure/analyze_ci_failure.py
             sparse-checkout-cone-mode: false
         - name: Download collected failure data
           uses: actions/download-artifact@v8.0.1
@@ -658,7 +657,7 @@ safe-outputs:
             # The agent also sees job logs and can reproduce values that were not present in
             # the pre-redacted TRX fields. Redact its complete output again at the publish
             # boundary before reading, rendering, or persisting any analysis fields.
-            node .github/workflows/analyze-ci-failure.js redact "$ANALYSIS_FILE" \
+            python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py redact "$ANALYSIS_FILE" \
               > "${ANALYSIS_FILE}.redacted"
             mv "${ANALYSIS_FILE}.redacted" "$ANALYSIS_FILE"
 
@@ -673,7 +672,7 @@ safe-outputs:
                   rm -f "$CAUSE_FILE"
                   continue
                 fi
-                node .github/workflows/analyze-ci-failure.js redact "$CAUSE_FILE" \
+                python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py redact "$CAUSE_FILE" \
                   > "${CAUSE_FILE}.redacted"
                 mv "${CAUSE_FILE}.redacted" "$CAUSE_FILE"
               done
@@ -685,7 +684,7 @@ safe-outputs:
             # Validate model output against collector-owned data and consume only the
             # normalized trusted manifest returned by the helper.
             PUBLISH_MANIFEST=$(mktemp)
-            node .github/workflows/analyze-ci-failure.js validate-publication \
+            python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py validate-publication \
               "$ANALYSIS_FILE" "$CONTEXT_FILE" "$EVIDENCE_FILE" > "$PUBLISH_MANIFEST"
             RUN_ID=$(jq -r '.run_id' "$PUBLISH_MANIFEST")
             RUN_ATTEMPT=$(jq -r '.run_attempt' "$PUBLISH_MANIFEST")
@@ -756,7 +755,7 @@ safe-outputs:
                   EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
 
                   # Add an occurrences array using the job associated with this cause.
-                  CAUSE_WITH_OCC=$(node .github/workflows/analyze-ci-failure.js \
+                  CAUSE_WITH_OCC=$(python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py \
                     add-occurrence "$ANALYSIS_FILE" "$CAUSE_FILE")
 
                   if [ -f "$EXISTING" ]; then
@@ -803,7 +802,7 @@ safe-outputs:
                   continue
                 fi
 
-                NEW_OCCURRENCE_ROW=$(node .github/workflows/analyze-ci-failure.js \
+                NEW_OCCURRENCE_ROW=$(python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py \
                   occurrence-row "$ANALYSIS_FILE" "$CAUSE_FILE")
                 CAUSE_STORED="memory-repo/causes/${CAUSE_ID}.json"
                 MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
@@ -886,7 +885,7 @@ safe-outputs:
                 else
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
-                  node .github/workflows/analyze-ci-failure.js \
+                  python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py \
                     issue-body "$ANALYSIS_FILE" "$CAUSE_FILE" "$MARKER" > "$BODY_FILE"
 
                   LABELS="ci-failure-cause"
@@ -895,7 +894,7 @@ safe-outputs:
                   fi
 
                   # Normalize agent-generated titles before passing them to GitHub.
-                  ISSUE_TITLE=$(node .github/workflows/analyze-ci-failure.js \
+                  ISSUE_TITLE=$(python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py \
                     issue-title "$ANALYSIS_FILE" "$CAUSE_FILE")
                   CREATED_ISSUE_URL=$(gh issue create --repo "$REPO" \
                     --title "$ISSUE_TITLE" \
@@ -946,7 +945,7 @@ safe-outputs:
             # Build comment body from the analysis JSON and write to a file
             # to avoid shell expansion issues and ARG_MAX limits.
             COMMENT_FILE=$(mktemp)
-            node .github/workflows/analyze-ci-failure.js pr-comment "$ANALYSIS_FILE" "$CONTEXT_FILE" > "$COMMENT_FILE"
+            python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py pr-comment "$ANALYSIS_FILE" "$CONTEXT_FILE" > "$COMMENT_FILE"
 
             # Update an existing analysis comment if one exists (by marker),
             # otherwise create a new one. This prevents stacking duplicate
@@ -993,7 +992,7 @@ safe-outputs:
         - name: Checkout analysis helper
           uses: actions/checkout@v4
           with:
-            sparse-checkout: .github/workflows/analyze-ci-failure.js
+            sparse-checkout: .github/workflows/analyze-ci-failure/analyze_ci_failure.py
             sparse-checkout-cone-mode: false
         - name: Download collected failure data
           uses: actions/download-artifact@v8.0.1
@@ -1001,89 +1000,84 @@ safe-outputs:
             name: ci-failure-data
             path: ${{ runner.temp }}/ci-failure-data
         - name: Rerun failed jobs
-          uses: actions/github-script@v9.0.0
           env:
             COLLECTED_DATA_DIR: ${{ runner.temp }}/ci-failure-data
-          with:
-            script: |
-              const fs = require('fs');
-              const path = require('path');
-              const analysisWorkflow = require(path.join(
-                process.env.GITHUB_WORKSPACE,
-                '.github/workflows/analyze-ci-failure.js'));
+            GH_TOKEN: ${{ github.token }}
+            REPO: ${{ github.repository }}
+          run: |
+            set -euo pipefail
 
-              // Read inputs from the agent output artifact.
-              // gh-aw writes { "items": [ { "type": "rerun_failed_jobs", ... } ] }.
-              const outputFile = process.env.GH_AW_AGENT_OUTPUT;
-              if (!outputFile || !fs.existsSync(outputFile)) {
-                core.setFailed('Agent output file not found');
-                return;
-              }
-              const payload = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
-              const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
-              const item = items.find(i => i && i.type === 'rerun_failed_jobs');
-              if (!item) {
-                core.info('No rerun_failed_jobs items in agent output.');
-                return;
-              }
+            OUTPUT_FILE="${GH_AW_AGENT_OUTPUT:-}"
+            if [ -z "$OUTPUT_FILE" ] || [ ! -f "$OUTPUT_FILE" ]; then
+              echo "::error::Agent output file not found"
+              exit 1
+            fi
+            if ! jq empty "$OUTPUT_FILE" 2>/dev/null; then
+              echo "::error::Agent output file is not valid JSON"
+              exit 1
+            fi
 
-              const owner = context.repo.owner;
-              const repo = context.repo.repo;
+            # gh-aw writes { "items": [ { "type": "rerun_failed_jobs", ... } ] }.
+            REQUEST_FILE=$(mktemp)
+            if ! jq -e 'first(.items[]? | select(.type == "rerun_failed_jobs"))' "$OUTPUT_FILE" > "$REQUEST_FILE"; then
+              echo "No rerun_failed_jobs items in agent output."
+              rm -f "$REQUEST_FILE"
+              exit 0
+            fi
 
-              const analysisFile = path.join(path.dirname(outputFile), 'agent', 'analysis-result.json');
-              const contextFile = path.join(process.env.COLLECTED_DATA_DIR, 'run-context.json');
-              const evidenceFile = path.join(process.env.COLLECTED_DATA_DIR, 'evidence.json');
-              if (!fs.existsSync(analysisFile) || !fs.existsSync(contextFile) || !fs.existsSync(evidenceFile)) {
-                core.setFailed('Analysis result, trusted run context, or evidence metadata was not found.');
-                return;
-              }
+            ARTIFACT_DIR=$(dirname "$OUTPUT_FILE")
+            ANALYSIS_FILE="$ARTIFACT_DIR/agent/analysis-result.json"
+            CONTEXT_FILE="$COLLECTED_DATA_DIR/run-context.json"
+            EVIDENCE_FILE="$COLLECTED_DATA_DIR/evidence.json"
+            if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$CONTEXT_FILE" ] || [ ! -f "$EVIDENCE_FILE" ]; then
+              echo "::error::Analysis result, trusted run context, or evidence metadata was not found."
+              exit 1
+            fi
 
-              const analysis = JSON.parse(fs.readFileSync(analysisFile, 'utf8'));
-              const trustedContext = JSON.parse(fs.readFileSync(contextFile, 'utf8'));
-              const trustedEvidence = JSON.parse(fs.readFileSync(evidenceFile, 'utf8'));
-              const manifest = analysisWorkflow.validateRerunRequest(analysis, trustedContext, trustedEvidence, item);
-              const runId = manifest.run_id;
-              const trustedPrNumber = manifest.pr_number;
+            MANIFEST_FILE=$(mktemp)
+            python3 .github/workflows/analyze-ci-failure/analyze_ci_failure.py validate-rerun-request \
+              "$ANALYSIS_FILE" "$CONTEXT_FILE" "$EVIDENCE_FILE" "$REQUEST_FILE" > "$MANIFEST_FILE"
+            RUN_ID=$(jq -r '.run_id' "$MANIFEST_FILE")
+            RUN_ATTEMPT=$(jq -r '.run_attempt' "$MANIFEST_FILE")
+            ANALYZED_COMMIT_SHA=$(jq -r '.analyzed_commit_sha' "$MANIFEST_FILE")
+            TRUSTED_PR_NUMBER=$(jq -r '.pr_number' "$MANIFEST_FILE")
+            DRY_RUN=$(jq -r '.dry_run' "$MANIFEST_FILE")
+            rm -f "$REQUEST_FILE" "$MANIFEST_FILE"
 
-              const { data: workflowRun } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: runId });
-              if (workflowRun.name !== 'CI'
-                  || workflowRun.event !== 'pull_request'
-                  || workflowRun.conclusion !== 'failure'
-                  || Number(workflowRun.run_attempt) !== manifest.run_attempt
-                  || workflowRun.head_sha !== manifest.analyzed_commit_sha) {
-                core.info(`Run ${runId} is no longer the analyzed failed PR CI attempt. Skipping rerun.`);
-                return;
-              }
+            WORKFLOW_RUN=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}")
+            if [ "$(printf '%s' "$WORKFLOW_RUN" | jq -r '.name // ""')" != "CI" ] \
+                || [ "$(printf '%s' "$WORKFLOW_RUN" | jq -r '.event // ""')" != "pull_request" ] \
+                || [ "$(printf '%s' "$WORKFLOW_RUN" | jq -r '.conclusion // ""')" != "failure" ] \
+                || [ "$(printf '%s' "$WORKFLOW_RUN" | jq -r '.run_attempt // 0')" != "$RUN_ATTEMPT" ] \
+                || [ "$(printf '%s' "$WORKFLOW_RUN" | jq -r '.head_sha // ""')" != "$ANALYZED_COMMIT_SHA" ]; then
+              echo "Run ${RUN_ID} is no longer the analyzed failed PR CI attempt. Skipping rerun."
+              exit 0
+            fi
 
-              if (Number(workflowRun.run_attempt) > 3) {
-                core.info(`Run ${runId} is on attempt ${workflowRun.run_attempt}; the automatic rerun limit has been reached.`);
-                return;
-              }
+            if [ "$RUN_ATTEMPT" -gt 3 ]; then
+              echo "Run ${RUN_ID} is on attempt ${RUN_ATTEMPT}; the automatic rerun limit has been reached."
+              exit 0
+            fi
 
-              const { data: pullRequest } = await github.rest.pulls.get({ owner, repo, pull_number: trustedPrNumber });
-              if (pullRequest.state !== 'open') {
-                core.info(`PR #${trustedPrNumber} is closed. Skipping rerun.`);
-                return;
-              }
-              if (pullRequest.head.sha !== manifest.analyzed_commit_sha) {
-                core.info(`PR #${trustedPrNumber} no longer points at analyzed commit ${manifest.analyzed_commit_sha}. Skipping rerun.`);
-                return;
-              }
+            PULL_REQUEST=$(gh api "repos/${REPO}/pulls/${TRUSTED_PR_NUMBER}")
+            if [ "$(printf '%s' "$PULL_REQUEST" | jq -r '.state // ""')" != "open" ]; then
+              echo "PR #${TRUSTED_PR_NUMBER} is closed. Skipping rerun."
+              exit 0
+            fi
+            if [ "$(printf '%s' "$PULL_REQUEST" | jq -r '.head.sha // ""')" != "$ANALYZED_COMMIT_SHA" ]; then
+              echo "PR #${TRUSTED_PR_NUMBER} no longer points at analyzed commit ${ANALYZED_COMMIT_SHA}. Skipping rerun."
+              exit 0
+            fi
 
-              if (manifest.dry_run) {
-                const message = `Dry run: analysis requested a rerun of failed jobs for run ${runId}, but no rerun was sent.`;
-                core.notice(message);
-                await core.summary.addHeading('CI failure rerun dry run').addRaw(message).write();
-                return;
-              }
+            if [ "$DRY_RUN" = "true" ]; then
+              MESSAGE="Dry run: analysis requested a rerun of failed jobs for run ${RUN_ID}, but no rerun was sent."
+              echo "::notice::${MESSAGE}"
+              printf '### CI failure rerun dry run\n\n%s\n' "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
 
-              await github.rest.actions.reRunWorkflowFailedJobs({
-                owner,
-                repo,
-                run_id: runId,
-              });
-
-              core.info(`Requested rerun of failed jobs for run ${runId} as directed by the CI failure analysis.`);
+            gh api --method POST "repos/${REPO}/actions/runs/${RUN_ID}/rerun-failed-jobs" > /dev/null
+            echo "Requested rerun of failed jobs for run ${RUN_ID} as directed by the CI failure analysis."
 
 steps:
   - uses: actions/download-artifact@v4.3.0

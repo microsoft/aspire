@@ -1,22 +1,23 @@
-# CI failure analysis and automatic reruns
+# CI failure analysis
 
-This document explains how failed pull-request CI runs are analyzed and when an automatic rerun is requested.
+This document explains how failed CI runs are analyzed, how results are published, and when an automatic rerun is requested.
 
 ## How it works
 
-When a `CI` pull-request run fails, the [Analyze CI Failure](../../.github/workflows/analyze-ci-failure.md) agentic workflow collects the failed jobs, annotations, focused logs, test-result artifacts, PR metadata, changed files, and known transient patterns from [`eng/test-retry-patterns.json`](../../eng/test-retry-patterns.json). Runner startup failures and failed jobs without a failed step are retained; aggregate result jobs are excluded because they contain no independent diagnostic evidence.
+When a pull-request or `main` push run of `CI` fails and exactly one associated PR can be resolved, the [Analyze CI Failure](../../.github/workflows/analyze-ci-failure.md) agentic workflow collects the failed jobs, annotations, focused logs, test-result artifacts, PR metadata, changed files, and known transient patterns from [`eng/test-retry-patterns.json`](../../eng/test-retry-patterns.json). Runner startup failures and failed jobs without a failed step are retained; aggregate result jobs are excluded because they contain no independent diagnostic evidence.
 
 The same analysis produces:
 
 - a classification for every failed job and extracted test;
 - an overall verdict;
 - an explicit `rerun.eligible` decision and reason;
-- the PR comment describing the evidence and decision.
+- a PR comment describing the evidence and decision;
+- persistent cause records and issues when an eligible `main`-push failure recurs.
 
 There is no separate PR CI rerun classifier. The analysis result is the sole source of the rerun decision.
 
 ```text
-Failed PR CI run
+Failed CI run with one associated PR
        |
        v
 Analyze CI Failure collects revision-bound evidence
@@ -24,10 +25,18 @@ Analyze CI Failure collects revision-bound evidence
        v
 Agent classifies every failure and records rerun.eligible
        |
-       +--> publish validated PR comment
+       +--> PR run: publish validated comment; rerun when eligible and current
        |
-       +--> rerun failed jobs when eligible and still current
+       +--> main push: publish comment; persist eligible causes and update issues
 ```
+
+## Publication and persistence
+
+Pull-request analyses are advisory because failures may reflect work in progress. They can publish a comment and request a rerun, but they never update the memory branch or recurring-cause issues.
+
+For a failed `main` push, the workflow publishes the analysis on the associated PR and stores eligible transient, flaky, and mixed results on the `memory/ci-failure-analysis` branch. Each cause accumulates deduplicated occurrences across runs and is linked to a `ci-failure-cause` issue, which the workflow creates, updates, or reopens as needed. `code-issue`, `pr-test-failure`, and `unknown` results are not persisted. Main-push runs are never automatically rerun.
+
+This cause-level history is separate from the [red-main CI failure issue](ci-failure-issues.md), which tracks whether a protected branch is currently red and closes when a later run becomes green.
 
 Scheduled `Outerloop Tests` runs use a separate unconditional workflow because they have no associated PR or analysis result. See [Auto-rerun outerloop failures](auto-rerun-outerloop-failures.md).
 
@@ -75,9 +84,9 @@ The workflow supports `workflow_dispatch` with a failed `CI` run ID. Manual and 
 |------|------|
 | [`.github/workflows/analyze-ci-failure.md`](../../.github/workflows/analyze-ci-failure.md) | Agentic workflow source, classification instructions, publication, and rerun execution |
 | [`.github/workflows/analyze-ci-failure.lock.yml`](../../.github/workflows/analyze-ci-failure.lock.yml) | Generated executable workflow |
-| [`.github/workflows/analyze-ci-failure.js`](../../.github/workflows/analyze-ci-failure.js) | Deterministic publication and rerun validation, evidence redaction, test-result extraction, and comment rendering |
+| [`.github/workflows/analyze-ci-failure/analyze_ci_failure.py`](../../.github/workflows/analyze-ci-failure/analyze_ci_failure.py) | Deterministic publication and rerun validation, evidence redaction, test-failure parsing, comment rendering, and bounded TRX extraction |
 | [`eng/test-retry-patterns.json`](../../eng/test-retry-patterns.json) | Reviewed transient-pattern evidence |
-| [`tests/Infrastructure.Tests/WorkflowScripts/AnalyzeCiFailureWorkflowTests.cs`](../../tests/Infrastructure.Tests/WorkflowScripts/AnalyzeCiFailureWorkflowTests.cs) | Workflow contract and helper behavior tests |
+| [`tests/Infrastructure.Tests/WorkflowScripts/AnalyzeCiFailureWorkflowTests.cs`](../../tests/Infrastructure.Tests/WorkflowScripts/AnalyzeCiFailureWorkflowTests.cs) | Python helper and archive-extraction behavior tests |
 
 ## Validation
 

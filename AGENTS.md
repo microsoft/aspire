@@ -432,7 +432,7 @@ These switches can be repeated to run tests on multiple classes or methods at on
 - **`tests-outerloop.yml`**: Runs outerloop tests separately every 6 hours
 - **`ci.yml`**: Main CI workflow triggered on PRs and pushes to main/release branches
 - **Build validation**: Includes package generation, API compatibility checks, template validation
-- **CI failure analysis maintenance**: When changing CI workflow job or step names that are referenced by automation or tests, update the corresponding workflow helpers, behavior tests, and docs together. Keep `.github/workflows/analyze-ci-failure.md`, `.github/workflows/analyze-ci-failure.js`, `tests/Infrastructure.Tests/WorkflowScripts/AnalyzeCiFailureWorkflowTests.cs`, and `docs/ci/auto-rerun-transient-ci-failures.md` aligned. The generated `.lock.yml` must be updated with `gh aw compile`.
+- **CI failure analysis maintenance**: When changing CI workflow job or step names that are referenced by automation or tests, update the corresponding workflow helpers, behavior tests, and docs together. Keep `.github/workflows/analyze-ci-failure.md`, `.github/workflows/analyze-ci-failure/analyze_ci_failure.py`, `tests/Infrastructure.Tests/WorkflowScripts/AnalyzeCiFailureWorkflowTests.cs`, and `docs/ci/analyze-ci-failure.md` aligned. The generated `.lock.yml` must be updated with `gh aw compile`.
 - **⚠️ Quarantine and outerloop tests are easily broken** because they primarily run on schedule, not on most PRs. Changes to `tests-quarantine.yml`, `tests-outerloop.yml`, `specialized-test-runner.yml`, or `run-tests.yml` will automatically trigger the affected workflow(s) on the PR via `paths:` filters. Verify the triggered runs pass before merging.
 
 #### Azure DevOps (secondary, does NOT run tests on PRs)

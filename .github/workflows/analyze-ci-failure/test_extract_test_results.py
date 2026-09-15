@@ -6,7 +6,7 @@ import unittest
 from unittest import mock
 import zipfile
 
-import extract_test_results
+import analyze_ci_failure
 
 
 class ExtractTestResultsTests(unittest.TestCase):
@@ -26,7 +26,7 @@ class ExtractTestResultsTests(unittest.TestCase):
                 symlink.external_attr = (stat.S_IFLNK | 0o777) << 16
                 archive.writestr(symlink, "safe/results.trx")
 
-            extract_test_results.extract_test_results(archive_path, destination, evidence_gaps)
+            analyze_ci_failure.extract_test_results(archive_path, destination, evidence_gaps)
 
             self.assertEqual("safe", (destination / "safe" / "results.trx").read_text())
             self.assertFalse((root / "escaped.trx").exists())
@@ -41,7 +41,7 @@ class ExtractTestResultsTests(unittest.TestCase):
         entry = zipfile.ZipInfo("safe.trx")
         entry.filename = "windows\\escaped.trx"
 
-        self.assertTrue(extract_test_results._is_unsafe_entry(entry))
+        self.assertTrue(analyze_ci_failure._is_unsafe_entry(entry))
 
     def test_reports_file_count_and_stops_at_aggregate_limit(self):
         with tempfile.TemporaryDirectory() as temp_directory:
@@ -56,7 +56,7 @@ class ExtractTestResultsTests(unittest.TestCase):
                 archive.writestr("3.trx", b"9012")
                 archive.writestr("4.trx", b"not-processed")
 
-            extract_test_results.extract_test_results(
+            analyze_ci_failure.extract_test_results(
                 archive_path,
                 destination,
                 evidence_gaps,
@@ -83,7 +83,7 @@ class ExtractTestResultsTests(unittest.TestCase):
             with zipfile.ZipFile(archive_path, "w") as archive:
                 archive.writestr("oversized.trx", b"123456")
 
-            extract_test_results.extract_test_results(
+            analyze_ci_failure.extract_test_results(
                 archive_path,
                 destination,
                 evidence_gaps,
@@ -123,8 +123,8 @@ class ExtractTestResultsTests(unittest.TestCase):
             destination = root / "results"
             evidence_gaps = root / "evidence-gaps.txt"
 
-            with mock.patch.object(extract_test_results.zipfile, "ZipFile", return_value=FakeArchive()):
-                extract_test_results.extract_test_results(
+            with mock.patch.object(analyze_ci_failure.zipfile, "ZipFile", return_value=FakeArchive()):
+                analyze_ci_failure.extract_test_results(
                     root / "results.zip",
                     destination,
                     evidence_gaps,
