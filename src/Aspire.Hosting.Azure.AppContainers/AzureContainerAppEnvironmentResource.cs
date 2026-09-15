@@ -365,8 +365,6 @@ public class AzureContainerAppEnvironmentResource :
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
-        ArgumentNullException.ThrowIfNull(endpointReference);
-
         if (IsExpress)
         {
             // Express apps are reachable only over public ingress, so there is no ".internal"
@@ -400,19 +398,18 @@ public class AzureContainerAppEnvironmentResource :
         var scheme = PreserveHttpEndpoints ? endpoint.UriScheme : "https";
         var port = string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? 80 : 443;
         var tlsEnabled = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || endpoint.TlsEnabled;
+        var host = GetHostAddressExpression(endpointReference);
 
-        // Only hostname-bearing properties require the post-deployment Express output. In
-        // particular, project-generated HTTP_PORTS must not depend on the app's own deployment.
         return property switch
         {
-            EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{GetHostAddressExpression(endpointReference)}"),
-            EndpointProperty.Host or EndpointProperty.IPV4Host => GetHostAddressExpression(endpointReference),
+            EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
+            EndpointProperty.Host or EndpointProperty.IPV4Host => host,
             EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),
             EndpointProperty.TargetPort => endpoint.TargetPort is int targetPort
                 ? ReferenceExpression.Create($"{targetPort.ToString(CultureInfo.InvariantCulture)}")
                 : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
             EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
-            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{GetHostAddressExpression(endpointReference)}:{port.ToString(CultureInfo.InvariantCulture)}"),
+            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host}:{port.ToString(CultureInfo.InvariantCulture)}"),
             EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(tlsEnabled ? bool.TrueString : bool.FalseString)}"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
         };

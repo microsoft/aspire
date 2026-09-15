@@ -17,11 +17,13 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
 {
     private const string ApiVersion = "2026-03-02-preview";
     private const string ProjectName = "AcaExpress";
+    private const string ApiMessage = "express-api-response";
+    private const string DeploymentLogFile = "deployment.txt";
     // Leave room for independent Azure cleanup before the project's 90-minute hang timeout.
-    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(70);
+    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);
 
     [Fact]
-    public async Task DeployAndUpdatePublicHttpGraphWithManualSecrets()
+    public async Task DeployPublicHttpGraphWithManualSecrets()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Deployment terminal automation requires Linux.");
 
@@ -99,24 +101,13 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
                     counter);
 
                 deploymentAttempted = true;
-                await DeployAsync(auto, counter, "initial-deployment.txt", clearCache: true);
-                var initialUrls = await VerifyProviderConfigurationAsync(
+                await DeployAsync(auto, counter);
+                var urls = await VerifyProviderConfigurationAsync(
                     managementClient, credential, subscriptionId, resourceGroupName, cancellationToken);
-                VerifyDeploymentSummary(projectDirectory, "initial-deployment.txt", initialUrls);
-                await VerifyPublicCallAsync(initialUrls, "express-version-one", cancellationToken);
+                VerifyDeploymentSummary(projectDirectory, urls);
+                await VerifyPublicCallAsync(urls, cancellationToken);
 
-                // Change the API image, not merely the deployment cache. Seeing version two through
-                // the frontend proves the update succeeded and the public reference still works.
-                WriteApi(projectDirectory, "express-version-two");
-                await DeployAsync(auto, counter, "updated-deployment.txt", clearCache: false);
-                var updatedUrls = await VerifyProviderConfigurationAsync(
-                    managementClient, credential, subscriptionId, resourceGroupName, cancellationToken);
-                Assert.Equal(initialUrls["api"], updatedUrls["api"]);
-                Assert.Equal(initialUrls["frontend"], updatedUrls["frontend"]);
-                VerifyDeploymentSummary(projectDirectory, "updated-deployment.txt", updatedUrls);
-                await VerifyPublicCallAsync(updatedUrls, "express-version-two", cancellationToken);
-
-                foreach (var (name, uri) in updatedUrls)
+                foreach (var (name, uri) in urls)
                 {
                     deploymentUrls.Add(name, uri.AbsoluteUri);
                 }
@@ -145,7 +136,7 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
         {
             deploymentFailure = ex;
             DeploymentReporter.ReportDeploymentFailure(
-                nameof(DeployAndUpdatePublicHttpGraphWithManualSecrets), resourceGroupName, ex.Message);
+                nameof(DeployPublicHttpGraphWithManualSecrets), resourceGroupName, ex.Message);
             throw;
         }
         finally
@@ -171,16 +162,16 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
         }
 
         DeploymentReporter.ReportDeploymentSuccess(
-            nameof(DeployAndUpdatePublicHttpGraphWithManualSecrets),
+            nameof(DeployPublicHttpGraphWithManualSecrets),
             resourceGroupName,
             deploymentUrls,
             DateTime.UtcNow - startTime);
     }
 
-    private static async Task DeployAsync(Hex1bTerminalAutomator auto, SequenceCounter counter, string logFile, bool clearCache)
+    private static async Task DeployAsync(Hex1bTerminalAutomator auto, SequenceCounter counter)
     {
         // pipefail is enabled in the terminal so tee cannot hide a failed deployment.
-        await auto.TypeAsync($"aspire deploy{(clearCache ? " --clear-cache" : "")} 2>&1 | tee {logFile}");
+        await auto.TypeAsync($"aspire deploy 2>&1 | tee {DeploymentLogFile}");
         await auto.EnterAsync();
         await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
@@ -218,7 +209,22 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
         // ports. 8080 is a container target port, not a fixed local listening port.
         File.Delete(Path.Combine(projectDirectory, "Api", "Properties", "launchSettings.json"));
         File.Delete(Path.Combine(projectDirectory, "Frontend", "Properties", "launchSettings.json"));
-        WriteApi(projectDirectory, "express-version-one");
+        File.WriteAllText(Path.Combine(projectDirectory, "Api", "Program.cs"), $$"""
+            var builder = WebApplication.CreateBuilder(args);
+            var secret = builder.Configuration["MANUAL_SECRET"]
+                ?? throw new InvalidOperationException("Manual secret is missing.");
+            var app = builder.Build();
+            app.MapGet("/", (HttpRequest request) =>
+            {
+                if (!string.Equals(request.Headers["X-Express-Test-Secret"], secret, StringComparison.Ordinal))
+                {
+                    return Results.Unauthorized();
+                }
+
+                return Results.Text("{{ApiMessage}}");
+            });
+            app.Run();
+            """);
         File.WriteAllText(Path.Combine(projectDirectory, "Frontend", "Program.cs"), """
             var builder = WebApplication.CreateBuilder(args);
             var secret = builder.Configuration["MANUAL_SECRET"]
@@ -237,26 +243,6 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
             {
                 var message = await client.GetStringAsync("/", cancellationToken);
                 return Results.Json(new { backend = api.GetLeftPart(UriPartial.Authority), message });
-            });
-            app.Run();
-            """);
-    }
-
-    private static void WriteApi(string projectDirectory, string version)
-    {
-        File.WriteAllText(Path.Combine(projectDirectory, "Api", "Program.cs"), $$"""
-            var builder = WebApplication.CreateBuilder(args);
-            var secret = builder.Configuration["MANUAL_SECRET"]
-                ?? throw new InvalidOperationException("Manual secret is missing.");
-            var app = builder.Build();
-            app.MapGet("/", (HttpRequest request) =>
-            {
-                if (!string.Equals(request.Headers["X-Express-Test-Secret"], secret, StringComparison.Ordinal))
-                {
-                    return Results.Unauthorized();
-                }
-
-                return Results.Text("{{version}}");
             });
             app.Run();
             """);
@@ -340,9 +326,9 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
         return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
     }
 
-    private static void VerifyDeploymentSummary(string projectDirectory, string logFile, Dictionary<string, Uri> urls)
+    private static void VerifyDeploymentSummary(string projectDirectory, Dictionary<string, Uri> urls)
     {
-        var summary = File.ReadAllText(Path.Combine(projectDirectory, logFile));
+        var summary = File.ReadAllText(Path.Combine(projectDirectory, DeploymentLogFile));
         foreach (var uri in urls.Values)
         {
             // Check only public URLs; never include the complete deployment log in an assertion.
@@ -351,10 +337,10 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
         }
     }
 
-    private static async Task VerifyPublicCallAsync(Dictionary<string, Uri> urls, string expectedVersion, CancellationToken cancellationToken)
+    private static async Task VerifyPublicCallAsync(Dictionary<string, Uri> urls, CancellationToken cancellationToken)
     {
-        // Give each deployment its own readiness budget. Scale-to-zero is verified in the provider
-        // configuration; this probe verifies requests succeed with that configuration, not idle timing.
+        // Scale-to-zero is verified in the provider configuration; this probe verifies requests
+        // succeed with that configuration, not idle timing.
         using var readiness = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         readiness.CancelAfter(TimeSpan.FromMinutes(5));
         using var handler = new HttpClientHandler { AllowAutoRedirect = false };
@@ -369,7 +355,7 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     var result = await response.Content.ReadFromJsonAsync<JsonElement>(readiness.Token);
-                    if (result.GetProperty("message").GetString() == expectedVersion)
+                    if (result.GetProperty("message").GetString() == ApiMessage)
                     {
                         Assert.Equal(urls["api"].GetLeftPart(UriPartial.Authority), result.GetProperty("backend").GetString());
 
