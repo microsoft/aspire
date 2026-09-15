@@ -1831,6 +1831,9 @@ function writeWinUiProject(projectName) {
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Roslyn can reload while Aspire builds. Isolate XAML intermediates without moving
+         the shared NuGet assets. See https://github.com/microsoft/aspire/issues/19935. -->
+    <IntermediateOutputPath Condition="'$(DesignTimeBuild)' == 'true'">$(BaseIntermediateOutputPath)design-time\\$(Configuration)\\</IntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
