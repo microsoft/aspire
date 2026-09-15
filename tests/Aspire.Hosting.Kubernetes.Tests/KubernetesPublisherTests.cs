@@ -1726,6 +1726,179 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_WithConfigurationAppliesToGeneratedClaim()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var data = k8s.AddPersistentVolume("data")
+            .WithPersistentVolumeName("existing-volume")
+            .WithConfiguration(claim =>
+            {
+                claim.Metadata.Labels["example.com/retention"] = "retain";
+                claim.Spec.VolumeMode = "Filesystem";
+            });
+
+        builder.AddContainer("service", "nginx")
+            .WithPersistentVolume(data, "/var/lib/data");
+
+        var app = builder.Build();
+        app.Run();
+
+        Assert.NotNull(data.Resource.GeneratedClaim);
+        var claim = data.Resource.GeneratedClaim!;
+        Assert.Equal("retain", claim.Metadata.Labels["example.com/retention"]);
+        Assert.Equal("Filesystem", claim.Spec.VolumeMode);
+
+        var claimPath = Path.Combine(workspace.Path, "templates", "data", "data.yaml");
+        Assert.True(File.Exists(claimPath));
+        var content = await File.ReadAllTextAsync(claimPath);
+        await Verify(content, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_StorageClassConfigurationPreservesOmissionAndEmptyValue()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "default-class");
+        var omitted = k8s.AddPersistentVolume("omitted")
+            .WithPersistentVolumeName("existing-volume")
+            .WithoutStorageClass();
+        var empty = k8s.AddPersistentVolume("empty")
+            .WithStorageClass(string.Empty);
+
+        builder.AddContainer("service", "nginx")
+            .WithPersistentVolume(omitted, "/var/lib/data")
+            .WithPersistentVolume(empty, "/var/lib/empty");
+
+        var app = builder.Build();
+        app.Run();
+
+        var omittedClaimPath = Path.Combine(workspace.Path, "templates", "omitted", "omitted.yaml");
+        var emptyClaimPath = Path.Combine(workspace.Path, "templates", "empty", "empty.yaml");
+        Assert.True(File.Exists(omittedClaimPath));
+        Assert.True(File.Exists(emptyClaimPath));
+
+        var omittedClaim = await File.ReadAllTextAsync(omittedClaimPath);
+        var emptyClaim = await File.ReadAllTextAsync(emptyClaimPath);
+
+        await Verify(omittedClaim, "yaml")
+            .AppendContentAsFile(emptyClaim, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_PersistentVolumeStorageClassLastCallWins()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "default-class");
+        var parameter = builder.AddParameter("storageclass");
+        var volumes = new[]
+        {
+            k8s.AddPersistentVolume("explicit").WithoutStorageClass().WithStorageClass("fast"),
+            k8s.AddPersistentVolume("classless").WithoutStorageClass().WithStorageClass(""),
+            k8s.AddPersistentVolume("parameter").WithoutStorageClass().WithStorageClass(parameter),
+            k8s.AddPersistentVolume("omitted").WithStorageClass("fast").WithoutStorageClass(),
+            k8s.AddPersistentVolume("omitted-parameter").WithStorageClass(parameter).WithoutStorageClass(),
+        };
+
+        foreach (var volume in volumes)
+        {
+            builder.AddContainer($"{volume.Resource.Name}-service", "nginx")
+                .WithPersistentVolume(volume, "/data");
+        }
+
+        using var app = builder.Build();
+        app.Run();
+
+        SettingsTask settingsTask = default!;
+        foreach (var volume in volumes)
+        {
+            var name = volume.Resource.Name;
+            var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", name, $"{name}.yaml"));
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_PersistentVolumeStorageClassPreservesEmptyParameter()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "");
+        var empty = builder.AddParameter("empty-class", "", publishValueAsDefault: true);
+        var whitespace = builder.AddParameter("whitespace-class", " \t", publishValueAsDefault: true);
+        var volumes = new[]
+        {
+            k8s.AddPersistentVolume("default"),
+            k8s.AddPersistentVolume("classless").WithStorageClass(empty),
+            k8s.AddPersistentVolume("whitespace").WithStorageClass(whitespace),
+        };
+
+        foreach (var volume in volumes)
+        {
+            builder.AddContainer($"{volume.Resource.Name}-service", "nginx")
+                .WithPersistentVolume(volume, "/data");
+        }
+
+        using var app = builder.Build();
+        app.Run();
+
+        SettingsTask settingsTask = default!;
+        foreach (var volume in volumes)
+        {
+            var name = volume.Resource.Name;
+            var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", name, $"{name}.yaml"));
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_PersistentVolumeCallbacksRunInOrderAfterDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var volume = k8s.AddPersistentVolume("data")
+            .WithStorageClass("fast")
+            .WithPersistentVolumeName("original-volume")
+            .WithConfiguration(claim =>
+            {
+                Assert.Equal("fast", claim.Spec.StorageClassName);
+                Assert.Equal("original-volume", claim.Spec.VolumeName);
+                claim.Spec.StorageClassName = "";
+                claim.Spec.VolumeName = "replacement-volume";
+                claim.Metadata.Labels["stage"] = "first";
+            })
+            .WithConfiguration(claim =>
+            {
+                Assert.Equal("first", claim.Metadata.Labels["stage"]);
+                claim.Metadata.Labels["stage"] = "second";
+            });
+        builder.AddContainer("service", "nginx").WithPersistentVolume(volume, "/data");
+
+        using var app = builder.Build();
+        app.Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "data", "data.yaml"));
+        await Verify(content, "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_WithFirstClassPersistentVolume_KubernetesCustomizationOverridesDefaultFsGroup()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1837,6 +2010,36 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         }
 
         await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_StorageClassConfigurationControlsGeneratedClaim()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "default-class");
+
+        var defaultVolume = k8s.AddPersistentVolume("default");
+        var explicitVolume = k8s.AddPersistentVolume("explicit")
+            .WithStorageClass("explicit-class");
+        var omittedVolume = k8s.AddPersistentVolume("omitted")
+            .WithoutStorageClass();
+
+        builder.AddContainer("default-service", "nginx")
+            .WithPersistentVolume(defaultVolume, "/data");
+        builder.AddContainer("explicit-service", "nginx")
+            .WithPersistentVolume(explicitVolume, "/data");
+        builder.AddContainer("omitted-service", "nginx")
+            .WithPersistentVolume(omittedVolume, "/data");
+
+        var app = builder.Build();
+        app.Run();
+
+        Assert.Equal("default-class", ReadStorageClassName(workspace.Path, "default"));
+        Assert.Equal("explicit-class", ReadStorageClassName(workspace.Path, "explicit"));
+        Assert.Null(ReadStorageClassName(workspace.Path, "omitted"));
     }
 
     [Fact]
@@ -2088,6 +2291,19 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             new System.Text.RegularExpressions.Regex(@"parameters:[\s\S]+data:[\s\S]+" +
                 System.Text.RegularExpressions.Regex.Escape(backupTierName) + @"\s*:"),
             valuesContent);
+    }
+    private static string? ReadStorageClassName(string workspacePath, string volumeName)
+    {
+        var claimPath = Path.Combine(workspacePath, "templates", volumeName, $"{volumeName}.yaml");
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(claimPath));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var spec = (YamlMappingNode)root["spec"];
+        return spec.Children.TryGetValue("storageClassName", out var storageClass)
+            ? ((YamlScalarNode)storageClass).Value
+            : null;
     }
 
     /// <summary>

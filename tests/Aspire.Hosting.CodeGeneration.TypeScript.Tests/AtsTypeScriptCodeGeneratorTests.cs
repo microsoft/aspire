@@ -1064,6 +1064,40 @@ public class AtsTypeScriptCodeGeneratorTests
                     StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Generate_KubernetesPersistentVolume_WithPersistentVolumeNameExposesCapability()
+    {
+        var scanResult = AtsCapabilityScanner.ScanAssemblies(
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(global::Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource).Assembly
+        ]);
+        var files = _generator.GenerateDistributedApplication(scanResult.ToAtsContext());
+        var generatedCode = files["aspire.mts"];
+
+        var capability = Assert.Single(
+            scanResult.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting.Kubernetes/withPersistentVolumeName");
+        Assert.Equal("withPersistentVolumeName", capability.MethodName);
+        Assert.Equal("string", capability.Parameters.Single().Type?.TypeId);
+        Assert.DoesNotContain("withConfiguration", generatedCode);
+
+        Assert.Contains(
+            generatedCode.Split('\n'),
+            line => line.Contains("withPersistentVolumeName(", StringComparison.Ordinal) &&
+                line.Contains("persistentVolumeName: string", StringComparison.Ordinal));
+
+        var withoutStorageClassCapability = Assert.Single(
+            scanResult.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting.Kubernetes/withoutStorageClass");
+        Assert.Equal("withoutStorageClass", withoutStorageClassCapability.MethodName);
+        Assert.Empty(withoutStorageClassCapability.Parameters);
+
+        Assert.Contains(
+            generatedCode.Split('\n'),
+            line => line.Contains("withoutStorageClass()", StringComparison.Ordinal));
+    }
+
     // ===== 2-Pass Scanning / Cross-Assembly Expansion Tests =====
 
     [Fact]
