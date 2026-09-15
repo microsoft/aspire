@@ -258,11 +258,27 @@ public static class MySqlBuilderExtensions
         var phpMyAdminContainerBuilder = builder.ApplicationBuilder.AddResource(phpMyAdminContainer)
                                                 .WithImage(MySqlContainerImageTags.PhpMyAdminImage, MySqlContainerImageTags.PhpMyAdminTag)
                                                 .WithImageRegistry(MySqlContainerImageTags.Registry)
-                                                .WithHttpEndpoint(targetPort: 80, name: "http")
+                                                .WithHttpEndpoint(targetPort: 80, name: PhpMyAdminContainerResource.PrimaryEndpointName)
                                                 .WithIconName("WindowDatabase")
                                                 .ExcludeFromManifest();
 
-        AddManagementLinks(phpMyAdminContainerBuilder, "http", "Manage");
+        phpMyAdminContainerBuilder.WithHidden();
+        builder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var mySqlResource in @event.Model.Resources.OfType<MySqlServerResource>())
+            {
+                phpMyAdminContainerBuilder.WithRelationship(mySqlResource, KnownRelationshipTypes.Manages);
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                builder.ApplicationBuilder.CreateResourceBuilder(mySqlResource).WithUrlForEndpoint(phpMyAdminContainer.PrimaryEndpoint, url =>
+                {
+                    url.DisplayText = "Manage";
+                    url.DisplayOrder = 1;
+                });
+#pragma warning restore CS0618
+            }
+
+            return Task.CompletedTask;
+        });
 
         builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(phpMyAdminContainer, async (e, ct) =>
         {
@@ -325,40 +341,6 @@ public static class MySqlBuilderExtensions
         phpMyAdminContainerBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
         return builder;
-    }
-
-    /// <summary>
-    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpointName"/>
-    /// endpoint to every <see cref="MySqlServerResource"/> in the app.
-    /// </summary>
-    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, string endpointName, string displayText)
-        where T : IResourceWithEndpoints
-    {
-        resourceBuilder.WithHidden();
-
-        var endpoint = resourceBuilder.GetEndpoint(endpointName);
-        resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
-        {
-            foreach (var mySqlResource in @event.Model.Resources.OfType<MySqlServerResource>())
-            {
-                if (!resourceBuilder.Resource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(r => r.Type == KnownRelationshipTypes.Manages && r.Resource == mySqlResource))
-                {
-                    resourceBuilder.WithRelationship(mySqlResource, KnownRelationshipTypes.Manages);
-                }
-
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
-                mySqlResource.Annotations.Add(new ResourceUrlAnnotation
-                {
-                    Url = "/",
-                    DisplayText = displayText,
-                    Endpoint = endpoint,
-                    DisplayOrder = 1
-                });
-#pragma warning restore CS0618
-            }
-
-            return Task.CompletedTask;
-        });
     }
 
     /// <summary>

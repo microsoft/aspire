@@ -2245,20 +2245,27 @@ public static class ResourceBuilderExtensions
     public static IResourceBuilder<T> WithUrlForEndpoint<T>(this IResourceBuilder<T> builder, string endpointName, Action<ResourceUrlAnnotation> callback)
         where T : IResource
     {
-        builder.WithUrls(context =>
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpointName);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        if (builder.Resource is IResourceWithEndpoints resource)
         {
-            var urlForEndpoint = context.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == endpointName);
-            if (urlForEndpoint is not null)
+            return builder.WithUrlForEndpoint(resource.GetEndpoint(endpointName), callback);
+        }
+
+        return builder.WithUrls(context =>
+        {
+            var url = context.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == endpointName);
+            if (url is not null)
             {
-                callback(urlForEndpoint);
+                callback(url);
             }
             else
             {
                 context.Logger.LogWarning("Could not execute callback to customize endpoint URL as no endpoint with name '{EndpointName}' could be found on resource '{ResourceName}'.", endpointName, builder.Resource.Name);
             }
         });
-
-        return builder;
     }
 
     /// <summary>
@@ -2307,6 +2314,53 @@ public static class ResourceBuilderExtensions
         });
 
         return builder;
+    }
+
+    /// <summary>
+    /// Configures the URL for an endpoint, including an endpoint on another resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The builder for the resource that will display the URL.</param>
+    /// <param name="endpoint">The endpoint to link to.</param>
+    /// <param name="callback">The callback that configures the URL.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// The callback runs after endpoints have been allocated. An existing URL for the endpoint is updated.
+    /// When the endpoint belongs to another resource, a URL is added with its endpoint set before the callback runs.
+    /// A relative URL is combined with the referenced endpoint's URL.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the endpoint name overload for withUrlForEndpoint.")]
+    public static IResourceBuilder<T> WithUrlForEndpoint<T>(this IResourceBuilder<T> builder, EndpointReference endpoint, Action<ResourceUrlAnnotation> callback)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.WithUrls(context =>
+        {
+            if (endpoint.Exists)
+            {
+                var url = context.Urls.FirstOrDefault(u => ReferenceEquals(u.Endpoint?.Resource, endpoint.Resource) && u.Endpoint?.EndpointName == endpoint.EndpointName);
+                if (url is null)
+                {
+                    if (ReferenceEquals(builder.Resource, endpoint.Resource))
+                    {
+                        context.Logger.LogWarning("Could not execute callback to customize endpoint URL as no URL for endpoint '{EndpointName}' could be found on resource '{ResourceName}'.", endpoint.EndpointName, builder.Resource.Name);
+                        return;
+                    }
+
+                    url = new ResourceUrlAnnotation { Url = "/", Endpoint = endpoint };
+                    context.Urls.Add(url);
+                }
+
+                callback(url);
+            }
+            else
+            {
+                context.Logger.LogWarning("Could not execute callback to add an endpoint URL as no endpoint with name '{EndpointName}' could be found on resource '{ResourceName}'.", endpoint.EndpointName, endpoint.Resource.Name);
+            }
+        });
     }
 
     /// <summary>
@@ -4506,7 +4560,12 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(type);
 
-        return builder.WithAnnotation(new ResourceRelationshipAnnotation(resource, type));
+        if (!builder.Resource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(r => ReferenceEquals(r.Resource, resource) && r.Type == type))
+        {
+            builder.WithAnnotation(new ResourceRelationshipAnnotation(resource, type));
+        }
+
+        return builder;
     }
 
     /// <summary>

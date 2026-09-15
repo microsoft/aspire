@@ -211,7 +211,7 @@ public static class PostgresBuilderExtensions
                                                  .WithImage(PostgresContainerImageTags.PgAdminImage, PostgresContainerImageTags.PgAdminTag)
                                                  .WithImageRegistry(PostgresContainerImageTags.PgAdminRegistry)
                                                  .WithIconName("WindowDatabase")
-                                                 .WithHttpEndpoint(targetPort: 80, name: "http")
+                                                 .WithHttpEndpoint(targetPort: 80, name: PgAdminContainerResource.PrimaryEndpointName)
                                                  .WithEnvironment(SetPgAdminEnvironmentVariables)
                                                  .WithHttpHealthCheck("/browser")
                                                  .ExcludeFromManifest();
@@ -232,7 +232,7 @@ public static class PostgresBuilderExtensions
                     ];
                 });
 
-            AddManagementLinks(pgAdminContainerBuilder, "http", "Manage (pgAdmin)");
+            AddManagementLinks(pgAdminContainerBuilder, pgAdminContainer.PrimaryEndpoint, "Manage (pgAdmin)");
 
             configureContainer?.Invoke(pgAdminContainerBuilder);
 
@@ -324,12 +324,12 @@ public static class PostgresBuilderExtensions
                                                .WithImage(PostgresContainerImageTags.PgWebImage, PostgresContainerImageTags.PgWebTag)
                                                .WithImageRegistry(PostgresContainerImageTags.PgWebRegistry)
                                                .WithIconName("WindowDatabase")
-                                               .WithHttpEndpoint(targetPort: 8081, name: "http")
+                                               .WithHttpEndpoint(targetPort: 8081, name: PgWebContainerResource.PrimaryEndpointName)
                                                .WithArgs("--bookmarks-dir=/.pgweb/bookmarks")
                                                .WithArgs("--sessions")
                                                .ExcludeFromManifest();
 
-            AddManagementLinks(pgwebContainerBuilder, "http", "Manage (pgweb)");
+            AddManagementLinks(pgwebContainerBuilder, pgwebContainer.PrimaryEndpoint, "Manage (pgweb)");
 
             configureContainer?.Invoke(pgwebContainerBuilder);
 
@@ -417,31 +417,25 @@ public static class PostgresBuilderExtensions
     }
 
     /// <summary>
-    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpointName"/>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpoint"/>
     /// endpoint to every <see cref="PostgresServerResource"/> in the app.
     /// </summary>
-    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, string endpointName, string displayText)
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, EndpointReference endpoint, string displayText)
         where T : IResourceWithEndpoints
     {
         resourceBuilder.WithHidden();
 
-        var endpoint = resourceBuilder.GetEndpoint(endpointName);
         resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
         {
             foreach (var postgresResource in @event.Model.Resources.OfType<PostgresServerResource>())
             {
-                if (!resourceBuilder.Resource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(r => r.Type == KnownRelationshipTypes.Manages && r.Resource == postgresResource))
-                {
-                    resourceBuilder.WithRelationship(postgresResource, KnownRelationshipTypes.Manages);
-                }
+                resourceBuilder.WithRelationship(postgresResource, KnownRelationshipTypes.Manages);
 
 #pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
-                postgresResource.Annotations.Add(new ResourceUrlAnnotation
+                resourceBuilder.ApplicationBuilder.CreateResourceBuilder(postgresResource).WithUrlForEndpoint(endpoint, url =>
                 {
-                    Url = "/",
-                    DisplayText = displayText,
-                    Endpoint = endpoint,
-                    DisplayOrder = 1
+                    url.DisplayText = displayText;
+                    url.DisplayOrder = 1;
                 });
 #pragma warning restore CS0618
             }

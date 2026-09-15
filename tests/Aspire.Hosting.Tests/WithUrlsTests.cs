@@ -913,6 +913,38 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithUrlForEndpointCanLinkToAnotherResourcesEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var manager = builder.AddProject<ProjectA>("manager").WithHttpEndpoint(name: "http");
+        var managed = builder.AddProject<ProjectB>("managed");
+        managed.WithUrlForEndpoint(manager.GetEndpoint("http"), url =>
+        {
+            Assert.Same(manager.Resource, url.Endpoint?.Resource);
+            url.Url = "/admin";
+            url.DisplayText = "Manage";
+        });
+
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        managed.OnBeforeResourceStarted((_, _, _) =>
+        {
+            tcs.SetResult();
+            return Task.CompletedTask;
+        });
+
+        await using var app = await builder.BuildAsync();
+        await app.StartAsync();
+        await tcs.Task.DefaultTimeout();
+
+        var url = Assert.Single(managed.Resource.Annotations.OfType<ResourceUrlAnnotation>(), u => u.DisplayText == "Manage");
+        Assert.Same(manager.Resource, url.Endpoint?.Resource);
+        Assert.Equal($"{manager.GetEndpoint("http").Url.TrimEnd('/')}/admin", url.Url);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
+    }
+
+    [Fact]
     public async Task WithUrlsTurnsRelativeEndpointUrlsIntoAbsoluteUrls()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
