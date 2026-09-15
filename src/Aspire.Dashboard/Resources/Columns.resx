@@ -153,6 +153,9 @@
   <data name="PersistentContainerIconTooltip" xml:space="preserve">
     <value>This container is persistent and won't be stopped when the app host is shut down.</value>
   </data>
+  <data name="HiddenResourceIconTooltip" xml:space="preserve">
+    <value>This resource is hidden by default. It's only shown because "Show hidden resources" is turned on.</value>
+  </data>
   <data name="StateColumnResourceContainerRuntimeUnhealthy" xml:space="preserve">
     <value>Container runtime was found but appears to be unhealthy. Ensure that it is running.
 For more information, see https://aka.ms/aspire/container-runtime-unhealthy.</value>

@@ -62,6 +62,14 @@
     padding-inline-start: 0;
 }
 
+::deep tr.resource-row-hidden {
+    background-color: var(--colorNeutralBackground3);
+}
+
+::deep tr.resource-row-hidden > td {
+    opacity: 0.7;
+}
+
 ::deep .resources-summary-layout {
     display: grid;
     grid-template-rows: 1fr auto;
