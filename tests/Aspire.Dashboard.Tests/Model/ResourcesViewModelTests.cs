@@ -28,6 +28,23 @@ public sealed class ResourcesViewModelTests
     }
 
     [Fact]
+    public void GraphView_ExcludesParameters()
+    {
+        var vm = new ResourcesViewModel
+        {
+            SelectedViewKind = ResourceViewKind.Graph,
+            TextFilter = ""
+        };
+        vm.ResourceTypesToVisibility[KnownResourceTypes.Parameter] = true;
+        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+
+        var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.Running);
+
+        Assert.False(vm.Filter(resource));
+    }
+
+    [Fact]
     public void ParametersView_ShowsOnlyParameters()
     {
         var vm = new ResourcesViewModel

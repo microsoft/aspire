@@ -29,7 +29,6 @@ public class ConfigureDefaultDcpOptionsTests
         Assert.Equal(managedPath, options.TerminalHostPath);
         Assert.Equal("terminalhost", options.TerminalHostInvocationArgs);
     }
-
     [Fact]
     public void TerminalHostFallbackDoesNotApplyWhenDashboardPathIsNotAspireManaged()
     {
@@ -117,4 +116,3 @@ public class ConfigureDefaultDcpOptionsTests
         return options;
     }
 }
-

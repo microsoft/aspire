@@ -12,7 +12,7 @@
   },
   "include": [
     "src/**/*.ts",
-    ".modules/**/*.ts"
+    ".aspire/modules/**/*.mts"
   ],
   "exclude": [
     "node_modules",

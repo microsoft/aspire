@@ -21,9 +21,44 @@ namespace Aspire.Cli.Tests.Projects;
 public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public void IsAppHostProjectMatchesFilesystemAliases()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var realDirectory = workspace.CreateDirectory("real");
+        var appHostProject = new FileInfo(Path.Combine(realDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostProject.FullName, "<Project />");
+
+        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        TestSymlinkHelper.TryCreateSymlink(symlinkDirectory, realDirectory.FullName);
+        var appHostProjectViaSymlink = new FileInfo(Path.Combine(symlinkDirectory, appHostProject.Name));
+
+        Assert.True(ProjectUpdater.IsAppHostProject(appHostProjectViaSymlink, appHostProject));
+    }
+
+    [Fact]
+    public void IsAppHostProjectPreservesCaseDistinctPaths()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows filesystem paths are compared case-insensitively.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var lowerCaseProject = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.csproj"));
+        File.WriteAllText(lowerCaseProject.FullName, "<Project />");
+        var upperCaseProject = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        Assert.SkipWhen(upperCaseProject.Exists,
+            "This test requires a case-sensitive filesystem.");
+        File.WriteAllText(upperCaseProject.FullName, "<Project />");
+
+        Assert.False(ProjectUpdater.IsAppHostProject(lowerCaseProject, upperCaseProject));
+    }
+
+    [Fact]
     public async Task UpdateProjectFileAsync_DoesAttemptToUpdateIfNoUpdatesRequired()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var srcFolder = workspace.CreateDirectory("src");
 
@@ -133,7 +168,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_CanUpdateFromStableToDaily()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var srcFolder = workspace.CreateDirectory("src");
 
@@ -157,13 +192,14 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // Pre-existing aspire.config.json pinned to a (stale) channel — the updater should
         // rewrite the channel to match the resolved explicit channel after the update completes.
         // See https://github.com/microsoft/aspire/issues/17295.
-        var aspireConfigFile = new FileInfo(Path.Combine(appHostFolder.FullName, "aspire.config.json"));
+        var aspireConfigFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"));
         await File.WriteAllTextAsync(
             aspireConfigFile.FullName,
             """
             {
-              "appHost": { "path": "UpdateTester.AppHost.csproj" },
-              "channel": "stable"
+              "appHost": { "path": "UpdateTester.AppHost/UpdateTester.AppHost.csproj" },
+              "channel": "stable",
+              "sdk": { "version": "9.4.1" }
             }
             """);
 
@@ -287,6 +323,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var updatedConfig = await File.ReadAllTextAsync(aspireConfigFile.FullName);
         using var configDoc = JsonDocument.Parse(updatedConfig);
         Assert.Equal("daily", configDoc.RootElement.GetProperty("channel").GetString());
+        Assert.Equal("9.5.0-preview.1", configDoc.RootElement.GetProperty("sdk").GetProperty("version").GetString());
     }
 
     [Fact]
@@ -295,7 +332,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // Sibling of UpdateProjectFileAsync_CanUpdateFromStableToDaily covering the case where
         // the AppHost project predates aspire.config.json (legacy split layouts, pre-init projects).
         // `aspire update` must not fabricate a fresh aspire.config.json — that's `aspire init`'s job.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var srcFolder = workspace.CreateDirectory("src");
 
@@ -402,7 +439,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_CanUpdateFromDailyToStableWhereOnePackageIsUnstableOnly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var srcFolder = workspace.CreateDirectory("src");
 
@@ -574,7 +611,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_PackageNotInChannel_LogsWarningAndContinues()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -688,7 +725,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_DiamondDependency_DoesNotDuplicateUpdates()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create diamond dependency scenario:
         // AppHost -> ProjectA, ProjectB
@@ -827,7 +864,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_CentralPackageManagement_UpdatesDirectoryPackagesProps()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var serviceDefaultsFolder = workspace.CreateDirectory("UpdateTester.ServiceDefaults");
         var serviceDefaultsProjectFile = new FileInfo(Path.Combine(serviceDefaultsFolder.FullName, "UpdateTester.ServiceDefaults.csproj"));
@@ -963,7 +1000,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_CentralPackageManagement_DetectedByDirectoryPackagesProps()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -1065,7 +1102,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_CentralPackageManagement_PackageNotInDirectoryPackagesProps()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -1187,7 +1224,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // the SDK update step. The updater must still detect the orphan
         // PackageVersion and remove it.
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -1298,7 +1335,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // PackageReference is now redundant and must be removed even when no
         // SDK version bump is required. No CPM is involved here.
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -1377,7 +1414,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // no orphan references must not be touched. Guards against the new
         // cleanup path enqueuing spurious update steps.
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -1454,7 +1491,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // will silently survive the cleanup and break the next restore with
         // NU1009.
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -1547,7 +1584,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // When updating to the stable channel (maps Aspire* to nuget.org, so no config is
         // needed) and no project-local nuget.config exists, the updater should NOT create one.
         // See: https://github.com/microsoft/aspire/issues/18124
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);
 
         var services = CreateNuGetConfigTestServices(workspace, "9.5.0", "nuget.org");
@@ -1568,7 +1605,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // exists (e.g. from a previous daily channel), the updater should update it to
         // clean up old feeds.
         // See: https://github.com/microsoft/aspire/issues/18124
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);
 
         // Pre-existing nuget.config from a previous daily channel
@@ -1616,7 +1653,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     {
         // Contrast: when updating to the daily channel (routes Aspire* to a custom feed),
         // the updater should create a nuget.config if none exists.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);
 
         var services = CreateNuGetConfigTestServices(workspace, "9.5.0-preview.1", "daily");
@@ -1732,38 +1769,41 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ChannelUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WithExistingChannel()
+    public void ProjectConfigUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WithExistingValues()
     {
-        var step = new ChannelUpdateStep(
+        var step = new ProjectConfigUpdateStep(
             "Update aspire.config.json channel from 'pr-17452' to 'stable'",
             () => Task.CompletedTask,
             "pr-17452",
-            "stable");
+            "stable",
+            "13.4.0",
+            "13.5.0");
 
         Assert.Equal(
-            "[bold yellow]aspire.config.json#channel[/] [bold green]pr-17452[/] to [bold green]stable[/]",
+            "[bold yellow]aspire.config.json#channel[/] [bold green]pr-17452[/] to [bold green]stable[/], [bold yellow]aspire.config.json#sdk.version[/] [bold green]13.4.0[/] to [bold green]13.5.0[/]",
             step.GetFormattedDisplayText());
     }
 
     [Fact]
-    public void ChannelUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WhenChannelAbsent()
+    public void ProjectConfigUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WhenValuesAbsent()
     {
-        var step = new ChannelUpdateStep(
+        var step = new ProjectConfigUpdateStep(
             "Update aspire.config.json channel from '(none)' to 'stable'",
             () => Task.CompletedTask,
             CurrentChannel: null,
-            NewChannel: "stable");
+            NewChannel: "stable",
+            CurrentSdkVersion: null,
+            NewSdkVersion: "13.5.0");
 
-        // Markup-escaped grey placeholder for absent channel value.
         Assert.Equal(
-            "[bold yellow]aspire.config.json#channel[/] [grey](none)[/] to [bold green]stable[/]",
+            "[bold yellow]aspire.config.json#channel[/] [grey](none)[/] to [bold green]stable[/], [bold yellow]aspire.config.json#sdk.version[/] [grey](unknown)[/] to [bold green]13.5.0[/]",
             step.GetFormattedDisplayText());
     }
 
     [Fact]
     public async Task UpdateProjectFileAsync_CentralPackageManagement_ResolvesAspireVersionProperty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -1876,7 +1916,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_CentralPackageManagement_ResolvesMultipleProperties()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -2000,7 +2040,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_CentralPackageManagement_PropertyResolutionFailsWithInvalidSemanticVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -2114,7 +2154,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_CentralPackageManagement_PropertyResolutionFailsWithUnresolvableProperty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -2225,7 +2265,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProject_FallbackMode_WhenSdkUnresolvable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -2319,7 +2359,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FallbackMode_PackageReferenceWithoutVersion_CPM()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -2421,7 +2461,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FallbackMode_InvalidXml_StillFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -2500,7 +2540,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NormalMode_NoFallback()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -2582,7 +2622,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_SingleFileAppHost_UpdatesSdkDirectiveWithVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostFile = new FileInfo(Path.Combine(appHostFolder.FullName, "apphost.cs"));
@@ -2675,7 +2715,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // the user's stable version.
         // See https://github.com/dotnet/aspire/issues/15891.
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostFile = new FileInfo(Path.Combine(appHostFolder.FullName, "apphost.cs"));
@@ -2769,7 +2809,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // `#:package Aspire.Hosting.AppHost@<version>` directive so a re-run of
         // `aspire update` after a partial migration recovers cleanly.
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostFile = new FileInfo(Path.Combine(appHostFolder.FullName, "apphost.cs"));
@@ -2845,7 +2885,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_SingleFileAppHost_UpdatesSdkDirectiveWithWildcard()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostFile = new FileInfo(Path.Combine(appHostFolder.FullName, "apphost.cs"));
@@ -2927,7 +2967,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_PackageReferenceWithWildcard_DoesNotFail()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -3013,7 +3053,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_AppHost_UpdatesSdkAttributeFormat()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -3091,7 +3131,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_AppHost_UpdatesSdkElementFormat()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -3169,7 +3209,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_TreatsVersionRangeExpressionsLikeWildcard()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -3293,7 +3333,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_ManagePackageVersionsCentrallyFalse_UpdatesLocalProjectFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -3422,7 +3462,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     public async Task UpdateSdkVersionInCsprojAppHostAsync_MigratesFromOldFormatToNewFormat(string projectExtension)
     {
         // Arrange - tests migration from old <Sdk Name="..."> to new <Project Sdk="..."> format
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
@@ -3455,7 +3495,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     public async Task UpdateSdkVersionInCsprojAppHostAsync_UpdatesExistingNewFormat(string projectExtension)
     {
         // Arrange - tests updating a project already using the new format
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Aspire.AppHost.Sdk/13.0.1">
@@ -3487,7 +3527,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesAspireHostingAppHostPackageReference(string projectExtension)
     {
         // Arrange - tests removal of obsolete Aspire.Hosting.AppHost package reference
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
@@ -3524,7 +3564,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesEmptyItemGroupAfterPackageRemoval(string projectExtension)
     {
         // Arrange - tests that empty ItemGroup is removed after Aspire.Hosting.AppHost removal
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
@@ -3560,7 +3600,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     public async Task UpdateSdkVersionInCsprojAppHostAsync_PreservesOtherSdksInAttribute(string projectExtension)
     {
         // Arrange - tests that other SDKs in the attribute are preserved
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Aspire.AppHost.Sdk/13.0.1;Microsoft.NET.Sdk.Web">
@@ -3593,7 +3633,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     {
         // Arrange - tests that Aspire.AppHost.SdkFoo doesn't match as the Aspire SDK
         // In this case, the old <Sdk Name="..."> element is used, so it's a migration scenario
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Aspire.AppHost.SdkFoo/1.0.0">
@@ -3630,7 +3670,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // PackageReference is removed from csproj but the orphaned PackageVersion
         // must also be removed to avoid NU1009.
         // See: https://github.com/microsoft/aspire/issues/14550
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
@@ -3699,7 +3739,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_AppliesAllPackageEditsBeforeFinalRestore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("Issue15891.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "Issue15891.AppHost.csproj"));
@@ -3813,7 +3853,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_StableChannel_DoesNotCreateNuGetConfigWhenNoneExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -3890,7 +3930,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_StableChannel_UpdatesExistingNuGetConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -3980,7 +4020,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectFileAsync_DailyChannel_CreatesNuGetConfigWhenNoneExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));

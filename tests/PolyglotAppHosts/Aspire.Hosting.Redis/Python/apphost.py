@@ -1,7 +1,11 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import RedisModules, create_builder
+from aspire_app import RedisCommanderResource, RedisModules, create_builder
+
+
+def configure_redis_commander(container: RedisCommanderResource) -> None:
+    container.with_host_port(port=8082)
 
 
 with create_builder() as builder:
@@ -9,12 +13,12 @@ with create_builder() as builder:
     password = builder.add_parameter("parameter")
     cache = builder.add_redis("resource")
     # addRedis — overload with explicit port
-    cache2 = builder.add_redis("resource", 6380)
+    cache2 = builder.add_redis("resource", port=6380)
     # withDataVolume + withPersistence — fluent chaining on RedisResource
     cache.with_data_volume()
     cache.with_persistence()
     # withDataBindMount on RedisResource
-    cache2.with_data_bind_mount()
+    cache2.with_data_bind_mount("./data")
     # withModule on RedisResource - well-known and custom module paths
     cache.with_module(RedisModules.Json)
     cache.with_module("/opt/redis/custom-module.so")
@@ -22,9 +26,9 @@ with create_builder() as builder:
     cache.with_host_port()
     # withPassword on RedisResource
     new_password = builder.add_parameter("parameter")
-    cache2.with_password()
+    cache2.with_password(new_password)
     # withRedisCommander — with configureContainer callback exercising withHostPort
-    cache.with_redis_commander()
+    cache.with_redis_commander(configure_container=configure_redis_commander)
     # withRedisInsight — with configureContainer callback exercising withHostPort, withDataVolume, withDataBindMount
     cache.with_redis_insight()
     # ---- Property access on RedisResource (ExposeProperties = true) ----

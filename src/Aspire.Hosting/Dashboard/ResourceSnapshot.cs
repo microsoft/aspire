@@ -63,10 +63,22 @@ internal abstract class ResourceSnapshot
         {
             string s => Value.ForString(s),
             int i => Value.ForNumber(i),
+            IEnumerable<KeyValuePair<string, string>> properties => ConvertToValue(properties),
             IEnumerable<string> list => Value.ForList(list.Select(Value.ForString).ToArray()),
             IEnumerable<int> list => Value.ForList(list.Select(i => Value.ForNumber(i)).ToArray()),
             null => Value.ForNull(),
             _ => Value.ForString(value.ToString())
         };
+    }
+
+    private static Value ConvertToValue(IEnumerable<KeyValuePair<string, string>> properties)
+    {
+        var structValue = new Struct();
+        foreach (var property in properties)
+        {
+            structValue.Fields[property.Key] = ConvertToValue(property.Value);
+        }
+
+        return new Value { StructValue = structValue };
     }
 }

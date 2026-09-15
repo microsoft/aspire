@@ -1,0 +1,32 @@
+﻿services:
+  project:
+    image: "${PROJECT_IMAGE}"
+    environment:
+      OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
+      DATA_PATH: "/srv/project"
+    volumes:
+      - type: "volume"
+        target: "/srv/project"
+        source: "project-data"
+        read_only: false
+    networks:
+      - "aspire"
+  executable:
+    image: "${EXECUTABLE_IMAGE}"
+    environment:
+      DATA_PATH: "/srv/executable"
+    volumes:
+      - type: "volume"
+        target: "/srv/executable"
+        source: "executable-data"
+        read_only: false
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"
+volumes:
+  project-data:
+    driver: "local"
+  executable-data:
+    driver: "local"

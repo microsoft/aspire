@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Resize;
@@ -152,8 +153,9 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Act 2
         logger.LogInformation("Changing resource.");
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("test-resource2");
+        var selectedResource = resourceSelect.Instance.Resources!.Single(resource => resource.Name == "test-resource2");
+        var innerSelect = resourceSelect.FindComponent<FluentSelect<SelectViewModel<ResourceTypeDetails>, SelectViewModel<ResourceTypeDetails>>>();
+        await innerSelect.InvokeAsync(() => innerSelect.Instance.ValueChanged.InvokeAsync(selectedResource));
 
         // Assert 2
         logger.LogInformation("Waiting for selected resource.");
@@ -168,7 +170,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ToggleHiddenResources_HiddenResourceVisibilityAndSelection_WorksCorrectly()
+    public async Task ToggleHiddenResources_HiddenResourceVisibilityAndSelection_WorksCorrectly()
     {
         // Arrange
         var regularResource1 = ModelTestHelpers.CreateResource(resourceName: "regular-resource1", state: KnownResourceState.Running);
@@ -201,24 +203,18 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             var resourceSelect = cut.FindComponent<ResourceSelect>();
-            var selectElement = resourceSelect.Find("fluent-select");
-            var selectOptions = selectElement.QuerySelectorAll("fluent-option");
-
             // Should have "All" + 2 regular resources when resources are loaded
-            Assert.Equal(3, selectOptions.Length);
+            Assert.Equal(3, resourceSelect.Instance.Resources!.Count());
         });
 
         // Initially, hidden resources should not be shown
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var selectElement = resourceSelect.Find("fluent-select");
-        var selectOptions = selectElement.QuerySelectorAll("fluent-option");
-
         // Should have "All" + 2 regular resources (hidden resource filtered out)
-        Assert.Equal(3, selectOptions.Length);
-        var optionValues = selectOptions.Select(opt => opt.GetAttribute("value")).ToList();
-        Assert.Contains("regular-resource1", optionValues);
-        Assert.Contains("regular-resource2", optionValues);
-        Assert.DoesNotContain("hidden-resource", optionValues);
+        Assert.Collection(
+            resourceSelect.Instance.Resources!,
+            resource => Assert.Equal(Resources.ControlsStrings.LabelAll, resource.Name),
+            resource => Assert.Equal("regular-resource1", resource.Name),
+            resource => Assert.Equal("regular-resource2", resource.Name));
 
         // Act & Assert 2: Click the settings menu button to show the menu, then click "Show hidden resources"
         var settingsMenuButton = cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
@@ -226,46 +222,40 @@ public partial class ConsoleLogsTests : DashboardTestContext
         settingsMenuButton.Click();
 
         // Find and click the "Show hidden resources" menu item
-        cut.WaitForAssertion(() =>
-        {
-            var showHiddenMenuItem = cut.Find("fluent-menu-item:contains('" + Resources.ControlsStrings.ShowHiddenResources + "')");
-            Assert.NotNull(showHiddenMenuItem);
-            showHiddenMenuItem.Click();
-        });
+        var settingsMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ControlsStrings.ShowHiddenResources));
+        var showHiddenMenuItem = settingsMenu.Instance.Items.Single(i => i.Text == Resources.ControlsStrings.ShowHiddenResources);
+        Assert.NotNull(showHiddenMenuItem.OnClick);
+        await cut.InvokeAsync(() => settingsMenu.Instance.OpenChanged.InvokeAsync(false));
+        await cut.InvokeAsync(showHiddenMenuItem.OnClick);
+        cut.Render();
 
         // Wait for UI to update
         cut.WaitForAssertion(() =>
         {
-            var updatedOptions = selectElement.QuerySelectorAll("fluent-option");
             // Should now have "All" + all three resources
-            Assert.Equal(4, updatedOptions.Length);
-            var updatedOptionValues = updatedOptions.Select(opt => opt.GetAttribute("value")).ToList();
-            Assert.Contains("regular-resource1", updatedOptionValues);
-            Assert.Contains("regular-resource2", updatedOptionValues);
-            Assert.Contains("hidden-resource", updatedOptionValues);
+            Assert.Equal(
+                new[] { Resources.ControlsStrings.LabelAll, "regular-resource1", "regular-resource2", "hidden-resource" }.Order(),
+                cut.FindComponent<ResourceSelect>().Instance.Resources!.Select(resource => resource.Name).Order());
         });
 
-        // Act & Assert 3: Click the settings menu button again and click "Hide hidden resources" to hide them again
+        // Act & Assert 3: Click "Hide hidden resources" to hide them again
         // Note: We stay on "All" view to test the hide functionality
+        cut.WaitForAssertion(() => Assert.False(settingsMenu.Instance.Open));
         settingsMenuButton.Click();
-
-        cut.WaitForAssertion(() =>
-        {
-            var hideHiddenMenuItem = cut.Find("fluent-menu-item:contains('" + Resources.ControlsStrings.HideHiddenResources + "')");
-            Assert.NotNull(hideHiddenMenuItem);
-            hideHiddenMenuItem.Click();
-        });
+        settingsMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ControlsStrings.HideHiddenResources));
+        var hideHiddenMenuItem = settingsMenu.Instance.Items.Single(i => i.Text == Resources.ControlsStrings.HideHiddenResources);
+        Assert.NotNull(hideHiddenMenuItem.OnClick);
+        await cut.InvokeAsync(() => settingsMenu.Instance.OpenChanged.InvokeAsync(false));
+        await cut.InvokeAsync(hideHiddenMenuItem.OnClick);
+        cut.Render();
 
         // Wait for UI to update - hidden resource should be filtered out
         cut.WaitForAssertion(() =>
         {
-            var finalOptions = selectElement.QuerySelectorAll("fluent-option");
             // Should be back to "All" + 2 regular resources only
-            Assert.Equal(3, finalOptions.Length);
-            var finalOptionValues = finalOptions.Select(opt => opt.GetAttribute("value")).ToList();
-            Assert.Contains("regular-resource1", finalOptionValues);
-            Assert.Contains("regular-resource2", finalOptionValues);
-            Assert.DoesNotContain("hidden-resource", finalOptionValues);
+            Assert.Equal(
+                new[] { Resources.ControlsStrings.LabelAll, "regular-resource1", "regular-resource2" }.Order(),
+                cut.FindComponent<ResourceSelect>().Instance.Resources!.Select(resource => resource.Name).Order());
         });
     }
 
@@ -371,6 +361,135 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task CurrentRun_SubscribesToLiveConsoleLogs()
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var liveSubscriptionTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var liveConsoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var repositoryConsoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var repositorySubscriptionCount = 0;
+        var liveClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: resourceName =>
+            {
+                liveSubscriptionTcs.TrySetResult(resourceName);
+                return liveConsoleLogsChannel;
+            },
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        var currentResourceRepository = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ =>
+            {
+                Interlocked.Increment(ref repositorySubscriptionCount);
+                return repositoryConsoleLogsChannel;
+            },
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+
+        SetupConsoleLogsServices(liveClient, resourceRepository: currentResourceRepository);
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var cut = RenderConsoleLogsPage(viewport, testResource.Name);
+
+        Assert.Equal(testResource.Name, await liveSubscriptionTcs.Task.DefaultTimeout());
+        Assert.Equal(0, Volatile.Read(ref repositorySubscriptionCount));
+
+        liveConsoleLogsChannel.Writer.TryWrite([new ResourceLogLine(1, "Live log", IsErrorMessage: false)]);
+        cut.WaitForState(() => cut.Instance._logEntries.EntriesCount == 1);
+        Assert.Equal("Live log", Assert.Single(cut.Instance._logEntries.GetEntries()).RawContent);
+    }
+
+    [Theory]
+    [InlineData(false, "Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.")]
+    [InlineData(true, "No logs found")]
+    public void HistoricalRun_NoLogs_DisplaysCaptureStatus(bool consoleLogsWereLoaded, string expectedMessage)
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        testResource.ConsoleLogsLoaded = consoleLogsWereLoaded;
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>(),
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            initialResources: [testResource],
+            isReadOnly: true);
+        SetupConsoleLogsServices(dashboardClient);
+
+        var cut = RenderConsoleLogsPage(CreateViewport(isDesktop: true), testResource.Name);
+
+        var emptyMessage = cut.WaitForElement(".console-empty-message", TimeSpan.FromSeconds(3));
+        Assert.Equal(expectedMessage, emptyMessage.TextContent.Trim());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SearchFilter_UpdatesLogViewerFilterAndVisibleLogs(bool isDesktop)
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        var viewport = CreateViewport(isDesktop);
+        SetupConsoleLogsServices(dashboardClient);
+        var dialogProvider = isDesktop ? null : RenderDialogProvider(viewport);
+
+        var cut = RenderConsoleLogsPage(viewport, resourceName: "test-resource");
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        consoleLogsChannel.Writer.TryWrite([
+            new ResourceLogLine(1, "apple log", IsErrorMessage: false),
+            new ResourceLogLine(2, "banana log", IsErrorMessage: false)
+        ]);
+
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".log-content").Count));
+
+        var search = isDesktop
+            ? Assert.Single(cut.FindComponents<FluentTextInput>())
+            : OpenMobileToolbarAndFindSearch(cut, dialogProvider!);
+        await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("banana"));
+
+        cut.WaitForAssertion(() =>
+        {
+            var logViewer = Assert.Single(cut.FindComponents<LogViewer>());
+            Assert.Equal("banana", logViewer.Instance.FilterText);
+
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("banana log", content.TextContent);
+        });
+    }
+
+    [Fact]
+    public void SearchFilter_MobileHasVisibleLabel()
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        var viewport = CreateViewport(isDesktop: false);
+        SetupConsoleLogsServices(dashboardClient);
+        var dialogProvider = RenderDialogProvider(viewport);
+
+        var cut = RenderConsoleLogsPage(viewport, resourceName: "test-resource");
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        var loc = Services.GetRequiredService<IStringLocalizer<Resources.ControlsStrings>>();
+        var search = OpenMobileToolbarAndFindSearch(cut, dialogProvider);
+
+        Assert.Equal(loc[nameof(Resources.ControlsStrings.FilterPlaceholder)].Value, search.Instance.Label);
+    }
+
+    [Fact]
     public async Task ReadingLogs_ErrorDuringRead_SetStatusAndLog()
     {
         // Arrange
@@ -471,7 +590,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ClearLogEntries_AllResources_LogsFilteredOut()
+    public async Task ClearLogEntries_AllResources_LogsFilteredOut()
     {
         // Arrange
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
@@ -518,13 +637,59 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.Find(".clear-button").Click();
 
         cut.WaitForElement("#clear-menu-all");
-        cut.Find("#clear-menu-all").Click();
+        var clearMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Id == "clear-menu-all"));
+        var clearAllMenuItem = clearMenu.Instance.Items.Single(i => i.Id == "clear-menu-all");
+        Assert.NotNull(clearAllMenuItem.OnClick);
+        await cut.InvokeAsync(clearAllMenuItem.OnClick);
+        cut.Render();
 
         cut.WaitForState(() => instance._logEntries.EntriesCount == 0);
+        var clearedConsoleLogs = Assert.Single(dashboardClient.ClearedConsoleLogs);
+        Assert.Collection(
+            clearedConsoleLogs.ResourceNames,
+            resourceName => Assert.Equal(testResource.Name, resourceName));
+        Assert.Equal(timeProvider.UtcNow.UtcDateTime, clearedConsoleLogs.ClearDate);
 
         logger.LogInformation("New log results are added to log viewer.");
         consoleLogsChannel.Writer.TryWrite([new ResourceLogLine(2, "2025-03-08T10:16:08Z Hello world", IsErrorMessage: false)]);
         cut.WaitForState(() => instance._logEntries.EntriesCount > 0);
+    }
+
+    [Fact]
+    public async Task ClearLogEntries_SelectedResource_DeletesPersistedLogsAndUpdatesFilter()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var selectedResource = ModelTestHelpers.CreateResource(resourceName: "selected-resource", state: KnownResourceState.Running);
+        var otherResource = ModelTestHelpers.CreateResource(resourceName: "other-resource", state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [selectedResource, otherResource]);
+        var timeProvider = new TestTimeProvider
+        {
+            UtcNow = new DateTime(2025, 2, 8, 10, 16, 8, DateTimeKind.Utc)
+        };
+        SetupConsoleLogsServices(dashboardClient, timeProvider: timeProvider);
+
+        var cut = RenderConsoleLogsPage(CreateViewport(isDesktop: true), selectedResource.Name);
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource.Id?.InstanceId == selectedResource.Name);
+
+        cut.Find(".clear-button").Click();
+        cut.WaitForElement("#clear-menu-resource");
+        var clearMenu = cut.FindComponents<AspireMenu>().Single(menu => menu.Instance.Items.Any(item => item.Id == "clear-menu-resource"));
+        var clearResourceMenuItem = clearMenu.Instance.Items.Single(item => item.Id == "clear-menu-resource");
+        Assert.NotNull(clearResourceMenuItem.OnClick);
+        await cut.InvokeAsync(clearResourceMenuItem.OnClick);
+
+        var clearedConsoleLogs = Assert.Single(dashboardClient.ClearedConsoleLogs);
+        Assert.Collection(
+            clearedConsoleLogs.ResourceNames,
+            resourceName => Assert.Equal(selectedResource.Name, resourceName));
+        Assert.Equal(timeProvider.UtcNow.UtcDateTime, clearedConsoleLogs.ClearDate);
+        Assert.Equal(timeProvider.UtcNow.UtcDateTime, Services.GetRequiredService<ConsoleLogsManager>().GetFilterDate(selectedResource.Name));
+        Assert.Null(Services.GetRequiredService<ConsoleLogsManager>().GetFilterDate(otherResource.Name));
     }
 
     [Fact]
@@ -581,6 +746,41 @@ public partial class ConsoleLogsTests : DashboardTestContext
         logger.LogInformation("New log results are added to log viewer.");
         consoleLogsChannel.Writer.TryWrite([new ResourceLogLine(2, "2025-03-08T10:16:08Z Hello world", IsErrorMessage: false)]);
         cut.WaitForState(() => instance._logEntries.EntriesCount > 0);
+    }
+
+    [Fact]
+    public async Task NavigateBack_AfterLogsDeleted_ReplayedLogsBeforeClearDateRemainFiltered()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        SetupConsoleLogsServices(dashboardClient);
+
+        var clearDate = new DateTime(2025, 2, 8, 10, 16, 8, DateTimeKind.Utc);
+        await dashboardClient.ClearConsoleLogsAsync([testResource.Name], clearDate);
+        var consoleLogsManager = Services.GetRequiredService<ConsoleLogsManager>();
+        await consoleLogsManager.UpdateFiltersAsync(ConsoleLogsFilters.Default.WithResourceCleared(testResource.Name, clearDate));
+
+        var cut = RenderConsoleLogsPage(CreateViewport(isDesktop: true), testResource.Name);
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        var clearedLog = "2025-02-08T10:16:08Z Cleared log";
+        var newLog = "2025-02-08T10:16:09Z New log";
+        consoleLogsChannel.Writer.TryWrite([
+            new ResourceLogLine(1, clearedLog, IsErrorMessage: false),
+            new ResourceLogLine(2, newLog, IsErrorMessage: false)
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var logEntry = Assert.Single(cut.Instance._logEntries.GetEntries());
+            Assert.Equal(newLog, logEntry.RawContent);
+        });
     }
 
     [Fact]
@@ -644,6 +844,51 @@ public partial class ConsoleLogsTests : DashboardTestContext
         {
             var highlightedCommands = cut.FindAll(".highlighted-command");
             Assert.Empty(highlightedCommands);
+        });
+    }
+
+    [Fact]
+    public void DashboardReadOnly_DisablesCommandButNotTelemetryActions()
+    {
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "test-resource",
+            state: KnownResourceState.Running,
+            commands:
+            [
+                new CommandViewModel(
+                    "test-command",
+                    CommandViewModelState.Enabled,
+                    "Test command",
+                    "Test command description",
+                    confirmationMessage: "",
+                    argumentInputs: [],
+                    isHighlighted: true,
+                    iconName: string.Empty,
+                    iconVariant: IconVariant.Regular)
+            ]);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>(),
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            initialResources: [resource],
+            isReadOnly: true);
+        SetupConsoleLogsServices(dashboardClient);
+        var viewport = CreateViewport(isDesktop: true);
+
+        var cut = RenderConsoleLogsPage(viewport, resource.Name);
+
+        cut.WaitForAssertion(() =>
+        {
+            var commandButton = cut.Find(".highlighted-command");
+            Assert.True(commandButton.HasAttribute("disabled"));
+
+            var clearButton = Assert.Single(
+                cut.FindComponents<FluentButton>(),
+                button => string.Equals(button.Instance.Class, "clear-button", StringComparison.Ordinal));
+            Assert.False(clearButton.Instance.Disabled);
+
+            var pauseButton = Assert.Single(cut.FindComponents<PauseIncomingDataSwitch>());
+            Assert.False(pauseButton.Instance.Disabled);
         });
     }
 
@@ -753,7 +998,19 @@ public partial class ConsoleLogsTests : DashboardTestContext
         logger.LogInformation("Pause logs.");
         var pauseResumeButton = cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("fluent-button");
         pauseResumeButton.Click();
-        cut.WaitForAssertion(() => Assert.True(pauseManager.ConsoleLogsPaused));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(pauseManager.ConsoleLogsPaused);
+            var activePause = pauseManager.ConsoleLogPauseIntervals[^1];
+            var pauseWarning = cut.FindComponent<PauseWarning>();
+            Assert.Equal(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    loc[nameof(Resources.ConsoleLogs.PauseInProgressText)],
+                    FormatHelpers.FormatTimeWithOptionalDate(timeProvider, activePause.Start)),
+                pauseWarning.Instance.PauseText);
+            Assert.Single(cut.Find("footer").QuerySelectorAll(".block-warning"));
+        });
 
         logger.LogInformation("Wait for pause log.");
         var pauseConsoleLogLine = cut.WaitForElement(".log-pause");
@@ -783,7 +1040,11 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // - the log viewer shows the new log
         // - the log viewer does not show the discarded log
         pauseResumeButton.Click();
-        cut.WaitForAssertion(() => Assert.False(pauseManager.ConsoleLogsPaused));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.False(pauseManager.ConsoleLogsPaused);
+            Assert.False(cut.HasComponent<PauseWarning>());
+        });
 
         logger.LogInformation("Assert that pause log has expected content.");
         cut.WaitForAssertion(() =>
@@ -830,8 +1091,9 @@ public partial class ConsoleLogsTests : DashboardTestContext
         }
     }
 
-    private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null)
+    private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null, IResourceRepository? resourceRepository = null)
     {
+        FluentUISetupHelpers.SetupFluentDialogProvider(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentList(this);
@@ -842,18 +1104,67 @@ public partial class ConsoleLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentToolbar(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll");
-        JSInterop.SetupVoid("resetContinuousScrollPosition");
+        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
+        JSInterop.SetupVoid("resetContinuousScrollPosition").SetVoidResult();
+        JSInterop.SetupVoid("focusElement", _ => true);
 
         FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
 
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
 
         Services.AddSingleton<ILoggerFactory>(loggerFactory);
-        Services.AddSingleton<IToastService, ToastService>();
         Services.AddSingleton<IconResolver>();
         Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
         Services.AddScoped<DashboardCommandExecutor>();
         Services.AddSingleton<ConsoleLogsManager>();
+
+        if (resourceRepository is not null)
+        {
+            // Registered after AddCommonDashboardServices, which otherwise forwards IResourceRepository to IDashboardClient.
+            Services.AddSingleton(resourceRepository);
+        }
+
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+    }
+
+    private IRenderedComponent<Components.Pages.ConsoleLogs> RenderConsoleLogsPage(ViewportInformation viewport, string resourceName)
+    {
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        return RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, resourceName);
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+    }
+
+    private static ViewportInformation CreateViewport(bool isDesktop)
+    {
+        return new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+    }
+
+    private static IRenderedComponent<FluentTextInput> OpenMobileToolbarAndFindSearch(IRenderedComponent<Components.Pages.ConsoleLogs> cut, IRenderedFragment dialogProvider)
+    {
+        cut.Find(".mobile-toolbar").Click();
+
+        dialogProvider.WaitForAssertion(() => Assert.Single(dialogProvider.FindComponents<FluentTextInput>()));
+
+        return Assert.Single(dialogProvider.FindComponents<FluentTextInput>());
+    }
+
+    private IRenderedFragment RenderDialogProvider(ViewportInformation viewport)
+    {
+        return Render(builder =>
+        {
+            builder.OpenComponent<CascadingValue<ViewportInformation>>(0);
+            builder.AddAttribute(1, nameof(CascadingValue<ViewportInformation>.Value), viewport);
+            builder.AddAttribute(2, nameof(CascadingValue<ViewportInformation>.ChildContent), (RenderFragment)(childBuilder =>
+            {
+                childBuilder.OpenComponent<FluentDialogProvider>(0);
+                childBuilder.CloseComponent();
+            }));
+            builder.CloseComponent();
+        });
     }
 }

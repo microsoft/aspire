@@ -35,7 +35,7 @@ public static class RedisBuilderExtensions
     /// </para>
     /// This version of the package defaults to the <inheritdoc cref="RedisContainerImageTags.Tag"/> tag of the <inheritdoc cref="RedisContainerImageTags.Image"/> container image.
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the canonical addRedis export with options.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the canonical addRedis export with options.")]
     public static IResourceBuilder<RedisResource> AddRedis(this IDistributedApplicationBuilder builder, [ResourceName] string name, int? port)
     {
         return builder.AddRedis(name, port, null);
@@ -96,6 +96,7 @@ public static class RedisBuilderExtensions
             .WithEndpoint(port: port, targetPort: 6379, name: RedisResource.PrimaryEndpointName, scheme: RedisResource.StandardRedisScheme)
             .WithImage(RedisContainerImageTags.Image, RedisContainerImageTags.Tag)
             .WithImageRegistry(RedisContainerImageTags.Registry)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey)
             // see https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way
             .WithEntrypoint("/bin/sh")
@@ -240,8 +241,11 @@ public static class RedisBuilderExtensions
             var resourceBuilder = builder.ApplicationBuilder.AddResource(resource)
                                       .WithImage(RedisContainerImageTags.RedisCommanderImage, RedisContainerImageTags.RedisCommanderTag)
                                       .WithImageRegistry(RedisContainerImageTags.RedisCommanderRegistry)
+                                      .WithIconName("WindowDatabase")
                                       .WithHttpEndpoint(targetPort: 8081, name: "http")
                                       .ExcludeFromManifest();
+
+            AddManagementLinks(resourceBuilder, "http", "Manage (Commander)");
 
             builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(resource, async (e, ct) =>
             {
@@ -319,6 +323,7 @@ public static class RedisBuilderExtensions
             var resourceBuilder = builder.ApplicationBuilder.AddResource(resource)
                 .WithImage(RedisContainerImageTags.RedisInsightImage, RedisContainerImageTags.RedisInsightTag)
                 .WithImageRegistry(RedisContainerImageTags.RedisInsightRegistry)
+                .WithIconName("WindowDatabase")
                 .WithHttpEndpoint(targetPort: 5540, name: "http")
                 .WithEnvironment(context =>
                 {
@@ -389,10 +394,38 @@ public static class RedisBuilderExtensions
                 resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
             });
 
+            AddManagementLinks(resourceBuilder, "http", "Manage (Insights)");
+
             configureContainer?.Invoke(resourceBuilder);
 
             return builder;
         }
+    }
+
+    /// <summary>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpointName"/>
+    /// endpoint to every <see cref="RedisResource"/> in the app.
+    /// </summary>
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, string endpointName, string displayText)
+        where T : IResourceWithEndpoints
+    {
+        resourceBuilder.WithHidden();
+
+        var endpoint = resourceBuilder.GetEndpoint(endpointName);
+        resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var redisResource in @event.Model.Resources.OfType<RedisResource>())
+            {
+                redisResource.Annotations.Add(new ResourceUrlAnnotation
+                {
+                    Url = "/",
+                    DisplayText = displayText,
+                    Endpoint = endpoint
+                });
+            }
+
+            return Task.CompletedTask;
+        });
     }
 
     /// <summary>

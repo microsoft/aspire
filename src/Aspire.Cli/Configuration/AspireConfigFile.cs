@@ -119,8 +119,8 @@ internal sealed class AspireConfigFile
     /// Package references for non-first-class languages.
     /// </summary>
     /// <remarks>
-    /// Each entry value is either a <b>string</b> (short form, always NuGet — empty means the
-    /// SDK version, non-empty is an explicit version) or an <b>object</b> (long form, carries
+    /// Each entry value is either a <b>string</b> (short form, NuGet version or a legacy
+    /// <c>.csproj</c> path; empty means the SDK version) or an <b>object</b> (long form, carries
     /// a <c>source</c> discriminator and per-source fields).
     ///
     /// <para>String form examples:</para>

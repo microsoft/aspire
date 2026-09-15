@@ -198,7 +198,8 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
     private static bool ScopeEquals(AzureBicepResourceScope expected, AzureBicepResourceScope? actual)
     {
         return actual is not null &&
-            ScopeValueEquals(expected.ResourceGroup, actual.ResourceGroup) &&
+            expected.HasResourceGroup == actual.HasResourceGroup &&
+            (!expected.HasResourceGroup || ScopeValueEquals(expected.ResourceGroup, actual.ResourceGroup)) &&
             ScopeValueEquals(expected.Subscription, actual.Subscription) &&
             expected.IsTenantScope == actual.IsTenantScope;
     }
@@ -220,7 +221,7 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
             return new FunctionCallExpression(new IdentifierExpression("tenant"));
         }
 
-        if (scope.ResourceGroup is not null && scope.Subscription is not null)
+        if (scope.HasResourceGroup && scope.Subscription is not null)
         {
             return (scope.Subscription, scope.ResourceGroup) switch
             {
@@ -232,7 +233,7 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
             };
         }
 
-        if (scope.ResourceGroup is not null)
+        if (scope.HasResourceGroup)
         {
             return scope.ResourceGroup switch
             {

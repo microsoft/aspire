@@ -16,6 +16,11 @@ namespace Aspire.Cli.Projects;
 /// </remarks>
 internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDiscovery
 {
+    /// <summary>
+    /// Every supported language, including the ones whose feature flag is off.
+    /// </summary>
+    internal static IReadOnlyList<LanguageInfo> AllLanguages => s_allLanguages;
+
     private static readonly LanguageInfo[] s_allLanguages =
     [
         new LanguageInfo(
@@ -55,7 +60,8 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             DetectionPatterns: ["AppHost.java"],
             CodeGenerator: "Java",
             AppHostFileName: "AppHost.java",
-            IsExperimental: true),
+            IsExperimental: true,
+            PreserveUnchangedGeneratedFiles: true),
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.Rust),
             DisplayName: KnownLanguageId.RustDisplayName,

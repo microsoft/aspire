@@ -117,9 +117,9 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         var expectedCacheKey = diskCache.GetCacheKey(projectFile);
 
         // Mirror the property/item shape used by DotNetCliRunner.GetAppHostInformationAsync and
-        // additionally request AspireUseCliBundle, UserSecretsId, and run metadata so the CLI
-        // bundle handoff, --isolated user-secrets clone, and post-build AppHost launch path do
-        // not require their own MSBuild evaluations.
+        // additionally request AspireUseCliBundle, UserSecretsId, and run metadata so the CLI bundle
+        // handoff, --isolated user-secrets clone, and post-build AppHost launch path do not require
+        // their own MSBuild evaluations.
         // Adding extra -getProperty names is an evaluation-only cost.
         //
         // The Run* properties (RunCommand, RunArguments, RunWorkingDirectory) are only

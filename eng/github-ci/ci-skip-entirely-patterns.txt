@@ -34,6 +34,13 @@ eng/github-ci/ci-skip-entirely-patterns.txt
 # Documentation
 **.md
 
+# Generated API and ATS baselines
+# These files are generated release/API-surface artifacts and do not require PR CI.
+src/*/api/Aspire.*.cs
+src/*/api/*.ats.txt
+src/Components/*/api/Aspire.*.cs
+src/Components/*/api/*.ats.txt
+
 # Engineering pipeline scripts (Azure DevOps, not used in the GitHub CI build)
 eng/pipelines/**
 eng/test-configuration.json
@@ -42,6 +49,10 @@ Aspire-Core.slnf
 
 .github/instructions/**
 .agents/skills/**
+
+# Copilot canvas extensions have a dedicated PR workflow that validates module syntax,
+# manifests, imports, and tests without running the main build/test matrix.
+.github/extensions/**
 
 # GitHub workflow files that do not affect the CI build or test process
 .github/workflows/apply-test-attributes.yml
@@ -74,3 +85,21 @@ Aspire-Core.slnf
 start-code.sh
 localhive.*
 dogfood.sh
+
+# Developer-only workspace settings with no build or CI consumer.
+.vscode/settings.json
+pyrightconfig.json
+
+# Repository metadata with no build or test impact. Without these, a PR touching only one of them
+# would fall through the selective-CI run-all fallback and force the FULL test matrix (the fallback
+# escalates any file it cannot attribute -- see tools/SelectTests/TestSelector.cs). Issue forms and
+# CODEOWNERS cannot change what builds or how a test behaves.
+#
+# Deliberately NOT listed (each can change build/test outcomes, so they must still run CI):
+#   .editorconfig    -- analyzer severities feed TreatWarningsAsErrors
+#   .gitattributes   -- checkout normalization (line endings) can affect fixture-sensitive tests
+#   .gitignore       -- controls discovery of the extension's Java E2E workspace
+.github/CODEOWNERS
+.github/dependabot.yml
+.github/ISSUE_TEMPLATE/**
+.github/policies/**

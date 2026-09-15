@@ -1,0 +1,54 @@
+.dimension-tag {
+    border-radius: var(--borderRadiusLarge);
+    padding: 1px 3px;
+    border: var(--strokeWidthThin) solid transparent;
+    background: var(--colorNeutralBackground1Selected);
+    font-size: var(--fontSizeBase200);
+    line-height: var(--lineHeightBase200);
+    color: inherit;
+    font-family: inherit;
+}
+
+::deep .dimension-overflow {
+    /* Prevent scrollbar briefly appearing during overflow load. */
+    overflow-y: hidden;
+}
+
+.dimension-overflow-ellipsis {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: fit-content;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dimension-overflow-ellipsis > .dimension-tag {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filter-value-tag {
+    cursor: pointer;
+    user-select: none;
+}
+
+.filter-value-tag:hover {
+    border-color: var(--colorBrandForegroundLinkHover);
+}
+
+.included-in-filters {
+    color: var(--colorNeutralForegroundOnBrand);
+    background: var(--colorBrandBackground);
+}
+
+::deep .fluent-overflow-item:has(.included-in-filters) {
+    /* change ellipsis color */
+    color: var(--colorNeutralForegroundOnBrand);
+}
+
+.included-in-filters:hover {
+    border-color: var(--colorBrandForegroundLinkHover);
+}

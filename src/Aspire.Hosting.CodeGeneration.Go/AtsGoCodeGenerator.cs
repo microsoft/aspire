@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
+using Aspire.Shared.CodeGeneration;
 using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
@@ -243,10 +245,18 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         foreach (var capability in context.Capabilities)
         {
             var targetParamName = capability.TargetParameterName ?? "builder";
-            var hasOptionalParams = capability.Parameters.Any(p =>
-                !string.Equals(p.Name, targetParamName, StringComparison.Ordinal) &&
-                (IsCancellationToken(p) || p.IsOptional));
-            if (!hasOptionalParams)
+            var reservationOptionals = capability.Parameters
+                .Where(p => !string.Equals(p.Name, targetParamName, StringComparison.Ordinal))
+                .Where(p => IsCancellationToken(p) || p.IsOptional)
+                .ToList();
+            if (reservationOptionals.Count == 0)
+            {
+                continue;
+            }
+
+            // Direct-options capabilities thread the DTO type directly and emit no wrapper struct,
+            // so there is no name to reserve for them.
+            if (TryGetDirectOptionsParameter(reservationOptionals, out _))
             {
                 continue;
             }
@@ -678,10 +688,10 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             return "nil";
         }
 
-        return typeRef.Category switch
+        var renderedValue = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => value.ToRelaxedJsonString(),
-            AtsTypeCategory.Enum => $"{MapTypeRefToGo(typeRef, isOptional: false)}({value.ToRelaxedJsonString()})",
+            AtsTypeCategory.Enum => $"{MapEnumType(typeRef.TypeId)}({value.ToRelaxedJsonString()})",
             AtsTypeCategory.Dto when value is JsonObject obj && dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoInfo)
                 => RenderGoDtoValue(obj, dtoInfo, dtoTypesById),
             AtsTypeCategory.Array or AtsTypeCategory.List when value is JsonArray arr
@@ -690,6 +700,16 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 => $"map[{MapTypeRefToGo(typeRef.KeyType, isOptional: false)}]{MapTypeRefToGo(typeRef.ValueType, isOptional: false)}{{{string.Join(", ", obj.Select(pair => $"{AtsJsonCodeWriter.ToRelaxedJsonString(pair.Key)}: {RenderGoExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)}"))}}}",
             _ => value.ToRelaxedJsonString()
         };
+
+        if (!ShouldApplyNullableType(typeRef))
+        {
+            return renderedValue;
+        }
+
+        var valueType = typeRef.Category == AtsTypeCategory.Primitive
+            ? MapPrimitiveType(typeRef.TypeId)
+            : MapEnumType(typeRef.TypeId);
+        return $"func(value {valueType}) *{valueType} {{ return &value }}({renderedValue})";
     }
 
     private string RenderGoDtoValue(
@@ -983,8 +1003,8 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"func (s *{implName}) Value(name string) (string, error) {{");
         WriteLine("\tinput, err := s.Get(name)");
         WriteLine("\tif err != nil { return \"\", err }");
-        WriteLine("\tif input == nil { return \"\", nil }");
-        WriteLine("\treturn input.Value, nil");
+        WriteLine("\tif input == nil || input.Value == nil { return \"\", nil }");
+        WriteLine("\treturn *input.Value, nil");
         WriteLine("}");
         WriteLine();
 
@@ -992,7 +1012,8 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"func (s *{implName}) RequiredValue(name string) (string, error) {{");
         WriteLine("\tinput, err := s.Required(name)");
         WriteLine("\tif err != nil { return \"\", err }");
-        WriteLine("\treturn input.Value, nil");
+        WriteLine("\tif input.Value == nil { return \"\", nil }");
+        WriteLine("\treturn *input.Value, nil");
         WriteLine("}");
         WriteLine();
     }
@@ -1035,6 +1056,21 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         return (required, optional);
     }
 
+    /// <summary>
+    /// Determines whether a capability's optional parameters can be flattened so the caller passes
+    /// the DTO directly (<c>options ...*HostedAgentOptions</c>) instead of through a generated
+    /// wrapper struct. Go allows only one trailing variadic, so a coexisting cancellation token
+    /// keeps the wrapper.
+    /// </summary>
+    private static bool TryGetDirectOptionsParameter(
+        IReadOnlyList<AtsParameterInfo> optionalParams,
+        [NotNullWhen(true)] out AtsParameterInfo? directOptionsParam)
+        => AtsOptionsFlattening.TryGetDirectOptionsParameter(
+            optionalParams,
+            IsCancellationToken,
+            cancellationTokenIsSeparateParameter: false,
+            out directOptionsParam);
+
     private string RenderParameterList(
         List<AtsParameterInfo> requiredParams,
         List<AtsParameterInfo> optionalParams,
@@ -1058,7 +1094,16 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 sb.Append(", ");
             }
             sb.Append("options ...*");
-            sb.Append(GetOptionsTypeName(capability));
+            // Single optional DTO named "options" is threaded directly as its DTO type instead of
+            // through a generated wrapper struct (see TryGetDirectOptionsParameter).
+            if (TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam))
+            {
+                sb.Append(MapDtoType(directOptionsParam.Type!.TypeId));
+            }
+            else
+            {
+                sb.Append(GetOptionsTypeName(capability));
+            }
         }
         return sb.ToString();
     }
@@ -1395,10 +1440,15 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 WriteLine($"{indent}}}");
                 continue;
             }
-            var typeStr = MapTypeRefToGo(p.Type, p.IsOptional);
-            if (IsNilableGoType(typeStr))
+
+            var type = MapTypeRefToGo(p.Type, isOptional: false);
+            // A nil DTO or ReferenceExpression must be checked before it is boxed into any; otherwise
+            // serializeValue sees a non-nil interface and dereferences the typed nil. Nullable primitive
+            // and enum pointers intentionally bypass this guard because nil represents an explicit ATS null.
+            if (IsNilableGoType(type) && (p.Type is null || !ShouldApplyNullableType(p.Type)))
             {
-                WriteLine($"{indent}if {paramName} != nil {{ reqArgs[\"{p.Name}\"] = serializeValue({paramName}) }}");
+                var nilGuard = type == "any" ? $"!isNil({paramName})" : $"{paramName} != nil";
+                WriteLine($"{indent}if {nilGuard} {{ reqArgs[\"{p.Name}\"] = serializeValue({paramName}) }}");
             }
             else
             {
@@ -1408,6 +1458,23 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         if (optionalParams.Count > 0)
         {
+            // Direct-options: merge the DTO variadic under the original parameter name. Only emit the
+            // key when a non-nil option was applied, matching the wrapper path's ToMap(), which omits
+            // the nilable field when it is nil (e.g. a lone WithFoo(nil) sends no "options" key).
+            if (TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam))
+            {
+                var dtoType = MapDtoType(directOptionsParam.Type!.TypeId);
+                WriteLine($"{indent}if len(options) > 0 {{");
+                WriteLine($"{indent}\tmerged := &{dtoType}{{}}");
+                WriteLine($"{indent}\tapplied := false");
+                WriteLine($"{indent}\tfor _, opt := range options {{");
+                WriteLine($"{indent}\t\tif opt != nil {{ merged = deepUpdate(merged, opt); applied = true }}");
+                WriteLine($"{indent}\t}}");
+                WriteLine($"{indent}\tif applied {{ reqArgs[\"{directOptionsParam.Name}\"] = serializeValue(merged) }}");
+                WriteLine($"{indent}}}");
+                return;
+            }
+
             var optionsType = GetOptionsTypeName(capability);
             WriteLine($"{indent}if len(options) > 0 {{");
             WriteLine($"{indent}\tmerged := &{optionsType}{{}}");
@@ -1596,6 +1663,13 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 continue;
             }
+
+            // Direct-options capabilities thread the DTO directly, so no wrapper struct is emitted.
+            if (TryGetDirectOptionsParameter(optionalParams, out _))
+            {
+                continue;
+            }
+
             var name = GetOptionsTypeName(capability);
             seenForCapability[capability.CapabilityId] = name;
             if (!emitted.Add(name))
@@ -2045,7 +2119,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             _ => "any"
         };
 
-        if (isOptional && !IsNilableGoType(baseType))
+        if ((isOptional || ShouldApplyNullableType(typeRef)) && !IsNilableGoType(baseType))
         {
             return $"*{baseType}";
         }
@@ -2085,6 +2159,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         typeName.StartsWith("map[", StringComparison.Ordinal) ||
         typeName == "any" ||
         typeName.StartsWith("func(", StringComparison.Ordinal);
+
+    private static bool ShouldApplyNullableType(AtsTypeRef typeRef) =>
+        typeRef.IsNullable == true
+        && typeRef.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum
+        && typeRef.TypeId is not (AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken);
 
     /// <summary>
     /// Handle types map to their Go interface name. Interfaces in Go are

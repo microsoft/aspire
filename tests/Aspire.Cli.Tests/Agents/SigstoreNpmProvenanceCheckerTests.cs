@@ -1,8 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Npm;
+using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 using Sigstore;
 
 namespace Aspire.Cli.Tests.Agents;
@@ -108,6 +112,43 @@ public class SigstoreNpmProvenanceCheckerTests
         var bundleJson = SigstoreNpmProvenanceChecker.ExtractSlsaBundleJson(json, out _);
 
         Assert.Null(bundleJson);
+    }
+
+    #endregion
+
+    #region VerifyProvenanceAsync Tests
+
+    [Theory]
+    [InlineData(
+        "pkg:npm/%40playwright/cli@0.1.2",
+        "00112233445566778899aabbccddeeff",
+        nameof(ProvenanceVerificationOutcome.PackageIdentityMismatch))]
+    [InlineData(
+        "pkg:npm/%40playwright/cli@0.1.1",
+        "ffeeddccbbaa99887766554433221100",
+        nameof(ProvenanceVerificationOutcome.PackageDigestMismatch))]
+    public async Task VerifyProvenanceAsync_WithMismatchedSignedSubject_ReturnsMismatch(
+        string subjectName,
+        string subjectDigest,
+        string expectedOutcome)
+    {
+        var result = await VerifyThroughCheckerAsync(
+            subjectName,
+            subjectDigest,
+            workflowPath: ".github/workflows/publish.yml");
+
+        Assert.Equal(Enum.Parse<ProvenanceVerificationOutcome>(expectedOutcome), result.Outcome);
+    }
+
+    [Fact]
+    public async Task VerifyProvenanceAsync_WithMatchingSignedSubject_AppliesProvenanceFieldValidation()
+    {
+        var result = await VerifyThroughCheckerAsync(
+            "pkg:npm/%40playwright/cli@0.1.1",
+            "00112233445566778899aabbccddeeff",
+            workflowPath: ".github/workflows/unexpected.yml");
+
+        Assert.Equal(ProvenanceVerificationOutcome.WorkflowMismatch, result.Outcome);
     }
 
     #endregion
@@ -393,6 +434,107 @@ public class SigstoreNpmProvenanceCheckerTests
             refInfo => refInfo.Kind == "tags");
 
         Assert.Equal(ProvenanceVerificationOutcome.WorkflowRefMismatch, result.Outcome);
+    }
+
+    #endregion
+
+    #region VerifyNpmSubject Tests
+
+    [Fact]
+    public void VerifyNpmSubject_WithMatchingPackageAndDigest_ReturnsVerified()
+    {
+        var statement = BuildStatementWithSubject(
+            """
+            [
+                {
+                    "name": "pkg:npm/%40playwright/cli@0.1.1",
+                    "digest": { "sha512": "00112233445566778899aabbccddeeff" }
+                }
+            ]
+            """);
+
+        var outcome = SigstoreNpmProvenanceChecker.VerifyNpmSubject(
+            statement,
+            "@playwright/cli",
+            "0.1.1",
+            ToSha512Sri("00112233445566778899aabbccddeeff"));
+
+        Assert.Equal(ProvenanceVerificationOutcome.Verified, outcome);
+    }
+
+    [Fact]
+    public void VerifyNpmSubject_WithDifferentPackageIdentity_ReturnsPackageIdentityMismatch()
+    {
+        var statement = BuildStatementWithSubject(
+            """
+            [
+                {
+                    "name": "pkg:npm/%40playwright/other@0.1.1",
+                    "digest": { "sha512": "00112233445566778899aabbccddeeff" }
+                }
+            ]
+            """);
+
+        var outcome = SigstoreNpmProvenanceChecker.VerifyNpmSubject(
+            statement,
+            "@playwright/cli",
+            "0.1.1",
+            ToSha512Sri("00112233445566778899aabbccddeeff"));
+
+        Assert.Equal(ProvenanceVerificationOutcome.PackageIdentityMismatch, outcome);
+    }
+
+    [Fact]
+    public void VerifyNpmSubject_WithDifferentDigest_ReturnsPackageDigestMismatch()
+    {
+        var statement = BuildStatementWithSubject(
+            """
+            [
+                {
+                    "name": "pkg:npm/%40playwright/cli@0.1.1",
+                    "digest": { "sha512": "ffeeddccbbaa99887766554433221100" }
+                }
+            ]
+            """);
+
+        var outcome = SigstoreNpmProvenanceChecker.VerifyNpmSubject(
+            statement,
+            "@playwright/cli",
+            "0.1.1",
+            ToSha512Sri("00112233445566778899aabbccddeeff"));
+
+        Assert.Equal(ProvenanceVerificationOutcome.PackageDigestMismatch, outcome);
+    }
+
+    [Theory]
+    [InlineData("""[]""", nameof(ProvenanceVerificationOutcome.PackageIdentityMismatch))]
+    [InlineData("""[{ "name": "pkg:npm/%40playwright/cli@0.1.1" }]""", nameof(ProvenanceVerificationOutcome.PackageDigestMismatch))]
+    [InlineData("""[{ "digest": { "sha512": "00112233445566778899aabbccddeeff" } }]""", nameof(ProvenanceVerificationOutcome.PackageIdentityMismatch))]
+    [InlineData(
+        """
+        [
+            {
+                "name": "pkg:npm/%40playwright/cli@0.1.1",
+                "digest": { "sha512": "00112233445566778899aabbccddeeff" }
+            },
+            {
+                "name": "pkg:npm/%40playwright/cli@0.1.1",
+                "digest": { "sha512": "00112233445566778899aabbccddeeff" }
+            }
+        ]
+        """,
+        nameof(ProvenanceVerificationOutcome.PackageIdentityMismatch))]
+    public void VerifyNpmSubject_WithMalformedSubject_ReturnsMismatch(string subjectJson, string expectedOutcome)
+    {
+        var statement = BuildStatementWithSubject(subjectJson);
+
+        var outcome = SigstoreNpmProvenanceChecker.VerifyNpmSubject(
+            statement,
+            "@playwright/cli",
+            "0.1.1",
+            ToSha512Sri("00112233445566778899aabbccddeeff"));
+
+        Assert.Equal(Enum.Parse<ProvenanceVerificationOutcome>(expectedOutcome), outcome);
     }
 
     #endregion
@@ -1005,20 +1147,98 @@ public class SigstoreNpmProvenanceCheckerTests
         };
     }
 
+    private static async Task<ProvenanceVerificationResult> VerifyThroughCheckerAsync(
+        string subjectName,
+        string subjectDigest,
+        string workflowPath)
+    {
+        const string sourceRepository = "https://github.com/microsoft/playwright-cli";
+        const string workflowRef = "refs/tags/v0.1.1";
+        const string buildType = "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1";
+        const string builderId = "https://github.com/actions/runner/github-hosted";
+
+        var statementJson = BuildSlsaPredicateStatementJson(
+            sourceRepository,
+            workflowPath,
+            workflowRef,
+            buildType,
+            builderId,
+            subjectName,
+            subjectDigest);
+        var statement = InTotoStatement.Parse(statementJson);
+        Assert.NotNull(statement);
+
+        var bundle = new SigstoreBundle
+        {
+            DsseEnvelope = new DsseEnvelope
+            {
+                PayloadType = "application/vnd.in-toto+json",
+                Payload = Encoding.UTF8.GetBytes(statementJson)
+            }
+        };
+        var attestationJson = $$"""
+        {
+            "attestations": [
+                {
+                    "predicateType": "https://slsa.dev/provenance/v1",
+                    "bundle": {{bundle.Serialize()}}
+                }
+            ]
+        }
+        """;
+
+        using var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(attestationJson, Encoding.UTF8, "application/json")
+        };
+        using var handler = new MockHttpMessageHandler(response);
+        using var httpClient = new HttpClient(handler);
+        var verificationResult = new VerificationResult
+        {
+            SignerIdentity = new VerifiedIdentity
+            {
+                SubjectAlternativeName = "https://github.com/microsoft/playwright-cli/.github/workflows/publish.yml@refs/tags/v0.1.1",
+                Issuer = "https://token.actions.githubusercontent.com",
+                Extensions = new FulcioCertificateExtensions
+                {
+                    SourceRepositoryUri = sourceRepository,
+                    SourceRepositoryRef = workflowRef
+                }
+            },
+            Statement = statement
+        };
+        var checker = new SigstoreNpmProvenanceChecker(
+            httpClient,
+            NullLogger<SigstoreNpmProvenanceChecker>.Instance,
+            (_, _, _, _, _) => Task.FromResult((true, (VerificationResult?)verificationResult)));
+
+        return await checker.VerifyProvenanceAsync(
+            "@playwright/cli",
+            "0.1.1",
+            sourceRepository,
+            ".github/workflows/publish.yml",
+            buildType,
+            refInfo => refInfo is { Kind: "tags", Name: "v0.1.1" },
+            ToSha512Sri("00112233445566778899aabbccddeeff"),
+            CancellationToken.None);
+    }
+
     private static string BuildSlsaPredicateStatementJson(
         string sourceRepository,
         string workflowPath,
         string workflowRef,
         string buildType,
-        string builderId)
+        string builderId,
+        string subjectName = "pkg:npm/%40playwright/cli@0.1.1",
+        string subjectDigest = "abc123")
     {
         return $$"""
         {
             "_type": "https://in-toto.io/Statement/v1",
             "subject": [
                 {
-                    "name": "pkg:npm/@playwright/cli@0.1.1",
-                    "digest": { "sha512": "abc123" }
+                    "name": "{{subjectName}}",
+                    "digest": { "sha512": "{{subjectDigest}}" }
                 }
             ],
             "predicateType": "https://slsa.dev/provenance/v1",
@@ -1042,6 +1262,25 @@ public class SigstoreNpmProvenanceCheckerTests
         }
         """;
     }
+
+    private static InTotoStatement BuildStatementWithSubject(string subjectJson)
+    {
+        var statement = InTotoStatement.Parse(
+            $$"""
+            {
+                "_type": "https://in-toto.io/Statement/v1",
+                "subject": {{subjectJson}},
+                "predicateType": "https://slsa.dev/provenance/v1",
+                "predicate": {}
+            }
+            """);
+
+        Assert.NotNull(statement);
+        return statement;
+    }
+
+    private static string ToSha512Sri(string hexDigest)
+        => $"sha512-{Convert.ToBase64String(Convert.FromHexString(hexDigest))}";
 
     private static string BuildAttestationJsonWithBundle(string sourceRepository)
     {

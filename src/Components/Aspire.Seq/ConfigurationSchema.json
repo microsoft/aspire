@@ -46,6 +46,13 @@
                   },
                   "description": "Gets or sets the BatchExportProcessor options. Ignored unless ExportProcessorType is Batch."
                 },
+                "Compression": {
+                  "enum": [
+                    "None",
+                    "GZip"
+                  ],
+                  "description": "Gets or sets the compression method to use when sending telemetry."
+                },
                 "Endpoint": {
                   "type": "string",
                   "format": "uri",
@@ -104,6 +111,13 @@
                     }
                   },
                   "description": "Gets or sets the BatchExportProcessor options. Ignored unless ExportProcessorType is Batch."
+                },
+                "Compression": {
+                  "enum": [
+                    "None",
+                    "GZip"
+                  ],
+                  "description": "Gets or sets the compression method to use when sending telemetry."
                 },
                 "Endpoint": {
                   "type": "string",

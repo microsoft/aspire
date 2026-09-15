@@ -7,6 +7,8 @@ const helmReleaseName = await builder.addParameter('helm-release-name');
 const helmChartName = await builder.addParameter('helm-chart-name');
 const helmChartVersion = await builder.addParameter('helm-chart-version');
 const helmChartDescription = await builder.addParameter('helm-chart-description');
+const persistentVolumeStorageClass = await builder.addParameter('persistent-volume-storage-class');
+const persistentVolumeCapacity = await builder.addParameter('persistent-volume-capacity');
 
 const kubernetes = await builder.addKubernetesEnvironment('kube');
 
@@ -55,6 +57,15 @@ await gateway.withTls('gateway-tls');
 const ingress = await kubernetes.addIngress('public-ingress');
 await ingress.withHostname('ingress.example.com');
 await ingress.withTls('ingress-tls');
+
+const persistentVolume = await kubernetes.addPersistentVolume('data');
+await persistentVolume.withStorageClass('fast-storage');
+await persistentVolume.withCapacity('5Gi');
+const _persistentVolumeResourceName: string = await persistentVolume.getResourceName();
+
+const parameterizedPersistentVolume = await kubernetes.addPersistentVolume('parameterized-data');
+await parameterizedPersistentVolume.withStorageClassParam(persistentVolumeStorageClass);
+await parameterizedPersistentVolume.withCapacityParam(persistentVolumeCapacity);
 
 // === cert-manager ===
 // Validates the typed cert-manager API surface generated for TypeScript:

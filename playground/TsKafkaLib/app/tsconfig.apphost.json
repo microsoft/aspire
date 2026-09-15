@@ -11,10 +11,10 @@
     "rootDir": ".."
   },
   "include": [
-    "apphost.ts",
-    ".modules/**/*.ts",
+    "apphost.mts",
+    ".aspire/modules/**/*.mts",
     "../packages/aspire-kafka/src/**/*.ts",
-    "../packages/aspire-kafka/.modules/**/*.ts"
+    "../packages/aspire-kafka/.aspire/modules/**/*.mts"
   ],
   "exclude": ["node_modules"]
 }

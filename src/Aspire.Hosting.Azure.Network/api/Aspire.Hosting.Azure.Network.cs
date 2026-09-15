@@ -86,6 +86,9 @@ namespace Aspire.Hosting
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> WithNetworkSecurityGroup(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureNetworkSecurityGroupResource> nsg) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> WithServiceDelegation(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, string serviceName, string? name = null) { throw null; }
     }
 }
 

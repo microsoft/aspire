@@ -9,6 +9,7 @@ using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests;
 
@@ -115,6 +116,36 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 
         var httpClientFactory = app.Services.GetService<IHttpClientFactory>();
         Assert.NotNull(httpClientFactory);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithoutNamedHttpClient_HasNoTimeout()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK);
+        builder.Services.AddHttpClient(Options.DefaultName)
+            .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(100))
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        TimeSpan? timeout = null;
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/some-path", "Do The Thing", commandName: "mycommand", commandOptions: new()
+        {
+            PrepareRequest = context =>
+            {
+                timeout = context.HttpClient.Timeout;
+                return Task.CompletedTask;
+            }
+        });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal(Timeout.InfiniteTimeSpan, timeout);
     }
 
     [Fact]
@@ -430,6 +461,31 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(expectSuccess, result.Success);
     }
 
+    [Fact]
+    public async Task WithHttpCommand_WhenHttpSendObservesCanceledToken_ReturnsCanceled()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+        using var cts = new CancellationTokenSource();
+
+        var fakeHandler = new CancelingHttpMessageHandler(cts);
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/cancel", "Cancel The Thing", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient" });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand", cts.Token).DefaultTimeout();
+
+        Assert.True(fakeHandler.Called, "Expected the HTTP handler to be called");
+        Assert.False(result.Success);
+        Assert.True(result.Canceled);
+    }
+
     [InlineData(null, false)] // Default method is POST
     [InlineData("get", true)]
     [InlineData("post", false)]
@@ -468,11 +524,21 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
         // Arrange
         using var builder = CreateTestDistributedApplicationBuilder();
         var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK);
-        builder.Services.AddHttpClient("commandclient")
+        var configuredTimeout = TimeSpan.FromMinutes(5);
+        builder.Services.AddHttpClient("commandclient", client => client.Timeout = configuredTimeout)
             .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
 
+        TimeSpan? timeout = null;
         var service = CreateResourceWithAllocatedEndpoint(builder, "service");
-        service.WithHttpCommand("/get-only", "Do The Thing", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient" });
+        service.WithHttpCommand("/get-only", "Do The Thing", commandName: "mycommand", commandOptions: new()
+        {
+            HttpClientName = "commandclient",
+            PrepareRequest = context =>
+            {
+                timeout = context.HttpClient.Timeout;
+                return Task.CompletedTask;
+            }
+        });
 
         // Act
         using var app = builder.Build();
@@ -484,6 +550,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 
         // Assert
         Assert.True(fakeHandler.Called);
+        Assert.Equal(configuredTimeout, timeout);
     }
 
     private sealed class FakeHttpMessageHandler(HttpStatusCode statusCode, string? responseBody = null, string? mediaType = null) : HttpMessageHandler
@@ -515,6 +582,18 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
             }
 
             return response;
+        }
+    }
+
+    private sealed class CancelingHttpMessageHandler(CancellationTokenSource cancellationTokenSource) : HttpMessageHandler
+    {
+        public bool Called { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Called = true;
+            cancellationTokenSource.Cancel();
+            throw new OperationCanceledException(cancellationToken);
         }
     }
 
@@ -1011,4 +1090,3 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 
     }
 }
-

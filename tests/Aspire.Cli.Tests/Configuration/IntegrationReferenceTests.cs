@@ -27,6 +27,19 @@ public class IntegrationReferenceTests
         Assert.Equal("/path/to/MyIntegration.csproj", reference.Path);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PackageReference_PreservesLocalProjectSubstitutionPreference(bool disableLocalProjectSubstitution)
+    {
+        var reference = IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.5.0", disableLocalProjectSubstitution);
+
+        Assert.Equal(IntegrationSource.Nuget, reference.Source);
+        Assert.Equal("13.5.0", reference.Version);
+        Assert.Null(reference.Path);
+        Assert.Equal(disableLocalProjectSubstitution, reference.DisableLocalProjectSubstitution);
+    }
+
     [Fact]
     public void GetIntegrationReferences_DetectsCsprojAsProjectReference()
     {

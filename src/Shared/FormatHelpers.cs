@@ -76,7 +76,7 @@ internal static class FormatHelpers
         var local = timeProvider.ToLocal(value);
 
         // If the date is today then only return time, otherwise return entire date time text.
-        if (local.Date == DateTime.Now.Date)
+        if (local.Date == timeProvider.GetLocalNow().Date)
         {
             // e.g. "08:57:44" (based on user's culture and preferences)
             // Don't include milliseconds as resource server returned time stamp is second precision.
@@ -122,5 +122,16 @@ internal static class FormatHelpers
     public static string CombineWithSeparator(string separator, params string?[] parts)
     {
         return string.Join(separator, parts.Where(p => !string.IsNullOrEmpty(p)));
+    }
+
+    public static string FormatFileSize(long bytes)
+    {
+        return bytes switch
+        {
+            < 1024 => $"{bytes} B",
+            < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+            < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024.0):F1} MB",
+            _ => $"{bytes / (1024.0 * 1024.0 * 1024.0):F1} GB"
+        };
     }
 }

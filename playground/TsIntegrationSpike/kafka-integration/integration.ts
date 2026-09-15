@@ -1,9 +1,9 @@
-import type { DistributedApplicationBuilder, ContainerResource } from '../.modules/aspire.js';
+import type { DistributedApplicationBuilder, ContainerResource } from '../.aspire/modules/aspire.mjs';
 import {
     AspireExport,
     defineIntegration,
     type AspireTypeRef,
-} from '../.modules/base.js';
+} from '../.aspire/modules/base.mjs';
 
 // ============================================================================
 // Projection type references used by the AspireExport metadata.

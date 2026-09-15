@@ -6,12 +6,12 @@ import type {
     DockerfileBuilderCallbackContext,
     ExecutableResource,
     Resource,
-} from '../.modules/aspire.js';
+} from '../.aspire/modules/aspire.mjs';
 import {
     AspireExport,
     defineIntegration,
     type AspireTypeRef,
-} from '../.modules/base.js';
+} from '../.aspire/modules/base.mjs';
 import {
     defineAnnotation,
     getAnnotation,

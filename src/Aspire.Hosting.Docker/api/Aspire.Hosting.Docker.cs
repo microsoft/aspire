@@ -353,6 +353,9 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes
         [YamlDotNet.Serialization.YamlMember(Alias = "security_opt", DefaultValuesHandling = YamlDotNet.Serialization.DefaultValuesHandling.OmitEmptyCollections)]
         public System.Collections.Generic.List<string> SecurityOpt { get { throw null; } set { } }
 
+        [YamlDotNet.Serialization.YamlMember(Alias = "shm_size")]
+        public string? ShmSize { get { throw null; } set { } }
+
         [YamlDotNet.Serialization.YamlMember(Alias = "stdin_open")]
         public bool? StdinOpen { get { throw null; } set { } }
 

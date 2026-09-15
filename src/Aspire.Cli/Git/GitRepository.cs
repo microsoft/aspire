@@ -11,9 +11,10 @@ namespace Aspire.Cli.Git;
 /// Provides Git repository operations.
 /// </summary>
 /// <param name="executionContext">The CLI execution context providing the working directory.</param>
+/// <param name="environment">The environment abstraction for OS detection.</param>
 /// <param name="logger">The logger for diagnostic output.</param>
 /// <param name="profilingTelemetry">The profiling telemetry service.</param>
-internal sealed class GitRepository(CliExecutionContext executionContext, ILogger<GitRepository> logger, ProfilingTelemetry profilingTelemetry) : IGitRepository
+internal sealed class GitRepository(CliExecutionContext executionContext, IEnvironment environment, ILogger<GitRepository> logger, ProfilingTelemetry profilingTelemetry) : IGitRepository
 {
     /// <inheritdoc />
     public async Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken)
@@ -145,7 +146,7 @@ internal sealed class GitRepository(CliExecutionContext executionContext, ILogge
                 return null;
             }
 
-            var pathComparer = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            var pathComparer = environment.IsWindows() || environment.IsMacOS()
                 ? StringComparer.OrdinalIgnoreCase
                 : StringComparer.Ordinal;
             var includedFiles = new HashSet<string>(pathComparer);

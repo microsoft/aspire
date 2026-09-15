@@ -31,11 +31,14 @@ func main() {
 	foundry.AddDeployment("chat-from-model", model)
 
 	localFoundry := builder.AddFoundry("local-foundry")
-	localFoundry.RunAsFoundryLocal()
-	localFoundry.AddDeployment("local-chat", "Phi-3.5-mini-instruct", &aspire.AddDeploymentOptions{
+	localFoundry.RunAsFoundryLocal(&aspire.RunAsFoundryLocalOptions{
+		Endpoint: aspire.StringPtr("http://windows-host:5273"),
+	})
+	localChat := localFoundry.AddDeployment("local-chat", "Phi-3.5-mini-instruct", &aspire.AddDeploymentOptions{
 		ModelVersion: aspire.StringPtr("1"),
 		Format:       aspire.StringPtr("Microsoft"),
 	})
+	localChat.SetLocalModelId(aspire.StringPtr("Phi-3.5-mini-instruct-generic-gpu:1"))
 
 	registry := builder.AddAzureContainerRegistry("registry")
 	keyVault := builder.AddAzureKeyVault("vault")
@@ -92,13 +95,7 @@ func main() {
 	})
 	project.AddModelDeployment("project-model", model)
 
-	hostedAgent := builder.AddExecutable(
-		"hosted-agent",
-		"node",
-		".",
-		[]string{
-			"-e",
-			`
+	hostedAgentScript := `
 const http = require('node:http');
 const port = Number(process.env.DEFAULT_AD_PORT ?? '8088');
 const server = http.createServer((req, res) => {
@@ -112,26 +109,49 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ output: 'hello from validation app host' }));
     return;
   }
+  if (req.url === '/invocations') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ response: 'hello from validation app host' }));
+    return;
+  }
   res.writeHead(404);
   res.end();
 });
 server.listen(port, '127.0.0.1');
-`,
+`
+	hostedAgent := builder.AddExecutable(
+		"hosted-agent",
+		"node",
+		".",
+		[]string{
+			"-e",
+			hostedAgentScript,
 		})
 
-	hostedAgent.AsHostedAgent(project, &aspire.AsHostedAgentOptions{
-		Options: &aspire.HostedAgentOptions{
-			Description: "Validation hosted agent",
-			Cpu:         aspire.Float64Ptr(1),
-			Memory:      aspire.Float64Ptr(2),
-			Metadata: map[string]string{
-				"scenario": "validation",
-			},
-			EnvironmentVariables: map[string]string{
-				"VALIDATION_MODE": "true",
-			},
+	hostedAgent.AsHostedAgent(project, &aspire.HostedAgentOptions{
+		Description: aspire.StringPtr("Validation hosted agent"),
+		Cpu:         aspire.Float64Ptr(1),
+		Memory:      aspire.Float64Ptr(2),
+		Metadata: map[string]string{
+			"scenario": "validation",
+		},
+		EnvironmentVariables: map[string]string{
+			"VALIDATION_MODE": "true",
 		},
 	})
+
+	hostedAgentWithProtocol := builder.AddExecutable(
+		"hosted-agent-with-protocol",
+		"node",
+		".",
+		[]string{
+			"-e",
+			hostedAgentScript,
+		})
+	// Both hosted agents run as plain host processes (not containers), so they must not share the
+	// default 8088 target port or the second process fails to bind with EADDRINUSE.
+	hostedAgentWithProtocol.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{TargetPort: aspire.Float64Ptr(8089)})
+	hostedAgentWithProtocol.AsHostedAgentWithProtocol(project, aspire.HostedAgentProtocolInvocations, "1.0.0", nil)
 
 	_ = builder.AddContainer("api", "nginx")
 	_ = []aspire.FoundryRole{

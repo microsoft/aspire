@@ -500,18 +500,17 @@ extends:
           # Split C moves that second sign pass here so the parallelism
           # between `build` and `build_sign_native` is preserved. The Assemble
           # job runs on Windows because Authenticode signing of aspire.js
-          # (MicrosoftDotNet500 cert in eng/Signing.props) is rejected by
+          # (Microsoft400 cert in eng/Signing.props) is rejected by
           # Linux ESRP with "This file format cannot be signed because it is
           # not recognized."
           enableMicrobuild: true
           enablePublishUsingPipelines: true
-          # Asset_Registry_Publish (BAR publish) needs MaestroAccessToken from
-          # the Publish-Build-Assets variable group, which is only loaded on
-          # main / release / internal-release branches because of the AzDO
-          # ACL on that group. Skip the publish job entirely on contributor
-          # branches so jobs.yml does not inject Asset_Registry_Publish and
-          # fail at runtime for a missing token (and so the assemble stage
-          # does not trip an additional 1ES Branch control checkpoint).
+          # Asset_Registry_Publish (BAR publish) loads Publish-Build-Assets at
+          # job scope for MaestroAccessToken. The group has an AzDO ACL for
+          # main / release / internal-release branches, so skip the publish
+          # job entirely on contributor branches. This avoids injecting a job
+          # that cannot load its token and prevents another 1ES Branch control
+          # checkpoint on the assemble stage.
           ${{ if or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')) }}:
             enablePublishBuildAssets: true
             publishAssetsImmediately: true
@@ -527,7 +526,7 @@ extends:
           - job: Assemble
             timeoutInMinutes: 60
             # Windows agent: required for MicroBuild signing of aspire.js via
-            # MicrosoftDotNet500 (Authenticode). Linux ESRP rejects that cert
+            # Microsoft400 (Authenticode). Linux ESRP rejects that cert
             # for JS, so we cannot run the sign step on Linux even though the
             # surrounding download/stage/publish work is cross-platform.
             pool:

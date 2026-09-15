@@ -26,7 +26,7 @@ namespace Aspire.Hosting.Docker;
 /// Initializes a new instance of the <see cref="DockerComposeEnvironmentResource"/> class.
 /// </remarks>
 [AspireExport(ExposeProperties = true, ExposeMethods = true)]
-public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource
+public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
     private const string DockerComposeUpTag = "docker-compose-up";
 
@@ -306,7 +306,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
         var dockerComposeEnvironmentContext = new DockerComposeEnvironmentContext(this, logger);
 
-        if (DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource dashboard)
+        if (DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource dashboard && !IsAlreadyTargeted(dashboard))
         {
             // Ensure the dashboard resource is created (even though it's not part of the main application model)
             var dashboardService = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(dashboard, executionContext, cancellationToken).ConfigureAwait(false);
@@ -327,10 +327,21 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 continue;
             }
 
-            // Configure OTLP for resources if dashboard is enabled (before creating the service resource)
-            if (DashboardEnabled && Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
+            // This step is reachable from two pipeline executions: it is RequiredBy
+            // "before-start" (so it runs during AppHost startup) and it is also part of the
+            // publish/deploy DAG. Adding a second DeploymentTargetAnnotation on the second
+            // pass makes ResourceExtensions.GetDeploymentTargetAnnotation throw, so the step
+            // has to be idempotent. Skipping early also avoids re-running ConfigureOtlp,
+            // which would append duplicate environment variables.
+            if (IsAlreadyTargeted(r))
             {
-                ConfigureOtlp(r, otlpGrpcEndpoint);
+                continue;
+            }
+
+            // Configure OTLP for resources if dashboard is enabled (before creating the service resource)
+            if (DashboardEnabled && Dashboard?.Resource is { } dashboardResource)
+            {
+                ConfigureOtlp(r, dashboardResource);
             }
 
             // Create a Docker Compose compute resource for the resource
@@ -344,6 +355,13 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             });
         }
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the resource already carries a
+    /// <see cref="DeploymentTargetAnnotation"/> produced by this environment.
+    /// </summary>
+    private bool IsAlreadyTargeted(IResource resource) =>
+        resource.Annotations.OfType<DeploymentTargetAnnotation>().Any(a => a.ComputeEnvironment == this);
 
     private static IContainerRegistry GetContainerRegistry(DockerComposeEnvironmentResource environment, DistributedApplicationModel appModel)
     {
@@ -364,21 +382,49 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
         return LocalContainerRegistry.Instance;
     }
 
-    private static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
+    private static void ConfigureOtlp(IResource resource, DockerComposeAspireDashboardResource dashboard)
     {
+        var otlpExporter = GetEffectiveOtlpExporterAnnotation(resource);
+
         // Only configure OTLP for resources that have the OtlpExporterAnnotation and implement IResourceWithEnvironment
-        if (resource is IResourceWithEnvironment resourceWithEnv && resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        if (resource is IResourceWithEnvironment resourceWithEnv &&
+            otlpExporter is not null)
         {
-            // Configure OTLP environment variables
+            var (otlpEndpoint, protocol) = otlpExporter.RequiredProtocol switch
+            {
+                OtlpProtocol.HttpProtobuf => (dashboard.OtlpHttpEndpoint, "http/protobuf"),
+                OtlpProtocol.HttpJson => (dashboard.OtlpHttpEndpoint, "http/json"),
+                _ => (dashboard.OtlpGrpcEndpoint, "grpc"),
+            };
+
             resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
             {
                 context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
-                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = protocol;
                 context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
+                ApplyActivationEnvironmentVariables(resource, context.EnvironmentVariables);
                 return Task.CompletedTask;
             }));
         }
     }
+
+    private static void ApplyActivationEnvironmentVariables(
+        IResource resource,
+        IDictionary<string, object> environmentVariables)
+    {
+        if (GetEffectiveOtlpExporterAnnotation(resource) is not IReadOnlyDictionary<string, string> activationEnvironmentVariables)
+        {
+            return;
+        }
+
+        foreach (var (name, value) in activationEnvironmentVariables)
+        {
+            environmentVariables.TryAdd(name, value);
+        }
+    }
+
+    private static OtlpExporterAnnotation? GetEffectiveOtlpExporterAnnotation(IResource resource)
+        => resource.Annotations.OfType<OtlpExporterAnnotation>().LastOrDefault();
 
     private async Task DockerComposeUpAsync(PipelineStepContext context)
     {

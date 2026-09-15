@@ -21,7 +21,7 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnEventHubsEmulatorBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
@@ -62,7 +62,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true, null)]
     [InlineData(false, "random")]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyAzureEventHubsEmulatorResource(bool referenceHub, string? hubName)
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
@@ -112,7 +112,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AzureEventHubsHealthChecksUsesSettingsEventHubName(bool useSettings)
     {
         const string hubName = "myhub";
@@ -333,7 +333,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AzureEventHubsEmulatorResourceGeneratesConfigJson()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -387,7 +387,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AzureEventHubsEmulatorResourceGeneratesConfigJsonWithCustomizations()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -445,7 +445,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AzureEventHubsEmulator_WithConfigurationFile()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

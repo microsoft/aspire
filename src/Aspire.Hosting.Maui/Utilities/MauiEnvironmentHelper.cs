@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
-using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
 using Aspire.Hosting.ApplicationModel;
@@ -24,39 +23,33 @@ internal static class MauiEnvironmentHelper
     /// <summary>
     /// Creates an MSBuild targets file for Android that sets environment variables.
     /// </summary>
-    /// <param name="fileSystemService">The file system service for managing temp files.</param>
+    /// <param name="tempDirectory">The resource-specific temporary directory for the targets file.</param>
     /// <param name="resource">The resource to collect environment variables from.</param>
     /// <param name="executionContext">The execution context.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The path to the generated targets file, or null if no environment variables are present.</returns>
     public static async Task<string?> CreateAndroidEnvironmentTargetsFileAsync(
-        IFileSystemService fileSystemService,
+        string tempDirectory,
         IResource resource,
         DistributedApplicationExecutionContext executionContext,
         ILogger logger,
         CancellationToken cancellationToken)
     {
         var environmentVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var encodedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
             .WithEnvironmentVariablesConfig()
             .BuildAsync(executionContext, logger, cancellationToken)
             .ConfigureAwait(false);
 
-        // Normalize all the environment variables for the resource
+        // Normalize all the environment variables for the resource. Semicolon encoding is applied
+        // later in GenerateAndroidTargetsFileContent so it stays close to where the values are
+        // emitted into MSBuild items (mirroring the iOS targets file generation).
         foreach (var envVar in executionConfiguration.EnvironmentVariables)
         {
             var normalizedKey = envVar.Key.ToUpperInvariant();
-            var encodedValue = EncodeSemicolons(envVar.Value, out var wasEncoded);
-
-            environmentVariables[normalizedKey] = encodedValue;
-
-            if (wasEncoded)
-            {
-                encodedKeys.Add(normalizedKey);
-            }
+            environmentVariables[normalizedKey] = envVar.Value;
         }
 
         // If no environment variables, return null
@@ -65,15 +58,8 @@ internal static class MauiEnvironmentHelper
             return null;
         }
 
-        // Create a temporary targets file
-        var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-maui-android-env").Path;
-
-        // Prune old targets files
-        PruneOldTargets(tempDirectory, logger);
-
         var sanitizedName = SanitizeFileName(resource.Name + "-android");
-        var uniqueId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var targetsFilePath = Path.Combine(tempDirectory, $"{sanitizedName}-{uniqueId}.targets");
+        var targetsFilePath = Path.Combine(tempDirectory, $"{sanitizedName}.targets");
 
         // Generate the targets file content
         var targetsContent = GenerateAndroidTargetsFileContent(environmentVariables);
@@ -102,7 +88,8 @@ internal static class MauiEnvironmentHelper
         var itemGroup = new XElement("ItemGroup");
         foreach (var (key, value) in environmentVariables.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
         {
-            itemGroup.Add(new XElement("_GeneratedAndroidEnvironment", new XAttribute("Include", $"{key}={value}")));
+            var encodedValue = EncodeMSBuildItemValue(value, out _);
+            itemGroup.Add(new XElement("_GeneratedAndroidEnvironment", new XAttribute("Include", $"{key}={encodedValue}")));
         }
         projectElement.Add(itemGroup);
 
@@ -150,34 +137,6 @@ internal static class MauiEnvironmentHelper
         return stringWriter.ToString();
     }
 
-    private static void PruneOldTargets(string directory, ILogger logger)
-    {
-        var expiration = DateTimeOffset.UtcNow - TimeSpan.FromDays(1);
-        var deletedFiles = new List<string>();
-
-        foreach (var file in Directory.EnumerateFiles(directory, "*.targets", SearchOption.TopDirectoryOnly))
-        {
-            try
-            {
-                var info = new FileInfo(file);
-                if (info.Exists && info.LastWriteTimeUtc < expiration)
-                {
-                    info.Delete();
-                    deletedFiles.Add(info.Name);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogDebug(ex, "Failed to prune stale Android environment targets file '{TargetsFile}'.", file);
-            }
-        }
-
-        if (deletedFiles.Count > 0)
-        {
-            logger.LogDebug("Pruned {Count} stale Android environment targets file(s): {Files}", deletedFiles.Count, string.Join(", ", deletedFiles));
-        }
-    }
-
     internal static string SanitizeFileName(string name)
     {
         var invalidCharacters = Path.GetInvalidFileNameChars();
@@ -198,28 +157,32 @@ internal static class MauiEnvironmentHelper
         return new string(chars);
     }
 
-    internal static string EncodeSemicolons(string value, out bool wasEncoded)
+    internal static string EncodeMSBuildItemValue(string value, out bool wasEncoded)
     {
-        wasEncoded = value.Contains(';', StringComparison.Ordinal);
+        wasEncoded = value.Contains('%', StringComparison.Ordinal) || value.Contains(';', StringComparison.Ordinal);
         if (!wasEncoded)
         {
             return value;
         }
 
-        return value.Replace(";", "%3B", StringComparison.Ordinal);
+        // MSBuild item Include values use %-escaped sequences. Escape existing '%' first so a literal
+        // value like "foo%3Bbar" is preserved as "%253B" instead of being decoded into "foo;bar".
+        return value
+            .Replace("%", "%25", StringComparison.Ordinal)
+            .Replace(";", "%3B", StringComparison.Ordinal);
     }
 
     /// <summary>
     /// Creates an MSBuild targets file for iOS that sets environment variables.
     /// </summary>
-    /// <param name="fileSystemService">The file system service for managing temp files.</param>
+    /// <param name="tempDirectory">The resource-specific temporary directory for the targets file.</param>
     /// <param name="resource">The resource to collect environment variables from.</param>
     /// <param name="executionContext">The execution context.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The path to the generated targets file, or null if no environment variables are present.</returns>
     public static async Task<string?> CreateiOSEnvironmentTargetsFileAsync(
-        IFileSystemService fileSystemService,
+        string tempDirectory,
         IResource resource,
         DistributedApplicationExecutionContext executionContext,
         ILogger logger,
@@ -236,15 +199,8 @@ internal static class MauiEnvironmentHelper
             return null;
         }
 
-        // Create a temporary targets file
-        var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-maui-mlaunch-env").Path;
-
-        // Prune old targets files
-        PruneOldTargetsiOS(tempDirectory, logger);
-
         var sanitizedName = SanitizeFileName(resource.Name + "-ios");
-        var uniqueId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var targetsFilePath = Path.Combine(tempDirectory, $"{sanitizedName}-{uniqueId}.targets");
+        var targetsFilePath = Path.Combine(tempDirectory, $"{sanitizedName}.targets");
 
         // Generate the targets file content
         var targetsContent = GenerateiOSTargetsFileContent(executionConfiguration.EnvironmentVariables.ToDictionary());
@@ -275,8 +231,7 @@ internal static class MauiEnvironmentHelper
 
         foreach (var (key, value) in environmentVariables.OrderBy(kvp => kvp.Key, StringComparer.Ordinal))
         {
-            // Encode semicolons as %3B to prevent MSBuild from treating them as item separators
-            var encodedValue = value.Replace(";", "%3B", StringComparison.Ordinal);
+            var encodedValue = EncodeMSBuildItemValue(value, out _);
 
             // Add as MlaunchEnvironmentVariables item with Include="KEY=VALUE"
             itemGroup.Add(new XElement("MlaunchEnvironmentVariables",
@@ -305,31 +260,4 @@ internal static class MauiEnvironmentHelper
         return stringWriter.ToString();
     }
 
-    private static void PruneOldTargetsiOS(string directory, ILogger logger)
-    {
-        var expiration = DateTimeOffset.UtcNow - TimeSpan.FromDays(1);
-        var deletedFiles = new List<string>();
-
-        foreach (var file in Directory.EnumerateFiles(directory, "*.targets", SearchOption.TopDirectoryOnly))
-        {
-            try
-            {
-                var info = new FileInfo(file);
-                if (info.Exists && info.LastWriteTimeUtc < expiration)
-                {
-                    info.Delete();
-                    deletedFiles.Add(info.Name);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogDebug(ex, "Failed to prune stale iOS environment targets file '{TargetsFile}'.", file);
-            }
-        }
-
-        if (deletedFiles.Count > 0)
-        {
-            logger.LogDebug("Pruned {Count} stale iOS environment targets file(s): {Files}", deletedFiles.Count, string.Join(", ", deletedFiles));
-        }
-    }
 }

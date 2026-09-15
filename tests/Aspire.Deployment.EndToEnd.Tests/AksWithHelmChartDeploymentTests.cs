@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -116,8 +115,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 #pragma warning disable ASPIREAZURE003
 
 // AKS environment provisioned by Aspire (Azure Kubernetes Service).
-// Pin both the system and workload pools to DASv5 SKUs; the default workload pool
-// uses DSv5 SKUs which routinely hit vCPU quota in westus3.
+// Pin both the system and workload pools to a Standard_D2as_v5 SKU; the default pool SKUs
+// routinely hit vCPU quota, so we standardize on StandardDASv5Family, where we hold quota.
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSystemNodePool("Standard_D2as_v5");
 aks.AddNodePool("workload", "Standard_D2as_v5", 1, 3);
@@ -144,13 +143,15 @@ aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1"
             await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 8: Set env vars for deployment
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 9: Deploy to AKS
             output.WriteLine("Step 9: Starting AKS deployment with external Helm chart...");
-            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.TypeAsync("aspire deploy");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
@@ -214,19 +215,21 @@ aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1"
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
-            // Step 15: Destroy and verify the external Helm chart was uninstalled too.
-            output.WriteLine("Step 15: Destroying deployment...");
-            await auto.AspireDestroyAsync(counter);
-
-            // Step 16: Verify the podinfo release is gone (this is the WithDestroy() contract).
-            output.WriteLine("Step 16: Verifying podinfo Helm release was uninstalled by aspire destroy...");
-            await auto.TypeAsync(
-                "RELEASES=$(helm list -n podinfo -q 2>/dev/null); " +
-                "if [ -z \"$RELEASES\" ]; then echo 'VERIFY_OK: podinfo release was uninstalled'; " +
-                "else echo \"FAIL: podinfo release still exists: $RELEASES\"; exit 1; fi");
+            // Step 15: Replace the ambient kubeconfig so destroy proves it acquires AKS
+            // credentials itself instead of reusing the context configured in Step 10.
+            output.WriteLine("Step 15: Clearing ambient Kubernetes credentials...");
+            await auto.TypeAsync("export KUBECONFIG=$(mktemp)");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("VERIFY_OK", timeout: TimeSpan.FromMinutes(2));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
+
+            // Step 16: Destroy the application and opted-in external Helm chart before
+            // deleting the AKS resource group.
+            output.WriteLine("Step 16: Destroying deployment...");
+            await auto.TypeAsync("aspire destroy --yes");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("helm-uninstall-podinfo", timeout: TimeSpan.FromMinutes(10));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(20));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
 
             // Step 17: Exit terminal
             await auto.TypeAsync("exit");

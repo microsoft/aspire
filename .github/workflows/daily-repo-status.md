@@ -11,6 +11,10 @@ on:
   schedule: daily around 9am
   workflow_dispatch:
 
+# Only run in the canonical repository. Forks don't have the required
+# secrets/permissions for this report workflow.
+if: github.repository == 'microsoft/aspire'
+
 permissions:
   contents: read
   issues: read

@@ -13,7 +13,7 @@
   "include": [
     "*.ts",
     "../kafka-integration/host-runtime.ts",
-    "../.modules/**/*.ts"
+    "../.aspire/modules/**/*.mts"
   ],
   "exclude": ["node_modules"]
 }

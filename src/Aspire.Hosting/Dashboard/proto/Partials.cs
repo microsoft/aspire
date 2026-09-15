@@ -174,7 +174,8 @@ partial class Resource
             Hosting.ApplicationModel.ResourceCommandState.Enabled => ResourceCommandState.Enabled,
             Hosting.ApplicationModel.ResourceCommandState.Disabled => ResourceCommandState.Disabled,
             Hosting.ApplicationModel.ResourceCommandState.Hidden => ResourceCommandState.Hidden,
-            _ => throw new InvalidOperationException("Unexpected state: " + state)
+            // A newer or malformed state must not terminate WatchResources or become actionable for older clients.
+            _ => ResourceCommandState.Hidden
         };
     }
 }

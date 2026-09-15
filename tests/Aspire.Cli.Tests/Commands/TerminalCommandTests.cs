@@ -5,6 +5,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Hosting.Backchannel;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,7 +17,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -32,7 +33,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     {
         // The 'terminal' parent command is non-runnable; it prints help when invoked
         // alone and returns InvalidCommand to mirror the DashboardCommand pattern.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -46,7 +47,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalAttachCommand_WhenNoResourceArgument_FailsParsing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -60,7 +61,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -75,7 +76,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenAppHostLacksTerminalsV1Capability_ReturnsAppHostIncompatible()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -95,7 +96,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenResourceNotFound_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -115,7 +116,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenTerminalNotAvailable_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -140,7 +141,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenReplicasArrayEmpty_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -165,7 +166,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenReplicaIndexOutOfRange_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -209,7 +210,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         // Replicated resources share a DisplayName equal to the parent resource that
         // carries the TerminalAnnotation. Passing the parent name on the CLI must
         // resolve to the same canonical name when looking up terminal info.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? capturedResourceName = null;
 
         var (provider, backchannel) = CreateProviderWithBackchannel(
@@ -232,7 +233,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var monitor = (TestAuxiliaryBackchannelMonitor)provider.GetRequiredService<IAuxiliaryBackchannelMonitor>();
             var capturing = new CapturingTerminalAppHostBackchannel(backchannel, name => capturedResourceName = name);
             monitor.ClearConnections();
-            monitor.AddConnection("hash1", "socket.hash1", capturing);
+            monitor.AddConnection("socket.hash1", capturing);
 
             var command = provider.GetRequiredService<RootCommand>();
             var result = command.Parse("terminal attach myresource");
@@ -250,7 +251,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     {
         // When stdin or stdout is redirected and the resource has more than one replica,
         // the command must require --replica explicitly (rather than try to prompt).
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -293,7 +294,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalPsCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -311,7 +312,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         // Older AppHosts that pre-date the 'terminals.v1' capability return
         // SupportsTerminalsV1=false; the command must surface that explicitly rather
         // than misleadingly listing nothing.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -331,7 +332,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalPsCommand_WhenNoTerminalsRegistered_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -354,7 +355,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalPsCommand_WhenTerminalsPresent_RendersTableSuccessfully()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -400,7 +401,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalPsCommand_JsonFormat_WhenEmpty_EmitsEmptyArray()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // Capture stdout so we can verify the actual JSON contract — exit code
         // alone passes vacuously even if no JSON was written, the formatter
         // silently fell back to the text table, or the output isn't valid JSON.
@@ -451,7 +452,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         // ps --format json` to jq depend on field names + casing + verbose-only Peers
         // visibility staying stable; any rename, drop, or accidental verbosity
         // regression here breaks consumers silently.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var capturedOutput = new TestOutputTextWriter(outputHelper);
 
         // Two-resource shape covers the interesting matrix:
@@ -629,7 +630,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             SupportsTerminalsV1 = true
         };
         configure(backchannel);
-        monitor.AddConnection("hash1", "socket.hash1", backchannel);
+        monitor.AddConnection("socket.hash1", backchannel);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -668,7 +669,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             _onGetTerminalInfo = onGetTerminalInfo;
         }
 
-        public string Hash => _inner.Hash;
+        public IAppHostSocket Socket => _inner.Socket;
         public string SocketPath => _inner.SocketPath;
         public AppHostInformation? AppHostInfo => _inner.AppHostInfo;
         public bool IsInScope => _inner.IsInScope;
@@ -676,6 +677,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         public bool SupportsV2 => _inner.SupportsV2;
         public bool SupportsV3 => _inner.SupportsV3;
         public bool SupportsTerminalsV1 => _inner.SupportsTerminalsV1;
+        public bool SupportsResourceSnapshotVersionsV1 => _inner.SupportsResourceSnapshotVersionsV1;
 
         public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
         {

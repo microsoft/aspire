@@ -1,0 +1,10 @@
+﻿parameters:
+  myapp:
+    mode: "enabled"
+secrets:
+  myapp:
+    OPTIONS: ""
+    password: ""
+config:
+  myapp:
+    user: "alice"

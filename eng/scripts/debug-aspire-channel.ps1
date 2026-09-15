@@ -17,9 +17,9 @@
 
       overrideCliIdentityChannel       - forces the identity used for staging-feed
                                          routing decisions (here: 'staging').
-      overrideCliInformationalVersion  - forces the informational version the SHA
-                                         derivation and version-shape (quality)
-                                         checks read, e.g. 13.4.0-preview.1.x+<sha>.
+      overrideCliInformationalVersion  - forces the informational version used to
+                                         derive the SHA-specific feed URL, e.g.
+                                         13.4.0-preview.1.x+<sha>.
 
     Both flow into IConfiguration from environment variables (used here) OR from
     aspire.config.json, and are scoped to staging feed routing only. A CLI run
@@ -29,8 +29,8 @@
     The script runs 'aspire add <package> --debug' in a throwaway directory whose
     aspire.config.json pins channel: staging, then asserts the debug log contains
       Resolved 'staging' channel: feed=<expected darc feed>, quality=<expected>
-    The 'aspire add' step is expected to fail later (there is no real apphost
-    project in the scratch directory); only the feed-routing log line is validated.
+    A minimal TypeScript AppHost lets 'aspire add' reach package discovery; only
+    the feed-routing log line is validated.
 #>
 
 Set-StrictMode -Version Latest
@@ -58,7 +58,7 @@ function Invoke-DebugChannel {
 
     switch ($Kind) {
         'staging' { $kindLabel = 'staging (prerelease-shaped)'; $defaultVersion = $script:DefaultStagingVersion; $expectedQuality = 'Both' }
-        'stable'  { $kindLabel = 'staging (stable-shaped)';     $defaultVersion = $script:DefaultStableVersion;  $expectedQuality = 'Stable' }
+        'stable'  { $kindLabel = 'staging (stable-shaped)';     $defaultVersion = $script:DefaultStableVersion;  $expectedQuality = 'Both' }
     }
 
     if ([string]::IsNullOrEmpty($Sha)) {
@@ -161,9 +161,8 @@ function Invoke-DebugChannel {
     }
 
     # Throwaway working directory pinned to channel: staging so 'aspire add'
-    # filters to the synthesized staging channel. No real apphost project lives
-    # here, so 'add' will ultimately fail after feed routing has already been
-    # logged -- that is expected.
+    # filters to the synthesized staging channel. A minimal TypeScript AppHost is
+    # enough to reach package discovery without scaffolding a complete project.
     $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ("aspire-debug-" + [System.Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $scratch | Out-Null
     try {
@@ -172,10 +171,11 @@ function Invoke-DebugChannel {
   "channel": "staging"
 }
 '@ | Set-Content -Path (Join-Path $scratch 'aspire.config.json') -Encoding utf8
+        Set-Content -Path (Join-Path $scratch 'apphost.ts') -Value '' -NoNewline
 
         $log = Join-Path $scratch 'aspire-debug.log'
         Write-Host ">> Running: aspire add $Package --debug $($PassThrough -join ' ')"
-        Write-Host '   (feed routing is logged before the add step fails on the missing apphost)'
+        Write-Host '   (only feed routing is validated; the add result itself is ignored)'
         Write-Host ''
 
         # The overrides are scoped to THIS invocation only (set then removed), so

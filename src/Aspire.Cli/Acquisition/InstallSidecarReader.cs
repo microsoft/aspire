@@ -16,9 +16,9 @@ namespace Aspire.Cli.Acquisition;
 /// </summary>
 internal sealed class InstallSidecarReader : IInstallSidecarReader
 {
-    private readonly ILogger<InstallSidecarReader>? _logger;
+    private readonly ILogger<InstallSidecarReader> _logger;
 
-    public InstallSidecarReader(ILogger<InstallSidecarReader>? logger = null)
+    public InstallSidecarReader(ILogger<InstallSidecarReader> logger)
     {
         _logger = logger;
     }
@@ -44,20 +44,20 @@ internal sealed class InstallSidecarReader : IInstallSidecarReader
     {
         if (string.IsNullOrEmpty(binaryDir))
         {
-            _logger?.LogDebug("Install sidecar read skipped because the binary directory is empty.");
+            _logger.LogDebug("Install sidecar read skipped because the binary directory is empty.");
             return new InstallSidecarReadResult.NotFound(string.Empty);
         }
 
         var sidecarPath = Path.Combine(binaryDir, SidecarFileName);
         if (!File.Exists(sidecarPath))
         {
-            _logger?.LogDebug("Install sidecar file '{SidecarPath}' does not exist.", sidecarPath);
+            _logger.LogDebug("Install sidecar file '{SidecarPath}' does not exist.", sidecarPath);
             return new InstallSidecarReadResult.NotFound(sidecarPath);
         }
 
         if (TryGetOversizedSidecarReason(sidecarPath, out var oversizedReason))
         {
-            _logger?.LogDebug("Install sidecar file '{SidecarPath}' rejected: {Reason}.", sidecarPath, oversizedReason);
+            _logger.LogDebug("Install sidecar file '{SidecarPath}' rejected: {Reason}.", sidecarPath, oversizedReason);
             return new InstallSidecarReadResult.Invalid(sidecarPath, oversizedReason);
         }
 
@@ -65,11 +65,11 @@ internal sealed class InstallSidecarReader : IInstallSidecarReader
         {
             if (error is JsonException)
             {
-                _logger?.LogDebug(error, "Install sidecar file '{SidecarPath}' contains malformed JSON.", sidecarPath);
+                _logger.LogDebug(error, "Install sidecar file '{SidecarPath}' contains malformed JSON.", sidecarPath);
             }
             else
             {
-                _logger?.LogDebug(error, "Install sidecar file '{SidecarPath}' could not be read due to a path, permission, or IO error.", sidecarPath);
+                _logger.LogDebug(error, "Install sidecar file '{SidecarPath}' could not be read due to a path, permission, or IO error.", sidecarPath);
             }
 
             return new InstallSidecarReadResult.Invalid(sidecarPath, error?.Message ?? "Install sidecar file could not be read.");

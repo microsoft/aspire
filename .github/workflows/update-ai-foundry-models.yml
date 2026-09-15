@@ -3,7 +3,7 @@ name: Update Microsoft Foundry Models
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 5 * * *' # Daily at 05:00 UTC
+    - cron: '6 7 * * MON' # Runs at 07:06, only on Monday
 
 permissions:
   contents: write

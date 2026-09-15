@@ -1,0 +1,53 @@
+﻿{
+  "schemaVersion": 1,
+  "language": "typescript",
+  "generator": {
+    "name": "Aspire.Hosting.CodeGeneration.TypeScript",
+    "version": "13.5.0"
+  },
+  "package": {
+    "name": "Aspire.Hosting.Contoso",
+    "version": "1.2.3"
+  },
+  "modules": [
+    {
+      "name": "index",
+      "items": [
+        {
+          "id": "interface:ContosoResource",
+          "kind": "interface",
+          "name": "ContosoResource",
+          "typeId": "Aspire.Hosting.Contoso/ContosoResource",
+          "owningAssembly": "Aspire.Hosting.Contoso",
+          "declaration": "export interface ContosoResource",
+          "summary": "A Contoso resource.",
+          "members": [
+            {
+              "id": "member:ContosoResource.configure",
+              "kind": "method",
+              "name": "configure",
+              "declaration": "configure(enabled?: boolean): Promise\u003Cvoid\u003E",
+              "capabilityId": "Aspire.Hosting.Contoso/configure",
+              "returnType": "Promise\u003Cvoid\u003E",
+              "parameters": [
+                {
+                  "name": "enabled",
+                  "type": "boolean",
+                  "optional": true,
+                  "summary": "Whether configuration is enabled."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "declarations": [
+    {
+      "id": "interface:ContosoResource",
+      "owningAssembly": "Aspire.Hosting.Contoso",
+      "content": "export interface ContosoResource {\n    configure(enabled?: boolean): Promise\u003Cvoid\u003E;\n}"
+    }
+  ]
+}

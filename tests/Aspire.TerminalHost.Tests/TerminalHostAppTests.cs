@@ -12,7 +12,7 @@ namespace Aspire.TerminalHost.Tests;
 public sealed class TerminalHostAppTestsCollection;
 
 [Collection(nameof(TerminalHostAppTestsCollection))]
-public class TerminalHostAppTests
+public class TerminalHostAppTests(ITestOutputHelper outputHelper)
 {
     /// <summary>
     /// Builds a single-replica argument set for the host. Each terminal host process
@@ -20,19 +20,19 @@ public class TerminalHostAppTests
     /// producer/consumer/control UDS path triple. The replica index is opaque to the
     /// host — callers encode it however they like in the path layout.
     /// </summary>
-    private static (TerminalHostArgs args, TestTempDirectory tmp, string controlPath) BuildArgs()
+    private (TerminalHostArgs args, TemporaryWorkspace workspace, string controlPath) BuildArgs()
     {
-        var tmp = new TestTempDirectory();
-        var dcpDir = Path.Combine(tmp.Path, "dcp");
-        var hostDir = Path.Combine(tmp.Path, "host");
-        var ctrlDir = Path.Combine(tmp.Path, "control");
+        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dcpDir = Path.Combine(workspace.Path, "dcp");
+        var hostDir = Path.Combine(workspace.Path, "host");
+        var ctrlDir = Path.Combine(workspace.Path, "ctl");
         Directory.CreateDirectory(dcpDir);
         Directory.CreateDirectory(hostDir);
         Directory.CreateDirectory(ctrlDir);
 
         var producer = Path.Combine(dcpDir, "r.sock");
         var consumer = Path.Combine(hostDir, "r.sock");
-        var control = Path.Combine(ctrlDir, "ctrl.sock");
+        var control = Path.Combine(ctrlDir, "c.sock");
 
         var args = TerminalHostArgs.Parse([
             "--producer-uds", producer,
@@ -40,14 +40,14 @@ public class TerminalHostAppTests
             "--control-uds", control,
         ]);
 
-        return (args, tmp, control);
+        return (args, workspace, control);
     }
 
     [Fact]
     public async Task RunAsyncBindsControlListenerWhenStarted()
     {
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -69,8 +69,8 @@ public class TerminalHostAppTests
     [Fact]
     public async Task ControlEndpointReturnsSessionInfo()
     {
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -101,8 +101,8 @@ public class TerminalHostAppTests
     [Fact]
     public async Task ShutdownRequestCausesRunAsyncToReturn()
     {
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -129,8 +129,8 @@ public class TerminalHostAppTests
         // ServeClientAsync had registered into _activeRpcs, ending up with two
         // concurrently-served sessions instead of one. The reservation counter
         // increment must happen synchronously under _gate at the accept site.
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -206,8 +206,8 @@ public class TerminalHostAppTests
     [Fact]
     public async Task SnapshotSessionReportsConfiguredPaths()
     {
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -253,8 +253,8 @@ public class TerminalHostAppTests
             return;
         }
 
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         // Pre-place leftovers exactly as a crashed previous host would have left them.
         File.WriteAllBytes(args.ProducerUdsPath, []);
@@ -297,8 +297,8 @@ public class TerminalHostAppTests
         // same UDS path, with ProducerConnected and RestartCount tracking
         // each cycle. This exercises the path DCP exercises in production
         // when the underlying process exits and gets relaunched.
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -373,13 +373,63 @@ public class TerminalHostAppTests
     }
 
     [Fact]
+    public async Task GracefulCancellationDeletesProducerAndConsumerSockets()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/19302: on a graceful
+        // `aspire stop`, DCP signals the terminal host (SIGTERM) which Program.cs turns into a
+        // cancellation of the token passed to RunAsync. That cancellation MUST flow through
+        // TearDownAsync -> TerminalReplica.DisposeAsync and unlink both listen sockets
+        // ({id}.dcp.sock producer + {id}.host.sock consumer). If it doesn't (the old SIGINT-only
+        // behavior), the child is SIGKILLed while those sockets are still bound and both files
+        // leak on disk. This test drives exactly the token-cancel path the SIGTERM handler now
+        // invokes and asserts both files are gone afterward.
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
+
+        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+        using var hostCts = new CancellationTokenSource();
+        var hostTask = app.RunAsync(hostCts.Token);
+
+        try
+        {
+            await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
+
+            // Both listen sockets are bound while the replica waits for its first producer — this
+            // is precisely the on-disk state that leaks under SIGKILL. The producer UDS is a
+            // single-accept listener (its file disappears once a producer dials in), so we assert
+            // on the pre-connect bound state rather than connecting a producer. Wait for both to
+            // exist first; otherwise the "deleted after shutdown" assertion below could pass
+            // trivially because the sockets were never bound.
+            await WaitForFileAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(10));
+            await WaitForFileAsync(args.ConsumerUdsPath, TimeSpan.FromSeconds(10));
+            Assert.True(File.Exists(args.ProducerUdsPath), "Producer socket should be bound while the replica waits.");
+            Assert.True(File.Exists(args.ConsumerUdsPath), "Consumer socket should be bound while the replica waits.");
+        }
+        finally
+        {
+            // Cancel ONLY the external token — this is precisely what Program.cs's SIGINT/SIGTERM
+            // handler does (cts.Cancel()). We deliberately do NOT call app.RequestShutdown() so the
+            // test exercises the signal-driven graceful path end to end.
+            hostCts.Cancel();
+            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        Assert.False(
+            File.Exists(args.ProducerUdsPath),
+            $"Producer socket '{args.ProducerUdsPath}' should be deleted after graceful shutdown.");
+        Assert.False(
+            File.Exists(args.ConsumerUdsPath),
+            $"Consumer socket '{args.ConsumerUdsPath}' should be deleted after graceful shutdown.");
+    }
+
+    [Fact]
     public async Task SessionSnapshotIncludesNewFields()
     {
         // Even before any producer has connected, the snapshot must populate
         // the new fields so older AppHost wire deserialisation never sees a
         // missing-required-property error.
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -415,8 +465,8 @@ public class TerminalHostAppTests
         // minimal HMP1 server never sends Hello.PrimaryPeerId or RoleChange.
         // Without this bridge, the underlying PTY stayed at its DCP-initial
         // dims forever.
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -770,8 +820,8 @@ public class TerminalHostAppTests
             return;
         }
 
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -807,8 +857,8 @@ public class TerminalHostAppTests
             return;
         }
 
-        var (args, tmp, _) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, _) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();

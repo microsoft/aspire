@@ -55,6 +55,13 @@ Where arch is `x64` or `arm64`.
 | `release-publish-nuget.yml` (release) | —                                               | Stable manifests only |
 
 Publishing submits a PR to `microsoft/winget-pkgs` using `wingetcreate submit`.
+The Azure DevOps prepare stage also installs the .NET 9 runtime, downloads the
+latest standalone `wingetcreate`, and runs `wingetcreate info`. This
+side-effect-free smoke catches runtime compatibility changes before the release
+pipeline attempts a public submission; it does not exercise credentials or
+submission. The release WinGet job repeats the same startup check whenever that
+job is selected, including dry-run and non-production-branch builds, while the
+submission step remains limited to non-dry-run production builds.
 
 ## Validation model
 

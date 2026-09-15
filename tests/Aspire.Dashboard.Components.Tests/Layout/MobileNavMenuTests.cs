@@ -8,6 +8,7 @@ using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
@@ -20,7 +21,7 @@ public class MobileNavMenuTests : DashboardTestContext
     {
         var cut = RenderMobileNavMenu(DashboardUrls.StructuredLogsUrl());
 
-        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuStructuredLogsTab);
+        AssertMenuItemIsActive(cut, Resources.StructuredLogs.StructuredLogsHeader);
     }
 
     [Fact]
@@ -28,7 +29,7 @@ public class MobileNavMenuTests : DashboardTestContext
     {
         var cut = RenderMobileNavMenu(DashboardUrls.StructuredLogsUrl(logLevel: "warning"));
 
-        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuStructuredLogsTab);
+        AssertMenuItemIsActive(cut, Resources.StructuredLogs.StructuredLogsHeader);
     }
 
     [Fact]
@@ -44,15 +45,65 @@ public class MobileNavMenuTests : DashboardTestContext
     {
         var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl());
 
-        var style = cut.Find("fluent-menu").GetAttribute("style");
+        var menu = cut.Find("fluent-menu-list");
+        var style = menu.GetAttribute("style");
+
+        Assert.Empty(cut.FindAll("fluent-menu"));
+        Assert.Equal(MobileNavMenu.MobileNavMenuId, menu.Id);
+        Assert.Equal(cut.FindAll("fluent-menu-item").Count, menu.QuerySelectorAll(":scope > fluent-menu-item").Length);
+        Assert.Equal(cut.FindAll("fluent-menu-item").Count - 1, cut.FindAll("fluent-divider").Count);
+        Assert.Equal("fluent-menu-item", menu.Children.First().LocalName);
+        Assert.Equal("fluent-menu-item", menu.Children.Last().LocalName);
 
         Assert.Contains("max-height: calc(100dvh - var(--mobile-header-height) - var(--mobile-nav-menu-offset))", style);
         Assert.DoesNotContain("height: 100vh", style);
         Assert.Contains("margin-top: var(--mobile-nav-menu-offset)", style);
         Assert.Contains("overflow-y: auto", style);
+        Assert.Contains("padding-block: var(--mobile-nav-menu-focus-padding)", style);
+        Assert.Contains("scroll-padding-block: var(--mobile-nav-menu-focus-padding)", style);
+        Assert.Contains("mobile-nav-menu", menu.ClassList);
     }
 
-    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl)
+    [Fact]
+    public void Render_OpenMenu_InitializesKeyboardNavigationWithComponentReferenceAndMenuId()
+    {
+        _ = RenderMobileNavMenu(DashboardUrls.ResourcesUrl());
+
+        var invocation = Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeMobileNavMenuKeyboardNavigation");
+        Assert.Collection(
+            invocation.Arguments,
+            argument => Assert.IsAssignableFrom<DotNetObjectReference<MobileNavMenu>>(argument),
+            argument => Assert.Equal(MobileNavMenu.MobileNavMenuId, argument));
+    }
+
+    [Fact]
+    public async Task CloseMobileNavMenuFromFocusLossAsync_ClosesMenuWithoutRestoringFocus()
+    {
+        var closeNavMenuCalled = false;
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true, isNavMenuOpen: false);
+
+        await cut.InvokeAsync(cut.Instance.CloseMobileNavMenuFromFocusLossAsync);
+
+        Assert.True(closeNavMenuCalled);
+        Assert.DoesNotContain(JSInterop.Invocations, invocation => invocation.Identifier == "focusElement");
+    }
+
+    [Fact]
+    public async Task CloseMobileNavMenuFromKeyboardAsync_ClosesMenuAndRestoresFocus()
+    {
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
+        var closeNavMenuCalled = false;
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true, isNavMenuOpen: false);
+
+        await cut.InvokeAsync(cut.Instance.CloseMobileNavMenuFromKeyboardAsync);
+
+        Assert.True(closeNavMenuCalled);
+        var invocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "focusElement");
+        var argument = Assert.Single(invocation.Arguments);
+        Assert.Equal(MainLayout.NavigationButtonId, argument);
+    }
+
+    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
@@ -60,19 +111,18 @@ public class MobileNavMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(currentUrl);
 
         return RenderComponent<MobileNavMenu>(builder =>
         {
-            builder.Add(p => p.IsNavMenuOpen, true);
-            builder.Add(p => p.IsAIEnabled, false);
-            builder.Add(p => p.CloseNavMenu, () => { });
+            builder.Add(p => p.IsNavMenuOpen, isNavMenuOpen);
+            builder.Add(p => p.CloseNavMenu, closeNavMenu ?? (() => { }));
             builder.Add(p => p.LaunchHelpAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchAIAgentsAsync, () => Task.CompletedTask);
             builder.Add(p => p.IsAgentHelpEnabled, false);
-            builder.Add(p => p.LaunchAIAssistantAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchNotificationsAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchSettingsAsync, () => Task.CompletedTask);
         });
@@ -86,8 +136,7 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.True(currentItem.ClassList.Contains("mobile-nav-menu-item-active"));
 
         // The active item swaps to the filled icon variant and tags the slot wrapper
-        // with mobile-nav-menu-icon-active so non-color cues stay alongside the
-        // ::before accent bar styled in app.css.
+        // so the selected state has a non-color cue.
         var activeIconSlot = Assert.Single(currentItem.QuerySelectorAll(".mobile-nav-menu-icon-active"));
         Assert.Equal("start", activeIconSlot.GetAttribute("slot"));
         Assert.NotEmpty(activeIconSlot.QuerySelectorAll("svg"));

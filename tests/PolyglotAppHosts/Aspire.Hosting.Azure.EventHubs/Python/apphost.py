@@ -6,10 +6,10 @@ from aspire_app import create_builder
 
 with create_builder() as builder:
     event_hubs = builder.add_azure_event_hubs("resource")
-    event_hubs.with_event_hubs_role_assignments()
+    event_hubs.with_event_hubs_role_assignments(event_hubs, ["AzureEventHubsDataOwner"])
     hub = event_hubs.add_hub("resource")
-    hub.with_properties()
+    hub.with_properties(lambda _properties: None)
     consumer_group = hub.add_consumer_group("resource")
-    consumer_group.with_event_hubs_role_assignments()
+    consumer_group.with_event_hubs_role_assignments(event_hubs, ["AzureEventHubsDataReceiver"])
     event_hubs.run_as_emulator()
     builder.run()

@@ -144,7 +144,7 @@ public class ProvisioningContextTests
     public void ProvisioningContext_CanBeCustomized()
     {
         // Arrange
-        var customPrincipal = new UserPrincipal(Guid.NewGuid(), "custom@example.com");
+        var customPrincipal = new AzurePrincipal(Guid.NewGuid(), "custom@example.com");
 
         // Act
         var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
@@ -211,15 +211,12 @@ public class ProvisioningServicesTests
     }
 
     [Fact]
-    public async Task TestUserPrincipalProvider_CanGetUserPrincipal()
+    public async Task TestAzurePrincipalProvider_CanGetPrincipal()
     {
-        // Arrange
-        var provider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var provider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
 
-        // Act
-        var principal = await provider.GetUserPrincipalAsync();
+        var principal = await provider.GetPrincipalAsync();
 
-        // Assert
         Assert.NotNull(principal);
         Assert.NotEqual(Guid.Empty, principal.Id);
         Assert.False(string.IsNullOrEmpty(principal.Name));

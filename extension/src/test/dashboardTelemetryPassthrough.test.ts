@@ -100,17 +100,61 @@ suite('DashboardTelemetryPassthrough.bundleDashboardData', () => {
         assert.deepStrictEqual(measurements, { v: { 'Aspire.Dashboard.StructuredLogs.FilterCount': 1 } });
     });
 
-    test('stringifies known booleans and string arrays inside dashboard_properties', () => {
+    test('formats known booleans and string arrays inside dashboard_properties', () => {
         const result = bundleDashboardData({
             'Aspire.Dashboard.ConsoleLogs.ShowTimestamp': { value: true, propertyType: PropertyType.Basic },
             'Aspire.Dashboard.AIAssistant.Enabled': { value: false, propertyType: PropertyType.Basic },
-            'Aspire.Dashboard.Resource.Types': { value: ['project', 'container'], propertyType: PropertyType.Basic },
+            'Aspire.Dashboard.Resource.Types': {
+                value: ['project', 'container;special"', 'plain\\value'],
+                propertyType: PropertyType.Basic,
+            },
         });
         const envelope = JSON.parse(result.properties ?? '');
         assert.strictEqual(envelope.v['Aspire.Dashboard.ConsoleLogs.ShowTimestamp'], 'true');
         assert.strictEqual(envelope.v['Aspire.Dashboard.AIAssistant.Enabled'], 'false');
-        assert.strictEqual(envelope.v['Aspire.Dashboard.Resource.Types'], '["project","container"]');
+        assert.deepStrictEqual(
+            envelope.v['Aspire.Dashboard.Resource.Types'],
+            ['project', 'container;special_', 'plain_value']);
         assert.strictEqual(envelope.t, undefined);
+    });
+
+    test('redacts non-HTTP hierarchical URIs before bundling', () => {
+        const result = bundleDashboardData({
+            'Aspire.Dashboard.RequestId': {
+                value: 'ssh://alice@internal.example/repository',
+                propertyType: PropertyType.Basic,
+            },
+        });
+
+        assert.deepStrictEqual(JSON.parse(result.properties ?? ''), {
+            v: { 'Aspire.Dashboard.RequestId': '<redacted>' },
+        });
+    });
+
+    test('bounds large values before running sensitive-value detection', () => {
+        const started = performance.now();
+        const result = bundleDashboardData({
+            'Aspire.Dashboard.RequestId': {
+                value: 'a/'.repeat(50_000),
+                propertyType: PropertyType.Basic,
+            },
+        });
+        const elapsedMs = performance.now() - started;
+
+        assert.ok(elapsedMs < 1_500, `expected bounded sanitization under 1500ms, got ${elapsedMs}ms`);
+        assert.deepStrictEqual(JSON.parse(result.properties ?? ''), {
+            v: { 'Aspire.Dashboard.RequestId': '<redacted>' },
+        });
+    });
+
+    test('removes lone surrogates before encoding dashboard_properties', () => {
+        const result = bundleDashboardData({
+            'Aspire.Dashboard.Version': { value: 'before\uD800after', propertyType: PropertyType.Basic },
+        });
+
+        assert.deepStrictEqual(JSON.parse(result.properties ?? ''), {
+            v: { 'Aspire.Dashboard.Version': 'before_after' },
+        });
     });
 
     test('skips null and undefined values', () => {

@@ -144,6 +144,7 @@ internal sealed class ExternalCapabilityRegistry
         var projectedCapabilities = _capabilities.Values
             .Select(c => c.ProjectedCapability)
             .OfType<AtsCapabilityInfo>()
+            .OrderBy(c => c.CapabilityId, StringComparer.Ordinal)
             .ToList();
 
         if (projectedCapabilities.Count == 0)
@@ -161,6 +162,7 @@ internal sealed class ExternalCapabilityRegistry
             HandleTypes = context.HandleTypes,
             DtoTypes = context.DtoTypes,
             EnumTypes = context.EnumTypes,
+            ExportedValues = context.ExportedValues,
             Diagnostics = context.Diagnostics
         };
 
@@ -352,6 +354,7 @@ internal sealed class ExternalCapabilityRegistry
             TypeId = typeRef.TypeId,
             Category = typeRef.Category,
             IsInterface = typeRef.IsInterface,
+            IsNullable = typeRef.IsNullable,
             IsReadOnly = typeRef.IsReadOnly,
             ElementType = typeRef.ElementType is not null ? CreateTypeRef(typeRef.ElementType) : null,
             KeyType = typeRef.KeyType is not null ? CreateTypeRef(typeRef.KeyType) : null,
@@ -404,6 +407,7 @@ internal sealed class ExternalCapabilityRegistry
         public string TypeId { get; set; } = "";
         public AtsTypeCategory Category { get; set; }
         public bool IsInterface { get; set; }
+        public bool? IsNullable { get; set; }
         public bool IsReadOnly { get; set; }
         public ExternalTypeRef? ElementType { get; set; }
         public ExternalTypeRef? KeyType { get; set; }

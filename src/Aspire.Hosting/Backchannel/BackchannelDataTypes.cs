@@ -61,6 +61,11 @@ internal static class AuxiliaryBackchannelCapabilities
     /// Older clients ignore the new fields/RPC; new clients gate CLI/UI affordances on this capability.
     /// </summary>
     public const string Terminals_V1 = "terminals.v1";
+
+    /// <summary>
+    /// Resource snapshot version capability: snapshots include monotonic versions that can be used for ordering.
+    /// </summary>
+    public const string ResourceSnapshotVersions_V1 = "resource-snapshot-versions.v1";
 }
 
 /// <summary>
@@ -907,6 +912,22 @@ internal sealed class PublishingPromptInput
     public bool Loading { get; init; }
 
     public bool Disabled { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether multiple files can be selected for File inputs.
+    /// </summary>
+    public bool AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets the file type filter for File inputs. Uses the same format as the HTML accept attribute.
+    /// The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as "image/*".
+    /// </summary>
+    public string? FileFilter { get; init; }
+
+    /// <summary>
+    /// Gets the maximum file size in bytes for File inputs. Null means no explicit limit.
+    /// </summary>
+    public long? MaxFileSize { get; init; }
 }
 
 /// <summary>
@@ -934,9 +955,13 @@ internal static class CompletionStates
 
 internal class BackchannelLogEntry
 {
+    public long SequenceNumber { get; set; }
+    public Guid GenerationId { get; set; }
     public required EventId EventId { get; set; }
     public required LogLevel LogLevel { get; set; }
     public required string Message { get; set; }
+
+    public string? Exception { get; set; }
     public required DateTimeOffset Timestamp { get; set; }
     public required string CategoryName { get; set; }
 }
@@ -945,6 +970,29 @@ internal class PublishingPromptInputAnswer
 {
     public string? Name { get; set; }
     public string? Value { get; set; }
+}
+
+internal sealed class UploadFileRequest
+{
+    public required byte[] Data { get; set; }
+    public required string FileName { get; set; }
+    public required int InteractionId { get; set; }
+    public required string InputName { get; set; }
+}
+
+internal sealed class UploadFileResponse
+{
+    public required string FileId { get; set; }
+}
+
+/// <summary>
+/// Represents a file reference as serialized in interaction input values.
+/// Matches the JSON format: [{"Id":"...","Name":"..."}]
+/// </summary>
+internal sealed class FileReferenceDto
+{
+    public required string Id { get; set; }
+    public required string Name { get; set; }
 }
 
 /// <summary>
@@ -1035,6 +1083,11 @@ internal sealed class ResourceSnapshot
     /// Gets the unique name of the resource.
     /// </summary>
     public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the monotonically increasing version of this resource snapshot, or <c>0</c> when unavailable.
+    /// </summary>
+    public long Version { get; init; }
 
     /// <summary>
     /// Gets the display name of the resource.
@@ -1447,15 +1500,48 @@ internal sealed class AppHostInformation
     public int? CliProcessId { get; init; }
 
     /// <summary>
-    /// Gets or sets when the AppHost process started.
+    /// Gets or sets when the AppHost process started using the legacy <see cref="Process.StartTime"/> clock domain.
     /// </summary>
+    /// <remarks>
+    /// Released AppHosts only report this field. On Linux it can differ from the stable PID-identity
+    /// value by an adjacent Unix second, so callers that verify process identity should prefer
+    /// <see cref="StableStartedAt"/> when it is present and use a runtime-start-time verifier for this
+    /// fallback field.
+    /// </remarks>
     public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets when the AppHost process started using the stable PID-identity clock domain.
+    /// </summary>
+    /// <remarks>
+    /// Current AppHosts report this additive field so callers can perform exact PID-reuse checks while
+    /// still accepting older AppHosts that only sent <see cref="StartedAt"/>.
+    /// </remarks>
+    public DateTimeOffset? StableStartedAt { get; init; }
 
     /// <summary>
     /// Gets or sets when the CLI process that launched the AppHost started.
     /// This value is only set when the AppHost is launched via the Aspire CLI.
     /// </summary>
+    /// <remarks>
+    /// This value comes from <c>ASPIRE_CLI_STARTED</c>, which is intentionally stamped from
+    /// <see cref="Process.StartTime"/> for released-AppHost compatibility. On Linux it drifts across
+    /// processes after a wall-clock adjustment, so prefer <see cref="CliStableStartedAt"/> when it is
+    /// present.
+    /// </remarks>
     public DateTimeOffset? CliStartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets when the CLI process that launched the AppHost started, using the stable
+    /// PID-identity clock domain.
+    /// </summary>
+    /// <remarks>
+    /// This value comes from <c>ASPIRE_CLI_STARTED_STABLE</c> and, unlike <see cref="CliStartedAt"/>,
+    /// is derived from Linux <c>/proc</c> start ticks so it survives wall-clock adjustments and can be
+    /// compared exactly to guard against CLI PID reuse. Current CLIs stamp it; older CLIs do not, so
+    /// this additive field is <see langword="null"/> when the AppHost was launched by an older CLI.
+    /// </remarks>
+    public DateTimeOffset? CliStableStartedAt { get; init; }
 
     /// <summary>
     /// Gets or sets the log file path of the CLI process that launched the AppHost.
@@ -1731,4 +1817,3 @@ internal sealed class ResourceLogBatch
     /// </summary>
     public required ResourceLogLine[] Lines { get; init; }
 }
-

@@ -2,10 +2,11 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as https from 'https';
 import * as path from 'path';
-import type { AspireAppHostState as AppHostState, AspireDebugSessionState, AspireExtensionE2EControlStatus as ExtensionE2EControlStatus, AspireExtensionE2EStateFile as ExtensionE2EStateFile, AspireExtensionStateSnapshot as ExtensionStateSnapshot, AspireResourceState as ResourceState } from '../../types/extensionApi';
-import { getControlFilePath, getPrimaryAppHostProjectPath, getStateFilePath, getWorkspaceRoot } from './paths';
+import type { AspireAppHostState as AppHostState, AspireDebugSessionState, AspireExtensionE2EControlStatus as ExtensionE2EControlStatus, AspireExtensionE2EStateFile as ExtensionE2EStateFile, AspireExtensionE2ETaskProcessEvent as TaskProcessEvent, AspireExtensionStateSnapshot as ExtensionStateSnapshot, AspireResourceState as ResourceState } from '../../types/extensionApi';
+import { getControlFilePath, getPrimaryAppHostProjectPath, getRunId, getStateFilePath, getWorkspaceRoot } from './paths';
 
 type CommandInvocation = ExtensionE2EStateFile['commandInvocations'][number];
+type BrowserDebugSession = ExtensionE2EStateFile['browserDebugSessions'][number];
 interface Deadline {
     readonly started: number;
     readonly timeoutMs: number;
@@ -20,12 +21,23 @@ export async function waitForRepositoryIdle(timeoutMs = 120000): Promise<Extensi
 }
 
 export async function waitForWorkspaceAppHost(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
+    return await waitForWorkspaceAppHostCandidate(getPrimaryAppHostProjectPath(), timeoutMs);
+}
+
+/**
+ * Waits for discovery to surface a specific AppHost.
+ *
+ * Opening the workspace folder is part of the wait rather than a precondition: discovery does not
+ * run at all while the harness still has its own folder open, so a caller that skips it observes an
+ * empty candidate list until the timeout.
+ */
+export async function waitForWorkspaceAppHostCandidate(appHostPath: string, timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
     const deadline = createDeadline(timeoutMs);
     await ensureWorkspaceFolderOpen(deadline);
     return await waitForExtensionState(
-        file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getPrimaryAppHostProjectPath())),
-        'workspace AppHost candidate',
-        getRemainingTimeout(deadline, 'workspace AppHost candidate'));
+        file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, appHostPath)),
+        `workspace AppHost candidate '${appHostPath}'`,
+        getRemainingTimeout(deadline, `workspace AppHost candidate '${appHostPath}'`));
 }
 
 export async function waitForSelectedWorkspaceAppHost(appHostPath = getPrimaryAppHostProjectPath(), timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
@@ -64,6 +76,14 @@ export async function waitForResource(resourceName: string, timeoutMs = 120000):
 
 export async function waitForResourceState(resourceName: string, states: readonly string[], timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
     return await waitForExtensionState(file => getResources(file.state).some(resource => isResourceMatch(resource, resourceName) && resource.state !== null && states.includes(resource.state)), `resource '${resourceName}' state ${states.join(' or ')}`, timeoutMs);
+}
+
+export async function waitForRunningResourceWithUrl(resourceName: string, protocol: string, timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
+    return await waitForExtensionState(file => {
+        const resource = findResource(file.state, resourceName);
+        return resource?.state === 'Running'
+            && resource.urls?.some(url => new URL(url.url).protocol === protocol) === true;
+    }, `resource '${resourceName}' to be Running with a '${protocol}' URL`, timeoutMs);
 }
 
 export async function waitForDashboardUrl(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
@@ -105,6 +125,49 @@ export async function waitForNoDebugSessions(timeoutMs = 90000): Promise<Extensi
     return await waitForExtensionState(file => file.state.debugSessions.length === 0, 'debug sessions to stop', timeoutMs);
 }
 
+export async function waitForBrowserDebugSession(timeoutMs = 120000): Promise<BrowserDebugSession> {
+    const file = await waitForExtensionState(
+        stateFile => stateFile.browserDebugSessions.some(session => session.parentSessionType === 'aspire'),
+        'dashboard browser debug session to start',
+        timeoutMs);
+    const session = file.browserDebugSessions.find(candidate => candidate.parentSessionType === 'aspire');
+    if (!session) {
+        throw new Error('Dashboard browser debug session was not found even though the state predicate matched.');
+    }
+
+    return session;
+}
+
+export async function waitForNoBrowserDebugSessions(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
+    return await waitForExtensionState(file => file.browserDebugSessions.length === 0, 'browser debug sessions to terminate', timeoutMs);
+}
+
+export function getBrowserDebugSessions(): readonly BrowserDebugSession[] {
+    return readStateFile().browserDebugSessions;
+}
+
+export async function waitForTaskProcessEvent(
+    predicate: (event: TaskProcessEvent) => boolean,
+    description: string,
+    timeoutMs = 60000,
+    afterSequence = 0,
+): Promise<TaskProcessEvent> {
+    const file = await waitForExtensionState(
+        stateFile => stateFile.taskProcessEvents.some(event => event.sequence > afterSequence && predicate(event)),
+        description,
+        timeoutMs);
+    const event = file.taskProcessEvents.find(candidate => candidate.sequence > afterSequence && predicate(candidate));
+    if (!event) {
+        throw new Error(`Task process event '${description}' was not found even though the state predicate matched.`);
+    }
+
+    return event;
+}
+
+export function getTaskProcessEventCount(): number {
+    return Math.max(0, ...readStateFile().taskProcessEvents.map(event => event.sequence));
+}
+
 export async function waitForCommandOutcome(command: string, outcome: CommandInvocation['outcome'], timeoutMs = 60000, afterInvocationSequence = 0): Promise<CommandInvocation> {
     const file = await waitForExtensionState(stateFile => stateFile.commandInvocations.some(event => event.command === command && event.sequence > afterInvocationSequence && event.outcome === outcome), `${command} ${outcome} outcome`, timeoutMs);
     const event = file.commandInvocations.find(candidate => candidate.command === command && candidate.sequence > afterInvocationSequence && candidate.outcome === outcome);
@@ -122,6 +185,23 @@ export function getCommandInvocationCount(command?: string): number {
         : file.commandInvocations;
 
     return Math.max(0, ...matchingEvents.map(event => event.sequence));
+}
+
+export function getStoppingPathEventCount(): number {
+    return Math.max(0, ...readStateFile().stoppingPathEvents.map(event => event.sequence));
+}
+
+export async function waitForStoppingPathEvent(appHostPath: string, state: 'entered' | 'left', afterSequence: number, timeoutMs = 60000): Promise<ExtensionE2EStateFile['stoppingPathEvents'][number]> {
+    const file = await waitForExtensionState(
+        stateFile => stateFile.stoppingPathEvents.some(event => event.sequence > afterSequence && event.state === state && isSamePath(event.appHostPath, appHostPath)),
+        `AppHost '${appHostPath}' stopping path ${state} event`,
+        timeoutMs);
+    const event = file.stoppingPathEvents.find(candidate => candidate.sequence > afterSequence && candidate.state === state && isSamePath(candidate.appHostPath, appHostPath));
+    if (!event) {
+        throw new Error(`Stopping path '${state}' event for '${appHostPath}' was not found even though the state predicate matched.`);
+    }
+
+    return event;
 }
 
 export async function waitForTerminalCommand(
@@ -231,7 +311,18 @@ export function readStateFile(): ExtensionE2EStateFile {
     const maxAttempts = process.platform === 'win32' ? 10 : 1;
     for (let attempt = 1; ; attempt++) {
         try {
-            return JSON.parse(fs.readFileSync(getStateFilePath(), 'utf8')) as ExtensionE2EStateFile;
+            const stateFile = JSON.parse(fs.readFileSync(getStateFilePath(), 'utf8')) as ExtensionE2EStateFile;
+            // An extension host left behind by an earlier run keeps writing this file, so reject a
+            // foreign snapshot rather than asserting against another run's state. Waiters retry on
+            // a throw, which lets the intended host's next write win.
+            const runId = getRunId();
+            if (runId !== undefined && stateFile.runId !== undefined && stateFile.runId !== runId) {
+                throw new Error(
+                    `The E2E state file was written by run '${stateFile.runId}' but this run is '${runId}'. `
+                    + 'An extension host from an earlier run is still writing to it; close leftover VS Code instances.');
+            }
+
+            return stateFile;
         }
         catch (error) {
             if (attempt >= maxAttempts || !isRetryableStateFileReadError(error)) {
@@ -308,9 +399,9 @@ export async function applyE2eControl(payload: Record<string, unknown>, waitFor:
     }
 
     const revision = ++controlRevision;
-    writeJsonFileAtomic(controlFilePath, { revision, ...payload });
+    writeJsonFileAtomic(controlFilePath, { revision, runId: getRunId(), ...payload });
     const stateFile = await waitForExtensionState(
-        file => file.control?.revision === revision && (file.control.status === 'error' || file.control.status === 'applied' || (waitFor === 'started' && file.control.status === 'started')),
+        file => file.control?.revision === revision && (file.control.status === 'error' || (waitFor === 'applied' ? file.control.status === 'applied' : file.control.startedObserved === true)),
         `E2E control revision ${revision}`,
         timeoutMs);
 

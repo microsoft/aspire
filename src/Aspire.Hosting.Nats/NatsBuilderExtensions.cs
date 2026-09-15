@@ -97,6 +97,7 @@ public static class NatsBuilderExtensions
             .WithEndpoint(targetPort: 4222, port: port, name: NatsServerResource.PrimaryEndpointName)
             .WithImage(NatsContainerImageTags.Image, NatsContainerImageTags.Tag)
             .WithImageRegistry(NatsContainerImageTags.Registry)
+            .WithIconName("MailMultiple")
             .WithHealthCheck(healthCheckKey)
             .WithArgs(context =>
             {

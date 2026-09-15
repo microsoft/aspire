@@ -2,24 +2,27 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Provides access to the Aspire skills bundle snapshot embedded in the CLI assembly.
+/// Provides the validated Aspire skills bundle embedded in the CLI assembly.
 /// </summary>
 internal interface IEmbeddedAspireSkillsBundleProvider
 {
     /// <summary>
-    /// Gets metadata for the embedded Aspire skills bundle snapshot.
+    /// Gets the parsed metadata embedded alongside the Aspire skills bundle archive.
     /// </summary>
     EmbeddedAspireSkillsBundleMetadata? Metadata { get; }
 
     /// <summary>
-    /// Opens the embedded Aspire skills bundle archive.
+    /// Creates the embedded Aspire skills bundle in the specified directory.
     /// </summary>
-    Stream? OpenArchive();
+    Task<AspireSkillsBundle?> CreateBundleAsync(
+        DirectoryInfo bundleDirectory,
+        CancellationToken cancellationToken);
 }
 
 internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkillsBundleProvider
@@ -27,18 +30,68 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
     private const string ArchiveResourceName = "aspire-skills.bundle.tgz";
     private const string MetadataResourceName = "aspire-skills.metadata.json";
 
+    private readonly IAspireSkillsBundleProvider _bundleProvider;
     private readonly ILogger<EmbeddedAspireSkillsBundleProvider> _logger;
     private readonly Lazy<EmbeddedAspireSkillsBundleMetadata?> _metadata;
 
-    public EmbeddedAspireSkillsBundleProvider(ILogger<EmbeddedAspireSkillsBundleProvider> logger)
+    public EmbeddedAspireSkillsBundleProvider(
+        IAspireSkillsBundleProvider bundleProvider,
+        ILogger<EmbeddedAspireSkillsBundleProvider> logger)
     {
+        ArgumentNullException.ThrowIfNull(bundleProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        _bundleProvider = bundleProvider;
         _logger = logger;
         _metadata = new Lazy<EmbeddedAspireSkillsBundleMetadata?>(LoadMetadata);
     }
 
     public EmbeddedAspireSkillsBundleMetadata? Metadata => _metadata.Value;
 
-    public Stream? OpenArchive()
+    public async Task<AspireSkillsBundle?> CreateBundleAsync(
+        DirectoryInfo bundleDirectory,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(bundleDirectory);
+
+        var metadata = Metadata;
+        if (metadata is null || string.IsNullOrWhiteSpace(metadata.Sha512))
+        {
+            return null;
+        }
+
+        await using var archiveStream = OpenArchive();
+        if (archiveStream is null)
+        {
+            return null;
+        }
+
+        Directory.CreateDirectory(bundleDirectory.FullName);
+        var temporaryDirectoryRoot = bundleDirectory.Parent
+            ?? throw new InvalidOperationException("The Aspire skills bundle staging directory must have a parent directory.");
+        // Keep the archive beside the staging directory so a transient Windows file lock during
+        // best-effort cleanup cannot prevent the validated staging directory from being published.
+        using var temporaryDirectory = TemporaryCacheDirectory.Create(
+            temporaryDirectoryRoot.FullName,
+            "embedded",
+            path => FileDeleteHelper.TryDeleteDirectory(path),
+            path => FileDeleteHelper.TryDeleteFile(path));
+        var archivePath = Path.Combine(temporaryDirectory.FullName, "bundle.tgz");
+
+        await using (var fileStream = File.Create(archivePath))
+        {
+            await archiveStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
+        }
+
+        return await _bundleProvider.CreateAsync(
+            new FileInfo(archivePath),
+            bundleDirectory,
+            metadata.Sha512,
+            cancellationToken,
+            skipCompatibilityCheck: true).ConfigureAwait(false);
+    }
+
+    private Stream? OpenArchive()
     {
         var stream = typeof(EmbeddedAspireSkillsBundleProvider).Assembly.GetManifestResourceStream(ArchiveResourceName);
         if (stream is null)

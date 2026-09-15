@@ -55,14 +55,37 @@ internal sealed class IntegrationReference
     public string? Path { get; init; }
 
     /// <summary>
+    /// Gets whether repository mode must restore this package instead of substituting a checkout project.
+    /// </summary>
+    public bool DisableLocalProjectSubstitution { get; init; }
+
+    /// <summary>
     /// Creates a NuGet package reference.
     /// </summary>
     public static IntegrationReference FromPackage(string name, string version)
+        => FromPackage(name, version, disableLocalProjectSubstitution: false);
+
+    /// <summary>
+    /// Creates a NuGet package reference.
+    /// </summary>
+    /// <param name="name">The package name.</param>
+    /// <param name="version">The NuGet package version.</param>
+    /// <param name="disableLocalProjectSubstitution">Whether repository mode must restore the package instead of substituting a checkout project.</param>
+    public static IntegrationReference FromPackage(
+        string name,
+        string version,
+        bool disableLocalProjectSubstitution)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(version);
 
-        return new IntegrationReference { Name = name, Source = IntegrationSource.Nuget, Version = version };
+        return new IntegrationReference
+        {
+            Name = name,
+            Source = IntegrationSource.Nuget,
+            Version = version,
+            DisableLocalProjectSubstitution = disableLocalProjectSubstitution
+        };
     }
 
     /// <summary>

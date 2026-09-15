@@ -44,7 +44,7 @@ Anything that can do both — a TypeScript package, a Python module, a Go binary
 
 ## Problem Statement
 
-Aspire already supports reusable **same-language** helper packages for polyglot AppHosts. The TypeScript codegen supports a package shipping with `aspire.config.json` (no `apphost.ts`), running `aspire restore` to generate its own local `.modules/` tree, and exporting typed helper functions that a consuming TypeScript AppHost imports via a normal npm dependency. The generated public types are structurally compatible across independently-restored trees because public surface types are split from runtime implementation classes (interface + `Impl` class), so a handle produced by the consumer's codegen is assignable to one produced by the helper package's codegen. This is covered end-to-end by the reusable-package integration tests.
+Aspire already supports reusable **same-language** helper packages for polyglot AppHosts. The TypeScript codegen supports a package shipping with `aspire.config.json` (no `apphost.mts`), running `aspire restore` to generate its own local `.aspire/modules/` tree, and exporting typed helper functions that a consuming TypeScript AppHost imports via a normal npm dependency. The generated public types are structurally compatible across independently-restored trees because public surface types are split from runtime implementation classes (interface + `Impl` class), so a handle produced by the consumer's codegen is assignable to one produced by the helper package's codegen. This is covered end-to-end by the reusable-package integration tests.
 
 That pattern is enough for many integrations — any TypeScript integration consumed by a TypeScript AppHost can ship as a normal npm library today. What it does **not** yet cover:
 
@@ -95,7 +95,7 @@ This spec covers (1) and (2) with an out-of-process **integration host** protoco
 
 ## Authoring an Integration
 
-There is **one way** to author an Aspire integration, and it is the same in every supported language: write code that uses the generated `Aspire.Hosting` lib to configure resources. The integration is hand-written source that imports types from a locally-restored `.modules/` tree and calls methods on generated handles — `.addContainer(...).withImageTag(...).withEndpoint(...).withEnvironment(...)`. The generated `Aspire.Hosting` lib is both the type surface the integration author sees and the runtime substrate their calls flow through.
+There is **one way** to author an Aspire integration, and it is the same in every supported language: write code that uses the generated `Aspire.Hosting` lib to configure resources. The integration is hand-written source that imports types from a locally-restored `.aspire/modules/` tree and calls methods on generated handles — `.addContainer(...).withImageTag(...).withEndpoint(...).withEnvironment(...)`. The generated `Aspire.Hosting` lib is both the type surface the integration author sees and the runtime substrate their calls flow through.
 
 An integration ships as a **normal package** in its language's package manager (npm, pip, nuget, cargo, ...) with:
 
@@ -103,7 +103,7 @@ An integration ships as a **normal package** in its language's package manager (
 - no AppHost entry point — the package is a library, not a runnable app
 - hand-written source files implementing the integration on top of the generated lib
 
-`aspire restore` walks the consumer's dependency graph and runs codegen for every reusable package, producing a `.modules/` SDK per package. Cross-package type interop works by **structural typing** — public generated types are interfaces without private members, so a handle type produced by one `.modules/` tree is assignable to the same-named interface from another.
+`aspire restore` walks the consumer's dependency graph and runs codegen for every reusable package, producing a `.aspire/modules/` SDK per package. Cross-package type interop works by **structural typing** — public generated types are interfaces without private members, so a handle type produced by one `.aspire/modules/` tree is assignable to the same-named interface from another.
 
 For same-language consumption, **this is the entire story**. A TypeScript AppHost consuming a TypeScript Kafka integration imports the package, calls the exported function, and the function runs in-process against the consumer's own client. Callbacks are plain in-language closures. No RPC, no external capability protocol, no integration host process. Same story in every language: a Python integration consumed by a Python AppHost is a plain Python function that runs in-process; a C# integration consumed by a C# AppHost is a plain extension method that runs in-process. Same-language is just code.
 
@@ -127,11 +127,11 @@ public static IResourceBuilder<KafkaResource> AddKafka(
 
 **In TypeScript:** `AspireExport(meta, fn)` wraps a plain typed function, attaching projection metadata under a non-enumerable symbol so the function stays directly callable. `defineIntegration({ name, capabilities })` is the package-level rollup the integration host enumerates at `getCapabilities` time.
 
-Both helpers **live in the generated `.modules/base.ts`** emitted by the TypeScript code generator — integration authors import them from the same place they import `DistributedApplicationBuilder`, `ContainerResource`, and the rest of the typed surface. No framework dependency, no hand-written helper package.
+Both helpers **live in the generated `.aspire/modules/base.mts`** emitted by the TypeScript code generator — integration authors import them from the same place they import `DistributedApplicationBuilder`, `ContainerResource`, and the rest of the typed surface. No framework dependency, no hand-written helper package.
 
 ```ts
-import type { DistributedApplicationBuilder, ContainerResource } from '../.modules/aspire.js';
-import { AspireExport, defineIntegration, type AspireTypeRef } from '../.modules/base.js';
+import type { DistributedApplicationBuilder, ContainerResource } from '../.aspire/modules/aspire.mjs';
+import { AspireExport, defineIntegration, type AspireTypeRef } from '../.aspire/modules/base.mjs';
 
 export const addKafka = AspireExport(
     {
@@ -168,7 +168,7 @@ export default defineIntegration({
 
 Three things to notice:
 
-1. **`AspireExport` and `defineIntegration` come from `.modules/base.js`** — the same `.modules/` tree the integration's `DistributedApplicationBuilder` and `ContainerResource` types come from. The TypeScript codegen emits `AspireExport`, `defineIntegration`, `getAspireExport`, and the projection schema types (`AspireCapabilityProjection`, `AspireCapabilityParameter`, `AspireCallbackParameter`, `AspireTypeRef`) into every restored `.modules/base.ts`. No framework package to install; no hand-written host-runtime authoring helpers to vendor.
+1. **`AspireExport` and `defineIntegration` come from `.aspire/modules/base.mjs`** — the same `.aspire/modules/` tree the integration's `DistributedApplicationBuilder` and `ContainerResource` types come from. The TypeScript codegen emits `AspireExport`, `defineIntegration`, `getAspireExport`, and the projection schema types (`AspireCapabilityProjection`, `AspireCapabilityParameter`, `AspireCallbackParameter`, `AspireTypeRef`) into every restored `.aspire/modules/base.mts`. No framework package to install; no hand-written host-runtime authoring helpers to vendor.
 2. **The function body uses the generated `Aspire.Hosting` lib directly** — `builder.addContainer(...).withImageTag(...).withEndpoint(...).withEnvironment(...)`. It is the same typed surface a guest AppHost uses when it calls `createBuilder()`. There are no hand-rolled helpers hiding the real API.
 3. **The callback is a plain JS closure** — `await configure(container)`. No callback id ceremony at the authoring layer. The integration host runtime reads the projection's `isCallback` flag and replaces the wire-format callback id string with an async function closure before dispatching, so author code never sees the callback id.
 
@@ -185,9 +185,9 @@ A TypeScript integration package, authored once with `AspireExport` on top of th
 | Consumer | What happens |
 |---|---|
 | Any language AppHost, unmarked integration | Only reachable via a plain library import in the same language. The consumer writes `await addKafka(builder, ...)` as a free function call. No fluent builder method, no cross-language visibility, no integration host involvement. |
-| Any language AppHost, annotated integration | Consumer's codegen emits a fluent `builder.addKafka(...)` method whose body issues a JSON-RPC `invokeCapability` call. The AppHost server reads the integration from its `appsettings.json`, asks that language's `ILanguageSupport.GetIntegrationHostSpec()` how to spawn a host for it (a Node process for `@spike/aspire-kafka`), supervises it like a .NET load context, gathers its capabilities via `getCapabilities`, and dispatches runtime calls through `handleExternalCapability`. The impl runs inside the host process against its own restored `.modules/` tree. |
+| Any language AppHost, annotated integration | Consumer's codegen emits a fluent `builder.addKafka(...)` method whose body issues a JSON-RPC `invokeCapability` call. The AppHost server reads the integration from its `appsettings.json`, asks that language's `ILanguageSupport.GetIntegrationHostSpec()` how to spawn a host for it (a Node process for `@spike/aspire-kafka`), supervises it like a .NET load context, gathers its capabilities via `getCapabilities`, and dispatches runtime calls through `handleExternalCapability`. The impl runs inside the host process against its own restored `.aspire/modules/` tree. |
 
-Same package, same implementation, same annotation. The cross-language codegen picks up exactly what the same-language codegen picks up, because both read the same projection metadata. The only difference between "a TS consumer uses this" and "a Python consumer uses this" is which language's restored `.modules/` the emitted wrapper lives in — the wire dispatch is identical.
+Same package, same implementation, same annotation. The cross-language codegen picks up exactly what the same-language codegen picks up, because both read the same projection metadata. The only difference between "a TS consumer uses this" and "a Python consumer uses this" is which language's restored `.aspire/modules/` the emitted wrapper lives in — the wire dispatch is identical.
 
 **Why everything goes through the integration host — even same-language.** A single delivery mechanism is simpler than two. Same-language consumers could in principle short-circuit the RPC hop and call the imported function directly in their own process, but that would require the codegen to branch on consumer language and emit different wrapper bodies, plus a second code path to maintain. Two Node processes on the same machine round-tripping over JSON-RPC is fast enough for AppHost-time operations (not a hot path), and the single-path design means cross-language and same-language share one tested route. The integration host process also gives long-lived integrations (background monitors, connection pools, watchers) a natural home for state that wouldn't fit cleanly inside the consumer's own process.
 
@@ -423,11 +423,11 @@ A few concrete technical pieces make the single authoring model work. None of th
 
 ### Per-package local codegen
 
-Each reusable package has its own `aspire.config.json` declaring the Aspire SDK version and any `Aspire.Hosting.*` packages whose types it references. `aspire restore` walks the consumer's dependency graph and runs codegen **per package**, emitting a local `.modules/` tree into each package directory. Integration authors import types from their own `.modules/` tree; consumers import the integration package's source and their own consumer-side `.modules/` types are what they see at call sites. There is **no shared published npm package** for `Aspire.Hosting` — each package in the dependency graph runs codegen locally.
+Each reusable package has its own `aspire.config.json` declaring the Aspire SDK version and any `Aspire.Hosting.*` packages whose types it references. `aspire restore` walks the consumer's dependency graph and runs codegen **per package**, emitting a local `.aspire/modules/` tree into each package directory. Integration authors import types from their own `.aspire/modules/` tree; consumers import the integration package's source and their own consumer-side `.aspire/modules/` types are what they see at call sites. There is **no shared published npm package** for `Aspire.Hosting` — each package in the dependency graph runs codegen locally.
 
 ### Structural typing across trees
 
-Public generated types are interfaces with no private members. Runtime implementations live in separate `Impl` classes that carry the private state. Because the interfaces have nothing nominal to collide on, a handle generated in one `.modules/` tree is structurally assignable to the same-named interface generated in any other. This is what makes cross-package integration authoring work: both the integration and the consumer restore independently, and their generated types interop automatically.
+Public generated types are interfaces with no private members. Runtime implementations live in separate `Impl` classes that carry the private state. Because the interfaces have nothing nominal to collide on, a handle generated in one `.aspire/modules/` tree is structurally assignable to the same-named interface generated in any other. This is what makes cross-package integration authoring work: both the integration and the consumer restore independently, and their generated types interop automatically.
 
 ### Cross-assembly exports
 
@@ -439,7 +439,7 @@ The wire protocol, handle type IDs, and capability IDs between an integration an
 
 ### What authors interact with
 
-The integration author never has to understand any of the above. They write `import type { DistributedApplicationBuilder } from '../.modules/aspire.js'` and `builder.addContainer(...).withImageTag(...)`, and everything above either runs at restore time (codegen) or is handled by the framework (structural typing, cross-assembly exports, version pinning). The pieces matter for understanding why the model works; they are not part of the authoring ceremony.
+The integration author never has to understand any of the above. They write `import type { DistributedApplicationBuilder } from '../.aspire/modules/aspire.mjs'` and `builder.addContainer(...).withImageTag(...)`, and everything above either runs at restore time (codegen) or is handled by the framework (structural typing, cross-assembly exports, version pinning). The pieces matter for understanding why the model works; they are not part of the authoring ceremony.
 
 ---
 
@@ -459,6 +459,28 @@ This is why the existing .NET integration ecosystem continues to work without mo
 
 ## Runtime Flow
 
+### CLI compatibility
+
+The playgrounds use `apphost.mts` and import `.aspire/modules/aspire.mjs`, matching
+the current TypeScript AppHost layout. They inherit the executing CLI's SDK version
+and channel instead of pinning an older PR build. Run them with this spike's CLI;
+a stock CLI does not understand npm integration-host declarations.
+
+The CLI restores npm dependencies before starting an AppHost server. A clean
+`aspire restore` uses two separately disposed `IAppHostServerSession` instances:
+the first generates the core SDK that the integration hosts import, and the
+second starts those hosts and generates the combined SDK before installing the
+AppHost's dependencies. Each session uses the current `Create`/`StartAsync`
+lifecycle and propagates cancellation.
+
+In repository mode, `IntegrationHosts` participates in the AppHost server scaffold
+fingerprint along with `AtsAssemblies`. An unchanged host configuration preserves
+restore artifacts; changing an entry-point path invalidates them. Explicit package
+requests from SDK export retain `DisableLocalProjectSubstitution`, even when other
+integrations are restored from local projects or npm hosts.
+
+### Server startup
+
 1. CLI parses `aspire.config.json`, resolves each `PackageEntry` to an `IntegrationReference`, and runs per-source restore — `dotnet build` on the generated server csproj for NuGet and project references, `npm install` (and future `pip install`, etc.) for non-.NET integration hosts so their dependencies are on disk before the server starts.
 2. CLI writes the AppHost server's `appsettings.json` with two sections: `AtsAssemblies` (for CLR reflection) and `IntegrationHosts` (one entry per non-.NET integration, carrying `Language`, `PackageName`, `HostEntryPoint`).
 3. CLI starts the AppHost server process. The server reads `appsettings.json` and runs its integration-listing phase:
@@ -467,7 +489,7 @@ This is why the existing .NET integration ecosystem continues to work without mo
 4. The server spawns each integration host process directly, substituting `{entryPoint}` into the command args, passing `REMOTE_APP_HOST_SOCKET_PATH` and the auth token via env vars. It captures stdout/stderr into its own logs and holds the `Process` handles in its internal registry — the same way it holds references to .NET integration load contexts.
 5. Each spawned host connects back over the socket, authenticates, and calls `registerAsIntegrationHost`. The server waits on a counting-semaphore signal released once per registration, with a per-host timeout.
 6. Phase 1 gather: the server calls `getCapabilities` on every registered host (and on the in-process .NET "host" directly) and merges the results into `AtsContext`.
-7. Phase 2 codegen runs over the merged context and produces the guest-language SDK (`.modules/`). The readiness gate ensures codegen never runs before every expected host has registered.
+7. Phase 2 codegen runs over the merged context and produces the guest-language SDK (`.aspire/modules/`). The readiness gate ensures codegen never runs before every expected host has registered.
 8. The server signals ready. The CLI invokes the guest AppHost.
 9. Guest AppHost executes against the generated SDK. Every `builder.addX(...)` call becomes an `invokeCapability` RPC to the server.
 10. The server's `CapabilityDispatcher` routes each call to the owning integration — a direct method call for a .NET integration in its load context, a JSON-RPC `handleExternalCapability` forward for an out-of-process host.
@@ -558,9 +580,9 @@ Authoring (unmarked libraries):
 Annotated integrations (`AspireExport`):
 
 - `AspireExport(meta, fn)` + `defineIntegration({ capabilities: [...] })` works end-to-end for TypeScript. The integration is authored as a plain typed function using the generated `Aspire.Hosting` lib directly (`builder.addContainer(...).withImageTag(...).withEnvironment(...)`), wrapped in `AspireExport`, and the integration host runtime enumerates the wrappers via `getAspireExport` and serves them over `getCapabilities` / `handleExternalCapability`. Callbacks remain plain JS closures. The consumer calls `builder.addKafka("events", { configure: ... })` — the existing codegen wrapper does the rest.
-- `AspireExport`, `defineIntegration`, `getAspireExport`, and the projection schema types are emitted by the TypeScript codegen into `.modules/base.ts`. Integration authors import them from the same `.modules/` tree as the generated `Aspire.Hosting` types. No framework package.
+- `AspireExport`, `defineIntegration`, `getAspireExport`, and the projection schema types are emitted by the TypeScript codegen into `.aspire/modules/base.mts`. Integration authors import them from the same `.aspire/modules/` tree as the generated `Aspire.Hosting` types. No framework package.
 - **Projection metadata is still hand-declared** alongside `AspireExport`'s `projection` field. Integration authors still write out per-type `AspireTypeRef` records because runtime projection cannot be derived from TypeScript types that are erased at runtime. The cheapest near-term fix is to have codegen emit a ready-made `AspireTypeRef` constant next to each generated handle type, so authors reference `DistributedApplicationBuilderTypeRef` by name instead of hand-writing the record. The long-term target is full signature inference via the TypeScript compiler API so the `projection` field disappears entirely.
-- The integration host runtime needs a side-effect import of the generated `aspire.js` so the module's top-level `registerHandleWrapper(...)` calls actually execute and populate the transport registry. Required because a bare `import type` is erased by tsc. A gotcha for anyone wiring up a new language's integration host runtime.
+- The integration host runtime needs a side-effect import of the generated `aspire.mjs` so the module's top-level `registerHandleWrapper(...)` calls actually execute and populate the transport registry. Required because a bare `import type` is erased by tsc. A gotcha for anyone wiring up a new language's integration host runtime.
 - The C# side already has `[AspireExport]` and the cross-assembly export story it rests on (documented in `polyglot-apphost.md`).
 
 Integration host lifetime:
@@ -626,7 +648,7 @@ An **unannotated** library is consumable today — same-language consumers impor
 To expose an integration to any consumer (same-language or cross-language) as a **first-class capability with a fluent `builder.addX(...)` method**, the author opts its public surface into cross-language export by marking the exported capabilities with a language-native annotation:
 
 - **C#:** `[AspireExport]` attributes on methods. Read by the CLR scanner.
-- **TypeScript:** `AspireExport(meta, fn)` wraps a plain typed function and attaches the metadata via a non-enumerable symbol; `defineIntegration({ name, capabilities })` rolls them up. Both emitted by codegen into `.modules/base.ts` alongside `DistributedApplicationBuilder` and the rest of the generated surface — no framework package.
+- **TypeScript:** `AspireExport(meta, fn)` wraps a plain typed function and attaches the metadata via a non-enumerable symbol; `defineIntegration({ name, capabilities })` rolls them up. Both emitted by codegen into `.aspire/modules/base.mts` alongside `DistributedApplicationBuilder` and the rest of the generated surface — no framework package.
 - **Python, Go, Rust, Java:** an equivalent decorator, attribute, or registration function native to each language.
 
 Same idea in every language. All annotations produce the same underlying `AtsCapabilityInfo` shape (mirrored in generated TypeScript as `AspireCapabilityProjection`) — id, method, parameters, return type, callback signatures, target type. Consumers in any language read this shape at codegen time and emit fluent builder methods on their generated `DistributedApplicationBuilder`. **Every emitted wrapper issues an `invokeCapability` RPC** that routes through the AppHost server to an integration host running the author's language runtime — one delivery mechanism, shared by same-language and cross-language consumers alike.
@@ -642,4 +664,4 @@ The winning shape is:
 - the AppHost server owns integration lifetime uniformly — .NET load contexts and spawned host processes are two delivery mechanisms behind one ownership model
 - one JSON-RPC integration host protocol delivers every annotated call, same-language and cross-language
 - `Aspire.Hosting` is the BCL, delivered through the same per-package codegen pipeline that produces guest AppHost SDKs
-- `AspireExport` and `defineIntegration` are emitted by that same codegen — integration authors pick them up from the `.modules/` tree without any framework dependency
+- `AspireExport` and `defineIntegration` are emitted by that same codegen — integration authors pick them up from the `.aspire/modules/` tree without any framework dependency

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.TestUtilities;
 using Xunit;
 
@@ -51,6 +52,11 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("What if", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Set up Aspire CLI bundle", result.Output);
+        Assert.True(
+            result.Output.IndexOf("Write route sidecar", StringComparison.Ordinal) <
+            result.Output.IndexOf("Set up Aspire CLI bundle", StringComparison.Ordinal),
+            "Bundle setup should be planned after the install-route sidecar is written.");
     }
 
     [Fact]
@@ -127,6 +133,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("Skipping PATH", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Set up Aspire CLI bundle", result.Output);
     }
 
     [Fact]
@@ -167,6 +174,113 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain("dotnet", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("ga/daily", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("rc/daily", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("dev", "daily")]
+    [InlineData("staging", "staging")]
+    [InlineData("release", "stable")]
+    [InlineData("", null)]
+    public async Task WriteInstallSidecar_PersistsQualityChannel(string quality, string? expectedChannel)
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $"Write-InstallSidecar -InstallPath '{installPath}' -Quality '{quality}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(Path.Combine(installPath, ".aspire-install.json")));
+        Assert.Equal("script", document.RootElement.GetProperty("source").GetString());
+        if (expectedChannel is null)
+        {
+            Assert.False(document.RootElement.TryGetProperty("channel", out _));
+        }
+        else
+        {
+            Assert.Equal(expectedChannel, document.RootElement.GetProperty("channel").GetString());
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WriteInstallSidecar_WithoutFileMoveOverwrite_CreatesOrReplacesSidecar(bool sidecarExists)
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        Directory.CreateDirectory(installPath);
+        var sidecarPath = Path.Combine(installPath, ".aspire-install.json");
+        if (sidecarExists)
+        {
+            await File.WriteAllTextAsync(sidecarPath, """{"source":"old"}""");
+        }
+
+        // CI runs these tests with PowerShell 7+. Force the compatibility branch used by
+        // PowerShell 6 and Windows PowerShell 4/5.1 without requiring those hosts in CI.
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $"$Script:SupportsFileMoveOverwrite = $false; Write-InstallSidecar -InstallPath '{installPath}' -Quality 'staging'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(await File.ReadAllBytesAsync(sidecarPath));
+        Assert.Equal("script", document.RootElement.GetProperty("source").GetString());
+        Assert.Equal("staging", document.RootElement.GetProperty("channel").GetString());
+        Assert.Collection(
+            Directory.GetFiles(installPath),
+            path => Assert.Equal(sidecarPath, path));
+    }
+
+    [Fact]
+    public async Task ExplicitVersionInstall_WritesSourceOnlySidecar()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var archive = await FakeArchiveHelper.CreateFakeArchiveAsync(env.TempDirectory);
+
+        // Pass a non-empty quality deliberately so the test fails if Install-AspireCli stops
+        // giving explicit versions precedence when it chooses the sidecar identity.
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            $archiveSource = '{{archive.ArchivePath}}'
+            $checksumSource = '{{archive.ChecksumPath}}'
+            function Invoke-FileDownload {
+                param([string]$Uri, [int]$TimeoutSec, [string]$OutputPath)
+                $source = if ($OutputPath.EndsWith('.sha512')) { $checksumSource } else { $archiveSource }
+                [System.IO.File]::Copy($source, $OutputPath, $true)
+            }
+            Install-AspireCli `
+                -InstallPath '{{installPath}}' `
+                -Version '13.2.0-preview.1.25366.3' `
+                -Quality 'release' `
+                -OS 'linux' `
+                -Architecture 'x64'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(Path.Combine(installPath, ".aspire-install.json")));
+        Assert.Collection(
+            document.RootElement.EnumerateObject(),
+            property =>
+            {
+                Assert.Equal("source", property.Name);
+                Assert.Equal("script", property.Value.GetString());
+            });
     }
 
     [Fact]
@@ -218,6 +332,21 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains("dev", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task WhatIfWithExtension_PlansExtensionBeforeBundleSetup()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("-Quality", "dev", "-InstallExtension", "-WhatIf");
+
+        result.EnsureSuccessful();
+        var extensionIndex = result.Output.IndexOf("Installing VS Code extension", StringComparison.Ordinal);
+        var setupIndex = result.Output.IndexOf("Set up Aspire CLI bundle", StringComparison.Ordinal);
+        Assert.True(extensionIndex >= 0, "VS Code extension installation should be planned.");
+        Assert.True(setupIndex > extensionIndex, "Bundle setup should be planned after VS Code extension installation.");
+    }
+
     [Theory]
     [InlineData("dev")]
     [InlineData("staging")]
@@ -234,7 +363,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         var globalConfig = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
         Assert.False(
             File.Exists(globalConfig),
-            $"Release script must not write {globalConfig}; channel is baked into the CLI binary, not stored globally.");
+            $"Release script must not write {globalConfig}; channel belongs to the install-scoped sidecar.");
 
         // The script should not even plan a global-channel write in its what-if output.
         Assert.DoesNotContain("aspire.config.json", result.Output, StringComparison.OrdinalIgnoreCase);
@@ -243,11 +372,8 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task Install_DryRun_DoesNotWriteGlobalChannelField()
     {
-        // Install scripts must not write a global aspire.config.json — the channel
-        // is baked into the CLI binary at build time and read via
-        // IdentityChannelReader. A global channel field would shadow the baked value.
-        // Asserts both -WhatIf stdout shape and absence of the global config file
-        // under MockHome.
+        // Install scripts must not write channel identity to global application config.
+        // The install-scoped sidecar carries it without contaminating unrelated projects.
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
 
@@ -255,7 +381,6 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.DoesNotContain("config set channel", result.Output, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("\"channel\"", result.Output);
 
         var configPath = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
         Assert.False(

@@ -1,0 +1,49 @@
+﻿{
+  ApiService:
+If targeting 'deploy-api-service':
+  Direct dependencies: print-api-service-summary
+  Total steps: 20
+  Execution order:
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-api-service | validate-azure-login (parallel)
+    [3] create-provisioning-context
+    [4] provision-aas-env-mi | provision-aas-registry | provision-aca-registry (parallel)
+    [5] login-to-acr-aas-registry | login-to-acr-aca-registry | provision-aas-env-mi-roles-aas-registry (parallel)
+    [6] provision-aas-env | push-prereq (parallel)
+    [7] push-api-service
+    [8] provision-api-service-website
+    [9] print-api-service-summary
+    [10] deploy-api-service,
+  Cache:
+If targeting 'deploy-cache':
+  Direct dependencies: print-cache-summary
+  Total steps: 11
+  Execution order:
+    [0] process-parameters | validate-build-only-container-references (parallel)
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-aca-env-mi
+    [5] provision-aca-env-mi-roles-aca-registry
+    [6] provision-aca-env
+    [7] provision-cache-containerapp
+    [8] print-cache-summary
+    [9] deploy-cache,
+  PythonApp:
+If targeting 'deploy-python-app':
+  Direct dependencies: print-python-app-summary
+  Total steps: 20
+  Execution order:
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [1] build-prereq | deploy-prereq (parallel)
+    [2] build-python-app | validate-azure-login (parallel)
+    [3] create-provisioning-context
+    [4] provision-aas-registry | provision-aca-env-mi | provision-aca-registry (parallel)
+    [5] login-to-acr-aas-registry | login-to-acr-aca-registry | provision-aca-env-mi-roles-aca-registry (parallel)
+    [6] provision-aca-env | push-prereq (parallel)
+    [7] push-python-app
+    [8] provision-python-app-containerapp
+    [9] print-python-app-summary
+    [10] deploy-python-app
+}

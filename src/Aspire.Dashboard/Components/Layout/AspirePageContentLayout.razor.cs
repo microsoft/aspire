@@ -43,10 +43,18 @@ public partial class AspirePageContentLayout : ComponentBase
     [Parameter]
     public bool IsSummaryDetailsViewOpen { get; set; }
 
+    /// <summary>
+    /// When <see langword="true"/>, the desktop toolbar header row is not rendered. Pages set this when they
+    /// relocate their toolbar controls elsewhere (for example, Resources shares the tabs row with the filter
+    /// controls) so an empty toolbar row doesn't waste vertical space. The page title teleport is unaffected.
+    /// </summary>
+    [Parameter]
+    public bool HideDesktopToolbar { get; set; }
+
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
-    private IDialogReference? _toolbarPanel;
+    private DashboardDialogReference? _toolbarPanel;
 
     public bool IsToolbarPanelOpen => _toolbarPanel is not null;
 
@@ -73,7 +81,7 @@ public partial class AspirePageContentLayout : ComponentBase
 
     public async Task OpenMobileToolbarAsync()
     {
-        _toolbarPanel = await DialogService.ShowPanelAsync<ToolbarPanel>(
+        _toolbarPanel = await DialogService.ShowDialogAsync<ToolbarPanel>(
             new MobileToolbar(
                 ToolbarSection!,
                 MobileToolbarButtonText ?? LayoutLoc[nameof(Resources.Layout.PageLayoutViewFilters)]),
@@ -81,28 +89,26 @@ public partial class AspirePageContentLayout : ComponentBase
             {
                 Alignment = HorizontalAlignment.Center,
                 Title = MobileToolbarButtonText ?? ControlsStringsLoc[nameof(ControlsStrings.ChartContainerFiltersHeader)],
-                Width = "100%",
-                Height = "90%",
+                Width = "100vw",
+                Height = "100dvh",
                 Modal = false,
                 PrimaryAction = null,
                 SecondaryAction = null,
-                OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, async () =>
+                OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, async () =>
                 {
-                    await InvokeListenersAsync();
                     _toolbarPanel = null;
+                    await InvokeListenersAsync();
                 })
             });
     }
 
     public async Task CloseMobileToolbarAsync()
     {
-        if (_toolbarPanel is not null)
+        if (_toolbarPanel is { } toolbarPanel)
         {
-            await _toolbarPanel.CloseAsync();
-            // CloseAsync doesn't invoke OnDialogClosing, so we need to call InvokeListeners ourselves
-            await InvokeListenersAsync();
-
             _toolbarPanel = null;
+            await toolbarPanel.CloseAsync();
+            await toolbarPanel.Result;
         }
     }
 

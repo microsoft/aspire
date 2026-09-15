@@ -50,6 +50,7 @@ internal sealed record AzureProvisioningFailureDetails(
     internal const string LiveResourceCheckOperation = "live-resource-check";
     internal const string MissingResourceIdReason = "missing-resource-id";
     internal const string MissingLiveResourceReason = "missing-live-resource";
+    internal const string KeyVaultDeletedStateTombstoneNotFoundReason = "key-vault-deleted-state-tombstone-not-found";
     internal const string ResourceGroupBeingDeletedErrorCode = "ResourceGroupBeingDeleted";
     internal const string LocationNotAvailableForResourceTypeErrorCode = "LocationNotAvailableForResourceType";
     internal const string SubscriptionNotFoundErrorCode = "SubscriptionNotFound";
@@ -113,6 +114,34 @@ internal sealed record AzureProvisioningFailureDetails(
         }
 
         return null;
+    }
+
+    internal static AzureProvisioningFailureDetails CreateKeyVaultDeletedStateTombstoneNotFound(
+        string resourceName,
+        string targetResourceId,
+        IReadOnlyList<string> attemptedLocations)
+    {
+        // ARM only reports the create conflict. Once our purge lookup cannot find the deleted vault,
+        // use an Aspire-local failure shape so command JSON, resource properties, and recommended
+        // actions describe the real blocker instead of repeating the generic provider error.
+        var locationMessage = attemptedLocations.Count == 0
+            ? "because no Azure location was available for the deleted-vault lookup"
+            : $"in the attempted location(s): {string.Join(", ", attemptedLocations)}";
+
+        return new(
+            Provider: "Microsoft.KeyVault",
+            ResourceType: "Microsoft.KeyVault/vaults",
+            ResourceName: resourceName,
+            TargetResourceId: targetResourceId,
+            CurrentLocation: null,
+            SupportedLocations: [],
+            HttpStatus: 409,
+            ErrorCode: KeyVaultDeletedStateTombstoneNotFoundReason,
+            ErrorMessage: $"Azure reported that Key Vault '{resourceName}' is in a deleted state, but the deleted vault was not found {locationMessage}. Aspire cannot purge or recover a tombstone that Azure does not return.",
+            Operation: ProvisionOperation,
+            RequestId: null,
+            CorrelationId: null,
+            RecommendedActions: GetRecommendedActions(KeyVaultDeletedStateTombstoneNotFoundReason));
     }
 
     internal static AzureProvisioningFailureDetails? FromResponseError(
@@ -231,6 +260,15 @@ internal sealed record AzureProvisioningFailureDetails(
             [
                 Action("reprovision-or-forget-state", $"Run '{AzureProvisioningController.ReprovisionResourceCommandName}' to recreate the missing Azure resource, or '{AzureProvisioningController.ForgetStateCommandName}' if it was intentionally deleted."),
                 Action("change-resource-group", $"Run '{AzureProvisioningController.ChangeAzureContextCommandName}' if the cached Azure context points at the wrong resource group.")
+            ];
+        }
+
+        if (string.Equals(errorCodeOrReason, KeyVaultDeletedStateTombstoneNotFoundReason, StringComparisons.AzureProvisioningErrorCode))
+        {
+            return
+            [
+                Action("retry-reprovision", $"Run '{AzureProvisioningController.ReprovisionResourceCommandName}' again after Azure finishes publishing the deleted Key Vault tombstone."),
+                Action("change-context-or-name", $"If Azure continues to report the conflict, run '{AzureProvisioningController.ChangeAzureContextCommandName}' with a different resource group or change the AppHost resource name so Azure generates a different Key Vault name.")
             ];
         }
 
@@ -409,7 +447,7 @@ internal sealed record AzureProvisioningFailureDetails(
     internal static bool IsFailureProperty(string propertyName)
         => propertyName.StartsWith(PropertyPrefix, StringComparison.Ordinal);
 
-    private static ResourcePropertySnapshot CreateHighlightedFailureProperty(string name, object value, string displayName)
+    internal static ResourcePropertySnapshot CreateHighlightedFailureProperty(string name, object value, string displayName)
         => new($"{PropertyPrefix}{name}", value) { DisplayName = displayName, IsHighlighted = true };
 
     internal JsonObject ToJsonObject()

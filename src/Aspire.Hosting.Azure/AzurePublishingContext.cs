@@ -47,6 +47,26 @@ public sealed class AzurePublishingContext(
     };
 
     /// <summary>
+    /// Gets or sets a value indicating whether the root main.bicep file is excluded from the published output.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Callers of this class might not need main.bicep. A publisher that deploys each resource module
+    /// directly from its own deployment manifest never consumes the root template. Although Azure.Provisioning
+    /// can emit that template, a later Bicep compilation can fail for models the individual modules handle
+    /// correctly. For example, the generated root always passes <c>location</c> to each module, but a
+    /// tenant-scoped module does not declare a <c>location</c> parameter, resulting in <c>BCP037</c>.
+    /// </para>
+    /// <para>
+    /// When set to <see langword="true"/>, <see cref="WriteModelAsync"/> still writes every per-resource
+    /// Bicep module and populates <see cref="ParameterLookup"/> and <see cref="OutputLookup"/> against
+    /// <see cref="MainInfrastructure"/>. <see cref="MainInfrastructure"/> remains available in memory, but
+    /// it is never built, compiled, or written to disk. The default is <see langword="false"/>.
+    /// </para>
+    /// </remarks>
+    public bool ExcludeMainBicepFile { get; set; }
+
+    /// <summary>
     /// Gets a dictionary that maps parameter resources to provisioning parameters.
     /// </summary>
     /// <remarks>
@@ -141,6 +161,17 @@ public sealed class AzurePublishingContext(
         var principalId = ParameterLookup[environment.PrincipalId];
         MainInfrastructure.Add(principalId);
 
+        ProvisioningParameter? deploymentPrincipalType = null;
+        if (bicepResourcesToPublish.Any(resource =>
+            resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId) &&
+            userPrincipalId is null &&
+            resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var principalType) &&
+            principalType is null))
+        {
+            deploymentPrincipalType = new ProvisioningParameter(AzureBicepResource.KnownParameters.PrincipalType, typeof(string));
+            MainInfrastructure.Add(deploymentPrincipalType);
+        }
+
         var rg = new ResourceGroup("rg")
         {
             Name = resourceGroupParam,
@@ -181,7 +212,10 @@ public sealed class AzurePublishingContext(
 
             if (resource.Scope is { } scope)
             {
-                await VisitAsync(scope.ResourceGroup, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+                if (scope.HasResourceGroup)
+                {
+                    await VisitAsync(scope.ResourceGroup, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+                }
                 await VisitAsync(scope.Subscription, MapParameterAsync, cancellationToken).ConfigureAwait(false);
             }
 
@@ -263,27 +297,29 @@ public sealed class AzurePublishingContext(
                 return new IdentifierExpression(rg.BicepIdentifier);
             }
 
-            if (resource.Scope.IsTenantScope)
+            var scope = resource.Scope;
+
+            if (scope.IsTenantScope)
             {
                 return new FunctionCallExpression(new IdentifierExpression("tenant"));
             }
 
-            if (resource.Scope.ResourceGroup is not null && resource.Scope.Subscription is not null)
+            if (scope.HasResourceGroup && scope.Subscription is not null)
             {
                 return new FunctionCallExpression(
                     new IdentifierExpression("resourceGroup"),
-                    ResolveValue(Eval(resource.Scope.Subscription)).Compile(),
-                    ResolveValue(Eval(resource.Scope.ResourceGroup)).Compile());
+                    ResolveValue(Eval(scope.Subscription)).Compile(),
+                    ResolveValue(Eval(scope.ResourceGroup)).Compile());
             }
 
-            if (resource.Scope.ResourceGroup is not null)
+            if (scope.HasResourceGroup)
             {
-                return new FunctionCallExpression(new IdentifierExpression("resourceGroup"), ResolveValue(Eval(resource.Scope.ResourceGroup)).Compile());
+                return new FunctionCallExpression(new IdentifierExpression("resourceGroup"), ResolveValue(Eval(scope.ResourceGroup)).Compile());
             }
 
-            if (resource.Scope.Subscription is not null)
+            if (scope.Subscription is not null)
             {
-                return new FunctionCallExpression(new IdentifierExpression("subscription"), ResolveValue(Eval(resource.Scope.Subscription)).Compile());
+                return new FunctionCallExpression(new IdentifierExpression("subscription"), ResolveValue(Eval(scope.Subscription)).Compile());
             }
 
             throw new InvalidOperationException("The Azure Bicep resource scope must specify a resource group, subscription, or tenant scope.");
@@ -323,6 +359,14 @@ public sealed class AzurePublishingContext(
                 if (parameter.Key == AzureBicepResource.KnownParameters.PrincipalId && parameter.Value is null)
                 {
                     module.Parameters.Add(parameter.Key, principalId);
+                    continue;
+                }
+                if (parameter.Key == AzureBicepResource.KnownParameters.PrincipalType &&
+                    parameter.Value is null &&
+                    resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId) &&
+                    userPrincipalId is null)
+                {
+                    module.Parameters.Add(parameter.Key, deploymentPrincipalType!);
                     continue;
                 }
 
@@ -515,6 +559,15 @@ public sealed class AzurePublishingContext(
     /// <returns>A task that represents the asynchronous save operation.</returns>
     private async Task SaveToDiskAsync(string outputDirectoryPath)
     {
+        if (ExcludeMainBicepFile)
+        {
+            // The root is not even built, rather than compiled and then discarded, because a model that
+            // only the individual modules support (such as a tenant-scoped module without a location parameter)
+            // makes compiling the root throw.
+            logger.LogDebug("Excluding {BicepName}.bicep from the output because {PropertyName} is set.", MainInfrastructure.BicepName, nameof(ExcludeMainBicepFile));
+            return;
+        }
+
         var plan = MainInfrastructure.Build(provisioningOptions.ProvisioningBuildOptions);
         var compiledBicep = plan.Compile().First();
 

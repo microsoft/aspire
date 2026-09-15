@@ -8,6 +8,8 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 public sealed class AzureBicepResourceScope
 {
+    private readonly object? _resourceGroup;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureBicepResourceScope"/> class with a resource group scope.
     /// </summary>
@@ -16,7 +18,7 @@ public sealed class AzureBicepResourceScope
     {
         ArgumentNullException.ThrowIfNull(resourceGroup);
 
-        ResourceGroup = resourceGroup;
+        _resourceGroup = resourceGroup;
     }
 
     /// <summary>
@@ -31,11 +33,26 @@ public sealed class AzureBicepResourceScope
         Subscription = subscription;
     }
 
-    private AzureBicepResourceScope(object? resourceGroup, object? subscription, bool isTenantScope)
+    private AzureBicepResourceScope(ScopeKind scopeKind)
     {
-        ResourceGroup = resourceGroup;
+        if (scopeKind is not ScopeKind.Tenant)
+        {
+            throw new ArgumentOutOfRangeException(nameof(scopeKind));
+        }
+
+        IsTenantScope = true;
+    }
+
+    private AzureBicepResourceScope(ScopeKind scopeKind, object subscription)
+    {
+        if (scopeKind is not ScopeKind.Subscription)
+        {
+            throw new ArgumentOutOfRangeException(nameof(scopeKind));
+        }
+
+        ArgumentNullException.ThrowIfNull(subscription);
+
         Subscription = subscription;
-        IsTenantScope = isTenantScope;
     }
 
     /// <summary>
@@ -43,26 +60,27 @@ public sealed class AzureBicepResourceScope
     /// </summary>
     /// <param name="subscription">The subscription identifier for subscription-level resources.</param>
     /// <returns>A new <see cref="AzureBicepResourceScope"/> scoped to the subscription.</returns>
-    public static AzureBicepResourceScope ForSubscription(object subscription)
+    public static AzureBicepResourceScope CreateForSubscription(object subscription)
     {
         ArgumentNullException.ThrowIfNull(subscription);
 
-        return new AzureBicepResourceScope(resourceGroup: null, subscription, isTenantScope: false);
+        return new AzureBicepResourceScope(ScopeKind.Subscription, subscription);
     }
 
     /// <summary>
     /// Creates a scope for tenant-level resources in the current tenant.
     /// </summary>
     /// <returns>A new <see cref="AzureBicepResourceScope"/> scoped to the current tenant.</returns>
-    public static AzureBicepResourceScope ForTenant()
+    public static AzureBicepResourceScope CreateForTenant()
     {
-        return new AzureBicepResourceScope(resourceGroup: null, subscription: null, isTenantScope: true);
+        return new AzureBicepResourceScope(ScopeKind.Tenant);
     }
 
     /// <summary>
     /// Represents the resource group to encode in the scope.
     /// </summary>
-    public object? ResourceGroup { get; }
+    /// <exception cref="InvalidOperationException">The scope does not target a resource group.</exception>
+    public object ResourceGroup => _resourceGroup ?? throw new InvalidOperationException("The Azure Bicep resource scope does not target a resource group.");
 
     /// <summary>
     /// Represents the subscription to encode in the scope.
@@ -74,21 +92,36 @@ public sealed class AzureBicepResourceScope
     /// </summary>
     public bool IsTenantScope { get; }
 
+    /// <summary>
+    /// Gets a value indicating whether the scope targets a resource group.
+    /// </summary>
+    /// <remarks>
+    /// Use this to test the scope before reading <see cref="ResourceGroup"/>, which throws for
+    /// subscription- and tenant-scoped resources.
+    /// </remarks>
+    public bool HasResourceGroup => _resourceGroup is not null;
+
     internal static AzureBicepResourceScope? FromExistingResourceAnnotation(ExistingAzureResourceAnnotation annotation)
     {
         ArgumentNullException.ThrowIfNull(annotation);
 
         if (annotation.IsTenantScope)
         {
-            return ForTenant();
+            return CreateForTenant();
         }
 
         return (annotation.ResourceGroup, annotation.Subscription) switch
         {
             ({ } resourceGroup, { } subscription) => new AzureBicepResourceScope(resourceGroup, subscription),
             ({ } resourceGroup, null) => new AzureBicepResourceScope(resourceGroup),
-            (null, { } subscription) => ForSubscription(subscription),
+            (null, { } subscription) => CreateForSubscription(subscription),
             _ => null
         };
+    }
+
+    private enum ScopeKind
+    {
+        Subscription,
+        Tenant
     }
 }

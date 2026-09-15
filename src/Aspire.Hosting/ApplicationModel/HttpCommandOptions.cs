@@ -49,6 +49,10 @@ public class HttpCommandOptions : CommandOptions
     /// <summary>
     /// Gets or sets the name of the HTTP client to use when creating it via <see cref="IHttpClientFactory.CreateClient(string)"/>.
     /// </summary>
+    /// <remarks>
+    /// When this property is <see langword="null"/>, the default <see cref="HttpClient"/> is used and its <see cref="HttpClient.Timeout"/>
+    /// is set to <see cref="Timeout.InfiniteTimeSpan"/>. Specify a named client to preserve its configured timeout.
+    /// </remarks>
     public string? HttpClientName { get; set; }
 
     /// <summary>

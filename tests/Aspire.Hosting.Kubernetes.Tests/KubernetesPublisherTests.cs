@@ -1,21 +1,26 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
-public class KubernetesPublisherTests()
+public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task PublishAsync_GeneratesValidHelmChart()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -63,7 +68,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -82,8 +87,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAppliesServiceCustomizations()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env")
             .WithProperties(e => e.DefaultImagePullPolicy = "Always");
@@ -102,7 +107,7 @@ public class KubernetesPublisherTests()
         app.Run();
 
         // Assert
-        var deploymentPath = Path.Combine(tempDir.Path, "templates/service/deployment.yaml");
+        var deploymentPath = Path.Combine(workspace.Path, "templates/service/deployment.yaml");
         Assert.True(File.Exists(deploymentPath));
 
         var content = await File.ReadAllTextAsync(deploymentPath);
@@ -113,8 +118,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_CustomWorkloadAndResourceType()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -160,7 +165,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -179,8 +184,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_CustomManifestResource()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -204,7 +209,7 @@ public class KubernetesPublisherTests()
 
         app.Run();
 
-        var manifestPath = Path.Combine(tempDir.Path, "templates/myapp/scaler.yaml");
+        var manifestPath = Path.Combine(workspace.Path, "templates/myapp/scaler.yaml");
         Assert.True(File.Exists(manifestPath), $"Manifest should exist at {manifestPath}");
 
         var content = await File.ReadAllTextAsync(manifestPath);
@@ -245,8 +250,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_HandlesSpecialResourceName()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env")
                    .WithHelm(helm => helm.WithChartName("my-chart"));
@@ -282,7 +287,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -301,8 +306,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_ResourceWithProbes()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -338,7 +343,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -357,8 +362,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_WithDockerfileFactory_WritesDockerfileToOutputFolder()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -370,11 +375,262 @@ public class KubernetesPublisherTests()
         app.Run();
 
         // Verify Dockerfile was written to resource-specific path
-        var dockerfilePath = Path.Combine(tempDir.Path, "testcontainer.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "testcontainer.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
         var actualContent = await File.ReadAllTextAsync(dockerfilePath);
 
         await Verify(actualContent);
+    }
+
+    [Fact]
+    public async Task PublishAsync_SupportsProjectedSecretVolumes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                var podTemplate = serviceResource.Workload!.PodTemplate;
+                podTemplate.Spec.Volumes.Add(new()
+                {
+                    Name = "projected-secrets",
+                    Projected = new()
+                    {
+                        DefaultMode = 420,
+                        Sources =
+                        {
+                            new()
+                            {
+                                Secret = new()
+                                {
+                                    Name = "first-secret",
+                                    Items =
+                                    {
+                                        new()
+                                        {
+                                            Key = "username",
+                                            Path = "first/username"
+                                        }
+                                    }
+                                }
+                            },
+                            new()
+                            {
+                                Secret = new()
+                                {
+                                    Name = "second-secret",
+                                    Optional = true,
+                                    Items =
+                                    {
+                                        new()
+                                        {
+                                            Key = "password",
+                                            Mode = 256,
+                                            Path = "second/password"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                podTemplate.Spec.Containers[0].VolumeMounts.Add(new()
+                {
+                    Name = "projected-secrets",
+                    MountPath = "/mnt/secrets",
+                    ReadOnly = true
+                });
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var deploymentPath = Path.Combine(workspace.Path, "templates/myapp/deployment.yaml");
+        var deployment = await File.ReadAllTextAsync(deploymentPath);
+
+        await Verify(deployment, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_SupportsCsiVolumes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                var podTemplate = serviceResource.Workload!.PodTemplate;
+                podTemplate.Spec.Volumes.Add(new()
+                {
+                    Name = "secrets-store",
+                    Csi = new()
+                    {
+                        Driver = "secrets-store.csi.k8s.io",
+                        ReadOnly = true,
+                        FsType = "ext4",
+                        VolumeAttributes =
+                        {
+                            ["secretProviderClass"] = "my-spc"
+                        },
+                        NodePublishSecretRef = new()
+                        {
+                            Name = "secrets-store-creds"
+                        }
+                    }
+                });
+
+                podTemplate.Spec.Containers[0].VolumeMounts.Add(new()
+                {
+                    Name = "secrets-store",
+                    MountPath = "/mnt/secrets-store",
+                    ReadOnly = true
+                });
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var deploymentPath = Path.Combine(workspace.Path, "templates/myapp/deployment.yaml");
+        var deployment = await File.ReadAllTextAsync(deploymentPath);
+
+        await Verify(deployment, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_OmitsCsiVolumeSourceWhenUnset()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                var podTemplate = serviceResource.Workload!.PodTemplate;
+                podTemplate.Spec.Volumes.Add(new()
+                {
+                    Name = "scratch",
+                    EmptyDir = new()
+                });
+
+                podTemplate.Spec.Containers[0].VolumeMounts.Add(new()
+                {
+                    Name = "scratch",
+                    MountPath = "/mnt/scratch"
+                });
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var deploymentPath = Path.Combine(workspace.Path, "templates/myapp/deployment.yaml");
+        var deployment = await File.ReadAllTextAsync(deploymentPath);
+
+        await Verify(deployment, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_SupportsProjectedConfigMapDownwardApiAndServiceAccountTokenVolumes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                var podTemplate = serviceResource.Workload!.PodTemplate;
+                podTemplate.Spec.Volumes.Add(new()
+                {
+                    Name = "projected-config",
+                    Projected = new()
+                    {
+                        Sources =
+                        {
+                            new()
+                            {
+                                ConfigMap = new()
+                                {
+                                    Name = "app-config",
+                                    Optional = true,
+                                    Items =
+                                    {
+                                        new()
+                                        {
+                                            Key = "appsettings.json",
+                                            Path = "config/appsettings.json"
+                                        }
+                                    }
+                                }
+                            },
+                            new()
+                            {
+                                DownwardApi = new()
+                                {
+                                    Items =
+                                    {
+                                        new()
+                                        {
+                                            Path = "pod/name",
+                                            FieldRef = new()
+                                            {
+                                                FieldPath = "metadata.name"
+                                            }
+                                        },
+                                        new()
+                                        {
+                                            Mode = 256,
+                                            Path = "resources/cpu-limit",
+                                            ResourceFieldRef = new()
+                                            {
+                                                ContainerName = "myapp",
+                                                Resource = "limits.cpu"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            new()
+                            {
+                                ServiceAccountToken = new()
+                                {
+                                    Audience = "api",
+                                    ExpirationSeconds = 3600,
+                                    Path = "tokens/api-token"
+                                }
+                            }
+                        }
+                    }
+                });
+
+                podTemplate.Spec.Containers[0].VolumeMounts.Add(new()
+                {
+                    Name = "projected-config",
+                    MountPath = "/mnt/config",
+                    ReadOnly = true
+                });
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var deploymentPath = Path.Combine(workspace.Path, "templates/myapp/deployment.yaml");
+        var deployment = await File.ReadAllTextAsync(deploymentPath);
+
+        await Verify(deployment, "yaml");
     }
 
     private sealed class KedaScaledObject() : BaseKubernetesResource("keda.sh/v1alpha1", "ScaledObject")
@@ -430,8 +686,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task KubernetesWithProjectResources()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -467,7 +723,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -486,8 +742,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task KubernetesMapsPortsForBaitAndSwitchResources()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.AddKubernetesEnvironment("env");
         var api = builder.AddExecutable("api", "node", ".")
             .PublishAsDockerFile()
@@ -513,7 +769,7 @@ public class KubernetesPublisherTests()
         SettingsTask settingsTask = default!;
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
             if (settingsTask is null)
             {
@@ -528,10 +784,461 @@ public class KubernetesPublisherTests()
     }
 
     [Fact]
+    public async Task PublishAsync_ProjectAndExecutableVolumesUseDefaultStorageAndEnvironmentPaths()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddProject<TestProject>("project", launchProfileName: null)
+            .WithVolume("project-data", "/srv/project", env: "DATA_PATH");
+        builder.AddExecutable("executable", "node", ".")
+            .PublishAsDockerFile()
+            .WithVolume("executable-data", "/srv/executable", env: "DATA_PATH");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/project/config.yaml",
+            "templates/project/deployment.yaml",
+            "templates/executable/config.yaml",
+            "templates/executable/deployment.yaml",
+            "values.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task KubernetesTreatsZeroPublicPortAsUnspecified()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+        builder.AddContainer("database", "image")
+            .WithEndpoint(name: "tcp", port: 0, targetPort: 1433);
+
+        var app = builder.Build();
+        app.Run();
+
+        var servicePath = Path.Combine(workspace.Path, "templates/database/service.yaml");
+        await Verify(File.ReadAllText(servicePath), "yaml");
+    }
+
+    [Fact]
+    public async Task KubernetesEndpointReferenceUsesServicePortNotTargetPort()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/18321
+        // When an endpoint has a distinct exposed `port` and container `targetPort`, a reference to
+        // that endpoint must resolve to the Kubernetes Service `port` (what clients connect to), not
+        // the container `targetPort`. The generated Service maps port -> targetPort, so a URL using
+        // the targetPort points at a port the Service is not listening on.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("k8s");
+
+        var questdb = builder.AddContainer("questdb", "questdb/questdb:9.4.1")
+            .WithHttpEndpoint(port: 9002, targetPort: 9000, name: "http");
+
+        builder.AddContainer("web", "questdb/questdb:9.4.1")
+            .WithEnvironment("QDB_CLIENT_CONF", questdb.GetEndpoint("http"));
+
+        var app = builder.Build();
+        app.Run();
+
+        // Assert. values.yaml holds the resolved reference URL (must use service port 9002), while
+        // questdb/service.yaml shows the Service mapping port 9002 -> targetPort 9000.
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/questdb/service.yaml",
+            "templates/web/config.yaml"
+        };
+        SettingsTask settingsTask = default!;
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task KubernetesIngressAndGatewayRouteToServicePortForDistinctPorts()
+    {
+        // Companion to KubernetesEndpointReferenceUsesServicePortNotTargetPort (issue #18321).
+        // The GetEndpoint fix only touches service-to-service reference resolution; Ingress and
+        // Gateway backends resolve ports on separate code paths. This test locks in that all three
+        // stay consistent for an endpoint with a distinct exposed `port` (9002) and container
+        // `targetPort` (9000):
+        //   - service.yaml maps Service port 9002 -> targetPort 9000
+        //   - the Ingress backend references the Service port by NAME ("http"), so it is decoupled
+        //     from the numeric port and resolves through the Service to 9002 -> 9000
+        //   - the Gateway HTTPRoute backendRef uses the numeric Service port 9002 (not 9000)
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("k8s");
+
+        var ingress = k8s.AddIngress("ingress").WithIngressClass("nginx");
+        var gateway = k8s.AddGateway("gateway").WithGatewayClass("nginx");
+
+        var api = builder.AddContainer("api", "questdb/questdb:9.4.1")
+            .WithHttpEndpoint(port: 9002, targetPort: 9000, name: "http")
+            .WithExternalHttpEndpoints();
+
+        ingress.WithPath("/api", api.GetEndpoint("http"));
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/api/service.yaml",
+            "templates/ingress/ingress.yaml",
+            "templates/gateway/route.yaml"
+        };
+        SettingsTask settingsTask = default!;
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task KubernetesProbeUsesContainerTargetPortNotServicePort()
+    {
+        // Guards EndpointProperty.TargetPort => GetPort(targetPort) in KubernetesResource.GetEndpointValue.
+        // Probes run against the pod directly (not through the Service), so when an endpoint has a
+        // distinct exposed `port` (9002) and container `targetPort` (9000), the generated probe must
+        // target the container port 9000. This is the inverse of issue #18321: client-facing
+        // references use the Service port, but the probe must keep using the container target port.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("k8s");
+
+#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        builder.AddContainer("api", "questdb/questdb:9.4.1")
+            .WithHttpEndpoint(port: 9002, targetPort: 9000, name: "http")
+            .WithHttpProbe(ProbeType.Readiness, "/ready");
+#pragma warning restore ASPIREPROBES001
+
+        var app = builder.Build();
+        app.Run();
+
+        // deployment.yaml carries the probe (httpGet.port must be 9000, the container port), while
+        // service.yaml shows the Service mapping port 9002 -> targetPort 9000.
+        var expectedFiles = new[]
+        {
+            "templates/api/deployment.yaml",
+            "templates/api/service.yaml"
+        };
+        SettingsTask settingsTask = default!;
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_EmbeddedParametersInEnvironmentExpressionsPopulateValues()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        // Regression for https://github.com/microsoft/aspire/issues/11140: the base chart keeps
+        // deployment parameters empty, but every nested Helm reference must still be declared.
+        var host = builder.AddParameter("host", "localhost");
+        var token = builder.AddParameter("token", "test-token", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("SOME_URL", $"http://{host}/test")
+            .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/config.yaml",
+            "templates/myapp/secrets.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_ConflictingEmbeddedParameterValuesPathReportsError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var host = builder.AddParameter("host", "parameter-host", publishValueAsDefault: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("host", "environment-host")
+            .WithEnvironment("URL", $"http://{host}/test");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Contains(
+            "Resource 'myapp' maps both environment value 'host' and embedded parameter 'host' " +
+            "to Helm values path 'config.myapp.host'. Rename one of them so each value has a unique Helm path.",
+            Assert.IsType<string>(reporter.CompletionMessage));
+    }
+
+    [Fact]
+    public async Task PublishAsync_EmbeddedParametersWithSameNormalizedValuesPathReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var dashedHost = builder.AddParameter("api-host", "dashed-host", publishValueAsDefault: true);
+        var underscoredHost = new ParameterResource("api_host", _ => "underscored-host");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("URL", $"http://{dashedHost}/{underscoredHost}");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Contains(
+            "Resource 'myapp' maps both embedded parameter 'api-host' and embedded parameter 'api_host' " +
+            "to Helm values path 'config.myapp.api_host'. Rename one of them so each value has a unique Helm path.",
+            Assert.IsType<string>(reporter.CompletionMessage));
+    }
+
+    [Fact]
+    public async Task PublishAsync_DistinctEmbeddedParameterSourcesWithSameNameReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var firstHost = new ParameterResource("host", _ => "first-host");
+        var secondHost = new ParameterResource("host", _ => "second-host");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("URL", $"http://{firstHost}/{secondHost}");
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "Resource 'myapp' maps multiple distinct embedded parameter sources named 'host' " +
+            "to Helm values path 'config.myapp.host'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.",
+            exception.ToString());
+    }
+
+    [Fact]
+    public async Task PublishAsync_DistinctConditionalParameterSourcesWithSameNameReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var firstCondition = new ParameterResource("enable-tls", _ => bool.TrueString);
+        var secondCondition = new ParameterResource("enable-tls", _ => bool.FalseString);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["FIRST"] = ReferenceExpression.CreateConditional(
+                    firstCondition,
+                    bool.TrueString,
+                    ReferenceExpression.Create($"enabled"),
+                    ReferenceExpression.Create($"disabled"));
+                context.EnvironmentVariables["SECOND"] = ReferenceExpression.CreateConditional(
+                    secondCondition,
+                    bool.TrueString,
+                    ReferenceExpression.Create($"enabled"),
+                    ReferenceExpression.Create($"disabled"));
+            });
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "Resource 'myapp' maps multiple distinct condition parameter sources named 'enable-tls' " +
+            "to Helm values path 'parameters.myapp.enable_tls'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.",
+            exception.ToString());
+    }
+
+    [Fact]
+    public async Task PublishAsync_CompositeExpressionPreservesExpressionShape()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var first = builder.AddParameter("first", "alpha", publishValueAsDefault: true);
+        var second = builder.AddParameter("second", "beta", publishValueAsDefault: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("COMPOSITE", $"prefix-{{literal}}-{second}-{first}-{second}-suffix");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_SharedEmbeddedParameterIsScopedPerResource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var sharedHost = builder.AddParameter("shared-host", "shared.internal", publishValueAsDefault: true);
+
+        builder.AddContainer("first", "nginx")
+            .WithEnvironment("URL", $"http://{sharedHost}/first");
+
+        builder.AddContainer("second", "nginx")
+            .WithEnvironment("URL", $"http://{sharedHost}/second");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/first/config.yaml",
+            "templates/second/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpression()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -539,7 +1246,7 @@ public class KubernetesPublisherTests()
             .WithEnvironment(context =>
             {
                 var conditional = ReferenceExpression.CreateConditional(
-                    new TestConditionProvider(bool.TrueString),
+                    new TestValueProvider(bool.TrueString),
                     bool.TrueString,
                     ReferenceExpression.Create($",ssl=true"),
                     ReferenceExpression.Empty);
@@ -547,7 +1254,7 @@ public class KubernetesPublisherTests()
                 context.EnvironmentVariables["TLS_SUFFIX"] = conditional;
 
                 var conditionalFalse = ReferenceExpression.CreateConditional(
-                    new TestConditionProvider(bool.FalseString),
+                    new TestValueProvider(bool.FalseString),
                     bool.TrueString,
                     ReferenceExpression.Create($",ssl=true"),
                     ReferenceExpression.Create($",ssl=false"));
@@ -572,7 +1279,58 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_ConditionalBranchesCaptureEmbeddedParameters()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var mode = builder.AddParameter("mode", "enabled", publishValueAsDefault: true);
+        var user = builder.AddParameter("user", "alice", publishValueAsDefault: true);
+        var password = builder.AddParameter("password", "test-password", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["OPTIONS"] = ReferenceExpression.CreateConditional(
+                    mode.Resource,
+                    "enabled",
+                    ReferenceExpression.Create($"user={user};password={password}"),
+                    ReferenceExpression.Create($"user={user};disabled"));
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/secrets.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -591,10 +1349,10 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpressionWithParameterCondition()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
-        builder.AddKubernetesEnvironment("env");
+        var environment = builder.AddKubernetesEnvironment("env");
 
         // Use a real ParameterResource as the condition with a known default value.
         var enableTls = builder.AddParameter("enable-tls", "True", publishValueAsDefault: true);
@@ -614,6 +1372,12 @@ public class KubernetesPublisherTests()
         var app = builder.Build();
         app.Run();
 
+        Assert.Contains(environment.Resource.CapturedHelmValues, captured =>
+            captured.Section == "parameters" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "enable_tls" &&
+            captured.Parameter == enableTls.Resource);
+
         var expectedFiles = new[]
         {
             "Chart.yaml",
@@ -628,7 +1392,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -647,8 +1411,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_ConditionalWithParameterBranch_UsesIfElseSyntax()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -687,7 +1451,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -706,8 +1470,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_HandlesScalarEnvironmentVariableTypes()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -741,7 +1505,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -757,15 +1521,608 @@ public class KubernetesPublisherTests()
         await settingsTask;
     }
 
-    private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
+    [Fact]
+    public async Task PublishAsync_WithPvcStorageType_GeneratesValidPersistentVolumeClaim()
     {
-        public string ValueExpression => "test-condition";
+        // Regression test for https://github.com/microsoft/aspire/issues/16504 (PVC emits empty
+        // dataSource/dataSourceRef/selector blocks) caused by eager `= new()` initialization of
+        // complex sub-properties on V1 spec types; once those properties are nullable the YAML
+        // serializer's OmitNull configuration suppresses the empty mappings.
+        //
+        // Also asserts that the publisher does NOT emit a bare PersistentVolume manifest for
+        // DefaultStorageType = "pvc": dynamic provisioning is driven by the storageClassName on
+        // the PVC, and a PV without a PersistentVolumeSource (csi/hostPath/local/nfs/...) is
+        // rejected by `kubectl apply`. See
+        // https://kubernetes.io/docs/concepts/storage/persistent-volumes/#dynamic.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
-        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
-            => new(value);
+        builder.AddKubernetesEnvironment("env")
+            .WithProperties(env =>
+            {
+                env.DefaultStorageType = "pvc";
+                env.DefaultStorageClassName = "managed-csi";
+                env.DefaultStorageSize = "10Gi";
+                env.DefaultStorageReadWritePolicy = "ReadWriteOnce";
+            });
 
-        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
-            => new(value);
+        builder.AddContainer("service", "nginx")
+            .WithVolume("data", "/var/lib/data");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/service/deployment.yaml",
+            "templates/service/data-pvc.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+
+            // Empty `{ }` mappings on the specific spec fields that Kubernetes rejects are
+            // the failure mode the bug fixes address; assert against them explicitly so a
+            // regression is obvious without snapshot-diffing. Uses the targeted helper
+            // because valid Kubernetes YAML routinely contains `{}` shorthand (e.g.
+            // `emptyDir: {}`, `resources: {}`), which a bare Assert.DoesNotContain("{}")
+            // would flag as a false positive.
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        // The bare PV manifest (data-pv.yaml) must NOT be emitted — see method comment.
+        var legacyPv = Path.Combine(workspace.Path, "templates", "service", "data-pv.yaml");
+        Assert.False(File.Exists(legacyPv), "DefaultStorageType=\"pvc\" must not emit a bare PV; dynamic provisioning is driven by the PVC's storageClassName.");
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithHostPathStorageType_EmitsHostPathVolumeOnPodSpec()
+    {
+        // Regression test for the hostPath emission path in WithPodSpecVolumes. When
+        // DefaultStorageType = "hostpath" the publisher renders the volume directly as a
+        // pod hostPath volume (no PV/PVC objects are emitted — only the Deployment manifest
+        // is produced). The original bug emitted empty `{}` mappings on the hostPath
+        // sub-properties; with the nullable-property fixes those are now suppressed.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithProperties(env =>
+            {
+                env.DefaultStorageType = "hostpath";
+                env.DefaultStorageSize = "5Gi";
+            });
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("logs", "/var/log/service");
+
+        var app = builder.Build();
+        app.Run();
+
+        var deploymentPath = Path.Combine(workspace.Path, "templates", "service", "deployment.yaml");
+        Assert.True(File.Exists(deploymentPath));
+
+        var deploymentContent = await File.ReadAllTextAsync(deploymentPath);
+        Assert.DoesNotContain("{}", deploymentContent);
+
+        await Verify(deploymentContent, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_BindsByName_PromotesToStatefulSet()
+    {
+        // First-class persistent volumes bind to a workload by matching a
+        // ContainerMountAnnotation source name. The publisher routes the pod's
+        // volumes[] entry through the generated PVC and promotes the workload to a
+        // StatefulSet (regardless of whether the resource implements
+        // IResourceWithConnectionString).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var data = k8s.AddPersistentVolume("data")
+            .WithStorageClass("managed-csi")
+            .WithCapacity("20Gi")
+            .WithAccessMode(PersistentVolumeAccessMode.ReadWriteOnce)
+            .WithVolumeAnnotation("volume.beta.kubernetes.io/storage-provisioner", "disk.csi.azure.com");
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("data", "/var/lib/data")
+            .WithPersistentVolume(data);
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/service/statefulset.yaml",
+            "templates/data/data.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        // The pre-existing per-resource PVC under templates/service/ must NOT be emitted —
+        // the binding consumes the volume mount and routes it to the standalone PVC instead.
+        var legacyPvc = Path.Combine(workspace.Path, "templates", "service", "data-pvc.yaml");
+        Assert.False(File.Exists(legacyPvc), "Bound volumes must not also be emitted via the env-default PV/PVC path.");
+
+        // And no Deployment manifest for the bound workload — it must promote to StatefulSet.
+        var deploymentPath = Path.Combine(workspace.Path, "templates", "service", "deployment.yaml");
+        Assert.False(File.Exists(deploymentPath), "Workloads bound to a persistent volume must render as a StatefulSet, not a Deployment.");
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_OnProject_BindsViaMountPathOverload()
+    {
+        // Closes https://github.com/microsoft/aspire/issues/9430 — projects can bind a
+        // persistent volume via the (volume, mountPath) overload, which adds the
+        // ContainerMountAnnotation itself.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var media = k8s.AddPersistentVolume("media")
+            .WithStorageClass("azurefile-csi")
+            .WithCapacity("100Gi")
+            .WithAccessMode(PersistentVolumeAccessMode.ReadWriteMany);
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(media, "/srv/media");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/api/statefulset.yaml",
+            "templates/media/media.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_KubernetesCustomizationOverridesDefaultFsGroup()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var data = k8s.AddPersistentVolume("data");
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(data, "/srv/data")
+            .PublishAsKubernetesService(resource =>
+            {
+                var podSpec = resource.Workload?.PodTemplate.Spec
+                    ?? throw new InvalidOperationException("The Kubernetes workload was not generated.");
+                podSpec.SecurityContext ??= new();
+                podSpec.SecurityContext.FsGroup = 3000;
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var statefulSetPath = Path.Combine(workspace.Path, "templates", "api", "statefulset.yaml");
+        var content = await File.ReadAllTextAsync(statefulSetPath);
+
+        await Verify(content, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_KubernetesCustomizationCanRemoveDefaultSecurityContext()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var data = k8s.AddPersistentVolume("data");
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(data, "/srv/data")
+            .PublishAsKubernetesService(resource =>
+            {
+                var podSpec = resource.Workload?.PodTemplate.Spec
+                    ?? throw new InvalidOperationException("The Kubernetes workload was not generated.");
+                podSpec.SecurityContext = null;
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var statefulSetPath = Path.Combine(workspace.Path, "templates", "api", "statefulset.yaml");
+        var content = await File.ReadAllTextAsync(statefulSetPath);
+
+        var yaml = new YamlStream();
+        using (var reader = new StringReader(content))
+        {
+            yaml.Load(reader);
+        }
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var podSpec = (YamlMappingNode)root["spec"]["template"]["spec"];
+        Assert.False(podSpec.Children.ContainsKey(new YamlScalarNode("securityContext")));
+
+        await Verify(content, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_EnvironmentUsesDeploymentMountPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("media")
+            .WithStorageClass("azurefile-csi")
+            .WithCapacity("100Gi")
+            .WithAccessMode(PersistentVolumeAccessMode.ReadWriteMany);
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(volume, "/srv/media", env: "MEDIA_PATH");
+
+        var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+        var localPath = KubernetesPersistentVolumeLocalStorage.GetPath(store, volume.Resource);
+
+        app.Run();
+
+        Assert.False(Directory.Exists(localPath));
+
+        var expectedFiles = new[]
+        {
+            "templates/api/config.yaml",
+            "templates/api/statefulset.yaml",
+            "templates/media/media.yaml",
+            "values.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithPersistentVolumeEnvironment_OnContainerAndExecutable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var containerVolume = kubernetes.AddPersistentVolume("container-data")
+            .WithCapacity("1Gi");
+        var executableVolume = kubernetes.AddPersistentVolume("executable-data")
+            .WithCapacity("1Gi");
+
+        builder.AddContainer("container", "nginx")
+            .WithPersistentVolume(containerVolume, "/srv/container", env: "DATA_PATH");
+        builder.AddExecutable("executable", "node", ".")
+            .PublishAsDockerFile()
+            .WithPersistentVolume(executableVolume, "/srv/executable", env: "DATA_PATH");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/container/config.yaml",
+            "templates/container/statefulset.yaml",
+            "templates/container-data/container-data.yaml",
+            "templates/executable/config.yaml",
+            "templates/executable/statefulset.yaml",
+            "templates/executable-data/executable-data.yaml",
+            "values.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_FallsThroughForUnboundVolumes()
+    {
+        // A workload may declare both a bound and an unbound volume. The bound one
+        // routes through the standalone PVC; the unbound one falls through to the
+        // env-default storage type (here: emptyDir) so existing workloads are not
+        // perturbed by this feature.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var data = k8s.AddPersistentVolume("data")
+            .WithStorageClass("managed-csi")
+            .WithCapacity("5Gi");
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("data", "/var/lib/data")
+            .WithVolume("scratch", "/srv/scratch")
+            .WithPersistentVolume(data);
+
+        var app = builder.Build();
+        app.Run();
+
+        var statefulSetPath = Path.Combine(workspace.Path, "templates", "service", "statefulset.yaml");
+        Assert.True(File.Exists(statefulSetPath));
+
+        var statefulSetContent = await File.ReadAllTextAsync(statefulSetPath);
+        AssertNoBuggyEmptyMappings(statefulSetContent);
+
+        var pvcPath = Path.Combine(workspace.Path, "templates", "data", "data.yaml");
+        Assert.True(File.Exists(pvcPath));
+        var pvcContent = await File.ReadAllTextAsync(pvcPath);
+        Assert.DoesNotContain("{}", pvcContent);
+
+        await Verify(statefulSetContent, "yaml")
+            .AppendContentAsFile(pvcContent, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_ThrowsWhenBoundAcrossEnvironments()
+    {
+        // A persistent volume declared on one Kubernetes environment cannot be bound
+        // by a workload assigned to a different environment: the two charts render
+        // into separate namespaces/clusters, so the workload's claimName would
+        // reference a PVC that does not exist alongside it. Fail fast at publish time
+        // with a clear message rather than silently emitting broken YAML.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var envA = builder.AddKubernetesEnvironment("envA");
+        var envB = builder.AddKubernetesEnvironment("envB");
+
+        var data = envA.AddPersistentVolume("data").WithCapacity("5Gi");
+
+        builder.AddContainer("service", "nginx")
+            .WithComputeEnvironment(envB)
+            .WithVolume("data", "/var/lib/data")
+            .WithPersistentVolume(data);
+
+        var app = builder.Build();
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
+        Assert.Contains("service", ex.Message);
+        Assert.Contains("envA", ex.Message);
+        Assert.Contains("envB", ex.Message);
+        Assert.Contains("data", ex.Message);
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_ReadOnlyFlag_PropagatesToVolumeMountAndPodVolume()
+    {
+        // The mount-path overload of WithPersistentVolume accepts an `isReadOnly`
+        // parameter. That flag must reach both the container's volumeMounts[i].readOnly
+        // (so the container sees the mount as read-only) AND the pod's
+        // volumes[i].persistentVolumeClaim.readOnly (so Kubernetes enforces read-only
+        // at the volume-source layer even if a co-scheduled container in the same
+        // pod forgot to set the mount flag). Prior to this test, both emission
+        // paths silently dropped the flag, so `isReadOnly: true` was a no-op.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var media = k8s.AddPersistentVolume("media")
+            .WithStorageClass("azurefile-csi")
+            .WithCapacity("50Gi")
+            .WithAccessMode(PersistentVolumeAccessMode.ReadOnlyMany);
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(media, "/srv/media", isReadOnly: true);
+
+        var app = builder.Build();
+        app.Run();
+
+        var statefulSetPath = Path.Combine(workspace.Path, "templates", "api", "statefulset.yaml");
+        Assert.True(File.Exists(statefulSetPath), $"Expected StatefulSet manifest at {statefulSetPath}");
+        var content = await File.ReadAllTextAsync(statefulSetPath);
+        AssertNoBuggyEmptyMappings(content);
+
+        // Parse the emitted YAML and walk to the exact fields we care about so the
+        // assertion isn't satisfied by a `readOnly:` on some unrelated field
+        // (e.g. a securityContext) that happens to share the substring.
+        var yaml = new YamlStream();
+        using (var reader = new StringReader(content))
+        {
+            yaml.Load(reader);
+        }
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var podSpec = (YamlMappingNode)root["spec"]["template"]["spec"];
+
+        var securityContext = (YamlMappingNode)podSpec["securityContext"];
+        Assert.Equal("2000", ((YamlScalarNode)securityContext["fsGroup"]).Value);
+        Assert.Equal("OnRootMismatch", ((YamlScalarNode)securityContext["fsGroupChangePolicy"]).Value);
+
+        // Container mount side: containers[0].volumeMounts[?(@.name == "media")].readOnly == true
+        var container = (YamlMappingNode)((YamlSequenceNode)podSpec["containers"])[0];
+        var volumeMount = ((YamlSequenceNode)container["volumeMounts"])
+            .Cast<YamlMappingNode>()
+            .Single(m => ((YamlScalarNode)m["name"]).Value == "media");
+        Assert.Equal("true", ((YamlScalarNode)volumeMount["readOnly"]).Value);
+
+        // Pod volume-source side: spec.volumes[?(@.name == "media")].persistentVolumeClaim.readOnly == true
+        var podVolume = ((YamlSequenceNode)podSpec["volumes"])
+            .Cast<YamlMappingNode>()
+            .Single(v => ((YamlScalarNode)v["name"]).Value == "media");
+        var pvcSource = (YamlMappingNode)podVolume["persistentVolumeClaim"];
+        Assert.Equal("true", ((YamlScalarNode)pvcSource["readOnly"]).Value);
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_ParameterOverloads_CaptureValuesInHelmChart()
+    {
+        // The parameterized overloads (WithStorageClass(ParameterResource),
+        // WithCapacity(ParameterResource), WithVolumeAnnotation(key, ParameterResource))
+        // go through the Helm placeholder / value-capture path: each parameter must
+        // render into the PVC manifest as `{{ .Values.parameters.<pv-name>.<param> }}`
+        // and land in values.yaml under `parameters.<pv-name>.<param>`. Literal-value
+        // overloads never exercise this path, so a regression here could silently
+        // break the generated PVC YAML or values.yaml without failing any other test.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        // Use unique parameter names per run to defeat any persistent state file lookup.
+        var suffix = Guid.NewGuid().ToString("N");
+        var storageClassName = $"storageclass{suffix}";
+        var capacityName = $"capacity{suffix}";
+        var backupTierName = $"backuptier{suffix}";
+
+        var storageClassParam = builder.AddParameter(storageClassName);
+        var capacityParam = builder.AddParameter(capacityName);
+        var backupTierParam = builder.AddParameter(backupTierName);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var data = k8s.AddPersistentVolume("data")
+            .WithStorageClass(storageClassParam)
+            .WithCapacity(capacityParam)
+            .WithAccessMode(PersistentVolumeAccessMode.ReadWriteOnce)
+            .WithVolumeAnnotation("backup.example.com/tier", backupTierParam);
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("data", "/var/lib/data")
+            .WithPersistentVolume(data);
+
+        var app = builder.Build();
+        app.Run();
+
+        var pvcPath = Path.Combine(workspace.Path, "templates", "data", "data.yaml");
+        Assert.True(File.Exists(pvcPath), $"Expected PVC manifest at {pvcPath}");
+        var pvcContent = await File.ReadAllTextAsync(pvcPath);
+        AssertNoBuggyEmptyMappings(pvcContent);
+
+        // Every parameter must render as a Helm template reference scoped to the PV name,
+        // not as a raw ReferenceExpression placeholder ("{0}") or an inlined literal.
+        Assert.DoesNotContain("\"{0}\"", pvcContent);
+        Assert.Contains($"{{{{ .Values.parameters.data.{storageClassName} }}}}", pvcContent);
+        Assert.Contains($"{{{{ .Values.parameters.data.{capacityName} }}}}", pvcContent);
+        Assert.Contains($"{{{{ .Values.parameters.data.{backupTierName} }}}}", pvcContent);
+
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath), $"Expected values.yaml at {valuesPath}");
+        var valuesContent = await File.ReadAllTextAsync(valuesPath);
+
+        // Consumers of the published Helm chart fill these in via --set / values overrides;
+        // each parameter must appear under parameters.data.<name>: so `helm template`
+        // won't substitute <no value>.
+        var parametersBlockRegex = new System.Text.RegularExpressions.Regex(
+            @"parameters:\s*[\r\n]+\s*data:\s*[\r\n]+(?:\s+\w+:.*[\r\n]+)*\s*" +
+            System.Text.RegularExpressions.Regex.Escape(storageClassName) + @"\s*:");
+        Assert.Matches(parametersBlockRegex, valuesContent);
+        Assert.Matches(
+            new System.Text.RegularExpressions.Regex(@"parameters:[\s\S]+data:[\s\S]+" +
+                System.Text.RegularExpressions.Regex.Escape(capacityName) + @"\s*:"),
+            valuesContent);
+        Assert.Matches(
+            new System.Text.RegularExpressions.Regex(@"parameters:[\s\S]+data:[\s\S]+" +
+                System.Text.RegularExpressions.Regex.Escape(backupTierName) + @"\s*:"),
+            valuesContent);
+    }
+
+    /// <summary>
+    /// Asserts that the rendered YAML does not contain known-buggy empty <c>{}</c>
+    /// mappings that Kubernetes rejects on apply. Some <c>{}</c> mappings — such as
+    /// <c>emptyDir: {}</c> — are valid Kubernetes shorthand and must be permitted.
+    /// </summary>
+    private static void AssertNoBuggyEmptyMappings(string content)
+    {
+        string[] buggyPatterns =
+        [
+            "volumeClaimRetentionPolicy: {}",
+            "updateStrategy: {}",
+            "rollingUpdate: {}",
+            "dataSource: {}",
+            "dataSourceRef: {}",
+            "selector: {}",
+            "claimRef: {}",
+            "hostPath: {}",
+            "local: {}",
+            "nodeAffinity:",
+        ];
+
+        foreach (var pattern in buggyPatterns)
+        {
+            if (pattern == "nodeAffinity:")
+            {
+                // nodeAffinity is only buggy when followed by an empty `required: {}` block.
+                Assert.DoesNotContain("required: {}", content);
+            }
+            else
+            {
+                Assert.DoesNotContain(pattern, content);
+            }
+        }
     }
 
     private sealed class TestProject : IProjectMetadata

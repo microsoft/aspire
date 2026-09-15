@@ -174,6 +174,7 @@ public static class PostgresBuilderExtensions
 
         return builder.ApplicationBuilder
             .AddResource(postgresDatabase)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey);
     }
 
@@ -208,6 +209,7 @@ public static class PostgresBuilderExtensions
             var pgAdminContainerBuilder = builder.ApplicationBuilder.AddResource(pgAdminContainer)
                                                  .WithImage(PostgresContainerImageTags.PgAdminImage, PostgresContainerImageTags.PgAdminTag)
                                                  .WithImageRegistry(PostgresContainerImageTags.PgAdminRegistry)
+                                                 .WithIconName("WindowDatabase")
                                                  .WithHttpEndpoint(targetPort: 80, name: "http")
                                                  .WithEnvironment(SetPgAdminEnvironmentVariables)
                                                  .WithHttpHealthCheck("/browser")
@@ -318,6 +320,7 @@ public static class PostgresBuilderExtensions
             var pgwebContainerBuilder = builder.ApplicationBuilder.AddResource(pgwebContainer)
                                                .WithImage(PostgresContainerImageTags.PgWebImage, PostgresContainerImageTags.PgWebTag)
                                                .WithImageRegistry(PostgresContainerImageTags.PgWebRegistry)
+                                               .WithIconName("WindowDatabase")
                                                .WithHttpEndpoint(targetPort: 8081, name: "http")
                                                .WithArgs("--bookmarks-dir=/.pgweb/bookmarks")
                                                .WithArgs("--sessions")

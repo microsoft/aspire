@@ -30,32 +30,28 @@ else
                 </div>
             }
         </div>
-        <FluentTabs ActiveTabId="@($"tab-{ActiveView}")" OnTabChange="@OnTabChangeAsync" Size="null">
-            <FluentTab LabelClass="tab-label"
+        <FluentTabs Class="aspire-content-tabs" ActiveTabId="@($"tab-{_activeView}")" ActiveTabChanged="@OnTabChangeAsync" Size="null">
+            <FluentTab HeaderClass="tab-label"
                        Id="@($"tab-{Metrics.MetricViewKind.Graph}")"
+                       DeferredLoading="true"
                        aria-label="@Loc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]"
-                       Label="@Loc[nameof(ControlsStrings.ChartContainerGraphTab)]"
-                       Icon="@(new Icons.Regular.Size24.DataArea())">
+                       Header="@Loc[nameof(ControlsStrings.ChartContainerGraphTab)]"
+                       IconStart="@(new Icons.Regular.Size24.DataArea())">
                 <div class="metrics-chart-container metric-tab">
-                    <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources"/>
-                    <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
+                    <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" />
+                    <ChartFilters InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
-            <FluentTab LabelClass="tab-label"
+            <FluentTab HeaderClass="tab-label"
                        Id="@($"tab-{Metrics.MetricViewKind.Table}")"
-                       Label="@Loc[nameof(ControlsStrings.ChartContainerTableTab)]"
-                       Icon="@(new Icons.Regular.Size24.Table())">
+                       DeferredLoading="true"
+                       Header="@Loc[nameof(ControlsStrings.ChartContainerTableTab)]"
+                       IconStart="@(new Icons.Regular.Size24.Table())">
                 <div class="metrics-chart-container metric-tab">
-                    <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" />
-                    <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
+                    <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" />
+                    <ChartFilters InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
         </FluentTabs>
-        <div class="metrics-chart-footer">
-            @if (PauseText is not null)
-            {
-                <PauseWarning PauseText="@PauseText" />
-            }
-        </div>
     </div>
 }

@@ -88,7 +88,7 @@ try {
 
   const tarballPath = join(temporaryDirectory, packEntry.filename);
 
-  // Corepack can use COREPACK_NPM_REGISTRY for npmjs.org, but Azure Artifacts
+  // Corepack can use COREPACK_NPM_REGISTRY for the public npm registry, but Azure Artifacts
   // does not implement the /<package>/<version> metadata route Corepack calls.
   // Seed the same cache shape Corepack writes, using npm pack because npm can
   // resolve Yarn through the Azure Artifacts pull-through feed.

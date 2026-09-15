@@ -161,6 +161,7 @@ public interface IResourceContainerImageManager
 internal sealed class ResourceContainerImageManager(
     ILogger<ResourceContainerImageManager> logger,
     IContainerRuntimeResolver containerRuntimeResolver,
+    IProcessRunner processRunner,
     IServiceProvider serviceProvider,
     DistributedApplicationExecutionContext? executionContext = null) : IResourceContainerImageManager
 {
@@ -327,7 +328,7 @@ internal sealed class ResourceContainerImageManager(
     private async Task ExecuteDotnetPublishAsync(IResource resource, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
     {
         // This is a resource project so we'll use the .NET SDK to build the container image.
-        if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+        if (!resource.TryGetProjectMetadata(out var projectMetadata))
         {
             throw new DistributedApplicationException($"The resource '{resource.Name}' does not have a project metadata annotation.");
         }
@@ -406,7 +407,7 @@ internal sealed class ResourceContainerImageManager(
             string.Join(" ", spec.Arguments)
             );
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = processRunner.Run(spec);
 
         await using (processDisposable)
         {

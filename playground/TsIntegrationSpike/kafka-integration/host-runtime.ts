@@ -10,15 +10,15 @@ import {
 // registerHandleWrapper(...) calls, populating the transport.ts handle-wrapper
 // registry with factories for every type in the generated SDK. Without this
 // import `wrapIfHandle` would return bare Handle instances with no methods.
-import '../.modules/aspire.js';
+import '../.aspire/modules/aspire.mjs';
 import {
     invokeRegisteredCallback,
     getAspireExport,
     type AspireExportedFunction,
     type AspireExportMetadata,
     type AspireIntegrationDefinition,
-} from '../.modules/base.js';
-import { wrapIfHandle, type AspireClientRpc } from '../.modules/transport.js';
+} from '../.aspire/modules/base.mjs';
+import { wrapIfHandle, type AspireClientRpc } from '../.aspire/modules/transport.mjs';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -35,7 +35,7 @@ export interface RemoteHandle
 /**
  * The set of integrations a host process loads. Each integration's exported
  * capabilities are AspireExport-wrapped functions rolled up via the
- * `defineIntegration` helper (both emitted into the generated `.modules/base.js`).
+ * `defineIntegration` helper (both emitted into the generated `.aspire/modules/base.mjs`).
  */
 export interface IntegrationHostDefinition
 {
@@ -264,7 +264,7 @@ function wrapRemoteValue(value: unknown, client: AspireClientRpc): unknown
     return value;
 }
 
-// Projection metadata types live in `../.modules/base.js` (AspireCapabilityProjection,
+// Projection metadata types live in `../.aspire/modules/base.mjs` (AspireCapabilityProjection,
 // AspireCapabilityParameter, AspireCallbackParameter, AspireTypeRef). Host runtime code
 // reads them via `getAspireExport(fn).projection`. Integrations import them from the
 // generated base when they need to reference a projection shape in their AspireExport

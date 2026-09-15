@@ -33,7 +33,6 @@ namespace Aspire.Hosting.Foundry;
 public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IResourceWithConnectionString
 {
     private const string BeforeStartStepName = "before-start";
-    private const string RunModeAzureProvisionStepName = "run-mode-azure-provision";
     private const int ProjectEndpointReadinessMaxRetryAttempts = 11;
     private static readonly TimeSpan s_projectEndpointReadinessDelay = TimeSpan.FromSeconds(5);
     private readonly List<IFoundryTool> _tools = [];
@@ -75,7 +74,7 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
                     Action = DeployBeforeStartAsync,
                     RequiredBySteps = [BeforeStartStepName],
                     Resource = this,
-                    DependsOnSteps = [RunModeAzureProvisionStepName]
+                    DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName]
                 };
                 steps.Add(beforeStartDeployStep);
             }

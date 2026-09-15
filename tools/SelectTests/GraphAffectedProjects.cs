@@ -26,14 +26,19 @@ namespace Aspire.SelectTests;
 /// closure is a BFS) from a directly-changed project to the affected one, plus the changed file that
 /// seeded that chain — the data the selector turns into a "why this test ran" path in the summary.
 /// </param>
+/// <param name="AffectedTestProjects">
+/// Affected project base names for graph projects under <c>tests/</c>, including projects omitted from <c>Aspire.slnx</c> but brought into the graph through ProjectReference.
+/// </param>
 internal sealed record AffectedResult(
     IReadOnlyCollection<string> AffectedProjects,
     IReadOnlySet<string> AttributedPaths,
-    IReadOnlyDictionary<string, AffectedPath> Paths)
+    IReadOnlyDictionary<string, AffectedPath> Paths,
+    IReadOnlySet<string> AffectedTestProjects)
 {
     public static readonly AffectedResult Empty =
         new(Array.Empty<string>(), new HashSet<string>(StringComparer.Ordinal),
-            new Dictionary<string, AffectedPath>(StringComparer.Ordinal));
+            new Dictionary<string, AffectedPath>(StringComparer.Ordinal),
+            new HashSet<string>(StringComparer.Ordinal));
 }
 
 /// <summary>
@@ -59,8 +64,12 @@ public sealed record AffectedPath(string ChangedFile, IReadOnlyList<string> Proj
 /// through a libgit2-backed MSBuild virtual filesystem to diff packages, which (a) crashes whenever
 /// the diff touches <c>Directory.Packages.props</c> — it eager-loads <c>global.json</c> as MSBuild
 /// XML (leonardochaia/dotnet-affected#155) — and (b) cannot run inside a git worktree. A HEAD-only
-/// graph never evaluates from-commit content, so both problems disappear. Two-commit central-package
-/// diffing is intentionally not reproduced; Layer 2 routes <c>Directory.Packages.props -&gt; ALL</c>.
+/// graph never evaluates from-commit content, so both problems disappear. Two-commit <em>per-package</em>
+/// diffing (mapping a single changed <c>&lt;PackageVersion&gt;</c> to only its consumers) is not
+/// reproduced and is not needed: the SDK imports <c>Directory.Packages.props</c> at evaluation, so it is
+/// in every project's <see cref="ProjectInstance.ImportPaths"/> and Layer 1 already attributes a change
+/// to it to every importing project (i.e. all test projects). Layer 2 also routes it to <c>ALL</c> to
+/// additionally fire the non-.NET <c>job:</c> targets, which Layer 1 never emits.
 /// </para>
 /// <para>
 /// Why no <c>Microsoft.Build.Prediction</c>: a file-&gt;project index built from the evaluated
@@ -165,7 +174,17 @@ internal static class GraphAffectedProjects
 
         var paths = BuildAffectedPaths(affectedProjects, parentByProjectPath, originatingFileByProject);
 
-        return new AffectedResult(names, attributedPaths, paths);
+        // ProjectGraph includes ProjectReference nodes omitted from the solution, so path-derived
+        // classification prevents test-support projects from matching production affected_project_rules.
+        var normalizedTestsDir = NormalizeFullPath(Path.Combine(repoRoot, "tests"));
+        var affectedTestProjects = affectedProjects
+            .Where(p => IsUnder(p, normalizedTestsDir))
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(name => !string.IsNullOrEmpty(name))
+            .Select(name => name!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return new AffectedResult(names, attributedPaths, paths, affectedTestProjects);
     }
 
     // Reconstructs, for each affected project path, the shortest reverse-dependency chain back to the

@@ -58,6 +58,7 @@ using Microsoft.Extensions.Logging;
 [assembly: AspireExport(typeof(ResourceLoggerService))]
 [assembly: AspireExport(typeof(ResourceCommandService))]
 [assembly: AspireExport(typeof(IInteractionService))]
+[assembly: AspireExport(typeof(ProgressContext), ExposeProperties = true)]
 
 // Additional framework and hosting types we reference
 [assembly: AspireExport(typeof(IConfiguration))]

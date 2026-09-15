@@ -96,6 +96,33 @@ public interface IInteractionService
     /// An <see cref="InteractionResult{T}"/> containing <c>true</c> if the user accepted, <c>false</c> otherwise.
     /// </returns>
     Task<InteractionResult<bool>> PromptNotificationAsync(string title, string message, NotificationInteractionOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Displays a progress dialog with an indeterminate progress indicator.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The dialog displays a spinning progress wheel and can optionally include a title, message, and a cancel button.
+    /// </para>
+    /// <para>
+    /// If <see cref="ProgressInteractionOptions.Work"/> is provided, the dialog remains open while the callback executes
+    /// and closes automatically when it completes. If no callback is provided, the dialog remains open until
+    /// <paramref name="cancellationToken"/> is canceled.
+    /// </para>
+    /// <para>
+    /// When a button is shown (via <see cref="InteractionOptions.PrimaryButtonText"/>), clicking it signals cancellation
+    /// through the <see cref="ProgressContext.CancellationToken"/> provided to the work callback.
+    /// </para>
+    /// </remarks>
+    /// <param name="message">The message to display in the progress dialog.</param>
+    /// <param name="options">Optional configuration for the progress interaction.</param>
+    /// <param name="cancellationToken">A token to cancel the operation and close the dialog.</param>
+    /// <returns>
+    /// An <see cref="InteractionResult{T}"/> containing <c>true</c> if the operation completed successfully,
+    /// or a canceled result if the user clicked the cancel button.
+    /// </returns>
+    [Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    Task<InteractionResult<bool>> PromptProgressAsync(string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default);
 }
 
 internal record QueueLoadOptions(
@@ -258,6 +285,7 @@ public sealed class InteractionInput
     private string _name = null!;
     private bool _required;
     private InputLoadOptions? _dynamicLoading;
+    private InteractionFileCollection _files = new([]);
 
     internal string EffectiveLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label;
     internal InputLoadingState? DynamicLoadingState { get; set; }
@@ -269,6 +297,11 @@ public sealed class InteractionInput
     }
 
     internal void SetRequired(bool required) => _required = required;
+
+    internal void SetFiles(InteractionFileCollection files)
+    {
+        _files = files;
+    }
 
     internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
@@ -348,7 +381,7 @@ public sealed class InteractionInput
     public bool AllowCustomChoice { get; init; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether a custom choice is allowed. Only used by <see cref="InputType.Choice"/> inputs.
+    /// Gets or sets a value indicating whether the input is disabled.
     /// </summary>
     public bool Disabled { get; set; }
 
@@ -368,6 +401,201 @@ public sealed class InteractionInput
             field = value;
         }
     }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether multiple files can be selected. Only used by <see cref="InputType.File"/> inputs.
+    /// </summary>
+    public bool AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets or sets the file type filter for <see cref="InputType.File"/> inputs.
+    /// Uses the same format as the HTML <c>accept</c> attribute, e.g. <c>".pem,.pfx,.crt"</c> or <c>"image/*"</c>.
+    /// When set, the file picker restricts selectable files. The CLI validates only dot-prefixed extension filters
+    /// and does not validate MIME type patterns such as <c>"image/*"</c>.
+    /// </summary>
+    public string? FileFilter { get; init; }
+
+    /// <summary>
+    /// Gets or sets the maximum file size in bytes for <see cref="InputType.File"/> inputs.
+    /// If not specified, the server applies the configured upload limit (default 100 MB).
+    /// When specified, the value is capped at the server-side upload limit.
+    /// </summary>
+    public long? MaxFileSize
+    {
+        get => field;
+        init
+        {
+            if (value is { } v)
+            {
+                ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(v, 0);
+            }
+
+            field = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets the files associated with this <see cref="InputType.File"/> input.
+    /// Populated after the user selects file(s) and the interaction completes.
+    /// </summary>
+    /// <remarks>
+    /// This property does not provide ownership of the uploaded files. Use <see cref="GetFiles"/> and dispose the
+    /// returned collection when the files are no longer needed.
+    /// </remarks>
+    [Obsolete("Use GetFiles() and dispose the returned collection when the files are no longer needed.")]
+    // Excluded from the ATS surface: InteractionFile holds non-serializable methods (OpenRead, ReadAllBytesAsync)
+    // and refers to server-local file paths. Polyglot app hosts receive file metadata through the manually defined
+    // InteractionInputFile interface in base.mts, populated by ToResultInput.
+    [AspireExportIgnore(Reason = "InteractionFile contains non-serializable methods and server-local paths; polyglot callers use InteractionInputFile from base.mts.")]
+    public IReadOnlyList<InteractionFile>? Files => _files.Count > 0 ? _files : null;
+
+    /// <summary>
+    /// Gets the files associated with this <see cref="InputType.File"/> input.
+    /// </summary>
+    /// <returns>
+    /// A disposable collection of uploaded files. Disposing the collection deletes the uploaded files from disk.
+    /// </returns>
+    /// <remarks>
+    /// The caller owns the returned collection and must dispose it when the files are no longer needed to delete the
+    /// temporary files before AppHost shutdown. After disposal, the file metadata remains available but new content
+    /// reads cannot be started. Streams opened before disposal remain usable until those streams are disposed. Files
+    /// that are not disposed are deleted when the AppHost shuts down.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
+    public InteractionFileCollection GetFiles() => _files;
+}
+
+/// <summary>
+/// Represents the uploaded files associated with an interaction input.
+/// </summary>
+/// <remarks>
+/// Dispose the collection when its files are no longer needed. Disposing the collection deletes the uploaded files
+/// from disk and prevents new content reads. Streams opened before disposal remain usable until those streams are
+/// disposed. Disposal is idempotent.
+/// </remarks>
+[AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
+public sealed class InteractionFileCollection : IReadOnlyList<InteractionFile>, IDisposable
+{
+    private readonly IReadOnlyList<InteractionFile> _files;
+    private Action? _dispose;
+
+    internal InteractionFileCollection(IReadOnlyList<InteractionFile> files, Action? dispose = null)
+    {
+        _files = files;
+        _dispose = dispose;
+    }
+
+    /// <summary>
+    /// Gets the number of uploaded files in the collection.
+    /// </summary>
+    public int Count => _files.Count;
+
+    /// <summary>
+    /// Gets an uploaded file by its zero-based index.
+    /// </summary>
+    /// <param name="index">The zero-based index of the file.</param>
+    /// <returns>The uploaded file at the specified index.</returns>
+    public InteractionFile this[int index] => _files[index];
+
+    /// <summary>
+    /// Returns an enumerator that iterates through the uploaded files.
+    /// </summary>
+    /// <returns>An enumerator for the uploaded files.</returns>
+    public IEnumerator<InteractionFile> GetEnumerator() => _files.GetEnumerator();
+
+    /// <inheritdoc/>
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    /// <summary>
+    /// Deletes the uploaded files from disk and prevents new content reads. Streams that are already open remain
+    /// usable until those streams are disposed.
+    /// </summary>
+    public void Dispose()
+    {
+        var dispose = Interlocked.Exchange(ref _dispose, null);
+        if (dispose is null)
+        {
+            return;
+        }
+
+        foreach (var file in _files)
+        {
+            file.MarkDisposed();
+        }
+
+        dispose();
+    }
+}
+
+/// <summary>
+/// Represents a file selected by the user for an <see cref="InputType.File"/> input.
+/// </summary>
+public sealed class InteractionFile
+{
+    private bool _disposed;
+
+    internal InteractionFile(string id, string name, string filePath)
+    {
+        Id = id;
+        Name = name;
+        FilePath = filePath;
+    }
+
+    /// <summary>
+    /// Gets the unique identifier for the uploaded file.
+    /// </summary>
+    public string Id { get; }
+
+    /// <summary>
+    /// Gets the original file name as provided by the user (e.g. "readme.txt").
+    /// </summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// Gets the full path to the uploaded file on disk.
+    /// </summary>
+    public string FilePath { get; }
+
+    /// <summary>
+    /// Opens a read-only stream for the file content.
+    /// </summary>
+    /// <returns>A <see cref="Stream"/> for reading the file.</returns>
+    /// <remarks>
+    /// The returned stream remains usable if the owning <see cref="InteractionFileCollection"/> is disposed. Dispose
+    /// the stream when reading is complete so the operating system can finish reclaiming the deleted file.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The owning <see cref="InteractionFileCollection"/> has been disposed.</exception>
+    public Stream OpenRead()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, bufferSize: 4096, useAsync: true);
+    }
+
+    /// <summary>
+    /// Reads all bytes of the file asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A byte array containing the file content.</returns>
+    /// <exception cref="ObjectDisposedException">The owning <see cref="InteractionFileCollection"/> has been disposed.</exception>
+    public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default)
+    {
+        // File.ReadAllBytesAsync opens with FileShare.Read, which can prevent the owning collection from deleting
+        // the temporary file on Windows while a read is in progress. OpenRead also shares deletion.
+        var stream = OpenRead();
+        return ReadAllBytesAsyncCore(stream, cancellationToken);
+    }
+
+    private static async Task<byte[]> ReadAllBytesAsyncCore(Stream stream, CancellationToken cancellationToken)
+    {
+        await using (stream.ConfigureAwait(false))
+        {
+            var bytes = new byte[stream.Length];
+            await stream.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
+            return bytes;
+        }
+    }
+
+    internal void MarkDisposed() => _disposed = true;
 }
 
 /// <summary>
@@ -571,7 +799,11 @@ public enum InputType
     /// <summary>
     /// A numeric input.
     /// </summary>
-    Number
+    Number,
+    /// <summary>
+    /// A file input. Allows the user to select a file using the OS/browser file picker.
+    /// </summary>
+    File
 }
 
 /// <summary>
@@ -675,6 +907,45 @@ public class NotificationInteractionOptions : InteractionOptions
     /// Gets or sets the URL for the link in the notification.
     /// </summary>
     public string? LinkUrl { get; set; }
+}
+
+/// <summary>
+/// Options for configuring a progress interaction.
+/// </summary>
+[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public class ProgressInteractionOptions : InteractionOptions
+{
+    internal static ProgressInteractionOptions CreateDefault() => new();
+
+    /// <summary>
+    /// Gets or sets the optional title of the progress dialog.
+    /// </summary>
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed.
+    /// </summary>
+    /// <remarks>
+    /// When provided, the progress dialog remains open while this callback executes and closes automatically
+    /// when the callback completes. The <see cref="ProgressContext.CancellationToken"/> passed to the callback
+    /// is triggered when the user clicks the cancel button or the operation is externally canceled.
+    /// When not provided, the dialog remains open until the <see cref="CancellationToken"/> passed to
+    /// <see cref="IInteractionService.PromptProgressAsync"/> is canceled.
+    /// </remarks>
+    public Func<ProgressContext, Task>? Work { get; set; }
+}
+
+/// <summary>
+/// Provides context to the work callback of a progress interaction.
+/// </summary>
+[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class ProgressContext
+{
+    /// <summary>
+    /// Gets the <see cref="System.Threading.CancellationToken"/> that is triggered when the user clicks
+    /// the cancel button or the operation is externally canceled.
+    /// </summary>
+    public required CancellationToken CancellationToken { get; init; }
 }
 
 /// <summary>

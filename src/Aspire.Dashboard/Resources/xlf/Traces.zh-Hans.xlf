@@ -87,6 +87,11 @@
         <target state="translated">跟踪 ID: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="VirtualizedLimitText">
+        <source>Showing &lt;strong&gt;{0} of {1} traces&lt;/strong&gt;. Use filters to narrow the results</source>
+        <target state="new">Showing &lt;strong&gt;{0} of {1} traces&lt;/strong&gt;. Use filters to narrow the results</target>
+        <note>{0} is the displayed count. {1} is the total count. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified.</note>
+      </trans-unit>
     </body>
   </file>
 </xliff>

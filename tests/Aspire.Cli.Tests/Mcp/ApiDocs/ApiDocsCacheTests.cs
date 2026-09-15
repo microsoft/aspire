@@ -19,7 +19,7 @@ public class ApiDocsCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FetchSitemapAsync_PersistsFriendlySitemapCacheFileNames()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var configuration = new ConfigurationBuilder().Build();
         var cache = CreateCache(workspace, memoryCache, configuration);
@@ -45,7 +45,7 @@ public class ApiDocsCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FetchPageAsync_PersistsFriendlyPageCacheFileNames()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var configuration = new ConfigurationBuilder().Build();
         var cache = CreateCache(workspace, memoryCache, configuration);
@@ -71,7 +71,7 @@ public class ApiDocsCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetIndexAsync_PersistsFriendlyIndexFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var configuration = new ConfigurationBuilder().Build();
         var cache = CreateCache(workspace, memoryCache, configuration);

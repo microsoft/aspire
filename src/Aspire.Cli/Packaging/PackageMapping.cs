@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Utils;
-
 namespace Aspire.Cli.Packaging;
 
 internal class PackageMapping(string PackageFilter, string source)
@@ -22,6 +20,6 @@ internal class PackageMapping(string PackageFilter, string source)
     public bool IsAspireDirectoryMapping =>
         PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
         PackageFilter != AllPackages &&
-        !UrlHelper.IsHttpUrl(Source) &&
-        Directory.Exists(Source);
+        PackageSourceOverrideMappings.GetNormalizedLocalDirectory(Source) is { } localDirectory &&
+        Directory.Exists(localDirectory);
 }

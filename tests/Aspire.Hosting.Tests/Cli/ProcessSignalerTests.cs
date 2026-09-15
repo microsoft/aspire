@@ -9,40 +9,41 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "4")]
 public class ProcessSignalerTests(ITestOutputHelper testOutputHelper)
 {
-    [Theory]
-    [InlineData(0, true)]       // Exact match
-    [InlineData(0.8, true)]     // Sub-second difference within same second after truncation
-    [InlineData(1.2, true)]
-    [InlineData(1, true)]       // Exactly 1 second apart (within tolerance)
-    [InlineData(3, false)]      // 3 seconds apart (PID reuse)
-    [InlineData(-0.5, true)]    // Negative sub-second difference
-    public void AreClose_ComparesAtSecondGranularity(double offsetSeconds, bool expected)
-    {
-        var baseTime = new DateTime(2025, 6, 12, 10, 30, 45, 0, DateTimeKind.Local);
-        var expectedStartTime = new DateTimeOffset(baseTime);
-        var processStartTime = baseTime.AddSeconds(offsetSeconds);
-
-        var result = ProcessSignaler.AreClose(expectedStartTime, processStartTime);
-
-        Assert.Equal(expected, result);
-    }
-
     [Fact]
-    public void TryGetRunningProcess_CurrentProcess_WithTruncatedStartTime_ReturnsProcess()
+    public void TryGetRunningProcess_CurrentProcess_WithStableStartTime_ReturnsProcess()
     {
         var loggerFactory = LoggerFactory.Create(b => b.AddXunit(testOutputHelper));
         var logger = loggerFactory.CreateLogger<ProcessSignalerTests>();
         var currentProcess = Process.GetCurrentProcess();
 
-        // Simulate what the CLI does: truncate to unix seconds
-        var truncatedStartTime = DateTimeOffset.FromUnixTimeSeconds(
-            ((DateTimeOffset)currentProcess.StartTime).ToUnixTimeSeconds());
+        // The stable path receives the full millisecond-precision identity time (the AppHost's
+        // StableStartedAt, or a locally captured TryGetProcessStartTime value), so an exact reading
+        // of the same process must match.
+        var stableStartTime = ProcessStartTimeHelper.GetCurrentProcessStartTime();
 
         using var result = ProcessSignaler.TryGetRunningProcess(
-            currentProcess.Id, truncatedStartTime, logger);
+            currentProcess.Id, stableStartTime, logger);
 
         Assert.NotNull(result);
         Assert.Equal(currentProcess.Id, result.Id);
     }
-}
 
+    [Fact]
+    public void TryGetRunningProcess_CurrentProcess_WithStartTimeBeyondTolerance_ReturnsNull()
+    {
+        var loggerFactory = LoggerFactory.Create(b => b.AddXunit(testOutputHelper));
+        var logger = loggerFactory.CreateLogger<ProcessSignalerTests>();
+        var currentProcess = Process.GetCurrentProcess();
+
+        // One second off is still the same (or an immediately adjacent) wall-clock second, but far beyond
+        // the millisecond reuse tolerance. This models a PID recycled within the same second: it must not
+        // match now that the stable path compares identity at millisecond precision rather than truncating
+        // to whole seconds.
+        var mismatchedStartTime = ProcessStartTimeHelper.GetCurrentProcessStartTime().AddSeconds(1);
+
+        using var result = ProcessSignaler.TryGetRunningProcess(
+            currentProcess.Id, mismatchedStartTime, logger);
+
+        Assert.Null(result);
+    }
+}

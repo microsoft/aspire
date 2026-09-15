@@ -21,7 +21,7 @@ public class ConformanceTests : ConformanceTests<WebPubSubServiceClient, AzureMe
 
     protected override string ActivitySourceName => "Azure.Messaging.WebPubSub.*";
 
-    protected override string[] RequiredLogCategories => ["Azure.Core"];
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("Azure.Core")];
 
     protected override bool SupportsKeyedRegistrations => true;
 

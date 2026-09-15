@@ -50,6 +50,26 @@ steps:
       Write-Host "##vso[task.setvariable variable=WinGetIsPrereleaseInStablePackage]$isPrereleaseInStablePackage"
     displayName: 🟣Set version ${{ parameters.version }}
 
+  # The standalone wingetcreate executable is framework-dependent. Exercise it
+  # in regular builds so an upstream target-framework change is caught before
+  # the release pipeline attempts a public submission.
+  - task: UseDotNet@2
+    displayName: '🟣Install .NET 9 runtime for wingetcreate'
+    inputs:
+      packageType: 'runtime'
+      version: '9.0.x'
+
+  - pwsh: |
+      $ErrorActionPreference = 'Stop'
+
+      Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "$(Build.StagingDirectory)/wingetcreate.exe"
+      & "$(Build.StagingDirectory)/wingetcreate.exe" info
+      if ($LASTEXITCODE -ne 0) {
+        Write-Error "wingetcreate info failed with exit code $LASTEXITCODE"
+        exit $LASTEXITCODE
+      }
+    displayName: '🟣Verify wingetcreate'
+
   - pwsh: |
       # Probe-only: do not attempt to install/repair winget here. The 1ES `1es-windows-2022`
       # pool blocks outbound access to cdn.winget.microsoft.com, so

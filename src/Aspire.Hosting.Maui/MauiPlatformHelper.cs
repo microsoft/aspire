@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Maui.Annotations;
@@ -73,7 +74,7 @@ internal static class MauiPlatformHelper
     /// <param name="tfmExample">Example TFM for error messages (e.g., "net10.0-windows10.0.19041.0").</param>
     /// <param name="isSupported">Function to check if the platform is supported on the current host.</param>
     /// <param name="iconName">The icon name for the resource.</param>
-    /// <param name="additionalArgs">Optional additional command-line arguments to pass to dotnet run.</param>
+    /// <param name="additionalArgs">Optional additional command-line arguments to pass to the MAUI Run target.</param>
     /// <returns>The detected target framework for the platform, or an empty string if one was not found.</returns>
     internal static string ConfigurePlatformResource<T>(
         IResourceBuilder<T> resourceBuilder,
@@ -88,16 +89,46 @@ internal static class MauiPlatformHelper
         // Check if the project has the platform TFM and get the actual TFM value
         var platformTfm = ProjectFileReader.GetPlatformTargetFramework(projectPath, platformName);
 
-        // Set the command line arguments with the detected TFM if available
+        // Override the default DCP launch command from 'dotnet run' to 'dotnet build --no-restore /t:Run'.
+        // The Build target is run separately by MauiBuildQueueEventSubscriber before DCP starts
+        // the process, giving reliable exit-code-based build completion detection and allowing
+        // the "Building" state to persist in the dashboard. Most platforms can skip Build while
+        // Android must retain the full Run target for required fast-deploy/runtime upload work.
+        var isAndroid = string.Equals(platformName, "android", StringComparison.Ordinal);
+        var launchOverrideArgs = isAndroid
+            ? new List<string> { "build", "--no-restore", "/t:Run" }
+            // Clear BuildDependsOn before setting NoBuild to avoid NETSDK1085 in .NET SDK 10.0.201.
+            : new List<string> { "build", "--no-restore", "/t:Run", "-p:BuildDependsOn=", "-p:NoBuild=true" };
+
+        resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(launchOverrideArgs, leadingResourceArgumentToRemove: "run"));
+
+        // Store build parameters so the event subscriber can run 'dotnet build' before launch.
+        // The annotation captures the same target framework, configuration, and MSBuild properties
+        // that DCP later passes to the Run target.
+        var workingDir = Path.GetDirectoryName(projectPath)
+            ?? throw new InvalidOperationException($"Unable to determine directory from project path: {projectPath}");
+        var configuration = resourceBuilder.ApplicationBuilder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        resourceBuilder.WithAnnotation(new MauiBuildInfoAnnotation(
+            projectPath,
+            workingDir,
+            platformTfm,
+            configuration,
+            additionalArgs,
+            releaseBuildLockOnResourceRunning: !isAndroid));
+
+        // Set the command line arguments with the detected TFM and platform-specific args.
+        // These are appended AFTER the DCP-generated project args.
         resourceBuilder.WithArgs(context =>
         {
             context.Args.Add("run");
+
             if (!string.IsNullOrEmpty(platformTfm))
             {
                 context.Args.Add("-f");
                 context.Args.Add(platformTfm);
             }
-            // Add any additional platform-specific arguments
+
+            // Add any additional platform-specific arguments (e.g., -p:AdbTarget=...)
             foreach (var arg in additionalArgs)
             {
                 context.Args.Add(arg);

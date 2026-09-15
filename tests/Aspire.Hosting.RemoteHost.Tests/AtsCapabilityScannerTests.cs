@@ -165,6 +165,20 @@ public class AtsCapabilityScannerTests
         Assert.Equal(AtsTypeCategory.Array, enumerableReturnCapability.ReturnType.Category);
     }
 
+    [Theory]
+    [InlineData(typeof(double?[]), AtsConstants.Number)]
+    [InlineData(typeof(bool?[]), AtsConstants.Boolean)]
+    public void CreateTypeRef_NullableArrayElements_PreserveNullability(Type arrayType, string expectedElementTypeId)
+    {
+        var typeRef = AtsCapabilityScanner.CreateTypeRef(arrayType);
+
+        Assert.NotNull(typeRef);
+        Assert.Equal(AtsTypeCategory.Array, typeRef.Category);
+        Assert.NotNull(typeRef.ElementType);
+        Assert.Equal(expectedElementTypeId, typeRef.ElementType.TypeId);
+        Assert.True(typeRef.ElementType.IsNullable);
+    }
+
     [Fact]
     public void ScanAssembly_UnionCapability_CollectsEnumTypesFromUnionMembers()
     {
@@ -593,6 +607,35 @@ public class AtsCapabilityScannerTests
             c => c.CapabilityId.EndsWith("/classLevelBackgroundThreadProbe", StringComparison.Ordinal));
 
         Assert.True(capability.RunSyncOnBackgroundThread);
+    }
+
+    [Fact]
+    public void ScanAssembly_HostingAssembly_CallbackBearingInteractionPrompts_UseBackgroundThreadOptIn()
+    {
+        // These prompts accept option/handle types that carry user callbacks (progress work, dynamic input
+        // loading, validation). The callbacks re-enter the remote host over the same JSON-RPC connection, so the
+        // synchronous invocation path has to run on a background thread or the RPC loop deadlocks waiting on itself.
+        // AspireExportAnalyzer only detects delegates passed *directly* as parameters, so it cannot enforce the
+        // opt-in when the delegate is reached through an options object or builder handle. This test is the guard.
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+
+        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+
+        string[] expectedCapabilityIds =
+        [
+            "Aspire.Hosting/promptProgress",
+            "Aspire.Hosting/promptInput",
+            "Aspire.Hosting/promptInputs"
+        ];
+
+        foreach (var expectedCapabilityId in expectedCapabilityIds)
+        {
+            var capability = Assert.Single(result.Capabilities, c => c.CapabilityId == expectedCapabilityId);
+
+            Assert.True(
+                capability.RunSyncOnBackgroundThread,
+                $"'{expectedCapabilityId}' invokes polyglot callbacks and must set RunSyncOnBackgroundThread = true.");
+        }
     }
 
     #endregion

@@ -29,6 +29,10 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     private OtlpInstrumentKey? _renderedInstrument;
     private string? _renderedTheme;
     private bool _renderedShowCount;
+    private DateTimeOffset? _previousDataEndTime;
+
+    // Full updates always run. This interval only throttles recurring tick updates.
+    protected virtual TimeSpan UpdateInterval => TimeSpan.FromSeconds(0.2);
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> Loc { get; init; }
@@ -40,7 +44,9 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     public required BrowserTimeProvider TimeProvider { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required PauseManager PauseManager { get; init; }
@@ -54,6 +60,9 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     [Parameter]
     public required List<OtlpResource> Resources { get; set; }
 
+    [Parameter]
+    public DateTimeOffset? DataEndTime { get; set; }
+
     // Stores a cache of the last set of spans returned as exemplars.
     // This dictionary is replaced each time the chart is updated.
     private Dictionary<SpanKey, OtlpSpan> _currentCache = new Dictionary<SpanKey, OtlpSpan>();
@@ -63,8 +72,8 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     {
         // Copy the token so there is no chance it is accessed on CTS after it is disposed.
         CancellationToken = _cts.Token;
-        _currentDataStartTime = PauseManager.AreMetricsPaused(out var pausedAt) ? pausedAt.Value : GetCurrentDataTime();
-        InstrumentViewModel.DataUpdateSubscriptions.Add(OnInstrumentDataUpdate);
+        _currentDataStartTime = GetCurrentDataTime(out _);
+        InstrumentViewModel.AddDataUpdateSubscription(OnInstrumentDataUpdate);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -77,11 +86,10 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
             return;
         }
 
-        var inProgressDataTime = PauseManager.AreMetricsPaused(out var pausedAt) ? pausedAt.Value : GetCurrentDataTime();
+        var inProgressDataTime = GetCurrentDataTime(out var isTimeFrozen);
 
-        // Only advance the time window when not paused. When paused, keep the chart's
-        // time axis stable so filter changes don't cause the x-axis to jump.
-        if (pausedAt is null)
+        // Keep the time axis stable for historical data and while live data is paused.
+        if (!isTimeFrozen)
         {
             while (_currentDataStartTime.Add(_tickDuration) < inProgressDataTime)
             {
@@ -101,8 +109,11 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
             _renderedTheme = InstrumentViewModel.Theme;
             _renderedShowCount = InstrumentViewModel.ShowCount;
             await UpdateChartAsync(tickUpdate: false, inProgressDataTime).ConfigureAwait(false);
+            _lastUpdateTime = TimeProvider.GetUtcNow();
+            // Derived components can update Blazor-rendered state during OnAfterRenderAsync.
+            await InvokeAsync(StateHasChanged);
         }
-        else if (_lastUpdateTime.Add(TimeSpan.FromSeconds(0.2)) < TimeProvider.GetUtcNow())
+        else if (_lastUpdateTime.Add(UpdateInterval) < TimeProvider.GetUtcNow())
         {
             // Throttle how often the chart is updated.
             _lastUpdateTime = TimeProvider.GetUtcNow();
@@ -113,11 +124,16 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     protected override void OnParametersSet()
     {
         _tickDuration = Duration / GraphPointCount;
+        if (_previousDataEndTime != DataEndTime)
+        {
+            _currentDataStartTime = GetCurrentDataTime(out _);
+            _previousDataEndTime = DataEndTime;
+        }
     }
 
     private Task OnInstrumentDataUpdate()
     {
-        return InvokeAsync(StateHasChanged);
+        return CancellationToken.IsCancellationRequested ? Task.CompletedTask : InvokeAsync(StateHasChanged);
     }
 
     private string FormatTooltip(string name, double yValue, DateTimeOffset xValue)
@@ -230,9 +246,23 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
         }
     }
 
-    private DateTimeOffset GetCurrentDataTime()
+    private DateTimeOffset GetCurrentDataTime(out bool isTimeFrozen)
     {
-        return TimeProvider.GetUtcNow().Subtract(TimeSpan.FromSeconds(1)); // Compensate for delay in receiving metrics from services.
+        if (DataEndTime is { } dataEndTime)
+        {
+            isTimeFrozen = true;
+            return dataEndTime;
+        }
+
+        if (PauseManager.AreMetricsPaused(out var pausedAt))
+        {
+            isTimeFrozen = true;
+            return pausedAt.Value;
+        }
+
+        isTimeFrozen = false;
+        // Compensate for delay in receiving metrics from services.
+        return TimeProvider.GetUtcNow().Subtract(TimeSpan.FromSeconds(1));
     }
 
     private string GetDisplayedUnit(OtlpInstrumentSummary instrument)
@@ -249,6 +279,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     protected virtual ValueTask DisposeAsync(bool disposing)
     {
         _cts.Cancel();
+        InstrumentViewModel.RemoveDataUpdateSubscription(OnInstrumentDataUpdate);
         _cts.Dispose();
         return ValueTask.CompletedTask;
     }

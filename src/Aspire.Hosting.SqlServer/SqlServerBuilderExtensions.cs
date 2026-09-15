@@ -135,6 +135,7 @@ public static partial class SqlServerBuilderExtensions
 
         return builder.ApplicationBuilder
             .AddResource(sqlServerDatabase)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (sqlServerDatabase, @event, ct) =>
             {

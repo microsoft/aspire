@@ -26,7 +26,7 @@ public abstract class ConformanceTests : ConformanceTests<ServiceBusClient, Azur
 
     protected override string ActivitySourceName => "Azure.Messaging.ServiceBus.ServiceBusReceiver";
 
-    protected override string[] RequiredLogCategories => new string[] { "Azure.Messaging.ServiceBus" };
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("Azure.Messaging.ServiceBus")];
 
     protected override bool SupportsKeyedRegistrations => true;
 

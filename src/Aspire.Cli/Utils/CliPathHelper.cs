@@ -5,13 +5,14 @@ using System.IO.Hashing;
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Hosting.Backchannel;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils;
 
 internal static class CliPathHelper
 {
-    internal const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
+    internal const string AspireHomeEnvironmentVariable = AspireHomeDirectory.EnvironmentVariable;
 
     /// <summary>
     /// Name of the directory under <c>ASPIRE_HOME</c> that holds NuGet package caches keyed by
@@ -49,15 +50,11 @@ internal static class CliPathHelper
     }
 
     internal static string GetDefaultAspireHomeDirectory()
-        => GetDefaultAspireHomeDirectory(
-            Environment.GetEnvironmentVariable(AspireHomeEnvironmentVariable),
-            GetUserProfileDirectory());
+        => AspireHomeDirectory.GetDefault();
 
     internal static string GetDefaultAspireHomeDirectory(string? configuredAspireHome, string userProfileDirectory)
     {
-        return string.IsNullOrWhiteSpace(configuredAspireHome)
-            ? Path.Combine(userProfileDirectory, ".aspire")
-            : configuredAspireHome;
+        return AspireHomeDirectory.GetDefault(configuredAspireHome, userProfileDirectory);
     }
 
     /// <summary>
@@ -151,8 +148,27 @@ internal static class CliPathHelper
         return Path.GetDirectoryName(dogfoodDir);
     }
 
-    internal static string GetUserProfileDirectory()
-        => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    /// <summary>
+    /// Normalizes the casing of a filesystem <paramref name="path"/> so that paths which differ only
+    /// by case collapse to a single value when used as a comparison or hash key.
+    /// </summary>
+    /// <param name="path">The path to normalize.</param>
+    /// <param name="environment">
+    /// Environment abstraction used to detect the host OS. Supply a test double to exercise the
+    /// Windows behavior on another OS.
+    /// </param>
+    /// <remarks>
+    /// On Windows the filesystem is case-insensitive, so the same physical project can be reached
+    /// through paths that differ only by case — for example <c>c:\repo\App.csproj</c> when the CLI is
+    /// launched from VS Code versus <c>C:\Repo\app.csproj</c> from a terminal. Lowercasing the whole
+    /// path collapses those to one key. On case-sensitive platforms (Linux, and case-sensitive macOS
+    /// volumes) casing is significant, so the path is returned unchanged; macOS is intentionally left
+    /// alone because its volumes may be case-sensitive.
+    /// </remarks>
+    internal static string NormalizePathCasing(string path, IEnvironment environment)
+    {
+        return environment.IsWindows() ? path.ToLowerInvariant() : path;
+    }
 
     internal static string ResolveSymlinkOrOriginalPath(string path, ILogger? logger = null)
     {
@@ -289,11 +305,11 @@ internal static class CliPathHelper
     /// <see cref="CleanupStaleCliSockets(string, TimeSpan, TimeProvider)"/>.
     /// </summary>
     /// <remarks>
-    /// Unlike <see cref="BackchannelConstants.CleanupOrphanedSockets"/>,
-    /// CLI sockets don't encode the process ID in their filename — they're created with a random
-    /// GUID-style suffix — so the only reliable signal we have for "this is stale" is the file's
-    /// mtime. We pick a generous default threshold so an in-flight long-running run never has its
-    /// socket pruned out from under it.
+    /// Unlike auxiliary backchannel sockets, which encode the owning process ID in their filename so
+    /// <see cref="AppHostSocketManager"/> can prune them by liveness, CLI sockets are created with a
+    /// random GUID-style suffix. The only reliable "this is stale" signal we have is the file's mtime,
+    /// so we pick a generous default threshold and an in-flight long-running run never has its socket
+    /// pruned out from under it.
     /// </remarks>
     internal static int CleanupStaleCliSockets(string socketDirectory, TimeSpan maxAge, TimeProvider? timeProvider = null)
     {

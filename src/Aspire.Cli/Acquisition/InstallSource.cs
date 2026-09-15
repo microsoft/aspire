@@ -34,6 +34,9 @@ internal enum InstallSource
 
     /// <summary>Locally-built install from <c>localhive.sh</c> / <c>localhive.ps1</c>.</summary>
     LocalHive,
+
+    /// <summary>Nix package or flake install.</summary>
+    Nix,
 }
 
 /// <summary>
@@ -51,6 +54,7 @@ internal static class InstallSourceExtensions
     internal const string BrewWire = "brew";
     internal const string DotnetToolWire = "dotnet-tool";
     internal const string LocalHiveWire = "localhive";
+    internal const string NixWire = "nix";
 
     /// <summary>
     /// Parses a sidecar <c>source</c> string into the strongly-typed enum.
@@ -68,6 +72,7 @@ internal static class InstallSourceExtensions
             BrewWire => InstallSource.Brew,
             DotnetToolWire => InstallSource.DotnetTool,
             LocalHiveWire => InstallSource.LocalHive,
+            NixWire => InstallSource.Nix,
             _ => InstallSource.Unknown,
         };
     }
@@ -87,6 +92,7 @@ internal static class InstallSourceExtensions
             InstallSource.Brew => BrewWire,
             InstallSource.DotnetTool => DotnetToolWire,
             InstallSource.LocalHive => LocalHiveWire,
+            InstallSource.Nix => NixWire,
             _ => null,
         };
     }

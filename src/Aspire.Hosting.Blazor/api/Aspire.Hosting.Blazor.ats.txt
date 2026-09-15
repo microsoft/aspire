@@ -8,3 +8,4 @@ Aspire.Hosting.Blazor/Aspire.Hosting.BlazorWasmAppResource
 Aspire.Hosting.Blazor/addBlazorGateway(name: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
 Aspire.Hosting.Blazor/addBlazorWasmProject(name: string, projectPath: string) -> Aspire.Hosting.Blazor/Aspire.Hosting.BlazorWasmAppResource
 Aspire.Hosting.Blazor/withBlazorClientApp(wasmApp: Aspire.Hosting.Blazor/Aspire.Hosting.BlazorWasmAppResource, apiPrefix?: string, otlpPrefix?: string, proxyTelemetry?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
+Aspire.Hosting.Blazor/withBlazorDebuggerBrowser(browser?: string) -> Aspire.Hosting.Blazor/Aspire.Hosting.BlazorWasmAppResource

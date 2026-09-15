@@ -1,7 +1,7 @@
 import type {
     DistributedApplicationBuilder,
     ContainerResource,
-} from '../.modules/aspire.js';
+} from '../.aspire/modules/aspire.mjs';
 
 export interface AddKafkaOptions
 {

@@ -187,6 +187,7 @@ public static class AzureFunctionsProjectResourceExtensions
 
 #pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
         var functionsBuilder = builder.AddResource(resource)
+            .WithIconName("Flash")
             .WithAnnotation(projectMetadata)
             .WithAnnotation(new AzureFunctionsAnnotation())
             .WithDebugSupport(mode => new AzureFunctionsLaunchConfiguration { ProjectPath = projectMetadata.ProjectPath, Mode = mode }, "azure-functions");

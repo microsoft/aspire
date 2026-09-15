@@ -19,9 +19,10 @@ void main() throws Exception {
         var _chatFromModel = foundry.addDeployment("chat-from-model", model);
 
         var localFoundry = builder.addFoundry("local-foundry")
-            .runAsFoundryLocal();
+            .runAsFoundryLocal("http://windows-host:5273");
 
         var _localChat = localFoundry.addDeployment("local-chat", "Phi-3.5-mini-instruct", new AddDeploymentOptions().modelVersion("1").format("Microsoft"));
+        _localChat.setLocalModelId("Phi-3.5-mini-instruct-generic-gpu:1");
 
         var registry = builder.addAzureContainerRegistry("registry");
         var keyVault = builder.addAzureKeyVault("vault");
@@ -80,13 +81,7 @@ void main() throws Exception {
         var builderProject = builderProjectFoundry.addProject("builder-project");
         var _builderProjectModel = builderProject.addModelDeployment("builder-project-model", "Phi-4-mini", new AddModelDeploymentOptions().modelVersion("1").format("Microsoft"));
         var _projectModel = project.addModelDeployment("project-model", FoundryModels.Microsoft.Phi4);
-        var hostedAgent = builder.addExecutable(
-            "hosted-agent",
-            "node",
-            ".",
-            new String[] {
-                "-e",
-                """
+        var hostedAgentScript = """
 const http = require('node:http');
 const port = Number(process.env.DEFAULT_AD_PORT ?? '8088');
 const server = http.createServer((req, res) => {
@@ -100,11 +95,23 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ output: 'hello from validation app host' }));
     return;
   }
+  if (req.url === '/invocations') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ response: 'hello from validation app host' }));
+    return;
+  }
   res.writeHead(404);
   res.end();
 });
 server.listen(port, '127.0.0.1');
-"""
+""";
+        var hostedAgent = builder.addExecutable(
+            "hosted-agent",
+            "node",
+            ".",
+            new String[] {
+                "-e",
+                hostedAgentScript
             });
 
         var hostedAgentOptions = new HostedAgentOptions();
@@ -114,6 +121,19 @@ server.listen(port, '127.0.0.1');
         hostedAgentOptions.setMetadata(Map.of("scenario", "validation"));
         hostedAgentOptions.setEnvironmentVariables(Map.of("VALIDATION_MODE", "true"));
         hostedAgent.asHostedAgent(project, hostedAgentOptions);
+
+        var hostedAgentWithProtocol = builder.addExecutable(
+            "hosted-agent-with-protocol",
+            "node",
+            ".",
+            new String[] {
+                "-e",
+                hostedAgentScript
+            });
+        // Both hosted agents run as plain host processes (not containers), so they must not share the
+        // default 8088 target port or the second process fails to bind with EADDRINUSE.
+        hostedAgentWithProtocol.withHttpEndpoint(new WithHttpEndpointOptions().targetPort(8089.0));
+        hostedAgentWithProtocol.asHostedAgentWithProtocol(project, HostedAgentProtocol.INVOCATIONS, "1.0.0");
 
         var api = builder.addContainer("api", "nginx");
         foundry.withContainerRegistryRoleAssignments(registry, new AzureContainerRegistryRole[] {

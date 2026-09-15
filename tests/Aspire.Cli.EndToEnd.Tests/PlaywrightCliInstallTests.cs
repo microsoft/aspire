@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
@@ -55,7 +54,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
 
         // Step 4: Run aspire agent init for Playwright only. This test is about
         // @playwright/cli acquisition, not the Aspire skills bundle.
-        await auto.TypeAsync("aspire agent init --workspace-root . --skill-locations claudecode --skills playwright-cli");
+        await auto.TypeAsync("aspire agent init --workspace-root . --skill-locations claudecode --skills playwright-cli --mcp=false");
         await auto.EnterAsync();
 
         // Wait for installation to complete (this downloads from npm, can take a while)
@@ -111,7 +110,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         // Step 3: Run aspire agent init from the PARENT directory for Playwright
         // only. When provided as options, the workspace root and skill selection
         // are deterministic and do not depend on Aspire default skills.
-        await auto.TypeAsync("aspire agent init --workspace-root TestProject --skill-locations claudecode --skills playwright-cli");
+        await auto.TypeAsync("aspire agent init --workspace-root TestProject --skill-locations claudecode --skills playwright-cli --mcp=false");
         await auto.EnterAsync();
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));

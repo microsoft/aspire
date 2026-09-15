@@ -5,6 +5,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Net.WebSockets;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
 
 namespace Aspire.Dashboard.Terminal;
 
@@ -115,7 +116,7 @@ internal static class TerminalWebSocketProxy
         // so a missing Origin on a WS request is itself suspicious — reject.
         //
         // See: https://datatracker.ietf.org/doc/html/rfc6455#section-10.2
-        if (!IsAllowedOrigin(context, out var originLogValue))
+        if (!WebSocketOriginValidator.IsSameOrigin(context, out var originLogValue))
         {
             logger.LogWarning(
                 "Rejecting terminal WebSocket upgrade {ConnectionId} with disallowed Origin '{Origin}'.",
@@ -472,43 +473,7 @@ internal static class TerminalWebSocketProxy
     /// </remarks>
     internal static bool IsAllowedOrigin(HttpContext context, out string originLogValue)
     {
-        var origin = context.Request.Headers.Origin.ToString();
-        originLogValue = string.IsNullOrEmpty(origin) ? "(none)" : origin;
-
-        if (string.IsNullOrEmpty(origin))
-        {
-            return false;
-        }
-
-        if (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
-        {
-            return false;
-        }
-
-        // Compare against the request's own scheme + host. When behind a reverse proxy
-        // with UseForwardedHeaders, these reflect the public-facing values, so the
-        // browser's Origin (= the page's public URL) lines up automatically.
-        if (!string.Equals(originUri.Scheme, context.Request.Scheme, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var expectedHost = context.Request.Host;
-        if (!expectedHost.HasValue)
-        {
-            return false;
-        }
-
-        // Uri.Authority drops a default port (e.g. :443 for https, :80 for http); use
-        // Host + ":" + Port directly and let HostString.ToString() apply the same rule.
-        // Compare both with and without explicit port to handle the default-port case.
-        var originAuthority = originUri.IsDefaultPort
-            ? originUri.Host
-            : originUri.Host + ":" + originUri.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-        var expectedAuthority = expectedHost.ToString();
-
-        return string.Equals(originAuthority, expectedAuthority, StringComparison.OrdinalIgnoreCase);
+        return WebSocketOriginValidator.IsSameOrigin(context, out originLogValue);
     }
 
     private readonly struct ValueStopwatch

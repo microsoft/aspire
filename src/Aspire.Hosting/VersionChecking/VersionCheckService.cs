@@ -162,16 +162,20 @@ internal sealed class VersionCheckService : BackgroundService
         {
             _logger.LogDebug("User chose to ignore version {Version}.", latestVersion);
 
-            if (latestVersion.IsPrerelease)
+            if (_userSecretsManager.IsAvailable)
             {
                 // Store a wildcard pattern that ignores all pre-release versions with the same major.minor.patch.
                 // For example, 13.5.0-preview1 becomes 13.5.0-* which will ignore all 13.5.0 pre-releases
                 // but still notify when the stable 13.5.0 is released.
-                _userSecretsManager.TrySetSecret(IgnoreVersionKey, $"{latestVersion.Major}.{latestVersion.Minor}.{latestVersion.Patch}-*");
+                var ignoredVersion = latestVersion.IsPrerelease
+                    ? $"{latestVersion.Major}.{latestVersion.Minor}.{latestVersion.Patch}-*"
+                    : latestVersion.ToString();
+
+                _userSecretsManager.TrySetSecret(IgnoreVersionKey, ignoredVersion);
             }
             else
             {
-                _userSecretsManager.TrySetSecret(IgnoreVersionKey, latestVersion.ToString());
+                _logger.LogWarning("Could not ignore the version update notification to {Version} because user secrets are not configured correctly. See https://aka.ms/aspire/user-secrets for more information.", latestVersion);
             }
         }
     }

@@ -6,7 +6,6 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Git;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 
@@ -16,19 +15,9 @@ namespace Aspire.Cli.Commands;
 /// Legacy command 'aspire mcp init' that delegates to the new AgentInitCommand.
 /// This is kept for backward compatibility but is hidden from help.
 /// </summary>
-internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingCommand
+internal sealed class McpInitCommand : BaseCommand
 {
     private readonly AgentInitCommand _agentInitCommand;
-
-    /// <summary>
-    /// McpInitCommand does not need template package metadata prefetching.
-    /// </summary>
-    public bool PrefetchesTemplatePackageMetadata => false;
-
-    /// <summary>
-    /// McpInitCommand does not need CLI package metadata prefetching.
-    /// </summary>
-    public bool PrefetchesCliPackageMetadata => false;
 
     public McpInitCommand(
         IAgentEnvironmentDetector agentEnvironmentDetector,
@@ -36,6 +25,7 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
+        Aspire.Cli.Agents.Hooks.ITelemetryHookConfigurator telemetryHookConfigurator,
         CommonCommandServices services)
         : base("init", McpCommandStrings.InitCommand_Description, services)
     {
@@ -46,6 +36,7 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
             playwrightCliInstaller,
             gitRepository,
             languageDiscovery,
+            telemetryHookConfigurator,
             services);
     }
 

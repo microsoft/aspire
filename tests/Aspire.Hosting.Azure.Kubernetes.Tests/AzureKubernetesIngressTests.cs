@@ -4,17 +4,16 @@
 #pragma warning disable ASPIREAZURE003
 
 using Aspire.Hosting.Kubernetes;
-using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureKubernetesIngressTests
+public class AzureKubernetesIngressTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AksAddIngress_WithPath_GeneratesIngressInHelmOutput()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var ingress = aks.AddIngress("public")
@@ -30,7 +29,7 @@ public class AzureKubernetesIngressTests
         app.Run();
 
         // With AKS, the Helm output goes to the inner K8S env subdirectory
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         Assert.True(File.Exists(ingressPath), $"Expected ingress YAML at {ingressPath}");
 
         var content = await File.ReadAllTextAsync(ingressPath);
@@ -41,7 +40,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public void AksAddIngress_HasCorrectParent()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var ingress = aks.AddIngress("public");
 
@@ -53,7 +53,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public void AksAddGateway_HasCorrectParent()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var gateway = aks.AddGateway("public");
 
@@ -64,7 +65,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public async Task WithLoadBalancer_OnGateway_AnnotatesAndDefaultsClass()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
 
@@ -87,7 +89,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public async Task WithLoadBalancer_OnIngress_AnnotatesAndDefaultsClass()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
 
@@ -110,7 +113,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public async Task WithLoadBalancer_RespectsExplicitGatewayClass()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
 
@@ -134,8 +138,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public void AksAddIngress_WithPath_NonExternalEndpoint_ThrowsOnPublish()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var ingress = aks.AddIngress("public").WithIngressClass("nginx");
@@ -156,8 +160,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public void AksAddGateway_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var gateway = aks.AddGateway("public").WithGatewayClass("nginx");
