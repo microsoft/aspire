@@ -12,7 +12,9 @@ func main() {
 		log.Fatal(aspire.FormatError(err))
 	}
 
-	project := builder.AddDotnetProject("project", "./src/Project/Project.csproj")
+	project := builder.AddDotnetProject("project", "./src/Project/Project.csproj", &aspire.DotnetProjectOptions{
+		LaunchProfileName: aspire.StringPtr("https"),
+	})
 	_, _ = project.Name()
 	_, _ = project.Command()
 	_, _ = project.WorkingDirectory()
