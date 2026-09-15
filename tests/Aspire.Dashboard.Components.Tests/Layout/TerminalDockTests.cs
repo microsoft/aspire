@@ -118,6 +118,11 @@ public partial class TerminalDockTests : DashboardTestContext
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         Assert.Equal("No terminals", cut.Find(".terminal-dock-panel-heading").TextContent);
+        var helpLink = cut.Find(".terminal-dock-panel a");
+        Assert.Equal(Resources.Layout.TerminalDockMoreInformation, helpLink.TextContent);
+        Assert.Equal("https://aka.ms/aspire/dashboard-terminals", helpLink.GetAttribute("href"));
+        Assert.Equal("_blank", helpLink.GetAttribute("target"));
+        Assert.Equal("noopener noreferrer", helpLink.GetAttribute("rel"));
         Assert.Equal(["Open terminal in a new window", "Hide terminal panel (Shift+`)"],
             cut.FindAll(".terminal-dock-tabstrip fluent-button").Select(button => button.GetAttribute("aria-label")));
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));

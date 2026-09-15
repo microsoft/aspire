@@ -216,6 +216,10 @@
   <data name="TerminalDockPanelHint" xml:space="preserve">
     <value>Press Shift+` to hide this panel.</value>
   </data>
+  <data name="TerminalDockMoreInformation" xml:space="preserve">
+    <value>More information</value>
+    <comment>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</comment>
+  </data>
   <data name="TerminalDockReturnToDock" xml:space="preserve">
     <value>Return to panel</value>
   </data>

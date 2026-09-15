@@ -192,6 +192,11 @@
         <target state="new">Hide terminal panel (Shift+`)</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalDockMoreInformation">
+        <source>More information</source>
+        <target state="new">More information</target>
+        <note>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</note>
+      </trans-unit>
       <trans-unit id="TerminalDockPanelBody">
         <source>Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</source>
         <target state="new">Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</target>

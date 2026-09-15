@@ -158,6 +158,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TerminalDockPanelHint", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to More information.
+        /// </summary>
+        public static string TerminalDockMoreInformation {
+            get {
+                return ResourceManager.GetString("TerminalDockMoreInformation", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to The browser blocked the terminal window. Allow pop-ups for the dashboard and try again..
