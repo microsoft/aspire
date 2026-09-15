@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Globalization;
 using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
@@ -47,7 +49,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     internal Dictionary<string, string> Labels { get; private set; } = [];
     internal List<string> Commands { get; } = [];
     internal List<VolumeMountV1> Volumes { get; } = [];
-    internal List<PersistentVolume> PersistentVolumes { get; } = [];
     internal List<PersistentVolumeClaim> PersistentVolumeClaims { get; } = [];
 #pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     internal List<(ProbeType Type, ProbeV1 Probe)> Probes { get; } = [];
@@ -125,11 +126,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             yield return Service;
         }
 
-        foreach (var volume in PersistentVolumes)
-        {
-            yield return volume;
-        }
-
         foreach (var volumeClaim in PersistentVolumeClaims)
         {
             yield return volumeClaim;
@@ -167,7 +163,12 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void CreateApplication()
     {
-        if (resource is IResourceWithConnectionString)
+        // Promote to a StatefulSet when the workload is bound to a first-class persistent
+        // volume — Kubernetes requires stable identity and ordered rollout for pods that
+        // share named PVCs. The historical IResourceWithConnectionString rule remains so
+        // existing integrations that imply state continue to render as StatefulSets.
+        if (resource is IResourceWithConnectionString ||
+            resource.HasAnnotationOfType<KubernetesPersistentVolumeBindingAnnotation>())
         {
             Workload = resource.ToStatefulSet(this);
             return;
@@ -663,15 +664,24 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private static string GetEndpointValue(EndpointMapping mapping, EndpointProperty property, bool embedded = false)
     {
-        var (scheme, _, host, port, _, _, _) = mapping;
+        var (scheme, _, host, targetPort, _, _, exposedPort) = mapping;
+
+        // In Kubernetes a Service publishes `port` and forwards traffic to the pod's `targetPort`.
+        // Other resources reach this resource through the Service, so the client-facing address must
+        // use the Service (exposed) port, not the container's listening port. When no distinct
+        // exposed port was configured (`port == targetPort`, or the deployment tool assigns it),
+        // ServicePort is null and we fall back to the target port. Only EndpointProperty.TargetPort
+        // surfaces the container's listening port. This mirrors the Azure Container Apps publisher.
+        // See: https://github.com/microsoft/aspire/issues/18321
+        var servicePort = exposedPort ?? targetPort;
 
         return property switch
         {
-            EndpointProperty.Url => GetHostValue($"{scheme}://", suffix: GetPortSuffix()),
+            EndpointProperty.Url => GetHostValue($"{scheme}://", suffix: GetPortSuffix(servicePort)),
             EndpointProperty.Host or EndpointProperty.IPV4Host => GetHostValue(),
-            EndpointProperty.Port => GetPort(),
-            EndpointProperty.HostAndPort => GetHostValue(suffix: GetPortSuffix()),
-            EndpointProperty.TargetPort => GetPort(),
+            EndpointProperty.Port => GetPort(servicePort),
+            EndpointProperty.HostAndPort => GetHostValue(suffix: GetPortSuffix(servicePort)),
+            EndpointProperty.TargetPort => GetPort(targetPort),
             EndpointProperty.Scheme => scheme,
             _ => throw new NotSupportedException(),
         };
@@ -681,7 +691,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             return $"{prefix}{host}{suffix}";
         }
 
-        string GetPort()
+        string GetPort(HelmValue port)
         {
             var rawPort = embedded ? port.Expression ?? port.ValueString : port.ToScalar();
 
@@ -690,7 +700,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 : rawPort;
         }
 
-        string GetPortSuffix()
+        string GetPortSuffix(HelmValue port)
         {
             var portValue = port switch
             {

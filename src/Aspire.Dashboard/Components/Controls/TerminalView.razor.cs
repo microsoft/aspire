@@ -20,6 +20,27 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private int _terminalId;
     private string? _connectedResourceName;
     private int _connectedReplicaIndex = -1;
+    // Highest reconnect generation we've observed from JS via a toolbar
+    // snapshot. The JS side bumps `state.reconnect.generation` on every
+    // initTerminal / reconnectTerminal / auto-reconnect. `reconnectTerminal`
+    // keeps the same terminal id, so terminal id alone can't tell us whether
+    // a late-arriving `onExit` or `OnTerminalStateChanged` callback belongs
+    // to the currently bound connection or to a superseded one. Any callback
+    // whose generation is below _connectedGeneration is stale and dropped.
+    private int _connectedGeneration = -1;
+    // Guards against concurrent or re-entrant initialization. OnAfterRenderAsync
+    // can fire again while the first InitializeTerminalAsync await is still in
+    // flight (Blazor does not serialize OnAfterRenderAsync calls when re-renders
+    // happen during awaits). Without this latch, the non-firstRender branch
+    // below would see _connectedResourceName == null, mistake that for "rebind
+    // needed", call ReconnectAsync, and — because _terminalId is also still 0
+    // — fall through to InitializeTerminalAsync a second time. Each
+    // initTerminal call appends a brand-new xterm host element to the same
+    // Blazor container, leaving multiple stacked terminals in the DOM that
+    // mirror the same input/output stream. This pattern is easy to trigger
+    // on a resource stop+restart where the dashboard fires a burst of
+    // resource-snapshot-driven re-renders right after the page mounts.
+    private bool _initStarted;
 
     /// <summary>
     /// Gets or sets the user-facing display name of the resource that owns the
@@ -60,9 +81,61 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
         if (firstRender)
         {
-            await InitializeTerminalAsync();
-            _connectedResourceName = ResourceName;
-            _connectedReplicaIndex = ReplicaIndex;
+            _initStarted = true;
+            // Snapshot the resource/replica values BEFORE the JS init await:
+            // parameter push from the parent can change ResourceName/
+            // ReplicaIndex while initTerminal is in flight. Recording the
+            // *post-await* field values would falsely mark the terminal as
+            // connected to the new resource, so the rebind branch below
+            // would never fire and the JS terminal would keep streaming
+            // the previous resource.
+            var initResource = ResourceName;
+            var initReplica = ReplicaIndex;
+            await InitializeTerminalAsync(initResource!, initReplica);
+            // Only record the connected resource/replica when JS init actually
+            // produced a terminal. If _terminalId is still 0, InitializeTerminalAsync
+            // caught an exception; leaving _connectedResourceName null lets the
+            // rebind branch below (and future renders) notice and retry rather
+            // than silently masking the failure.
+            if (_terminalId != 0)
+            {
+                _connectedResourceName = initResource;
+                _connectedReplicaIndex = initReplica;
+            }
+
+            if (!string.Equals(ResourceName, _connectedResourceName, StringComparison.Ordinal) ||
+                ReplicaIndex != _connectedReplicaIndex)
+            {
+                var newResource = ResourceName;
+                var newReplica = ReplicaIndex;
+                try
+                {
+                    await ReconnectAsync(newResource, newReplica);
+                }
+                catch (JSDisconnectedException)
+                {
+                    return;
+                }
+                catch (Exception)
+                {
+                    return;
+                }
+
+                _connectedResourceName = newResource;
+                _connectedReplicaIndex = newReplica;
+            }
+            return;
+        }
+
+        // If a re-render fires while the very first initTerminal call is still
+        // in flight, do nothing here. Once that call completes the firstRender
+        // path will set _connectedResourceName / _connectedReplicaIndex and
+        // any future rebind needed will be caught on the next render after
+        // that. Without this guard the rebind branch below would re-enter
+        // initialization and stack a second xterm onto the same container —
+        // see the comment on _initStarted.
+        if (_initStarted && _terminalId == 0)
+        {
             return;
         }
 
@@ -103,7 +176,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
     }
 
-    private async Task InitializeTerminalAsync()
+    private async Task InitializeTerminalAsync(string resourceName, int replicaIndex)
     {
         try
         {
@@ -112,12 +185,30 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
             _selfRef ??= DotNetObjectReference.Create(this);
 
+            _connectedGeneration = -1;
             _terminalId = await _jsModule.InvokeAsync<int>(
-                "initTerminal", _terminalElement, BuildWebSocketUrl(ResourceName!, ReplicaIndex), _selfRef);
+                "initTerminal", _terminalElement, BuildWebSocketUrl(resourceName, replicaIndex), _selfRef);
         }
         catch (JSDisconnectedException)
         {
-            // Component disposed during initialization
+            // Component disposed during initialization. Clear _initStarted so
+            // that if a later render *does* fire (e.g. reconnection scenarios
+            // that re-mount the JS module), OnAfterRenderAsync's
+            // `_initStarted && _terminalId == 0` short-circuit doesn't
+            // permanently wedge us with no terminal.
+            _initStarted = false;
+        }
+        catch (Exception)
+        {
+            // Defensive: any other JS-side error (e.g. JSException while
+            // importing the module or during initTerminal) must not bubble
+            // out of a Blazor lifecycle method — that can tear down the
+            // SignalR circuit and take the whole dashboard tab with it.
+            // Clear _initStarted so a subsequent render can retry, and leave
+            // _terminalId == 0 so the firstRender path in OnAfterRenderAsync
+            // does not record a connected resource for a terminal that was
+            // never created.
+            _initStarted = false;
         }
     }
 
@@ -133,7 +224,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             ReplicaIndex = newReplicaIndex;
             if (!string.IsNullOrEmpty(newResourceName))
             {
-                await InitializeTerminalAsync();
+                await InitializeTerminalAsync(newResourceName, newReplicaIndex);
             }
             return;
         }
@@ -144,12 +235,20 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             {
                 await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
                 _terminalId = 0;
+                _connectedGeneration = -1;
                 return;
             }
 
             ResourceName = newResourceName;
             ReplicaIndex = newReplicaIndex;
-            await _jsModule.InvokeVoidAsync("reconnectTerminal", _terminalId, BuildWebSocketUrl(newResourceName, newReplicaIndex));
+            var generation = await _jsModule.InvokeAsync<int>(
+                "reconnectTerminal",
+                _terminalId,
+                BuildWebSocketUrl(newResourceName, newReplicaIndex));
+            if (generation > 0)
+            {
+                _connectedGeneration = generation;
+            }
         }
         catch (JSDisconnectedException)
         {
@@ -166,10 +265,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [JSInvokable]
     public Task OnTerminalStateChanged(TerminalToolbarState state)
     {
-        // Drop stale snapshots that arrive after this view was rebound to a
-        // different resource/replica (the JS side bumps `generation` on every
-        // (re)connect; the id changes when initTerminal allocates a new one).
-        if (_terminalId != 0 && state.TerminalId != _terminalId)
+        if (IsStaleTerminalCallback(state.TerminalId, state.Generation))
         {
             return Task.CompletedTask;
         }
@@ -177,24 +273,27 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         return OnToolbarStateChanged.InvokeAsync(state);
     }
 
-    /// <summary>
-    /// Requests primary control of the producer session. No-op if the terminal
-    /// JS module hasn't initialized yet or if we're already primary; JS
-    /// performs the authoritative role checks.
-    /// </summary>
-    public async Task TakePrimaryAsync()
+    private bool IsStaleTerminalCallback(int terminalId, int generation)
     {
-        if (_jsModule is null || _terminalId == 0)
+        // Drop stale callbacks that arrive after this view was rebound. The
+        // terminal id changes when initTerminal allocates a new xterm host;
+        // explicit reconnect keeps the id but bumps the JS-side generation.
+        if (_terminalId != 0 && terminalId != _terminalId)
         {
-            return;
+            return true;
         }
-        try
+
+        if (generation < _connectedGeneration)
         {
-            await _jsModule.InvokeVoidAsync("takePrimaryFromHost", _terminalId);
+            return true;
         }
-        catch (JSDisconnectedException)
+
+        if (generation > _connectedGeneration)
         {
+            _connectedGeneration = generation;
         }
+
+        return false;
     }
 
     /// <summary>
@@ -273,6 +372,29 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         try
         {
             await _jsModule.InvokeVoidAsync("refreshToolbarState", _terminalId);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Asks the JS terminal to recompute its layout. Called by the host
+    /// page when the terminal element transitions from hidden back to
+    /// visible (e.g. the user flips the page-level View dropdown from
+    /// Console back to Terminal) — display:none → visible does not always
+    /// trigger ResizeObserver, so forcing a relayout here guarantees the
+    /// terminal fills the available space immediately.
+    /// </summary>
+    public async Task RefreshLayoutAsync()
+    {
+        if (_jsModule is null || _terminalId == 0)
+        {
+            return;
+        }
+        try
+        {
+            await _jsModule.InvokeVoidAsync("refreshLayout", _terminalId);
         }
         catch (JSDisconnectedException)
         {

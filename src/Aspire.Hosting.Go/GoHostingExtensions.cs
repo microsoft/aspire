@@ -102,12 +102,33 @@ public static class GoHostingExtensions
                 if (hasDelve)
                 {
                     // Delve debug mode — global flags MUST precede the subcommand per the Delve CLI:
-                    //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--build-flags=...] <pkg> [-- args]
+                    //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--continue] [--build-flags=...] <pkg> [-- args]
                     // See: https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html
                     ctx.Args.Add("--headless=true");
                     ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation!.Port}");
                     ctx.Args.Add("--api-version=2");
+                    if (delveAnnotation.AcceptMulticlient)
+                    {
+                        ctx.Args.Add("--accept-multiclient");
+                    }
+                    if (delveAnnotation.OnlySameUser.HasValue)
+                    {
+                        ctx.Args.Add($"--only-same-user={delveAnnotation.OnlySameUser.Value.ToString().ToLowerInvariant()}");
+                    }
+                    if (delveAnnotation.Log)
+                    {
+                        ctx.Args.Add("--log");
+                        if (!string.IsNullOrEmpty(delveAnnotation.LogOutput))
+                        {
+                            ctx.Args.Add($"--log-output={delveAnnotation.LogOutput}");
+                        }
+                    }
+
                     ctx.Args.Add("debug");
+                    if (delveAnnotation.ContinueOnStart)
+                    {
+                        ctx.Args.Add("--continue");
+                    }
 
                     var buildFlags = BuildFlagsString(ctx.Resource);
                     if (buildFlags.Length > 0)
@@ -599,12 +620,17 @@ public static class GoHostingExtensions
     /// <summary>
     /// Starts a headless Delve debug server so that any DAP-compatible client can attach remotely.
     /// The application is launched as
-    /// <c>dlv --headless=true --listen=127.0.0.1:&lt;port&gt; --api-version=2 debug .</c>
+    /// <c>dlv --headless=true --listen=127.0.0.1:&lt;port&gt; --api-version=2 --accept-multiclient debug .</c>
     /// instead of <c>go run .</c>. Delve must be available on the PATH.
     /// </summary>
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <param name="port">The TCP port Delve listens on. Defaults to <c>2345</c>.</param>
+    /// <param name="acceptMulticlient">Whether Delve accepts multiple debugger clients with <c>--accept-multiclient</c>. Defaults to <see langword="true"/>.</param>
+    /// <param name="onlySameUser">Whether Delve allows connections only from the same operating system user. When <see langword="null"/>, the <c>--only-same-user</c> flag is not passed.</param>
+    /// <param name="continueOnStart">Whether Delve passes <c>--continue</c> to continue the debuggee immediately after startup. Defaults to <see langword="false"/>.</param>
+    /// <param name="log">Whether Delve debug server logging is enabled with <c>--log</c>. Defaults to <see langword="false"/>.</param>
+    /// <param name="logOutput">The Delve logging components passed with <c>--log-output</c> when <paramref name="log"/> is <see langword="true"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
@@ -638,7 +664,14 @@ public static class GoHostingExtensions
     /// </code>
     /// </example>
     [AspireExport]
-    public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder, int port = 2345)
+    public static IResourceBuilder<T> WithDelveServer<T>(
+        this IResourceBuilder<T> builder,
+        int port = 2345,
+        bool acceptMulticlient = true,
+        bool? onlySameUser = null,
+        bool continueOnStart = false,
+        bool log = false,
+        string logOutput = "")
         where T : GoAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -658,7 +691,7 @@ public static class GoHostingExtensions
             .WithAnnotation(
                 new ExecutableAnnotation { Command = "dlv", WorkingDirectory = builder.Resource.WorkingDirectory },
                 ResourceAnnotationMutationBehavior.Replace)
-            .WithAnnotation(new GoDelveServerAnnotation(port), ResourceAnnotationMutationBehavior.Replace)
+            .WithAnnotation(new GoDelveServerAnnotation(port, acceptMulticlient, onlySameUser, continueOnStart, log, logOutput), ResourceAnnotationMutationBehavior.Replace)
             .WithRequiredCommand("dlv", "https://github.com/go-delve/delve");
     }
 

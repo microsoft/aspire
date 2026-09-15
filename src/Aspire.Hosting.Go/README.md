@@ -96,8 +96,39 @@ builder.AddGoApp("api", "../go-api")
 
 This launches:
 ```sh
-dlv --headless=true --listen=127.0.0.1:2345 --api-version=2 debug .
+dlv --headless=true --listen=127.0.0.1:2345 --api-version=2 --accept-multiclient debug .
 ```
+
+`WithDelveServer` passes `--accept-multiclient` by default so the Delve server remains available
+after a debugger detaches. Set `acceptMulticlient: false` if you need Delve to exit when the first
+debugger disconnects. To customize Delve server flags, use named arguments:
+
+```csharp
+builder.AddGoApp("api", "../go-api")
+    .WithDelveServer(
+        continueOnStart: true,
+        log: true,
+        logOutput: "rpc,dap,debugger");
+```
+
+Set `continueOnStart: true` when you want the Go application to run immediately under Delve and
+attach a debugger later.
+
+If an IDE fails to attach, enable Delve logging first and inspect the resource logs. Some IDE and
+remote-environment combinations can cause Delve to reject the connection because it appears to come
+from a different operating system user. If the logs show that the same-user check is failing, you
+can disable that check:
+
+```csharp
+builder.AddGoApp("api", "../go-api")
+    .WithDelveServer(
+        onlySameUser: false,
+        log: true,
+        logOutput: "rpc,dap,debugger");
+```
+
+`onlySameUser: false` maps to `--only-same-user=false`. Use it only when needed; the Delve listener
+remains bound to `127.0.0.1`.
 
 **GoLand** — create a **Go Remote** run/debug configuration (**Edit | Run Configurations**):
 - **Host**: `localhost`
@@ -113,6 +144,23 @@ dlv --headless=true --listen=127.0.0.1:2345 --api-version=2 debug .
   "host": "localhost",
   "port": 2345
 }
+```
+
+**Zed** — add to `debug.json`:
+```json
+[
+  {
+    "label": "Attach to api",
+    "adapter": "Delve",
+    "request": "attach",
+    "mode": "remote",
+    "tcp_connection": {
+      "host": "127.0.0.1",
+      "port": 2345
+    },
+    "stopOnEntry": false
+  }
+]
 ```
 
 Start the debug configuration after the resource appears as running in the Aspire dashboard.

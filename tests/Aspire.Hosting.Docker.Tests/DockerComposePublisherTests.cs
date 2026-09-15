@@ -229,6 +229,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
                 // Set a restart policy
                 composeService.Restart = "always";
 
+                composeService.ShmSize = "128mb";
+
                 composeService.ContainerName = containerNameParam.AsEnvironmentPlaceholder(serviceResource);
 
                 // Add a custom network

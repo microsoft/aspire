@@ -3,6 +3,7 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
@@ -19,8 +20,9 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 
 // Focused bUnit coverage for the central user-visible render branch in
 // ConsoleLogs.razor: when the selected resource has WithTerminal() applied,
-// the page must mount TerminalView instead of LogViewer (and restore LogViewer
-// when switching back to a non-terminal resource). The HasTerminal()
+// the page must mount BOTH TerminalView and LogViewer (the two are toggled
+// via the View dropdown; both stay mounted so neither tears down on flips).
+// For non-terminal resources only LogViewer is mounted. The HasTerminal()
 // predicate itself has unit coverage in ResourceViewModelExtensionsTerminalTests,
 // but only a component-level test proves the page actually re-evaluates the
 // flag on selection change and that the render branch wires the correct
@@ -36,7 +38,7 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class ConsoleLogsTests
 {
     [Fact]
-    public async Task TerminalResource_Selected_RendersTerminalView_NotLogViewer()
+    public async Task TerminalResource_Selected_RendersBothViews_DefaultsToConsole()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -66,17 +68,18 @@ public partial class ConsoleLogsTests
         var instance = cut.Instance;
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
         // Page wires _selectedResourceHasTerminal in SubscribeAsync after the
-        // selection update; wait for that to flip true before asserting the
-        // rendered tree, otherwise we can race the initial render.
+        // selection update; wait for the dual-mount branch to take effect.
         cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
 
-        var terminalViews = cut.FindComponents<TerminalView>();
-        var logViewers = cut.FindComponents<LogViewer>();
+        // Both views are mounted concurrently for terminal-enabled resources
+        // so the View dropdown can flip between them without tearing down
+        // the JS terminal or the LogViewer subscription. The initial active
+        // view is Console — that way any pre-PTY hosting messages (WaitFor)
+        // are visible immediately.
+        Assert.Single(cut.FindComponents<TerminalView>());
+        Assert.Single(cut.FindComponents<LogViewer>());
 
-        Assert.Single(terminalViews);
-        Assert.Empty(logViewers);
-
-        var terminalView = terminalViews[0].Instance;
+        var terminalView = cut.FindComponents<TerminalView>()[0].Instance;
         Assert.Equal(terminalResource.DisplayName, terminalView.ResourceName);
         Assert.Equal(0, terminalView.ReplicaIndex);
 
@@ -84,7 +87,7 @@ public partial class ConsoleLogsTests
     }
 
     [Fact]
-    public async Task SwitchingFromTerminalToNonTerminalResource_RestoresLogViewer()
+    public async Task SwitchingFromTerminalToNonTerminalResource_TearsDownTerminalView()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -116,9 +119,9 @@ public partial class ConsoleLogsTests
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
         cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
 
-        // Sanity: starting state is TerminalView, no LogViewer.
+        // Sanity: terminal resource mounts both views.
         Assert.Single(cut.FindComponents<TerminalView>());
-        Assert.Empty(cut.FindComponents<LogViewer>());
+        Assert.Single(cut.FindComponents<LogViewer>());
 
         // Switch to the plain resource. Use the same ResourceSelect-driven
         // path as ResourceName_SubscribeOnLoadAndChange_* so we exercise the
@@ -135,8 +138,9 @@ public partial class ConsoleLogsTests
         innerSelect.Change("plain-resource");
 
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == plainResource.Name);
-        // LogViewer should be restored and TerminalView torn down.
-        cut.WaitForState(() => cut.FindComponents<LogViewer>().Count > 0);
+        // For a non-terminal resource the TerminalView is not mounted at all
+        // (only LogViewer is needed), so the dual-mount branch is skipped.
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count == 0);
 
         Assert.Empty(cut.FindComponents<TerminalView>());
         Assert.Single(cut.FindComponents<LogViewer>());
@@ -176,6 +180,13 @@ public partial class ConsoleLogsTests
         var instance = cut.Instance;
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
         cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // Switch to the Terminal view via the user picker so the log filter
+        // is hidden (the filter only applies to LogViewer content, not to
+        // a live PTY). Then verify that navigating to a non-terminal
+        // resource restores the filter UI.
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Terminal)));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
         Assert.Empty(cut.FindComponents<FluentSearch>());
 
         navigationManager.LocationChanged += (sender, e) =>
@@ -211,6 +222,134 @@ public partial class ConsoleLogsTests
         });
     }
 
+    [Fact]
+    public async Task TerminalResource_ViewToggle_RenderedDisplayStylesMatchActiveView()
+    {
+        // The user-visible contract for the view flip is not the _activeView
+        // enum but the `display: contents` / `display: none` pair on the two
+        // wrapper divs in ConsoleLogs.razor. Lock down that mapping so a
+        // future edit that inverts the ternary or swaps the wrappers can't
+        // pass the enum-based tests while producing a broken UI.
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // Initial state: page defaults to Console. The Console wrapper (the
+        // one containing LogViewer) must be visible; the Terminal wrapper
+        // must be hidden. Locate each wrapper by descending from the
+        // component's rendered element.
+        var (consoleWrapper, terminalWrapper) = FindViewWrappers(cut);
+        Assert.Contains("display: contents", consoleWrapper.GetAttribute("style"));
+        Assert.Contains("display: none", terminalWrapper.GetAttribute("style"));
+
+        // Flip to Terminal via the user-picked latch path and re-query the
+        // wrappers — the render pass must swap the two `display` values.
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Terminal)));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+
+        (consoleWrapper, terminalWrapper) = FindViewWrappers(cut);
+        Assert.Contains("display: none", consoleWrapper.GetAttribute("style"));
+        Assert.Contains("display: contents", terminalWrapper.GetAttribute("style"));
+    }
+
+    [Fact]
+    public void TerminalView_InitialRender_ReconnectsWhenResourceChangesDuringInitialization()
+    {
+        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
+        var initTerminal = module.Setup<int>("initTerminal", _ => true);
+        var reconnectTerminal = module.Setup<int>("reconnectTerminal", _ => true);
+        reconnectTerminal.SetResult(2);
+
+        var cut = RenderComponent<TerminalView>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "first-resource");
+            builder.Add(p => p.ReplicaIndex, 0);
+        });
+
+        cut.SetParametersAndRender(builder =>
+        {
+            builder.Add(p => p.ResourceName, "second-resource");
+            builder.Add(p => p.ReplicaIndex, 1);
+        });
+
+        initTerminal.SetResult(1);
+
+        cut.WaitForAssertion(() =>
+        {
+            var init = Assert.Single(initTerminal.Invocations);
+            var reconnect = Assert.Single(reconnectTerminal.Invocations);
+            var initUrl = Assert.IsType<string>(init.Arguments[1]);
+            var reconnectUrl = Assert.IsType<string>(reconnect.Arguments[1]);
+
+            Assert.Contains("resource=first-resource", initUrl);
+            Assert.Contains("replica=0", initUrl);
+            Assert.Equal(1, reconnect.Arguments[0]);
+            Assert.Contains("resource=second-resource", reconnectUrl);
+            Assert.Contains("replica=1", reconnectUrl);
+        });
+    }
+
+    private static (AngleSharp.Dom.IElement Console, AngleSharp.Dom.IElement Terminal) FindViewWrappers(
+        Bunit.IRenderedComponent<Components.Pages.ConsoleLogs> cut)
+    {
+        // LogViewer renders <div class="log-overflow ..."> as its root and
+        // TerminalView renders <div class="terminal-container">. The two
+        // Console/Terminal wrappers are the enclosing divs that carry the
+        // `display: contents;` / `display: none;` inline style bound to
+        // _activeView. Walk up from each component root until we hit that
+        // wrapper — the raw inline style is the user-visible flip contract.
+        var logRoot = cut.Find(".log-overflow");
+        var terminalRoot = cut.Find(".terminal-container");
+
+        var consoleWrapper = FindWrapperWithDisplayStyle(logRoot);
+        var terminalWrapper = FindWrapperWithDisplayStyle(terminalRoot);
+
+        Assert.NotNull(consoleWrapper);
+        Assert.NotNull(terminalWrapper);
+        return (consoleWrapper!, terminalWrapper!);
+    }
+
+    private static AngleSharp.Dom.IElement? FindWrapperWithDisplayStyle(AngleSharp.Dom.IElement start)
+    {
+        var current = start.ParentElement;
+        while (current is not null)
+        {
+            var style = current.GetAttribute("style") ?? string.Empty;
+            if (current.TagName.Equals("DIV", StringComparison.OrdinalIgnoreCase) &&
+                style.Contains("display:", StringComparison.Ordinal))
+            {
+                return current;
+            }
+            current = current.ParentElement;
+        }
+        return null;
+    }
+
     private void SetupTerminalViewJsInterop()
     {
         // TerminalView.OnAfterRenderAsync does:
@@ -223,7 +362,10 @@ public partial class ConsoleLogsTests
         // about runtime terminal behaviour.
         var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);
         module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
+        module.SetupVoid("refreshLayout", _ => true).SetVoidResult();
+        module.SetupVoid("refreshToolbarState", _ => true).SetVoidResult();
         module.Setup<TerminalSizePreset[]>("getSizePresets").SetResult([]);
     }
 
