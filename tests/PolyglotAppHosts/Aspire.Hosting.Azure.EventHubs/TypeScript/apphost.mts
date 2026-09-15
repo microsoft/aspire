@@ -2,6 +2,11 @@ import { AzureEventHubsRole, createBuilder } from './.aspire/modules/aspire.mjs'
 
 const builder = await createBuilder();
 const eventHubs = await builder.addAzureEventHubs('eventhubs');
+await eventHubs.configureInfrastructure(async infrastructure => {
+    const namespace = await infrastructure.getEventHubsNamespace();
+    const tags = await namespace.tags.get();
+    await tags.set("provisioning-proxy", "typescript");
+});
 
 await eventHubs.withEventHubsRoleAssignments(eventHubs, [AzureEventHubsRole.AzureEventHubsDataOwner]);
 

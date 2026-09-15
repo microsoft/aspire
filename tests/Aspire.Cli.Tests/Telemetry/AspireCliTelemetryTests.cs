@@ -3,7 +3,9 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -713,25 +715,77 @@ public class AspireCliTelemetryTests
     }
 
     [Theory]
+    [InlineData("CLAUDECODE", null, "1", null)]
+    [InlineData("CLAUDECODE", "1", "", "claude")]
+    [InlineData("CLAUDECODE", "1", null, "claude")]
+    [InlineData("AI_AGENT", null, "github_copilot_app_agent", null)]
+    [InlineData("AI_AGENT", "github_copilot_app_agent", "github_copilot_vscode_agent", "copilot-app")]
+    [InlineData("OR_APP_NAME", "Aider", "plandex", "aider")]
+    public void CodingAgentDetector_IgnoresConfigurationValues(string variableName, string? environmentValue, string? configuredValue, string? expectedCodingAgent)
+    {
+        var environmentVariables = new Dictionary<string, string?>
+        {
+            [variableName] = environmentValue
+        };
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(environmentVariables)
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [variableName] = configuredValue
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton<IEnvironment>(new TestEnvironment(environmentVariables));
+        services.AddTelemetryServices();
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var detector = serviceProvider.GetRequiredService<ICodingAgentDetector>();
+
+        Assert.Equal(expectedCodingAgent, detector.GetCodingAgent());
+    }
+
+    [Theory]
     [MemberData(nameof(CodingAgentTelemetryTestCases))]
     public void CodingAgentDetector_DetectsKnownCodingAgents((string, string?)[] environmentVariables, string? expectedCodingAgent)
     {
-        var configurationValues = new Dictionary<string, string?>();
-        foreach (var environmentVariable in environmentVariables)
-        {
-            if (environmentVariable.Item1.Length > 0)
-            {
-                configurationValues.Add(environmentVariable.Item1, environmentVariable.Item2);
-            }
-        }
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(configurationValues)
-            .Build();
-
-        var detector = new CodingAgentDetector(configuration);
+        var environment = new TestEnvironment(environmentVariables.ToDictionary(variable => variable.Item1, variable => variable.Item2, StringComparer.Ordinal));
+        var detector = new CodingAgentDetector(environment);
 
         Assert.Equal(expectedCodingAgent, detector.GetCodingAgent());
+    }
+
+    [Theory]
+    [InlineData(true, "claude")]
+    [InlineData(false, null)]
+    public void CodingAgentDetector_PreservesEnvironmentVariableNameComparison(bool ignoreCase, string? expectedCodingAgent)
+    {
+        var comparer = ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var environment = new TestEnvironment(new Dictionary<string, string?>(comparer)
+        {
+            ["claudecode"] = "1"
+        });
+        var detector = new CodingAgentDetector(environment);
+
+        Assert.Equal(expectedCodingAgent, detector.GetCodingAgent());
+    }
+
+    [Fact]
+    public void CodingAgentDetector_ReadsCurrentEnvironmentValues()
+    {
+        var environmentVariables = new Dictionary<string, string?>();
+        var detector = new CodingAgentDetector(new TestEnvironment(environmentVariables));
+
+        Assert.Null(detector.GetCodingAgent());
+
+        environmentVariables["AI_AGENT"] = "github_copilot_app_agent";
+        Assert.Equal("copilot-app", detector.GetCodingAgent());
+
+        environmentVariables["AI_AGENT"] = "github_copilot_vscode_agent";
+        Assert.Equal("copilot-vscode", detector.GetCodingAgent());
+
+        environmentVariables.Clear();
+        Assert.Null(detector.GetCodingAgent());
     }
 
     [Fact]
@@ -840,6 +894,10 @@ public class AspireCliTelemetryTests
     public static TheoryData<(string, string?)[], string?> CodingAgentTelemetryTestCases => new()
     {
         { [("CLAUDECODE", "1")], "claude" },
+        { [("CLAUDECODE", null)], null },
+        { [("CLAUDECODE", "")], null },
+        { [("CLAUDECODE", " ")], "claude" },
+        { [("CLAUDECODE", "1"), ("CLAUDE_CODE", "1")], "claude" },
         { [("CLAUDE_CODE", "1")], "claude" },
         { [("CLAUDE_CODE_ENTRYPOINT", "some_value")], "claude" },
         { [("CLAUDE_CODE_IS_COWORK", "1")], "cowork" },
@@ -856,6 +914,11 @@ public class AspireCliTelemetryTests
         { [("COPILOT_ALLOW_ALL", "1")], "copilot-cli" },
         { [("COPILOT_GITHUB_TOKEN", "token")], "copilot-cli" },
         { [("AI_AGENT", "github_copilot_app_agent")], "copilot-app" },
+        { [("AI_AGENT", "GITHUB_COPILOT_APP_AGENT")], "copilot-app" },
+        { [("AI_AGENT", " github_copilot_app_agent ")], null },
+        { [("AI_AGENT", "unknown_agent")], null },
+        { [("AI_AGENT", "")], null },
+        { [("AI_AGENT", null)], null },
         { [("AI_AGENT", "github_copilot_vscode_agent")], "copilot-vscode" },
         { [("COPILOT_AGENT", "1")], "copilot-vscode" },
         { [("AI_AGENT", "github_copilot_vscode_agent"), ("COPILOT_AGENT", "1")], "copilot-vscode" },
@@ -865,6 +928,7 @@ public class AspireCliTelemetryTests
         { [("CODEX_THREAD_ID", "thread1")], "codex" },
         { [("OR_APP_NAME", "Aider")], "aider" },
         { [("OR_APP_NAME", "aider")], "aider" },
+        { [("OR_APP_NAME", " Aider ")], null },
         { [("OR_APP_NAME", "plandex")], "plandex" },
         { [("OR_APP_NAME", "Plandex")], "plandex" },
         { [("AMP_HOME", "/path/to/amp")], "amp" },
@@ -900,6 +964,6 @@ public class AspireCliTelemetryTests
         { [("KIMI_CLI", "false")], "kimi" },
         { [("CLAUDE_CODE_IS_COWORK", "1"), ("CLAUDE_CODE", "1")], "cowork, claude" },
         { [("OR_APP_NAME", "SomeOtherApp")], null },
-        { [("", "")], null }
+        { [], null }
     };
 }

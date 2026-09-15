@@ -6,6 +6,11 @@ import { AzureOpenAIRole, createBuilder } from './.aspire/modules/aspire.mjs';
 const builder = await createBuilder();
 
 const openai = await builder.addAzureOpenAI('openai');
+await openai.configureInfrastructure(async infrastructure => {
+    const account = await infrastructure.getCognitiveServicesAccount();
+    const tags = await account.tags.get();
+    await tags.set("provisioning-proxy", "typescript");
+});
 const chat = await openai.addDeployment('chat', 'gpt-4o-mini', '2024-07-18');
 
 const api = await builder.addContainer('api', 'redis:latest');

@@ -467,6 +467,19 @@ public static class ProjectResourceBuilderExtensions
     /// resource behind the Rebuild command.
     /// </para>
     /// <para>
+    /// For TLS-enabled endpoints, an available HTTPS certificate is mapped to Kestrel's default certificate
+    /// unless the resource environment already contains <c>Kestrel__Certificates__Default__Path</c>,
+    /// <c>Kestrel__Certificates__Default__KeyPath</c>, or <c>Kestrel__Certificates__Default__Subject</c>.
+    /// These names are matched case-insensitively. The presence of any of them preserves the existing
+    /// certificate configuration, including its password. Settings supplied by earlier HTTPS certificate
+    /// callbacks participate in this check.
+    /// </para>
+    /// <para>
+    /// A password alone does not suppress the default PFX configuration. It is replaced by the selected
+    /// certificate's password, or removed when that certificate has no password. Certificate settings
+    /// loaded separately by the resource application, such as from <c>appsettings.json</c>, are not checked.
+    /// </para>
+    /// <para>
     /// The resource must carry <see cref="IProjectMetadata"/>. It is intended for language integration
     /// packages that add their own .NET resource type, such as <c>Aspire.Hosting.Dotnet</c>; use
     /// <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> for ordinary projects.
@@ -578,6 +591,17 @@ public static class ProjectResourceBuilderExtensions
         builder.WithHttpsCertificateConfiguration(ctx =>
         {
             if (!ctx.Resource.Annotations.OfType<EndpointAnnotation>().Any(e => e.TlsEnabled))
+            {
+                return Task.CompletedTask;
+            }
+
+            // Preserve an explicit certificate selection as a group. Replacing a PEM Path with a PFX
+            // path while retaining KeyPath makes Kestrel load incompatible files.
+            // https://github.com/microsoft/aspire/issues/20019
+            if (ctx.EnvironmentVariables.Keys.Any(name =>
+                string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath, StringComparisons.EnvironmentVariableName) ||
+                string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultKeyPath, StringComparisons.EnvironmentVariableName) ||
+                string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultSubject, StringComparisons.EnvironmentVariableName)))
             {
                 return Task.CompletedTask;
             }

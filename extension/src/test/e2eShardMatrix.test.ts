@@ -62,6 +62,10 @@ suite('E2E shard matrix', () => {
                 shardName: optionalString(row, 'shardName', index),
                 spec: optionalString(row, 'spec', index),
                 advisoryIssue: optionalString(row, 'advisoryIssue', index),
+                runner: optionalString(row, 'runner', index),
+                browser: optionalString(row, 'browser', index),
+                installDotnetDebugger: optionalBoolean(row, 'installDotnetDebugger', index),
+                installAzureFunctions: optionalBoolean(row, 'installAzureFunctions', index),
             };
         });
     }
@@ -86,6 +90,16 @@ suite('E2E shard matrix', () => {
 
         assert.strictEqual(typeof value, 'string', `Expected extension_e2e matrix row ${index + 1} field '${key}' to be a string.`);
         return value as string;
+    }
+
+    function optionalBoolean(row: Record<string, unknown>, key: string, index: number): boolean | undefined {
+        const value = row[key];
+        if (value === undefined) {
+            return undefined;
+        }
+
+        assert.strictEqual(typeof value, 'boolean', `Expected extension_e2e matrix row ${index + 1} field '${key}' to be a boolean.`);
+        return value as boolean;
     }
 
     function assertNoLegacyFields(row: Record<string, unknown>, index: number): void {
@@ -158,6 +172,42 @@ suite('E2E shard matrix', () => {
         assert.ok(matrixSpecPaths(workflow).length > 0, 'Expected spec entries in the E2E workflow matrix.');
         assertMatrixMatchesSpecs(workflow, specFileNames);
         assertAdvisoryRowsAreTracked(workflow, expectedAdvisoryRows);
+    });
+
+    test('schedules browser debugger proofs on Chrome and Edge with debugger prerequisites', () => {
+        const workflow = fs.readFileSync(workflowPath, 'utf8');
+        const browserDebuggerRows = matrixRows(workflow)
+            .filter(row => row.shardName === 'browser-debugger')
+            .map(row => ({
+                name: row.name,
+                runner: row.runner,
+                spec: row.spec,
+                browser: row.browser,
+                installDotnetDebugger: row.installDotnetDebugger,
+                installAzureFunctions: row.installAzureFunctions,
+                advisoryIssue: row.advisoryIssue,
+            }));
+
+        assert.deepStrictEqual(browserDebuggerRows, [
+            {
+                name: 'Linux',
+                runner: 'ubuntu-latest',
+                spec: 'out/test-e2e/test-e2e/browserDebugger.e2e.test.js',
+                browser: 'chrome',
+                installDotnetDebugger: true,
+                installAzureFunctions: undefined,
+                advisoryIssue: undefined,
+            },
+            {
+                name: 'Windows',
+                runner: 'windows-latest',
+                spec: 'out/test-e2e/test-e2e/browserDebugger.e2e.test.js',
+                browser: 'msedge',
+                installDotnetDebugger: true,
+                installAzureFunctions: undefined,
+                advisoryIssue: undefined,
+            },
+        ]);
     });
 
     test('rejects a spec that has no matrix row', () => {
@@ -306,4 +356,8 @@ interface MatrixRow {
     shardName?: string;
     spec?: string;
     advisoryIssue?: string;
+    runner?: string;
+    browser?: string;
+    installDotnetDebugger?: boolean;
+    installAzureFunctions?: boolean;
 }

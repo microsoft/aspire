@@ -51,6 +51,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Keep dependency pins with the test assembly when CI runs from an archive. -->
+    <EmbeddedResource Include="package.json" LogicalName="Aspire.Cli.EndToEnd.Tests.package.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
     <PackageReference Include="ModelContextProtocol" />

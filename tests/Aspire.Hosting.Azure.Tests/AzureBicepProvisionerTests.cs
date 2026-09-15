@@ -1840,7 +1840,7 @@ public class AzureBicepProvisionerTests
     private static async Task SeedRunningDeploymentStateAsync(IDeploymentStateManager deploymentStateManager, AzureBicepResource resource, string deploymentId)
     {
         var parameters = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters, resource);
+        await BicepUtilities.SetParametersAsync(parameters, resource, new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
 
         var scope = new JsonObject();
         await BicepUtilities.SetScopeAsync(scope, resource);
