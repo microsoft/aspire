@@ -11,6 +11,7 @@ using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting.Utils;
@@ -394,9 +395,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
                     // Static icons used by the graph that aren't tied to a specific resource. Converted to raw
                     // SVG path data here (the same way resource/state icons are) so the JS can render them.
-                    var graphIcons = new GraphIconsDto(new GraphMenuIconDto(
-                        Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
-                        LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value));
+                    var graphIcons = new GraphIconsDto(
+                        new GraphMenuIconDto(
+                            Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
+                            LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value),
+                        new GraphHiddenIconDto(
+                            Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.EyeOff()),
+                            Tooltip: ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)].Value));
 
                     await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
                     _graphInitialized = true;

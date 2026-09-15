@@ -264,6 +264,18 @@
     fill: var(--aspire-page-background);
 }
 
+::deep .resource-group-hidden .resource-node {
+    fill: var(--colorNeutralBackground3);
+}
+
+::deep .resource-group-hidden .resource-scale {
+    opacity: 0.7;
+}
+
+::deep .resource-hidden-icon {
+    fill: var(--colorNeutralForeground3);
+}
+
 ::deep .resource-group-hover .resource-node {
     fill: var(--resource-graph-hover-background) !important;
 }
