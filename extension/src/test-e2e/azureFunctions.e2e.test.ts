@@ -1,5 +1,4 @@
 import * as assert from 'assert';
-import './azureFunctionsNode.e2e.test';
 import { findResource, getCommandInvocationCount, getTaskProcessEventCount, waitForCommandOutcome, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForRunningResourceWithUrl, waitForTaskProcessEvent, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, reloadWorkspaceForE2E, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';

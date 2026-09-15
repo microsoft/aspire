@@ -44,6 +44,8 @@ builder.Build().Run();
 **C# - TypeScript or JavaScript app directory**
 
 ```csharp
+#pragma warning disable ASPIREAZUREFUNCTIONS001
+
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Functions;
 
@@ -56,6 +58,8 @@ builder.AddAzureFunctionsApp("functions", "../functions", AzureFunctionsLanguage
     .WithReference(blob);
 
 builder.Build().Run();
+
+#pragma warning restore ASPIREAZUREFUNCTIONS001
 ```
 
 **TypeScript**

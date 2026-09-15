@@ -244,9 +244,9 @@ public sealed class AzureFunctionsDeploymentTests(ITestOutputHelper output)
             request_id = uuid.uuid4().hex
             value = 'aspire-functions-binding-' + request_id
             url = base_url + '/api/roundtrip/' + request_id
-            deadline = time.monotonic() + 600
 
-            def request_until_success(method, expected):
+            def request_until_success(method, expected, timeout_seconds):
+                deadline = time.monotonic() + timeout_seconds
                 last_error = None
                 while time.monotonic() < deadline:
                     try:
@@ -265,10 +265,13 @@ public sealed class AzureFunctionsDeploymentTests(ITestOutputHelper output)
                     time.sleep(10)
                 raise AssertionError(f'{method} binding verification failed: {last_error}')
 
-            request_until_success('POST', {'accepted': request_id})
+            # Separate startup/RBAC and queue-processing budgets so a slow startup cannot
+            # consume the GET retries. Eleven minutes leaves room in the 12-minute command
+            # timeout for az and the final in-flight request/retry delay of each phase.
+            request_until_success('POST', {'accepted': request_id}, timeout_seconds=480)
             # Both values must be read back through real Functions blob input bindings.
             # The second blob can only exist after queue output + trigger + blob output succeed.
-            request_until_success('GET', {'direct': value, 'queued': value})
+            request_until_success('GET', {'direct': value, 'queued': value}, timeout_seconds=180)
             print('Verified generated Node image, functionapp kind, port 80, and storage binding round trip.')
             """);
     }

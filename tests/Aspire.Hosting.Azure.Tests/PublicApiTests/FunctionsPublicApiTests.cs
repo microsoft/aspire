@@ -146,15 +146,19 @@ public class FunctionsPublicApiTests
         Assert.Equal(nameof(name), exception.ParamName);
     }
 
-    [Fact]
-    public void AddAzureFunctionsAppShouldThrowWhenAppDirectoryIsNull()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddAzureFunctionsAppShouldThrowWhenAppDirectoryIsNullOrEmpty(bool isNull)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        string appDirectory = null!;
+        var appDirectory = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureFunctionsApp("funcapp", appDirectory, AzureFunctionsLanguage.TypeScript);
 
-        var exception = Assert.Throws<ArgumentNullException>(action);
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
         Assert.Equal(nameof(appDirectory), exception.ParamName);
     }
 

@@ -2,12 +2,14 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 import * as path from 'path';
+import net = require('node:net');
 import { getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
 import { azureFunctionsNodeDebuggerExtension } from '../debugger/languages/azureFunctions';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import { AspireResourceExtendedDebugConfiguration, AzureFunctionsNodeLaunchConfiguration } from '../dcp/types';
+import { azureFunctionsNodeInspectorPortAllocationFailed } from '../loc/strings';
 
 suite('Azure Functions Node Debugger Tests', () => {
     const fakeAspireDebugSession = {} as AspireDebugSession;
@@ -174,6 +176,53 @@ suite('Azure Functions Node Debugger Tests', () => {
             )
         );
     });
+
+    for (const failure of ['null address', 'string address', 'listen error', 'close error'] as const) {
+        test(`localizes inspector port allocation failure for ${failure}`, async () => {
+            const server = new net.Server();
+            const socketError = new Error('Socket failure');
+            sinon.stub(net, 'createServer').returns(server);
+            sinon.stub(server, 'address').returns(
+                failure === 'null address' ? null :
+                    failure === 'string address' ? 'pipe' :
+                        { address: '127.0.0.1', family: 'IPv4', port: 12345 });
+            const close = sinon.stub(server, 'close').callsFake(callback => {
+                callback?.(failure === 'close error' ? socketError : undefined);
+                return server;
+            });
+            sinon.stub(server, 'listen').callsFake((...args: unknown[]) => {
+                if (failure === 'listen error') {
+                    server.emit('error', socketError);
+                } else {
+                    (args[2] as () => void)();
+                }
+                return server;
+            });
+            const executeTask = sinon.stub(vscode.tasks, 'executeTask');
+            const launchConfig: AzureFunctionsNodeLaunchConfiguration = {
+                type: 'azure-functions-node',
+                app_directory: '/workspace/functions',
+                command: 'func',
+                language: 'javascript',
+                worker_runtime: 'node'
+            };
+
+            await assert.rejects(
+                azureFunctionsNodeDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    launchConfig,
+                    [], [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                    createDebugConfig()),
+                (error: Error) => {
+                    assert.strictEqual(error.message, azureFunctionsNodeInspectorPortAllocationFailed);
+                    assert.strictEqual(error.cause, failure.endsWith('error') ? socketError : undefined);
+                    return true;
+                });
+
+            sinon.assert.notCalled(executeTask);
+            assert.strictEqual(close.callCount, failure === 'listen error' ? 0 : 1);
+        });
+    }
 });
 
 function createDebugConfig(): AspireResourceExtendedDebugConfiguration {

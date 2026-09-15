@@ -11,6 +11,7 @@ import {
     azureFunctionsCmdPercentArgument,
     azureFunctionsHostStartupTimedOut,
     azureFunctionsInvalidProcessId,
+    azureFunctionsNodeInspectorPortAllocationFailed,
     azureFunctionsTaskExitedBeforeStartup,
     azureFunctionsUnsupportedTaskShell,
     azureFunctionsWorkerStartupTimedOut,
@@ -657,19 +658,19 @@ async function allocateNodeInspectorPort(): Promise<number> {
     return await new Promise<number>((resolve, reject) => {
         const server = net.createServer();
 
-        server.once('error', reject);
+        server.once('error', error => reject(new Error(azureFunctionsNodeInspectorPortAllocationFailed, { cause: error })));
         server.listen(0, NODE_INSPECTOR_HOST, () => {
             const address = server.address();
             if (typeof address !== 'object' || address === null) {
                 server.close();
-                reject(new Error('Failed to allocate a Node inspector port.'));
+                reject(new Error(azureFunctionsNodeInspectorPortAllocationFailed));
                 return;
             }
 
             const port = address.port;
             server.close(error => {
                 if (error) {
-                    reject(error);
+                    reject(new Error(azureFunctionsNodeInspectorPortAllocationFailed, { cause: error }));
                     return;
                 }
 

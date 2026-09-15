@@ -178,6 +178,8 @@ public static class AzureFunctionsProjectResourceExtensions
     /// <param name="language">The authoring language used by the Azure Functions app.</param>
     /// <returns>An <see cref="IResourceBuilder{AzureFunctionsAppResource}"/> for the added Azure Functions app resource.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/>, <paramref name="name"/>, or <paramref name="appDirectory"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> or <paramref name="appDirectory"/> is empty.</exception>
     /// <remarks>
     /// <para>
     /// This overload is intended for Azure Functions apps that do not have a .NET project file, such as
@@ -195,11 +197,15 @@ public static class AzureFunctionsProjectResourceExtensions
     /// <example>
     /// Add a TypeScript Azure Functions app to the app model.
     /// <code lang="csharp">
+    /// #pragma warning disable ASPIREAZUREFUNCTIONS001
+    ///
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
     /// builder.AddAzureFunctionsApp("funcapp", "../functions", AzureFunctionsLanguage.TypeScript);
     ///
     /// builder.Build().Run();
+    ///
+    /// #pragma warning restore ASPIREAZUREFUNCTIONS001
     /// </code>
     /// </example>
     /// </remarks>
@@ -209,7 +215,7 @@ public static class AzureFunctionsProjectResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
-        ArgumentNullException.ThrowIfNull(appDirectory);
+        ArgumentException.ThrowIfNullOrEmpty(appDirectory);
 
         var normalizedAppDirectory = NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, appDirectory));
         var resource = new AzureFunctionsAppResource(name, GetAzureFunctionsAppCommand(language), normalizedAppDirectory, language);
