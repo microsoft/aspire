@@ -1,0 +1,9 @@
+{
+  "author": "maddymontaquila",
+  "comment": "Assigns a distinct cloud icon to the azure-environment resource in the dashboard instead of the generic cog fallback",
+  "mergedAt": "2026-09-15T07:20:36Z",
+  "number": 20011,
+  "runDate": "2026-09-15T12:07:18Z",
+  "status": "included",
+  "title": "Use cloud icon for Azure environment"
+}

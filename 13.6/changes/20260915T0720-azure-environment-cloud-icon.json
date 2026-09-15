@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard's Resources page now shows a filled cloud-and-cube icon for the azure-environment control resource instead of the generic cog fallback, making it easier to identify at a glance.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "☁️",
+  "firstMergedAt": "2026-09-15T07:20:36Z",
+  "lastMergedAt": "2026-09-15T07:20:36Z",
+  "name": "Distinct icon for Azure environment resource",
+  "owner": "maddymontaquila",
+  "prs": [
+    20011
+  ]
+}

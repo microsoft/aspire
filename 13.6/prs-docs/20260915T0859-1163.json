@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents a 13.2 breaking-change migration mapping (AIFoundry rename); not related to a 13.6 changelog entry",
+  "mergedAt": "2026-09-15T08:59:54Z",
+  "number": 1163,
+  "runDate": "2026-09-15T12:07:18Z",
+  "status": "excluded",
+  "title": "Docs: capture 13.2 Foundry rename breaking changes and remove legacy AIFoundry references"
+}
