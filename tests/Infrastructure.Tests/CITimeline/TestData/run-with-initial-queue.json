@@ -1,0 +1,55 @@
+{
+  "run_info": {
+    "run_started_at": "2026-01-15T09:57:00Z",
+    "updated_at": "2026-01-15T10:43:00Z",
+    "conclusion": "success",
+    "status": "completed",
+    "run_attempt": 1
+  },
+  "jobs": [
+    {
+      "name": "Prepare for ci",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-01-15T10:00:00Z",
+      "started_at": "2026-01-15T10:00:30Z",
+      "completed_at": "2026-01-15T10:02:00Z",
+      "runner_name": "runner-1",
+      "html_url": "https://github.com/test/run/1",
+      "labels": ["ubuntu-latest"]
+    },
+    {
+      "name": "Build (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-01-15T10:02:00Z",
+      "started_at": "2026-01-15T10:03:00Z",
+      "completed_at": "2026-01-15T10:15:00Z",
+      "runner_name": "runner-2",
+      "html_url": "https://github.com/test/run/2",
+      "labels": ["ubuntu-latest"]
+    },
+    {
+      "name": "Tests / Aspire.Hosting.Tests (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-01-15T10:15:00Z",
+      "started_at": "2026-01-15T10:16:00Z",
+      "completed_at": "2026-01-15T10:40:00Z",
+      "runner_name": "runner-4",
+      "html_url": "https://github.com/test/run/4",
+      "labels": ["8-core-ubuntu-latest"]
+    },
+    {
+      "name": "results",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-01-15T10:40:00Z",
+      "started_at": "2026-01-15T10:40:30Z",
+      "completed_at": "2026-01-15T10:43:00Z",
+      "runner_name": "runner-6",
+      "html_url": "https://github.com/test/run/6",
+      "labels": ["ubuntu-latest"]
+    }
+  ]
+}
