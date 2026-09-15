@@ -188,6 +188,66 @@ public class AgentResourceBuilderExtensionsTests
     }
 
     [Theory]
+    [InlineData(-1)]
+    [InlineData(int.MaxValue)]
+    public void AsAgent_RejectsUndefinedProtocolWithoutMutatingResource(int value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var agent = builder.AddContainer("agent", "image");
+        var annotations = agent.Resource.Annotations.ToArray();
+        var services = builder.Services.ToArray();
+        var protocol = (AgentProtocol)value;
+        Action[] configure =
+        [
+            () => agent.AsAgent(protocol),
+            () => agent.AsAgent(protocol, A2AInvocationMode.NonStreaming),
+            () => agent.AsAgent("/agent-card.json", protocol),
+            () => agent.AsAgent("/agent-card.json", protocol, A2AInvocationMode.Streaming)
+        ];
+
+        foreach (var action in configure)
+        {
+            var exception = Assert.Throws<ArgumentOutOfRangeException>(action);
+            Assert.Equal("protocol", exception.ParamName);
+            Assert.Equal(protocol, exception.ActualValue);
+            Assert.Equal(annotations, agent.Resource.Annotations);
+            Assert.Equal(services, builder.Services);
+        }
+    }
+
+    [Theory]
+    [InlineData(AgentProtocol.A2A, -1)]
+    [InlineData(AgentProtocol.A2A, int.MaxValue)]
+    [InlineData(AgentProtocol.Responses, -1)]
+    [InlineData(AgentProtocol.Responses, int.MaxValue)]
+    [InlineData(AgentProtocol.AgUi, -1)]
+    [InlineData(AgentProtocol.AgUi, int.MaxValue)]
+    [InlineData(AgentProtocol.Acp, -1)]
+    [InlineData(AgentProtocol.Acp, int.MaxValue)]
+    public void AsAgent_RejectsUndefinedInvocationModeWithoutMutatingResource(AgentProtocol protocol, int value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var agent = builder.AddContainer("agent", "image");
+        var annotations = agent.Resource.Annotations.ToArray();
+        var services = builder.Services.ToArray();
+        var invocationMode = (A2AInvocationMode)value;
+        Action[] configure =
+        [
+            () => agent.AsAgent(protocol, invocationMode),
+            () => agent.AsAgent("/agent-card.json", protocol, invocationMode)
+        ];
+
+        foreach (var action in configure)
+        {
+            var exception = Assert.Throws<ArgumentOutOfRangeException>(action);
+            Assert.Equal("invocationMode", exception.ParamName);
+            Assert.Equal(invocationMode, exception.ActualValue);
+            Assert.Equal(annotations, agent.Resource.Annotations);
+            Assert.Equal(services, builder.Services);
+        }
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]

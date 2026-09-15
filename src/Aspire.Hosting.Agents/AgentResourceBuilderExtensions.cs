@@ -63,6 +63,7 @@ public static class AgentResourceBuilderExtensions
     /// <param name="protocol">The protocol supported by the agent.</param>
     /// <param name="agentName">The registered agent name for Responses or ACP. When omitted, the dashboard command prompts for it.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="protocol"/> is not a defined <see cref="AgentProtocol"/> value.</exception>
     /// <remarks>
     /// Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
     /// identifiers and do not need to match the Aspire resource name.
@@ -95,6 +96,7 @@ public static class AgentResourceBuilderExtensions
     /// <param name="invocationMode">The invocation mode used by dashboard commands.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="invocationMode"/> is used with a protocol other than A2A.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="protocol"/> or <paramref name="invocationMode"/> is not a defined enum value.</exception>
     /// <remarks>
     /// Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
     /// <code>
@@ -126,6 +128,7 @@ public static class AgentResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="agentCustomPath"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="agentCustomPath"/> is empty or whitespace.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="protocol"/> is not a defined <see cref="AgentProtocol"/> value.</exception>
     /// <remarks>
     /// Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
     /// <code>
@@ -161,6 +164,7 @@ public static class AgentResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="agentCustomPath"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="agentCustomPath"/> is empty or whitespace, or <paramref name="invocationMode"/> is used with a protocol other than A2A.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="protocol"/> or <paramref name="invocationMode"/> is not a defined enum value.</exception>
     /// <remarks>
     /// Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
     /// <code>
@@ -193,6 +197,14 @@ public static class AgentResourceBuilderExtensions
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
+        if (!Enum.IsDefined(protocol))
+        {
+            throw new ArgumentOutOfRangeException(nameof(protocol), protocol, "The protocol must be a defined AgentProtocol value.");
+        }
+        if (!Enum.IsDefined(invocationMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(invocationMode), invocationMode, "The invocation mode must be a defined A2AInvocationMode value.");
+        }
         if (protocol is not AgentProtocol.A2A && invocationMode is not A2AInvocationMode.NonStreaming)
         {
             throw new ArgumentException("A2A invocation modes can only be configured for the A2A protocol.", nameof(invocationMode));

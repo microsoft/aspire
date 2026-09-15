@@ -598,9 +598,15 @@ public class WithMcpToolCommandsTests
     [InlineData("""{"jsonrpc":"2.0","id":"tool-call"}""")]
     [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":null,"error":null}""")]
     [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":"invalid"}""")]
-    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":{"isError":"invalid"}}""")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":{"content":[],"isError":"invalid"}}""")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":{}}""")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":{"content":null}}""")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":{"content":{}}}""")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":{"content":"text"}}""")]
+    [InlineData("""{"jsonrpc":"2.0","id":"tool-call","result":{"content":false}}""")]
     [InlineData("event: message\ndata: invalid-json\n\n")]
     [InlineData("event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":\"tool-call\"}\n\n")]
+    [InlineData("event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":\"tool-call\",\"result\":{}}\n\n")]
     public async Task WithMcpToolCommands_InvokeCommandRejectsMalformedResponseAndPreservesBody(string responseBody)
     {
         using var appBuilder = TestDistributedApplicationBuilder.Create();
@@ -628,6 +634,36 @@ public class WithMcpToolCommandsTests
         Assert.Equal(CommandResultFormat.Text, result.Data.Format);
         Assert.Equal(["session-1"], handler.TerminatedSessions);
         await Assert.ThrowsAsync<ObjectDisposedException>(invalidResponse.Content.ReadAsStringAsync);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithMcpToolCommands_InvokeCommandAcceptsEmptyContentArray(bool streaming)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        var payload = """{"jsonrpc":"2.0","id":"tool-call","result":{"content":[]}}""";
+        var handler = new McpCommandHandler
+        {
+            OverrideResponse = (method, _) => Task.FromResult(method == "tools/call"
+                ? new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(streaming ? $"data: {payload}\n\n" : payload)
+                }
+                : null)
+        };
+        appBuilder.Services.AddHttpClient(string.Empty).ConfigurePrimaryHttpMessageHandler(() => handler);
+        var container = AddMcpContainer(appBuilder);
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource, "app-mcp-call-tool", CreateMcpArguments("get_weather", "{}")).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal("MCP tool response received.", result.Message);
+        Assert.Equal(["session-1"], handler.TerminatedSessions);
     }
 
     [Fact]

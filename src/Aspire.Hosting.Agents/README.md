@@ -31,7 +31,7 @@ builder.AddProject<Projects.Frontend>("frontend")
 **TypeScript**
 
 ```typescript
-import { refExpr } from "./.aspire/modules/aspire.mjs";
+import { AgentProtocol, refExpr } from "./.aspire/modules/aspire.mjs";
 
 const weatherAgent = await builder.addNodeApp("weather-agent", "../weather-agent", "server.js")
     .withHttpEndpoint()

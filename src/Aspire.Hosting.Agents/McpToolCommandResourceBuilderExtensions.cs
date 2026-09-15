@@ -379,6 +379,7 @@ public static class McpToolCommandResourceBuilderExtensions
                 }
 
                 if (responseJson["result"] is JsonObject toolResult &&
+                    toolResult["content"] is JsonArray &&
                     (toolResult["isError"] is null || toolResult["isError"] is JsonValue isErrorValue && isErrorValue.TryGetValue<bool>(out _)))
                 {
                     if (toolResult["isError"]?.GetValue<bool>() is true)
