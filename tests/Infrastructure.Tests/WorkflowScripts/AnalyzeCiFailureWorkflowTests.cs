@@ -304,6 +304,96 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 && call.Contains("--slurp", StringComparison.Ordinal));
     }
 
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CollectionContinuesWhenOnlyOptionalTestArtifactIsUnavailable()
+    {
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
+        await WriteExecutableAsync(
+            fakeGhPath,
+            """
+            #!/usr/bin/env bash
+            case "$*" in
+              "api repos/microsoft/aspire/actions/runs/123")
+                cat <<'JSON'
+            {"id":123,"path":".github/workflows/ci.yml","run_attempt":1,"run_started_at":"2026-08-31T12:00:00Z","updated_at":"2026-08-31T12:05:00Z","event":"pull_request","head_sha":"abc","head_branch":"feature","html_url":"https://github.com/microsoft/aspire/actions/runs/123","conclusion":"failure","pull_requests":[{"number":42,"base":{"repo":{"url":"https://api.github.com/repos/microsoft/aspire"}}}]}
+            JSON
+                ;;
+              *"actions/runs/123/attempts/1/jobs"*)
+                cat <<'JSON'
+            {"id":100,"name":"Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)","conclusion":"failure","check_run_url":null,"steps":[{"name":"Run tests","conclusion":"failure"}]}
+            JSON
+                ;;
+              "api --help")
+                echo "--allow-escape-sequences"
+                ;;
+              *"actions/jobs/100/logs"*)
+                echo "FAILED extension E2E test"
+                ;;
+              *"pulls/42/files"*)
+                echo '{"filename":"extension/src/test-e2e/example.ts","status":"modified","additions":1,"deletions":1,"changes":2}'
+                ;;
+              *"pulls/42 --jq"*)
+                echo '{"number":42,"title":"Test","state":"open","locked":false,"user":"octocat","head_branch":"feature","base_branch":"main","html_url":"https://github.com/microsoft/aspire/pull/42"}'
+                ;;
+              *"actions/runs/123/artifacts"*)
+                cat <<'JSON'
+            {"id":20,"name":"extension-e2e-diagnostics-linux-x64-debug-attempt1","size_in_bytes":2048,"expired":false,"created_at":"2026-08-31T12:01:00Z"}
+            JSON
+                ;;
+              *"actions/artifacts/20/zip"*)
+                exit 1
+                ;;
+              *)
+                exit 99
+                ;;
+            esac
+            """);
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "git"),
+            """
+            #!/usr/bin/env bash
+            exit 1
+            """);
+        var workflowDirectory = Directory.CreateDirectory(
+            Path.Combine(_workspace.Path, ".github", "workflows")).FullName;
+        File.Copy(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            Path.Combine(workflowDirectory, Path.GetFileName(PersistenceScriptRelativePath)));
+
+        var githubOutputPath = Path.Combine(_workspace.Path, "github-output");
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Collect CI failure data");
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["EVENT_NAME"] = "workflow_dispatch",
+                ["GH_TOKEN"] = "test-token",
+                ["GITHUB_OUTPUT"] = githubOutputPath,
+                ["MANUAL_RUN_ID"] = "123",
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["REPO"] = "microsoft/aspire",
+                ["WORKFLOW_RUN_ATTEMPT"] = string.Empty,
+                ["WORKFLOW_RUN_ID"] = string.Empty,
+            });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains(
+            "Warning: Optional extension test diagnostics unavailable for Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)",
+            result.Output,
+            StringComparison.Ordinal);
+        Assert.Equal(
+            "[]",
+            (await File.ReadAllTextAsync(
+                Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"))).Trim());
+        Assert.Equal(
+            """{"state":"complete"}""",
+            (await File.ReadAllTextAsync(
+                Path.Combine(_workspace.Path, "ci-failure-data", "test-evidence.json"))).Trim());
+    }
+
     [Theory]
     [InlineData("""[[{"number":42,"head":{"sha":"abc"}}]]""", "42")]
     [InlineData("""[[{"number":42,"head":{"sha":"newer"}}]]""", "")]
@@ -2875,6 +2965,21 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "\"ci-failure-data/test-failures/${ARTIFACT_ID}.json\" \\\n\"${RESULT_FORMAT}\"",
                 normalizedCollectionStep,
                 StringComparison.Ordinal);
+            Assert.Contains(
+                "if [ \"${RESULT_FORMAT}\" = \"mocha\" ]; then\n" +
+                "echo \"Warning: Optional extension test diagnostics unavailable for ${JOB_NAME}; continuing without structured failed-test records\"\n" +
+                "rm -f \"${ARTIFACT_ZIP}\"\n" +
+                "rm -rf \"${ARTIFACT_OUTPUT}\"\n" +
+                "continue",
+                normalizedCollectionStep,
+                StringComparison.Ordinal);
+            Assert.True(
+                normalizedCollectionStep.IndexOf(
+                    "if [ \"${RESULT_FORMAT}\" = \"mocha\" ]; then",
+                    StringComparison.Ordinal) <
+                normalizedCollectionStep.IndexOf(
+                    "collect-test-failures \"${ARTIFACT_OUTPUT}\"",
+                    StringComparison.Ordinal));
         });
         Assert.Contains(
             ".created_at > $started_at and .created_at <= $updated_at",
@@ -3229,6 +3334,157 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task TestResultArtifactSelectorAllowsMissingOptionalExtensionDiagnostics()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(artifactsPath, "[]");
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """
+            [{
+              "id":1,
+              "name":"Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug)",
+              "steps":[{"name":"Install extension dependencies","conclusion":"failure"}]
+            }]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-result-artifacts",
+                artifactsPath,
+                "2026-09-04T12:00:00Z",
+                "2026-09-04T12:02:00Z",
+                jobsPath,
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("[]", result.Output.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultArtifactSelectorSkipsOversizedOptionalExtensionDiagnostics()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(
+            artifactsPath,
+            """
+            [{
+              "id":10,
+              "name":"extension-e2e-diagnostics-linux-x64-debug-attempt1",
+              "expired":false,
+              "created_at":"2026-09-04T12:01:00Z",
+              "size_in_bytes":104857601
+            }]
+            """);
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """
+            [{
+              "id":1,
+              "name":"Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug)",
+              "steps":[{"name":"Run extension E2E tests","conclusion":"failure"}]
+            }]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-result-artifacts",
+                artifactsPath,
+                "2026-09-04T12:00:00Z",
+                "2026-09-04T12:02:00Z",
+                jobsPath,
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("[]", result.Output.Trim());
+    }
+
+    [Theory]
+    [InlineData("2", "100")]
+    [InlineData("3", "10")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultArtifactSelectorKeepsRequiredEvidenceWhenOptionalArtifactsExceedSharedBudget(
+        string maxArtifacts,
+        string maxTotalBytes)
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(
+            artifactsPath,
+            """
+            [
+              {
+                "id":10,
+                "name":"logs-Infrastructure-ubuntu-latest",
+                "expired":false,
+                "created_at":"2026-09-04T12:01:00Z",
+                "size_in_bytes":4
+              },
+              {
+                "id":20,
+                "name":"extension-e2e-diagnostics-linux-x64-debug-attempt1",
+                "expired":false,
+                "created_at":"2026-09-04T12:01:00Z",
+                "size_in_bytes":4
+              },
+              {
+                "id":30,
+                "name":"extension-e2e-diagnostics-linux-x64-command-palette-attempt1",
+                "expired":false,
+                "created_at":"2026-09-04T12:01:00Z",
+                "size_in_bytes":4
+              }
+            ]
+            """);
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """
+            [
+              {
+                "id":1,
+                "name":"Tests / No-package tests / Infrastructure (ubuntu-latest)",
+                "steps":[{"name":"Upload logs, and test results","conclusion":"success"}]
+              },
+              {
+                "id":2,
+                "name":"Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug)"
+              },
+              {
+                "id":3,
+                "name":"Run VS Code extension E2E tests / VS Code extension E2E (Linux, command-palette)"
+              }
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-result-artifacts",
+                artifactsPath,
+                "2026-09-04T12:00:00Z",
+                "2026-09-04T12:02:00Z",
+                jobsPath,
+                maxArtifacts,
+                maxTotalBytes,
+                "10",
+                "1",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        using var selected = JsonDocument.Parse(result.Output);
+        Assert.Equal(2, selected.RootElement.GetArrayLength());
+        Assert.Equal(10, selected.RootElement[0].GetProperty("id").GetInt32());
+        Assert.Equal("trx", selected.RootElement[0].GetProperty("format").GetString());
+        Assert.Equal("mocha", selected.RootElement[1].GetProperty("format").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task TestResultArtifactSelectorRejectsMissingArtifactForRecognizedTestJob()
     {
         var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
@@ -3496,6 +3752,77 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             }
             """);
         var jobName = "Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)";
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            $$"""[{"id":1,"name":{{JsonSerializer.Serialize(jobName)}}}]""");
+        var outputPath = Path.Combine(_workspace.Path, "test-failures.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "collect-test-failures",
+                testResultsDirectory.FullName,
+                jobName,
+                jobsPath,
+                outputPath,
+                "mocha",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("[]", (await File.ReadAllTextAsync(outputPath)).Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TrustedTestFailureCollectorDoesNotPartiallyTrustMixedMochaFailures()
+    {
+        var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
+        await File.WriteAllTextAsync(
+            Path.Combine(testResultsDirectory.FullName, "00001.json"),
+            """
+            {
+              "tests": [{"fullTitle":"suite assertion"}],
+              "failures": [
+                {
+                  "fullTitle":"suite assertion",
+                  "err":{"name":"AssertionError","message":"expected true","stack":"frame"}
+                },
+                {
+                  "fullTitle":"after each hook",
+                  "err":{"name":"NoSuchSessionError","message":"browser crashed","stack":"frame"}
+                }
+              ]
+            }
+            """);
+        var jobName = "Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug)";
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            $$"""[{"id":1,"name":{{JsonSerializer.Serialize(jobName)}}}]""");
+        var outputPath = Path.Combine(_workspace.Path, "test-failures.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "collect-test-failures",
+                testResultsDirectory.FullName,
+                jobName,
+                jobsPath,
+                outputPath,
+                "mocha",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("[]", (await File.ReadAllTextAsync(outputPath)).Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TrustedTestFailureCollectorAllowsMissingMochaResult()
+    {
+        var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
+        var jobName = "Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug)";
         var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
         await File.WriteAllTextAsync(
             jobsPath,
@@ -5650,6 +5977,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     [InlineData(
         """{"ConnectionStrings":{"Default":"Endpoint=sb://example/;PrimaryKey=secret"}}""",
         """{"ConnectionStrings":{"Default":"Endpoint=sb://example/;PrimaryKey=[REDACTED]""")]
+    [InlineData(
+        "ConnectionStrings__sql=Server=tcp:db.example;Initial Catalog=app;User ID=sa;Encrypt=True",
+        "ConnectionStrings__sql=[REDACTED]")]
+    [InlineData(
+        "ConnectionStrings:kafka = broker1:9092,broker2:9092;SaslUsername=svc",
+        "ConnectionStrings:kafka = [REDACTED]")]
     [InlineData("Password='secret;tail';Timeout=30", "Password='[REDACTED]';Timeout=30")]
     [InlineData(
         """command --password "prefix\"secret-suffix" --verbose""",

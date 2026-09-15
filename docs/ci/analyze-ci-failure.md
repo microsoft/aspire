@@ -93,10 +93,14 @@ GitHub's artifact API does not expose a producer job ID. The selector therefore
 uses the job and artifact naming contract in
 [`run-tests.yml`](../../.github/workflows/run-tests.yml) and
 [`extension-e2e-tests.yml`](../../.github/workflows/extension-e2e-tests.yml).
-Missing, oversized, ambiguous, or malformed artifacts make test evidence
-unavailable rather than producing an empty successful result. When no failed
-job uses either supported workflow, evidence is explicitly marked not
-applicable.
+Missing, oversized, ambiguous, or malformed required TRX artifacts make test
+evidence unavailable rather than producing an empty successful result.
+Extension E2E diagnostics are optional because setup can fail before the test
+harness creates them, and recordings can exceed the analyzer's bounded download
+budget. Missing, oversized, or unavailable extension diagnostics, and valid
+diagnostics without `mocha.json`, contribute no trusted failed-test records; the
+job remains classifiable from its trusted step conclusions and sanitized logs.
+Malformed or ambiguous extension results still fail closed.
 
 ## Side-effect gates
 

@@ -411,6 +411,7 @@ jobs:
                   ci-failure-data/test-result-zips \
                   ci-failure-data/test-results \
                   ci-failure-data/test-failures
+                printf '[]\n' > ci-failure-data/test-failures/empty.json
                 ARTIFACT_DOWNLOAD_FAILED=false
                 REMAINING_UNCOMPRESSED_BYTES=1073741824
                 while IFS= read -r ARTIFACT; do
@@ -427,12 +428,21 @@ jobs:
                       ! bash .github/workflows/analyze-ci-failure-persistence.sh \
                         extract-test-results-artifact "${ARTIFACT_ZIP}" "${ARTIFACT_OUTPUT}" \
                         10000 "${REMAINING_UNCOMPRESSED_BYTES}" 104857600 \
-                        "${ARTIFACT_SIZE}" "${RESULT_FORMAT}" ||
-                      ! bash .github/workflows/analyze-ci-failure-persistence.sh \
-                        collect-test-failures "${ARTIFACT_OUTPUT}" "${JOB_NAME}" \
-                        ci-failure-data/failed-jobs.json \
-                        "ci-failure-data/test-failures/${ARTIFACT_ID}.json" \
-                        "${RESULT_FORMAT}"; then
+                        "${ARTIFACT_SIZE}" "${RESULT_FORMAT}"; then
+                    if [ "${RESULT_FORMAT}" = "mocha" ]; then
+                      echo "Warning: Optional extension test diagnostics unavailable for ${JOB_NAME}; continuing without structured failed-test records"
+                      rm -f "${ARTIFACT_ZIP}"
+                      rm -rf "${ARTIFACT_OUTPUT}"
+                      continue
+                    fi
+                    ARTIFACT_DOWNLOAD_FAILED=true
+                    break
+                  fi
+                  if ! bash .github/workflows/analyze-ci-failure-persistence.sh \
+                      collect-test-failures "${ARTIFACT_OUTPUT}" "${JOB_NAME}" \
+                      ci-failure-data/failed-jobs.json \
+                      "ci-failure-data/test-failures/${ARTIFACT_ID}.json" \
+                      "${RESULT_FORMAT}"; then
                     ARTIFACT_DOWNLOAD_FAILED=true
                     break
                   fi
@@ -543,7 +553,7 @@ jobs:
                 echo "No test failures extracted from structured test artifacts."
               fi
             elif [ "${TEST_EVIDENCE_STATE}" = "not-applicable" ]; then
-              echo "No failed job uses a supported test workflow."
+              echo "No supported structured test result was available for the failed jobs."
             else
               echo "Test failure evidence is unavailable. Analysis cannot be published or rerun."
             fi
@@ -1570,7 +1580,7 @@ Field details:
 - `failed_jobs[].classification`: Per-job classification — one of `"transient-infra"`, `"flaky-test"`, `"code-issue"`, or `"main-repository-breakage"`.
 - `failed_jobs[].reason`: A single-line explanation, limited to 500 characters.
 - `failed_jobs` MUST contain exactly one object for every failed job in the summary, using its exact numeric ID, with no additions, omissions, or duplicates.
-- When trusted structured test evidence is complete, `failed_tests` MUST contain exactly one entry for every `{name, job}` pair in the summary, with no additions, omissions, or duplicates. When no failed job uses a supported test workflow, use an empty array. Do not infer failed tests from job logs.
+- When trusted structured test evidence is complete, `failed_tests` MUST contain exactly one entry for every `{name, job}` pair in the summary, with no additions, omissions, or duplicates. When no supported structured test result is available, use an empty array. Do not infer failed tests from job logs.
 - `failed_tests[].name`: The exact single-line test name from the structured artifact, limited to 500 characters.
 - `failed_tests[].job`: The exact failed job name from the summary, limited to 500 characters.
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.

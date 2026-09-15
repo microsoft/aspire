@@ -11,9 +11,9 @@ RUN_CONTEXT_FILE="$CI_FAILURE_DATA_DIR/run-context.json"
 
 JQ_SANITIZE_DEFS=$(cat <<'JQ'
   def sensitive_name:
-    "(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|primary[_-]?key|secondary[_-]?key|secret|client[_-]?secret|connection[_-]?string|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)|pgpassword|_?authToken|_?auth|accessToken|refreshToken)";
+    "(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|primary[_-]?key|secondary[_-]?key|secret|client[_-]?secret|connection[_-]?strings?(?:(?:__|[.:])[A-Za-z0-9_.-]+)?|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)|pgpassword|_?authToken|_?auth|accessToken|refreshToken)";
   def option_name:
-    "(?i:password|passwd|pwd|token|auth[_-]?token|access[_-]?token|refresh[_-]?token|api[_-]?key|access[_-]?key|account[_-]?key|primary[_-]?key|secondary[_-]?key|secret|client[_-]?secret|connection[_-]?string|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)";
+    "(?i:password|passwd|pwd|token|auth[_-]?token|access[_-]?token|refresh[_-]?token|api[_-]?key|access[_-]?key|account[_-]?key|primary[_-]?key|secondary[_-]?key|secret|client[_-]?secret|connection[_-]?strings?|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key)";
   def redact_sensitive:
     gsub("-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)"; "[REDACTED]") |
     gsub("(?<prefix>\\b(?i:authorization|proxy-authorization)\\s*:\\s*(?i:basic|bearer)\\s+)[^\\s,;]+"; "\(.prefix)[REDACTED]") |
@@ -28,7 +28,7 @@ JQ_SANITIZE_DEFS=$(cat <<'JQ'
     gsub("(?<prefix>(^|\\s)--" + option_name + "\\s+\")(?:\\\\[^\\r\\n]|[^\"\\\\\\r\\n])*(?<suffix>\")"; "\(.prefix)[REDACTED]\(.suffix)") |
     gsub("(?<prefix>(^|\\s)--" + option_name + "\\s+')(?:\\\\[^\\r\\n]|[^'\\\\\\r\\n])*(?<suffix>')"; "\(.prefix)[REDACTED]\(.suffix)") |
     gsub("(?<prefix>(^|[^\\S\\r\\n])--" + option_name + "[^\\S\\r\\n]+)(?![\"'])[^\\s]+"; "\(.prefix)[REDACTED]") |
-    gsub("(?<prefix>\\b(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?connection[_-]?string)\\s*[:=]\\s*)(?![\"'])[^\\r\\n]+"; "\(.prefix)[REDACTED]") |
+    gsub("(?<prefix>\\b(?i:(?:[A-Za-z][A-Za-z0-9_.-]*[_-])?connection[_-]?strings?(?:(?:__|[.:])[A-Za-z0-9_.-]+)?)\\s*[:=]\\s*)(?![\"'])[^\\r\\n]+"; "\(.prefix)[REDACTED]") |
     gsub("(?<prefix>\\b" + sensitive_name + "\\s*[:=]\\s*\")(?:\\\\[^\\r\\n]|[^\"\\\\\\r\\n])*(?<suffix>\")"; "\(.prefix)[REDACTED]\(.suffix)") |
     gsub("(?<prefix>\\b" + sensitive_name + "\\s*[:=]\\s*')(?:\\\\[^\\r\\n]|[^'\\\\\\r\\n])*(?<suffix>')"; "\(.prefix)[REDACTED]\(.suffix)") |
     gsub("(?<prefix>\\b" + sensitive_name + "\\s*[:=]\\s*)(?![\"'])[^;&\\r\\n]+"; "\(.prefix)[REDACTED]");
@@ -253,7 +253,7 @@ collect_test_failures()
             else
               error("Mocha completed test has an invalid shape")
             end] as $completed_tests |
-          .failures |
+          (.failures |
           map(
             (.fullTitle // .title) as $test |
             if type == "object" and
@@ -263,11 +263,16 @@ collect_test_failures()
               . + { normalized_test: $test }
             else
               error("Mocha failure has an invalid shape")
-            end) |
-          map(select(
+            end)) as $failures |
+          if all(
+            $failures[];
             . as $failure |
             (($completed_tests | index($failure.normalized_test)) != null) and
-            (($failure.err | blocking_harness_error) | not))) |
+            (($failure.err | blocking_harness_error) | not)) then
+            $failures
+          else
+            []
+          end |
           .[] |
           {
             test: (.normalized_test | sanitize_single_line | .[0:500]),
@@ -291,11 +296,13 @@ collect_test_failures()
   if [ "$result_count" -eq 0 ]; then
     if [ "$result_format" = "trx" ]; then
       echo "::error::Selected test result artifact does not contain any TRX files" >&2
+      rm -f "$json_lines"
+      return 1
     else
-      echo "::error::Selected test result artifact does not contain a Mocha result" >&2
+      printf '[]\n' > "$output_file"
+      rm -f "$json_lines"
+      return 0
     fi
-    rm -f "$json_lines"
-    return 1
   fi
   if [ "$result_format" = "mocha" ] && [ "$result_count" -ne 1 ]; then
     echo "::error::Selected extension test artifact must contain exactly one Mocha result" >&2
@@ -459,7 +466,11 @@ select_test_result_artifacts()
             (.created_at > $started_at and .created_at <= $updated_at))
         ] as $matches |
         if $matches | length == 0 then
-          error("test result artifact is missing for a failed test job")
+          if $contract.format == "mocha" then
+            empty
+          else
+            error("test result artifact is missing for a failed test job")
+          end
         elif $matches | length == 1 then
           $matches[0] |
           {
@@ -473,10 +484,21 @@ select_test_result_artifacts()
           error("test result artifact does not identify exactly one failed job")
         end
       ] as $selected |
-      if ($selected | length) > $max_artifacts then
+      ($selected | map(select(.format == "trx"))) as $required |
+      ($selected | map(select(
+        .format == "mocha" and
+        ((.id | type) == "number" and
+         (.id | floor) == .id and
+         .id >= 1 and
+         (.size_in_bytes | type) == "number" and
+         (.size_in_bytes | floor) == .size_in_bytes and
+         .size_in_bytes >= 0 and
+         .size_in_bytes <= $max_artifact_bytes))) |
+        sort_by([.job, .id])) as $optional |
+      if ($required | length) > $max_artifacts then
         error("test result artifact count exceeds the download budget")
       elif any(
-        $selected[];
+        $required[];
         (.id | type) != "number" or
         (.id | floor) != .id or
         .id < 1 or
@@ -486,12 +508,31 @@ select_test_result_artifacts()
         .size_in_bytes > $max_artifact_bytes
       ) then
         error("test result artifact has invalid or excessive size metadata")
-      elif ($selected | map(.id) | unique | length) != ($selected | length) then
+      elif ($required | map(.id) | unique | length) != ($required | length) then
         error("test result artifact does not identify exactly one failed job")
-      elif ($selected | map(.size_in_bytes) | add // 0) > $max_total_bytes then
+      elif ($required | map(.size_in_bytes) | add // 0) > $max_total_bytes then
         error("test result artifacts exceed the cumulative download budget")
       else
-        $selected
+        ($max_artifacts - ($required | length)) as $remaining_count |
+        ($max_total_bytes - ($required | map(.size_in_bytes) | add // 0)) as $remaining_bytes |
+        (reduce $optional[] as $artifact (
+          {artifacts: [], bytes: 0};
+          if (.artifacts | length) < $remaining_count and
+             (.bytes + $artifact.size_in_bytes) <= $remaining_bytes then
+            {
+              artifacts: (.artifacts + [$artifact]),
+              bytes: (.bytes + $artifact.size_in_bytes)
+            }
+          else
+            .
+          end
+        ) | .artifacts) as $selected_optional |
+        ($required + $selected_optional) as $bounded_selected |
+        if ($bounded_selected | map(.id) | unique | length) != ($bounded_selected | length) then
+          error("test result artifact does not identify exactly one failed job")
+        else
+          $bounded_selected
+        end
       end
     ' "$failed_jobs_file"
 }
