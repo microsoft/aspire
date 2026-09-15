@@ -108,6 +108,11 @@ void main() throws Exception {
         subnet.allowInbound(new AllowInboundOptions().port("443").from(AzureServiceTags.AzureLoadBalancer));
         subnet.denyInbound(new DenyInboundOptions().from(AzureServiceTags.Internet));
         var aks = builder.addAzureKubernetesEnvironment("aks");
+        aks.configureInfrastructure(infrastructure -> {
+            var cluster = infrastructure.getContainerServiceManagedCluster();
+            cluster.setIsRbacEnabled(true);
+            var _rbacEnabled = cluster.isRbacEnabled();
+        });
         aks.addNodePool("system", new AddNodePoolOptions().vmSize(AksNodeVmSizes.StandardDSv5.StandardD2sV5));
         var aksVolume = aks.addPersistentVolume("aks-data");
         aksVolume.withCapacity("20Gi");

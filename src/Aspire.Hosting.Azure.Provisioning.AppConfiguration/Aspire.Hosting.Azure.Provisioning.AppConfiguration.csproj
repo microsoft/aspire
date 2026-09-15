@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
+    <PackageTags>aspire integration hosting azure provisioning appconfiguration cloud polyglot</PackageTags>
+    <Description>Opt-in Azure Provisioning App Configuration APIs for polyglot Aspire AppHosts.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Aspire.Hosting.Azure.Provisioning\ExperimentalAssemblyInfo.cs" Link="ExperimentalAssemblyInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting.Azure.AppConfiguration\Aspire.Hosting.Azure.AppConfiguration.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Provisioning\Aspire.Hosting.Azure.Provisioning.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Provisioning.Generators\Aspire.Hosting.Azure.Provisioning.Generators.csproj" PrivateAssets="all" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+    <PackageReference Include="Azure.Provisioning" />
+    <PackageReference Include="Azure.Provisioning.AppConfiguration" />
+  </ItemGroup>
+
+</Project>

@@ -22,6 +22,33 @@ func main() {
 		log.Fatalf(aspire.FormatError(kusto.Err()))
 	}
 
+	kusto.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		cluster := infrastructure.GetKustoCluster()
+		if err := cluster.SetIsStreamingIngestEnabled(true).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := cluster.IsStreamingIngestEnabled(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		database := infrastructure.AddKustoReadWriteDatabase("proxyDatabase")
+		if err := database.SetParent(cluster).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if err := database.SetName("ProxyDatabase").Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := database.Name(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		// Exercise the derived AddTo export; adding to the same infrastructure is idempotent.
+		if err := database.AddTo(infrastructure); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
+	if kusto.Err() != nil {
+		log.Fatalf(aspire.FormatError(kusto.Err()))
+	}
+
 	defaultDatabase := kusto.AddReadWriteDatabase("samples")
 	if defaultDatabase.Err() != nil {
 		log.Fatalf(aspire.FormatError(defaultDatabase.Err()))

@@ -1089,8 +1089,21 @@ public class AspireProvisioningProxyGeneratorTests
 
         namespace Azure.Provisioning
         {
-            public abstract class BicepValue
+            public enum BicepValueKind
             {
+                Unset,
+                Literal,
+                Expression
+            }
+
+            public interface IBicepValue
+            {
+                BicepValueKind Kind { get; }
+            }
+
+            public abstract class BicepValue : IBicepValue
+            {
+                public BicepValueKind Kind => BicepValueKind.Literal;
             }
 
             public sealed class BicepValue<T> : BicepValue

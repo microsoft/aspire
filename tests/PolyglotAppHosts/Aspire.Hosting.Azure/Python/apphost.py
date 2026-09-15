@@ -7,8 +7,17 @@ from aspire_app import AzureResourceInfrastructure, ReferenceExpression, create_
 def configure_infrastructure(_infrastructure: AzureResourceInfrastructure):
     pass
 
+
+def configure_front_door(infrastructure: AzureResourceInfrastructure) -> None:
+    profile = infrastructure.get_cdn_profile()
+    profile.origin_response_timeout_seconds = 60
+    _origin_timeout = profile.origin_response_timeout_seconds
+
+
 with create_builder() as builder:
     builder.add_azure_provisioning()
+    front_door = builder.add_azure_front_door("frontdoor")
+    front_door.configure_infrastructure(configure_front_door)
     location = builder.add_parameter("parameter")
     resource_group = builder.add_parameter("parameter")
     existing_name = builder.add_parameter("parameter")

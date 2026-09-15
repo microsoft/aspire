@@ -159,6 +159,74 @@ public class AtsMarshallerTests
         Assert.True(result.GetValue<bool>());
     }
 
+    [Theory]
+    [InlineData("hello", "\"hello\"")]
+    [InlineData(42, "42")]
+    [InlineData(true, "true")]
+    public void MarshalToJson_UnionSerializesMatchingPrimitive(object value, string expectedJson)
+    {
+        var marshaller = CreateMarshaller();
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = "string|number|boolean",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef { TypeId = AtsConstants.String, ClrType = typeof(string), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = AtsConstants.Number, ClrType = typeof(int), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = AtsConstants.Boolean, ClrType = typeof(bool), Category = AtsTypeCategory.Primitive }
+            ]
+        };
+
+        var result = marshaller.MarshalToJson(value, typeRef);
+
+        Assert.Equal(expectedJson, result!.ToJsonString());
+    }
+
+    [Fact]
+    public void MarshalToJson_UnionPreservesDeclaredHandleTypeAndIdentity()
+    {
+        var registry = new HandleRegistry();
+        var marshaller = CreateMarshaller(registry);
+        var value = new ContainerResource("container");
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = "string|resource",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef { TypeId = AtsConstants.String, ClrType = typeof(string), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = "test/IResource", ClrType = typeof(IResource), Category = AtsTypeCategory.Handle }
+            ]
+        };
+
+        var result = Assert.IsType<JsonObject>(marshaller.MarshalToJson(value, typeRef));
+
+        Assert.Equal("test/IResource", result["$type"]!.GetValue<string>());
+        Assert.True(registry.TryGet(result["$handle"]!.GetValue<string>(), out var retrieved, out _));
+        Assert.Same(value, retrieved);
+    }
+
+    [Fact]
+    public void MarshalToJson_UnionRejectsValueOutsideDeclaredMembers()
+    {
+        var marshaller = CreateMarshaller();
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = "string|boolean",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef { TypeId = AtsConstants.String, ClrType = typeof(string), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = AtsConstants.Boolean, ClrType = typeof(bool), Category = AtsTypeCategory.Primitive }
+            ]
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() => marshaller.MarshalToJson(42, typeRef));
+
+        Assert.Equal("Value of type 'System.Int32' does not match any member of union 'string|boolean'.", exception.Message);
+    }
+
     [Fact]
     public void MarshalToJson_MarshalsEnumAsString()
     {

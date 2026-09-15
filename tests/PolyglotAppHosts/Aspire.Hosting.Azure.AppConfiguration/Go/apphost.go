@@ -13,6 +13,15 @@ func main() {
 	}
 
 	appConfig := builder.AddAzureAppConfiguration("appconfig")
+	appConfig.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		store := infrastructure.GetAppConfigurationStore()
+		if err := store.SetDisableLocalAuth(true).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := store.DisableLocalAuth(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
 	if err = appConfig.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}

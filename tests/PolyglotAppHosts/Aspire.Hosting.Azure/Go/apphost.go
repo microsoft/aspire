@@ -105,6 +105,20 @@ output inlineUrl string = 'https://inline.example.com'
 		log.Fatalf(aspire.FormatError(inlineBicep.Err()))
 	}
 
+	frontDoor := builder.AddAzureFrontDoor("frontdoor")
+	frontDoor.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		profile := infrastructure.GetCdnProfile()
+		if err := profile.SetOriginResponseTimeoutSeconds(float64(60)).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := profile.OriginResponseTimeoutSeconds(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
+	if frontDoor.Err() != nil {
+		log.Fatalf(aspire.FormatError(frontDoor.Err()))
+	}
+
 	infra := builder.AddAzureInfrastructure("infra", func(ctx aspire.AzureResourceInfrastructure) {
 		_, _ = ctx.BicepName()
 		targetScope := aspire.DeploymentScopeSubscription
