@@ -7,6 +7,7 @@
     "experimentalPolyglot:go": true
   },
   "packages": {
+    "Aspire.Hosting.Azure.Provisioning.Kusto": "../../../../src/Aspire.Hosting.Azure.Provisioning.Kusto/Aspire.Hosting.Azure.Provisioning.Kusto.csproj",
     "Aspire.Hosting.Azure.Kusto": ""
   }
 }
