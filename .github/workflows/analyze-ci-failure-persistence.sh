@@ -1243,7 +1243,14 @@ case "$COMMAND" in
       --slurpfile last_successful_run "$LAST_SUCCESSFUL_RUN_FILE" \
       --slurpfile candidate_merges "$CANDIDATE_MERGES_FILE" \
       --slurpfile candidate_history_status "$CANDIDATE_HISTORY_STATUS_FILE" \
-      '
+      "$JQ_SANITIZE_DEFS"'
+        def persisted_text($max_length):
+          if type == "string" then
+            sanitize_single_line | .[0:$max_length]
+          else
+            ""
+          end;
+
         ($analysis[0]) as $analysis |
         ($run_context[0]) as $context |
         ($run[0]) as $run |
@@ -1258,7 +1265,7 @@ case "$COMMAND" in
         {
           run_id: $context.run_id,
           run_attempt: $context.run_attempt,
-          run_url: ($run.html_url // ""),
+          run_url: (($run.html_url // "") | persisted_text(1000)),
           run_scope: $context.run_scope,
           analyzed_at: $analyzed_at,
           verdict: $analysis.verdict,
@@ -1266,12 +1273,12 @@ case "$COMMAND" in
             if $context.run_scope == "pull-request" and ($pr.number | type) == "number" then
               {
                 number: $pr.number,
-                title: ($pr.title // ""),
-                author: ($pr.user // ""),
-                state: ($pr.state // ""),
-                head_branch: ($pr.head_branch // ""),
-                base_branch: ($pr.base_branch // ""),
-                url: ($pr.html_url // "")
+                title: (($pr.title // "") | persisted_text(500)),
+                author: (($pr.user // "") | persisted_text(100)),
+                state: (($pr.state // "") | persisted_text(50)),
+                head_branch: (($pr.head_branch // "") | persisted_text(500)),
+                base_branch: (($pr.base_branch // "") | persisted_text(500)),
+                url: (($pr.html_url // "") | persisted_text(1000))
               }
             else
               null
@@ -1281,12 +1288,12 @@ case "$COMMAND" in
             if $context.run_scope == "main" and $candidate_history_state == "available" and ($triggering.number | type) == "number" then
               {
                 number: $triggering.number,
-                title: ($triggering.title // ""),
-                author: ($triggering.user.login // ""),
-                state: ($triggering.state // ""),
-                head_branch: ($triggering.head.ref // ""),
-                base_branch: ($triggering.base.ref // ""),
-                url: ($triggering.html_url // ""),
+                title: (($triggering.title // "") | persisted_text(500)),
+                author: (($triggering.user.login // "") | persisted_text(100)),
+                state: (($triggering.state // "") | persisted_text(50)),
+                head_branch: (($triggering.head.ref // "") | persisted_text(500)),
+                base_branch: (($triggering.base.ref // "") | persisted_text(500)),
+                url: (($triggering.html_url // "") | persisted_text(1000)),
                 merged_at: ($triggering.merged_at // null)
               }
             else
@@ -1305,12 +1312,12 @@ case "$COMMAND" in
                       $candidates[]? |
                       {
                         sha: .sha,
-                        message: .message,
-                        html_url: .html_url,
+                        message: ((.message // "") | persisted_text(500)),
+                        html_url: ((.html_url // "") | persisted_text(1000)),
                         pull_request: {
                           number: .pull_request.number,
-                          title: .pull_request.title,
-                          url: .pull_request.url,
+                          title: ((.pull_request.title // "") | persisted_text(500)),
+                          url: ((.pull_request.url // "") | persisted_text(1000)),
                           merged_at: .pull_request.merged_at
                         }
                       }
@@ -1331,7 +1338,7 @@ case "$COMMAND" in
               name: $job.name,
               id: $job.id,
               conclusion: $job.conclusion,
-              url: ($job.html_url // ""),
+              url: (($job.html_url // "") | persisted_text(1000)),
               classification: $classification.classification,
               reason: (
                 if ($classification.reason | type) == "string" then
@@ -1343,7 +1350,7 @@ case "$COMMAND" in
               failed_steps: [
                 $job.steps[]? |
                 select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") |
-                .name
+                (.name | persisted_text(500))
               ]
             }
           ],

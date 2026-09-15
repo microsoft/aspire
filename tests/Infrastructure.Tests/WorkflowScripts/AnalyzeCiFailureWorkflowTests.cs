@@ -5597,10 +5597,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """,
             """{"run_id":123,"run_attempt":2,"run_scope":"main","head_sha":"trusted-failed","pr_numbers":""}""",
             """{"html_url":"https://github.com/microsoft/aspire/actions/runs/123"}""",
-            """[{"id":123,"name":"Build","conclusion":"failure","html_url":"https://github.com/job/123","steps":[{"name":"Compile","conclusion":"failure"}]}]""",
-            """{"number":42,"title":"Trusted merge","html_url":"https://github.com/microsoft/aspire/pull/42"}""",
+            """[{"id":123,"name":"Build","conclusion":"failure","html_url":"https://github.com/job/123","steps":[{"name":"ConnectionStrings__step=step-secret","conclusion":"failure"}]}]""",
+            """{"number":42,"title":"PrimaryKey=trigger-secret","html_url":"https://github.com/microsoft/aspire/pull/42"}""",
             """{"head_sha":"trusted-success"}""",
-            """[{"sha":"trusted-candidate","message":"candidate","html_url":"https://github.com/commit","pull_request":{"number":41,"title":"Candidate","url":"https://github.com/microsoft/aspire/pull/41","merged_at":"2026-08-29T00:00:00Z"}}]""",
+            """[{"sha":"trusted-candidate","message":"SecondaryKey=candidate-secret\nsecond line","html_url":"https://github.com/commit","pull_request":{"number":41,"title":"ConnectionString=candidate-pr-secret","url":"https://github.com/microsoft/aspire/pull/41","merged_at":"2026-08-29T00:00:00Z"}}]""",
             "{}",
             """{"state":"available"}""");
 
@@ -5621,7 +5621,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var triggeringMerge = root.GetProperty("triggering_merge_pr");
         Assert.Equal(8, triggeringMerge.EnumerateObject().Count());
         Assert.Equal(42, triggeringMerge.GetProperty("number").GetInt32());
-        Assert.Equal("Trusted merge", triggeringMerge.GetProperty("title").GetString());
+        Assert.Equal("PrimaryKey=[REDACTED]", triggeringMerge.GetProperty("title").GetString());
         Assert.Equal("https://github.com/microsoft/aspire/pull/42", triggeringMerge.GetProperty("url").GetString());
 
         var mainContext = root.GetProperty("main_context");
@@ -5630,13 +5630,19 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal("trusted-success", mainContext.GetProperty("last_successful_main_sha").GetString());
         Assert.Equal("available", mainContext.GetProperty("candidate_merge_history_state").GetString());
         Assert.Equal("trusted-candidate", mainContext.GetProperty("candidate_merges")[0].GetProperty("sha").GetString());
+        Assert.Equal(
+            "SecondaryKey=[REDACTED] second line",
+            mainContext.GetProperty("candidate_merges")[0].GetProperty("message").GetString());
+        Assert.Equal(
+            "ConnectionString=[REDACTED]",
+            mainContext.GetProperty("candidate_merges")[0].GetProperty("pull_request").GetProperty("title").GetString());
 
         var failedJob = root.GetProperty("failed_jobs")[0];
         Assert.Equal(7, failedJob.EnumerateObject().Count());
         Assert.Equal("Build", failedJob.GetProperty("name").GetString());
         Assert.Equal("main-repository-breakage", failedJob.GetProperty("classification").GetString());
         Assert.Equal("compiler failed", failedJob.GetProperty("reason").GetString());
-        Assert.Equal("Compile", failedJob.GetProperty("failed_steps")[0].GetString());
+        Assert.Equal("ConnectionStrings__step=[REDACTED]", failedJob.GetProperty("failed_steps")[0].GetString());
     }
 
     [Theory]
@@ -5695,7 +5701,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "{}",
             "{}",
             "[]",
-            """{"number":42,"title":"Trusted PR","state":"open","user":"octocat","head_branch":"feature","base_branch":"main","html_url":"https://github.com/microsoft/aspire/pull/42"}""");
+            """{"number":42,"title":"PrimaryKey=pr-secret","state":"open","user":"octocat","head_branch":"ConnectionStrings__branch=branch-secret","base_branch":"main","html_url":"https://github.com/microsoft/aspire/pull/42"}""");
 
         var outputPath = Path.Combine(_workspace.Path, "persisted-pr.json");
         var result = await RunPersistenceScriptAsync("write-run-summary", outputPath);
@@ -5712,7 +5718,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var pr = root.GetProperty("pr");
         Assert.Equal(7, pr.EnumerateObject().Count());
         Assert.Equal(42, pr.GetProperty("number").GetInt32());
-        Assert.Equal("Trusted PR", pr.GetProperty("title").GetString());
+        Assert.Equal("PrimaryKey=[REDACTED]", pr.GetProperty("title").GetString());
+        Assert.Equal("ConnectionStrings__branch=[REDACTED]", pr.GetProperty("head_branch").GetString());
         Assert.Equal("https://github.com/microsoft/aspire/pull/42", pr.GetProperty("url").GetString());
         Assert.Equal("known flaky test", root.GetProperty("failed_jobs")[0].GetProperty("reason").GetString());
         Assert.Equal("Tests.Flaky", root.GetProperty("failed_tests")[0].GetProperty("name").GetString());
