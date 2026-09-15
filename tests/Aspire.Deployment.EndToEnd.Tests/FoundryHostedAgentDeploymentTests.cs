@@ -779,8 +779,8 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                     <PackageReference Include="Azure.Identity" Version="1.21.0" />
                     <PackageReference Include="Microsoft.Agents.AI.Foundry.Hosting" Version="1.12.0-preview.260629.1" />
                     <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />
-                    <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
-                    <PackageReference Include="Azure.Core" Version="1.59.0" />
+                    <PackageReference Include="ModelContextProtocol" Version="1.4.1" />
+                    <PackageReference Include="Azure.Core" Version="1.62.0" />
                   </ItemGroup>
                 </Project>
                 """);

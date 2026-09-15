@@ -361,6 +361,14 @@ public sealed class TestTriggerMapTests
     public static TheoryData<string, string[]> AuditedLoosePathCases => new()
     {
         {
+            "tools/CreateFailingTestIssue/Program.cs",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "tools/CreateFailingTestIssue/CreateFailingTestIssue.csproj",
+            ["test:Infrastructure.Tests"]
+        },
+        {
             ".github/workflows/prepare-installer-artifacts.yml",
             ["test:Infrastructure.Tests", "job:winget-installer", "job:homebrew-installer"]
         },

@@ -371,6 +371,10 @@ path_rules:
     targets: [test:QuarantineTools.Tests]
     reason: QuarantineTools.Tests exercises the quarantine/disable source-rewriting logic
   - paths:
+      - tools/CreateFailingTestIssue/**
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests/CreateFailingTestIssue builds and invokes the tool dynamically, without a ProjectReference edge in the solution graph
+  - paths:
       - tools/SelectTests/**
       - eng/github-ci/test-trigger-map.yml
       - eng/github-ci/ci-skip-entirely-patterns.txt
