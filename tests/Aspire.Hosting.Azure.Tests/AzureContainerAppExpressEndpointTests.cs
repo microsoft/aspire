@@ -125,11 +125,11 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [InlineData(EndpointProperty.TargetPort, "8080")]
     [InlineData(EndpointProperty.Scheme, "https")]
     [InlineData(EndpointProperty.TlsEnabled, "True")]
-    public async Task NonHostPropertiesDoNotRequirePublicIngressOrDeploymentOutputs(EndpointProperty property, string expected)
+    public async Task NonHostPropertiesResolveWithoutMaterializingDeploymentTargets(EndpointProperty property, string expected)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
-        var api = builder.AddContainer("api", "myimage").WithHttpEndpoint(targetPort: 8080);
+        var api = builder.AddContainer("api", "myimage").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
 
         var expression = environment.Resource.GetEndpointPropertyExpression(api.GetEndpoint("http").Property(property));
 
@@ -142,7 +142,11 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [InlineData(EndpointProperty.Host)]
     [InlineData(EndpointProperty.IPV4Host)]
     [InlineData(EndpointProperty.HostAndPort)]
-    public void InternalHostPropertiesRequireExplicitPublicIngress(EndpointProperty property)
+    [InlineData(EndpointProperty.Port)]
+    [InlineData(EndpointProperty.TargetPort)]
+    [InlineData(EndpointProperty.Scheme)]
+    [InlineData(EndpointProperty.TlsEnabled)]
+    public void InternalEndpointReferencesRequireExplicitPublicIngress(EndpointProperty property)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();

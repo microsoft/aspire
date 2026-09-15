@@ -22,7 +22,6 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
     public override void BuildContainerApp(AzureResourceInfrastructure infra)
     {
         _infrastructure = infra;
-
         // Write a fake parameter for the container app environment
         // so azd knows the Dashboard URL - see https://github.com/microsoft/aspire/issues/8449.
         // This is temporary until a real fix can be made in azd.
