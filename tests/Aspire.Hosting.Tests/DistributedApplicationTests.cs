@@ -778,26 +778,29 @@ public class DistributedApplicationTests
 
         var logger = app.Services.GetRequiredService<ILogger<DistributedApplicationTests>>();
 
-        await app.StartAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        using var startupCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.StartAsync(startupCts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
 
         logger.LogInformation("Make sure services A and C are running");
         using var clientA = app.CreateHttpClient(testProgram.ServiceABuilder.Resource.Name, "http");
         using var clientC = app.CreateHttpClient(testProgram.ServiceCBuilder.Resource.Name, "http");
 
-        await Task.WhenAll(clientA.GetStringAsync("/pid"), clientC.GetStringAsync("/pid")).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        using var readinessCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await Task.WhenAll(
+            clientA.GetStringAsync("/pid", readinessCts.Token),
+            clientC.GetStringAsync("/pid", readinessCts.Token)).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await WaitForResolvedReplicasRunningAsync(app, testProgram.ServiceBBuilder.Resource, readinessCts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
 
         // We should get 3 distinct PIDs from service B
         Dictionary<int, bool> pids = [];
 
-        var uri = app.GetEndpoint(testProgram.ServiceBBuilder.Resource.Name, "http");
+        using var clientB = app.CreateHttpClientWithResilience(testProgram.ServiceBBuilder.Resource.Name, "http");
 
-        var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
-        while (!cts.IsCancellationRequested)
+        using var pollingCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        while (!pollingCts.IsCancellationRequested)
         {
-            using var clientB = new HttpClient();
-            var url = $"{uri}pid";
-            logger.LogInformation("Calling PID API at {Url}", url);
-            var pidText = await clientB.GetStringAsync(url).DefaultTimeout();
+            logger.LogInformation("Calling PID API");
+            var pidText = await clientB.GetStringAsync("/pid", pollingCts.Token).DefaultTimeout();
             if (!string.IsNullOrEmpty(pidText))
             {
                 var pid = int.Parse(pidText, CultureInfo.InvariantCulture);
@@ -817,6 +820,45 @@ public class DistributedApplicationTests
         }
 
         Assert.Equal(3, pids.Count);
+    }
+
+    [Fact]
+    public async Task WaitForResolvedReplicasRunningAsyncWaitsForEveryReplica()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddResource(new TestResource("replicated"))
+            .WithAnnotation(new DcpInstancesAnnotation([
+                new("replicated-abc", "", 0),
+                new("replicated-def", "", 1)
+            ]));
+
+        await using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = WaitForResolvedReplicasRunningAsync(app, resource.Resource, cts.Token);
+
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, "replicated-abc", s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        Assert.False(waitTask.IsCompleted);
+
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, "replicated-def", s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        await waitTask.DefaultTimeout();
+    }
+
+    private static Task WaitForResolvedReplicasRunningAsync(DistributedApplication app, IResource resource, CancellationToken cancellationToken)
+    {
+        return Task.WhenAll(resource.GetResolvedResourceNames().Select(resourceId =>
+            app.ResourceNotifications.WaitForResourceAsync(
+                resource.Name,
+                resourceEvent => string.Equals(resourceEvent.ResourceId, resourceId, StringComparisons.ResourceName) &&
+                    string.Equals(resourceEvent.Snapshot.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState),
+                cancellationToken)));
     }
 
     [Fact]
@@ -2464,4 +2506,6 @@ public class DistributedApplicationTests
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
     }
+
+    private sealed class TestResource(string name) : Resource(name);
 }
