@@ -85,7 +85,24 @@ This spec covers (1) and (2) with an out-of-process **integration host** protoco
 
 **Integration host.** A process (or in-process component) that exposes integrations of a particular language to the AppHost server. One host may own multiple integrations. A host speaks Aspire's JSON-RPC integration protocol and answers `getCapabilities`, `invoke`, and lifecycle RPCs.
 
-**`ILanguageSupport`.** The single language-plugin contract, discovered via assembly scanning. Every supported language ships one implementation. A language opts in to hosting cross-language integrations by overriding `GetIntegrationHostSpec()` to return a non-null `IntegrationHostSpec` — the default returns null, so languages that only support their own AppHost side (codegen, scaffolding, detection) don't need any integration-host code. TypeScript is the only language returning non-null today.
+**`ILanguageSupport`.** The single language-plugin contract, discovered via assembly scanning. Every supported language ships one implementation. A provider opts in to hosting cross-language integrations with an optional public `JsonElement GetIntegrationHostSpec()` method. The server probes this method reflectively; it is not part of `ILanguageSupport` and references no new TypeSystem type, so newer providers remain loadable when an older CLI shares its own TypeSystem assembly. Providers without the method, or returning JSON null, do not support integration hosts. TypeScript is the only provider implementing the hook today.
+
+The JSON contains `execute` and optional `installDependencies` commands. For example:
+
+```json
+{
+  "execute": {
+    "command": "npx",
+    "args": ["--no-install", "tsx", "{entryPoint}"]
+  },
+  "installDependencies": {
+    "command": "npm",
+    "args": ["install"]
+  }
+}
+```
+
+The server deserializes this into an internal launch-specification DTO, not a public package contract.
 
 **Metadata contract.** The shape of `AtsCapabilityInfo` that every integration host must produce, regardless of language.
 
@@ -185,7 +202,7 @@ A TypeScript integration package, authored once with `AspireExport` on top of th
 | Consumer | What happens |
 |---|---|
 | Any language AppHost, unmarked integration | Only reachable via a plain library import in the same language. The consumer writes `await addKafka(builder, ...)` as a free function call. No fluent builder method, no cross-language visibility, no integration host involvement. |
-| Any language AppHost, annotated integration | Consumer's codegen emits a fluent `builder.addKafka(...)` method whose body issues a JSON-RPC `invokeCapability` call. The AppHost server reads the integration from its `appsettings.json`, asks that language's `ILanguageSupport.GetIntegrationHostSpec()` how to spawn a host for it (a Node process for `@spike/aspire-kafka`), supervises it like a .NET load context, gathers its capabilities via `getCapabilities`, and dispatches runtime calls through `handleExternalCapability`. The impl runs inside the host process against its own restored `.aspire/modules/` tree. |
+| Any language AppHost, annotated integration | Consumer's codegen emits a fluent `builder.addKafka(...)` method whose body issues a JSON-RPC `invokeCapability` call. The AppHost server reads the integration from its `appsettings.json`, probes the provider's optional JSON `GetIntegrationHostSpec()` hook to learn how to spawn a host (a Node process for `@spike/aspire-kafka`), supervises it like a .NET load context, gathers its capabilities via `getCapabilities`, and dispatches runtime calls through `handleExternalCapability`. The impl runs inside the host process against its own restored `.aspire/modules/` tree. |
 
 Same package, same implementation, same annotation. The cross-language codegen picks up exactly what the same-language codegen picks up, because both read the same projection metadata. The only difference between "a TS consumer uses this" and "a Python consumer uses this" is which language's restored `.aspire/modules/` the emitted wrapper lives in — the wire dispatch is identical.
 
@@ -220,7 +237,7 @@ Three components participate in every AppHost run. Their responsibilities are de
 
 - Scans loaded .NET assemblies for `[AspireExport]` and related type exports. Same as today.
 - **Reads non-.NET integrations** from its own `appsettings.json`, under an `IntegrationHosts` section the CLI writes during server-project generation. Each entry carries a `Language`, `PackageName`, and `HostEntryPoint` path. No runtime RPC call; no manifest walk.
-- **Spawns integration host processes itself** — the symmetric counterpart to loading a .NET integration into an in-process load context. For each listed host, the server looks up the language's `ILanguageSupport`, calls `GetIntegrationHostSpec()` to get the `Execute` command template, substitutes `{entryPoint}`, starts the process, passes `REMOTE_APP_HOST_SOCKET_PATH` + the auth token via env, captures stdout/stderr into server logs, and holds the `Process` handle in its own registry.
+- **Spawns integration host processes itself** — the symmetric counterpart to loading a .NET integration into an in-process load context. For each listed host, the server looks up the language's provider, probes its optional JSON `GetIntegrationHostSpec()` hook to get the `execute` command template, substitutes `{entryPoint}`, starts the process, passes `REMOTE_APP_HOST_SOCKET_PATH` + the auth token via env, captures stdout/stderr into server logs, and holds the `Process` handle in its own registry.
 - Accepts inbound connections from the hosts it spawned, registers each via a per-host signal (`registerAsIntegrationHost`), waits for every expected host to register (per-host timeout), runs the metadata gathering phase (`getCapabilities` on every registered host), merges capabilities into `AtsContext`, then unblocks codegen.
 - Routes runtime calls from the guest AppHost through `CapabilityDispatcher` — a direct method call for a .NET integration, a JSON-RPC forward for an out-of-process integration host. One dispatch path, two delivery mechanisms decided by the target.
 - Tears down every integration host process it spawned when the server itself stops — same shutdown hook that disposes .NET integration load contexts.
@@ -246,7 +263,7 @@ flowchart TB
     subgraph Server["AppHost Server"]
         direction TB
         Listing["<b>Integration listing</b> (config-driven)<br/>AtsAssemblies (.NET)<br/>IntegrationHosts (Language, PackageName, HostEntryPoint)"]
-        Lifetime["<b>Integration host lifetime</b><br/>.NET → AssemblyLoadContext (in-process)<br/>non-.NET → ILanguageSupport.GetIntegrationHostSpec()<br/>&nbsp;&nbsp;→ spawn host process (Process + stdio + env)"]
+        Lifetime["<b>Integration host lifetime</b><br/>.NET → AssemblyLoadContext (in-process)<br/>non-.NET → optional JSON provider hook<br/>&nbsp;&nbsp;→ spawn host process (Process + stdio + env)"]
         Phase1["<b>Phase 1: metadata gather</b><br/>getCapabilities on every host<br/>(direct call for .NET, JSON-RPC for out-of-process)"]
         Phase2["<b>Phase 2: codegen + dispatch</b><br/>via CapabilityDispatcher"]
         Listing --> Lifetime --> Phase1 --> Phase2
@@ -487,7 +504,7 @@ integrations are restored from local projects or npm hosts.
 2. CLI writes the AppHost server's `appsettings.json` with two sections: `AtsAssemblies` (for CLR reflection) and `IntegrationHosts` (one entry per non-.NET integration, carrying `Language`, `PackageName`, `HostEntryPoint`).
 3. CLI starts the AppHost server process. The server reads `appsettings.json` and runs its integration-listing phase:
    - CLR assembly scanning populates `.NET` integrations into an in-process `AssemblyLoadContext`.
-   - For each `IntegrationHosts` entry, the server looks up the language via `LanguageSupportResolver.GetLanguageSupport(language)` and calls `GetIntegrationHostSpec()` to get the `Execute` command template. A language that returns null from `GetIntegrationHostSpec()` (the default) can't host integrations, and the entry is skipped with a clear diagnostic.
+   - For each `IntegrationHosts` entry, the server looks up the language via `LanguageSupportResolver.GetLanguageSupport(language)` and reflectively probes its optional JSON `GetIntegrationHostSpec()` hook for the `execute` command template. A provider without the hook, or returning JSON null, can't host integrations, and the entry is skipped with a clear diagnostic.
 4. The server spawns each integration host process directly, substituting `{entryPoint}` into the command args, passing `REMOTE_APP_HOST_SOCKET_PATH` and the auth token via env vars. It captures stdout/stderr into its own logs and holds the `Process` handles in its internal registry — the same way it holds references to .NET integration load contexts.
 5. Each spawned host connects back over the socket, authenticates, and calls `registerAsIntegrationHost`. The server waits on a counting-semaphore signal released once per registration, with a per-host timeout.
 6. Phase 1 gather: the server calls `getCapabilities` on every registered host (and on the in-process .NET "host" directly) and merges the results into `AtsContext`.
@@ -595,7 +612,7 @@ Integration host lifetime:
 
 Language support:
 
-- Only `typescript/nodejs` overrides `ILanguageSupport.GetIntegrationHostSpec()` today. Python, Go, Java, and Rust have `ILanguageSupport` implementations for the AppHost side (scaffold, detect, runtime spec) but don't yet host integrations. Adding a new language is one method override returning a non-null `IntegrationHostSpec`.
+- Only `typescript/nodejs` exposes the optional JSON `GetIntegrationHostSpec()` hook today. Python, Go, Java, and Rust have `ILanguageSupport` implementations for the AppHost side (scaffold, detect, runtime spec) but don't yet host integrations. Supporting integration hosts requires the optional provider method and a corresponding host runtime, without changing `ILanguageSupport`.
 - Process grouping is "one host per integration" across the board. Collapsing many integrations into a single per-language host (or per-venv for Python, etc.) is not implemented and not in scope for the spike.
 
 CLI ergonomics that still assume .NET (verified, not speculative):
@@ -623,7 +640,7 @@ Authoring and export:
 
 Second language end-to-end:
 
-- Override `ILanguageSupport.GetIntegrationHostSpec()` for a second language (Python is the likely next target) and run the same spike shape end-to-end. This is the real validation that the contract is language-agnostic — everything else is theory until a second language goes through the same code path.
+- Add the optional JSON `GetIntegrationHostSpec()` provider hook for a second language (Python is the likely next target) and run the same spike shape end-to-end. This is the real validation that the contract is language-agnostic — everything else is theory until a second language goes through the same code path.
 
 CLI ergonomics:
 
@@ -655,7 +672,7 @@ To expose an integration to any consumer (same-language or cross-language) as a 
 
 Same idea in every language. All annotations produce the same underlying `AtsCapabilityInfo` shape (mirrored in generated TypeScript as `AspireCapabilityProjection`) — id, method, parameters, return type, callback signatures, target type. Consumers in any language read this shape at codegen time and emit fluent builder methods on their generated `DistributedApplicationBuilder`. **Every emitted wrapper issues an `invokeCapability` RPC** that routes through the AppHost server to an integration host running the author's language runtime — one delivery mechanism, shared by same-language and cross-language consumers alike.
 
-**The AppHost server owns integration lifetime regardless of language.** A .NET integration lives in an in-process `AssemblyLoadContext` the server loads, scans, and disposes with itself. A TypeScript integration lives in a Node process the server spawns, captures stdio from, and terminates with itself. A Python integration will live in a Python process the same way. The server reads the list of integration hosts from its own `appsettings.json`, looks up each language's `ILanguageSupport.GetIntegrationHostSpec()` to learn how to spawn that language's host, supervises the resulting processes, routes `invokeCapability` calls to them, and tears them down. The CLI never touches an integration host — it only manages the server itself. That's the rest of this document: lifecycle roles, metadata contract, gathering phase, NxM, callback relay.
+**The AppHost server owns integration lifetime regardless of language.** A .NET integration lives in an in-process `AssemblyLoadContext` the server loads, scans, and disposes with itself. A TypeScript integration lives in a Node process the server spawns, captures stdio from, and terminates with itself. A Python integration will live in a Python process the same way. The server reads the list of integration hosts from its own `appsettings.json`, probes each provider's optional JSON `GetIntegrationHostSpec()` hook to learn how to spawn that language's host, supervises the resulting processes, routes `invokeCapability` calls to them, and tears them down. The CLI never touches an integration host — it only manages the server itself. That's the rest of this document: lifecycle roles, metadata contract, gathering phase, NxM, callback relay.
 
 The winning shape is:
 

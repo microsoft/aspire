@@ -71,6 +71,7 @@ internal sealed class IntegrationHostLauncher : IHostedService
     /// server startup forever.
     /// </summary>
     private static readonly TimeSpan s_perHostRegistrationTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan s_perHostDiscoveryTimeout = TimeSpan.FromSeconds(10);
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -106,7 +107,7 @@ internal sealed class IntegrationHostLauncher : IHostedService
                     registered, descriptors.Count, s_perHostRegistrationTimeout.TotalSeconds);
             }
 
-            await _externalCapabilityRegistry.InitializeAllHostsAsync().ConfigureAwait(false);
+            await _externalCapabilityRegistry.InitializeAllHostsAsync(s_perHostDiscoveryTimeout, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -186,7 +187,7 @@ internal sealed class IntegrationHostLauncher : IHostedService
         foreach (var descriptor in descriptors)
         {
             var languageSupport = _languageResolver.GetLanguageSupport(descriptor.Language);
-            var hostSpec = languageSupport?.GetIntegrationHostSpec();
+            var hostSpec = languageSupport is null ? null : LanguageService.GetIntegrationHostSpec(languageSupport);
             if (hostSpec is null)
             {
                 _logger.LogWarning(
@@ -212,9 +213,9 @@ internal sealed class IntegrationHostLauncher : IHostedService
                 _logger.LogDebug("Resolved integration host command '{Command}' to '{ResolvedCommand}'.", command, resolvedCommand);
             }
 
-            var psi = CreateProcessStartInfo(resolvedCommand, hostSpec.Execute.Args, descriptor.HostEntryPoint);
+            var psi = CreateProcessStartInfo(resolvedCommand, hostSpec.Execute.Args, descriptor.HostEntryPoint, OperatingSystem.IsWindows());
             var hostDir = psi.WorkingDirectory;
-            var args = string.Join(" ", psi.ArgumentList);
+            var args = psi.ArgumentList.Count > 0 ? string.Join(" ", psi.ArgumentList) : psi.Arguments;
 
             psi.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath;
             if (!string.IsNullOrEmpty(token))
@@ -327,23 +328,21 @@ internal sealed class IntegrationHostLauncher : IHostedService
     /// <summary>
     /// Creates launch settings preserving the argument boundaries declared by the language provider.
     /// </summary>
-    internal static ProcessStartInfo CreateProcessStartInfo(string command, IReadOnlyList<string> argumentTemplates, string entryPoint)
+    internal static ProcessStartInfo CreateProcessStartInfo(string command, IReadOnlyList<string> argumentTemplates, string entryPoint, bool isWindows)
     {
         var startInfo = new ProcessStartInfo
         {
-            FileName = command,
             WorkingDirectory = Path.GetDirectoryName(entryPoint)!,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
 
-        // Keep paths such as "/work/my integration/host.mts" as one argument.
-        // ArgumentList applies platform-specific escaping for spaces, quotes, and backslashes.
-        foreach (var argument in argumentTemplates)
-        {
-            startInfo.ArgumentList.Add(argument.Replace("{entryPoint}", entryPoint));
-        }
+        ProcessStartInfoHelper.SetCommand(
+            startInfo,
+            command,
+            argumentTemplates.Select(argument => argument.Replace("{entryPoint}", entryPoint)),
+            isWindows);
 
         return startInfo;
     }
@@ -387,7 +386,7 @@ internal sealed class IntegrationHostLauncher : IHostedService
 /// csproj generation step writes this section from the integrations it parsed
 /// from <c>aspire.config.json</c>. The server resolves <see cref="Language"/> to
 /// an <see cref="Aspire.TypeSystem.ILanguageSupport"/> at launch time and calls
-/// <see cref="Aspire.TypeSystem.ILanguageSupport.GetIntegrationHostSpec"/> to
+/// <see cref="LanguageService.GetIntegrationHostSpec"/> to
 /// discover how to spawn the host.
 /// </summary>
 internal sealed class IntegrationHostDescriptor

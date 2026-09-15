@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -23,11 +24,12 @@ internal sealed class ExternalCapabilityRegistry
         PropertyNameCaseInsensitive = true
     };
 
-    private readonly ConcurrentDictionary<string, ExternalCapabilityRegistration> _capabilities = new();
+    private volatile FrozenDictionary<string, ExternalCapabilityRegistration> _capabilities = FrozenDictionary<string, ExternalCapabilityRegistration>.Empty;
     private readonly ConcurrentBag<JsonRpc> _integrationHosts = new();
     private readonly ConcurrentDictionary<string, JsonRpcCallbackInvoker> _callbackOwners = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _hostRegisteredSignal = new(initialCount: 0);
     private readonly ILogger<ExternalCapabilityRegistry> _logger;
+    private InvalidOperationException? _initializationException;
 
     static ExternalCapabilityRegistry()
     {
@@ -101,39 +103,76 @@ internal sealed class ExternalCapabilityRegistry
     }
 
     /// <summary>
-    /// Calls getCapabilities on all connected integration hosts and registers the results.
-    /// Called by the CLI (via RPC) before codegen.
+    /// Calls getCapabilities on all connected integration hosts with a per-host timeout,
+    /// then publishes the validated registrations before codegen.
     /// </summary>
-    public async Task InitializeAllHostsAsync()
+    public async Task InitializeAllHostsAsync(TimeSpan timeoutPerHost, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Initializing {Count} integration host(s)...", _integrationHosts.Count);
+        var capabilities = new Dictionary<string, ExternalCapabilityRegistration>(StringComparer.Ordinal);
 
         foreach (var host in _integrationHosts)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var discoveryCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            List<ExternalCapabilityRegistration> registrations;
             try
             {
                 var capsPayload = await host.InvokeWithCancellationAsync<JsonElement>(
                     "getCapabilities",
                     Array.Empty<object>(),
-                    CancellationToken.None).ConfigureAwait(false);
+                    discoveryCancellation.Token)
+                    .WaitAsync(timeoutPerHost, cancellationToken).ConfigureAwait(false);
 
-                foreach (var cap in ReadCapabilities(capsPayload))
+                registrations = ReadCapabilities(capsPayload).Select(cap => new ExternalCapabilityRegistration
                 {
-                    var projectedCapability = TryCreateProjectedCapability(cap);
-                    _capabilities[cap.Id] = new ExternalCapabilityRegistration
-                    {
-                        CapabilityId = cap.Id,
-                        ClientRpc = host,
-                        ProjectedCapability = projectedCapability
-                    };
-
-                    _logger.LogInformation("Registered external capability: {CapabilityId}", cap.Id);
-                }
+                    CapabilityId = cap.Id,
+                    ClientRpc = host,
+                    ProjectedCapability = TryCreateProjectedCapability(cap)
+                }).ToList();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (TimeoutException ex)
+            {
+                // Bound the local wait even if the integration host ignores RPC cancellation.
+                discoveryCancellation.Cancel();
+                _logger.LogError(ex,
+                    "Timed out getting capabilities from integration host {RpcHash} after {Timeout}. " +
+                    "Capabilities from this host will be unavailable.",
+                    host.GetHashCode(), timeoutPerHost);
+                continue;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to get capabilities from integration host {RpcHash}", host.GetHashCode());
+                continue;
             }
+
+            foreach (var registration in registrations)
+            {
+                if (!capabilities.TryAdd(registration.CapabilityId, registration))
+                {
+                    var previous = capabilities[registration.CapabilityId];
+                    _initializationException = new InvalidOperationException(
+                        $"Capability ID '{registration.CapabilityId}' is provided by multiple external registrations " +
+                        $"(integration hosts {previous.ClientRpc.GetHashCode()} and {host.GetHashCode()}). Capability IDs must be unique.");
+                    _logger.LogError(_initializationException, "Conflicting external capability registrations.");
+                    throw _initializationException;
+                }
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        // Publish only after validating the entire set, so collisions cannot leave a
+        // partially registered SDK or choose a host based on connection enumeration order.
+        _capabilities = capabilities.ToFrozenDictionary(StringComparer.Ordinal);
+        _initializationException = null;
+        foreach (var capabilityId in _capabilities.Keys.Order(StringComparer.Ordinal))
+        {
+            _logger.LogInformation("Registered external capability: {CapabilityId}", capabilityId);
         }
 
         _logger.LogInformation("Integration hosts initialized. External capabilities: {Count}", _capabilities.Count);
@@ -141,7 +180,28 @@ internal sealed class ExternalCapabilityRegistry
 
     public AtsContext AugmentContext(AtsContext context)
     {
-        var projectedCapabilities = _capabilities.Values
+        // Startup logs initialization failures and releases its readiness gate. Keep
+        // collisions visible to codegen instead of returning a success-shaped partial SDK.
+        if (_initializationException is not null)
+        {
+            throw new InvalidOperationException("Integration host capability discovery failed.", _initializationException);
+        }
+
+        var registrations = _capabilities;
+        var duplicateId = context.Capabilities
+            .Select(c => c.CapabilityId)
+            .Where(registrations.ContainsKey)
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (duplicateId is not null)
+        {
+            // Dispatch prefers managed capabilities, so external metadata with the same
+            // ID would describe a different implementation than the one actually invoked.
+            throw new InvalidOperationException(
+                $"Capability ID '{duplicateId}' is provided by both a managed capability and an external integration host. Capability IDs must be unique.");
+        }
+
+        var projectedCapabilities = registrations.Values
             .Select(c => c.ProjectedCapability)
             .OfType<AtsCapabilityInfo>()
             .OrderBy(c => c.CapabilityId, StringComparer.Ordinal)
@@ -156,8 +216,6 @@ internal sealed class ExternalCapabilityRegistry
         {
             Capabilities = context.Capabilities
                 .Concat(projectedCapabilities)
-                .GroupBy(c => c.CapabilityId, StringComparer.Ordinal)
-                .Select(g => g.Last())
                 .ToList(),
             HandleTypes = context.HandleTypes,
             DtoTypes = context.DtoTypes,

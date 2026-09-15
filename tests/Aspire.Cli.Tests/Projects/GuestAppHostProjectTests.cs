@@ -48,6 +48,86 @@ public class GuestAppHostProjectTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(3, false)]
+    public async Task InstallIntegrationHostPackageAsync_ReportsExitCodeAndClosesInput(int exitCode, bool expectedSuccess)
+    {
+        var directory = _workspace.WorkspaceRoot.CreateSubdirectory("integration with spaces");
+        var npmPath = ProcessTestHelpers.CreateScript(
+            directory,
+            "npm",
+            $$"""
+            printf '%s\n' "$@" > arguments.txt
+            read line
+            printf 'final stdout\n'
+            printf 'final stderr\n' >&2
+            exit {{exitCode}}
+            """,
+            $$"""
+            @echo off
+            > arguments.txt echo %~1
+            set /p input=
+            echo final stdout
+            echo final stderr >&2
+            exit /b {{exitCode}}
+            """);
+
+        var result = await CreateGuestAppHostProject().InstallIntegrationHostPackageAsync(
+            "@test/integration", npmPath, directory.FullName, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(expectedSuccess, result);
+        Assert.Equal(["install"], await File.ReadAllLinesAsync(Path.Combine(directory.FullName, "arguments.txt")));
+    }
+
+    [Fact]
+    public async Task InstallIntegrationHostPackageAsync_CancellationStopsProcessTree()
+    {
+        var directory = _workspace.WorkspaceRoot.CreateSubdirectory("integration with spaces");
+        var npmPath = ProcessTestHelpers.CreateScript(
+            directory,
+            "npm",
+            """
+            sleep 300 &
+            echo $! > child.pid
+            echo $$ > parent.pid
+            wait
+            """,
+            """
+            @echo off
+            powershell.exe -NoLogo -NoProfile -NonInteractive -Command "$child = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 300' -PassThru; Set-Content child.pid $child.Id; Set-Content parent.pid $PID; Wait-Process -Id $child.Id"
+            """);
+        using var installCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var installTask = CreateGuestAppHostProject().InstallIntegrationHostPackageAsync(
+            "@test/integration", npmPath, directory.FullName, installCts.Token);
+        int? parentPid = null;
+        int? childPid = null;
+        try
+        {
+            using var readinessCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            parentPid = await ProcessTestHelpers.WaitForProcessIdAsync(Path.Combine(directory.FullName, "parent.pid"), readinessCts.Token);
+            childPid = await ProcessTestHelpers.WaitForProcessIdAsync(Path.Combine(directory.FullName, "child.pid"), readinessCts.Token);
+
+            installCts.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => installTask).DefaultTimeout();
+            Assert.True(ProcessTestHelpers.WaitForProcessExit(parentPid.Value, TimeSpan.FromSeconds(5)));
+            Assert.True(ProcessTestHelpers.WaitForProcessExit(childPid.Value, TimeSpan.FromSeconds(5)));
+        }
+        finally
+        {
+            installCts.Cancel();
+            if (childPid is { } child)
+            {
+                ProcessTestHelpers.TryKillProcess(child);
+            }
+            if (parentPid is { } parent)
+            {
+                ProcessTestHelpers.TryKillProcess(parent);
+            }
+        }
+    }
+
     [Fact]
     public async Task PruneObsoleteGeneratedFilesAsync_RemovesFilesTheGeneratorNoLongerProduces()
     {

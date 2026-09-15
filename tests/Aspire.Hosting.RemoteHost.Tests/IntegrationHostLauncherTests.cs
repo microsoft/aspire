@@ -26,7 +26,8 @@ public class IntegrationHostLauncherTests
                 "",
                 "{otherPlaceholder}"
             ],
-            entryPoint);
+            entryPoint,
+            isWindows: false);
 
         Assert.Equal(
             [
@@ -55,9 +56,29 @@ public class IntegrationHostLauncherTests
     {
         var entryPoint = Path.GetFullPath("host.mts");
 
-        var startInfo = IntegrationHostLauncher.CreateProcessStartInfo("integration-runtime", [], entryPoint);
+        var startInfo = IntegrationHostLauncher.CreateProcessStartInfo("integration-runtime", [], entryPoint, isWindows: false);
 
         Assert.Empty(startInfo.ArgumentList);
         Assert.Empty(startInfo.Arguments);
+    }
+
+    [Theory]
+    [InlineData("npx.cmd")]
+    [InlineData("npx.CMD")]
+    [InlineData("npx.bat")]
+    public void CreateProcessStartInfo_WindowsBatchShim_UsesOuterQuotedCommand(string shim)
+    {
+        var command = $@"C:\Program Files\nodejs\{shim}";
+        var entryPoint = Path.GetFullPath(Path.Combine("integration packages", "host entry.mts"));
+
+        var startInfo = IntegrationHostLauncher.CreateProcessStartInfo(
+            command, ["--no-install", "tsx", "{entryPoint}"], entryPoint, isWindows: true);
+
+        Assert.Equal("cmd.exe", startInfo.FileName);
+        Assert.Empty(startInfo.ArgumentList);
+        Assert.Equal($"/c \"\"{command}\" \"--no-install\" \"tsx\" \"{entryPoint}\"\"", startInfo.Arguments);
+        Assert.False(startInfo.UseShellExecute);
+        Assert.True(startInfo.RedirectStandardOutput);
+        Assert.True(startInfo.RedirectStandardError);
     }
 }

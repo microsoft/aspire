@@ -1450,15 +1450,10 @@ public interface ILanguageSupport
     Dictionary<string, string> Scaffold(ScaffoldRequest request);
     DetectionResult Detect(string directoryPath);
     RuntimeSpec GetRuntimeSpec();
-
-    // Non-null iff this language can host cross-language integrations.
-    // Defaults to null — a language that only supports its own AppHost side
-    // (scaffold/detect/runtime) doesn't need to override this.
-    IntegrationHostSpec? GetIntegrationHostSpec() => null;
 }
 ```
 
-> **Note:** `GetIntegrationHostSpec()` is the seam that lets a language host *cross-language* integrations — an npm integration consumed by a Python AppHost, for example. It is **separate** from the guest-AppHost-side concerns this spec covers. If you're only adding support for *running* a guest AppHost in a new language, leave the default `null` — everything in this section is what you need. If you want AppHosts in your language to be able to host integrations authored in other languages too, see [Polyglot Integrations](./polyglot-integrations.md) for the protocol and `IntegrationHostSpec` shape.
+> **Note:** A provider may also expose an optional `JsonElement GetIntegrationHostSpec()` method for hosting *cross-language* integrations, such as an npm integration consumed by a Python AppHost. This is discovered reflectively and is not an `ILanguageSupport` member, so newer providers remain loadable with an older CLI's shared TypeSystem assembly. Providers that only support running guest AppHosts omit the hook. See [Polyglot Integrations](./polyglot-integrations.md) for the protocol and JSON launch specification.
 
 Example implementation:
 

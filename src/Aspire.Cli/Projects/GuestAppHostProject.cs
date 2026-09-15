@@ -12,6 +12,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Npm;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
@@ -943,78 +944,60 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 "Restoring '{Name}': running `npm install` in {HostDir}",
                 integration.Name, hostDir);
 
-            var psi = new ProcessStartInfo
+            if (!await InstallIntegrationHostPackageAsync(integration.Name, npmPath!, hostDir, cancellationToken))
             {
-                FileName = npmPath!,
-                Arguments = "install",
-                WorkingDirectory = hostDir,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-
-            Process? installProcess;
-            try
-            {
-                installProcess = Process.Start(psi);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Failed to launch `npm install` for integration host '{Name}' in '{HostDir}'. " +
-                    "Verify Node.js is installed and `npm` is on PATH.",
-                    integration.Name, hostDir);
                 return false;
             }
 
-            if (installProcess is null)
-            {
-                _logger.LogError(
-                    "Process.Start returned null for `npm install` of integration host '{Name}' in '{HostDir}'.",
-                    integration.Name, hostDir);
-                return false;
-            }
-
-            var integrationName = integration.Name;
-            var stdoutTask = Task.Run(async () =>
-            {
-                string? line;
-                while ((line = await installProcess.StandardOutput.ReadLineAsync(cancellationToken)) is not null)
-                {
-                    _logger.LogInformation("[npm install: {Name}] {Line}", integrationName, line);
-                }
-            }, cancellationToken);
-            var stderrTask = Task.Run(async () =>
-            {
-                string? line;
-                while ((line = await installProcess.StandardError.ReadLineAsync(cancellationToken)) is not null)
-                {
-                    _logger.LogWarning("[npm install: {Name}] {Line}", integrationName, line);
-                }
-            }, cancellationToken);
-
-            await installProcess.WaitForExitAsync(cancellationToken);
-            try { await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(TimeSpan.FromSeconds(5), cancellationToken); }
-            catch { /* drain */ }
-
-            if (installProcess.ExitCode != 0)
-            {
-                _logger.LogError(
-                    "`npm install` for integration host '{Name}' exited with code {ExitCode} (cwd: {HostDir}). " +
-                    "See [npm install: {Name}] log lines above for npm's output.",
-                    integration.Name, installProcess.ExitCode, hostDir, integration.Name);
-                installProcess.Dispose();
-                return false;
-            }
-
-            installProcess.Dispose();
             _logger.LogInformation(
                 "Restored integration host '{Name}'.",
                 integration.Name);
         }
 
         return true;
+    }
+
+    internal async Task<bool> InstallIntegrationHostPackageAsync(string name, string npmPath, string hostDir, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo(npmPath, ["install"], hostDir, _environment);
+        var result = await ProcessCaptureRunner.RunAsync(
+            startInfo,
+            Timeout.InfiniteTimeSpan,
+            CaptureOutputAsync,
+            static () => false,
+            _logger,
+            cancellationToken);
+
+        // ProcessCaptureRunner kills and disposes the process tree before returning cancellation.
+        cancellationToken.ThrowIfCancellationRequested();
+        if (result.FailureKind is not null || result.ExitCode != 0 || !result.Capture)
+        {
+            _logger.LogError(
+                "`npm install` for integration host '{Name}' failed with exit code {ExitCode} " +
+                "(cwd: {HostDir}, output captured: {OutputCaptured}). {FailureMessage}",
+                name, result.ExitCode, hostDir, result.Capture, result.FailureMessage);
+            return false;
+        }
+
+        return true;
+
+        async Task<bool> CaptureOutputAsync(Process process, CancellationToken captureCancellationToken)
+        {
+            process.StandardInput.Close();
+            await Task.WhenAll(
+                LogOutputAsync(process.StandardOutput, LogLevel.Information, captureCancellationToken),
+                LogOutputAsync(process.StandardError, LogLevel.Warning, captureCancellationToken));
+            return true;
+        }
+
+        async Task LogOutputAsync(StreamReader reader, LogLevel level, CancellationToken captureCancellationToken)
+        {
+            while (await reader.ReadLineAsync(captureCancellationToken) is { } line)
+            {
+                _logger.Log(level, "[npm install: {Name}] {Line}", name, line);
+            }
+        }
     }
 
     internal Dictionary<string, string> CreateGuestEnvironmentVariables(

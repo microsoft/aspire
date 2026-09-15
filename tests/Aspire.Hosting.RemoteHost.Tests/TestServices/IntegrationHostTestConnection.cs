@@ -12,11 +12,16 @@ internal sealed class IntegrationHostTestConnection : IDisposable
     private readonly JsonRpc _hostRpc;
 
     public IntegrationHostTestConnection(JsonElement capabilities)
+        : this(_ => Task.FromResult(capabilities))
+    {
+    }
+
+    public IntegrationHostTestConnection(Func<CancellationToken, Task<JsonElement>> getCapabilities)
     {
         var (serverStream, hostStream) = FullDuplexStream.CreatePair();
         ServerRpc = new JsonRpc(new HeaderDelimitedMessageHandler(serverStream, serverStream, new SystemTextJsonFormatter()));
         _hostRpc = new JsonRpc(new HeaderDelimitedMessageHandler(hostStream, hostStream, new SystemTextJsonFormatter()));
-        _hostRpc.AddLocalRpcMethod("getCapabilities", (Func<JsonElement>)(() => capabilities));
+        _hostRpc.AddLocalRpcMethod("getCapabilities", getCapabilities);
         _hostRpc.StartListening();
         ServerRpc.StartListening();
     }
