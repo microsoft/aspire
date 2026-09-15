@@ -126,19 +126,19 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // deterministic across Radius releases. Keep this aligned with
             // RadiusBicepExtension.Version (major.minor 0.60) so the installed control plane matches
             // the Bicep types the publisher emits. install.sh is fetched pinned to the immutable
-            // commit SHA behind the v0.60.0 release tag (radiusInstallScriptSha) rather than a branch
+            // commit SHA behind the v0.60.2 release tag (radiusInstallScriptSha) rather than a branch
             // or tag ref, either of which can be retargeted, so the executed installer content cannot
             // drift out from under this pin (supply-chain hardening). The download is retried a few
             // times to tolerate transient GitHub CDN failures on scheduled runs. install.sh's needsSudo
             // checks the install dir first and skips sudo when that directory already exists and is
             // writable; it only falls back to the parent dir when the install dir is absent. Pre-creating
             // the user-owned {wsRoot}/radbin makes it see a writable target and skip sudo entirely.
-            const string radiusVersion = "0.60.0";
+            const string radiusVersion = "0.60.2";
 
-            // Immutable commit SHA that the v0.60.0 tag pointed to in radius-project/radius. Update this
+            // Immutable commit SHA that the v0.60.2 tag pointed to in radius-project/radius. Update this
             // together with radiusVersion (and RadiusBicepExtension.Version) when bumping the Radius
             // release, re-resolving the tag to its commit SHA.
-            const string radiusInstallScriptSha = "694528df87202b3f092ad0a9e81adaebd4e49a8b";
+            const string radiusInstallScriptSha = "a3916f884df2e412c4cb662db63132bcf1344ca8";
             output.WriteLine("Step 1a: Installing the Radius (rad) CLI into the workspace...");
             await auto.TypeAsync(
                 // `set -o pipefail` so a failed `curl` propagates through the pipe instead of being
