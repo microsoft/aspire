@@ -13,6 +13,8 @@
     <Description>Aspire Template Pack for Microsoft Template Engine</Description>
     <UsingToolTemplateLocalizer>true</UsingToolTemplateLocalizer>
     <NoDefaultExcludes>true</NoDefaultExcludes>
+    <_TemplateSourceRoot Condition="'$(_TemplateSourceRoot)' == ''">$(MSBuildThisFileDirectory)templates\</_TemplateSourceRoot>
+    <_ReplaceTextScriptPath Condition="'$(_ReplaceTextScriptPath)' == ''">$(RepoRoot)tools\scripts\replace-text.cs</_ReplaceTextScriptPath>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -21,12 +23,12 @@
 
   <ItemGroup>
     <!-- see https://github.com/microsoft/aspire/pull/1225 -->
-    <None Include="templates\**\*" />
+    <None Include="$(_TemplateSourceRoot)**\*" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Template config files: .template.config\*.json -->
-    <TemplateConfigFiles Include="$(MSBuildThisFileDirectory)templates\**\.template.config\*.json">
+    <TemplateConfigFiles Include="$(_TemplateSourceRoot)**\.template.config\*.json">
       <PackagePath>content/templates/%(RecursiveDir)</PackagePath>
       <DestinationFile>$(IntermediateOutputPath)content\templates\%(RecursiveDir)%(Filename)%(Extension)</DestinationFile>
     </TemplateConfigFiles>
@@ -34,21 +36,21 @@
     <TemplateConfigFilesObj Include="@(TemplateConfigFiles->'%(DestinationFile)')" />
 
     <!-- Template project files: *.csproj -->
-    <TemplateProjectFiles Include="$(MSBuildThisFileDirectory)templates\**\*.csproj">
+    <TemplateProjectFiles Include="$(_TemplateSourceRoot)**\*.csproj">
       <PackagePath>content/templates/%(RecursiveDir)</PackagePath>
       <DestinationFile>$(IntermediateOutputPath)content\templates\%(RecursiveDir)%(Filename)%(Extension)</DestinationFile>
     </TemplateProjectFiles>
 
     <!-- Template project files: apphost.cs (singlefile only) -->
-    <TemplateProjectFiles Include="$(MSBuildThisFileDirectory)templates\aspire-apphost-singlefile\**\apphost.cs">
+    <TemplateProjectFiles Include="$(_TemplateSourceRoot)aspire-apphost-singlefile\**\apphost.cs">
       <PackagePath>content/templates/aspire-apphost-singlefile/%(RecursiveDir)</PackagePath>
       <DestinationFile>$(IntermediateOutputPath)content\templates\aspire-apphost-singlefile\%(RecursiveDir)%(Filename)%(Extension)</DestinationFile>
     </TemplateProjectFiles>
 
     <TemplateProjectFilesObj Include="@(TemplateProjectFiles->'%(DestinationFile)')" />
 
-    <TemplateFiles Include="$(MSBuildThisFileDirectory)templates\**\*"
-                   Exclude="$(MSBuildThisFileDirectory)templates\**\bin\**;$(MSBuildThisFileDirectory)templates\**\obj\**;$(MSBuildThisFileDirectory)templates\**\*.csproj;$(MSBuildThisFileDirectory)templates\aspire-apphost-singlefile\**\apphost.cs">
+    <TemplateFiles Include="$(_TemplateSourceRoot)**\*"
+                   Exclude="$(_TemplateSourceRoot)**\bin\**;$(_TemplateSourceRoot)**\obj\**;$(_TemplateSourceRoot)**\*.csproj;$(_TemplateSourceRoot)aspire-apphost-singlefile\**\apphost.cs;$(_TemplateSourceRoot)**\.template.config\*.json;$(_TemplateSourceRoot)**\.template.config\localize\templatestrings.*.json">
       <PackagePath>content/templates/%(RecursiveDir)</PackagePath>
     </TemplateFiles>
 
@@ -61,13 +63,11 @@
           AfterTargets="Build"
           DependsOnTargets="ReplacePackageVersionOnTemplates">
     <ItemGroup>
-      <Content Include="@(TemplateFilesObj);@(TemplateProjectFilesObj)" />
+      <Content Include="@(TemplateFilesObj);@(TemplateConfigFilesObj);@(TemplateProjectFilesObj);@(TemplateLocalizedStringsFilesObj)" />
     </ItemGroup>
   </Target>
 
-  <Target Name="ReplacePackageVersionOnTemplates"
-          DependsOnTargets="CopyTemplatesToIntermediateOutputPath">
-
+  <Target Name="PrepareReplaceTextResponseFile">
     <PropertyGroup>
       <!-- Extract purely numeric portions before any '-' prerelease tag -->
       <_VersionBase>$(PackageVersion.Split('-')[0])</_VersionBase>
@@ -75,15 +75,16 @@
       <VersionMajor>$(_VersionBase.Split('.')[0])</VersionMajor>
       <VersionMinor>$(_VersionBase.Split('.')[1])</VersionMinor>
       <VersionMajorMinor>$(VersionMajor).$(VersionMinor)</VersionMajorMinor>
-      <_RspFilePath>$(IntermediateOutputPath)replace-text-args.rsp</_RspFilePath>
-      <_ReplaceTextScriptPath>$(RepoRoot)tools/scripts/replace-text.cs</_ReplaceTextScriptPath>
+      <_ReplaceTextRspFilePath>$(IntermediateOutputPath)replace-text-args.rsp</_ReplaceTextRspFilePath>
+      <_ReplaceTextStampPath>$(IntermediateOutputPath)replace-text.stamp</_ReplaceTextStampPath>
     </PropertyGroup>
 
     <ItemGroup>
       <!-- This is defined here as these files aren't guaranteed to exist until the build has run -->
-      <TemplateLocalizedStringsFiles Include="$(MSBuildThisFileDirectory)templates\**\.template.config\localize\templatestrings.*.json" />
+      <TemplateLocalizedStringsFiles Include="$(_TemplateSourceRoot)**\.template.config\localize\templatestrings.*.json" />
       <TemplateLocalizedStringsFilesDest Include="@(TemplateLocalizedStringsFiles)"
-                                         DestinationFile="$(IntermediateOutputPath)content\templates\%(RecursiveDir)%(Filename)%(Extension)" />
+                                         DestinationFile="$(IntermediateOutputPath)content\templates\%(RecursiveDir)%(Filename)%(Extension)"
+                                         PackagePath="content/templates/%(RecursiveDir)" />
       <TemplateLocalizedStringsFilesObj Include="@(TemplateLocalizedStringsFilesDest->'%(DestinationFile)')" />
     </ItemGroup>
 
@@ -126,31 +127,79 @@
       <_RspLines Include="@(Replacements)" />
     </ItemGroup>
 
-    <!-- Write the .rsp file -->
-    <WriteLinesToFile File="$(_RspFilePath)"
+    <!-- The response file captures both the source list and every replacement value. Keeping its
+         timestamp stable when the content is unchanged gives the replacement target one complete,
+         response-file-safe input for property changes. -->
+    <WriteLinesToFile File="$(_ReplaceTextRspFilePath)"
                       Lines="@(_RspLines)"
                       Overwrite="true"
                       WriteOnlyWhenDifferent="true" />
 
+    <ItemGroup>
+      <_ReplaceTextInputs Include="@(TemplateFiles);@(TemplateConfigFiles);@(TemplateProjectFiles);@(TemplateLocalizedStringsFiles);$(_ReplaceTextRspFilePath);$(_ReplaceTextScriptPath)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="InvalidateReplacePackageVersionStampForMissingFiles"
+          DependsOnTargets="PrepareReplaceTextResponseFile">
+    <ItemGroup>
+      <_MissingReplaceTextSourceFiles Include="@(SourceFiles)" Condition="!Exists('%(Identity)')" />
+    </ItemGroup>
+
+    <!-- Incremental target inputs are the original templates, so explicitly invalidate the stamp
+         when an expected generated file is missing. -->
+    <Delete Files="$(_ReplaceTextStampPath)" Condition="'@(_MissingReplaceTextSourceFiles)' != ''" />
+  </Target>
+
+  <Target Name="ReplacePackageVersionOnTemplates"
+          DependsOnTargets="CopyTemplatesToIntermediateOutputPath;InvalidateReplacePackageVersionStampForMissingFiles"
+          Inputs="@(_ReplaceTextInputs)"
+          Outputs="$(_ReplaceTextStampPath)">
+
+    <!-- Replacement-owned files are recopied only when an original template, the script, or a
+         serialized replacement value changes. This avoids copying tokenized sources over generated
+         content on every ordinary Build. -->
+    <Copy SourceFiles="@(TemplateConfigFiles)"
+          DestinationFiles="@(TemplateConfigFilesObj)"
+          SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(TemplateProjectFiles)"
+          DestinationFiles="@(TemplateProjectFilesObj)"
+          SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(TemplateLocalizedStringsFiles)"
+          DestinationFiles="@(TemplateLocalizedStringsFilesObj)"
+          SkipUnchangedFiles="false" />
+
+    <ItemGroup>
+      <_MissingReplaceTextSourceFilesAfterCopy Include="@(SourceFiles)" Condition="!Exists('%(Identity)')" />
+    </ItemGroup>
+    <Error Text="Template replacement input was not generated: @(_MissingReplaceTextSourceFilesAfterCopy, ', ')"
+           Condition="'@(_MissingReplaceTextSourceFilesAfterCopy)' != ''" />
+
     <!-- Execute the script with the .rsp file, using double dash to pass arguments directly to the script -->
-    <Exec Command="dotnet &quot;$(_ReplaceTextScriptPath)&quot; -- @&quot;$(_RspFilePath)&quot;"
+    <Exec Command="dotnet &quot;$(_ReplaceTextScriptPath)&quot; -- @&quot;$(_ReplaceTextRspFilePath)&quot;"
           WorkingDirectory="$(MSBuildThisFileDirectory)"
           StandardOutputImportance="Normal"
           StandardErrorImportance="Normal" />
+    <Touch Files="$(_ReplaceTextStampPath)" AlwaysCreate="true" />
   </Target>
 
   <!-- Grabs the contents of the templates folder and copies them to IntermediateOutputPath directory -->
   <Target Name="CopyTemplatesToIntermediateOutputPath"
-          Inputs="@(TemplateFiles);@(TemplateProjectFiles)"
-          Outputs="@(TemplateFilesObj);@(TemplateProjectFilesObj)">
+          Inputs="@(TemplateFiles)"
+          Outputs="@(TemplateFilesObj)">
 
     <Copy SourceFiles="@(TemplateFiles)"
           DestinationFiles="@(TemplateFilesObj)"
           SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(TemplateProjectFiles)"
-          DestinationFiles="@(TemplateProjectFilesObj)"
-          SkipUnchangedFiles="true" />
+  </Target>
 
+  <Target Name="CleanReplacePackageVersionOnTemplates"
+          AfterTargets="Clean">
+    <PropertyGroup>
+      <_ReplaceTextRspFilePath>$(IntermediateOutputPath)replace-text-args.rsp</_ReplaceTextRspFilePath>
+      <_ReplaceTextStampPath>$(IntermediateOutputPath)replace-text.stamp</_ReplaceTextStampPath>
+    </PropertyGroup>
+    <Delete Files="$(_ReplaceTextRspFilePath);$(_ReplaceTextStampPath)" />
   </Target>
 
   <!--
