@@ -192,6 +192,11 @@ with `--skip-layer1`; the loose-file `path_rules` still cover those triggers.
 
 Project name means the `.csproj` base name, which is what Layer 1 emits.
 
+The opt-in `Aspire.Hosting.Azure.Provisioning*` packages and their source
+generator route to `job:polyglot`. The per-language AppHost fixtures load these
+packages through `aspire.config.json`, so their SDK validation is not expressed
+by the .NET project graph.
+
 ```yaml
 - projects: [Aspire.Hosting*, Aspire.Cli]
   targets: [job:typescript-api-compat]

@@ -6,6 +6,7 @@
   Documentation: {
     Summary: Adds an optional string parameter
   },
+  IsExperimental: false,
   IsObsolete: false,
   Parameters: [
     {

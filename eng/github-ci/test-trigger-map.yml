@@ -390,6 +390,9 @@ affected_project_rules:
   - projects: [Aspire.Hosting.CodeGeneration.TypeScript]
     targets: [job:typescript-sdk]
     reason: vitest unit tests over generated TS SDK (@aspire/transport, @aspire/base)
+  - projects: [Aspire.Hosting.Azure.Provisioning*]
+    targets: [job:polyglot]
+    reason: opt-in provisioning packages and their source generator are consumed by the per-language AppHost fixtures
   - projects: [Aspire.Hosting*, Aspire.Cli]
     targets: [job:typescript-api-compat]
     reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`

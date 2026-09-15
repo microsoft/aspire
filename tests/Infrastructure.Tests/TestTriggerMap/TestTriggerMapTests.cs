@@ -192,6 +192,27 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
+    public void ProvisioningProjectsSelectPolyglotJob()
+    {
+        var projects = LoadSolutionProjectPaths()
+            .Where(path => path.StartsWith("src/Aspire.Hosting.Azure.Provisioning", StringComparison.Ordinal))
+            .Select(path => Path.GetFileNameWithoutExtension(path))
+            .ToArray();
+
+        Assert.NotEmpty(projects);
+        Assert.All(projects, project =>
+        {
+            var targets = s_map.AffectedProjectRules
+                .Where(rule => rule.Projects.Any(pattern =>
+                    System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern, project, ignoreCase: false)))
+                .SelectMany(rule => rule.Targets)
+                .ToHashSet(StringComparer.Ordinal);
+
+            Assert.Contains("job:polyglot", targets);
+        });
+    }
+
+    [Fact]
     public void EveryAffectedProjectRuleGlobMatchesASolutionProject()
     {
         // affected_project_rules key off the affected PROJECT set (Layer 1), matched by project-name
