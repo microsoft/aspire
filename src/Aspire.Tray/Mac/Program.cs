@@ -44,7 +44,7 @@ internal static class Program
             var options = TrayOptions.Parse(args);
             if (options.SmokeSeconds is int seconds)
             {
-                return NativeSmokeHarness.Run(options.CliPath, seconds);
+                return NativeSmokeHarness.Run(options.CliPath, seconds, options.InteractiveSmoke);
             }
 
             using var singleton = SingleInstance.TryAcquire();
@@ -58,7 +58,8 @@ internal static class Program
             using var lease = options.BundleRoot is null
                 ? null : BundleVersionLease.Acquire(options.BundleRoot, "tray", "tray");
             var controller = new TrayController(new CliAppHostClient(options.CliPath),
-                new FileTraySavedStateStore(Path.Combine(SingleInstance.DirectoryPath, "apphosts.json")));
+                new FileTraySavedStateStore(Path.Combine(SingleInstance.DirectoryPath, "apphosts.json")),
+                TrayConfiguration.LoadRecentAppHostLimit(TrayConfiguration.GetSettingsPath(options.CliPath)));
             var startupSettings = new MacTrayStartupSettings(options, !RuntimeFeature.IsDynamicCodeSupported,
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "LaunchAgents"));
             using var application = new MacTrayApplication(controller, "AspireTray", startupSettings);

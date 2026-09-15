@@ -123,6 +123,9 @@ internal static partial class AppKit
     public static partial byte SendReturningBool(nint receiver, nint selector, nint argument);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial byte SendTwoPointersReturningBool(nint receiver, nint selector, nint first, nint second);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial byte GetBool(nint receiver, nint selector);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]

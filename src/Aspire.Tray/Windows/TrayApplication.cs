@@ -39,13 +39,15 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
     private TrayViewState? _displayedState;
     private Exception? _callbackFailure;
     private Artwork? _artwork;
-    private bool? _connectedIcon;
+    private IconState? _iconState;
     private bool _dpiDirty;
+    private bool _interactiveSmoke;
 
     internal int ExitCode { get; private set; }
     internal Action? SmokeTick { get; set; }
     internal Func<string, string, uint, bool>? ConfirmForSmoke { get; set; }
     internal Action<Uri>? OpenUrlForSmoke { get; set; }
+    internal Action<string>? CopyPathForSmoke { get; set; }
     internal Action<Exception>? ErrorForSmoke { get; set; }
 
     internal Task WaitUntilReadyAsync(CancellationToken cancellationToken) => _ready.Task.WaitAsync(cancellationToken);
@@ -90,7 +92,8 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
         if (RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64)
             || sizeof(NativeMethods.WindowClass) != 72 || sizeof(NativeMethods.Message) != 48
             || sizeof(NativeMethods.NotifyIconData) != 976 || sizeof(NativeMethods.MenuItemInfo) != 80
-            || sizeof(NativeMethods.IconInfo) != 32 || sizeof(NativeMethods.BitmapInfo) != 44)
+            || sizeof(NativeMethods.IconInfo) != 32 || sizeof(NativeMethods.BitmapInfo) != 44
+            || sizeof(NativeMethods.ToolInfo) != 72)
         {
             throw new PlatformNotSupportedException("This frontend requires the Windows x64 or ARM64 native layouts.");
         }
@@ -137,6 +140,15 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
 
     private void Initialize()
     {
+        // The embedded Common Controls v6 manifest opts both managed and NativeAOT
+        // executables into themed controls; loading the standard classes activates them.
+        // https://learn.microsoft.com/windows/win32/controls/cookbook-overview
+        var controls = new NativeMethods.CommonControls
+        {
+            Size = (uint)sizeof(NativeMethods.CommonControls),
+            Classes = 0x4000 | 0x4 // ICC_STANDARD_CLASSES | ICC_BAR_CLASSES (tooltips).
+        };
+        NativeCallException.Require(NativeMethods.InitCommonControlsEx(in controls) != 0, "InitCommonControlsEx");
         _previousDpiContext = NativeMethods.SetThreadDpiAwarenessContext(-4);
         NativeCallException.Require(_previousDpiContext != 0, "SetThreadDpiAwarenessContext");
         _module = NativeMethods.GetModuleHandle(null);
@@ -345,6 +357,9 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
             case NativeMethods.WmMenuRightButtonUp when _menuOpen && _modalDepth == 0:
                 PinContextRow(lParam, (uint)wParam);
                 return 0;
+            case NativeMethods.WmMenuSelect:
+                SelectMenuTooltip(wParam, lParam);
+                return 0;
             case NativeMethods.TrayCallback when !_menuOpen && !_quitRequested && _modalDepth == 0:
                 // NIM_SETVERSION(4): LOWORD(lParam)=event; wParam holds signed screen coordinates.
                 var notification = (uint)((nuint)lParam & 0xFFFF);
@@ -382,6 +397,7 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
             }
         }
         RefreshMenu();
+        UpdateMenuTooltip();
         if (smokeSeconds is not null && _modalDepth != 0)
         {
             CompleteDialogForSmoke();
@@ -403,6 +419,7 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
             return;
         }
         _quitRequested = true;
+        HideMenuTooltip();
         lock (_lifecycleGate)
         {
             _shutdownRequested = true;
@@ -472,6 +489,10 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
             if (_iconAdded)
             {
                 Cleanup(NativeMethods.ShellNotifyIcon(NativeMethods.NimDelete, ref _iconData) != 0, "Shell_NotifyIconW(NIM_DELETE)");
+            }
+            if (!DisposeMenuTooltip())
+            {
+                return;
             }
             _menu?.Dispose();
             if (!DisposeSettings())

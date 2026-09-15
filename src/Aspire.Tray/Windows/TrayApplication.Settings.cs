@@ -12,10 +12,10 @@ internal sealed unsafe partial class TrayApplication
 {
     private const int StartupCheckboxId = 2001;
     private const int StartupRefreshId = 2002;
-    private const int SettingsDocumentationId = 2003;
     private const int SettingsGeneralId = 2004;
     private const int SettingsAboutId = 2005;
-    private const int SettingsExplanationId = 2006;
+    private const int SettingsPreviewMenuId = 2007;
+    private const int SettingsTitleId = 2008;
     private const int SettingsCloseId = 2; // IDCANCEL also handles the dialog's Escape key.
     private const string SettingsMenuLabel = "Settings...\tCtrl+,";
     private nint _settingsWindow;
@@ -23,9 +23,14 @@ internal sealed unsafe partial class TrayApplication
     private nint _settingsStatus;
     private nint _settingsVersion;
     private nint _settingsRefresh;
-    private nint _settingsDocumentation;
     private nint _settingsIcon;
     private nint _settingsMenuFilter;
+    private nint _settingsGeneral;
+    private nint _settingsAbout;
+    private nint _settingsClose;
+    private nint _settingsPreview;
+    private nint _settingsTitle;
+    private string _settingsStatusText = "";
     private TrayStartupState? _startupState;
     private bool _settingsInitializing;
     private bool _settingsShortcutPending;
@@ -37,7 +42,7 @@ internal sealed unsafe partial class TrayApplication
             var assembly = typeof(TrayApplication).Assembly;
             var version = assembly.GetName().Version?.ToString() ?? "Development build";
             var build = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? version;
-            return $"Aspire Tray\r\nVersion: {version}\r\nBuild: {build}";
+            return $"Aspire Tray\r\nVersion: {build}\r\nAssembly version: {version}";
         }
     }
 
@@ -53,7 +58,7 @@ internal sealed unsafe partial class TrayApplication
         _settingsInitializing = true;
         try
         {
-            var template = CreateSettingsTemplate();
+            var template = CreateDialogTemplate(_interactiveSmoke ? "Aspire Tray Preview Settings" : "Aspire Settings", 380, 292, 10);
             fixed (byte* pointer = template)
             {
                 var window = NativeMethods.CreateDialogIndirectParam(_module, pointer, _window, &SettingsDialogProcedure, 0);
@@ -65,25 +70,24 @@ internal sealed unsafe partial class TrayApplication
             NativeMethods.SendMessage(_settingsWindow, 0x80, 0, _settingsIcon); // WM_SETICON, ICON_SMALL.
             NativeMethods.SendMessage(_settingsWindow, 0x80, 1, _settingsIcon);
 
-            AddSettingsControl("BUTTON", "General", 0x7, SettingsGeneralId, 8, 8, 354, 161);
+            _settingsTitle = AddSettingsControl("STATIC", "Settings", 0x80, SettingsTitleId, 20, 16, 340, 30);
+            _settingsGeneral = AddSettingsControl("STATIC", "General", 0x80, SettingsGeneralId, 32, 56, 316, 14);
             // BS_3STATE (not AUTO3STATE) exposes an accessible checkbox, but only confirmed
             // backend state changes its check mark. A failed write never looks successful.
             _settingsCheckbox = AddSettingsControl("BUTTON", "&Launch Aspire Tray when I sign in",
-                0x10000 | 0x5, StartupCheckboxId, 20, 24, 329, 16);
-            AddSettingsControl("STATIC", "Only Aspire Tray launches at sign-in. AppHosts are not started.",
-                0, SettingsExplanationId, 20, 45, 329, 24);
-            AddSettingsControl("STATIC", "Startup status:", 0, 0, 20, 72, 329, 10);
-            _settingsStatus = AddSettingsControl("EDIT", "", 0x10000 | 0x4 | 0x40 | 0x800 | 0x200000,
-                0, 20, 84, 329, 46);
+                0x10000 | 0x5, StartupCheckboxId, 20, 50, 340, 18);
+            _settingsStatus = AddSettingsControl("STATIC", "", 0x80, 0, 20, 105, 340, 60);
             _settingsRefresh = AddSettingsControl("BUTTON", "&Refresh startup status", 0x10000,
-                StartupRefreshId, 20, 137, 112, 18);
-            AddSettingsControl("BUTTON", "About", 0x7, SettingsAboutId, 8, 177, 354, 79);
-            _settingsVersion = AddSettingsControl("EDIT", AboutVersionText,
-                0x10000 | 0x4 | 0x40 | 0x800 | 0x200000, 0, 20, 193, 329, 32);
-            _settingsDocumentation = AddSettingsControl("BUTTON", "Open &Documentation (aspire.dev)",
-                0x10000, SettingsDocumentationId, 20, 231, 172, 18);
-            AddSettingsControl("BUTTON", "&Close", 0x10000 | 0x1, SettingsCloseId, 298, 265, 64, 18);
+                StartupRefreshId, 20, 175, 120, 24);
+            _settingsAbout = AddSettingsControl("STATIC", "About", 0x80, SettingsAboutId, 20, 218, 340, 24);
+            _settingsVersion = AddSettingsControl("STATIC", AboutVersionText, 0x80, 0, 20, 244, 340, 48);
+            if (_interactiveSmoke)
+            {
+                _settingsPreview = AddSettingsControl("BUTTON", "Preview tray &menu", 0x10000, SettingsPreviewMenuId, 20, 340, 120, 24);
+            }
+            _settingsClose = AddSettingsControl("BUTTON", "&Close", 0x10000 | 0x1, SettingsCloseId, 288, 305, 72, 24);
             NativeMethods.SendMessage(_settingsWindow, 0x401, SettingsCloseId, 0); // DM_SETDEFID.
+            UpdateSettingsAppearance();
             ReadStartupSettings();
             FocusSettings();
         }
@@ -98,7 +102,7 @@ internal sealed unsafe partial class TrayApplication
         }
     }
 
-    private static byte[] CreateSettingsTemplate()
+    private static byte[] CreateDialogTemplate(string title, short width, short height, ushort pointSize)
     {
         // Standard DLGTEMPLATE: DWORD style/exstyle, WORD count, four SHORT bounds,
         // then zero menu/class, UTF-16 title, WORD point size and UTF-16 font.
@@ -111,26 +115,31 @@ internal sealed unsafe partial class TrayApplication
         writer.Write((ushort)0);
         writer.Write((short)0);
         writer.Write((short)0);
-        writer.Write((short)370);
-        writer.Write((short)292);
+        writer.Write(width);
+        writer.Write(height);
         writer.Write((ushort)0);
         writer.Write((ushort)0);
-        writer.Write(Encoding.Unicode.GetBytes("Aspire Settings\0"));
-        writer.Write((ushort)9);
+        writer.Write(Encoding.Unicode.GetBytes(title + "\0"));
+        writer.Write(pointSize);
         writer.Write(Encoding.Unicode.GetBytes("Segoe UI\0"));
         writer.Flush();
         return stream.ToArray();
     }
 
     private nint AddSettingsControl(string className, string text, uint style, int id, int x, int y, int width, int height)
+        // BS_NOTIFY lets keyboard focus scroll native buttons into view on small displays.
+        => AddDialogControl(_settingsWindow, className, text, style | (className == "BUTTON" ? 0x4000u : 0),
+            id, x, y, width, height);
+
+    private nint AddDialogControl(nint dialog, string className, string text, uint style, int id, int x, int y, int width, int height)
     {
         var rect = new NativeMethods.Rect { Left = x, Top = y, Right = x + width, Bottom = y + height };
-        NativeCallException.Require(NativeMethods.MapDialogRect(_settingsWindow, ref rect) != 0, "MapDialogRect(Settings)");
+        NativeCallException.Require(NativeMethods.MapDialogRect(dialog, ref rect) != 0, "MapDialogRect");
         var control = NativeMethods.CreateWindowEx(0, className, text, 0x40000000 | 0x10000000 | style,
-            rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top, _settingsWindow, id, _module, 0);
-        NativeCallException.Require(control != 0, $"CreateWindowExW(Settings {className})");
-        var font = NativeMethods.SendMessage(_settingsWindow, 0x31, 0, 0); // WM_GETFONT; owned by the dialog manager.
-        NativeCallException.Require(font != 0, "WM_GETFONT(Settings)");
+            rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top, dialog, id, _module, 0);
+        NativeCallException.Require(control != 0, $"CreateWindowExW({className})");
+        var font = NativeMethods.SendMessage(dialog, 0x31, 0, 0); // WM_GETFONT; owned by the dialog manager.
+        NativeCallException.Require(font != 0, "WM_GETFONT");
         NativeMethods.SendMessage(control, 0x30, (nuint)font, 1); // WM_SETFONT.
         return control;
     }
@@ -146,7 +155,8 @@ internal sealed unsafe partial class TrayApplication
             Program.Log("Windows kept Aspire Settings in the background.");
         }
         var focus = NativeMethods.GetFocus();
-        if (NativeMethods.IsChild(_settingsWindow, focus) == 0 || NativeMethods.IsWindowEnabled(focus) == 0)
+        if (NativeMethods.IsChild(_settingsWindow, focus) == 0 || NativeMethods.IsWindowEnabled(focus) == 0
+            || NativeMethods.IsWindowVisible(focus) == 0)
         {
             var target = NativeMethods.IsWindowEnabled(_settingsCheckbox) != 0 ? _settingsCheckbox : _settingsRefresh;
             NativeMethods.SetFocus(target);
@@ -179,8 +189,13 @@ internal sealed unsafe partial class TrayApplication
         _startupState = state;
         NativeMethods.SendMessage(_settingsCheckbox, NativeMethods.BmSetCheck, state.Enabled ? 1u : 0u, 0);
         EnableStartupCheckbox(state.Enabled || state.CanEnable);
+        if (state.CanEnable && error is null)
+        {
+            SetSettingsStatus("");
+            return;
+        }
         var status = state.Enabled ? "Launch at sign-in is on." : "Launch at sign-in is off.";
-        if (!state.Enabled && !state.CanEnable)
+        if (!state.CanEnable)
         {
             status += " Enabling launch at sign-in is unavailable.";
         }
@@ -192,7 +207,18 @@ internal sealed unsafe partial class TrayApplication
     }
 
     private void SetSettingsStatus(string message)
-        => NativeCallException.Require(NativeMethods.SetWindowText(_settingsStatus, message) != 0, "SetWindowTextW(Settings status)");
+    {
+        NativeCallException.Require(NativeMethods.SetWindowText(_settingsStatus, message) != 0, "SetWindowTextW(Settings status)");
+        _settingsStatusText = message;
+        var showDetails = message.Length != 0;
+        if (!showDetails && NativeMethods.GetFocus() == _settingsRefresh)
+        {
+            NativeMethods.SetFocus(NativeMethods.IsWindowEnabled(_settingsCheckbox) != 0 ? _settingsCheckbox : _settingsClose);
+        }
+        NativeMethods.ShowWindow(_settingsStatus, showDetails ? 5 : 0); // SW_SHOW / SW_HIDE.
+        NativeMethods.ShowWindow(_settingsRefresh, showDetails ? 5 : 0);
+        LayoutSettings();
+    }
 
     private void EnableStartupCheckbox(bool enabled)
     {
@@ -200,7 +226,7 @@ internal sealed unsafe partial class TrayApplication
         NativeMethods.EnableWindow(_settingsCheckbox, enabled ? 1 : 0);
         if (moveFocus)
         {
-            NativeMethods.SetFocus(_settingsRefresh);
+            NativeMethods.SetFocus(_settingsStatusText.Length != 0 ? _settingsRefresh : _settingsClose);
         }
     }
 
@@ -286,10 +312,56 @@ internal sealed unsafe partial class TrayApplication
             case NativeMethods.WmInitDialog:
                 _settingsWindow = window;
                 return 0;
+            case NativeMethods.WmCtlColorDialog:
+                return _settingsBackgroundBrush != 0 ? _settingsBackgroundBrush : NativeMethods.GetSysColorBrush(5);
+            case NativeMethods.WmCtlColorStatic:
+            case NativeMethods.WmCtlColorButton:
+                NativeMethods.SetTextColor((nint)wParam, NativeMethods.IsWindowEnabled(lParam) == 0
+                    ? NativeMethods.GetSysColor(17) : _settingsTextColor); // COLOR_GRAYTEXT for disabled controls.
+                NativeMethods.SetBkMode((nint)wParam, 1); // TRANSPARENT.
+                return lParam == _settingsTitle || lParam == _settingsClose ? _settingsBackgroundBrush : _settingsCardBrush;
+            case NativeMethods.WmPaint when _settingsBackgroundBrush != 0:
+                var dc = NativeMethods.BeginPaint(window, out var paint);
+                NativeCallException.Require(dc != 0, "BeginPaint(Settings)");
+                try
+                {
+                    PaintSettingsBackground(dc);
+                }
+                finally
+                {
+                    Cleanup(NativeMethods.EndPaint(window, in paint) != 0, "EndPaint(Settings)");
+                }
+                return 1;
+            case NativeMethods.WmEraseBackground when _settingsBackgroundBrush != 0:
+            case NativeMethods.WmPrintClient when _settingsBackgroundBrush != 0:
+                // Themed checkboxes ask their parent to paint behind transparent parts.
+                PaintSettingsBackground((nint)wParam);
+                return 1;
+            case NativeMethods.WmVerticalScroll:
+            case NativeMethods.WmMouseWheel:
+                ScrollSettings(message, wParam);
+                return 1;
+            case NativeMethods.WmDpiChanged:
+            case NativeMethods.WmSettingChange:
+            case 0x31A: // WM_THEMECHANGED.
+                // Let the PerMonitorV2 dialog manager scale its font first. Reflow on the
+                // next dispatch so our measured labels and owned heading font use that DPI.
+                NativeCallException.Require(NativeMethods.PostMessage(window, NativeMethods.SettingsLayoutMessage, 0, 0) != 0,
+                    "PostMessageW(Settings layout)");
+                return 0;
+            case NativeMethods.SettingsLayoutMessage when !_settingsInitializing && _settingsHeadingFont != 0:
+                UpdateSettingsAppearance();
+                LayoutSettings();
+                return 1;
             case NativeMethods.WmCommand when !_settingsInitializing && !_quitRequested:
                 var id = (int)(wParam & 0xFFFF);
                 var notification = (uint)((wParam >> 16) & 0xFFFF);
-                if (id == SettingsCloseId)
+                if (notification == 6) // BN_SETFOCUS.
+                {
+                    EnsureSettingsControlVisible(lParam);
+                    return 1;
+                }
+                if (id == SettingsCloseId && notification == 0)
                 {
                     CloseSettings();
                     return 1;
@@ -303,14 +375,15 @@ internal sealed unsafe partial class TrayApplication
                     ChangeStartupSetting();
                     return 1;
                 }
-                if (id == StartupRefreshId && lParam == _settingsRefresh)
+                if (id == StartupRefreshId && lParam == _settingsRefresh && _settingsStatusText.Length != 0)
                 {
                     ReadStartupSettings();
                     return 1;
                 }
-                if (id == SettingsDocumentationId && lParam == _settingsDocumentation)
+                if (id == SettingsPreviewMenuId && _interactiveSmoke)
                 {
-                    Dispatch(new(ActionKind.Documentation));
+                    NativeCallException.Require(NativeMethods.GetCursorPos(out var point) != 0, "GetCursorPos(preview)");
+                    ShowMenu((nuint)((uint)(ushort)point.X | ((uint)(ushort)point.Y << 16)));
                     return 1;
                 }
                 return 0;
@@ -323,8 +396,14 @@ internal sealed unsafe partial class TrayApplication
                 _settingsStatus = 0;
                 _settingsVersion = 0;
                 _settingsRefresh = 0;
-                _settingsDocumentation = 0;
+                _settingsGeneral = 0;
+                _settingsAbout = 0;
+                _settingsClose = 0;
+                _settingsPreview = 0;
+                _settingsTitle = 0;
+                _settingsStatusText = "";
                 _startupState = null;
+                DisposeSettingsAppearance();
                 if (_settingsIcon != 0)
                 {
                     Cleanup(NativeMethods.DestroyIcon(_settingsIcon) != 0, "DestroyIcon(Settings)");

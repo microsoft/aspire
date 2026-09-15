@@ -14,7 +14,7 @@ internal sealed partial class MacTrayApplication
     private nint _startupCheckbox;
     private nint _startupStatus;
     private nint _settingsAbout;
-    private nint _settingsDocumentation;
+    private nint _settingsGeneral;
     private bool _settingsRequested;
 
     private nint AddSettingsItem(nint menu)
@@ -93,31 +93,24 @@ internal sealed partial class MacTrayApplication
         // https://developer.apple.com/documentation/appkit/nswindow/isreleasedwhenclosed
         _settingsWindow = AppKit.CreateWindow(AppKit.Get(AppKit.Class("NSWindow"), "alloc"),
             AppKit.Selector("initWithContentRect:styleMask:backing:defer:"),
-            new(new(0, 0), new(540, 460)), 3, 2, 0);
+            new(new(0, 0), new(540, 250)), 3, 2, 0);
         if (_settingsWindow == 0)
         {
             throw new InvalidOperationException("Could not create the Settings window.");
         }
         AppKit.SendBool(_settingsWindow, AppKit.Selector("setReleasedWhenClosed:"), 0);
         var content = AppKit.Get(_settingsWindow, "contentView");
-        AddSettingsLabel(content, "General", new(new(24, 410), new(492, 26)), heading: true);
+        _settingsGeneral = AddSettingsLabel(content, "General", new(new(24, 200), new(492, 26)), heading: true);
         _startupCheckbox = AppKit.SendThreePointers(AppKit.Class("NSButton"),
             AppKit.Selector("checkboxWithTitle:target:action:"),
             AppKit.String("Launch Aspire Tray when I sign in"), _target, AppKit.Selector("changeStartup:"));
-        AppKit.SetRect(_startupCheckbox, AppKit.Selector("setFrame:"), new(new(24, 376), new(492, 26)));
+        AppKit.SetRect(_startupCheckbox, AppKit.Selector("setFrame:"), new(new(24, 166), new(492, 26)));
         AppKit.Set(content, "addSubview:", _startupCheckbox);
-        AddSettingsLabel(content, "Only the tray starts at sign-in. AppHosts are not started.",
-            new(new(44, 346), new(472, 24)));
-        _startupStatus = AddSettingsLabel(content, "", new(new(44, 198), new(472, 142)));
+        _startupStatus = AddSettingsLabel(content, "", new(new(44, 160), new(472, 142)));
         AppKit.SendBool(_startupStatus, AppKit.Selector("setSelectable:"), 1);
-        AddSettingsLabel(content, "About", new(new(24, 162), new(492, 26)), heading: true);
-        _settingsAbout = AddSettingsLabel(content, SettingsAboutText, new(new(24, 66), new(492, 90)));
+        AddSettingsLabel(content, "About", new(new(24, 120), new(492, 26)), heading: true);
+        _settingsAbout = AddSettingsLabel(content, SettingsAboutText, new(new(24, 24), new(492, 90)));
         AppKit.SendBool(_settingsAbout, AppKit.Selector("setSelectable:"), 1);
-        _settingsDocumentation = AppKit.SendThreePointers(AppKit.Class("NSButton"),
-            AppKit.Selector("buttonWithTitle:target:action:"),
-            AppKit.String("Documentation - https://aspire.dev"), _target, AppKit.Selector("openDocumentation:"));
-        AppKit.SetRect(_settingsDocumentation, AppKit.Selector("setFrame:"), new(new(20, 22), new(320, 32)));
-        AppKit.Set(content, "addSubview:", _settingsDocumentation);
         AppKit.SendVoid(_settingsWindow, AppKit.Selector("center"));
     }
 
@@ -154,6 +147,11 @@ internal sealed partial class MacTrayApplication
             AppKit.SendBool(_startupCheckbox, AppKit.Selector("setAllowsMixedState:"), 0);
             AppKit.Set(_startupCheckbox, "setState:", state.Enabled ? 1 : 0);
             SetEnabled(_startupCheckbox, state.Enabled || state.CanEnable);
+            if (state.CanEnable && error is null)
+            {
+                SetStartupStatus("");
+                return;
+            }
             var status = state.Enabled ? "Launch at sign-in is on." : "Launch at sign-in is off.";
             if (!state.CanEnable)
             {
@@ -174,7 +172,15 @@ internal sealed partial class MacTrayApplication
     }
 
     private void SetStartupStatus(string text)
-        => AppKit.Set(_startupStatus, "setStringValue:", AppKit.String(text));
+    {
+        AppKit.Set(_startupStatus, "setStringValue:", AppKit.String(text));
+        var showDetails = text.Length != 0;
+        AppKit.SendBool(_startupStatus, AppKit.Selector("setHidden:"), showDetails ? (byte)0 : (byte)1);
+        var height = showDetails ? 410 : 250;
+        AppKit.SendSize(_settingsWindow, AppKit.Selector("setContentSize:"), new(540, height));
+        AppKit.SetRect(_settingsGeneral, AppKit.Selector("setFrame:"), new(new(24, height - 50), new(492, 26)));
+        AppKit.SetRect(_startupCheckbox, AppKit.Selector("setFrame:"), new(new(24, height - 84), new(492, 26)));
+    }
 
     private void ChangeStartup(nint sender)
     {
@@ -222,9 +228,8 @@ internal sealed partial class MacTrayApplication
     {
         CloseSettings();
         AppKit.Set(_startupCheckbox, "setTarget:", 0);
-        AppKit.Set(_settingsDocumentation, "setTarget:", 0);
         AppKit.Release(_settingsWindow);
-        _settingsWindow = _startupCheckbox = _startupStatus = _settingsAbout = _settingsDocumentation = 0;
+        _settingsWindow = _startupCheckbox = _startupStatus = _settingsAbout = _settingsGeneral = 0;
         if (_applicationMenu != 0)
         {
             AppKit.Set(_application, "setMainMenu:", 0);

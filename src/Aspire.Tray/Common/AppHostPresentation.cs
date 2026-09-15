@@ -26,9 +26,18 @@ internal static class AppHostPresentation
         return string.IsNullOrEmpty(name) ? "AppHost" : ToSingleLine(name);
     }
 
-    public static string GetTitle(AppHostInfo host) => Compact(GetDisplayName(host));
+    public static string GetTitle(AppHostInfo host) => Compact(GetDisplayName(host), 44);
 
-    public static string GetSubtitle(AppHostInfo host) => $"{Compact(GetLocation(host))} \u00b7 PID {host.AppHostPid}";
+    public static string GetPathLabel(string appHostPath) => Compact(appHostPath, 44);
+
+    public static string GetMenuDetailsText(string appHostPath, string subtitle)
+        => ToSingleLine($"{appHostPath} \u00b7 {subtitle}");
+
+    public static string GetMenuDetailsLabel(string details) => Compact(details, 45);
+
+    public static string GetCompactMenuLabel(AppHostMenuItem host) => Compact(host.DisplayName, 44);
+
+    public static string GetSubtitle(AppHostInfo host) => $"{Compact(GetLocation(host), 44)} \u00b7 PID {host.AppHostPid}";
 
     public static string GetLabel(AppHostInfo host)
         => ToSingleLine($"{Path.GetFileNameWithoutExtension(host.AppHostPath)} - {GetLocation(host)} (PID {host.AppHostPid})");
@@ -42,18 +51,19 @@ internal static class AppHostPresentation
         return parent is null ? directory : Path.Combine(Path.GetFileName(parent), Path.GetFileName(directory));
     }
 
-    private static string Compact(string value)
+    private static string Compact(string value, int maximumTextElements)
     {
-        const int MaximumTextElements = 44;
         value = ToSingleLine(value);
         var elements = StringInfo.ParseCombiningCharacters(value);
-        if (elements.Length <= MaximumTextElements)
+        if (elements.Length <= maximumTextElements)
         {
             return value;
         }
 
         // Keep both ends without cutting a surrogate pair or a combining sequence.
-        return value[..elements[21]] + "\u2026" + value[elements[^22]..];
+        var tailLength = maximumTextElements / 2;
+        var headLength = maximumTextElements - tailLength - 1;
+        return value[..elements[headLength]] + "\u2026" + value[elements[^tailLength]..];
     }
 
     private static string ToSingleLine(string value) => value.ReplaceLineEndings(" ").Replace('\t', ' ');

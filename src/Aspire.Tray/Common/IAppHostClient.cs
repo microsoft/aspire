@@ -10,7 +10,24 @@ internal interface IAppHostClient
     Task<StartResult> StartAsync(string appHostPath, CancellationToken cancellationToken);
 }
 
-internal readonly record struct AppHostId(string AppHostPath, int AppHostPid, long? ProcessStartTimeUnixMilliseconds);
+internal readonly record struct AppHostId(string AppHostPath, int AppHostPid, long? ProcessStartTimeUnixMilliseconds)
+{
+    // Identity matching follows the platform, but paths also reach menus, the clipboard,
+    // and CLI arguments. Keep their original casing rather than storing an uppercased key.
+    public bool Equals(AppHostId other)
+        => TrayAppHostPath.Comparer.Equals(AppHostPath, other.AppHostPath)
+            && AppHostPid == other.AppHostPid
+            && ProcessStartTimeUnixMilliseconds == other.ProcessStartTimeUnixMilliseconds;
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(AppHostPath, TrayAppHostPath.Comparer);
+        hash.Add(AppHostPid);
+        hash.Add(ProcessStartTimeUnixMilliseconds);
+        return hash.ToHashCode();
+    }
+}
 
 internal enum DiscoveryState
 {

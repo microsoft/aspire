@@ -10,8 +10,13 @@ internal sealed record TrayOptions(string CliPath, int? SmokeSeconds, string? Bu
     public const string Usage = """
         aspire-tray start --cli <absolute Aspire executable path> --bundle-root <absolute bundle directory> [--startup-cli <stable native Aspire executable path>]
         aspire-tray stop
-        aspire-tray --cli <absolute Aspire executable path> [--bundle-root <absolute bundle directory>] [--startup-cli <stable native Aspire executable path>] [--smoke-seconds <1-120>]
+        aspire-tray --cli <absolute Aspire executable path> [--bundle-root <absolute bundle directory>] [--startup-cli <stable native Aspire executable path>] [--smoke-seconds <1-120> [--smoke-interactive]]
         """;
+
+    /// <summary>
+    /// Keeps the isolated smoke preview available for interactive inspection.
+    /// </summary>
+    public bool InteractiveSmoke { get; init; }
 
     public static TrayOptions Parse(string[] args)
     {
@@ -19,6 +24,7 @@ internal sealed record TrayOptions(string CliPath, int? SmokeSeconds, string? Bu
         int? smokeSeconds = null;
         string? bundleRoot = null;
         string? startupCli = null;
+        var interactiveSmoke = false;
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i] == "--cli" && i + 1 < args.Length && cli is null)
@@ -38,6 +44,10 @@ internal sealed record TrayOptions(string CliPath, int? SmokeSeconds, string? Bu
                 && seconds is >= 1 and <= 120)
             {
                 smokeSeconds = seconds;
+            }
+            else if (args[i] == "--smoke-interactive" && !interactiveSmoke)
+            {
+                interactiveSmoke = true;
             }
             else
             {
@@ -62,7 +72,11 @@ internal sealed record TrayOptions(string CliPath, int? SmokeSeconds, string? Bu
         {
             throw new ArgumentException("Native smoke must not use a live bundle lease or startup registration.");
         }
+        if (interactiveSmoke && smokeSeconds is null)
+        {
+            throw new ArgumentException("Interactive smoke requires --smoke-seconds.");
+        }
 
-        return new(cli, smokeSeconds, bundleRoot, startupCli);
+        return new(cli, smokeSeconds, bundleRoot, startupCli) { InteractiveSmoke = interactiveSmoke };
     }
 }

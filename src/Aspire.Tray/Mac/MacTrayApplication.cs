@@ -8,8 +8,9 @@ internal sealed partial class MacTrayApplication : IDisposable
     private readonly TrayController _controller;
     private readonly ITrayStartupSettings _startupSettings;
     private readonly Action<Uri> _openDashboard;
-    private readonly Func<StopConfirmation, bool>? _confirmStop;
+    private readonly Func<StopConfirmation, StopConfirmationResult>? _confirmStop;
     private readonly Func<TrayConfirmation, bool>? _confirmAction;
+    private readonly Action<string> _copyPath;
     private readonly string _autosaveName;
     private readonly int _uiThread = Environment.CurrentManagedThreadId;
     private int _exitCode;
@@ -19,8 +20,9 @@ internal sealed partial class MacTrayApplication : IDisposable
         string autosaveName,
         ITrayStartupSettings startupSettings,
         Action<Uri>? openDashboard = null,
-        Func<StopConfirmation, bool>? confirmStop = null,
-        Func<TrayConfirmation, bool>? confirmAction = null)
+        Func<StopConfirmation, StopConfirmationResult>? confirmStop = null,
+        Func<TrayConfirmation, bool>? confirmAction = null,
+        Action<string>? copyPath = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(autosaveName);
         ArgumentNullException.ThrowIfNull(startupSettings);
@@ -30,6 +32,7 @@ internal sealed partial class MacTrayApplication : IDisposable
         _openDashboard = openDashboard ?? OpenDashboardInBrowser;
         _confirmStop = confirmStop;
         _confirmAction = confirmAction;
+        _copyPath = copyPath ?? CopyPathToPasteboard;
         InitializeNative();
         _controller.Changed += RequestRefresh;
         RequestRefresh();
@@ -69,11 +72,16 @@ internal sealed partial class MacTrayApplication : IDisposable
         try
         {
             var selected = _controller.RequireLiveInstance(id);
-            if (ConfirmStop(selected))
+            var confirmation = _controller.ConfirmStop ? ConfirmStop(selected) : new StopConfirmationResult(true, false);
+            if (confirmation.Confirmed)
             {
-                // Discovery can replace a process while the modal alert is open.
-                // RequestStop revalidates this exact lifetime and does not block the UI.
+                // Dispatch revalidates the exact lifetime after the modal alert. A canceled
+                // or stale action must not suppress later warnings.
                 _controller.RequestStop(selected.Id);
+                if (confirmation.DontAskAgain)
+                {
+                    _controller.SetConfirmStop(false);
+                }
             }
         }
         catch (Exception ex)
@@ -113,11 +121,17 @@ internal sealed partial class MacTrayApplication : IDisposable
 internal sealed record StopConfirmation(
     AppHostId AppHost,
     string Message,
+    string Detail,
     int ButtonCount,
     bool CancelIsDefault,
     bool StopRequiresExplicitChoice,
     bool HasColorIcon,
-    bool HasStandardButtonContrast);
+    bool HasStandardButtonContrast,
+    bool ShowsSuppressionButton,
+    string SuppressionTitle,
+    bool SuppressionIsChecked);
+
+internal readonly record struct StopConfirmationResult(bool Confirmed, bool DontAskAgain);
 
 internal sealed record TrayConfirmation(
     string Message,

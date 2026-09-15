@@ -9,6 +9,11 @@ internal static unsafe partial class NativeMethods
 {
     internal const uint WmNull = 0;
     internal const uint WmDestroy = 2;
+    internal const uint WmPaint = 0xF;
+    internal const uint WmEraseBackground = 0x14;
+    internal const uint WmPrintClient = 0x318;
+    internal const uint WmVerticalScroll = 0x115;
+    internal const uint WmMouseWheel = 0x20A;
     internal const uint WmClose = 0x10;
     internal const uint WmEndSession = 0x16;
     internal const uint WmContextMenu = 0x7B;
@@ -23,9 +28,13 @@ internal static unsafe partial class NativeMethods
     internal const uint QuitMessage = 0x8005;
     internal const uint SmokeMessage = 0x8006;
     internal const uint SettingsMessage = 0x8007;
+    internal const uint SettingsLayoutMessage = 0x8008;
     internal const uint WmKeyDown = 0x100;
     internal const uint WmCommand = 0x111;
     internal const uint WmInitDialog = 0x110;
+    internal const uint WmCtlColorDialog = 0x136;
+    internal const uint WmCtlColorStatic = 0x138;
+    internal const uint WmCtlColorButton = 0x135;
     internal const uint WmNcDestroy = 0x82;
     internal const uint BmGetCheck = 0xF0;
     internal const uint BmSetCheck = 0xF1;
@@ -33,6 +42,15 @@ internal static unsafe partial class NativeMethods
     internal const uint WmDpiChanged = 0x02E0;
     internal const uint WmSettingChange = 0x001A;
     internal const uint WmMenuRightButtonUp = 0x0122;
+    internal const uint WmMenuSelect = 0x011F;
+    internal const uint TtmTrackActivate = 0x411;
+    internal const uint TtmTrackPosition = 0x412;
+    internal const uint TtmGetDelayTime = 0x415;
+    internal const uint TtmSetMaxTipWidth = 0x418;
+    internal const uint TtmGetBubbleSize = 0x41E;
+    internal const uint TtmAddTool = 0x432;
+    internal const uint TtmGetText = 0x438;
+    internal const uint TtmUpdateTipText = 0x439;
     internal const uint NimAdd = 0;
     internal const uint NimModify = 1;
     internal const uint NimDelete = 2;
@@ -59,6 +77,7 @@ internal static unsafe partial class NativeMethods
     internal const uint MiimBitmap = 0x80;
     internal const uint MiimId = 0x2;
     internal const uint MiimSubmenu = 0x4;
+    internal const uint MiimFType = 0x100;
     internal const uint MfByPosition = 0x400;
     internal const uint GwEnabledPopup = 6;
 
@@ -106,6 +125,13 @@ internal static unsafe partial class NativeMethods
         public nint Color;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct CommonControls
+    {
+        public uint Size;
+        public uint Classes;
+    }
+
     // Default Win32 packing is 8 on both supported architectures (x64 and ARM64).
     // Pointer-sized fields must stay pointer-sized, including WPARAM and menu identifiers.
     [StructLayout(LayoutKind.Sequential)]
@@ -137,6 +163,60 @@ internal static unsafe partial class NativeMethods
         public int Top;
         public int Right;
         public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct ToolInfo
+    {
+        public uint Size;
+        public uint Flags;
+        public nint Window;
+        public nuint Id;
+        public Rect Rect;
+        public nint Instance;
+        public char* Text;
+        public nint Parameter;
+        public nint Reserved;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MonitorInfo
+    {
+        public uint Size;
+        public Rect Monitor;
+        public Rect Work;
+        public uint Flags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct HighContrast
+    {
+        public uint Size;
+        public uint Flags;
+        public nint DefaultScheme;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct ScrollInfo
+    {
+        public uint Size;
+        public uint Mask;
+        public int Minimum;
+        public int Maximum;
+        public uint Page;
+        public int Position;
+        public int TrackPosition;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct PaintStruct
+    {
+        public nint Dc;
+        public int Erase;
+        public Rect Paint;
+        public int Restore;
+        public int IncrementalUpdate;
+        public fixed byte Reserved[32];
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -269,6 +349,12 @@ internal static unsafe partial class NativeMethods
     internal static partial int GetMenuItemCount(nint menu);
 
     [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int GetMenuItemRect(nint window, nint menu, uint item, out Rect rect);
+
+    [LibraryImport("user32.dll")]
+    internal static partial int HiliteMenuItem(nint window, nint menu, uint item, uint flags);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
     internal static partial nint SetThreadDpiAwarenessContext(nint context);
 
     [LibraryImport("user32.dll")]
@@ -335,6 +421,37 @@ internal static unsafe partial class NativeMethods
     internal static partial nint CreateDialogIndirectParam(nint instance, byte* template, nint owner,
         delegate* unmanaged[Stdcall]<nint, uint, nuint, nint, nint> dialogProcedure, nint parameter);
 
+    [LibraryImport("user32.dll", EntryPoint = "DialogBoxIndirectParamW", SetLastError = true)]
+    internal static partial nint DialogBoxIndirectParam(nint instance, byte* template, nint owner,
+        delegate* unmanaged[Stdcall]<nint, uint, nuint, nint, nint> dialogProcedure, nint parameter);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int EndDialog(nint dialog, nint result);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int OpenClipboard(nint owner);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int EmptyClipboard();
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial nint SetClipboardData(uint format, nint memory);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int CloseClipboard();
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    internal static partial nint GlobalAlloc(uint flags, nuint bytes);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    internal static partial nint GlobalLock(nint memory);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    internal static partial int GlobalUnlock(nint memory);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    internal static partial nint GlobalFree(nint memory);
+
     [LibraryImport("user32.dll", EntryPoint = "IsDialogMessageW")]
     internal static partial int IsDialogMessage(nint dialog, ref Message message);
 
@@ -358,6 +475,9 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport("user32.dll")]
     internal static partial int IsWindowEnabled(nint window);
+
+    [LibraryImport("user32.dll")]
+    internal static partial int IsWindowVisible(nint window);
 
     [LibraryImport("user32.dll", EntryPoint = "SetWindowTextW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
     internal static partial int SetWindowText(nint window, string text);
@@ -386,6 +506,92 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport("user32.dll")]
     internal static partial nint GetDlgItem(nint dialog, int id);
+
+    [LibraryImport("comctl32.dll", SetLastError = true)]
+    internal static partial int InitCommonControlsEx(in CommonControls controls);
+
+    [LibraryImport("uxtheme.dll")]
+    internal static partial int IsAppThemed();
+
+    [LibraryImport("uxtheme.dll")]
+    internal static partial int IsThemeActive();
+
+    [LibraryImport("gdi32.dll", EntryPoint = "CreateFontW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    internal static partial nint CreateFont(int height, int width, int escapement, int orientation, int weight,
+        uint italic, uint underline, uint strikeOut, uint charSet, uint outputPrecision, uint clipPrecision,
+        uint quality, uint pitchAndFamily, string face);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial nint GetDC(nint window);
+
+    [LibraryImport("user32.dll")]
+    internal static partial int ReleaseDC(nint window, nint dc);
+
+    [LibraryImport("user32.dll", EntryPoint = "DrawTextW", StringMarshalling = StringMarshalling.Utf16)]
+    internal static partial int DrawText(nint dc, string text, int count, ref Rect rect, uint format);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int GetWindowRect(nint window, out Rect rect);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int GetClientRect(nint window, out Rect rect);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int ClientToScreen(nint window, ref Point point);
+
+    [LibraryImport("user32.dll")]
+    internal static partial nint MonitorFromWindow(nint window, uint flags);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetMonitorInfoW", SetLastError = true)]
+    internal static partial int GetMonitorInfo(nint monitor, ref MonitorInfo info);
+
+    [LibraryImport("user32.dll")]
+    internal static partial nint GetSysColorBrush(int index);
+
+    [LibraryImport("user32.dll")]
+    internal static partial uint GetSysColor(int index);
+
+    [LibraryImport("gdi32.dll")]
+    internal static partial uint SetTextColor(nint dc, uint color);
+
+    [LibraryImport("gdi32.dll")]
+    internal static partial int SetBkMode(nint dc, int mode);
+
+    [LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
+    internal static partial int GetHighContrast(uint action, uint parameter, ref HighContrast contrast, uint flags);
+
+    [LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
+    internal static partial int GetWheelScrollLines(uint action, uint parameter, ref uint lines, uint flags);
+
+    [LibraryImport("user32.dll")]
+    internal static partial int SetScrollInfo(nint window, int bar, in ScrollInfo info, int redraw);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial int GetScrollInfo(nint window, int bar, ref ScrollInfo info);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial nint BeginPaint(nint window, out PaintStruct paint);
+
+    [LibraryImport("user32.dll")]
+    internal static partial int EndPaint(nint window, in PaintStruct paint);
+
+    [LibraryImport("user32.dll")]
+    internal static partial int FillRect(nint dc, in Rect rect, nint brush);
+
+    [LibraryImport("gdi32.dll", SetLastError = true)]
+    internal static partial nint CreateSolidBrush(uint color);
+
+    [LibraryImport("gdi32.dll", SetLastError = true)]
+    internal static partial nint CreatePen(int style, int width, uint color);
+
+    [LibraryImport("gdi32.dll", SetLastError = true)]
+    internal static partial int SaveDC(nint dc);
+
+    [LibraryImport("gdi32.dll", SetLastError = true)]
+    internal static partial int RestoreDC(nint dc, int saved);
+
+    [LibraryImport("gdi32.dll", SetLastError = true)]
+    internal static partial int RoundRect(nint dc, int left, int top, int right, int bottom, int ellipseWidth, int ellipseHeight);
 }
 
 internal sealed class NativeCallException(string operation, int? error = null)

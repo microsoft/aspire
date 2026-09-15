@@ -5,6 +5,7 @@
     <OptimizationPreference>Size</OptimizationPreference>
     <AssemblyName>aspire-tray</AssemblyName>
     <ApplicationIcon>$(SharedDir)Aspire.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="$(SharedDir)Aspire.ico" Link="Aspire.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

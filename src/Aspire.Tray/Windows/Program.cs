@@ -66,7 +66,7 @@ internal static class Program
             var options = TrayOptions.Parse(args);
             if (options.SmokeSeconds is int seconds)
             {
-                return NativeSmokeHarness.Run(options.CliPath, seconds);
+                return NativeSmokeHarness.Run(options.CliPath, seconds, options.InteractiveSmoke);
             }
 
             // Run, acquire, and release the named mutex on the initial STA thread.
@@ -81,7 +81,8 @@ internal static class Program
             using var lease = options.BundleRoot is null
                 ? null : BundleVersionLease.Acquire(options.BundleRoot, "tray", "tray");
             var controller = new TrayController(new CliAppHostClient(options.CliPath),
-                new FileTraySavedStateStore(Path.Combine(WindowsSingleInstance.DirectoryPath, "apphosts.json")));
+                new FileTraySavedStateStore(Path.Combine(WindowsSingleInstance.DirectoryPath, "apphosts.json")),
+                TrayConfiguration.LoadRecentAppHostLimit(TrayConfiguration.GetSettingsPath(options.CliPath)));
             TrayApplication? tray = null;
             TrayActivation? activation = null;
             try

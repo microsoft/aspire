@@ -6,16 +6,26 @@ namespace Aspire.Tray;
 internal sealed partial class MacTrayApplication
 {
     private const int TrayMarkSize = 20;
-    private const double StatusIconSize = 12;
-    private const uint AspirePurple = 0x512BD4;
-    private const uint AvailableColor = 0x4A9F30;
-    private const uint AwayColor = 0xDFA638;
-    private const uint BusyColor = 0xB52A29;
-    private const uint OfflineColor = 0x606060;
+    private const double StatusIconSize = 14;
 
-    private nint GetTrayImage(bool connected)
+    private static TrayIconState GetTrayIconState(TrayViewState state) => state.Discovery switch
     {
-        if (_trayImages.TryGetValue(connected, out var existing))
+        DiscoveryState.Connecting => TrayIconState.Connecting,
+        DiscoveryState.Live => state.HasActiveAppHosts ? TrayIconState.Active : TrayIconState.Idle,
+        _ => TrayIconState.Disconnected
+    };
+
+    private static string TrayIconDescription(TrayIconState state) => state switch
+    {
+        TrayIconState.Active => "AppHosts running",
+        TrayIconState.Idle => "No AppHosts running",
+        TrayIconState.Connecting => "Connecting to discovery",
+        _ => "Discovery unavailable"
+    };
+
+    private nint GetTrayImage(TrayIconState state)
+    {
+        if (_trayImages.TryGetValue(state, out var existing))
         {
             return existing;
         }
@@ -24,10 +34,13 @@ internal sealed partial class MacTrayApplication
             var mark = new AppKit.NativeRect(new(0, 1), new(TrayMarkSize, TrayMarkSize));
             AppKit.DrawImage(_trayMarkImage, AppKit.Selector("drawInRect:fromRect:operation:fraction:"),
                 mark, new(new(0, 0), new(0, 0)), 2, 1);
-            // Whiten only the mark, preserving its alpha. Making the composite a template
-            // would also discard the connection badge's purple color.
-            AppKit.SendVoid(GetColor(0xFFFFFF), AppKit.Selector("setFill"));
-            AppKit.FillRectUsingOperation(new(new(0, 0), new(22, 22)), 3);
+            // Preserve the supplied brand silhouette. The entire composite is a template:
+            // AppKit chooses its contrast for the menu-bar material and selected appearance.
+            // https://developer.apple.com/documentation/appkit/nsimage/istemplate
+            if (state == TrayIconState.Idle)
+            {
+                return;
+            }
             // Erase the mark under the badge rather than painting a background-colored
             // outline. The transparent ring follows any menu-bar material or wallpaper.
             AppKit.SendVoid(AppKit.Class("NSGraphicsContext"), AppKit.Selector("saveGraphicsState"));
@@ -43,13 +56,23 @@ internal sealed partial class MacTrayApplication
                 AppKit.SendVoid(AppKit.Class("NSGraphicsContext"), AppKit.Selector("restoreGraphicsState"));
             }
             var badge = new AppKit.NativeRect(new(13, 0), new(9, 9));
-            FillCircle(connected ? AspirePurple : 0xFFFFFF, badge);
-            if (!connected)
+            switch (state)
             {
-                DrawCross(badge, OfflineColor);
+                case TrayIconState.Active:
+                    FillCircle(0, badge);
+                    break;
+                case TrayIconState.Disconnected:
+                    DrawCross(badge, 0);
+                    break;
+                case TrayIconState.Connecting:
+                    foreach (var x in new[] { 13.0, 16.5, 20.0 })
+                    {
+                        FillCircle(0, new(new(x, 3.5), new(2, 2)));
+                    }
+                    break;
             }
         });
-        _trayImages.Add(connected, image);
+        _trayImages.Add(state, image);
         return image;
     }
 
@@ -109,8 +132,7 @@ internal sealed partial class MacTrayApplication
         }
         try
         {
-            // lockFocus uses a display-dependent color space. Explicit sRGB bitmap
-            // representations preserve the presence palette on both standard and Retina displays.
+            // Explicit 1x/2x bitmaps avoid lockFocus's display-dependent raster scale.
             foreach (var scale in new[] { 2, 1 })
             {
                 var pixels = (nint)(size * scale);
@@ -147,6 +169,7 @@ internal sealed partial class MacTrayApplication
                     try
                     {
                         AppKit.Set(AppKit.Class("NSGraphicsContext"), "setCurrentContext:", context);
+                        AppKit.SendBool(context, AppKit.Selector("setShouldAntialias:"), 1);
                         AppKit.FillRectUsingOperation(new(new(0, 0), new(pixels, pixels)), 0);
                         var transform = AppKit.Get(AppKit.Class("NSAffineTransform"), "transform");
                         AppKit.SetDouble(transform, AppKit.Selector("scaleBy:"), scale);
@@ -165,7 +188,7 @@ internal sealed partial class MacTrayApplication
                     AppKit.Release(bitmap);
                 }
             }
-            AppKit.SendBool(image, AppKit.Selector("setTemplate:"), 0);
+            AppKit.SendBool(image, AppKit.Selector("setTemplate:"), 1);
             return image;
         }
         catch
@@ -188,8 +211,8 @@ internal sealed partial class MacTrayApplication
 
     private static void DrawCross(AppKit.NativeRect rect, uint color)
     {
-        DrawStroke(rect, [new(0.32, 0.32), new(0.68, 0.68)], color);
-        DrawStroke(rect, [new(0.32, 0.68), new(0.68, 0.32)], color);
+        DrawStroke(rect, [new(0.2, 0.2), new(0.8, 0.8)], color);
+        DrawStroke(rect, [new(0.2, 0.8), new(0.8, 0.2)], color);
     }
 
     private static void DrawStroke(AppKit.NativeRect rect, AppKit.NativePoint[] points, uint color)
@@ -208,32 +231,50 @@ internal sealed partial class MacTrayApplication
         AppKit.SendVoid(path, AppKit.Selector("stroke"));
     }
 
-    private nint GetHealthImage(AppHostHealth health)
+    private nint GetHealthImage(AppHostHealth health, bool running)
     {
-        if (_healthImages.TryGetValue(health, out var existing))
+        var key = (running ? health : AppHostHealth.Unknown, running);
+        if (_healthImages.TryGetValue(key, out var existing))
         {
             return existing;
         }
-        var image = DrawIcon(StatusIconSize, () =>
+        // Native symbols remain legible in light/dark/selected menus and carry meaning
+        // without relying on color perception. An inactive host is neutral, not an error.
+        var symbol = AppKit.SendTwoPointers(AppKit.Class("NSImage"),
+            AppKit.Selector("imageWithSystemSymbolName:accessibilityDescription:"),
+            AppKit.String(HealthSymbol(health, running)), AppKit.String(HealthDescription(health, running)));
+        if (symbol == 0)
         {
-            var rect = new AppKit.NativeRect(new(0, 0), new(StatusIconSize, StatusIconSize));
-            FillCircle(health switch
-            {
-                AppHostHealth.Healthy => AvailableColor,
-                AppHostHealth.Warning => AwayColor,
-                AppHostHealth.Unhealthy => BusyColor,
-                _ => 0xFFFFFF
-            }, rect);
-        });
-        _healthImages.Add(health, image);
+            throw new InvalidOperationException("A required AppHost health symbol is unavailable.");
+        }
+        var image = AppKit.Get(symbol, "copy");
+        AppKit.SendSize(image, AppKit.Selector("setSize:"), new(StatusIconSize, StatusIconSize));
+        AppKit.SendBool(image, AppKit.Selector("setTemplate:"), 1);
+        _healthImages.Add(key, image);
         return image;
     }
 
-    private static string HealthDescription(AppHostHealth health) => health switch
+    private static string HealthSymbol(AppHostHealth health, bool running) => !running ? "stop.circle" : health switch
+    {
+        AppHostHealth.Healthy => "checkmark.circle",
+        AppHostHealth.Warning => "exclamationmark.triangle",
+        AppHostHealth.Unhealthy => "xmark.octagon",
+        _ => "questionmark.circle"
+    };
+
+    private static string HealthDescription(AppHostHealth health, bool running) => !running ? "AppHost stopped" : health switch
     {
         AppHostHealth.Healthy => "All resources healthy",
         AppHostHealth.Warning => "Resources waiting or degraded",
         AppHostHealth.Unhealthy => "Resources failed or unhealthy",
-        _ => "Inactive or resource health unavailable"
+        _ => "Resource health unavailable"
     };
+
+    private enum TrayIconState
+    {
+        Idle,
+        Active,
+        Connecting,
+        Disconnected
+    }
 }

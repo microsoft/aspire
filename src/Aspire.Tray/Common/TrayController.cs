@@ -9,6 +9,7 @@ internal sealed class TrayController : IAsyncDisposable
 {
     private readonly IAppHostClient _client;
     private readonly ITraySavedStateStore _savedStateStore;
+    private readonly int _recentAppHostLimit;
     private readonly object _gate = new();
     private readonly CancellationTokenSource _shutdown = new();
     private readonly Dictionary<AppHostId, StopOperation> _stops = [];
@@ -22,6 +23,7 @@ internal sealed class TrayController : IAsyncDisposable
     private string? _actionError;
     private string? _savedStateError;
     private string? _pinProbeError;
+    private bool _savedStateDirty;
     private bool _disposed;
 
     public TrayController(IAppHostClient client) : this(client, new MemoryTraySavedStateStore())
@@ -29,9 +31,17 @@ internal sealed class TrayController : IAsyncDisposable
     }
 
     public TrayController(IAppHostClient client, ITraySavedStateStore savedStateStore)
+        : this(client, savedStateStore, TraySavedState.DefaultRecentAppHostLimit)
     {
+    }
+
+    public TrayController(IAppHostClient client, ITraySavedStateStore savedStateStore, int recentAppHostLimit)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(recentAppHostLimit);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(recentAppHostLimit, TraySavedState.MaximumRecentAppHosts);
         _client = client;
         _savedStateStore = savedStateStore;
+        _recentAppHostLimit = recentAppHostLimit;
         try
         {
             _savedState = savedStateStore.Load();
@@ -41,6 +51,14 @@ internal sealed class TrayController : IAsyncDisposable
             Console.Error.WriteLine($"Saved AppHost state could not be loaded ({ex.GetType().Name}).");
             _savedStateError = "Unable to load saved AppHosts. The saved file was left unchanged.";
         }
+        var trimmed = _savedState.Trim(_recentAppHostLimit);
+        if (!TrySaveStateLocked(trimmed))
+        {
+            // The configured limit also applies when storage is temporarily unavailable.
+            // Keep the original file untouched and show the existing persistence error.
+            _savedState = trimmed;
+            _savedStateDirty = true;
+        }
         PublishLocked();
     }
 
@@ -48,6 +66,26 @@ internal sealed class TrayController : IAsyncDisposable
     public event Action? Changed;
 
     public TrayViewState State => Volatile.Read(ref _state);
+
+    /// <summary>
+    /// Gets whether the native frontend must confirm an AppHost stop.
+    /// </summary>
+    public bool ConfirmStop
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _savedState.ConfirmStop;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Persists the stop-confirmation preference before changing its in-memory value.
+    /// </summary>
+    public void SetConfirmStop(bool confirmStop)
+        => UpdateSavedState(state => state with { ConfirmStop = confirmStop });
 
     public void Start()
     {
@@ -462,19 +500,20 @@ internal sealed class TrayController : IAsyncDisposable
         var state = _savedState;
         foreach (var path in paths)
         {
-            state = state.Remember(path);
+            state = state.Remember(path, _recentAppHostLimit);
         }
         if (!TrySaveStateLocked(state))
         {
             // Discovery still works in memory after a storage failure, but its persistent
             // error stays visible and the store will not overwrite an unreadable file.
             _savedState = state;
+            _savedStateDirty = true;
         }
     }
 
     private bool TrySaveStateLocked(TraySavedState state)
     {
-        if (_savedState.AppHosts.SequenceEqual(state.AppHosts))
+        if (!_savedStateDirty && _savedState.ConfirmStop == state.ConfirmStop && _savedState.AppHosts.SequenceEqual(state.AppHosts))
         {
             return true;
         }
@@ -482,6 +521,7 @@ internal sealed class TrayController : IAsyncDisposable
         {
             _savedStateStore.Save(state);
             _savedState = state;
+            _savedStateDirty = false;
             _savedStateError = null;
             return true;
         }

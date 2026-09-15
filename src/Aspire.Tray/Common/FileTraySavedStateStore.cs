@@ -32,7 +32,8 @@ internal sealed class FileTraySavedStateStore : ITraySavedStateStore
         _writable = false;
         var contents = ReadContents();
         // Only paths and flags are accepted:
-        // {"appHosts":[{"appHostPath":"/src/shop/apphost.cs","isPinned":true,"isRecent":true}]}
+        // {"appHosts":[{"appHostPath":"/src/shop/apphost.cs","isPinned":true,"isRecent":true}],"confirmStop":false}
+        // Older files omit confirmStop; the JSON constructor retains confirmation.
         // Array order is recency; no timestamp, PID, or dashboard URL is persisted.
         var state = contents is null ? TraySavedState.Empty
             : JsonSerializer.Deserialize(contents, TraySavedStateJsonContext.Default.TraySavedState)

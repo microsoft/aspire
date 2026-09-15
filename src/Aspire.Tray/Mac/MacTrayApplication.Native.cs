@@ -28,8 +28,8 @@ internal sealed partial class MacTrayApplication
     private nint _clearRecent;
     private nint _brandImage;
     private nint _trayMarkImage;
-    private readonly Dictionary<bool, nint> _trayImages = [];
-    private readonly Dictionary<AppHostHealth, nint> _healthImages = [];
+    private readonly Dictionary<TrayIconState, nint> _trayImages = [];
+    private readonly Dictionary<(AppHostHealth Health, bool Running), nint> _healthImages = [];
     private bool _showStatus;
     private nint _runLoop;
     private nint _refreshSource;
@@ -71,6 +71,7 @@ internal sealed partial class MacTrayApplication
             AddCallback(callbackClass, "clearRecent:", &OnClearRecent);
             AddCallback(callbackClass, "openIn:", &OnOpenIn);
             AddCallback(callbackClass, "showInFinder:", &OnShowInFinder);
+            AddCallback(callbackClass, "copyPath:", &OnCopyPath);
             AddCallback(callbackClass, "openDocumentation:", &OnOpenDocumentation);
             AddCallback(callbackClass, "showSettings:", &OnShowSettings);
             AddCallback(callbackClass, "changeStartup:", &OnChangeStartup);
@@ -314,19 +315,19 @@ internal sealed partial class MacTrayApplication
             AppKit.Set(row.Pin, "setTitle:", AppKit.String(host?.IsPinned == true ? "Unpin AppHost" : "Pin AppHost"));
             AppKit.Set(row.Pin, "setAction:", AppKit.Selector(host?.IsPinned == true ? "unpinAppHost:" : "pinAppHost:"));
             SetSymbol(row.Pin, host?.IsPinned == true ? "pin.slash" : "pin", host?.IsPinned == true ? "Unpin AppHost" : "Pin AppHost");
-            AppKit.Set(row.Stop, "setTitle:", AppKit.String(host?.IsStopping == true ? "Stopping AppHost..." : "Stop AppHost\u2026"));
+            AppKit.Set(row.Stop, "setTitle:", AppKit.String(GetStopTitle(host?.IsStopping == true)));
             var health = host?.Health ?? AppHostHealth.Unknown;
-            AppKit.Set(row.Item, "setImage:", GetHealthImage(health));
+            AppKit.Set(row.Item, "setImage:", GetHealthImage(health, host?.IsRunning == true));
             AppKit.Set(row.Item, "setAccessibilityLabel:",
-                AppKit.String($"{host?.DisplayName ?? row.DisplayName}, {HealthDescription(health)}, {subtitle}, AppHost actions"));
+                AppKit.String($"{host?.DisplayName ?? row.DisplayName}, {HealthDescription(health, host?.IsRunning == true)}, {subtitle}, AppHost actions"));
         }
         SetEnabled(_clearRecent, state.CanClearRecent);
 
         var button = AppKit.Get(_statusItem, "button");
         AppKit.Set(button, "setTitle:", AppKit.String(""));
-        AppKit.Set(button, "setImage:", GetTrayImage(state.HasActiveAppHosts));
+        AppKit.Set(button, "setImage:", GetTrayImage(GetTrayIconState(state)));
         AppKit.Set(button, "setToolTip:", AppKit.String($"Aspire\n{state.Status}"));
-        AppKit.Set(button, "setAccessibilityLabel:", AppKit.String($"Aspire, {state.Status}"));
+        AppKit.Set(button, "setAccessibilityLabel:", AppKit.String($"Aspire, {TrayIconDescription(GetTrayIconState(state))}, {state.Status}"));
     }
 
     private void RebuildMenu(TrayViewState state)
@@ -388,7 +389,7 @@ internal sealed partial class MacTrayApplication
             AppKit.Release(_recentMenu);
         }
         var documentation = AddItem(_menu, "Documentation", "openDocumentation:", enabled: true);
-        SetSymbol(documentation, "arrow.up.right.square", "Open documentation");
+        SetSymbol(documentation, "book", "Open documentation");
         AddSettingsItem(_menu);
         AddSeparator(_menu);
         var quit = AddItem(_menu, "Quit Aspire", "quit:", enabled: true);
@@ -405,7 +406,7 @@ internal sealed partial class MacTrayApplication
             var dashboard = AddItem(submenu, "Open Dashboard", "openDashboard:", host.CanOpenDashboard);
             SetSymbol(dashboard, "arrow.up.right.square", "Open dashboard");
             AddSeparator(submenu);
-            var stop = AddItem(submenu, "Stop AppHost\u2026", "stopAppHost:", host.CanStop);
+            var stop = AddItem(submenu, GetStopTitle(host.IsStopping), "stopAppHost:", host.CanStop);
             SetSymbol(stop, "stop.circle", "Stop AppHost");
             var start = AddItem(submenu, "Start AppHost", "startAppHost:", host.CanStart);
             SetSymbol(start, "play", "Start AppHost");
@@ -422,9 +423,12 @@ internal sealed partial class MacTrayApplication
             var finder = AddItem(submenu, "Show in Finder", "showInFinder:", enabled: true);
             SetSymbol(finder, "folder", "Show in Finder");
             AttachPath(finder, host.Id.AppHostPath);
+            var copyPath = AddItem(submenu, "Copy Path", "copyPath:", enabled: true);
+            SetSymbol(copyPath, "doc.on.doc", "Copy AppHost path");
+            AttachPath(copyPath, host.Id.AppHostPath);
             AppKit.Set(item, "setSubmenu:", submenu);
             AttachAppHostIdentity(host.Id, dashboard, stop);
-            return new(host.Id, host.Title, host.DisplayName, item, submenu, dashboard, stop, start, pin);
+            return new(host.Id, host.Title, host.DisplayName, item, submenu, dashboard, stop, start, pin, copyPath);
         }
         finally
         {
@@ -440,6 +444,9 @@ internal sealed partial class MacTrayApplication
         _menus.Add(menu);
         return menu;
     }
+
+    private string GetStopTitle(bool isStopping)
+        => isStopping ? "Stopping AppHost..." : _controller.ConfirmStop ? "Stop AppHost\u2026" : "Stop AppHost";
 
     private nint AddItem(nint menu, string title, string? action, bool enabled)
     {
@@ -506,7 +513,7 @@ internal sealed partial class MacTrayApplication
             _trayMarkImage = LoadTrayMark();
         }
         var button = AppKit.Get(_statusItem, "button");
-        AppKit.Set(button, "setImage:", GetTrayImage(_controller.State.HasActiveAppHosts));
+        AppKit.Set(button, "setImage:", GetTrayImage(GetTrayIconState(_controller.State)));
         AppKit.Set(button, "setImagePosition:", 2);
     }
 
@@ -540,7 +547,7 @@ internal sealed partial class MacTrayApplication
         }
     }
 
-    private bool ConfirmStop(AppHostInfo host)
+    private StopConfirmationResult ConfirmStop(AppHostInfo host)
     {
         var alert = AppKit.Get(AppKit.Class("NSAlert"), "new");
         _modalDepth++;
@@ -548,8 +555,15 @@ internal sealed partial class MacTrayApplication
         {
             AppKit.Set(alert, "setMessageText:", AppKit.String($"Stop {AppHostPresentation.GetTitle(host)}?"));
             AppKit.Set(alert, "setInformativeText:", AppKit.String(
-                $"Only this AppHost instance will be stopped. Persistent resources are left running.\n\n{host.AppHostPath}\nPID {host.AppHostPid}"));
+                $"Only this AppHost instance (PID {host.AppHostPid}) will be stopped. Persistent resources are left running."));
             AppKit.Set(alert, "setAlertStyle:", 0);
+            // NSAlert lays out and exposes the suppression checkbox to accessibility itself.
+            // It is strictly a Stop preference, not suppression of unrelated confirmations.
+            // https://developer.apple.com/documentation/appkit/nsalert/showssuppressionbutton
+            AppKit.SendBool(alert, AppKit.Selector("setShowsSuppressionButton:"), 1);
+            var suppression = AppKit.Get(alert, "suppressionButton");
+            AppKit.Set(suppression, "setTitle:", AppKit.String("Don't ask again"));
+            AppKit.Set(suppression, "setState:", 0);
             var icon = AppKit.Get(_brandImage, "copy");
             try
             {
@@ -572,20 +586,31 @@ internal sealed partial class MacTrayApplication
             AppKit.Set(window, "setDefaultButtonCell:", AppKit.Get(cancel, "cell"));
             AppKit.Set(stop, "setKeyEquivalent:", AppKit.String(""));
 
+            bool confirmed;
             if (_confirmStop is not null && !_interactiveSmoke)
             {
-                return _confirmStop(new(host.Id, AppKit.Text(AppKit.Get(alert, "messageText")),
+                var result = _confirmStop(new(host.Id, AppKit.Text(AppKit.Get(alert, "messageText")),
+                    AppKit.Text(AppKit.Get(alert, "informativeText")),
                     checked((int)AppKit.Get(AppKit.Get(alert, "buttons"), "count")),
                     AppKit.Get(window, "defaultButtonCell") == AppKit.Get(cancel, "cell")
                         && AppKit.Text(AppKit.Get(cancel, "keyEquivalent")) == "\r",
                     AppKit.Text(AppKit.Get(stop, "keyEquivalent")) == "",
                     AppKit.Get(alert, "icon") != 0 && AppKit.GetBool(AppKit.Get(alert, "icon"), AppKit.Selector("isTemplate")) == 0,
                     !AppKit.Supports(stop, "hasDestructiveAction")
-                        || AppKit.GetBool(stop, AppKit.Selector("hasDestructiveAction")) == 0));
+                        || AppKit.GetBool(stop, AppKit.Selector("hasDestructiveAction")) == 0,
+                    AppKit.GetBool(alert, AppKit.Selector("showsSuppressionButton")) != 0 && suppression != 0,
+                    AppKit.Text(AppKit.Get(suppression, "title")),
+                    AppKit.Get(suppression, "state") != 0));
+                AppKit.Set(suppression, "setState:", result.DontAskAgain ? 1 : 0);
+                confirmed = result.Confirmed;
+            }
+            else
+            {
+                AppKit.SendBool(_application, AppKit.Selector("activateIgnoringOtherApps:"), 1);
+                confirmed = AppKit.Get(alert, "runModal") == 1001;
             }
 
-            AppKit.SendBool(_application, AppKit.Selector("activateIgnoringOtherApps:"), 1);
-            return AppKit.Get(alert, "runModal") == 1001;
+            return new(confirmed, confirmed && AppKit.Get(suppression, "state") == 1);
         }
         finally
         {
@@ -807,7 +832,7 @@ internal sealed partial class MacTrayApplication
         => Route(self, sender, static (app, _) => app._smokeTimeout?.Invoke());
 
     private sealed record NativeAppHostRow(
-        AppHostId Id, string Title, string DisplayName, nint Item, nint Submenu, nint Dashboard, nint Stop, nint Start, nint Pin);
+        AppHostId Id, string Title, string DisplayName, nint Item, nint Submenu, nint Dashboard, nint Stop, nint Start, nint Pin, nint CopyPath);
 
     private sealed record RestoreRequest(CancellationToken CancellationToken)
     {

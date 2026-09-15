@@ -11,6 +11,17 @@ public class CliAppHostCommandsTests
     public static bool SupportsShell => !OperatingSystem.IsWindows();
 
     [Fact]
+    public void StopPreservesTheDiscoveredSourcePathCasing()
+    {
+        var path = Path.GetFullPath(Path.Combine("MyWorktree", "Shop.AppHost", "AppHost.cs"));
+        var host = new AppHostInfo(path, 42, null) { ProcessStartTimeUnixMilliseconds = 1000 };
+
+        var startInfo = CliAppHostCommands.CreateStopStartInfo(Path.GetFullPath("aspire"), host.Id);
+
+        Assert.Equal(Arguments(new AppHostId(path, 42, 1000)), startInfo.ArgumentList);
+    }
+
+    [Fact]
     public void StopAlwaysSuppliesExactIdentityAndUsesNoShell()
     {
         var executable = Path.GetFullPath("cli path/aspire");

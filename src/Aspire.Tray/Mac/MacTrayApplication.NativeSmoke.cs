@@ -18,6 +18,7 @@ internal sealed partial class MacTrayApplication
     private nint _smokeTrackingDeadlineTimer;
     private nint _smokeTrackingMenu;
     private nint _smokeRetainedStopSender;
+    private nint _smokeRetainedCopySender;
     private Action? _smokeTimeout;
     private Action? _smokeMenuOpened;
     private Action<bool>? _smokeMenuClosed;
@@ -194,10 +195,10 @@ internal sealed partial class MacTrayApplication
                     && AppKit.Get(row.Stop, "action") == AppKit.Selector("stopAppHost:"),
                 Enabled(row.Start),
                 AppKit.Text(AppKit.Get(row.Pin, "title")),
-                _healthImages.Single(pair => pair.Value == AppKit.Get(row.Item, "image")).Key)).ToArray(),
+                _healthImages.Single(pair => pair.Value == AppKit.Get(row.Item, "image")).Key.Health)).ToArray(),
             checked((int)AppKit.Get(_menu, "numberOfItems")),
             _header == 0 ? null : AppKit.Text(AppKit.Get(_header, "title")),
-            icon != 0 && AppKit.GetBool(icon, AppKit.Selector("isTemplate")) == 0,
+            icon != 0 && AppKit.GetBool(icon, AppKit.Selector("isTemplate")) != 0,
             AppKit.Text(AppKit.Get(AppKit.Get(_statusItem, "button"), "title")) == "",
             HasNoItemTooltips(_menu),
             AppKit.Text(AppKit.Get(quit, "keyEquivalent")) == "q"
@@ -209,7 +210,57 @@ internal sealed partial class MacTrayApplication
             AppKit.GetBool(_statusItem, AppKit.Selector("isVisible")) != 0,
             _recentRows.Select(row => row.Id.AppHostPath).ToArray(),
             Enabled(_clearRecent),
-            AppKit.Get(AppKit.Get(_statusItem, "button"), "image") == GetTrayImage(_controller.State.HasActiveAppHosts));
+            AppKit.Get(AppKit.Get(_statusItem, "button"), "image") == GetTrayImage(GetTrayIconState(_controller.State)),
+            AppKit.Text(AppKit.Get(AppKit.Get(_statusItem, "button"), "accessibilityLabel")));
+    }
+
+    internal void VerifyCopyMenusForSmoke()
+    {
+        foreach (var row in _rows.Concat(_recentRows))
+        {
+            var count = AppKit.Get(row.Submenu, "numberOfItems");
+            var finder = AppKit.Get(row.Submenu, "itemAtIndex:", count - 2);
+            var copy = AppKit.Get(row.Submenu, "itemAtIndex:", count - 1);
+            if (AppKit.Text(AppKit.Get(finder, "title")) != "Show in Finder"
+                || AppKit.Get(finder, "action") != AppKit.Selector("showInFinder:")
+                || copy != row.CopyPath || AppKit.Text(AppKit.Get(copy, "title")) != "Copy Path"
+                || AppKit.Get(copy, "action") != AppKit.Selector("copyPath:")
+                || !Enabled(copy) || SelectedPath(copy) != row.Id.AppHostPath
+                || !Path.IsPathFullyQualified(SelectedPath(copy)))
+            {
+                throw new InvalidOperationException("Copy Path must immediately follow Finder and retain the exact absolute AppHost path.");
+            }
+            VerifySymbolForSmoke(AppKit.Get(copy, "image"), "doc.on.doc", "Copy AppHost path");
+        }
+    }
+
+    internal void PerformCopyForSmoke(string path)
+    {
+        var row = _rows.Concat(_recentRows).Single(row => row.Id.AppHostPath == path);
+        AppKit.Set(row.Submenu, "performActionForItemAtIndex:", AppKit.Get(row.Submenu, "numberOfItems") - 1);
+    }
+
+    internal void RetainCopySenderForSmoke(string path)
+    {
+        ReleaseRetainedCopySenderForSmoke();
+        _smokeRetainedCopySender = AppKit.Get(_rows.Single(row => row.Id.AppHostPath == path).CopyPath, "retain");
+    }
+
+    internal void PerformRetainedCopyForSmoke()
+    {
+        if (_smokeRetainedCopySender == 0
+            || _rows.Concat(_recentRows).Any(row => row.CopyPath == _smokeRetainedCopySender))
+        {
+            throw new InvalidOperationException("The Copy Path test must retain a sender from a previous menu.");
+        }
+        AppKit.SendVoidPointer(AppKit.Get(_smokeRetainedCopySender, "target"),
+            AppKit.Get(_smokeRetainedCopySender, "action"), _smokeRetainedCopySender);
+    }
+
+    internal void ReleaseRetainedCopySenderForSmoke()
+    {
+        AppKit.Release(_smokeRetainedCopySender);
+        _smokeRetainedCopySender = 0;
     }
 
     internal void PerformPinForSmoke(string path, bool useContextMenu)
@@ -261,15 +312,16 @@ internal sealed partial class MacTrayApplication
             }
             if (i == 2)
             {
+                VerifySymbolForSmoke(AppKit.Get(item, "image"), "book", "Open documentation");
                 var documentationArtwork = AppKit.Get(AppKit.Get(item, "image"), "TIFFRepresentation");
                 var dashboardIcon = AppKit.SendTwoPointers(AppKit.Class("NSImage"),
                     AppKit.Selector("imageWithSystemSymbolName:accessibilityDescription:"),
                     AppKit.String("arrow.up.right.square"), AppKit.String("Open dashboard"));
                 var dashboardArtwork = AppKit.Get(dashboardIcon, "TIFFRepresentation");
                 if (documentationArtwork == 0 || dashboardArtwork == 0
-                    || AppKit.SendReturningBool(documentationArtwork, AppKit.Selector("isEqualToData:"), dashboardArtwork) == 0)
+                    || AppKit.SendReturningBool(documentationArtwork, AppKit.Selector("isEqualToData:"), dashboardArtwork) != 0)
                 {
-                    throw new InvalidOperationException("Documentation must use the same icon as Open Dashboard.");
+                    throw new InvalidOperationException("Documentation must have a distinct book icon, not the dashboard icon.");
                 }
             }
             if (i == 3 && (AppKit.Text(AppKit.Get(item, "keyEquivalent")) != ","
@@ -295,9 +347,9 @@ internal sealed partial class MacTrayApplication
         void VerifyState(bool enabled)
         {
             var expected = startupSettings.Read();
-            var status = $"Launch at sign-in is {(enabled ? "on" : "off")}.\n{expected.Detail}";
             if (expected.Enabled != enabled || AppKit.Get(_startupCheckbox, "state") != (enabled ? 1 : 0)
-                || !Enabled(_startupCheckbox) || AppKit.Text(AppKit.Get(_startupStatus, "stringValue")) != status)
+                || !Enabled(_startupCheckbox) || AppKit.Text(AppKit.Get(_startupStatus, "stringValue")) != ""
+                || AppKit.GetBool(_startupStatus, AppKit.Selector("isHidden")) == 0)
             {
                 throw new InvalidOperationException("The native launch-at-sign-in control disagrees with the in-memory registration.");
             }
@@ -329,10 +381,9 @@ internal sealed partial class MacTrayApplication
         if (window == 0 || AppKit.GetBool(window, AppKit.Selector("isVisible")) == 0
             || AppKit.GetBool(window, AppKit.Selector("canBecomeKeyWindow")) == 0
             || AppKit.Text(AppKit.Get(_startupCheckbox, "title")) != "Launch Aspire Tray when I sign in"
-            || AppKit.Text(AppKit.Get(_settingsAbout, "stringValue")) != SettingsAboutText
-            || AppKit.Text(AppKit.Get(_settingsDocumentation, "title")) != "Documentation - https://aspire.dev")
+            || AppKit.Text(AppKit.Get(_settingsAbout, "stringValue")) != SettingsAboutText)
         {
-            throw new InvalidOperationException("Settings is missing its native window, startup control, About information, or documentation.");
+            throw new InvalidOperationException("Settings is missing its native window, startup control, or About information.");
         }
         var subviews = AppKit.Get(AppKit.Get(window, "contentView"), "subviews");
         var labels = new List<string>();
@@ -344,10 +395,9 @@ internal sealed partial class MacTrayApplication
                 labels.Add(AppKit.Text(AppKit.Get(view, "stringValue")));
             }
         }
-        if (!labels.Contains("General") || !labels.Contains("About")
-            || !labels.Contains("Only the tray starts at sign-in. AppHosts are not started."))
+        if (!labels.Contains("General") || !labels.Contains("About"))
         {
-            throw new InvalidOperationException("Settings must label its sections and explain that startup never starts AppHosts.");
+            throw new InvalidOperationException("Settings must label its sections.");
         }
 
         // performClick: changes the actual NSButton state and invokes its registered
@@ -391,7 +441,6 @@ internal sealed partial class MacTrayApplication
         }
         AppKit.Set(_startupCheckbox, "performClick:", 0);
         VerifyState(false);
-        AppKit.Set(_settingsDocumentation, "performClick:", 0);
         AppKit.Set(_menu, "performActionForItemAtIndex:", AppKit.Get(_menu, "numberOfItems") - 4);
         AppKit.Set(window, "performClose:", 0);
         VerifyState(false);
@@ -399,32 +448,79 @@ internal sealed partial class MacTrayApplication
 
     internal void VerifyStatusArtworkForSmoke()
     {
-        foreach (var health in Enum.GetValues<AppHostHealth>())
+        foreach (var discovery in new[] { DiscoveryState.Disconnected, DiscoveryState.Incompatible, DiscoveryState.LimitExceeded })
         {
-            var size = AppKit.GetSize(GetHealthImage(health), AppKit.Selector("size"));
-            if (size != new AppKit.NativeSize(12, 12))
+            if (GetTrayIconState(new(discovery, [], "")) != TrayIconState.Disconnected)
             {
-                throw new InvalidOperationException("AppHost status artwork must use a consistent 12-point size.");
+                throw new InvalidOperationException("Discovery failures must never use the idle artwork.");
             }
         }
-        if (AppKit.GetSize(GetTrayImage(true), AppKit.Selector("size")) != new AppKit.NativeSize(22, 22))
+        foreach (var (health, running, symbol, description) in new[]
         {
-            throw new InvalidOperationException("The tray artwork must use the larger 22-point canvas.");
+            (AppHostHealth.Healthy, true, "checkmark.circle", "All resources healthy"),
+            (AppHostHealth.Warning, true, "exclamationmark.triangle", "Resources waiting or degraded"),
+            (AppHostHealth.Unhealthy, true, "xmark.octagon", "Resources failed or unhealthy"),
+            (AppHostHealth.Unknown, true, "questionmark.circle", "Resource health unavailable"),
+            (AppHostHealth.Unknown, false, "stop.circle", "AppHost stopped")
+        })
+        {
+            var image = GetHealthImage(health, running);
+            VerifySymbolForSmoke(image, symbol, description);
+            if (AppKit.GetSize(image, AppKit.Selector("size")) != new AppKit.NativeSize(14, 14))
+            {
+                throw new InvalidOperationException("AppHost status symbols must use a consistent 14-point size.");
+            }
+        }
+        foreach (var state in Enum.GetValues<TrayIconState>())
+        {
+            var image = GetTrayImage(state);
+            if (AppKit.GetSize(image, AppKit.Selector("size")) != new AppKit.NativeSize(22, 22)
+                || AppKit.GetBool(image, AppKit.Selector("isTemplate")) == 0)
+            {
+                throw new InvalidOperationException("The tray artwork must be an appearance-adaptive 22-point template.");
+            }
+            foreach (var other in Enum.GetValues<TrayIconState>().Where(other => other != state))
+            {
+                if (AppKit.SendReturningBool(AppKit.Get(image, "TIFFRepresentation"), AppKit.Selector("isEqualToData:"),
+                    AppKit.Get(GetTrayImage(other), "TIFFRepresentation")) != 0)
+                {
+                    throw new InvalidOperationException("Active, idle, connecting, and disconnected tray artwork must be distinct.");
+                }
+            }
         }
         VerifyTrayMarkForSmoke();
-        VerifyIconPixel(GetTrayImage(true), new(10, 21.5), 0, 0, "transparent top margin");
-        VerifyIconPixel(GetTrayImage(true), new(0.5, 0.5), 0, 0, "transparent mark background");
-        VerifyIconPixel(GetTrayImage(true), new(17.5, 4.5), 0x512BD4, 1, "lower-right connected purple circle");
-        VerifyIconPixel(GetTrayImage(true), new(17.5, 9.5), 0, 0, "transparent connected border");
-        VerifyIconPixel(GetTrayImage(true), new(12.5, 4.5), 0, 0, "transparent connected inner border");
-        VerifyIconPixel(GetTrayImage(false), new(17.5, 4.5), 0x606060, 1, "lower-right disconnected cross");
-        VerifyIconPixel(GetTrayImage(false), new(17.5, 9.5), 0, 0, "transparent disconnected border");
-        VerifyIconPixel(GetHealthImage(AppHostHealth.Healthy), new(6, 10), 0x4A9F30, 1, "available green");
-        VerifyIconPixel(GetHealthImage(AppHostHealth.Healthy), new(5.3, 4), 0x4A9F30, 1, "solid available circle");
-        VerifyIconPixel(GetHealthImage(AppHostHealth.Warning), new(3, 6), 0xDFA638, 1, "away amber");
-        VerifyIconPixel(GetHealthImage(AppHostHealth.Warning), new(6, 7), 0xDFA638, 1, "solid waiting circle");
-        VerifyIconPixel(GetHealthImage(AppHostHealth.Unhealthy), new(6, 6), 0xB52A29, 1, "busy red");
-        VerifyIconPixel(GetHealthImage(AppHostHealth.Unknown), new(6, 6), 0xFFFFFF, 1, "white not-started circle");
+        VerifyIconPixel(GetTrayImage(TrayIconState.Active), new(10, 21.5), 0, 0, "transparent top margin");
+        VerifyIconPixel(GetTrayImage(TrayIconState.Active), new(0.5, 0.5), 0, 0, "transparent mark background");
+        VerifyIconPixel(GetTrayImage(TrayIconState.Active), new(17.5, 4.5), 0, 1, "active template badge");
+        VerifyIconPixel(GetTrayImage(TrayIconState.Active), new(17.5, 9.5), 0, 0, "transparent badge border");
+        VerifyIconPixel(GetTrayImage(TrayIconState.Active), new(12.5, 4.5), 0, 0, "transparent inner badge border");
+    }
+
+    private static void VerifySymbolForSmoke(nint image, string symbol, string description)
+    {
+        if (image == 0 || AppKit.GetBool(image, AppKit.Selector("isTemplate")) == 0
+            || AppKit.Text(AppKit.Get(image, "accessibilityDescription")) != description)
+        {
+            throw new InvalidOperationException("Native symbols must adapt to appearance and describe their meaning for accessibility.");
+        }
+        var expectedSymbol = AppKit.SendTwoPointers(AppKit.Class("NSImage"),
+            AppKit.Selector("imageWithSystemSymbolName:accessibilityDescription:"), AppKit.String(symbol), AppKit.String(description));
+        var expected = AppKit.Get(expectedSymbol, "copy");
+        try
+        {
+            AppKit.SendSize(expected, AppKit.Selector("setSize:"), AppKit.GetSize(image, AppKit.Selector("size")));
+            var actualData = AppKit.Get(image, "TIFFRepresentation");
+            var expectedData = AppKit.Get(expected, "TIFFRepresentation");
+            if (actualData == 0 || expectedData == 0
+                || AppKit.SendReturningBool(actualData, AppKit.Selector("isEqualToData:"), expectedData) == 0)
+            {
+                throw new InvalidOperationException($"The native action/status image must use the {symbol} symbol.");
+            }
+        }
+        finally
+        {
+            AppKit.Release(expected);
+        }
     }
 
     private unsafe void VerifyTrayMarkForSmoke()
@@ -439,12 +535,12 @@ internal sealed partial class MacTrayApplication
         foreach (var scale in new[] { 1, 2 })
         {
             var source = GetBitmapForSmoke(_trayMarkImage, 20 * scale);
-            foreach (var connected in new[] { false, true })
+            foreach (var state in Enum.GetValues<TrayIconState>())
             {
-                var image = GetTrayImage(connected);
-                if (AppKit.GetBool(image, AppKit.Selector("isTemplate")) != 0)
+                var image = GetTrayImage(state);
+                if (AppKit.GetBool(image, AppKit.Selector("isTemplate")) == 0)
                 {
-                    throw new InvalidOperationException("The composite must preserve the connection badge's color.");
+                    throw new InvalidOperationException("The composite must adapt its contrast to the menu bar.");
                 }
                 var rendered = GetBitmapForSmoke(image, 22 * scale);
                 var opaquePixels = 0;
@@ -459,17 +555,16 @@ internal sealed partial class MacTrayApplication
                     {
                         // The badge intentionally cuts into the lower-right mark. Elsewhere,
                         // compare every source alpha sample, including its separator cutouts.
-                        if (x >= 12 * scale && y >= 11 * scale)
+                        if (state != TrayIconState.Idle && x >= 12 * scale && y >= 11 * scale)
                         {
                             continue;
                         }
                         AppKit.GetPixel(source, AppKit.Selector("getPixel:atX:y:"), sourcePixel, x, y);
                         // Bitmap rows start at the top: the (0, 1) mark has one point above it.
                         AppKit.GetPixel(rendered, AppKit.Selector("getPixel:atX:y:"), renderedPixel, x, y + scale);
-                        if (Math.Abs((double)sourcePixel[3] - renderedPixel[3]) > 1
-                            || (sourcePixel[3] == 255 && (renderedPixel[0] != 255 || renderedPixel[1] != 255 || renderedPixel[2] != 255)))
+                        if (Math.Abs((double)sourcePixel[3] - renderedPixel[3]) > 1)
                         {
-                            throw new InvalidOperationException($"The supplied tray mask changed at ({x}, {y}), {scale}x, connected={connected}: expected alpha {sourcePixel[3]}, got RGBA ({renderedPixel[0]}, {renderedPixel[1]}, {renderedPixel[2]}, {renderedPixel[3]}).");
+                            throw new InvalidOperationException($"The supplied tray mask changed at ({x}, {y}), {scale}x, state={state}: expected alpha {sourcePixel[3]}, got {renderedPixel[3]}.");
                         }
                         opaquePixels += sourcePixel[3] == 255 ? 1 : 0;
                         transparentPixels += sourcePixel[3] == 0 ? 1 : 0;
@@ -486,13 +581,13 @@ internal sealed partial class MacTrayApplication
                 {
                     throw new InvalidOperationException("The tray template must include opaque artwork and transparent cutouts.");
                 }
-                // Measure the visible white mark, excluding the badge, rather than just its
+                // Measure the visible mark, excluding the badge, rather than just its
                 // image frame. Transparent source padding previously made a 20-point icon tiny.
                 if (right - left + 1 < 15 * scale || bottom - top + 1 < 17 * scale)
                 {
                     throw new InvalidOperationException($"The visible tray mark is too small at {scale}x: {right - left + 1} by {bottom - top + 1} pixels.");
                 }
-                Console.WriteLine($"Visible tray mark at {scale}x, connected={connected}: {right - left + 1} by {bottom - top + 1} pixels.");
+                Console.WriteLine($"Visible tray mark at {scale}x, state={state}: {right - left + 1} by {bottom - top + 1} pixels.");
             }
         }
     }
@@ -636,6 +731,7 @@ internal sealed partial class MacTrayApplication
         ReleaseSmokeTimer(ref _smokeTrackingWorkerTimer);
         ReleaseSmokeTimer(ref _smokeTrackingDeadlineTimer);
         ReleaseRetainedStopSenderForSmoke();
+        ReleaseRetainedCopySenderForSmoke();
         _smokeTimeout = null;
         _smokeMenuOpened = null;
         _smokeMenuClosed = null;
@@ -697,7 +793,7 @@ internal sealed record NativeMenuInspection(
     IReadOnlyList<NativeRowInspection> Rows,
     int ItemCount,
     string? StatusNotice,
-    bool HasColorIcon,
+    bool HasTemplateIcon,
     bool HasIconOnlyTitle,
     bool HasNoItemTooltips,
     bool HasCommandQ,
@@ -708,7 +804,8 @@ internal sealed record NativeMenuInspection(
     bool IsStatusItemVisible,
     IReadOnlyList<string> RecentPaths,
     bool CanClearRecent,
-    bool HasExpectedConnectionBadge);
+    bool HasExpectedConnectionBadge,
+    string AccessibilityLabel);
 
 internal sealed record NativeRowInspection(
     AppHostId Id,

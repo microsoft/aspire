@@ -22,12 +22,13 @@ public class TrayControllerSavedStateTests
 
         var row = Assert.Single(controller.State.AppHosts);
         Assert.Equal(new AppHostInfo(pinned, 0, null).Id, row.Id);
+        Assert.Equal(pinned, row.Id.AppHostPath);
         Assert.True(row.IsPinned);
         Assert.False(row.IsRunning);
         Assert.False(row.CanStop);
         Assert.False(row.CanOpenDashboard);
         Assert.Equal(AppHostHealth.Unknown, row.Health);
-        Assert.Equal(IdentityPath(recent), Assert.Single(controller.State.RecentAppHosts).Id.AppHostPath);
+        Assert.Equal(recent, Assert.Single(controller.State.RecentAppHosts).Id.AppHostPath);
         Assert.False(controller.State.HasActiveAppHosts);
         Assert.Empty(client.StartRequests);
 
@@ -42,7 +43,7 @@ public class TrayControllerSavedStateTests
     public async Task PinTracksLiveAndStoppedInstancesWithoutDuplicatingRecentEntries()
     {
         using var directory = new TestTrayStateDirectory();
-        var path = directory.CreateAppHost("pinned/apphost.cs");
+        var path = directory.CreateAppHost("MyPinnedProject/AppHost.cs");
         var client = new TestAppHostClient();
         var controller = new TrayController(client);
         await using var lifetime = controller.ConfigureAwait(true);
@@ -52,6 +53,7 @@ public class TrayControllerSavedStateTests
         controller.SetPinned(path, true);
 
         var live = Assert.Single(controller.State.AppHosts);
+        Assert.Equal(path, live.Id.AppHostPath);
         Assert.True(live.IsPinned);
         Assert.True(live.IsRunning);
         Assert.False(live.CanStart);
@@ -67,6 +69,7 @@ public class TrayControllerSavedStateTests
         await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
 
         var offline = Assert.Single(controller.State.AppHosts);
+        Assert.Equal(path, offline.Id.AppHostPath);
         Assert.True(offline.IsPinned);
         Assert.True(offline.CanStart);
         Assert.False(offline.IsRunning);
@@ -89,7 +92,7 @@ public class TrayControllerSavedStateTests
         Assert.False(Assert.Single(controller.State.AppHosts).IsPinned);
         await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
         Assert.Empty(controller.State.AppHosts);
-        Assert.Equal(IdentityPath(path), Assert.Single(controller.State.RecentAppHosts).Id.AppHostPath);
+        Assert.Equal(path, Assert.Single(controller.State.RecentAppHosts).Id.AppHostPath);
     }
 
     [Fact]
@@ -170,17 +173,17 @@ public class TrayControllerSavedStateTests
             await client.PublishAndWaitAsync(controller, new([host], DiscoveryState.Live));
         }
         Assert.Equal(hosts[^1].Id, Assert.Single(controller.State.AppHosts).Id);
-        Assert.Equal(hosts.Skip(5).SkipLast(1).Reverse().Select(host => host.Id.AppHostPath),
+        Assert.Equal(hosts.Skip(15).SkipLast(1).Reverse().Select(host => host.Id.AppHostPath),
             controller.State.RecentAppHosts.Select(host => host.Id.AppHostPath));
 
         controller.SetPinned(hosts[10].AppHostPath, true);
         Assert.Equal([hosts[^1].Id.AppHostPath, hosts[10].Id.AppHostPath], controller.State.AppHosts.Select(host => host.Id.AppHostPath));
-        Assert.Equal(hosts.Skip(5).SkipLast(1).Reverse().Where(host => host != hosts[10]).Select(host => host.Id.AppHostPath),
+        Assert.Equal(hosts.Skip(15).SkipLast(1).Reverse().Select(host => host.Id.AppHostPath),
             controller.State.RecentAppHosts.Select(host => host.Id.AppHostPath));
 
         await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
         Assert.Equal(hosts[10].Id.AppHostPath, Assert.Single(controller.State.AppHosts).Id.AppHostPath);
-        Assert.Equal(hosts.Skip(5).Reverse().Where(host => host != hosts[10]).Select(host => host.Id.AppHostPath),
+        Assert.Equal(hosts.Skip(15).Reverse().Select(host => host.Id.AppHostPath),
             controller.State.RecentAppHosts.Select(host => host.Id.AppHostPath));
     }
 

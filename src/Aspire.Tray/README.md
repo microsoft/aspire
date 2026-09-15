@@ -113,14 +113,13 @@ The menu bar shows the 20-point single-wave artwork from `Mac/Assets/AspireTrayT
 and `AspireTrayTemplate@2x.png` on a 22-point canvas. Excess transparent padding is
 trimmed from the supplied high-resolution artwork before generating the 20- and
 40-pixel standard/Retina representations, so the visible mark fills the tray space.
-The mark is rendered white, preserving the assets' transparent diagonal wave rather
-than drawing additional shading. The composite is not a template image, so the
-connection badge retains its color. These are Aspire-inspired concept assets, not
+The composite is an AppKit template image, preserving the assets' transparent
+diagonal wave and adapting its foreground to the menu-bar background. These are Aspire-inspired concept assets, not
 official brand masters; their supplied provenance is in `Mac/Assets/PROVENANCE.txt`.
 The app bundle and dialogs continue to use `src/Shared/Aspire_icon_256.png`.
-The lower-right connection badge replaces a numeric count: a gray cross when
-inactive/disconnected, and a solid purple circle when discovery sees a running
-AppHost. The badge's transparent border reveals the menu-bar background rather
+The lower-right connection badge replaces a numeric count: the idle mark is
+unbadged, dots indicate connecting, a cross indicates unavailable discovery, and
+a solid dot indicates active AppHosts. The badge's transparent border reveals the menu-bar background rather
 than painting an opaque outline. Native two-line AppHost
 rows show the project/worktree name first and directory context and PID underneath.
 The redundant branded/count header is omitted when AppHosts are listed; an empty
@@ -128,18 +127,20 @@ placeholder or actionable error/disconnection notice is shown when appropriate.
 Each live AppHost has an **Open Dashboard** action and **Stop AppHost...** action.
 Menu items have no
 hover tooltips, so they cannot cover the action submenu. Stopping opens a native
-confirmation dialog showing the full project path and PID, with Cancel as the
-default. Stop uses the system's standard adaptive button text rather than
-low-contrast red text on a gray button.
+confirmation dialog showing the project name and PID, without the full project
+path, with Cancel as the default. **Don't ask again** skips future Stop warnings
+only after confirming Stop. Canceling, or discovering that the selected process
+has been replaced, does not save that preference. Exact process identity is still
+validated when the warning is disabled. Stop uses the system's standard adaptive
+button text rather than low-contrast red text on a gray button.
 Long names are shortened in the middle, preserving both ends. Native subtitles
 require macOS 14.4; older systems use a single-line layout with the same details.
 **Quit Aspire** (Command-Q while using the menu) removes the icon and stops its
 own discovery subprocess, not any AppHost.
 
-Each AppHost has a compact, consistently sized solid status circle: green for
-healthy resources, amber for waiting/degraded resources, red for unhealthy/failed
-resources, or white when not started or health is unknown. The circles have no
-interior glyphs. Updates change the existing row's icon even while the menu is open.
+AppHost health uses distinct native SF Symbols rather than color-only circles.
+Healthy, waiting/degraded, unhealthy, unknown, and stopped states are distinguishable
+without color. Updates change the existing row's icon even while the menu is open.
 The menu-bar connection badge indicates AppHost presence, not aggregate health.
 
 **Pin AppHost** keeps a project in the main list after it stops. **Unpin AppHost**
@@ -162,11 +163,14 @@ Services, rather than assuming applications live in `/Applications`. Supported
 editors/terminals include VS Code, VS Code Insiders, Terminal, Ghostty, iTerm,
 Rider, and Xcode; only installed applications appear. The selected app opens the
 AppHost's directory without starting the AppHost. **Show in Finder** reveals the
-project file. This intentionally uses a tray-owned menu: Finder's Services menu
+project file. **Copy Path**, directly below it, copies the full AppHost file path
+without requiring the file to exist. These actions are available for running,
+pinned, and recent AppHosts. This intentionally uses a tray-owned menu: Finder's Services menu
 requires a document selection/responder contract that a status-menu row does not
 provide. **Documentation** opens [aspire.dev](https://aspire.dev). **Settings...**
 replaces the top-level About action and opens General and About information,
-including the build version and a documentation link. Its shortcut is Command-comma
+including the build version. Documentation remains in the tray menu, and a divider
+separates **Quit Aspire** from the other utility actions. The Settings shortcut is Command-comma
 on macOS or Control-comma on Windows while the tray's menu or window has focus;
 it is not a system-wide hotkey.
 A repeated launch restores the existing tray icon instead of starting another
@@ -196,9 +200,48 @@ The official pipeline signs/notarizes the whole app before copying it into the
 payload and embeds it without republishing. That official signing path still
 requires release-pipeline validation; this remains a draft feedback POC.
 
+## Recent history configuration
+
+Recent history defaults to **10 AppHosts**. Configure it in the existing per-user
+Aspire configuration file, normally `~/.aspire/aspire.config.json`, rather than in a project's
+configuration or the tray Settings dialog:
+
+```json
+{
+  "tray": {
+    "recentAppHostLimit": 10
+  }
+}
+```
+
+The existing configuration command can set the same preference:
+
+```sh
+aspire config set tray.recentAppHostLimit 10 --global
+```
+
+The tray honors the CLI's Aspire home/install routing, including `ASPIRE_HOME`,
+so a custom Aspire home uses its own `aspire.config.json`.
+
+The limit accepts integers from **0 to 50**. Zero disables history; reducing the
+limit keeps the most recent entries and preserves pins. Restart Aspire Tray after
+editing the configuration. An invalid value is reported rather than silently
+replaced by the default.
+
+The **Don't ask again** preference is stored as `confirmStop: false` in the tray's
+existing `apphosts.json`, separately from sign-in registration. To restore the
+warning, quit the tray, set `confirmStop` to `true` (or remove that property), then
+restart it. On macOS the file is under `~/Library/Application Support/Aspire/Tray`;
+on Windows it is under `%LocalAppData%\Aspire\Tray`. Quit before editing that state
+file: the tray refuses to overwrite changes made by another writer while running.
+
 ## Launch at sign-in
 
 The General section in **Settings...** offers **Launch Aspire Tray when I sign in**.
+Normally, only the checkbox is shown. Diagnostic details appear when configuration is
+unavailable or a read/write fails; Windows also shows **Refresh startup status** in
+that state. Reopening Settings re-reads the registration on either platform. Availability
+depends on a supported, verified native CLI installation, not just executable signing.
 It is off by default. Opening Settings, reading the preference, and closing the
 dialog never register startup or launch anything. Enabling it starts only the
 companion at the next sign-in; it does not start pinned or recent AppHosts.
@@ -238,15 +281,39 @@ in Settings.
 ## Windows companion
 
 Windows uses the original colored `src/Shared/Aspire.ico`, not the macOS wave
-artwork. Its notification icon indicates whether an AppHost is connected, without
-a numeric count. The AppHost menus use the same shared health, history, pinning,
-explicit Start, and exact-instance Stop behavior described above. Documentation
-and Settings are top-level actions; Documentation and Open Dashboard use the same
-external-link artwork.
+artwork. Its notification icon has no badge when discovery is connected but idle,
+a purple badge for active AppHosts, a gray dash while connecting, and an amber
+exclamation mark when discovery is unavailable. A stale AppHost list no longer
+looks like a working connection. The AppHost menus use the same shared health, history, pinning,
+explicit Start, and exact-instance Stop behavior described above. AppHost rows have small
+status circles: green for healthy resources, orange for waiting/degraded or transitional
+states and unavailable discovery, and red for unhealthy resources or action errors.
+Stopped AppHosts and unknown health use a neutral gray circle. Other menu items,
+including Documentation and Open Dashboard, remain text-only.
+AppHost names are limited to 44 text elements with a middle ellipsis and no appended
+status text. Each AppHost submenu ends with a divider followed by a disabled entry
+containing its path and status or directory/PID details together on one line.
+This entire entry is limited to 45 text elements with a middle ellipsis. Hovering
+over this final entry shows its full, untruncated value in a native tooltip, which
+can wrap long text. Parent AppHost rows and action items have no tooltips.
+Displayed and copied paths retain their original casing;
+Windows identity matching remains case-insensitive and still requires the exact PID
+and process start time. **Copy Path** copies the complete original path. The final
+details entry and its tooltip refresh when status changes, including while the menu is open.
+Only the notification-area icon and window icons use artwork.
 
 The Windows adapter uses native popup menus and confirmation dialogs.
-**Show in Explorer** and **Open In** act on the AppHost's source location without
-starting it. Missing pinned projects are pruned, while missing recent projects
+Its embedded Common Controls v6 manifest enables Windows visual styles in both
+managed and NativeAOT builds. Settings uses a large heading, rounded General and About
+cards, a soft light background, and native buttons and checkboxes. High-contrast mode
+uses the system palette. Informational labels wrap instead of using editable-looking
+scroll panes. The layout expands for startup details and errors, reflows after DPI changes,
+and scrolls when needed to keep all actions reachable on shorter displays. This appearance
+uses Win32 and GDI only, without a Windows App SDK runtime dependency.
+**Show in Explorer** (the Windows equivalent of **Show in Finder**), **Copy Path**,
+and **Open In** act on the AppHost's source location without starting it.
+A divider separates these file actions from **Pin**/**Unpin**.
+Missing pinned projects are pruned, while missing recent projects
 offer removal and clearing history requires confirmation. The adapter retains
 native menu resources while a popup is being tracked, restores the notification
 icon after Explorer restarts, and responds to display scaling changes.
@@ -281,8 +348,13 @@ The publishing helper also validates the original icon and native PE architectur
 ```
 
 Smoke requires an interactive Windows desktop with Explorer. It exercises real
-menus, safe-default dialogs, immutable actions, pin/history operations, connection
-and health artwork, delayed initial icon creation, Explorer recovery, activation,
+menus, the final divided path/status entry (45-character limit, ordering, and disabled state),
+full-value details tooltips (native hover selection, live/stale refresh, focus, and dismissal),
+safe-default dialogs including the native Stop suppression checkbox,
+Cancel/stale-instance suppression safeguards, subsequent prompt skipping,
+exact path copying (including missing files and Unicode), immutable actions,
+pin/history operations, status circles, text-only actions, bounded original-case paths and compact names,
+distinct notification-area connection artwork, delayed initial icon creation, Explorer recovery, activation,
 single-button message dismissal, and artwork invalidation.
 Synthetic invalidation is not a real monitor-DPI transition; verify display-scale
 changes separately on the desktop. Smoke uses only isolated fake AppHosts and
@@ -400,14 +472,17 @@ discovery stream through the supplied CLI. Real discovered identities are
 never passed to smoke actions. Without that setting, `--cli` only needs to
 reference an existing absolute executable; all discovery/action data is fake.
 
-For a manual inspection, set `ASPIRE_TRAY_SMOKE_INTERACTIVE=1` and use
-`--smoke-seconds 120`. After the automated checks pass, the harness leaves three
+For a manual inspection, use `--smoke-seconds 120 --smoke-interactive`
+(or set `ASPIRE_TRAY_SMOKE_INTERACTIVE=1` with `--smoke-seconds 120`).
+After the automated checks pass, the harness leaves
 fake running AppHosts with healthy/waiting/failed icons and a stopped, pinned
-**Not started** example with a white icon. It enables real native
+example with a neutral icon. It enables real native
 confirmation dialogs until **Quit Aspire**. The watchdog still bounds the automated
 checks but is removed when the interactive preview is ready. A Settings window
 identifies the preview so it is easy to find. History remains isolated from
-the normal tray. Its Start/Stop backend remains fake; explicit Open In actions
+the normal tray. Copy Path uses the real clipboard in the interactive preview;
+automated checks substitute a clipboard sink to preserve existing clipboard data.
+Its Start/Stop backend remains fake; explicit Open In actions
 can open the temporary fixture folder in a real installed application.
 An isolated preview `.app` can set `ASPIRE_TRAY_SMOKE_INTERACTIVE=1` and
 `ASPIRE_TRAY_SMOKE_CLI=<absolute CLI path>` in its `LSEnvironment` to support
@@ -416,8 +491,8 @@ these variables.
 
 Platform-independent tests exercise protocol framing and validation, subprocess
 cleanup, reconnects, lifetime replacement, concurrent stops, and controller
-shutdown without AppKit or running AppHosts. macOS ARM64 is the runtime exercised
-during this development session. Windows native UI, Windows NativeAOT publishing,
-and official Windows signing require a Windows host; cross-platform unit tests or
-a managed build on macOS do not validate those paths. macOS x64 is not
-runtime-validated in this session.
+shutdown without AppKit or running AppHosts. Run native smoke on the target
+platform and architecture: a cross-platform managed build does not validate
+AppKit execution or Windows NativeAOT publishing. Native smoke uses fake AppHosts
+and does not replace live CLI connectivity, real monitor-DPI transitions, or
+official signing/notarization validation.

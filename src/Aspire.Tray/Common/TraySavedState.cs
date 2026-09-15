@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Serialization;
+
 namespace Aspire.Tray;
 
 /// <summary>
@@ -8,15 +10,35 @@ namespace Aspire.Tray;
 /// </summary>
 internal sealed record TraySavedState(IReadOnlyList<SavedAppHost> AppHosts)
 {
-    internal const int MaximumRecentAppHosts = 20;
+    internal const int DefaultRecentAppHostLimit = 10;
+    internal const int MaximumRecentAppHosts = 50;
 
     public static TraySavedState Empty { get; } = new([]);
 
-    public TraySavedState Remember(string appHostPath)
+    // The source generator otherwise supplies default(bool) for an absent init-only
+    // property, overriding its initializer. Make the legacy-file default explicit in
+    // the JSON constructor so old files never silently opt out of stop confirmation.
+    [JsonConstructor]
+    public TraySavedState(IReadOnlyList<SavedAppHost> appHosts, bool confirmStop = true) : this(appHosts)
+    {
+        ConfirmStop = confirmStop;
+    }
+
+    /// <summary>
+    /// Requires confirmation before stopping an AppHost, including for files written before this preference existed.
+    /// </summary>
+    public bool ConfirmStop { get; init; } = true;
+
+    public TraySavedState Remember(string appHostPath) => Remember(appHostPath, DefaultRecentAppHostLimit);
+
+    public TraySavedState Remember(string appHostPath, int recentAppHostLimit)
     {
         var existing = AppHosts.SingleOrDefault(host => TrayAppHostPath.Comparer.Equals(host.AppHostPath, appHostPath));
-        return Trim([new(appHostPath, existing?.IsPinned ?? false, true),
-            .. AppHosts.Where(host => !TrayAppHostPath.Comparer.Equals(host.AppHostPath, appHostPath))]);
+        return (this with
+        {
+            AppHosts = [new(appHostPath, existing?.IsPinned ?? false, true),
+                .. AppHosts.Where(host => !TrayAppHostPath.Comparer.Equals(host.AppHostPath, appHostPath))]
+        }).Trim(recentAppHostLimit);
     }
 
     public TraySavedState SetPinned(string appHostPath, bool pinned)
@@ -24,29 +46,40 @@ internal sealed record TraySavedState(IReadOnlyList<SavedAppHost> AppHosts)
         var existing = AppHosts.SingleOrDefault(host => TrayAppHostPath.Comparer.Equals(host.AppHostPath, appHostPath));
         if (existing is null)
         {
-            return pinned ? new([.. AppHosts, new(appHostPath, true, false)]) : this;
+            return pinned ? this with { AppHosts = [.. AppHosts, new(appHostPath, true, false)] } : this;
         }
-        return new(AppHosts.Select(host => host == existing ? host with { IsPinned = pinned } : host)
-            .Where(host => host.IsPinned || host.IsRecent).ToArray());
+        return this with
+        {
+            AppHosts = AppHosts.Select(host => host == existing ? host with { IsPinned = pinned } : host)
+                .Where(host => host.IsPinned || host.IsRecent).ToArray()
+        };
     }
 
     public TraySavedState ClearRecent()
-        => new(AppHosts.Where(host => host.IsPinned).Select(host => host with { IsRecent = false }).ToArray());
+        => this with { AppHosts = AppHosts.Where(host => host.IsPinned).Select(host => host with { IsRecent = false }).ToArray() };
 
     public TraySavedState RemoveRecent(string appHostPath)
-        => new(AppHosts.Select(host => TrayAppHostPath.Comparer.Equals(host.AppHostPath, appHostPath)
+        => this with
+        {
+            AppHosts = AppHosts.Select(host => TrayAppHostPath.Comparer.Equals(host.AppHostPath, appHostPath)
                 ? host with { IsRecent = false } : host)
-            .Where(host => host.IsPinned || host.IsRecent).ToArray());
+                .Where(host => host.IsPinned || host.IsRecent).ToArray()
+        };
 
     public TraySavedState RemoveMissingPins(IReadOnlySet<string> missingPaths)
-        => new(AppHosts.Where(host => !host.IsPinned || !missingPaths.Contains(host.AppHostPath)).ToArray());
+        => this with { AppHosts = AppHosts.Where(host => !host.IsPinned || !missingPaths.Contains(host.AppHostPath)).ToArray() };
 
-    private static TraySavedState Trim(IEnumerable<SavedAppHost> hosts)
+    public TraySavedState Trim(int recentAppHostLimit)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(recentAppHostLimit);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(recentAppHostLimit, MaximumRecentAppHosts);
         var recent = 0;
-        return new(hosts.Select(host => host.IsRecent && ++recent > MaximumRecentAppHosts
+        return this with
+        {
+            AppHosts = AppHosts.Select(host => host.IsRecent && ++recent > recentAppHostLimit
                 ? host with { IsRecent = false } : host)
-            .Where(host => host.IsPinned || host.IsRecent).ToArray());
+                .Where(host => host.IsPinned || host.IsRecent).ToArray()
+        };
     }
 }
 

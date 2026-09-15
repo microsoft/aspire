@@ -11,6 +11,7 @@ internal sealed partial class TrayApplication
         {
             return;
         }
+        HideMenuTooltip();
         _dispatchDepth++;
         try
         {
@@ -25,10 +26,16 @@ internal sealed partial class TrayApplication
                         throw new InvalidOperationException("Stop is no longer available for the selected AppHost.");
                     }
                     var host = controller.RequireLiveInstance(target.Id);
-                    if (Confirm("Stop AppHost", $"Stop this exact AppHost instance?\n\n{host.AppHostPath}\nPID: {host.AppHostPid}"))
+                    if (ConfirmStop(host))
                     {
                         // The controller revalidates the full lifetime after the modal loop.
                         controller.RequestStop(target.Id);
+                        // Save only after dispatch accepts the exact instance. A canceled or
+                        // stale action must not suppress later warnings.
+                        if (_suppressStopConfirmation)
+                        {
+                            controller.SetConfirmStop(false);
+                        }
                     }
                     break;
                 case ActionKind.Start:
@@ -42,12 +49,16 @@ internal sealed partial class TrayApplication
                     var row = RequireCurrentRow(target.Id);
                     controller.SetPinned(row.Id.AppHostPath, !row.IsPinned);
                     break;
+                case ActionKind.CopyPath:
+                    RequireCurrentRow(target.Id);
+                    CopyPath(target.Id.AppHostPath);
+                    break;
                 case ActionKind.Explorer:
                 case ActionKind.OpenIn:
                     RequireCurrentRow(target.Id);
                     if (RequireProjectFile(target.Id.AppHostPath))
                     {
-                        if (smokeSeconds is not null)
+                        if (smokeSeconds is not null && !_interactiveSmoke)
                         {
                             throw new InvalidOperationException("External application launch is disabled in smoke mode.");
                         }
@@ -83,7 +94,7 @@ internal sealed partial class TrayApplication
             // This boundary covers native commands and their nested modal loops.
             controller.ReportActionError(ex.Message);
             Program.Log($"Tray action failed: {ex.Message}");
-            if (smokeSeconds is not null)
+            if (smokeSeconds is not null && !_interactiveSmoke)
             {
                 if (ErrorForSmoke is null)
                 {
@@ -142,7 +153,7 @@ internal sealed partial class TrayApplication
         _modalDepth++;
         try
         {
-            if (smokeSeconds is not null)
+            if (smokeSeconds is not null && !_interactiveSmoke)
             {
                 var accept = ConfirmForSmoke?.Invoke(title, detail, NativeMethods.SafeConfirmation)
                     ?? throw new InvalidOperationException("Smoke confirmation handler is missing.");
@@ -169,7 +180,7 @@ internal sealed partial class TrayApplication
         _modalDepth++;
         try
         {
-            if (smokeSeconds is not null)
+            if (smokeSeconds is not null && !_interactiveSmoke)
             {
                 // MB_OK reports IDOK as its default, but its sole button uses IDCANCEL
                 // so Escape can dismiss it. Sending IDOK leaves the native dialog open.

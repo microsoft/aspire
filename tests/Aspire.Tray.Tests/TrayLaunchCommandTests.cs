@@ -80,4 +80,40 @@ public class TrayLaunchCommandTests
         Assert.Throws<ArgumentException>(() => TrayOptions.Parse([
             "--cli", bundle.CliPath, "--bundle-root", bundle.Root, "--smoke-seconds", "20"]));
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void InteractiveSmokeCanPrecedeOrFollowTheDuration(bool interactiveFirst)
+    {
+        using var bundle = new TestTrayBundle();
+        var options = TrayOptions.Parse(interactiveFirst
+            ? ["--cli", bundle.CliPath, "--smoke-interactive", "--smoke-seconds", "120"]
+            : ["--cli", bundle.CliPath, "--smoke-seconds", "120", "--smoke-interactive"]);
+
+        Assert.True(options.InteractiveSmoke);
+        Assert.Equal(120, options.SmokeSeconds);
+        Assert.Null(options.BundleRoot);
+        Assert.Null(options.StartupCliPath);
+    }
+
+    [Fact]
+    public void SmokeIsNotInteractiveUnlessRequested()
+    {
+        using var bundle = new TestTrayBundle();
+        Assert.False(TrayOptions.Parse(["--cli", bundle.CliPath]).InteractiveSmoke);
+        Assert.False(TrayOptions.Parse(["--cli", bundle.CliPath, "--smoke-seconds", "1"]).InteractiveSmoke);
+    }
+
+    [Fact]
+    public void InteractiveSmokeRequiresADurationAndCannotBeRepeated()
+    {
+        using var bundle = new TestTrayBundle();
+        Assert.Equal("Interactive smoke requires --smoke-seconds.",
+            Assert.Throws<ArgumentException>(() => TrayOptions.Parse(["--cli", bundle.CliPath, "--smoke-interactive"])).Message);
+        Assert.Throws<ArgumentException>(() => TrayOptions.Parse([
+            "--cli", bundle.CliPath, "--smoke-seconds", "120", "--smoke-interactive", "--smoke-interactive"]));
+        Assert.Throws<ArgumentException>(() => TrayOptions.Parse([
+            "--cli", bundle.CliPath, "--bundle-root", bundle.Root, "--smoke-seconds", "120", "--smoke-interactive"]));
+    }
 }

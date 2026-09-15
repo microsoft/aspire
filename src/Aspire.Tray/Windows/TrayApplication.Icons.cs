@@ -7,17 +7,24 @@ internal sealed unsafe partial class TrayApplication
 {
     private void UpdateTrayIcon(TrayViewState state)
     {
-        var connected = state.HasActiveAppHosts;
-        if (_connectedIcon == connected)
+        var status = GetIconState(state);
+        if (_iconState == status)
         {
             return;
         }
-        _iconData.Icon = connected ? _artwork!.Connected : _artwork!.Disconnected;
+        _iconData.Icon = _artwork!.TrayIcon(status);
         fixed (char* tip = _iconData.Tip)
         {
             var buffer = new Span<char>(tip, 128);
             buffer.Clear();
-            (connected ? "Aspire - active AppHosts" : "Aspire - no active AppHosts").AsSpan().CopyTo(buffer);
+            var text = status switch
+            {
+                IconState.Active => "Aspire - active AppHosts",
+                IconState.Idle => "Aspire - no active AppHosts",
+                IconState.Connecting => "Aspire - connecting to discovery",
+                _ => "Aspire - discovery unavailable"
+            };
+            text.AsSpan().CopyTo(buffer);
         }
         if (_iconAdded && NativeMethods.ShellNotifyIcon(NativeMethods.NimModify, ref _iconData) == 0)
         {
@@ -25,18 +32,36 @@ internal sealed unsafe partial class TrayApplication
             _restoreAttempts = 0;
             Program.Log("The notification icon needs to be restored.");
         }
-        _connectedIcon = connected;
+        _iconState = status;
     }
 
+    private static IconState GetIconState(TrayViewState state) => state.Discovery switch
+    {
+        DiscoveryState.Connecting => IconState.Connecting,
+        DiscoveryState.Live => state.HasActiveAppHosts ? IconState.Active : IconState.Idle,
+        _ => IconState.Unavailable
+    };
+
+    private enum IconState { Idle, Active, Connecting, Unavailable }
+
+    private static AppHostHealth GetMenuStatusHealth(AppHostMenuItem? host, bool discoveryAvailable) => host switch
+    {
+        null => AppHostHealth.Unknown,
+        { IsStarting: true } or { IsStopping: true } => AppHostHealth.Warning,
+        _ when !discoveryAvailable => AppHostHealth.Warning,
+        { Error: not null } => AppHostHealth.Unhealthy,
+        { IsRunning: false } => AppHostHealth.Unknown,
+        _ => host.Health
+    };
+
     /// <summary>
-    /// Owns original-brand tray icons and premultiplied BGRA menu bitmaps at one DPI.
+    /// Owns notification icons and premultiplied status-circle menu bitmaps at one DPI.
     /// </summary>
     private sealed class Artwork : IDisposable
     {
         private readonly TrayApplication _owner;
         private readonly List<nint> _icons = [];
-        private readonly List<nint> _bitmaps = [];
-        private readonly Dictionary<AppHostHealth, nint> _health = [];
+        private readonly Dictionary<AppHostHealth, PixelCanvas> _statusBitmaps = [];
         private bool _disposed;
 
         internal Artwork(TrayApplication owner, uint dpi)
@@ -52,43 +77,24 @@ internal sealed unsafe partial class TrayApplication
                 NativeCallException.Require(original != 0, "LoadImageW(Aspire.ico)");
                 _icons.Add(original);
                 Original = original;
-                Connected = CreateTrayIcon(original, true);
-                Disconnected = CreateTrayIcon(original, false);
+                Connected = CreateTrayIcon(original, IconState.Active);
+                Disconnected = CreateTrayIcon(original, IconState.Unavailable);
+                Connecting = CreateTrayIcon(original, IconState.Connecting);
                 foreach (var health in Enum.GetValues<AppHostHealth>())
                 {
-                    using var canvas = new PixelCanvas(owner, Size);
+                    var canvas = new PixelCanvas(owner, Size);
+                    _statusBitmaps.Add(health, canvas);
                     var color = health switch
                     {
-                        AppHostHealth.Healthy => 0xFF26A85B,
-                        AppHostHealth.Warning => 0xFFE5A000,
+                        AppHostHealth.Healthy => 0xFF269653,
+                        AppHostHealth.Warning => 0xFFE58A00,
                         AppHostHealth.Unhealthy => 0xFFD63E42,
-                        _ => 0xFFFFFFFF
+                        _ => 0xFF929292
                     };
-                    canvas.Circle(Size / 2d, Size / 2d, Size * 0.32, 0xFF606060);
-                    canvas.Circle(Size / 2d, Size / 2d, Size * 0.32 - 1, color);
-                    var bitmap = canvas.Detach();
-                    _bitmaps.Add(bitmap);
-                    _health.Add(health, bitmap);
+                    var radius = Size * 0.3;
+                    canvas.Circle(Size / 2d, Size / 2d, radius, 0xFF606060);
+                    canvas.Circle(Size / 2d, Size / 2d, radius - Size / 16d, color);
                 }
-                using var globe = new PixelCanvas(owner, Size);
-                var center = Size / 2d;
-                var radius = Size * 0.4;
-                for (var y = 0; y < Size; y++)
-                {
-                    for (var x = 0; x < Size; x++)
-                    {
-                        var dx = x + 0.5 - center;
-                        var dy = y + 0.5 - center;
-                        var distance = Math.Sqrt(dx * dx + dy * dy);
-                        if (distance <= radius && (distance >= radius - 1.5 || Math.Abs(dx) < 1
-                            || Math.Abs(dy) < 1 || Math.Abs(Math.Abs(dy) - radius * 0.5) < 0.6))
-                        {
-                            globe.Pixels[y * Size + x] = 0xFF7255CC;
-                        }
-                    }
-                }
-                Globe = globe.Detach();
-                _bitmaps.Add(Globe);
             }
             catch
             {
@@ -101,10 +107,18 @@ internal sealed unsafe partial class TrayApplication
         internal nint Original { get; }
         internal nint Connected { get; }
         internal nint Disconnected { get; }
-        internal nint Globe { get; }
-        internal nint Health(AppHostHealth health, bool running) => _health[running ? health : AppHostHealth.Unknown];
+        internal nint Connecting { get; }
+        internal nint Status(AppHostHealth health) => _statusBitmaps[health].Handle;
 
-        private nint CreateTrayIcon(nint original, bool connected)
+        internal nint TrayIcon(IconState state) => state switch
+        {
+            IconState.Active => Connected,
+            IconState.Connecting => Connecting,
+            IconState.Unavailable => Disconnected,
+            _ => Original
+        };
+
+        private nint CreateTrayIcon(nint original, IconState state)
         {
             using var canvas = new PixelCanvas(_owner, Size);
             canvas.DrawIcon(original);
@@ -112,24 +126,17 @@ internal sealed unsafe partial class TrayApplication
             // status badge is overlaid; a white border contrasts with both taskbar themes.
             var radius = Math.Max(3, Size * 0.22);
             var center = Size - radius;
-            canvas.Circle(center, center, radius, 0xFF303030);
-            canvas.Circle(center, center, radius - 0.7, 0xFFFFFFFF);
-            canvas.Circle(center, center, radius - 1.4, connected ? 0xFF7255CC : 0xFFFFFFFF);
-            if (!connected)
+            canvas.Circle(center, center, radius, 0xFFFFFFFF);
+            canvas.Circle(center, center, radius - Size * 0.045,
+                state == IconState.Active ? 0xFF7255CC : state == IconState.Connecting ? 0xFF606060 : 0xFF9B6900);
+            if (state == IconState.Unavailable)
             {
-                for (var y = 0; y < Size; y++)
-                {
-                    for (var x = 0; x < Size; x++)
-                    {
-                        var dx = x + 0.5 - center;
-                        var dy = y + 0.5 - center;
-                        if (Math.Abs(dx) <= radius * 0.4 && Math.Abs(dy) <= radius * 0.4
-                            && (Math.Abs(dx - dy) < 0.7 || Math.Abs(dx + dy) < 0.7))
-                        {
-                            canvas.Pixels[y * Size + x] = 0xFF404040;
-                        }
-                    }
-                }
+                canvas.Line(center, center - radius * 0.4, center, center, Size * 0.065, 0xFFFFFFFF);
+                canvas.Circle(center, center + radius * 0.4, Size * 0.035, 0xFFFFFFFF);
+            }
+            else if (state == IconState.Connecting)
+            {
+                canvas.Line(center - radius * 0.4, center, center + radius * 0.4, center, Size * 0.065, 0xFFFFFFFF);
             }
             // CreateIconIndirect copies both bitmaps. A zero AND mask is used with the
             // 32-bit alpha channel; CreateBitmap(NULL) would leave that mask uninitialized.
@@ -164,9 +171,10 @@ internal sealed unsafe partial class TrayApplication
             {
                 _owner.Cleanup(NativeMethods.DestroyIcon(icon) != 0, "DestroyIcon");
             }
-            foreach (var bitmap in _bitmaps)
+            // Menus borrow these handles; RefreshMenu destroys them before replacing artwork.
+            foreach (var bitmap in _statusBitmaps.Values)
             {
-                _owner.Cleanup(NativeMethods.DeleteObject(bitmap) != 0, "DeleteObject(menu bitmap)");
+                bitmap.Dispose();
             }
         }
     }
@@ -193,16 +201,40 @@ internal sealed unsafe partial class TrayApplication
         }
 
         internal void Circle(double x, double y, double radius, uint color)
+            => DrawShape((px, py) => Math.Sqrt((px - x) * (px - x) + (py - y) * (py - y)) - radius, color);
+
+        internal void Line(double x1, double y1, double x2, double y2, double width, uint color)
         {
+            var dx = x2 - x1;
+            var dy = y2 - y1;
+            var lengthSquared = dx * dx + dy * dy;
+            DrawShape((x, y) =>
+            {
+                var t = Math.Clamp(((x - x1) * dx + (y - y1) * dy) / lengthSquared, 0, 1);
+                var px = x - (x1 + t * dx);
+                var py = y - (y1 + t * dy);
+                return Math.Sqrt(px * px + py * py) - width / 2;
+            }, color);
+        }
+
+        private void DrawShape(Func<double, double, double> distance, uint color)
+        {
+            // One-pixel coverage ramp and source-over compositing keep edges smooth at
+            // fractional DPI sizes. Icon DIBs require premultiplied BGRA, not straight alpha.
             for (var row = 0; row < _size; row++)
             {
                 for (var column = 0; column < _size; column++)
                 {
-                    var dx = column + 0.5 - x;
-                    var dy = row + 0.5 - y;
-                    if (dx * dx + dy * dy <= radius * radius)
+                    var coverage = Math.Clamp(0.5 - distance(column + 0.5, row + 0.5), 0, 1);
+                    if (coverage > 0)
                     {
-                        Pixels[row * _size + column] = color;
+                        var alpha = (uint)Math.Round(coverage * (color >> 24));
+                        var previous = Pixels[row * _size + column];
+                        var inverse = 255 - alpha;
+                        uint Channel(int shift) => (((color >> shift) & 255) * alpha
+                            + ((previous >> shift) & 255) * inverse + 127) / 255;
+                        Pixels[row * _size + column] = (alpha + ((previous >> 24) * inverse + 127) / 255) << 24
+                            | Channel(16) << 16 | Channel(8) << 8 | Channel(0);
                     }
                 }
             }
@@ -229,13 +261,6 @@ internal sealed unsafe partial class TrayApplication
                 }
                 _owner.Cleanup(NativeMethods.DeleteDC(dc) != 0, "DeleteDC");
             }
-        }
-
-        internal nint Detach()
-        {
-            var handle = Handle;
-            Handle = 0;
-            return handle;
         }
 
         public void Dispose()

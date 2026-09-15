@@ -8,9 +8,7 @@ internal sealed record AppHostInfo(string AppHostPath, int AppHostPid, string? D
     public long? ProcessStartTimeUnixMilliseconds { get; init; }
     public AppHostHealth Health { get; init; }
 
-    public AppHostId Id => new(
-        OperatingSystem.IsWindows() ? AppHostPath.ToUpperInvariant() : AppHostPath,
-        AppHostPid, ProcessStartTimeUnixMilliseconds);
+    public AppHostId Id => new(AppHostPath, AppHostPid, ProcessStartTimeUnixMilliseconds);
 
     public Uri? DashboardUri => Uri.TryCreate(DashboardUrl, UriKind.Absolute, out var uri)
         && uri.Scheme is "http" or "https"

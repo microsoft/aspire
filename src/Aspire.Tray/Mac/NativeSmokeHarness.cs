@@ -11,6 +11,9 @@ internal sealed class NativeSmokeHarness
 {
     private readonly SmokeAppHostClient _client = new();
     private readonly MemoryTrayStartupSettings _startupSettings = new();
+    private readonly MemoryTraySavedStateStore _savedStateStore = new();
+    private readonly List<string> _copiedPaths = [];
+    private bool _failCopy;
     private readonly AppHostInfo _first = new("/smoke/First/AppHost.cs", 41001, "http://localhost:19001/")
     {
         ProcessStartTimeUnixMilliseconds = 1_700_000_000_001
@@ -50,11 +53,16 @@ internal sealed class NativeSmokeHarness
     private int _removeConfirmations;
     private bool _inspectionMode;
     private bool _settingsSmokeInProgress;
+    private readonly bool _interactiveSmokeRequested;
 
-    private NativeSmokeHarness()
+    private NativeSmokeHarness(bool interactiveSmoke)
     {
-        _controller = new(_client);
-        var path = Path.Combine(_directory.FullName, "Saved.AppHost.cs");
+        _interactiveSmokeRequested = interactiveSmoke
+            || Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_INTERACTIVE") == "1";
+        _controller = new(_client, _savedStateStore);
+        // Tabs and non-ASCII text must survive copying even though presentation replaces
+        // control characters: ".../Saved.\t雪🧪.AppHost.cs" is an ordinary macOS filename.
+        var path = Path.Combine(_directory.FullName, "Saved.\t雪🧪.AppHost.cs");
         File.WriteAllText(path, "// Native smoke fixture; never executed.");
         _savedHost = new(path, 41006, null)
         {
@@ -63,14 +71,15 @@ internal sealed class NativeSmokeHarness
         };
     }
 
-    public static int Run(string cliPath, int seconds) => new NativeSmokeHarness().RunCore(cliPath, seconds);
+    public static int Run(string cliPath, int seconds, bool interactiveSmoke)
+        => new NativeSmokeHarness(interactiveSmoke).RunCore(cliPath, seconds);
 
     private int RunCore(string cliPath, int seconds)
     {
         // The normal tray's single-instance lock is intentionally not acquired: deterministic
         // smoke never uses real AppHost actions and may coexist with the user's running tray.
         using var application = new MacTrayApplication(_controller, "AspireTray.Smoke",
-            _startupSettings, OpenDashboard, ConfirmStop, ConfirmAction);
+            _startupSettings, OpenDashboard, ConfirmStop, ConfirmAction, CopyPath);
         _application = application;
         try
         {
@@ -140,7 +149,7 @@ internal sealed class NativeSmokeHarness
             "The native event loop did not acknowledge readiness.");
         var menu = _application.InspectMenu();
         Require(menu.AutosaveName == "AspireTray.Smoke", "Smoke must not share the production item's saved placement.");
-        Require(menu.HasColorIcon && menu.HasIconOnlyTitle && menu.HasExpectedConnectionBadge && menu.HasNoItemTooltips
+        Require(menu.HasTemplateIcon && menu.HasIconOnlyTitle && menu.HasExpectedConnectionBadge && menu.HasNoItemTooltips
             && menu.HasCommandQ && menu.DispatcherSupportsAllModes, "Icon, tooltip, keyboard, or dispatcher contract failed.");
         Require(menu.ItemCount == menu.Rows.Count + 6 + (menu.StatusNotice is null ? 0 : 1), "Unexpected menu structure.");
         if (menu.StatusNotice is not null)
@@ -148,6 +157,15 @@ internal sealed class NativeSmokeHarness
             Require(menu.StatusNotice == state.Status, "Status notice was not updated.");
         }
         Require(menu.Rows.All(row => row.HasActionIcons && row.HasCorrectActions), "Missing native action/icon.");
+        var connectionDescription = state.Discovery switch
+        {
+            DiscoveryState.Connecting => "Connecting to discovery",
+            DiscoveryState.Live => state.HasActiveAppHosts ? "AppHosts running" : "No AppHosts running",
+            _ => "Discovery unavailable"
+        };
+        Require(menu.AccessibilityLabel == $"Aspire, {connectionDescription}, {state.Status}",
+            "The tray must distinguish idle, active, connecting, and disconnected states for accessibility.");
+        _application.VerifyCopyMenusForSmoke();
 
         if (_trackingInProgress)
         {
@@ -192,7 +210,10 @@ internal sealed class NativeSmokeHarness
                 _application.PerformDashboardForSmoke(_first.Id);
                 Require(_dashboardCalls == 1, "Dashboard did not use the real native callback.");
                 _application.PerformStopForSmoke(_first.Id);
-                Require(_confirmations == 1 && _client.StopCount == 0, "Cancel sent a stop request.");
+                Require(_confirmations == 1 && _client.StopCount == 0
+                    && _controller.ConfirmStop && _savedStateStore.Load().ConfirmStop,
+                    "Cancel sent a stop request or persisted the selected suppression checkbox.");
+                VerifyCopy(_first.AppHostPath);
                 _application.SetTrackingForSmoke(null, open: true);
                 _application.SetTrackingForSmoke(_first.Id, open: true);
                 _phase++;
@@ -238,6 +259,8 @@ internal sealed class NativeSmokeHarness
             case 8:
                 Require(!menu.Rows.Single(row => row.Id == _second.Id).Enabled, "A lifetime replaced during confirmation is still enabled.");
                 Require(_confirmations == 4, "Modal confirmation callback missing.");
+                Require(_controller.ConfirmStop && _savedStateStore.Load().ConfirmStop,
+                    "A lifetime rejected after confirmation must not persist suppression.");
                 _phase++;
                 _client.Complete(_first.Id, new(StopOutcome.Stopped, 0));
                 _client.Complete(_third.Id, new(StopOutcome.Failed, 7));
@@ -312,6 +335,8 @@ internal sealed class NativeSmokeHarness
                     return;
                 }
                 VerifyRows(state, menu);
+                Require(!_controller.ConfirmStop && !_savedStateStore.Load().ConfirmStop,
+                    "An accepted stop did not persist Don't ask again.");
                 Require(menu.Rows.Single(row => row.Id == _trackingFirst.Id).CanStop,
                     "The delayed action stopped or disabled the wrong AppHost.");
                 _phase++;
@@ -325,12 +350,20 @@ internal sealed class NativeSmokeHarness
                     && _controller.State.AppHosts.Single(row => row.Id == Replacement(_trackingOther).Id).CanStop,
                     "The old native sender was re-targeted to a replacement process lifetime.");
                 _application.ReleaseRetainedStopSenderForSmoke();
+                _application.PerformStopForSmoke(Replacement(_trackingOther).Id);
+                Require(_confirmations == confirmationsBeforeStaleAction
+                    && _controller.State.AppHosts.Single(row => row.Id == Replacement(_trackingOther).Id).IsStopping,
+                    "A subsequent valid stop must skip only the opted-out warning.");
                 _phase++;
                 _client.Complete(_trackingOther.Id, new(StopOutcome.Failed, 7));
                 Publish([], DiscoveryState.Live);
                 break;
             case 19:
                 Require(menu.HasEmptyPlaceholder, "The real tracking pass did not clean up.");
+                if (!_client.HasStop(Replacement(_trackingOther).Id))
+                {
+                    return;
+                }
                 if (_discovery is not null && _discovery.State.Discovery != DiscoveryState.Live)
                 {
                     return;
@@ -371,13 +404,15 @@ internal sealed class NativeSmokeHarness
                 {
                     _settingsSmokeInProgress = false;
                 }
-                Require(_documentationCalls == 2, "Root and Settings documentation did not use the native callback.");
+                Require(_documentationCalls == 1, "Root documentation did not use the native callback.");
                 _controller.ClearRecent();
                 _phase++;
                 Publish([_savedHost]);
                 break;
             case 22:
                 VerifyRows(state, menu);
+                VerifyCopy(_savedHost.AppHostPath);
+                _application.RetainCopySenderForSmoke(_savedHost.AppHostPath);
                 Require(menu.Rows.Single().Health == AppHostHealth.Healthy && menu.StatusNotice is null,
                     "Healthy resources should show a checkmark without a redundant header.");
                 _application.PerformPinForSmoke(_savedHost.AppHostPath, useContextMenu: true);
@@ -401,6 +436,8 @@ internal sealed class NativeSmokeHarness
                 Require(menu.Rows.Single() is { Health: AppHostHealth.Unknown, CanStart: true, CanStop: false },
                     "An offline pin should remain available with a neutral icon and explicit Start.");
                 Require(menu.RecentPaths.Count == 0, "Pinned AppHost was also listed in Open Recent.");
+                VerifyCopy(_savedHost.AppHostPath);
+                VerifyRetainedCopy();
                 _phase++;
                 _application.PerformStartForSmoke(_savedHost.AppHostPath);
                 break;
@@ -424,6 +461,13 @@ internal sealed class NativeSmokeHarness
                 Require(menu.Rows.Count == 0 && menu.RecentPaths.Contains(_savedHost.AppHostPath),
                     "A stopped unpinned AppHost was not retained in Open Recent.");
                 var recentBeforeCancel = menu.RecentPaths.ToArray();
+                VerifyCopy(_savedHost.AppHostPath);
+                _failCopy = true;
+                var copiedBeforeFailure = _copiedPaths.Count;
+                _application.PerformCopyForSmoke(_savedHost.AppHostPath);
+                Require(_copiedPaths.Count == copiedBeforeFailure && _controller.State.Status == "Clipboard unavailable in smoke.",
+                    "Copy failure must be reported instead of pretending the clipboard was updated.");
+                _failCopy = false;
                 _application.PerformClearRecentForSmoke();
                 Require(_controller.State.RecentAppHosts.Select(host => host.Id.AppHostPath).SequenceEqual(recentBeforeCancel),
                     "Cancel cleared recent history.");
@@ -439,6 +483,7 @@ internal sealed class NativeSmokeHarness
                 break;
             case 30:
                 Require(menu.RecentPaths.Contains(_first.AppHostPath), "Missing-path recent fixture was not listed.");
+                VerifyCopy(_first.AppHostPath);
                 _phase++;
                 _application.PerformStartForSmoke(_first.AppHostPath);
                 break;
@@ -461,6 +506,8 @@ internal sealed class NativeSmokeHarness
             case 33:
                 Require(state.AppHosts.Count == 0 && state.RecentAppHosts.Count == 0 && !menu.Rows.Single().Enabled,
                     "A missing pin was not removed, or its stale tracked action remained enabled.");
+                VerifyRetainedCopy();
+                _application.ReleaseRetainedCopySenderForSmoke();
                 _phase++;
                 _application.SetTrackingForSmoke(null, open: false);
                 break;
@@ -483,10 +530,15 @@ internal sealed class NativeSmokeHarness
                 VerifyRows(state, menu);
                 Require(menu.Rows.Count == 4 && state.AppHosts.Single(host => host.Title == "Not started")
                     is { IsRunning: false, CanStart: true, Health: AppHostHealth.Unknown },
-                    "The preview must include a stopped pin with a white status icon.");
+                    "The preview must include a stopped pin with a neutral stop-circle symbol.");
+                Require(!_controller.ConfirmStop && !_savedStateStore.Load().ConfirmStop
+                    && _clearConfirmations == 2 && _removeConfirmations == 1,
+                    "Stop-warning opt-out must survive other actions without suppressing Clear or missing-file confirmations.");
+                // Interactive preview should still expose the real alert for manual inspection.
+                _controller.SetConfirmStop(true);
                 _finished = true;
-                Console.WriteLine($"Native smoke passed: 36 phases; supplied tray assets at 1x/2x with preserved alpha; lower-right purple badge with transparent border; solid status circles; white not-started preview example; context pin/unpin; missing-pin pruning; explicit start; filtered recents; safe clear/remove dialogs; top-level Documentation/Settings; native Settings default off, enable/disable/re-read, non-mutating open/close, reuse, Command-comma, About and documentation callbacks; standard Stop contrast; identity and tracking regressions; CLI discovery: {(_discovery is null ? "not requested" : "live")}.");
-                if (Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_INTERACTIVE") == "1")
+                Console.WriteLine($"Native smoke passed: 36 phases; adaptive 1x/2x brand mask; distinct active/idle/connecting/disconnected icons; semantic health symbols and accessibility; exact Unicode Copy Path in live/pinned/recent menus, retained senders and missing files, clipboard failure reporting (injected, real clipboard untouched); Stop checkbox/default/cancel/stale-lifetime safety, persisted opt-out and repeat skip; context pin/unpin; missing-pin pruning; explicit start; filtered recents; unsuppressed clear/remove dialogs; distinct Documentation/Settings; native startup Settings and callbacks; identity and tracking regressions; CLI discovery: {(_discovery is null ? "not requested" : "live")}.");
+                if (_interactiveSmokeRequested)
                 {
                     _inspectionMode = true;
                     _application.EnableInteractiveSmoke();
@@ -535,18 +587,25 @@ internal sealed class NativeSmokeHarness
         _application.FinishSmoke(success: false);
     }
 
-    private static void VerifyRows(TrayViewState state, NativeMenuInspection menu)
+    private void VerifyRows(TrayViewState state, NativeMenuInspection menu)
     {
         foreach (var native in menu.Rows)
         {
             var row = state.AppHosts.Single(host => host.Id == native.Id);
             Require(native.Title == (native.Subtitle is null ? $"{row.Title} - {row.Subtitle}" : row.Title)
                 && (native.Subtitle is null || native.Subtitle == row.Subtitle), "Native title/subtitle mismatch.");
-            Require(native.AccessibilityLabel.StartsWith($"{row.DisplayName}, ", StringComparison.Ordinal)
-                && native.AccessibilityLabel.EndsWith($", {row.Subtitle}, AppHost actions", StringComparison.Ordinal),
+            var healthDescription = !row.IsRunning ? "AppHost stopped" : row.Health switch
+            {
+                AppHostHealth.Healthy => "All resources healthy",
+                AppHostHealth.Warning => "Resources waiting or degraded",
+                AppHostHealth.Unhealthy => "Resources failed or unhealthy",
+                _ => "Resource health unavailable"
+            };
+            Require(native.AccessibilityLabel == $"{row.DisplayName}, {healthDescription}, {row.Subtitle}, AppHost actions",
                 "Accessibility label mismatch.");
             Require(native.CanOpenDashboard == row.CanOpenDashboard && native.CanStop == row.CanStop
-                && native.StopTitle == (row.IsStopping ? "Stopping AppHost..." : "Stop AppHost\u2026"), "Native action state mismatch.");
+                && native.StopTitle == (row.IsStopping ? "Stopping AppHost..."
+                    : _controller.ConfirmStop ? "Stop AppHost\u2026" : "Stop AppHost"), "Native action state mismatch.");
         }
     }
 
@@ -561,23 +620,56 @@ internal sealed class NativeSmokeHarness
         _dashboardCalls++;
     }
 
-    private bool ConfirmStop(StopConfirmation confirmation)
+    private StopConfirmationResult ConfirmStop(StopConfirmation confirmation)
     {
         Require(confirmation.ButtonCount == 2 && confirmation.CancelIsDefault
-            && confirmation.StopRequiresExplicitChoice && confirmation.HasColorIcon && confirmation.HasStandardButtonContrast,
-            "The real NSAlert has an unsafe default or missing icon.");
+            && confirmation.StopRequiresExplicitChoice && confirmation.HasColorIcon && confirmation.HasStandardButtonContrast
+            && confirmation.ShowsSuppressionButton && confirmation.SuppressionTitle == "Don't ask again"
+            && !confirmation.SuppressionIsChecked,
+            "The real NSAlert has an unsafe default or is missing its unchecked suppression control.");
+        var selected = _controller.RequireLiveInstance(confirmation.AppHost);
+        Require(confirmation.Message == $"Stop {AppHostPresentation.GetTitle(selected)}?"
+            && confirmation.Detail == $"Only this AppHost instance (PID {selected.AppHostPid}) will be stopped. Persistent resources are left running.",
+            "Stop must show a friendly title, PID and consequence, not the AppHost path.");
         _confirmations++;
         if (_confirmations == 1)
         {
-            return false;
+            return new(false, true);
         }
         if (confirmation.AppHost == _second.Id)
         {
             // Acknowledge the replacement on the watcher's thread before returning from the
             // actual confirmation hook. RequestStop must reject the old lifetime afterwards.
             Publish([_third, Replacement(_first), Replacement(_second)]);
+            return new(true, true);
         }
-        return true;
+        return new(true, confirmation.AppHost == _trackingOther.Id);
+    }
+
+    private void CopyPath(string path)
+    {
+        // Both deterministic and interactive smoke must leave the user's clipboard intact.
+        if (_failCopy)
+        {
+            throw new InvalidOperationException("Clipboard unavailable in smoke.");
+        }
+        _copiedPaths.Add(path);
+    }
+
+    private void VerifyCopy(string path)
+    {
+        var count = _copiedPaths.Count;
+        _application.PerformCopyForSmoke(path);
+        Require(_copiedPaths.Count == count + 1 && _copiedPaths[^1] == path,
+            "Copy Path changed the exact AppHost filename or skipped its native callback.");
+    }
+
+    private void VerifyRetainedCopy()
+    {
+        var count = _copiedPaths.Count;
+        _application.PerformRetainedCopyForSmoke();
+        Require(_copiedPaths.Count == count + 1 && _copiedPaths[^1] == _savedHost.AppHostPath,
+            "A retained Copy Path sender lost its original Unicode/tab-containing target.");
     }
 
     private bool ConfirmAction(TrayConfirmation confirmation)

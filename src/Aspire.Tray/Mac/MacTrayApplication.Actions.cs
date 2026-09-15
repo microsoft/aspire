@@ -156,6 +156,25 @@ internal sealed partial class MacTrayApplication
         OpenWithLaunchServices(["-R", "--", path]);
     }
 
+    private static void CopyPathToPasteboard(string path)
+    {
+        // Use the retained path, not its compact/single-line menu label or a file URL.
+        // Copy remains useful after the AppHost file has moved or been deleted.
+        var pasteboard = AppKit.Get(AppKit.Class("NSPasteboard"), "generalPasteboard");
+        if (pasteboard == 0)
+        {
+            throw new InvalidOperationException("macOS could not access the clipboard.");
+        }
+        AppKit.Get(pasteboard, "clearContents");
+        // setString:forType: returns BOOL, unlike the pointer-returning objc_msgSend overload.
+        // https://developer.apple.com/documentation/appkit/nspasteboard/setstring(_:fortype:)
+        if (AppKit.SendTwoPointersReturningBool(pasteboard, AppKit.Selector("setString:forType:"),
+            AppKit.String(path), AppKit.Constant("NSPasteboardTypeString")) == 0)
+        {
+            throw new InvalidOperationException("macOS could not copy the AppHost path to the clipboard. Try again.");
+        }
+    }
+
     private void OpenFolder(string path, string application)
     {
         if (!Directory.Exists(path))
@@ -278,6 +297,10 @@ internal sealed partial class MacTrayApplication
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnShowInFinder(nint self, nint selector, nint sender)
         => Route(self, sender, static (app, item) => app.RunAction(() => app.ShowInFinder(SelectedPath(item))));
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnCopyPath(nint self, nint selector, nint sender)
+        => Route(self, sender, static (app, item) => app.RunAction(() => app._copyPath(SelectedPath(item))));
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnOpenDocumentation(nint self, nint selector, nint sender)

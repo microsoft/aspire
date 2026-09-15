@@ -31,7 +31,7 @@ public class TraySavedStateTests
 
         Assert.Equal(saved.AppHosts, reloaded.AppHosts);
         using var json = JsonDocument.Parse(File.ReadAllText(directory.StatePath));
-        Assert.Equal(["appHosts"], json.RootElement.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(["appHosts", "confirmStop"], json.RootElement.EnumerateObject().Select(property => property.Name));
         Assert.All(json.RootElement.GetProperty("appHosts").EnumerateArray(), host =>
             Assert.Equal(["appHostPath", "isPinned", "isRecent"], host.EnumerateObject().Select(property => property.Name)));
         Assert.Equal([directory.StatePath], Directory.GetFiles(Path.GetDirectoryName(directory.StatePath)!));
@@ -47,14 +47,103 @@ public class TraySavedStateTests
             saved = saved.Remember(path);
         }
 
-        Assert.Equal(paths.TakeLast(20).Reverse(), saved.AppHosts.Where(host => host.IsRecent).Select(host => host.AppHostPath));
+        Assert.Equal(paths.TakeLast(10).Reverse(), saved.AppHosts.Where(host => host.IsRecent).Select(host => host.AppHostPath));
         Assert.Equal(new SavedAppHost(paths[0], true, false), saved.AppHosts.Single(host => host.IsPinned));
-        Assert.Equal(21, saved.AppHosts.Count);
+        Assert.Equal(11, saved.AppHosts.Count);
 
         saved = saved.Remember(paths[20]);
         Assert.Equal(paths[20], saved.AppHosts[0].AppHostPath);
-        Assert.Equal(20, saved.AppHosts.Count(host => host.IsRecent));
-        Assert.Equal(21, saved.AppHosts.Count);
+        Assert.Equal(10, saved.AppHosts.Count(host => host.IsRecent));
+        Assert.Equal(11, saved.AppHosts.Count);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(10)]
+    [InlineData(50)]
+    public void ConfiguredHistoryLimitsPreservePinsAndStopPreference(int limit)
+    {
+        var paths = Enumerable.Range(0, 52).Select(index => Path.GetFullPath($"project-{index}/apphost.cs")).ToArray();
+        var state = (TraySavedState.Empty with { ConfirmStop = false }).SetPinned(paths[0], true);
+        foreach (var path in paths)
+        {
+            state = state.Remember(path, limit);
+        }
+
+        Assert.False(state.ConfirmStop);
+        Assert.Equal(paths.TakeLast(limit).Reverse(), state.AppHosts.Where(host => host.IsRecent).Select(host => host.AppHostPath));
+        Assert.Equal(new SavedAppHost(paths[0], true, false), Assert.Single(state.AppHosts, host => host.IsPinned));
+        Assert.Equal(limit + 1, state.AppHosts.Count);
+    }
+
+    [Fact]
+    public void AllHistoryTransformsPreserveDisabledStopConfirmation()
+    {
+        var pinned = Path.GetFullPath("pinned/apphost.cs");
+        var recent = Path.GetFullPath("recent/apphost.cs");
+        var other = Path.GetFullPath("other/apphost.cs");
+        var state = (TraySavedState.Empty with { ConfirmStop = false }).Remember(pinned).SetPinned(pinned, true).Remember(recent);
+        TraySavedState[] transformed =
+        [
+            state.Remember(other),
+            state.Trim(0),
+            state.ClearRecent(),
+            state.RemoveRecent(pinned),
+            state.RemoveRecent(recent),
+            state.SetPinned(pinned, false),
+            state.SetPinned(recent, true),
+            state.SetPinned(other, true),
+            state.SetPinned(other, false),
+            state.RemoveMissingPins(new HashSet<string>([pinned], TrayAppHostPath.Comparer))
+        ];
+
+        Assert.All(transformed, saved => Assert.False(saved.ConfirmStop));
+        Assert.True(TraySavedState.Empty.ConfirmStop);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void StopConfirmationRoundTripsAlongsideHistory(bool confirmStop)
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("apphost.cs");
+        var state = TraySavedState.Empty.Remember(path).SetPinned(path, true) with { ConfirmStop = confirmStop };
+        new FileTraySavedStateStore(directory.StatePath).Save(state);
+
+        var reloaded = new FileTraySavedStateStore(directory.StatePath).Load();
+        Assert.Equal(confirmStop, reloaded.ConfirmStop);
+        Assert.Equal(state.AppHosts, reloaded.AppHosts);
+        using var json = JsonDocument.Parse(File.ReadAllText(directory.StatePath));
+        Assert.Equal(confirmStop, json.RootElement.GetProperty("confirmStop").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(20)]
+    [InlineData(50)]
+    public void FileStoreAcceptsOldAndMaximumHistoryCounts(int count)
+    {
+        using var directory = new TestTrayStateDirectory();
+        var paths = Enumerable.Range(0, count).Select(index => Path.GetFullPath($"project-{index}/apphost.cs")).ToArray();
+        var state = new TraySavedState(paths.Select(path => new SavedAppHost(path, false, true)).ToArray());
+        new FileTraySavedStateStore(directory.StatePath).Save(state);
+
+        Assert.Equal(state.AppHosts, new FileTraySavedStateStore(directory.StatePath).Load().AppHosts);
+    }
+
+    [Fact]
+    public void FileStoreRejectsHistoryOverFiftyWithoutLosingTheExistingFile()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var state = new TraySavedState(Enumerable.Range(0, 51)
+            .Select(index => new SavedAppHost(Path.GetFullPath($"project-{index}/apphost.cs"), false, true)).ToArray());
+        var store = new FileTraySavedStateStore(directory.StatePath);
+        store.Save(TraySavedState.Empty);
+        var contents = File.ReadAllText(directory.StatePath);
+
+        Assert.Throws<InvalidDataException>(() => store.Save(state));
+        Assert.Equal(contents, File.ReadAllText(directory.StatePath));
     }
 
     [Fact]
@@ -114,6 +203,8 @@ public class TraySavedStateTests
     [InlineData("{}")]
     [InlineData("{\"appHosts\":null}")]
     [InlineData("{\"appHosts\":[null]}")]
+    [InlineData("{\"appHosts\":[],\"confirmStop\":null}")]
+    [InlineData("{\"appHosts\":[],\"confirmStop\":\"false\"}")]
     [InlineData("{\"appHosts\":[{\"appHostPath\":\"relative/apphost.cs\",\"isPinned\":true,\"isRecent\":false}]}")]
     [InlineData("{\"appHosts\":[],\"dashboardUrl\":\"https://localhost/?token=private\"}")]
     public void CorruptStateIsNeverOverwritten(string contents)
