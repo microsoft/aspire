@@ -48,6 +48,54 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("--environment Staging")]
+    public async Task RunCommand_DefersSecretsEnvironmentSelectionToAppHost(string arguments)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var started = new TaskCompletionSource<AppHostProjectContext>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(true);
+                context.BackchannelCompletionSource?.TrySetResult(new TestAppHostBackchannel());
+                started.SetResult(context);
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return 0;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var pendingRun = command.Parse($"run --apphost \"{appHostFile.FullName}\" {arguments}")
+            .InvokeAsync(cancellationToken: cts.Token);
+
+        var context = await started.Task.DefaultTimeout();
+        cts.Cancel();
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(AspireSecretsPathHelper.ComputeSyntheticAppHostId(appHostFile.FullName),
+            context.EnvironmentVariables[KnownConfigNames.AspireUserSecretsId]);
+        Assert.False(context.EnvironmentVariables.ContainsKey(KnownConfigNames.AspireSecretsFile));
+    }
+
     [Fact]
     public async Task RunCommand_RejectsInvalidStartupTimeoutEnvironmentVariable()
     {

@@ -104,19 +104,23 @@ public sealed class SecretDotNetAppHostTests(ITestOutputHelper output)
 
             using Aspire.Hosting.Pipelines;
 
-            var builder = DistributedApplication.CreateBuilder(args);
+            var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = args,
+                DisableDashboard = true
+            });
 
             var appHostEnvironment = builder.Environment.EnvironmentName;
             var apiKey = builder.Configuration["Parameters:api_key"] ?? "<missing>";
 
+            if (!StringComparer.Ordinal.Equals(appHostEnvironment, "Staging") ||
+                !StringComparer.Ordinal.Equals(apiKey, "staging-secret"))
+            {
+                throw new InvalidOperationException($"E2E_SECRET_MISMATCH:{appHostEnvironment}:{apiKey}");
+            }
+
             builder.Pipeline.AddStep("verify-deployment-secret", async context =>
             {
-                if (!StringComparer.Ordinal.Equals(appHostEnvironment, "Staging") ||
-                    !StringComparer.Ordinal.Equals(apiKey, "staging-secret"))
-                {
-                    throw new InvalidOperationException($"E2E_SECRET_MISMATCH:{appHostEnvironment}:{apiKey}");
-                }
-
                 var task = await context.ReportingStep
                     .CreateTaskAsync("Verifying deployment secret", context.CancellationToken)
                     .ConfigureAwait(false);
@@ -163,5 +167,25 @@ public sealed class SecretDotNetAppHostTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("E2E_DEPLOY_SECRET_OK", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
+
+        // dotnet applies this profile after RunCommand has prepared the launch context.
+        // It must select Staging secrets even when the parent process is Development.
+        await File.WriteAllTextAsync(Path.ChangeExtension(appHostFilePath, ".run.json"), """
+            {
+              "profiles": {
+                "Staging": {
+                  "commandName": "Project",
+                  "environmentVariables": {
+                    "DOTNET_ENVIRONMENT": "Staging"
+                  }
+                }
+              }
+            }
+            """, TestContext.Current.CancellationToken);
+
+        await auto.TypeAsync("DOTNET_ENVIRONMENT=Development aspire start --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(3));
+        await auto.AspireStopAsync(counter);
     }
 }

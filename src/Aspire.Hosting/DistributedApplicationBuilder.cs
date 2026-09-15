@@ -72,6 +72,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     private const string ApplicationBuiltEventName = "DistributedApplicationBuilt";
     private const string BuilderConstructingEventName = "DistributedApplicationBuilderConstructing";
     private const string BuilderConstructedEventName = "DistributedApplicationBuilderConstructed";
+    private const string AspireEnvironmentVariablePrefix = "ASPIRE_";
 
     private readonly DistributedApplicationOptions _options;
     private readonly HostApplicationBuilder _innerBuilder;
@@ -197,14 +198,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // HostApplicationBuilder will then add DOTNET_-prefixed env vars and command line args on top.
         // This gives us the priority order: --environment > DOTNET_ENVIRONMENT > ASPIRE_ENVIRONMENT > default.
         var configuration = new ConfigurationManager();
-        configuration.AddEnvironmentVariables(prefix: "ASPIRE_");
+        configuration.AddEnvironmentVariables(prefix: AspireEnvironmentVariablePrefix);
         innerBuilderOptions.Configuration = configuration;
 
         LogBuilderConstructing(options, innerBuilderOptions);
         _innerBuilder = new HostApplicationBuilder(innerBuilderOptions);
 
-        var configuredUserSecretsId = _innerBuilder.Configuration[KnownConfigNames.AspireUserSecretsId];
-        var configuredAspireSecretsFile = _innerBuilder.Configuration[KnownConfigNames.AspireSecretsFile];
+        var configuredUserSecretsId = GetAspirePrefixedConfigurationValue(_innerBuilder.Configuration, KnownConfigNames.AspireUserSecretsId);
+        var configuredAspireSecretsFile = GetAspirePrefixedConfigurationValue(_innerBuilder.Configuration, KnownConfigNames.AspireSecretsFile);
         var userSecretsId = ResolveUserSecretsId(AppHostAssembly, _innerBuilder.Configuration);
         var legacyUserSecretsFilePath = ResolveLegacyUserSecretsFilePath(userSecretsId);
         var aspireSecretsFilePath = ResolveAspireSecretsFilePath(configuredAspireSecretsFile, userSecretsId, _innerBuilder.Environment.EnvironmentName);
@@ -843,9 +844,27 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         // An explicitly configured value should win over any assembly-level UserSecretsId so guest AppHosts can
         // direct secrets to their synthetic store instead of the generated server project's store.
-        var configuredUserSecretsId = configuration[KnownConfigNames.AspireUserSecretsId];
+        var configuredUserSecretsId = GetAspirePrefixedConfigurationValue(configuration, KnownConfigNames.AspireUserSecretsId);
         var assemblyUserSecretsId = appHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId;
         return string.IsNullOrWhiteSpace(configuredUserSecretsId) ? assemblyUserSecretsId : configuredUserSecretsId;
+    }
+
+    internal static string? GetAspirePrefixedConfigurationValue(IConfiguration configuration, string key)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        var configuredValue = configuration[key];
+        if (!string.IsNullOrWhiteSpace(configuredValue) || !key.StartsWith(AspireEnvironmentVariablePrefix, StringComparison.Ordinal))
+        {
+            return configuredValue;
+        }
+
+        // The constructor pre-seeds ASPIRE_-prefixed environment variables so
+        // ASPIRE_ENVIRONMENT can participate in host environment selection before
+        // HostApplicationBuilder is created. That provider strips the prefix, so
+        // ASPIRE_SECRETS_FILE is visible as SECRETS_FILE at this point.
+        return configuration[key[AspireEnvironmentVariablePrefix.Length..]];
     }
 
     internal static string? ResolveAspireSecretsFilePath(string? configuredAspireSecretsFile, string? userSecretsId, string environmentName)

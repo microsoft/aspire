@@ -306,6 +306,27 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
+    public void AspirePrefixedConfigurationValueReadsPrefixStrippedEnvironmentConfiguration()
+    {
+        var configuration = new ConfigurationManager();
+        configuration["SECRETS_FILE"] = "/tmp/aspire-secrets.json";
+
+        Assert.Equal("/tmp/aspire-secrets.json", DistributedApplicationBuilder.GetAspirePrefixedConfigurationValue(configuration, KnownConfigNames.AspireSecretsFile));
+    }
+
+    [Fact]
+    public void AspirePrefixedConfigurationValuePrefersExactConfigurationKey()
+    {
+        var configuration = new ConfigurationManager
+        {
+            ["SECRETS_FILE"] = "/tmp/from-environment-prefix.json",
+            [KnownConfigNames.AspireSecretsFile] = "/tmp/from-command-line.json"
+        };
+
+        Assert.Equal("/tmp/from-command-line.json", DistributedApplicationBuilder.GetAspirePrefixedConfigurationValue(configuration, KnownConfigNames.AspireSecretsFile));
+    }
+
+    [Fact]
     public void AspireSecretsFileLoadsInProduction()
     {
         var tempDirectory = Directory.CreateTempSubdirectory();
@@ -330,6 +351,41 @@ public class DistributedApplicationBuilderTests
         finally
         {
             tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    public void AspireSecretsIdentityUsesFinalHostEnvironment(string environment)
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var homeDirectory = AspireSecretsPathHelper.GetDefaultHomeDirectory();
+        var secretsDirectory = AspireSecretsPathHelper.GetSecretsDirectoryPath(homeDirectory, userSecretsId);
+        try
+        {
+            foreach (var name in new[] { "Development", "Staging", "Production" })
+            {
+                var store = new SecretsStore(AspireSecretsPathHelper.GetSecretsFilePath(homeDirectory, userSecretsId, name));
+                store.Set("Parameters:api_key", $"{name}-secret");
+                store.Save();
+            }
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}", "--environment", environment],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal(environment, appBuilder.Environment.EnvironmentName);
+            Assert.Equal($"{environment}-secret", appBuilder.Configuration["Parameters:api_key"]);
+            Assert.Equal(AspireSecretsPathHelper.GetSecretsFilePath(homeDirectory, userSecretsId, environment),
+                appBuilder.UserSecretsManager.FilePath);
+        }
+        finally
+        {
+            Directory.Delete(secretsDirectory, recursive: true);
         }
     }
 

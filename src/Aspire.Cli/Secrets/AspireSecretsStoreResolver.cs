@@ -16,6 +16,18 @@ internal sealed class AspireSecretsStoreResolver(
 {
     internal const string DefaultEnvironmentName = AppHostEnvironmentDefaults.DevelopmentEnvironmentName;
 
+    /// <summary>
+    /// Resolves the AppHost identity without initializing user secrets or selecting an environment.
+    /// </summary>
+    public async Task<string> ResolveAppHostIdAsync(
+        FileInfo appHostFile,
+        IAppHostProject project,
+        CancellationToken cancellationToken)
+    {
+        var userSecretsId = await project.GetUserSecretsIdAsync(appHostFile, autoInit: false, cancellationToken);
+        return ResolveAppHostId(appHostFile, userSecretsId);
+    }
+
     public async Task<AspireSecretsStoreResult?> ResolveAsync(
         FileInfo? projectFile,
         string? environmentName,
@@ -127,34 +139,18 @@ internal sealed class AspireSecretsStoreResolver(
 
         ImportLegacyUserSecretsIfNeeded(legacyUserSecretsFilePath, developmentFilePath);
 
-        if (File.Exists(developmentFilePath))
-        {
-            results.Add(new AspireSecretsStoreResult(
-                appHostFile,
-                DefaultEnvironmentName,
-                developmentFilePath,
-                new SecretsStore(developmentFilePath),
-                aspireStoreExists: true,
-                legacyUserSecretsFilePath));
-        }
-
         if (Directory.Exists(secretsDirectory))
         {
             foreach (var file in Directory.EnumerateFiles(secretsDirectory, "*.json", SearchOption.TopDirectoryOnly).Order(StringComparer.OrdinalIgnoreCase))
             {
                 var environment = Path.GetFileNameWithoutExtension(file);
-                if (IsDevelopment(environment))
-                {
-                    continue;
-                }
-
                 results.Add(new AspireSecretsStoreResult(
                     appHostFile,
                     environment,
                     file,
                     new SecretsStore(file),
                     aspireStoreExists: true,
-                    legacyUserSecretsFilePath: null));
+                    legacyUserSecretsFilePath: IsDevelopment(environment) ? legacyUserSecretsFilePath : null));
             }
         }
 
@@ -173,8 +169,46 @@ internal sealed class AspireSecretsStoreResolver(
     private static bool IsDevelopment(string environmentName) =>
         string.Equals(environmentName, AppHostEnvironmentDefaults.DevelopmentEnvironmentName, StringComparison.OrdinalIgnoreCase);
 
-    private static string ResolveAppHostId(FileInfo appHostFile, string? userSecretsId) =>
-        string.IsNullOrWhiteSpace(userSecretsId) ? AspireSecretsPathHelper.ComputeSyntheticAppHostId(appHostFile.FullName) : userSecretsId;
+    private string ResolveAppHostId(FileInfo appHostFile, string? userSecretsId)
+    {
+        var syntheticId = AspireSecretsPathHelper.ComputeSyntheticAppHostId(appHostFile.FullName);
+        if (string.IsNullOrWhiteSpace(userSecretsId))
+        {
+            return syntheticId;
+        }
+
+        var sourceDirectory = GetSecretsDirectoryPath(executionContext.HomeDirectory, syntheticId);
+        var destinationDirectory = GetSecretsDirectoryPath(executionContext.HomeDirectory, userSecretsId);
+        if (string.Equals(sourceDirectory, destinationDirectory, StringComparison.OrdinalIgnoreCase) || !Directory.Exists(sourceDirectory))
+        {
+            return userSecretsId;
+        }
+
+        // Deployment prompts and non-Development writes can persist secrets before user-secrets
+        // initialization. Move every environment to the real ID, including on read/list paths
+        // after an external initialization, without initializing or editing the project here.
+        foreach (var sourceFile in Directory.EnumerateFiles(sourceDirectory, "*.json", SearchOption.TopDirectoryOnly).Order(StringComparer.Ordinal))
+        {
+            var sourceStore = new SecretsStore(sourceFile);
+            var destinationStore = new SecretsStore(Path.Combine(destinationDirectory, Path.GetFileName(sourceFile)));
+            foreach (var (key, value) in sourceStore.AsEnumerable())
+            {
+                if (!destinationStore.ContainsKey(key))
+                {
+                    destinationStore.Set(key, value);
+                }
+            }
+
+            // Save atomically before removing the source. A failure must abort resolution so
+            // callers cannot delete values while a stale source still awaits migration.
+            // Retiring each source separately makes retries safe after a partial migration
+            // and prevents later resolutions from resurrecting deleted values.
+            destinationStore.Save();
+            File.Delete(sourceFile);
+        }
+
+        return userSecretsId;
+    }
 
     private static string? GetLegacyUserSecretsFilePath(string? userSecretsId, bool isDevelopment) =>
         isDevelopment && !string.IsNullOrWhiteSpace(userSecretsId) ? UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId) : null;

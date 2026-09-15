@@ -124,6 +124,65 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SecretCommands_PreserveDeploymentSecretsAfterDevelopmentInitializesUserSecrets()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var project = new TestAppHostProject(userSecretsId, initializeOnDemand: true);
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        using var provider = CreateSecretTestServices(workspace, outputWriter, appHostFile, project);
+        var command = provider.GetRequiredService<RootCommand>();
+        var projectOption = $"--apphost \"{appHostFile.FullName}\"";
+        var syntheticPath = AspireSecretsStoreResolver.GetSecretsFilePath(
+            workspace.WorkspaceRoot, AspireSecretsPathHelper.ComputeSyntheticAppHostId(appHostFile.FullName), "Production");
+
+        Assert.Equal(CliExitCodes.Success, await command.Parse($"secret set --environment Production Parameters:key prod-secret {projectOption}").InvokeAsync().DefaultTimeout());
+        Assert.False(project.IsInitialized);
+        Assert.True(File.Exists(syntheticPath));
+
+        Assert.Equal(CliExitCodes.Success, await command.Parse($"secret set Parameters:key dev-secret {projectOption}").InvokeAsync().DefaultTimeout());
+        Assert.True(project.IsInitialized);
+        Assert.False(File.Exists(syntheticPath));
+        Assert.False(File.Exists(UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId)));
+
+        outputWriter.Logs.Clear();
+        Assert.Equal(CliExitCodes.Success, await command.Parse($"secret get --environment Production Parameters:key {projectOption}").InvokeAsync().DefaultTimeout());
+        Assert.Contains("prod-secret", outputWriter.Logs);
+
+        outputWriter.Logs.Clear();
+        Assert.Equal(CliExitCodes.Success, await command.Parse($"secret list --all --format json {projectOption}").InvokeAsync().DefaultTimeout());
+        Assert.Contains(outputWriter.Logs, line => line.Contains("prod-secret", StringComparison.Ordinal));
+        Assert.Contains(outputWriter.Logs, line => line.Contains("dev-secret", StringComparison.Ordinal));
+
+        Assert.Equal(CliExitCodes.Success, await command.Parse($"secret delete --environment Production Parameters:key {projectOption}").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.ConfigNotFound, await command.Parse($"secret get --environment Production Parameters:key {projectOption}").InvokeAsync().DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task SecretListCommand_AllIncludesLowercaseDevelopmentEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        using var provider = CreateSecretTestServices(workspace, outputWriter, appHostFile, userSecretsId);
+        var command = provider.GetRequiredService<RootCommand>();
+        var projectOption = $"--apphost \"{appHostFile.FullName}\"";
+
+        Assert.Equal(CliExitCodes.Success, await command.Parse(
+            $"secret set --environment development Parameters:key lowercase-secret {projectOption}").InvokeAsync().DefaultTimeout());
+        outputWriter.Logs.Clear();
+
+        Assert.Equal(CliExitCodes.Success, await command.Parse(
+            $"secret list --all --format json {projectOption}").InvokeAsync().DefaultTimeout());
+        Assert.Contains(outputWriter.Logs, line => line.Contains("\"development\"", StringComparison.Ordinal));
+        Assert.Contains(outputWriter.Logs, line => line.Contains("\"lowercase-secret\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task SecretListCommand_CanListAllEnvironmentSecrets()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -229,6 +288,13 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         TestOutputTextWriter outputWriter,
         FileInfo appHostFile,
         string userSecretsId)
+        => CreateSecretTestServices(workspace, outputWriter, appHostFile, new TestAppHostProject(userSecretsId));
+
+    private ServiceProvider CreateSecretTestServices(
+        TemporaryWorkspace workspace,
+        TestOutputTextWriter outputWriter,
+        FileInfo appHostFile,
+        IAppHostProject project)
     {
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -238,7 +304,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         });
 
         services.Replace(ServiceDescriptor.Singleton<IAppHostProjectFactory>(
-            new TestAppHostProjectFactory(new TestAppHostProject(userSecretsId))));
+            new TestAppHostProjectFactory(project)));
 
         return services.BuildServiceProvider();
     }
@@ -270,8 +336,9 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public IAppHostProject GetProject(FileInfo appHostFile) => project;
     }
 
-    private sealed class TestAppHostProject(string userSecretsId) : IAppHostProject
+    private sealed class TestAppHostProject(string userSecretsId, bool initializeOnDemand = false) : IAppHostProject
     {
+        public bool IsInitialized { get; private set; } = !initializeOnDemand;
         public bool IsUnsupported { get; set; }
         public string LanguageId => "test";
         public string DisplayName => "Test";
@@ -281,7 +348,11 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public bool CanHandle(FileInfo appHostFile) => true;
         public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken = default) => Task.FromResult<string[]>([]);
-        public Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken) => Task.FromResult<string?>(userSecretsId);
+        public Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken)
+        {
+            IsInitialized |= autoInit;
+            return Task.FromResult(IsInitialized ? userSecretsId : null);
+        }
         public bool IsUsingProjectReferences(FileInfo appHostFile) => false;
         public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken) => throw new NotSupportedException();

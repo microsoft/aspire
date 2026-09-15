@@ -288,7 +288,10 @@ internal sealed class RunCommand : BaseCommand
             {
                 ProfileCaptureEnvironment.AddCurrentToEnvironment(context.EnvironmentVariables);
             }
-            await AddAspireSecretsFileEnvironmentVariableAsync(effectiveAppHostFile, project, context.EnvironmentVariables, context.UnmatchedTokens, cancellationToken);
+            // Launch profiles can still change the environment in RunAsync. Pass the identity, not an
+            // environment-specific file, so Hosting selects secrets after the final environment is known.
+            context.EnvironmentVariables[KnownConfigNames.AspireUserSecretsId] =
+                await _aspireSecretsStoreResolver.ResolveAppHostIdAsync(effectiveAppHostFile, project, cancellationToken);
 
             // Start the project run as a pending task - we'll handle UX while it runs
             Task<int> pendingRun;
@@ -1171,31 +1174,6 @@ internal sealed class RunCommand : BaseCommand
         return CommandResult.Failure(
             CliExitCodes.FailedToDotnetRunAppHost,
             string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeout));
-    }
-
-    private async Task AddAspireSecretsFileEnvironmentVariableAsync(
-        FileInfo appHostFile,
-        IAppHostProject project,
-        IDictionary<string, string> environmentVariables,
-        string[] args,
-        CancellationToken cancellationToken)
-    {
-        var effectiveEnvironment = AppHostEnvironmentDefaults.ResolveEffectiveEnvironment(
-            environmentVariables,
-            AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
-            ExecutionContext.EnvironmentVariables,
-            args);
-
-        if (string.IsNullOrWhiteSpace(effectiveEnvironment))
-        {
-            return;
-        }
-
-        var result = await _aspireSecretsStoreResolver.ResolveAsync(appHostFile, project, effectiveEnvironment, cancellationToken);
-        if (result is not null)
-        {
-            environmentVariables[KnownConfigNames.AspireSecretsFile] = result.AspireSecretsFilePath;
-        }
     }
 
 }
