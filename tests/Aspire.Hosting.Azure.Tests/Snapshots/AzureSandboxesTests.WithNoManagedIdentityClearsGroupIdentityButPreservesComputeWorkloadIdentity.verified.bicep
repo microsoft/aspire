@@ -60,4 +60,12 @@ output name string = sandboxes.name
 
 output location string = sandboxes.location
 
+output endpoint string = 'https://management.${sandboxes.location}.azuredevcompute.io'
+
+output subscriptionId string = subscription().subscriptionId
+
+output resourceGroup string = resourceGroup().name
+
+output connectionString string = 'Endpoint=https://management.${sandboxes.location}.azuredevcompute.io;SubscriptionId=${subscription().subscriptionId};ResourceGroup=${resourceGroup().name};SandboxGroupName=${sandboxes.name}'
+
 output imagePullIdentityClientId string = sandboxes_mi.properties.clientId

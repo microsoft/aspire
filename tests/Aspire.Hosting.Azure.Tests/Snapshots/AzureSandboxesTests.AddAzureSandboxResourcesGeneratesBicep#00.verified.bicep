@@ -60,4 +60,12 @@ output name string = hostgroup.name
 
 output location string = hostgroup.location
 
+output endpoint string = 'https://management.${hostgroup.location}.azuredevcompute.io'
+
+output subscriptionId string = subscription().subscriptionId
+
+output resourceGroup string = resourceGroup().name
+
+output connectionString string = 'Endpoint=https://management.${hostgroup.location}.azuredevcompute.io;SubscriptionId=${subscription().subscriptionId};ResourceGroup=${resourceGroup().name};SandboxGroupName=${hostgroup.name}'
+
 output imagePullIdentityClientId string = hostgroup_mi.properties.clientId
