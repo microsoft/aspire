@@ -29,6 +29,9 @@ var api = builder.AddProject<Projects.Api>("api");
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext");
 ```
 
+`AddEFMigrations` also accepts .NET project resources created with `AddDotnetProject`. File-based C# apps are not
+supported because the EF Core CLI requires a project file for its `--project` and `--startup-project` arguments.
+
 **TypeScript**
 
 ```typescript
@@ -245,6 +248,26 @@ for your deployment flow:
 ```
 
 Similarly you can use `PublishAsMigrationScript()` if you also want a raw SQL script produced.
+
+## Coordinated builds and custom build inputs
+
+With `AddDotnetProject`, local EF operations wait for the coordinated build to finish successfully before
+starting `dotnet-ef`. This includes automatic startup migrations and dashboard commands. The wait is for build
+output, not for the application to start, so `api.WaitFor(migrations)` remains supported.
+
+EF operations do **not** forward Aspire-specific `WithBuildEnvironment` customizations as MSBuild global
+properties to `dotnet-ef`. When the startup or a known migrations project has `WithBuildEnvironment`,
+`WithDotnetProgramBuildEnvironment`, or custom build-property metadata, each requested EF operation logs a
+warning and continues. This also applies to script and bundle generation during publishing.
+
+Waiting for the build does not guarantee that EF selects the same assemblies: EF may use suitable output,
+select different or stale output, or fail because its expected output is missing. Ordinary commands retain
+`--no-build`; bundle generation retains its existing build behavior. Actual EF failures still fail the
+operation, including automatic migrations and publishing steps.
+
+Where equivalent, move the required settings into shared `.csproj` or `Directory.Build.props` configuration
+so both evaluations agree. Runtime `WithEnvironment` is not equivalent to MSBuild global properties, especially
+when the project assigns a property unconditionally. The warning does not resolve this compatibility risk.
 
 ## Additional documentation
 

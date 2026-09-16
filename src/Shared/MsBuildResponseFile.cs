@@ -2,32 +2,25 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
-using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 
+#if ASPIRE_HOSTING_CORE
+namespace Aspire.Hosting.Internal;
+#else
 namespace Aspire.Hosting.Dotnet;
+#endif
 
-/// <summary>
-/// Provides build-only environment variables for a .NET project resource.
-/// </summary>
-internal sealed class DotnetProjectBuildEnvironmentCallbackAnnotation(
-    Func<EnvironmentCallbackContext, Task> callback) : IResourceAnnotation
+internal static class MsBuildResponseFileFactory
 {
-    public Func<EnvironmentCallbackContext, Task> Callback { get; } =
-        callback ?? throw new ArgumentNullException(nameof(callback));
-}
-
-internal static class DotnetProjectBuildEnvironment
-{
-    public static async Task<MsBuildResponseFile?> CreateResponseFileAsync(
-        IReadOnlyDictionary<string, string> environment,
+    public static async Task<MsBuildResponseFile?> CreateAsync(
+        IReadOnlyDictionary<string, string> properties,
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(properties);
         ArgumentNullException.ThrowIfNull(logger);
 
-        if (environment.Count == 0)
+        if (properties.Count == 0)
         {
             return null;
         }
@@ -45,8 +38,8 @@ internal static class DotnetProjectBuildEnvironment
             };
             if (!OperatingSystem.IsWindows())
             {
-                // Build environment values are not a secret transport, but the response file still belongs only to
-                // this process. Set the final mode atomically so another local user cannot read project-specific values.
+                // Build properties are not a secret transport, but the response file still belongs only to this
+                // process. Set the final mode atomically so another local user cannot read project-specific values.
                 options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
             }
 
@@ -54,13 +47,13 @@ internal static class DotnetProjectBuildEnvironment
             await using var streamScope = stream.ConfigureAwait(false);
             var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             await using var writerScope = writer.ConfigureAwait(false);
-            foreach (var (name, value) in environment)
+            foreach (var (name, value) in properties)
             {
-                // MSBuild's response-file tokenizer splits on all Unicode whitespace. Quoting the complete
-                // switch keeps those characters in the property value; percent escaping handles embedded
-                // quotes, backslashes, and line-breaking whitespace without relying on platform quoting rules.
+                // MSBuild's response-file tokenizer splits on all Unicode whitespace. Quoting the complete switch
+                // keeps those characters in the property value; percent escaping handles embedded quotes,
+                // backslashes, and line-breaking whitespace without relying on platform quoting rules.
                 await writer.WriteLineAsync(
-                    $"\"{CreateMsBuildPropertyArgument(name, value)}\"".AsMemory(),
+                    $"\"{CreatePropertyArgument(name, value)}\"".AsMemory(),
                     cancellationToken).ConfigureAwait(false);
             }
 
@@ -73,14 +66,26 @@ internal static class DotnetProjectBuildEnvironment
         }
     }
 
-    public static string CreateMsBuildPropertyArgument(string name, string value) =>
-        $"--property:{EscapeMsBuildPropertyValue(name)}={EscapeMsBuildPropertyValue(value)}";
+    public static string CreatePropertyArgument(string name, string value) =>
+        $"--property:{EscapePropertyValue(name)}={EscapePropertyValue(value)}";
 
-    private static string EscapeMsBuildPropertyValue(string value)
+    internal static void TryDeleteDirectory(DirectoryInfo directory, ILogger logger)
     {
-        // MSBuild decodes %-escaped special characters in property values. Response files are
-        // line-oriented command input, so quotes, backslashes, and ASCII whitespace are escaped
-        // before the complete switch is quoted by the caller.
+        try
+        {
+            directory.Delete(recursive: true);
+        }
+        catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            logger.LogDebug(ex, "Failed to delete temporary MSBuild response-file directory '{DirectoryPath}'.", directory.FullName);
+        }
+    }
+
+    private static string EscapePropertyValue(string value)
+    {
+        // MSBuild decodes %-escaped special characters in property values. Response files are line-oriented
+        // command input, so quotes, backslashes, and ASCII whitespace are escaped before the complete switch is
+        // quoted by the caller.
         // https://learn.microsoft.com/visualstudio/msbuild/msbuild-response-files
         // Escape '%' first so an existing sequence such as "%3B" remains literal.
         // https://learn.microsoft.com/visualstudio/msbuild/how-to-escape-special-characters-in-msbuild
@@ -103,18 +108,6 @@ internal static class DotnetProjectBuildEnvironment
             .Replace("\r", "%0D", StringComparison.Ordinal)
             .Replace("\n", "%0A", StringComparison.Ordinal);
     }
-
-    internal static void TryDeleteDirectory(DirectoryInfo directory, ILogger logger)
-    {
-        try
-        {
-            directory.Delete(recursive: true);
-        }
-        catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException or System.Security.SecurityException)
-        {
-            logger.LogDebug(ex, "Failed to delete temporary MSBuild response-file directory '{DirectoryPath}'.", directory.FullName);
-        }
-    }
 }
 
 internal sealed class MsBuildResponseFile(
@@ -133,7 +126,7 @@ internal sealed class MsBuildResponseFile(
         var directoryToDelete = Interlocked.Exchange(ref _directory, null);
         if (directoryToDelete is not null)
         {
-            DotnetProjectBuildEnvironment.TryDeleteDirectory(directoryToDelete, logger);
+            MsBuildResponseFileFactory.TryDeleteDirectory(directoryToDelete, logger);
         }
     }
 }

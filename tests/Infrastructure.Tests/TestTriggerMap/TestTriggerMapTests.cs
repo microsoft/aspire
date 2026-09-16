@@ -652,6 +652,33 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj", "Aspire.Hosting.Dotnet")]
+    [InlineData("src/Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.csproj", "Aspire.Hosting.Foundry")]
+    public void DeploymentE2eIsSelectedWhenRuntimeHostingDependencyIsAffected(string path, string affectedProject)
+    {
+        var result = SelectWithRealMap(path, affectedProject);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:deployment-e2e", result.Jobs);
+        Assert.Contains(result.JobCauses["job:deployment-e2e"], cause =>
+            cause.Kind == CauseKind.AffectedProject && cause.Trigger == affectedProject);
+    }
+
+    [Fact]
+    public void DeploymentE2eIsNotSelectedForFoundryTestOnlyChange()
+    {
+        var result = SelectWithRealMap(
+            "tests/Aspire.Hosting.Foundry.Tests/Aspire.Hosting.Foundry.Tests.csproj",
+            "Aspire.Hosting.Foundry.Tests");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal("Aspire.Hosting.Foundry.Tests", Assert.Single(result.TestProjects));
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
     [InlineData("src/Aspire.Cli/Commands/RunCommand.cs", "Aspire.Cli")]
     [InlineData("src/Aspire.Managed/Program.cs", "Aspire.Managed")]
     [InlineData("src/Aspire.AppHost.Sdk/Aspire.AppHost.Sdk.csproj", "Aspire.AppHost.Sdk")]
