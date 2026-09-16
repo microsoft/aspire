@@ -144,6 +144,10 @@ from another container still requires a container runtime. Docker supports layer
 because the layering build must use Docker's local image store before `docker image save` exports the result.
 Use Podman when container-file layering must produce an OCI-format archive.
 
+Layered archive publishing uses private temporary image tags and does not overwrite or delete an existing
+local image with the configured destination name and tag. The archive still contains that configured image
+identity. Temporary images are cleaned up after publishing, including when a build fails or is canceled.
+
 For .NET SDK publishing, a non-existent `OutputPath` with any filename extension is an explicit archive
 filename. This includes custom extensions such as `image.custom`, not only `.tar` or `.tar.gz`. A path without
 an extension is interpreted as a directory. End a dotted directory path with the platform's directory separator

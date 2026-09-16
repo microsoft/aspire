@@ -1,0 +1,16 @@
+﻿{
+  "index.json": {
+    "schemaVersion": 2,
+    "manifests": [
+      {
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "size": 987,
+        "annotations": {
+          "org.opencontainers.image.ref.name": "localhost/widget:preview-7",
+          "example.com/podman-field": "preserved"
+        }
+      }
+    ]
+  }
+}

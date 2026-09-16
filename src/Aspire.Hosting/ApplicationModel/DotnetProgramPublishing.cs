@@ -126,11 +126,12 @@ internal static class DotnetProgramPublishing
         // Only the resolved build options determine whether SDK publishing needs a runtime.
         // Keep interactive recovery for those builds without blocking daemon-free archives.
         var readiness = context.Services.GetRequiredService<ContainerRuntimeReadiness>();
-        using var buildResult = await dotnetProgramImageBuilder.BuildDotnetProgramImageAsync(
+        var buildResult = await dotnetProgramImageBuilder.BuildDotnetProgramImageAsync(
             resource,
             buildEnvironmentCallbacks,
             readiness.EnsureRunningAsync,
             context.CancellationToken).ConfigureAwait(false);
+        await using var buildResultLifetime = buildResult.ConfigureAwait(false);
 
         if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out _))
         {
@@ -152,35 +153,38 @@ internal static class DotnetProgramPublishing
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        var sourceImageName = string.Equals(buildResult.LocalImageTag, "latest", StringComparison.Ordinal)
-            ? buildResult.LocalImageName
-            : $"{buildResult.LocalImageName}:{buildResult.LocalImageTag}";
-        var tempImageName = $"{buildResult.LocalImageName}:temp-{Guid.NewGuid():N}";
+        var sourceImageName = buildResult.SourceImageReference;
+        var exportsArchive = buildResult.Destination == ContainerImageDestination.Archive;
+        var tempImageTag = exportsArchive ? $"aspire-layered-{Guid.NewGuid():N}" : $"temp-{Guid.NewGuid():N}";
+        var tempImageName = $"{buildResult.LocalImageName}:{tempImageTag}";
         var containerRuntime = await services
             .GetRequiredService<IContainerRuntimeResolver>()
             .ResolveAsync(cancellationToken)
             .ConfigureAwait(false);
         var directoryService = services.GetRequiredService<IFileSystemService>();
-        var removeSourceImage = buildResult.Destination == ContainerImageDestination.Archive;
-        var tempImageCreated = false;
+        TemporaryContainerImage? temporaryImage = null;
         TempDirectory? stagedArchiveDirectory = null;
         string? tempDockerfilePath = null;
         var builtSuccessfully = false;
 
         try
         {
-            stagedArchiveDirectory = ShouldStageArchive(buildResult)
+            stagedArchiveDirectory = exportsArchive
                 ? directoryService.TempDirectory.CreateTempSubdirectory("aspire-container-archive")
                 : null;
 
-            logger.LogDebug("Tagging image {SourceImageName} as {TempImageName}", sourceImageName, tempImageName);
-            await containerRuntime.TagImageAsync(sourceImageName, tempImageName, cancellationToken).ConfigureAwait(false);
-            tempImageCreated = true;
+            if (!exportsArchive)
+            {
+                temporaryImage = new TemporaryContainerImage(containerRuntime, tempImageName, logger);
+                logger.LogDebug("Tagging image {SourceImageName} as {TempImageName}", sourceImageName, tempImageName);
+                await containerRuntime.TagImageAsync(sourceImageName, tempImageName, cancellationToken).ConfigureAwait(false);
+                sourceImageName = tempImageName;
+            }
 
             var dockerfileBuilder = new DockerfileBuilder();
             dockerfileBuilder.AddContainerFilesStages(resource, logger);
             dockerfileBuilder
-                .From(tempImageName)
+                .From(sourceImageName)
                 .AddContainerFiles(resource, buildResult.ContainerWorkingDirectory, logger);
 
             var projectDirectory = Path.GetDirectoryName(projectMetadata.ProjectPath)!;
@@ -191,23 +195,23 @@ internal static class DotnetProgramPublishing
             }
 
             var runtimeOutputPath = stagedArchiveDirectory?.Path ?? buildResult.OutputPath;
-            if (buildResult.Destination == ContainerImageDestination.Archive &&
-                runtimeOutputPath is not null &&
-                stagedArchiveDirectory is null)
-            {
-                Directory.CreateDirectory(runtimeOutputPath);
-            }
-
             var buildOptions = new ContainerImageBuildOptions
             {
                 ImageName = buildResult.LocalImageName,
-                Tag = buildResult.LocalImageTag,
+                Tag = exportsArchive ? tempImageTag : buildResult.LocalImageTag,
                 Destination = buildResult.Destination,
                 OutputPath = runtimeOutputPath,
                 ImageFormat = buildResult.ImageFormat,
                 TargetPlatform = buildResult.TargetPlatform ?? ContainerTargetPlatform.LinuxAmd64,
                 RequiresLocalImageStore = true
             };
+
+            if (exportsArchive)
+            {
+                // Docker and Podman both build locally before saving these archives. Isolate the
+                // layered image too; rewriting archive metadata must never require tagging the daemon.
+                temporaryImage = new TemporaryContainerImage(containerRuntime, tempImageName, logger);
+            }
 
             await containerRuntime.BuildImageAsync(
                 projectDirectory,
@@ -223,10 +227,24 @@ internal static class DotnetProgramPublishing
                 var stagedArchivePath = ResourceExtensions.GetContainerImageArchivePath(
                     stagedArchiveDirectory.Path,
                     buildResult.LocalImageName,
-                    buildResult.LocalImageTag);
-                await MoveArchiveAsync(
+                    tempImageTag);
+                var normalizedArchivePath = Path.Combine(stagedArchiveDirectory.Path, "normalized.tar");
+                await ContainerImageArchiveRewriter.RewriteImageTagAsync(
                     stagedArchivePath,
-                    buildResult.OutputPath!,
+                    normalizedArchivePath,
+                    buildResult.LocalImageName,
+                    tempImageTag,
+                    buildResult.LocalImageTag,
+                    cancellationToken).ConfigureAwait(false);
+                var outputPath = IsExplicitArchiveOutputPath(buildResult.OutputPath!)
+                    ? buildResult.OutputPath!
+                    : ResourceExtensions.GetContainerImageArchivePath(
+                        buildResult.OutputPath!,
+                        buildResult.LocalImageName,
+                        buildResult.LocalImageTag);
+                await PublishArchiveAsync(
+                    normalizedArchivePath,
+                    outputPath,
                     logger,
                     cancellationToken).ConfigureAwait(false);
             }
@@ -235,7 +253,7 @@ internal static class DotnetProgramPublishing
         }
         finally
         {
-            if (builtSuccessfully && tempDockerfilePath is not null && File.Exists(tempDockerfilePath))
+            if ((builtSuccessfully || exportsArchive) && tempDockerfilePath is not null && File.Exists(tempDockerfilePath))
             {
                 try
                 {
@@ -263,23 +281,11 @@ internal static class DotnetProgramPublishing
                 }
             }
 
-            if (tempImageCreated)
+            if (temporaryImage is not null)
             {
-                await RemoveImageBestEffortAsync(containerRuntime, tempImageName, logger).ConfigureAwait(false);
-            }
-
-            if (removeSourceImage)
-            {
-                await RemoveImageBestEffortAsync(containerRuntime, sourceImageName, logger).ConfigureAwait(false);
+                await temporaryImage.DisposeAsync().ConfigureAwait(false);
             }
         }
-    }
-
-    private static bool ShouldStageArchive(DotnetProgramImageBuildResult buildResult)
-    {
-        return buildResult.Destination == ContainerImageDestination.Archive &&
-            buildResult.OutputPath is { } outputPath &&
-            IsExplicitArchiveOutputPath(outputPath);
     }
 
     internal static bool IsExplicitArchiveOutputPath(string outputPath)
@@ -291,7 +297,7 @@ internal static class DotnetProgramPublishing
             (File.Exists(outputPath) || Path.HasExtension(outputPath));
     }
 
-    private static async Task MoveArchiveAsync(
+    private static async Task PublishArchiveAsync(
         string sourcePath,
         string destinationPath,
         ILogger logger,
@@ -303,27 +309,10 @@ internal static class DotnetProgramPublishing
             Directory.CreateDirectory(destinationDirectory);
         }
 
-        if (destinationPath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase) ||
-            destinationPath.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
-        {
-            await CompressArchiveAsync(sourcePath, destinationPath, logger, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            File.Move(sourcePath, destinationPath, overwrite: true);
-        }
-    }
-
-    private static async Task CompressArchiveAsync(
-        string sourcePath,
-        string destinationPath,
-        ILogger logger,
-        CancellationToken cancellationToken)
-    {
-        var destinationDirectory = Path.GetDirectoryName(destinationPath);
         var tempPath = Path.Combine(
             string.IsNullOrEmpty(destinationDirectory) ? Directory.GetCurrentDirectory() : destinationDirectory,
             $".{Path.GetFileName(destinationPath)}.{Guid.NewGuid():N}.tmp");
+        var tempFileCreated = false;
 
         try
         {
@@ -343,11 +332,21 @@ internal static class DotnetProgramPublishing
                 FileShare.None,
                 bufferSize: 81920,
                 useAsync: true))
-            using (var gzip = new GZipStream(destination, CompressionLevel.Optimal))
             {
-                await source.CopyToAsync(gzip, cancellationToken).ConfigureAwait(false);
+                tempFileCreated = true;
+                if (destinationPath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase) ||
+                    destinationPath.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
+                {
+                    using var gzip = new GZipStream(destination, CompressionLevel.Optimal);
+                    await source.CopyToAsync(gzip, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+                }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             if (File.Exists(destinationPath))
             {
                 File.Replace(tempPath, destinationPath, destinationBackupFileName: null);
@@ -359,7 +358,7 @@ internal static class DotnetProgramPublishing
         }
         finally
         {
-            if (File.Exists(tempPath))
+            if (tempFileCreated && File.Exists(tempPath))
             {
                 try
                 {
@@ -370,22 +369,6 @@ internal static class DotnetProgramPublishing
                     logger.LogWarning(ex, "Failed to delete incomplete container archive {ArchivePath}", tempPath);
                 }
             }
-        }
-    }
-
-    private static async Task RemoveImageBestEffortAsync(
-        IContainerRuntime containerRuntime,
-        string imageName,
-        ILogger logger)
-    {
-        using var cleanupCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        try
-        {
-            await containerRuntime.RemoveImageAsync(imageName, cleanupCancellation.Token).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to remove temporary container image {ImageName}", imageName);
         }
     }
 }

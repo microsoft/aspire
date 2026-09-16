@@ -7,6 +7,8 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREPROJECTS001
+#pragma warning disable ASPIRECONTAINERRUNTIME001
+#pragma warning disable ASPIRECSHARPAPPS001
 
 using System.Globalization;
 using System.Reflection;
@@ -14,6 +16,7 @@ using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Resources;
@@ -282,23 +285,33 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Equal(expected, manifest.ToString(), ignoreLineEndingDifferences: true, ignoreWhiteSpaceDifferences: true);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
-    public async Task AddDotnetProject_FileBasedAppWithContainerFilesBuildsContainerArchive()
+    public async Task FileBasedAppWithContainerFilesPreservesLocalImageAndBuildsArchive(bool legacyProject)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var imageName = $"file-app-{Guid.NewGuid():N}";
+        var imageName = $"localhost/file-app-{Guid.NewGuid():N}";
+        const string ImageTag = "release";
+        var imageReference = $"{imageName}:{ImageTag}";
+        var sentinelReference = $"{imageName}:sentinel";
+        var marker = $"archive-marker-{Guid.NewGuid():N}";
         var appPath = Path.Combine(workspace.Path, "app.cs");
         await File.WriteAllTextAsync(appPath, """
             #:property PublishAot=false
+            #:property TargetFramework=net10.0
 
-            Console.WriteLine("file app");
+            Console.WriteLine(File.ReadAllText("assets"));
             """);
         var archivePath = Path.Combine(workspace.Path, "app.tar.gz");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var assets = builder.AddContainer("assets", "mcr.microsoft.com/dotnet/runtime", "10.0")
-            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/etc/os-release" });
-        var resource = builder.AddDotnetProject("file-app", appPath, options => options.ExcludeLaunchProfile = true)
+        var assets = builder.AddContainer("assets", imageName, ImageTag)
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/sentinel.txt" });
+        IResourceBuilder<IComputeResource> resource = legacyProject
+            ? builder.AddCSharpApp("file-app", appPath, options => options.ExcludeLaunchProfile = true)
+            : builder.AddDotnetProject("file-app", appPath, options => options.ExcludeLaunchProfile = true);
+        resource
             .WithAnnotation(new ContainerFilesDestinationAnnotation
             {
                 Source = assets.Resource,
@@ -309,16 +322,57 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
                 context.Destination = ContainerImageDestination.Archive;
                 context.ImageFormat = ContainerImageFormat.Docker;
                 context.LocalImageName = imageName;
+                context.LocalImageTag = ImageTag;
                 context.OutputPath = archivePath;
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             });
         using var app = builder.Build();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cancellation.CancelAfter(TestConstants.LongTimeoutTimeSpan);
+        var runtime = await app.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(cancellation.Token);
+        var logger = app.Services.GetRequiredService<ILogger<DotnetProjectResourceTests>>();
+        await using var finalImageCleanup = new TemporaryContainerImage(runtime, imageReference, logger);
+        var sentinelDockerfilePath = Path.Combine(workspace.Path, "Dockerfile.sentinel");
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "sentinel.txt"), marker, cancellation.Token);
+        await File.WriteAllTextAsync(sentinelDockerfilePath, "FROM scratch\nCOPY sentinel.txt /sentinel.txt\n", cancellation.Token);
+        await runtime.BuildImageAsync(
+            workspace.Path,
+            sentinelDockerfilePath,
+            new ContainerImageBuildOptions
+            {
+                ImageName = imageName,
+                Tag = ImageTag,
+                TargetPlatform = ContainerTargetPlatform.LinuxAmd64,
+                RequiresLocalImageStore = true
+            },
+            [],
+            [],
+            null,
+            cancellation.Token);
+        var processRunner = app.Services.GetRequiredService<IProcessRunner>();
+        var originalImageId = await RunContainerRuntimeAsync(
+            processRunner, runtime, ["image", "inspect", "--format", "{{.Id}}", imageReference], cancellation.Token);
+        Assert.NotEmpty(originalImageId);
+
+        // Keep an owned alias so loading the archive cannot leave the sentinel image untagged.
+        await using var sentinelCleanup = new TemporaryContainerImage(runtime, sentinelReference, logger);
+        await runtime.TagImageAsync(imageReference, sentinelReference, cancellation.Token);
         var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
 
-        await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+        await imageBuilder.BuildImageAsync(resource.Resource, cancellation.Token);
 
-        Assert.True(File.Exists(archivePath));
-        Assert.True(new FileInfo(archivePath).Length > 0);
+        var preservedImageId = await RunContainerRuntimeAsync(
+            processRunner, runtime, ["image", "inspect", "--format", "{{.Id}}", imageReference], cancellation.Token);
+        Assert.Equal(originalImageId, preservedImageId);
+        Assert.Equal([imageReference], TestContainerImageArchive.ReadDockerImageReferences(archivePath));
+
+        await RunContainerRuntimeAsync(processRunner, runtime, ["image", "load", "--input", archivePath], cancellation.Token);
+        var loadedImageId = await RunContainerRuntimeAsync(
+            processRunner, runtime, ["image", "inspect", "--format", "{{.Id}}", imageReference], cancellation.Token);
+        Assert.NotEqual(originalImageId, loadedImageId);
+        var containerOutput = await RunContainerRuntimeAsync(
+            processRunner, runtime, ["run", "--rm", imageReference], cancellation.Token);
+        Assert.Equal(marker, containerOutput);
     }
 
     [Fact]
@@ -977,6 +1031,30 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             cts.Token);
 
         await pipeline.ExecuteAsync(context).WaitAsync(cts.Token);
+    }
+
+    private static async Task<string> RunContainerRuntimeAsync(
+        IProcessRunner processRunner,
+        IContainerRuntime runtime,
+        string[] arguments,
+        CancellationToken cancellationToken)
+    {
+        var executable = runtime.Name switch
+        {
+            "Docker" => "docker",
+            "Podman" => "podman",
+            _ => throw new InvalidOperationException($"Unexpected container runtime '{runtime.Name}'.")
+        };
+        var (pendingResult, process) = processRunner.Run(new ProcessSpec(executable)
+        {
+            ArgumentList = arguments,
+            ThrowOnNonZeroReturnCode = true
+        });
+        await using var processLifetime = process.ConfigureAwait(false);
+        var result = await pendingResult.WaitAsync(cancellationToken);
+        Assert.Equal(0, result.ExitCode);
+
+        return string.Join(Environment.NewLine, result.ProcessOutput).Trim();
     }
 
     private static string CreateProjectDirectory(string workspacePath)

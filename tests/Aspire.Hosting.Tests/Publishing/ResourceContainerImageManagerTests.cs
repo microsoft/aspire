@@ -874,8 +874,10 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         }
     }
 
-    [Fact]
-    public async Task BuildImageAsync_DotnetProgramWithContainerFilesLayersExplicitArchive()
+    [Theory]
+    [InlineData("program", "latest")]
+    [InlineData("registry.example.com:5000/team/program", "release")]
+    public async Task BuildImageAsync_DotnetProgramWithContainerFilesLayersExplicitArchive(string imageName, string imageTag)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         using var workspace = TemporaryWorkspace.Create(output);
@@ -904,6 +906,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 context.ImageFormat = ContainerImageFormat.Docker;
                 context.OutputPath = archivePath;
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
+                context.LocalImageName = imageName;
+                context.LocalImageTag = imageTag;
             });
         containerRuntime.BuildImageAsyncCallback = (contextPath, _, options, _, _, _, _) =>
         {
@@ -914,12 +918,14 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             Assert.NotEqual(archivePath, options.OutputPath);
             Assert.True(Directory.Exists(options.OutputPath));
             Assert.True(options.RequiresLocalImageStore);
+            Assert.Equal(imageName, options.ImageName);
+            Assert.StartsWith("aspire-layered-", options.Tag);
 
             var stagedArchivePath = ResourceExtensions.GetContainerImageArchivePath(
                 options.OutputPath!,
                 options.ImageName!,
                 options.Tag);
-            File.WriteAllText(stagedArchivePath, "archive");
+            TestContainerImageArchive.WriteDockerArchive(stagedArchivePath, $"{options.ImageName}:{options.Tag}", "archive");
             return Task.CompletedTask;
         };
         using var app = builder.Build();
@@ -929,6 +935,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         Assert.True(File.Exists(archivePath));
         Assert.Equal<byte>([0x1f, 0x8b], File.ReadAllBytes(archivePath)[..2]);
+        Assert.Equal([$"{imageName}:{imageTag}"], TestContainerImageArchive.ReadDockerImageReferences(archivePath));
+        Assert.Equal("archive", TestContainerImageArchive.ReadLayerContents(archivePath));
         IValueProvider imageReference = new ContainerImageReference(resource.Resource);
         var resolvedArchivePath = await imageReference.GetValueAsync(
             new ValueProviderContext
@@ -945,12 +953,17 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             workingDirectory => Assert.Contains(
                 "-getProperty:ContainerWorkingDirectory",
                 workingDirectory.ArgumentList!));
-        var tagCall = Assert.Single(containerRuntime.TagImageCalls);
-        Assert.Equal("program", tagCall.localImageName);
-        Assert.StartsWith("program:temp-", tagCall.targetImageName);
-        Assert.Single(containerRuntime.BuildImageCalls);
-        Assert.Contains(containerRuntime.RemoveImageCalls, image => image == tagCall.targetImageName);
-        Assert.Contains(containerRuntime.RemoveImageCalls, image => image == "program");
+        var sdkTagArgument = Assert.Single(
+            processRunner.ProcessSpecs[0].ArgumentList!,
+            static argument => argument.StartsWith("--property:ContainerImageTag=", StringComparison.Ordinal));
+        Assert.StartsWith("--property:ContainerImageTag=aspire-sdk-", sdkTagArgument);
+        var sdkTag = sdkTagArgument["--property:ContainerImageTag=".Length..];
+        var layeredOptions = Assert.Single(containerRuntime.BuildImageCalls).options!;
+        Assert.Equal(
+            new[] { $"{imageName}:{sdkTag}", $"{imageName}:{layeredOptions.Tag}" }.Order(StringComparer.Ordinal),
+            containerRuntime.RemoveImageCalls.Order(StringComparer.Ordinal));
+        Assert.Empty(containerRuntime.TagImageCalls);
+        Assert.False(Directory.Exists(layeredOptions.OutputPath));
     }
 
     [Fact]

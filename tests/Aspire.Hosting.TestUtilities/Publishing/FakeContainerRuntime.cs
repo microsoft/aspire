@@ -40,6 +40,8 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
     public Dictionary<string, BuildImageSecretValue>? CapturedBuildSecrets { get; private set; }
     public string? CapturedStage { get; private set; }
     public Func<string, string, ContainerImageBuildOptions?, Dictionary<string, string?>, Dictionary<string, BuildImageSecretValue>, string?, CancellationToken, Task>? BuildImageAsyncCallback { get; set; }
+    public Func<string, string, CancellationToken, Task>? TagImageAsyncCallback { get; set; }
+    public Func<string, CancellationToken, Task>? RemoveImageAsyncCallback { get; set; }
     public Func<string, CancellationToken, Task<ContainerImageManifestInspectionResult>>? InspectImageManifestAsyncCallback { get; set; }
     public Func<CancellationToken, Task<bool>>? CheckIfRunningAsyncCallback { get; set; }
     public Func<CancellationToken, Task<IContainerRuntime>>? ResolveAsyncCallback { get; set; }
@@ -61,7 +63,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
         {
             throw new InvalidOperationException("Fake container runtime is configured to fail");
         }
-        return Task.CompletedTask;
+        return TagImageAsyncCallback?.Invoke(localImageName, targetImageName, cancellationToken) ?? Task.CompletedTask;
     }
 
     public Task RemoveImageAsync(string imageName, CancellationToken cancellationToken)
@@ -72,7 +74,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
         {
             throw new InvalidOperationException("Fake container runtime is configured to fail");
         }
-        return Task.CompletedTask;
+        return RemoveImageAsyncCallback?.Invoke(imageName, cancellationToken) ?? Task.CompletedTask;
     }
 
     public Task PushImageAsync(IResource resource, CancellationToken cancellationToken)

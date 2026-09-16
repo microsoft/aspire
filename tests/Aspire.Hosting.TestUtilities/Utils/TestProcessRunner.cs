@@ -36,6 +36,8 @@ internal sealed class TestProcessRunner : IProcessRunner
 
     public TaskCompletionSource<ProcessSpec> RunStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    public Action<ProcessSpec>? RunCallback { get; set; }
+
     public void EnqueueResult(
         int exitCode = 0,
         IReadOnlyList<string>? output = null,
@@ -79,6 +81,7 @@ internal sealed class TestProcessRunner : IProcessRunner
             run = _runs.Count > 0 ? _runs.Dequeue() : TestProcessRun.Result();
         }
 
+        RunCallback?.Invoke(processSpec);
         RunStarted.TrySetResult(processSpec);
 
         if (run.FailureException is { } exception)

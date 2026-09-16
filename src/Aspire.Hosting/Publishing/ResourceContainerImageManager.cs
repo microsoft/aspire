@@ -180,16 +180,20 @@ internal interface IDotnetProgramContainerImageManager
 internal sealed class DotnetProgramImageBuildResult(
     string localImageName,
     string localImageTag,
+    string sourceImageReference,
     ContainerTargetPlatform? targetPlatform,
     ContainerImageDestination? destination,
     string? outputPath,
     ContainerImageFormat? imageFormat,
     string containerWorkingDirectory,
-    IDisposable? buildContext) : IDisposable
+    IDisposable? buildContext,
+    TemporaryContainerImage? temporarySourceImage) : IAsyncDisposable
 {
     public string LocalImageName { get; } = localImageName;
 
     public string LocalImageTag { get; } = localImageTag;
+
+    public string SourceImageReference { get; } = sourceImageReference;
 
     public ContainerTargetPlatform? TargetPlatform { get; } = targetPlatform;
 
@@ -201,7 +205,20 @@ internal sealed class DotnetProgramImageBuildResult(
 
     public string ContainerWorkingDirectory { get; } = containerWorkingDirectory;
 
-    public void Dispose() => buildContext?.Dispose();
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            buildContext?.Dispose();
+        }
+        finally
+        {
+            if (temporarySourceImage is not null)
+            {
+                await temporarySourceImage.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+    }
 }
 
 internal sealed class ResourceContainerImageManager(
@@ -335,11 +352,12 @@ internal sealed class ResourceContainerImageManager(
 
         if (resource.SupportsDotnetProgramPublishing())
         {
-            using var result = await BuildDotnetProgramImageAsync(
+            var result = await BuildDotnetProgramImageAsync(
                 resource,
                 resource.Annotations.OfType<DotnetProgramBuildEnvironmentCallbackAnnotation>().ToArray(),
                 EnsureContainerRuntimeRunningAsync,
                 cancellationToken).ConfigureAwait(false);
+            await using var resultLifetime = result.ConfigureAwait(false);
 
             if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out _))
             {
@@ -426,6 +444,7 @@ internal sealed class ResourceContainerImageManager(
 
         await _throttle.WaitAsync(cancellationToken).ConfigureAwait(false);
         DotnetProgramBuildContext? buildContext = null;
+        TemporaryContainerImage? temporarySourceImage = null;
 
         try
         {
@@ -438,14 +457,24 @@ internal sealed class ResourceContainerImageManager(
                 buildEnvironmentCallbacks,
                 cancellationToken).ConfigureAwait(false);
 
-            var sdkPublishOptions = hasContainerFiles && options.Destination == ContainerImageDestination.Archive
-                ? options with
+            var sdkPublishOptions = options;
+            if (hasContainerFiles && options.Destination == ContainerImageDestination.Archive)
+            {
+                // The SDK must publish locally for layering, but an archive must not overwrite a
+                // caller's existing daemon tag, even briefly. Keep its final identity in options.
+                sdkPublishOptions = options with
                 {
+                    LocalImageTag = $"aspire-sdk-{Guid.NewGuid():N}",
                     Destination = null,
                     OutputPath = null,
                     ImageFormat = null
-                }
-                : options;
+                };
+                temporarySourceImage = new TemporaryContainerImage(
+                    containerRuntime,
+                    $"{sdkPublishOptions.LocalImageName}:{sdkPublishOptions.LocalImageTag}",
+                    logger);
+            }
+
             await ExecuteDotnetPublishAsync(
                 resource,
                 projectMetadata,
@@ -465,13 +494,18 @@ internal sealed class ResourceContainerImageManager(
             var result = new DotnetProgramImageBuildResult(
                 options.LocalImageName,
                 options.LocalImageTag,
+                string.Equals(sdkPublishOptions.LocalImageTag, "latest", StringComparison.Ordinal)
+                    ? sdkPublishOptions.LocalImageName
+                    : $"{sdkPublishOptions.LocalImageName}:{sdkPublishOptions.LocalImageTag}",
                 options.TargetPlatform,
                 options.Destination,
                 options.OutputPath,
                 options.ImageFormat,
                 containerWorkingDirectory,
-                buildContext);
+                buildContext,
+                temporarySourceImage);
             buildContext = null;
+            temporarySourceImage = null;
             return result;
         }
         catch (OperationCanceledException)
@@ -485,8 +519,18 @@ internal sealed class ResourceContainerImageManager(
         }
         finally
         {
-            buildContext?.Dispose();
             _throttle.Release();
+            try
+            {
+                buildContext?.Dispose();
+            }
+            finally
+            {
+                if (temporarySourceImage is not null)
+                {
+                    await temporarySourceImage.DisposeAsync().ConfigureAwait(false);
+                }
+            }
         }
     }
 
