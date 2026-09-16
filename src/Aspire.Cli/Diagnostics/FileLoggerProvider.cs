@@ -25,6 +25,14 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     private readonly Task? _writerTask;
     private bool _disposed;
 
+    private FileLoggerProvider(string logFilePath)
+    {
+        _logFilePath = logFilePath;
+    }
+
+    // Completion builds the command model but must not create a log file for every Tab press.
+    internal static FileLoggerProvider CreateDisabled(string logFilePath) => new(logFilePath);
+
     /// <summary>
     /// Gets the path to the log file.
     /// </summary>

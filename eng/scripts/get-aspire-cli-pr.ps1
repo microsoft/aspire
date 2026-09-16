@@ -60,6 +60,13 @@
 .PARAMETER SkipPath
     Do not add the install path to PATH environment variable (useful for portable installs)
 
+.PARAMETER SkipCompletions
+    Do not generate PowerShell completion artifacts. Archive installs generate a file beside the CLI
+    without changing profiles; dot-source the printed path after putting this CLI on PATH.
+    Delete the generated file to remove completions. Package-manager modes do not configure them.
+    Automatic generation requires the current engine to be PowerShell 7+; older engines print
+    manual pwsh instructions without changing any profile.
+
 .PARAMETER KeepArchive
     Keep downloaded archive files after installation
 
@@ -178,6 +185,9 @@ param(
 
     [Parameter(HelpMessage = "Do not add the install path to PATH environment variable (useful for portable installs)")]
     [switch]$SkipPath,
+
+    [Parameter(HelpMessage = "Do not generate PowerShell completion artifacts")]
+    [switch]$SkipCompletions,
 
     [Parameter(HelpMessage = "Keep downloaded archive files after installation")]
     [switch]$KeepArchive,
@@ -659,6 +669,104 @@ function Get-DefaultInstallPrefix {
 
     $defaultPath = Join-Path $homeDirectory ".aspire"
     return [System.IO.Path]::GetFullPath($defaultPath)
+}
+
+# Reject paths outside the selected CLI directory and reparse points that could redirect a write.
+function Test-CompletionPathWithinRoot {
+    param([string]$Path, [string]$Root)
+
+    $rootPath = [IO.Path]::GetFullPath($Root)
+    $volumeRoot = [IO.Path]::GetPathRoot($rootPath)
+    $rootPrefix = $rootPath.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    $rootPath = if ($rootPrefix.Length -eq $volumeRoot.Length) { $volumeRoot } else { $rootPrefix.TrimEnd([IO.Path]::DirectorySeparatorChar) }
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    $comparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    if (-not $fullPath.StartsWith($rootPrefix, $comparison)) {
+        return $false
+    }
+    $current = $fullPath
+    # The chosen root is the trust anchor, including an intentional junction/alias.
+    # Reject reparse points below it, not the user's choice of install location.
+    while (-not $current.Equals($rootPath, $comparison)) {
+        $item = Get-Item -LiteralPath $current -Force -ErrorAction SilentlyContinue
+        if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            return $false
+        }
+        $current = [IO.Path]::GetDirectoryName($current)
+    }
+    return $true
+}
+
+function Install-AspireCliCompletions {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CliPath
+    )
+
+    if ($SkipCompletions) {
+        Write-Message "Skipping shell completions due to -SkipCompletions." -Level Info
+        return
+    }
+    # The installer supports PowerShell 4+, but the generated completions target PowerShell 7+.
+    # Do not guess another engine's profile or register a pwsh script in Windows PowerShell.
+    if ($PSVersionTable.PSVersion.Major -lt 7) {
+        Write-Message "Automatic shell completions require PowerShell 7 or later. The current profile was left untouched." -Level Warning
+        Write-Message "Open pwsh, put aspire on PATH, then run 'aspire completions script pwsh' and save/dot-source its successful output in pwsh." -Level Info
+        return
+    }
+    $stagingPath = $null
+    try {
+        if ((Get-ExecutionPolicy) -eq 'AllSigned') {
+            Write-Message "AllSigned execution policy: leaving completion files and profiles untouched. Generate and sign 'aspire completions script pwsh' output manually before activation." -Level Warning
+            return
+        }
+        # Dogfood artifacts stay beside the CLI even when its selected directory is outside HOME.
+        $completionRoot = [IO.Path]::GetDirectoryName($CliPath)
+        $completionDir = Join-Path $completionRoot 'completions'
+        $completionFile = Join-Path $completionDir 'aspire.ps1'
+        # A single-quoted PowerShell literal doubles apostrophes; $, backticks and spaces stay literal.
+        $quotedFile = "'" + $completionFile.Replace("'", "''") + "'"
+        $registration = "if (Test-Path -LiteralPath $quotedFile -PathType Leaf) { . $quotedFile }"
+        if (-not (Test-CompletionPathWithinRoot -Path $completionFile -Root $completionRoot)) {
+            throw "Completion files must be inside '$completionRoot' without symlink redirection."
+        }
+        if (-not $PSCmdlet.ShouldProcess($completionFile, "Generate PowerShell completions using '$CliPath completions script pwsh'")) {
+            Write-Message "Activate after putting aspire on PATH: $registration" -Level Info
+            return
+        }
+        [IO.Directory]::CreateDirectory($completionDir) | Out-Null
+        $stagingPath = Join-Path $completionDir ('.aspire-completions-' + [Guid]::NewGuid().ToString('N'))
+        # Discard stderr and stage stdout so unsupported older CLIs cannot replace a working script.
+        # Use -LiteralPath for output: redirection to a path treats brackets as wildcard syntax.
+        $stream = [IO.File]::Open($stagingPath, [IO.FileMode]::CreateNew)
+        $stream.Dispose()
+        & $CliPath completions script pwsh 2> $null | Out-File -LiteralPath $stagingPath -Encoding utf8
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([IO.File]::ReadAllText($stagingPath))) {
+            throw "This CLI did not produce a completion script successfully."
+        }
+        if ([IO.File]::Exists($completionFile)) {
+            # PowerShell coerces $null to an empty string for this .NET overload.
+            [IO.File]::Replace($stagingPath, $completionFile, [NullString]::Value)
+        } else {
+            [IO.File]::Move($stagingPath, $completionFile)
+        }
+        Write-Message "PowerShell completions generated: $completionFile" -Level Info
+        Write-Message "Activate after putting aspire on PATH: $registration" -Level Info
+        Write-Message "Dogfood install: leaving PowerShell profiles untouched; activate completions manually for this session." -Level Info
+        Write-Message "To remove completions, delete $completionFile." -Level Info
+    }
+    catch [System.Management.Automation.RuntimeException] {
+        # PowerShell wraps terminating .NET I/O failures in RuntimeException as well.
+        # https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_try_catch_finally#using-multiple-catch-statements
+        Write-Message "Shell completions were not installed; the CLI installation is unaffected. $($_.Exception.Message)" -Level Warning
+        Write-Message "With a supported CLI, run 'aspire completions script pwsh' and save/dot-source its successful output manually." -Level Info
+    }
+    finally {
+        if ($stagingPath -and [IO.File]::Exists($stagingPath)) {
+            Remove-Item -LiteralPath $stagingPath -Force -ErrorAction Continue
+        }
+    }
 }
 
 # Simplified PATH environment update
@@ -1794,6 +1902,10 @@ function Start-InstallFromLocalDir {
         Write-PRRouteSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
     }
 
+    if (-not $HiveOnly -and $InstallMode -eq 'Archive') {
+        Install-AspireCliCompletions -CliPath (Get-CliExecutablePath -DestinationPath $cliBinDir)
+    }
+
     # Update PATH environment variables
     if (-not $HiveOnly) {
         if (Test-ScriptManagesCliPath) {
@@ -1941,6 +2053,10 @@ function Start-DownloadAndInstall {
         }
     }
 
+    if (-not $HiveOnly -and $InstallMode -eq 'Archive') {
+        Install-AspireCliCompletions -CliPath (Get-CliExecutablePath -DestinationPath $cliBinDir)
+    }
+
     # Print PATH activation hint for PR installs.
     # Uses Write-Host so the hint is visible on the host stream (not stderr) in normal output.
     # Printed in success path (after install completes) and also under -WhatIf.
@@ -1988,8 +2104,15 @@ OPTIONS:
     -SkipExtension          Skip VS Code extension download and installation
     -UseInsiders            Install extension to VS Code Insiders instead of VS Code
     -SkipPath               Do not add the install path to PATH environment variable
+    -SkipCompletions        Do not generate PowerShell completion artifacts (archive mode only)
     -KeepArchive            Keep downloaded archive files after installation
     -Help                   Show this help information
+
+COMPLETIONS:
+    PowerShell 7+ archive installs generate a file beside the CLI without changing profiles.
+    Older engines leave completions untouched; open pwsh to configure them manually.
+    Put aspire on PATH and run the printed dot-source command to activate for this session.
+    Delete the generated file to remove completions.
 "@ -Level Info
         if ($InvokedFromFile) { exit 0 } else { return 0 }
     }

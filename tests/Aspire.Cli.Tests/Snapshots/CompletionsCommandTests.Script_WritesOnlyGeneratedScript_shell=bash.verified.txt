@@ -1,0 +1,76 @@
+﻿# Bash completion for Aspire. Source this file from ~/.bashrc.
+_aspire_complete()
+{
+    local line suggestion word='' quote='' character escaped=false started=false i text
+    local -a arguments=()
+    local LC_ALL=C
+    COMPREPLY=()
+    line="${COMP_LINE:0:COMP_POINT}"
+
+    # Decode literal shell words without eval or expansion. For example:
+    #   echo "a;b"; aspire run --apphost 'path with spaces' --log-level "De
+    # Separators inside quotes are data. Older Bash versions include preceding
+    # commands in COMP_LINE; COMP_WORDS also splits option values at '=' and ':'.
+    for ((i = 0; i < ${#line}; i++)); do
+        character="${line:i:1}"
+        if [[ "$escaped" == true ]]; then
+            if [[ "$quote" == '"' && "$character" != '$' && "$character" != '`' &&
+                  "$character" != '"' && "$character" != '\' && "$character" != $'\n' ]]; then
+                word+='\'
+            fi
+            [[ "$character" == $'\n' ]] || word+="$character"
+            escaped=false
+        elif [[ "$character" == '\' && "$quote" != "'" ]]; then
+            escaped=true
+            started=true
+        elif [[ -n "$quote" ]]; then
+            if [[ "$character" == "$quote" ]]; then
+                quote=''
+            else
+                word+="$character"
+            fi
+        else
+            case "$character" in
+                "'"|'"') quote="$character"; started=true ;;
+                ' '|$'\t'|$'\r')
+                    if [[ "$started" == true ]]; then arguments+=("$word"); fi
+                    word=''
+                    started=false
+                    ;;
+                ';'|'|'|'&'|'('|')'|$'\n')
+                    arguments=()
+                    word=''
+                    started=false
+                    ;;
+                *) word+="$character"; started=true ;;
+            esac
+        fi
+    done
+    [[ "$escaped" == false ]] || word+='\'
+    arguments+=("$word")
+
+    while IFS= read -r suggestion; do
+        [[ -n "$suggestion" ]] || continue
+        # Without -o filenames, Readline inserts custom candidates verbatim.
+        # Inside an open quote, escape for that quote; Readline closes it.
+        if [[ -z "$quote" ]]; then
+            printf -v text '%q' "$suggestion"
+        else
+            text=''
+            for ((i = 0; i < ${#suggestion}; i++)); do
+                character="${suggestion:i:1}"
+                if [[ "$quote" == "'" && "$character" == "'" ]]; then
+                    text+="'\''"
+                else
+                    if [[ "$quote" == '"' && ( "$character" == '\' || "$character" == '"' ||
+                          "$character" == '$' || "$character" == '`' ) ]]; then
+                        text+='\'
+                    fi
+                    text+="$character"
+                fi
+            done
+        fi
+        COMPREPLY+=("$text")
+    done < <(command aspire '[suggest:tokens]' "${arguments[@]:1}" 2>/dev/null)
+}
+complete -o default -F _aspire_complete aspire

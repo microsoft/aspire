@@ -1,0 +1,10 @@
+﻿# Fish completion for Aspire. Save as ~/.config/fish/completions/aspire.fish.
+# `complete` prints registrations as: complete aspire -a '(__aspire_complete)'.
+# Inspect the registration, not the function: `complete --erase` leaves functions.
+if not complete --command aspire | string match --quiet -- "* -a '(__aspire_complete)'"
+    complete --command aspire --arguments '(__aspire_complete)'
+end
+function __aspire_complete
+    set -l line (commandline --current-process --cut-at-cursor)
+    command aspire '[suggest]' "$line" 2>/dev/null
+end
