@@ -13,10 +13,10 @@ namespace Aspire.Shared;
 internal static class DashboardImage
 {
     /// <summary>
-    /// The Aspire Dashboard container image (without a tag), published to the .NET nightly registry.
-    /// See <see href="https://mcr.microsoft.com/artifact/mar/dotnet/nightly/aspire-dashboard/about"/>.
+    /// The Aspire Dashboard container image (without a tag), published to the Aspire nightly registry.
+    /// See <see href="https://mcr.microsoft.com/artifact/mar/aspire/nightly/dashboard/about"/>.
     /// </summary>
-    public const string Name = "mcr.microsoft.com/dotnet/nightly/aspire-dashboard";
+    public const string Name = "mcr.microsoft.com/aspire/nightly/dashboard";
 
     /// <summary>
     /// Resolves the tag to pin the dashboard image to, derived from the running Aspire product
@@ -26,8 +26,8 @@ internal static class DashboardImage
     /// The publishers previously emitted the image without a tag, which Docker and Kubernetes both
     /// resolve to the mutable <c>:latest</c> tag. That made generated manifests non-reproducible and
     /// let the dashboard drift away from the app's Aspire version. Pinning to <c>major.minor</c> keeps
-    /// the dashboard on the same Aspire line that generated the manifest and always resolves to a tag
-    /// that exists on the registry — including for prerelease/CI builds, where a full
+    /// the dashboard on the same Aspire line that generated the manifest, provided that line has
+    /// been published to the registry. Prerelease/CI builds also use this tag because a full
     /// <c>major.minor.patch-prerelease</c> tag is not published.
     /// </remarks>
     public static string ResolveTag()

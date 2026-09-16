@@ -1,6 +1,6 @@
 ﻿services:
   env2-dashboard:
-    image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:13.6"
+    image: "mcr.microsoft.com/aspire/nightly/dashboard:13.6"
     ports:
       - "18888"
     expose:
