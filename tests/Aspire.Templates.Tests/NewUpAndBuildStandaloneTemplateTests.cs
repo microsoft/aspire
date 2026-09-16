@@ -6,20 +6,9 @@ using Xunit;
 
 namespace Aspire.Templates.Tests;
 
-public class NewUpAndBuildStandaloneTemplateTests(ITestOutputHelper testOutput) : TemplateTestsBase(testOutput)
+public abstract class NewUpAndBuildStandaloneTemplateTestsBase(ITestOutputHelper testOutput) : TemplateTestsBase(testOutput)
 {
-    [Theory]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire", ""])]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-starter", ""])]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-starter", "--test-framework MSTest"])]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-starter", "--test-framework NUnit"])]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-starter", "--test-framework xUnit.net"])]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-starter", "--test-framework xUnit.net --xunit-version v2"])]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-starter", "--test-framework xUnit.net --xunit-version v3"])]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-starter", "--test-framework xUnit.net --xunit-version v3mtp"])]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-ts-cs-starter", ""])]
-    [Trait("category", "basic-build")]
-    public async Task CanNewAndBuild(string templateName, string extraArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
+    protected async Task CanNewAndBuildActual(string templateName, string extraArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
     {
         var id = GetNewProjectId(prefix: $"new_build_{templateName}_{tfm.ToTFMString()}");
 
@@ -138,5 +127,18 @@ public class NewUpAndBuildStandaloneTemplateTests(ITestOutputHelper testOutput) 
         Assert.Contains("id=\"nav-scrollable\"", navMenuContent, StringComparison.Ordinal);
         Assert.False(navMenuContent.Contains("onclick=", StringComparison.Ordinal));
         Assert.True(File.Exists(Path.Combine(webProjectDirectory, "Components", "Layout", "NavMenu.razor.js")));
+    }
+}
+
+public class NewUpAndBuildStandaloneTemplateTests(ITestOutputHelper testOutput) : NewUpAndBuildStandaloneTemplateTestsBase(testOutput)
+{
+    [Theory]
+    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire", ""])]
+    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-starter", ""])]
+    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-ts-cs-starter", ""])]
+    [Trait("category", "basic-build")]
+    public Task CanNewAndBuild(string templateName, string extraArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
+    {
+        return CanNewAndBuildActual(templateName, extraArgs, sdk, tfm, error);
     }
 }
