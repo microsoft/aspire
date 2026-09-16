@@ -5,8 +5,8 @@
   "test_name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
   "error_pattern": "Failed to apply E2E control revision ...: Error: Timed out after ~288-295s waiting for pwa-msedge child session for Blazor WASM root '<guid>'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"...\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\", ...}]}",
-  "analysis": "The failing test times out waiting for the pwa-msedge child debug session to attach to the Blazor WASM debug target, a known intermittent timing issue in the browser-debugger E2E scenario. This exact error pattern has recurred across 16+ prior occurrences spanning many unrelated PRs, jobs, and operating systems (Windows and Linux), confirming it is a systemic environment/timing flakiness rather than a regression caused by any single PR's changes. The PR under analysis (#20152) modifies browser debugger relaunch handling, but the failure mode (timeout attaching pwa-msedge child session) matches the pre-existing recurring pattern rather than a new distinct error.",
-  "failure_details": "Test: Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone\nJob: Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)\nError: Failed to apply E2E control revision 1789531759941: Error: Timed out after 288854ms waiting for pwa-msedge child session for Blazor WASM root 'ae3555c4-1297-44ef-9be8-17a5e0399e5b'. Last error: <none>. State includes debugSessions with type 'monovsdbg_wasm', name 'Wasm Managed Debugger', configuration targeting StandaloneClient, HostedPerPage, and HostedGlobal Blazor WASM projects under net11.0.",
+  "analysis": "Intermittent timeout in the debugger-attach flow while waiting for the pwa-msedge child session to attach to a Blazor WASM managed debug target. The PR under test only modifies Aspire.Dashboard components and has no relation to the VS Code extension debugging code, so this is an environmental timing flake rather than a PR-caused regression.",
+  "failure_details": "Failed to apply E2E control revision 1789535159532: Error: Timed out after 291722ms waiting for pwa-msedge child session for Blazor WASM root '0a28856b-af4b-4e69-9d89-60dcf4b63702'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"c0275865-0c72-49fe-91ab-d0a7d93119fd\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",...,\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-YTwmKW\\\\workspace\",...}}]}",
   "occurrences": [
     {
       "run_id": 32704259463,
@@ -126,6 +126,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
       "pr_number": 20152,
       "observed_at": "2026-09-16T04:53:34Z"
+    },
+    {
+      "run_id": 35055620862,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35055620862",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "pr_number": 20082,
+      "observed_at": "2026-09-16T05:21:43Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19618"
