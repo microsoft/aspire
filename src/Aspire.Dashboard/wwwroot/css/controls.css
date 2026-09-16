@@ -1,3 +1,7 @@
+fluent-overflow::part(items) {
+    flex-grow: 0;
+}
+
 fluent-button {
     --aspire-button-background: var(--colorNeutralBackground1);
     --aspire-button-foreground: var(--colorNeutralForeground1);
@@ -338,7 +342,16 @@ fluent-field.aspire-checkbox {
 }
 
 fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) {
-    opacity: 0.3;
+    color: var(--colorNeutralForegroundDisabled);
+}
+
+fluent-field.aspire-checkbox > fluent-checkbox[disabled] {
+    --colorNeutralStrokeDisabled: var(--colorNeutralForegroundDisabled);
+    cursor: not-allowed;
+}
+
+fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) > label {
+    cursor: not-allowed;
 }
 
 fluent-field.aspire-checkbox:not(:has(> fluent-checkbox[disabled])) > label {
@@ -474,8 +487,12 @@ fluent-dropdown fluent-option::part(content) {
     transform: translateX(-20px);
 }
 
+/* Fluent's selected checkmark is inside shadow DOM and uses currentColor. Make the host
+   transparent to hide it globally, then restore the option text through its exposed part. */
 fluent-dropdown fluent-option[selected],
-fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover {
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover,
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):state(active),
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):focus-visible {
     position: relative;
     color: transparent;
 }
@@ -486,7 +503,7 @@ fluent-dropdown fluent-option[selected]::part(content) {
 
 fluent-dropdown fluent-option[selected]::before {
     position: absolute;
-    top: 5px;
+    top: 7px;
     left: 1px;
     width: 3px;
     height: 14px;
