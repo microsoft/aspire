@@ -28,6 +28,6 @@
   "overrides": {
     "@azure/core-auth": "$@azure/core-auth",
     "uuid": "$uuid",
-    "body-parser": "1.20.6"
+    "body-parser@<2": "1.20.6"
   }
 }
