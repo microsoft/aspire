@@ -760,13 +760,17 @@ install_completions_core() {
     fi
     for profile in "${profiles[@]}"; do
         is_user_completion_path "$profile" || return 1
+    done
+    # Validate the whole target set before appending to either Bash startup file.
+    for profile in "${profiles[@]}"; do
         mkdir -p "$(dirname "$profile")" || return 1
         if [[ "$profile" == "$new_login_profile" && ! -f "$profile" ]]; then
             # The PATH installer writes .bashrc. A new login profile must source it,
             # otherwise login shells would have completions but no aspire on PATH.
             printf '%s\n' 'if [ -f "$HOME/.bashrc" ]; then . "$HOME/.bashrc"; fi # Added by get-aspire-cli.sh' >> "$profile" || return 1
         fi
-        if [[ ! -f "$profile" ]] || ! grep -Fxq "$registration" "$profile"; then
+        # Accept existing LF or CRLF lines without rewriting the user's file.
+        if [[ ! -f "$profile" ]] || ! grep -Fxq -e "$registration" -e "$registration"$'\r' -- "$profile"; then
             printf '\n%s\n' "$registration" >> "$profile" || return 1
         fi
         say_info "Shell completions registered in $profile. Restart your shell or use the activation command above."

@@ -14,6 +14,36 @@ public class CompletionPowerShellTests(ITestOutputHelper testOutput)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task InstallCompletions_DirectDirectoryCreationFailureIsNonFatal(bool dogfood)
+    {
+        using var env = new TestEnvironment();
+        var cli = CreateFakeCli(env.MockHome);
+        var profile = Path.Combine(env.MockHome, "profile.ps1");
+        var blockedDirectory = Path.GetDirectoryName(CompletionPath(env.MockHome, cli, dogfood))!;
+        Directory.CreateDirectory(Path.GetDirectoryName(blockedDirectory)!);
+        File.WriteAllText(blockedDirectory, "# existing file, not a directory");
+        File.WriteAllText(profile, "# existing profile");
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRPowerShell : ScriptPaths.ReleasePowerShell,
+            $$"""
+            Set-Variable HOME '{{Quote(env.MockHome)}}' -Force
+            $PROFILE = @{ CurrentUserAllHosts = '{{Quote(profile)}}' }
+            Install-AspireCliCompletions -CliPath '{{Quote(cli)}}' {{(dogfood ? "" : "-Persist $true")}}
+            """,
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Contains("CLI installation is unaffected", result.Output);
+        Assert.Equal("# existing file, not a directory", File.ReadAllText(blockedDirectory));
+        Assert.Equal("# existing profile", File.ReadAllText(profile));
+        Assert.False(File.Exists(Path.Combine(env.MockHome, "called")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task CompletionBoundary_AcceptsVolumeRootWithoutWritingToIt(bool dogfood)
     {
         using var env = new TestEnvironment();
@@ -462,6 +492,58 @@ public class CompletionPowerShellTests(ITestOutputHelper testOutput)
 [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
 public class CompletionShellTests(ITestOutputHelper testOutput)
 {
+    [Fact]
+    public async Task InstallCompletions_UnsafeSecondBashProfileDoesNotModifyFirst()
+    {
+        using var env = new TestEnvironment();
+        var cli = CreateFakeCli(env.MockHome);
+        var bashrc = Path.Combine(env.MockHome, ".bashrc");
+        var outside = Path.Combine(env.TempDirectory, "outside-profile");
+        File.WriteAllText(bashrc, "# existing bashrc");
+        File.WriteAllText(outside, "# outside profile");
+        File.CreateSymbolicLink(Path.Combine(env.MockHome, ".bash_profile"), outside);
+        using var cmd = new ScriptFunctionCommand(
+            ScriptPaths.ReleaseShell,
+            $"SHELL=/bin/bash; install_completions '{Quote(cli)}' true",
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Contains("CLI installation is unaffected", result.Output);
+        Assert.Equal("# existing bashrc", File.ReadAllText(bashrc));
+        Assert.Equal("# outside profile", File.ReadAllText(outside));
+    }
+
+    [Fact]
+    public async Task InstallCompletions_CrLfProfilesDoNotAccumulateRegistrations()
+    {
+        using var env = new TestEnvironment();
+        var cli = CreateFakeCli(env.MockHome);
+        var invocation = $"SHELL=/bin/bash; install_completions '{Quote(cli)}' true";
+        using (var command = new ScriptFunctionCommand(ScriptPaths.ReleaseShell, invocation, env, testOutput))
+        {
+            (await command.ExecuteAsync()).EnsureSuccessful();
+        }
+
+        var profiles = new[] { Path.Combine(env.MockHome, ".bashrc"), Path.Combine(env.MockHome, ".bash_profile") };
+        foreach (var profile in profiles)
+        {
+            File.WriteAllText(profile, File.ReadAllText(profile).ReplaceLineEndings("\r\n"));
+        }
+        var originalContents = profiles.Select(File.ReadAllBytes).ToArray();
+
+        using (var command = new ScriptFunctionCommand(ScriptPaths.ReleaseShell, invocation, env, testOutput))
+        {
+            (await command.ExecuteAsync()).EnsureSuccessful();
+        }
+
+        for (var i = 0; i < profiles.Length; i++)
+        {
+            Assert.Equal(originalContents[i], File.ReadAllBytes(profiles[i]));
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

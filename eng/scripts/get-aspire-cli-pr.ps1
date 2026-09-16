@@ -757,6 +757,8 @@ function Install-AspireCliCompletions {
         Write-Message "To remove completions, delete $completionFile." -Level Info
     }
     catch [System.Management.Automation.RuntimeException] {
+        # PowerShell wraps terminating .NET I/O failures in RuntimeException as well.
+        # https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_try_catch_finally#using-multiple-catch-statements
         Write-Message "Shell completions were not installed; the CLI installation is unaffected. $($_.Exception.Message)" -Level Warning
         Write-Message "With a supported CLI, run 'aspire completions script pwsh' and save/dot-source its successful output manually." -Level Info
     }
