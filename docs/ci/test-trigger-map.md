@@ -232,6 +232,10 @@ generator route to `job:polyglot`. The per-language AppHost fixtures load these
 packages through `aspire.config.json`, so their SDK validation is not expressed
 by the .NET project graph.
 
+Hosting packages used by those fixtures also need routing entries even when
+they have no dedicated fixture directory. For example, `Aspire.Hosting.Azure.FrontDoor`
+is consumed by the base Azure fixtures alongside the CDN provisioning proxy.
+
 ```yaml
 - projects: [Aspire.Hosting*, Aspire.Cli]
   targets: [job:typescript-api-compat]
