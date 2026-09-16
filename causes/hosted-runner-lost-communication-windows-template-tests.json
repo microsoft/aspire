@@ -1,0 +1,19 @@
+{
+  "id": "hosted-runner-lost-communication-windows-template-tests",
+  "type": "infra-failure",
+  "title": "Windows Package tests job fails: hosted runner lost communication with the server",
+  "job_name": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-BuildAndRunTemplateTests, Templ... / Templates-BuildAndRunTemplateTests (windows-latest)",
+  "error_pattern": "The hosted runner lost communication with the server. Anything in your workflow that terminates the runner process, starves it for CPU/Memory, or blocks its network access can cause this error. Failed steps: Copy CLI E2E recordings for upload, Upload CLI E2E recordings, Generate test results summary, Post Checkout code.",
+  "analysis": "This is a GitHub Actions annotation indicating the hosted runner itself lost connectivity to the Actions service, a well-known transient infrastructure condition (runner starved for CPU/memory or network blocked) rather than a code or test defect. The failed steps are post-test cleanup/upload steps, not the actual test execution, and job logs could not be fetched, further indicating an infrastructure-level runner failure. The PR only removes the retired GitHub Models integration and does not touch Templates test infrastructure, workflow files, or CLI E2E recording code.",
+  "failure_details": "Job: Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-BuildAndRunTemplateTests, Templ... / Templates-BuildAndRunTemplateTests (windows-latest)\nFailed Steps: Copy CLI E2E recordings for upload, Upload CLI E2E recordings, Generate test results summary, Post Checkout code\nAnnotation: The hosted runner lost communication with the server. Anything in your workflow that terminates the runner process, starves it for CPU/Memory, or blocks its network access can cause this error.\nJob logs: (Failed to fetch logs for job 104617090560)",
+  "occurrences": [
+    {
+      "run_id": 35037910646,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35037910646",
+      "job": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-BuildAndRunTemplateTests, Templ... / Templates-BuildAndRunTemplateTests (windows-latest)",
+      "pr_number": 19848,
+      "observed_at": "2026-09-16T01:21:09Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20165"
+}
