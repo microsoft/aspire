@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Telemetry tracking hook for Aspire Skills.
+# Telemetry tracking hook for Aspire skills and extensions.
 #
 # Runs on every agent PostToolUse event. Reads the hook JSON from stdin, detects when an
-# Aspire skill, Aspire MCP tool, or Aspire skill reference file was used, and forwards a
+# Aspire skill, extension, MCP tool, or skill reference file was used, and forwards a
 # low-cardinality usage event to `aspire agent telemetry`. The Aspire CLI command owns the
 # actual opt-out + publishing logic; this script only classifies the event and shells out.
 #
@@ -23,6 +23,8 @@
 #
 # GitHub Copilot App:
 #   - Uses the Copilot CLI payload shape
+#   - Extensions register ordinary tools (open_aspire_doctor, open_aspireify) and canvases
+#     (aspire-doctor, aspireify-graph) that can also be opened with open_canvas
 #   - Detection: AI_AGENT=github_copilot_app_agent
 #
 # Claude Code:
@@ -42,14 +44,16 @@
 #
 # 1. skill_invocation     - the skill/Skill tool ran with an Aspire skill name, OR a SKILL.md
 #                           under .../skills/<aspire-skill>/SKILL.md was read.   (--skill-name)
-# 2. tool_invocation      - a tool matching an Aspire MCP prefix ran.            (--tool-name)
+# 2. tool_invocation      - an Aspire MCP or allowlisted extension tool ran, or open_canvas
+#                           targeted an Aspire extension canvas.              (--tool-name)
 # 3. reference_file_read  - a non-SKILL.md file under .../skills/<aspire-skill>/ was read.
 #                                                                                (--file-reference)
 #
-# Privacy: only Aspire-owned identifiers are forwarded. Skill/tool names are matched against an
-# allowlist of the skills shipped by github.com/microsoft/aspire-skills, and reference files are
+# Privacy: only Aspire-owned identifiers are forwarded. Skill/extension names are allowlisted
+# from github.com/microsoft/aspire-skills, MCP tools use exact Aspire prefixes, and reference files are
 # only forwarded as the repo-relative path *after* skills/<skill>/ — never absolute paths, repo
 # names, or user names. The Aspire CLI command independently re-validates and drops anything else.
+# Extension telemetry forwards only the tool name, never canvas instance IDs or input.
 
 # Never abort the agent: failures must be silent and we must still emit {"continue":true}.
 set +e
@@ -134,8 +138,8 @@ if [ -z "$rawInput" ]; then
 fi
 
 # Fast path: the vast majority of PostToolUse events are not Aspire-related. Everything we track
-# carries "skill"/"Skill" or "aspire" somewhere in the payload (the skill tool name, an aspire-/
-# mcp__aspire__ tool name, or a .../skills/<aspire-skill>/ path), so when none of those appear we
+# carries "skill"/"Skill" or "aspire" somewhere in the payload (a skill/tool name, Aspire extension
+# canvas ID, or a .../skills/<aspire-skill>/ path), so when none of those appear we
 # return immediately and skip all of the sed/grep extraction below.
 case "$rawInput" in
     *skill*|*Skill*|*aspire*|*Aspire*) ;;
@@ -234,11 +238,36 @@ if [ "$toolName" = "view" ] || [ "$toolName" = "Read" ] || [ "$toolName" = "read
     fi
 fi
 
-# --- tool_invocation via an Aspire MCP tool prefix ---
+# --- tool_invocation via an Aspire extension canvas ---
+# The extensions at https://github.com/microsoft/aspire-skills/tree/main/extensions register
+# open_aspire_doctor / open_aspireify and the canvas IDs below. The generic open_canvas tool uses:
+# {"canvasId":"aspire-doctor","instanceId":"caller-chosen","extensionId":"user:aspire-doctor"}
+# extensionId is optional when the canvas ID is unique. Never forward instanceId or canvas input,
+# or infer ownership for invoke_canvas_action, which only identifies the caller-chosen instance.
+if [ "$toolName" = "open_canvas" ]; then
+    canvasId=$(extract_nested_field "$rawInput" "canvasId")
+    extensionName=""
+    case "$canvasId" in
+        aspire-doctor) extensionName="aspire-doctor" ;;
+        aspireify-graph) extensionName="aspireify" ;;
+    esac
+    if [ -n "$extensionName" ]; then
+        extensionId=$(extract_nested_field "$rawInput" "extensionId")
+        case "$extensionId" in
+            ""|user:"$extensionName"|project:"$extensionName"|session:"$extensionName"|plugin:aspire:"$extensionName")
+                mcpToolName="$toolName"
+                eventType="tool_invocation"
+                shouldTrack=true
+                ;;
+        esac
+    fi
+fi
+
+# --- tool_invocation via an Aspire MCP prefix or an allowlisted extension tool ---
 # Conservative exact prefixes (avoid matching arbitrary "*aspire*" tools):
 #   Copilot: aspire-<tool>   Claude: mcp__aspire__<tool>   VS Code: mcp_aspire_<tool>
 case "$toolName" in
-    aspire-*|mcp__aspire__*|mcp_aspire_*)
+    aspire-*|mcp__aspire__*|mcp_aspire_*|open_aspire_doctor|open_aspireify)
         mcpToolName="$toolName"
         eventType="tool_invocation"
         shouldTrack=true

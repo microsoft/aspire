@@ -120,13 +120,13 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_ExcludesPathScopedSkillSnippets()
     {
-        // .github and .opencode hold more than skills, so only the .github/skills and .opencode/skill
-        // subpaths are excluded; a real AppHost elsewhere under .github is still discovered.
+        // Only agent asset subpaths are excluded; a real AppHost elsewhere under .github is still discovered.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var gitHubSkillSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".github/skills/demo/snippets/apphost.ts");
+        var extensionSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".github/extensions/demo/snippets/apphost.ts");
         var openCodeSkillSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".opencode/skill/demo/snippets/apphost.ts");
         var gitHubNonSkillAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".github/AppHost/apphost.ts");
-        var gitRepository = CreateGitRepository(gitHubSkillSnippetAppHost.FullName, openCodeSkillSnippetAppHost.FullName, gitHubNonSkillAppHost.FullName);
+        var gitRepository = CreateGitRepository(gitHubSkillSnippetAppHost.FullName, extensionSnippetAppHost.FullName, openCodeSkillSnippetAppHost.FullName, gitHubNonSkillAppHost.FullName);
         var finder = CreateFinder(gitRepository);
 
         var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["apphost.ts"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
@@ -147,6 +147,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
         // on every platform) covers keeping a non-skill AppHost under .github.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await WriteFileAsync(workspace.WorkspaceRoot, ".github/skills/demo/snippets/apphost.ts");
+        await WriteFileAsync(workspace.WorkspaceRoot, ".github/extensions/demo/snippets/apphost.ts");
         await WriteFileAsync(workspace.WorkspaceRoot, ".opencode/skill/demo/snippets/apphost.ts");
         var nonSkillAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "src/AppHost/apphost.ts");
         var finder = CreateFinder();

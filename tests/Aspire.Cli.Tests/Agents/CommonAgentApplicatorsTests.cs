@@ -1,205 +1,211 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Agents;
 
 public class CommonAgentApplicatorsTests
 {
-    private const int MaxSkillDescriptionLength = 1024;
-
     [Fact]
-    public void SkillLocation_All_ContainsAllLocations()
+    public void Catalogs_DeclareTheirSupportedClients()
     {
-        Assert.Equal(4, SkillLocation.All.Count);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.Standard);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.ClaudeCode);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.GitHubSkills);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.OpenCode);
+        var source = new FakeAgentAssetSource();
+        Assert.Equal(Enum.GetValues<AgentClientKind>(), new SkillCatalog(source).SupportedClients);
+        Assert.Equal([AgentClientKind.CopilotApp], new ExtensionCatalog(source).SupportedClients);
     }
 
     [Fact]
-    public void SkillLocation_Standard_IsDefaultAndIncludesUserLevel()
+    public void AgentAssetCatalogs_DeclareSkillAndExtensionLocations()
     {
-        Assert.True(SkillLocation.Standard.IsDefault);
-        Assert.True(SkillLocation.Standard.IncludeUserLevel);
-        Assert.Equal(Path.Combine(".agents", "skills"), SkillLocation.Standard.RelativeSkillDirectory);
-    }
-
-    [Fact]
-    public void SkillLocation_ClaudeCode_IsNotDefaultAndNoUserLevel()
-    {
-        Assert.False(SkillLocation.ClaudeCode.IsDefault);
-        Assert.False(SkillLocation.ClaudeCode.IncludeUserLevel);
-        Assert.Equal(Path.Combine(".claude", "skills"), SkillLocation.ClaudeCode.RelativeSkillDirectory);
-    }
-
-    [Fact]
-    public void SkillLocation_OnlyStandardIsDefault()
-    {
-        Assert.True(SkillLocation.Standard.IsDefault);
-        Assert.False(SkillLocation.ClaudeCode.IsDefault);
-        Assert.False(SkillLocation.GitHubSkills.IsDefault);
-        Assert.False(SkillLocation.OpenCode.IsDefault);
-    }
-
-    [Fact]
-    public void SkillDefinition_CliDefined_ContainsExpectedSkills()
-    {
-        Assert.Equal(2, SkillDefinition.CliDefined.Count);
-        Assert.Contains(SkillDefinition.CliDefined, s => s == SkillDefinition.PlaywrightCli);
-        Assert.Contains(SkillDefinition.CliDefined, s => s == SkillDefinition.DotnetInspect);
-    }
-
-    [Fact]
-    public void SkillDefinition_CliDefinedSkills_AreNotDefault()
-    {
-        Assert.All(SkillDefinition.CliDefined, static skill => Assert.False(skill.IsDefault));
-    }
-
-    [Fact]
-    public void SkillDefinition_DotnetInspect_IsRestrictedToCSharp()
-    {
-        Assert.Equal([KnownLanguageId.CSharp], SkillDefinition.DotnetInspect.ApplicableLanguages);
-        Assert.Empty(SkillDefinition.PlaywrightCli.ApplicableLanguages);
-    }
-
-    [Fact]
-    public void SkillDefinition_IsApplicableToLanguage_EmptyApplicableLanguages_AlwaysTrue()
-    {
-        var bundleSkill = SkillDefinition.CreateAspireSkillsBundle(
-            "aspire-monitoring",
-            "Observe Aspire apps with logs, traces, metrics, and resource state");
-
-        Assert.True(bundleSkill.IsApplicableToLanguage(null));
-        Assert.True(bundleSkill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
-        Assert.True(bundleSkill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
-    }
-
-    [Fact]
-    public void SkillDefinition_IsApplicableToLanguage_WithRestrictions_MatchesCorrectly()
-    {
-        // DotnetInspect is restricted to CSharp
-        Assert.False(SkillDefinition.DotnetInspect.IsApplicableToLanguage(null)); // no language detected => excluded
-        Assert.True(SkillDefinition.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
-        Assert.False(SkillDefinition.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
-        Assert.False(SkillDefinition.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.Python)));
-    }
-
-    [Fact]
-    public void SkillDefinition_PlaywrightCli_HasNoSkillContent()
-    {
-        Assert.Null(SkillDefinition.PlaywrightCli.SkillContent);
-        Assert.Equal(SkillSourceKind.ExternalInstaller, SkillDefinition.PlaywrightCli.SourceKind);
-        Assert.False(SkillDefinition.PlaywrightCli.HasInstallableFiles);
-    }
-
-    [Fact]
-    public void SkillDefinition_BundleSkills_AreExternallySourced()
-    {
-        Assert.All(
+        Assert.Equal(
             [
-                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
-                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifySkillName, "One-time setup: wire up AppHost with discovered projects"),
-                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireDeploymentSkillName, "Aspire deployment target selection, preflight, publish, and deploy workflows")
+                SkillCatalog.Standard,
+                SkillCatalog.ClaudeCode,
+                SkillCatalog.GitHubSkills,
+                SkillCatalog.OpenCode,
+                ExtensionCatalog.ProjectExtensions,
+                ExtensionCatalog.UserExtensions,
             ],
-            skill =>
-            {
-                Assert.Null(skill.SkillContent);
-                Assert.Equal(SkillSourceKind.AspireSkillsBundle, skill.SourceKind);
-                Assert.True(skill.HasInstallableFiles);
-            });
+            SkillCatalog.KnownLocations.Concat(ExtensionCatalog.KnownLocations));
     }
 
     [Fact]
-    public async Task SkillDefinition_StaticInstallableSkillDescriptionsFitAgentHostLimits()
+    public void SkillCatalog_Standard_IsDefaultAndIncludesUserLevel()
     {
-        var installableSkills = SkillDefinition.CliDefined
-            .Where(static skill => skill.SkillContent is not null);
+        Assert.True(SkillCatalog.Standard.IsDefault);
+        Assert.Equal(AgentAssetLocationScope.Workspace | AgentAssetLocationScope.User, SkillCatalog.Standard.Scopes);
+        Assert.Equal(Path.Combine(".agents", "skills"), SkillCatalog.Standard.RelativeAssetDirectory);
+    }
 
-        foreach (var skill in installableSkills)
+    [Fact]
+    public void SkillCatalog_ClaudeCode_IsNotDefaultAndNoUserLevel()
+    {
+        Assert.False(SkillCatalog.ClaudeCode.IsDefault);
+        Assert.Equal(AgentAssetLocationScope.Workspace, SkillCatalog.ClaudeCode.Scopes);
+        Assert.Equal(Path.Combine(".claude", "skills"), SkillCatalog.ClaudeCode.RelativeAssetDirectory);
+    }
+
+    [Fact]
+    public void ExtensionCatalog_Locations_KeepProjectAndUserTargetsSeparate()
+    {
+        Assert.Equal(
+            [ExtensionCatalog.ProjectExtensions, ExtensionCatalog.UserExtensions],
+            ExtensionCatalog.KnownLocations);
+        Assert.Equal(AgentAssetLocationScope.Workspace, ExtensionCatalog.ProjectExtensions.Scopes);
+        Assert.Equal(Path.Combine(".github", "extensions"), ExtensionCatalog.ProjectExtensions.RelativeAssetDirectory);
+        Assert.Equal(AgentAssetLocationScope.User, ExtensionCatalog.UserExtensions.Scopes);
+        Assert.Equal(Path.Combine(".copilot", "extensions"), ExtensionCatalog.UserExtensions.RelativeAssetDirectory);
+    }
+
+    [Fact]
+    public void AgentAssetCatalogs_DefaultLocationsAreIndependent()
+    {
+        Assert.Equal(
+            [SkillCatalog.Standard],
+            SkillCatalog.KnownLocations.Where(static location => location.IsDefault));
+        Assert.Equal(
+            [ExtensionCatalog.ProjectExtensions],
+            ExtensionCatalog.KnownLocations.Where(static location => location.IsDefault));
+    }
+
+    [Fact]
+    public void SkillCatalog_CliDefined_ContainsExpectedSkills()
+    {
+        Assert.Equal(
+            [SkillCatalog.PlaywrightCli, SkillCatalog.DotnetInspect],
+            SkillCatalog.CliDefined);
+        Assert.All(SkillCatalog.CliDefined, static skill => Assert.False(skill.IsDefault));
+    }
+
+    [Fact]
+    public void SkillCatalog_DotnetInspect_IsRestrictedToCSharp()
+    {
+        Assert.Equal([KnownLanguageId.CSharp], SkillCatalog.DotnetInspect.ApplicableLanguages);
+        Assert.Empty(SkillCatalog.PlaywrightCli.ApplicableLanguages);
+        Assert.False(SkillCatalog.DotnetInspect.IsApplicableToLanguage(null));
+        Assert.True(SkillCatalog.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
+        Assert.False(SkillCatalog.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
+        Assert.False(SkillCatalog.DotnetInspect.IsApplicableToLanguage(new LanguageId(KnownLanguageId.Python)));
+    }
+
+    [Fact]
+    public void AgentAssetDefinition_IsApplicableToLanguage_EmptyApplicableLanguages_AlwaysTrue()
+    {
+        var skill = new AgentAssetDefinition(
+            "aspire-monitoring",
+            "Observe Aspire apps with logs, traces, metrics, and resource state",
+            [new AgentAssetFile("SKILL.md", "Skill content")],
+            installExcludedRelativePaths: [],
+            isDefault: true);
+
+        Assert.True(skill.IsApplicableToLanguage(null));
+        Assert.True(skill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
+        Assert.True(skill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
+    }
+
+    [Fact]
+    public void SkillCatalog_PlaywrightCli_HasNoInstallableFiles()
+    {
+        Assert.Empty(SkillCatalog.PlaywrightCli.Files);
+        Assert.False(SkillCatalog.PlaywrightCli.HasInstallableFiles);
+    }
+
+    [Fact]
+    public void SkillCatalog_StaticInstallableSkillDescriptionsFitAgentHostLimits()
+    {
+        foreach (var skill in SkillCatalog.CliDefined.Where(static skill => skill.Files.Count > 0))
         {
-            var skillFiles = await GetInstallableSkillFilesAsync(skill);
-            var skillFile = Assert.Single(skillFiles, static file => file.RelativePath == "SKILL.md");
-            var description = GetFrontmatterValue(skillFile.Content, "description");
-
-            Assert.NotNull(description);
-            Assert.False(string.IsNullOrWhiteSpace(description), $"Skill '{skill.Name}' should define a frontmatter description.");
-            Assert.True(
-                description.Length <= MaxSkillDescriptionLength,
-                $"Skill '{skill.Name}' description is {description.Length} characters; agent hosts such as Codex and Copilot CLI accept at most {MaxSkillDescriptionLength}.");
+            var skillFile = Assert.Single(skill.Files, static file => file.RelativePath == "SKILL.md");
+            SkillFileValidator.Validate(skill.Name, skillFile.Bytes.Span);
         }
     }
 
     [Fact]
-    public void SkillDefinition_BundleSkill_ExcludesManifestPathsFromInstall()
+    public void AgentAssetDefinition_BundleSkill_ExcludesManifestPathsFromInstall()
     {
-        var bundleSkill = SkillDefinition.CreateAspireSkillsBundle(
+        var skill = new AgentAssetDefinition(
             CommonAgentApplicators.AspireSkillName,
             "Aspire CLI commands and workflows for distributed apps",
-            installExcludedRelativePaths: [Path.Combine("evals")]);
+            [
+                new AgentAssetFile(Path.Combine("evals-extra", "evals.json"), "{}"),
+                new AgentAssetFile("evals", "Excluded"),
+                new AgentAssetFile(Path.Combine("evals", "evals.json"), "{}"),
+                new AgentAssetFile("SKILL.md", "Skill content")
+            ],
+            installExcludedRelativePaths: ["evals"],
+            isDefault: true);
 
-        Assert.Contains(bundleSkill.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));
-        Assert.False(bundleSkill.ShouldInstallFile(Path.Combine("evals", "evals.json")));
-        Assert.True(bundleSkill.ShouldInstallFile("SKILL.md"));
+        Assert.Equal(
+            ["SKILL.md", Path.Combine("evals-extra", "evals.json")],
+            skill.Files.Select(file => file.RelativePath));
     }
 
     [Fact]
-    public void SkillDefinition_DotnetInspect_HasSkillContent()
+    public void SkillCatalog_DotnetInspect_HasSkillContent()
     {
-        Assert.NotNull(SkillDefinition.DotnetInspect.SkillContent);
-        Assert.Equal(SkillSourceKind.Static, SkillDefinition.DotnetInspect.SourceKind);
-        Assert.True(SkillDefinition.DotnetInspect.HasInstallableFiles);
-        Assert.Contains("# dotnet-inspect", SkillDefinition.DotnetInspect.SkillContent);
+        var skillFile = Assert.Single(SkillCatalog.DotnetInspect.Files);
+
+        Assert.True(SkillCatalog.DotnetInspect.HasInstallableFiles);
+        Assert.Equal("SKILL.md", skillFile.RelativePath);
+        Assert.Contains("# dotnet-inspect", skillFile.Content);
     }
 
-    private static async Task<IReadOnlyList<SkillAssetFile>> GetInstallableSkillFilesAsync(SkillDefinition skill)
+    [Theory]
+    [InlineData(65001)]
+    [InlineData(1200)]
+    [InlineData(1201)]
+    [InlineData(12000)]
+    [InlineData(12001)]
+    public void AgentAssetFile_NormalizedTextComparison_IgnoresBomAndLineEndings(int codePage)
     {
-        if (skill.SkillContent is not null)
-        {
-            return [new SkillAssetFile("SKILL.md", skill.SkillContent)];
-        }
+        var file = new AgentAssetFile("SKILL.md", "first\nsecond\n");
+        var encoding = Encoding.GetEncoding(codePage);
+        var existingContent = encoding.GetPreamble()
+            .Concat(encoding.GetBytes("first\r\nsecond\r\n"))
+            .ToArray();
 
-        throw new InvalidOperationException($"Skill '{skill.Name}' does not define installable files.");
+        Assert.True(file.ContentEquals(existingContent));
     }
 
-    private static string? GetFrontmatterValue(string content, string key)
+    [Fact]
+    public void AgentAssetFile_NormalizedTextComparison_UsesReplacementDecoding()
     {
-        var normalizedContent = content.ReplaceLineEndings("\n");
-        if (!normalizedContent.StartsWith("---\n", StringComparison.Ordinal))
-        {
-            return null;
-        }
+        var file = new AgentAssetFile("SKILL.md", "A\uFFFD");
 
-        var frontmatterEndIndex = normalizedContent.IndexOf("\n---\n", 4, StringComparison.Ordinal);
-        if (frontmatterEndIndex < 0)
-        {
-            return null;
-        }
+        Assert.True(file.ContentEquals([0x41, 0xff]));
+    }
 
-        // Skill files use YAML frontmatter:
-        //   ---
-        //   name: aspire
-        //   description: "Use when..."
-        //   ---
-        var frontmatter = normalizedContent[4..frontmatterEndIndex];
-        var keyPrefix = $"{key}:";
+    [Fact]
+    public void AgentAssetFile_NormalizedUtf8Comparison_RejectsInvalidUtf8()
+    {
+        var file = new AgentAssetFile("extension.mjs", Encoding.UTF8.GetBytes("A\uFFFD"), AgentAssetFileComparison.NormalizedUtf8Text);
 
-        foreach (var line in frontmatter.Split('\n'))
-        {
-            if (!line.StartsWith(keyPrefix, StringComparison.Ordinal))
-            {
-                continue;
-            }
+        Assert.False(file.ContentEquals([0x41, 0xff]));
+    }
 
-            var value = line[keyPrefix.Length..].Trim();
-            return value.Length >= 2 && value[0] == '"' && value[^1] == '"'
-                ? value[1..^1]
-                : value;
-        }
+    [Fact]
+    public void AgentAssetFile_NormalizedUtf8Comparison_AcceptsIdenticalNonUtf8Bytes()
+    {
+        var bytes = Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes("Write-Host 'Hello'")).ToArray();
+        var file = new AgentAssetFile("script.ps1", bytes, AgentAssetFileComparison.NormalizedUtf8Text);
 
-        return null;
+        Assert.True(file.ContentEquals(bytes));
+        Assert.False(file.ContentEquals(Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes("Write-Host 'Changed'")).ToArray()));
+    }
+
+    [Fact]
+    public void AgentAssetFile_ExactByteComparison_RequiresIdenticalBytes()
+    {
+        byte[] bytes = [0x00, 0x01, 0xFF];
+        var file = new AgentAssetFile("extension.bin", bytes, AgentAssetFileComparison.ExactBytes);
+        bytes[0] = 0xFF;
+
+        Assert.True(file.ContentEquals([0x00, 0x01, 0xFF]));
+        Assert.False(file.ContentEquals([0x00, 0x01, 0xFE]));
     }
 }

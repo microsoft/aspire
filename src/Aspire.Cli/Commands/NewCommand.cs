@@ -90,6 +90,8 @@ internal sealed class NewCommand : BaseCommand
         Options.Add(s_suppressAgentInitOption);
         Options.Add(AgentInitCommand.s_skillLocationsOption);
         Options.Add(AgentInitCommand.s_skillsOption);
+        Options.Add(AgentInitCommand.s_extensionLocationsOption);
+        Options.Add(AgentInitCommand.s_extensionsOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
@@ -598,6 +600,8 @@ internal sealed class NewCommand : BaseCommand
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
+        var extensionLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_extensionLocationsOption);
+        var extensionsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_extensionsOption);
         // New projects get the complete default skill set, including aspireify. This chained flow
         // never registers `--mcp`, so MCP configuration is unavailable here by construction —
         // it remains reachable only through standalone `aspire agent init`.
@@ -608,6 +612,8 @@ internal sealed class NewCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
+            extensionLocationsBinding,
+            extensionsBinding,
             cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))

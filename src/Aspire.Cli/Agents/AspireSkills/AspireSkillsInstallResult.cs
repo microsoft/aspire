@@ -9,9 +9,14 @@ namespace Aspire.Cli.Agents.AspireSkills;
 internal enum AspireSkillsInstallStatus
 {
     /// <summary>
-    /// The bundle is available locally and can be installed into skill locations.
+    /// The bundle is available locally and can be installed into agent asset locations.
     /// </summary>
     Installed,
+
+    /// <summary>
+    /// The bundle is unavailable from its provider.
+    /// </summary>
+    Unavailable,
 
     /// <summary>
     /// The bundle could not be resolved, verified, or cached.
@@ -25,6 +30,8 @@ internal enum AspireSkillsInstallStatus
 internal sealed record AspireSkillsInstallResult(AspireSkillsInstallStatus Status, AspireSkillsBundle? Bundle, string? Message)
 {
     public static AspireSkillsInstallResult Installed(AspireSkillsBundle bundle) => new(AspireSkillsInstallStatus.Installed, bundle, Message: null);
+
+    public static AspireSkillsInstallResult Unavailable { get; } = new(AspireSkillsInstallStatus.Unavailable, Bundle: null, Message: null);
 
     public static AspireSkillsInstallResult Failed(string message) => new(AspireSkillsInstallStatus.Failed, Bundle: null, message);
 }

@@ -1,0 +1,1 @@
+﻿Failed to install aspire-doctor extension at [workspace]/.github/extensions/aspire-doctor: Agent asset destination directory '[workspace]/.github/extensions/aspire-doctor' is a file.

@@ -7,11 +7,17 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestAgentEnvironmentDetector(params AgentEnvironmentApplicator[] applicators) : IAgentEnvironmentDetector
 {
+    public IReadOnlyCollection<AgentClientKind> DetectedClients { get; init; } = [];
+
     public Task<AgentEnvironmentApplicator[]> DetectAsync(
         AgentEnvironmentScanContext context,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        foreach (var client in DetectedClients)
+        {
+            context.AddDetectedClient(client);
+        }
         return Task.FromResult(applicators);
     }
 }
