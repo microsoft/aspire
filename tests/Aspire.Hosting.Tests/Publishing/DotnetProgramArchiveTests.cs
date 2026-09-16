@@ -49,7 +49,10 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
         Assert.Equal("sdk+assets", TestContainerImageArchive.ReadLayerContents(archivePath));
         Assert.Empty(runtime.TagImageCalls);
         var sdkReference = GetSdkImageReference(runner.ProcessSpecs[0]);
-        var layeredOptions = Assert.Single(runtime.BuildImageCalls).options!;
+        var layeredBuild = Assert.Single(runtime.BuildImageCalls);
+        var layeredOptions = layeredBuild.options!;
+        Assert.False(File.Exists(layeredBuild.dockerfilePath));
+        Assert.False(Directory.Exists(layeredOptions.OutputPath));
         Assert.Equal(
             new[] { sdkReference, $"{layeredOptions.ImageName}:{layeredOptions.Tag}" }.Order(StringComparer.Ordinal),
             runtime.RemoveImageCalls.Order(StringComparer.Ordinal));
@@ -234,7 +237,9 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
         AssertImagesUnchanged(existingImages, images);
         Assert.Equal("previous archive", await File.ReadAllTextAsync(archivePath));
         Assert.Equal(2, runtime.RemoveImageCalls.Count);
-        Assert.False(Directory.Exists(Assert.Single(runtime.BuildImageCalls).options!.OutputPath));
+        var layeredBuild = Assert.Single(runtime.BuildImageCalls);
+        Assert.False(File.Exists(layeredBuild.dockerfilePath));
+        Assert.False(Directory.Exists(layeredBuild.options!.OutputPath));
     }
 
     [Fact]
@@ -291,7 +296,9 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
         AssertImagesUnchanged(existingImages, images);
         Assert.Equal("existing file", await File.ReadAllTextAsync(blockedDirectory));
         Assert.Equal(2, runtime.RemoveImageCalls.Count);
-        Assert.False(Directory.Exists(Assert.Single(runtime.BuildImageCalls).options!.OutputPath));
+        var layeredBuild = Assert.Single(runtime.BuildImageCalls);
+        Assert.False(File.Exists(layeredBuild.dockerfilePath));
+        Assert.False(Directory.Exists(layeredBuild.options!.OutputPath));
     }
 
     [Fact]

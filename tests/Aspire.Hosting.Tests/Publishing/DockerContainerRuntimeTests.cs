@@ -174,9 +174,16 @@ public class DockerContainerRuntimeTests
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData(ContainerImageFormat.Docker)]
-    public async Task BuildImageAsync_LocalImageArchiveUsesActiveContextBuilderThenDockerSave(ContainerImageFormat? imageFormat)
+    [InlineData(null, null, null)]
+    [InlineData(null, ContainerTargetPlatform.LinuxAmd64, "linux/amd64")]
+    [InlineData(null, ContainerTargetPlatform.LinuxArm64, "linux/arm64")]
+    [InlineData(null, ContainerTargetPlatform.AllLinux, "linux/amd64,linux/arm64")]
+    [InlineData(ContainerImageFormat.Docker, null, null)]
+    [InlineData(ContainerImageFormat.Docker, ContainerTargetPlatform.LinuxAmd64, "linux/amd64")]
+    [InlineData(ContainerImageFormat.Docker, ContainerTargetPlatform.LinuxArm64, "linux/arm64")]
+    [InlineData(ContainerImageFormat.Docker, ContainerTargetPlatform.AllLinux, "linux/amd64,linux/arm64")]
+    public async Task BuildImageAsync_LocalImageArchiveUsesActiveContextBuilderThenDockerSave(
+        ContainerImageFormat? imageFormat, ContainerTargetPlatform? targetPlatform, string? expectedPlatforms)
     {
         var processRunner = new TestProcessRunner();
         processRunner.EnqueueResult();
@@ -192,24 +199,68 @@ public class DockerContainerRuntimeTests
             Tag = "latest",
             OutputPath = "out",
             ImageFormat = imageFormat,
-            TargetPlatform = ContainerTargetPlatform.LinuxAmd64,
+            TargetPlatform = targetPlatform,
             RequiresLocalImageStore = true
         };
 
         await BuildImageAsync(runtime, options);
 
         var archivePath = ResourceExtensions.GetContainerImageArchivePath("out", "myapp:latest");
+        var platformArgument = expectedPlatforms is null ? string.Empty : $" --platform \"{expectedPlatforms}\"";
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            check => Assert.Equal("buildx version", check.Arguments),
+            context => Assert.Equal("context show", context.Arguments),
+            build => Assert.Equal(
+                $"buildx build --file \"Dockerfile\" --tag \"myapp:latest\" --builder \"desktop-linux\"" +
+                $"{platformArgument} \"{GetNormalizedContextPath()}\"",
+                build.Arguments),
+            save => Assert.Equal(
+                $"image save --output \"{archivePath}\" \"myapp:latest\"",
+                save.Arguments));
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_LocalMultiPlatformBuildFailurePreservesDiagnosticWithoutSaving()
+    {
+        string[] diagnostic =
+        [
+            "Multi-platform build is not supported for the docker driver.",
+            "Switch to a different driver, or turn on the containerd image store, and try again.",
+            "Learn more at https://docs.docker.com/go/build-multi-platform/"
+        ];
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["desktop-linux"]);
+        processRunner.EnqueueResult(exitCode: 1, error: diagnostic);
+        var runtime = new DockerContainerRuntime(
+            NullLogger<DockerContainerRuntime>.Instance,
+            processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            OutputPath = "out",
+            ImageFormat = ContainerImageFormat.Docker,
+            TargetPlatform = ContainerTargetPlatform.AllLinux,
+            RequiresLocalImageStore = true
+        };
+
+        var exception = await Assert.ThrowsAsync<ProcessFailedException>(() => BuildImageAsync(runtime, options));
+
+        Assert.Equal(1, exception.ExitCode);
+        Assert.Equal(diagnostic, exception.ProcessOutput);
+        Assert.Equal(
+            $"Docker build failed with exit code 1.{Environment.NewLine}{string.Join(Environment.NewLine, diagnostic)}",
+            exception.Message);
         Assert.Collection(
             processRunner.ProcessSpecs,
             check => Assert.Equal("buildx version", check.Arguments),
             context => Assert.Equal("context show", context.Arguments),
             build => Assert.Equal(
                 $"buildx build --file \"Dockerfile\" --tag \"myapp:latest\" --builder \"desktop-linux\" " +
-                $"--platform \"linux/amd64\" \"{GetNormalizedContextPath()}\"",
-                build.Arguments),
-            save => Assert.Equal(
-                $"image save --output \"{archivePath}\" --platform \"linux/amd64\" \"myapp:latest\"",
-                save.Arguments));
+                $"--platform \"linux/amd64,linux/arm64\" \"{GetNormalizedContextPath()}\"",
+                build.Arguments));
     }
 
     [Fact]

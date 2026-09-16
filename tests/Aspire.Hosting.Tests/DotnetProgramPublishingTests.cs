@@ -17,7 +17,9 @@ using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests;
@@ -367,6 +369,66 @@ public class DotnetProgramPublishingTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("Container runtime 'Docker' is not running or is unhealthy.", exception.Message);
         Assert.False(interactions.Interactions.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task FailedLocalImageLayeringRetainsDockerfileForDebugging()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var failure = new InvalidOperationException("layer build failed");
+        string? dockerfilePath = null;
+        var runtime = new FakeContainerRuntime(name: "Docker")
+        {
+            BuildImageAsyncCallback = (_, path, _, _, _, _, _) =>
+            {
+                dockerfilePath = path;
+                throw failure;
+            }
+        };
+        builder.Services.AddFakeContainerRuntime(runtime);
+        var source = builder.AddContainer("assets", "assets-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
+        var metadata = new TestProjectMetadata(Path.Combine(workspace.WorkspaceRoot.FullName, "program.csproj"));
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(metadata)
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source.Resource,
+                DestinationPath = "/app/assets"
+            });
+        using var app = builder.Build();
+        var logger = new FakeLogger();
+        await using var buildResult = new DotnetProgramImageBuildResult(
+            "program", "latest", "program", ContainerTargetPlatform.LinuxAmd64,
+            destination: null, outputPath: null, imageFormat: null, containerWorkingDirectory: "/app",
+            buildContext: null, temporarySourceImage: null);
+
+        try
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                DotnetProgramPublishing.LayerContainerFilesAsync(
+                    resource.Resource, metadata, buildResult, app.Services, logger, TestContext.Current.CancellationToken));
+
+            Assert.Same(failure, exception);
+            Assert.NotNull(dockerfilePath);
+            Assert.True(File.Exists(dockerfilePath));
+            var diagnostic = Assert.Single(
+                logger.Collector.GetSnapshot(),
+                record => record.Message.StartsWith("Failed build - temporary Dockerfile", StringComparison.Ordinal));
+            Assert.Equal(LogLevel.Debug, diagnostic.Level);
+            Assert.Equal($"Failed build - temporary Dockerfile left at {dockerfilePath} for debugging", diagnostic.Message);
+            var taggedImage = Assert.Single(runtime.TagImageCalls);
+            Assert.Equal("program", taggedImage.localImageName);
+            Assert.Equal(taggedImage.targetImageName, Assert.Single(runtime.RemoveImageCalls));
+        }
+        finally
+        {
+            if (dockerfilePath is not null)
+            {
+                File.Delete(dockerfilePath);
+            }
+        }
     }
 
     [Theory]

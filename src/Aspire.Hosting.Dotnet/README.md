@@ -111,7 +111,8 @@ EF Core migration operations wait for the coordinated build in run mode, without
 to start. However, `dotnet-ef` does not receive `WithBuildEnvironment` customizations as MSBuild global properties.
 The EF integration warns once per requested operation and continues, including when generating publish scripts
 or bundles. EF may use suitable output, select different or stale output, or fail because the expected output
-is missing. Ordinary EF commands retain `--no-build`; bundle generation still allows EF to build.
+is missing. Ordinary run-mode EF commands retain `--no-build`; publish-time script and bundle generation
+allow EF to build the participating projects.
 
 Where equivalent, use shared `.csproj` or `Directory.Build.props` settings so the coordinated build and EF
 evaluate the same values. Runtime `WithEnvironment` is not an equivalent workaround. See the

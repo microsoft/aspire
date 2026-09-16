@@ -261,9 +261,9 @@ properties to `dotnet-ef`. When the startup or a known migrations project has `W
 warning and continues. This also applies to script and bundle generation during publishing.
 
 Waiting for the build does not guarantee that EF selects the same assemblies: EF may use suitable output,
-select different or stale output, or fail because its expected output is missing. Ordinary commands retain
-`--no-build`; bundle generation retains its existing build behavior. Actual EF failures still fail the
-operation, including automatic migrations and publishing steps.
+select different or stale output, or fail because its expected output is missing. Ordinary run-mode commands
+retain `--no-build`; publish-time script and bundle generation allow EF to build the participating projects.
+Actual EF failures still fail the operation, including automatic migrations and publishing steps.
 
 Where equivalent, move the required settings into shared `.csproj` or `Directory.Build.props` configuration
 so both evaluations agree. Runtime `WithEnvironment` is not equivalent to MSBuild global properties, especially

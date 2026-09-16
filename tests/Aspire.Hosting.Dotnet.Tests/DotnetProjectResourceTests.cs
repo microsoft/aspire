@@ -371,7 +371,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             processRunner, runtime, ["image", "inspect", "--format", "{{.Id}}", imageReference], cancellation.Token);
         Assert.NotEqual(originalImageId, loadedImageId);
         var containerOutput = await RunContainerRuntimeAsync(
-            processRunner, runtime, ["run", "--rm", imageReference], cancellation.Token);
+            processRunner, runtime, ["run", "--rm", "--platform", "linux/amd64", imageReference], cancellation.Token);
         Assert.Equal(marker, containerOutput);
     }
 

@@ -244,14 +244,11 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
         var outputPath = options.OutputPath;
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
         var archivePath = ResourceExtensions.GetContainerImageArchivePath(outputPath, imageName);
-        var arguments = $"image save --output \"{archivePath}\"";
 
-        if (options.TargetPlatform is not null)
-        {
-            arguments += $" --platform \"{options.TargetPlatform.Value.ToRuntimePlatformString()}\"";
-        }
-
-        return $"{arguments} \"{imageName}\"";
+        // Layered archives use a private tag whose platforms were already selected by the build.
+        // Save all its variants without requiring API 1.48+ (1.52+ for multiple platforms) for filtering.
+        // https://docs.docker.com/reference/cli/docker/image/save/#platform
+        return $"image save --output \"{archivePath}\" \"{imageName}\"";
     }
 
     public override async Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken)

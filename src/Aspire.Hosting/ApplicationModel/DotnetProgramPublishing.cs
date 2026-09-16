@@ -253,6 +253,9 @@ internal static class DotnetProgramPublishing
         }
         finally
         {
+            // Archive builds also clean their staging files and private source images on failure,
+            // so retaining just the Dockerfile would not provide a runnable reproduction. Preserve
+            // the existing debug-file retention behavior only for non-archive builds.
             if ((builtSuccessfully || exportsArchive) && tempDockerfilePath is not null && File.Exists(tempDockerfilePath))
             {
                 try
