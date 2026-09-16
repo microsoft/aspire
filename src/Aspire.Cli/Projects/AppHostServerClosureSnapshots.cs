@@ -203,6 +203,24 @@ internal sealed class AppHostServerClosureManifest
         return projectEntries.Count == 0 ? null : ComputeHash(projectEntries);
     }
 
+    private static string? TryGetSatelliteCulture(AppHostServerClosureManifestEntry entry)
+    {
+        if (!string.Equals(entry.AssetType, "resources", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var normalizedPath = entry.PathInPackage!.Replace('\\', '/');
+        var assemblyFileName = Path.GetFileName(normalizedPath);
+        if (!assemblyFileName.EndsWith(".resources.dll", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var culture = Path.GetFileName(Path.GetDirectoryName(normalizedPath));
+        return string.IsNullOrWhiteSpace(culture) ? null : culture;
+    }
+
     private static AppHostServerClosureManifestEntry? TryCreatePackageBackedEntry(
         AppHostServerClosureSource sourceFile,
         string normalizedSourcePath,
@@ -280,22 +298,6 @@ internal sealed class AppHostServerClosureManifest
         }
 
         return Convert.ToHexString(hash.GetCurrentHash()).ToLowerInvariant();
-    }
-
-    private static string? TryGetSatelliteCulture(AppHostServerClosureManifestEntry entry)
-    {
-        if (!string.Equals(entry.AssetType, "resources", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        var directoryName = Path.GetDirectoryName(entry.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-        if (string.IsNullOrWhiteSpace(directoryName))
-        {
-            return null;
-        }
-
-        return directoryName.Replace('\\', '/').Trim('/');
     }
 
     private static string? NormalizeAssetType(string? assetType)

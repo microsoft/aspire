@@ -527,6 +527,7 @@ public class Program
         // Registered before NuGetPackageCache so the factory can choose implementation.
         builder.Services.AddSingleton<ILayoutDiscovery, LayoutDiscovery>();
         builder.Services.AddSingleton<BundleNuGetService>();
+        builder.Services.AddTransient<INuGetSettingsProvider, NuGetSettingsProvider>();
 
         // Git repository operations.
         builder.Services.AddSingleton<IGitRepository, GitRepository>();

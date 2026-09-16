@@ -40,4 +40,33 @@ public class PackageSourceRedactorTests
     {
         Assert.Equal(expected, PackageSourceRedactor.RedactForDisplay(source));
     }
+
+    [Theory]
+    [InlineData(
+        "  HTTPS://user:secret@HOST.example/Feed?sig=secret  ",
+        "HTTPS://user:secret@HOST.example/Feed?sig=secret",
+        "Restore failed for https://***@host.example/Feed.")]
+    [InlineData(
+        "  HTTPS://user:secret@HOST.example/Feed?sig=secret  ",
+        "https://user:secret@host.example/Feed?sig=secret",
+        "Restore failed for https://***@host.example/Feed.")]
+    [InlineData(
+        "  https://user:p#word@host/  ",
+        "https://user:p#word@host/",
+        "Restore failed for <unparseable http source>.")]
+    [InlineData(
+        "https://[::1]/feed?sig=secret",
+        "https://[::1]/feed?sig=secret",
+        "Restore failed for https://[::1]/feed.")]
+    public void RedactOccurrences_RedactsNormalizedDiagnosticSpellings(
+        string source,
+        string diagnosticSpelling,
+        string expected)
+    {
+        var result = PackageSourceRedactor.RedactOccurrences(
+            $"Restore failed for {diagnosticSpelling}.",
+            [source]);
+
+        Assert.Equal(expected, result);
+    }
 }
