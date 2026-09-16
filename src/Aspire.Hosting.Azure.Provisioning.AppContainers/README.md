@@ -38,7 +38,7 @@ await environment.configureInfrastructure(async infrastructure => {
 
 ## Scope and limitations
 
-The selected roots are `ContainerAppManagedEnvironment`, `ContainerApp`, and `ContainerAppJob`. App and job customizations belong in their publish callbacks; use identifier-based lookups when their Bicep identifiers differ from the callback's Aspire resource identifier. Compatible SDK models are projected, not every member. Supported `BicepValue<T>` properties accept the corresponding language value or a shared Bicep expression.
+`ContainerAppManagedEnvironment` supports no-argument infrastructure lookup. `ContainerApp` and `ContainerAppJob` use identifier-based lookups in their publish callbacks: the SDK resource identifier is the normalized workload name, while the callback's hosting resource has a synthetic identifier. Compatible SDK models are projected, not every member. Supported `BicepValue<T>` properties accept the corresponding language value or a shared Bicep expression.
 
 `OutboundIPAddressList` is exposed as an IP address collection proxy. IP address lists accept IPv4/IPv6 strings or Bicep value handles; element getters preserve literals, expressions, and references as Bicep value handles. Invalid address strings fail validation rather than being silently dropped. Azure SDK read-only output restrictions still apply.
 

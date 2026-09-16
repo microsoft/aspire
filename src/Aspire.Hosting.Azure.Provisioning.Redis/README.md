@@ -31,7 +31,7 @@ const cache = await builder.addAzureInfrastructure("legacyRedis", async infrastr
     const redis = await infrastructure.addRedisResource("legacyRedis");
     const sku = await infrastructure.createRedisSku();
     await sku.name.set(RedisSkuName.Basic);
-    await sku.family.set(RedisSkuFamily.C);
+    await sku.family.set(RedisSkuFamily.BasicOrStandard);
     await sku.capacity.set(0);
     await redis.sku.set(sku);
 });
