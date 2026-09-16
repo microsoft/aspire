@@ -40,6 +40,14 @@ Windows only (x64, arm64). Installers are zip archives containing a portable `as
 
 ## Artifact URLs
 
+Stable WinGet manifests reference the public GitHub release assets:
+
+```text
+https://github.com/microsoft/aspire/releases/download/v{VERSION}/aspire-cli-win-{arch}-{VERSION}.zip
+```
+
+Prerelease and dogfood manifests reference CI artifacts:
+
 ```text
 https://ci.dot.net/public/aspire/{ARTIFACT_VERSION}/aspire-cli-win-{arch}-{VERSION}.zip
 ```
