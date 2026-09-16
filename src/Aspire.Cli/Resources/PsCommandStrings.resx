@@ -142,12 +142,18 @@
     <value>Unknown</value>
   </data>
   <data name="FollowOptionDescription" xml:space="preserve">
-    <value>Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</value>
+    <value>Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</value>
   </data>
   <data name="FollowRequiresJson" xml:space="preserve">
     <value>The --follow option only supports JSON output. Use --format json.</value>
   </data>
-  <data name="ProtocolRequiresFollowJson" xml:space="preserve">
-    <value>The experimental tray protocol requires --protocol-version 1 --follow --format json.</value>
+  <data name="OutputOptionDescription" xml:space="preserve">
+    <value>Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</value>
+  </data>
+  <data name="SnapshotRequiresFollowJson" xml:space="preserve">
+    <value>The --output snapshot option requires --follow --format json.</value>
+  </data>
+  <data name="InvalidOutputMode" xml:space="preserve">
+    <value>The --output option must be default or snapshot.</value>
   </data>
 </root>

@@ -15,22 +15,35 @@ internal sealed class FileTraySavedStateStore : ITraySavedStateStore
     private const int MaximumFileBytes = 1024 * 1024;
     private readonly string _path;
     private readonly string _directory;
+    private readonly string? _legacyPath;
     private bool _loaded;
     private bool _writable;
     private byte[]? _lastContents;
 
-    public FileTraySavedStateStore(string path)
+    public FileTraySavedStateStore(string path) : this(path, null)
+    {
+    }
+
+    private FileTraySavedStateStore(string path, string? legacyPath)
     {
         _path = TrayAppHostPath.Normalize(path);
         _directory = Path.GetDirectoryName(_path)
             ?? throw new ArgumentException("A saved-state file path is required.", nameof(path));
+        _legacyPath = legacyPath;
     }
+
+    public static FileTraySavedStateStore CreateWithLegacyMigration(string path, string legacyDirectory)
+        => new(path,
+            Path.Combine(TrayAppHostPath.Normalize(legacyDirectory), "apphosts.json"));
 
     public TraySavedState Load()
     {
         _loaded = true;
         _writable = false;
         var contents = ReadContents();
+        // Prefer the per-user file even when empty. Import old preferences only when it
+        // is absent, leaving the original intact for older tray builds.
+        var migrate = contents is null && _legacyPath is not null;
         // Only paths and flags are accepted:
         // {"appHosts":[{"appHostPath":"/src/shop/apphost.cs","isPinned":true,"isRecent":true}],"confirmStop":false}
         // Older files omit confirmStop; the JSON constructor retains confirmation.
@@ -39,8 +52,24 @@ internal sealed class FileTraySavedStateStore : ITraySavedStateStore
             : JsonSerializer.Deserialize(contents, TraySavedStateJsonContext.Default.TraySavedState)
                 ?? throw new InvalidDataException("The saved AppHost state is invalid.");
         Validate(state);
+        if (migrate)
+        {
+            var legacyStore = new FileTraySavedStateStore(_legacyPath!);
+            if (legacyStore.ReadContents() is not null)
+            {
+                state = legacyStore.Load();
+            }
+            else
+            {
+                migrate = false;
+            }
+        }
         _lastContents = contents;
         _writable = true;
+        if (migrate)
+        {
+            Save(state);
+        }
         return state;
     }
 

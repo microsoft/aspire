@@ -18,7 +18,7 @@ public class CliAppHostClientTests
         var executable = Path.GetFullPath("cli path/aspire");
         var startInfo = CliAppHostClient.CreateWatchStartInfo(executable);
         Assert.Equal(executable, startInfo.FileName);
-        Assert.Equal(["ps", "--follow", "--format", "json", "--protocol-version", "1", "--non-interactive", "--nologo"],
+        Assert.Equal(["ps", "--follow", "--format", "json", "--output", "snapshot", "--non-interactive", "--nologo"],
             startInfo.ArgumentList);
         Assert.False(startInfo.UseShellExecute);
         Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), startInfo.WorkingDirectory);

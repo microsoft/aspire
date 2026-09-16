@@ -111,8 +111,11 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
-    [Fact]
-    public async Task PsCommand_JsonFormat_ReturnsValidJson()
+    [Theory]
+    [InlineData("")]
+    [InlineData("--output default")]
+    [InlineData("--output=DEFAULT")]
+    public async Task PsCommand_JsonFormat_ReturnsValidJson(string outputOption)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
@@ -153,7 +156,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("ps --format json");
+        var result = command.Parse($"ps --format json {outputOption}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 

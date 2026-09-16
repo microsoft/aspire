@@ -604,7 +604,9 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("ps", "--format", "json")]
     [InlineData("ps", "--format=json")]
-    [InlineData("ps", "--protocol-version", "1", "--banner")]
+    [InlineData("ps", "--output", "snapshot", "--banner")]
+    [InlineData("ps", "--output=snapshot", "--banner")]
+    [InlineData("ps", "--output=SNAPSHOT", "--banner")]
     [InlineData("stop", "--protocol-version=1", "--banner")]
     [InlineData("config", "info", "--json")]
     [InlineData("resource", "database", "reset-password", "--load-arguments")]
@@ -633,6 +635,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--json")]
     [InlineData("--nologo")]
     [InlineData("--help")]
+    [InlineData("--output=snapshot")]
     public async Task ArgumentsAfterDelimiter_DoNotSuppressFirstRunNotice(string appArg)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

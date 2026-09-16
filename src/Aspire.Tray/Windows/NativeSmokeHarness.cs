@@ -192,8 +192,8 @@ internal sealed class NativeSmokeHarness
                     Invoke("CopyPath", id);
                 }
                 Require(_copiedPaths.SequenceEqual(_hosts.Select(host => host.AppHostPath)
-                    .Concat([_pinned, _missingPin, _recent, _missing])),
-                    "Copy Path must preserve the exact source path for live, pinned, and missing recent AppHosts.");
+                    .Concat([_pinned, _missingPin, _recent, _missing]).Select(Path.GetDirectoryName)),
+                    "Copy Path must copy the exact containing folder for live, pinned, and missing recent AppHosts.");
                 Invoke("Dashboard", _hosts[0].Id);
                 Require(_dashboardCalls == 1, "Native dashboard dispatch did not reach the URL handler.");
                 Invoke("Documentation");
@@ -399,8 +399,8 @@ internal sealed class NativeSmokeHarness
 
     private void VerifySettings()
     {
-        const string off = "Launch at sign-in is off.\r\nIsolated smoke setting; no startup registration is changed.";
-        const string on = "Launch at sign-in is on.\r\nIsolated smoke setting; no startup registration is changed.";
+        const string off = "Launch at sign-in is off.";
+        const string on = "Launch at sign-in is on.";
         Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 0, "Smoke startup preferences must default off.");
         Invoke("Settings");
         _application.VerifySettingsForSmoke(0, true, "");
@@ -422,13 +422,13 @@ internal sealed class NativeSmokeHarness
         _startupSettings.CanEnable = false;
         _application.RefreshSettingsForSmoke();
         _application.VerifySettingsForSmoke(0, false,
-            "Launch at sign-in is off. Enabling launch at sign-in is unavailable.\r\nIsolated smoke setting; no startup registration is changed.");
+            "Launch at sign-in is only available for signed binaries.");
         _application.ClickSettingsControlForSmoke("Startup");
         Require(_startupSettings.WriteCount == 2, "An unavailable startup setting was enabled.");
         _startupSettings.Store.SetEnabled(true);
         _application.RefreshSettingsForSmoke();
         _application.VerifySettingsForSmoke(1, true,
-            "Launch at sign-in is on. Enabling launch at sign-in is unavailable.\r\nIsolated smoke setting; no startup registration is changed.");
+            "Launch at sign-in is only available for signed binaries.");
         _application.ClickSettingsControlForSmoke("Startup");
         Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 3,
             "An existing registration could not be disabled when enabling was unavailable.");
@@ -438,14 +438,14 @@ internal sealed class NativeSmokeHarness
         _application.RefreshSettingsForSmoke();
         _application.ClickSettingsControlForSmoke("Startup");
         _application.VerifySettingsForSmoke(0, true,
-            $"Could not change launch at sign-in: Simulated startup write failure.\r\nReview the status below, then retry.\r\n{off}");
+            $"Could not change launch at sign-in: Simulated startup write failure.\r\n{off}");
         Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 4,
             "A failed write produced a phantom enabled setting.");
         _startupSettings.FailWrite = false;
         _startupSettings.FailAfterWrite = true;
         _application.ClickSettingsControlForSmoke("Startup");
         _application.VerifySettingsForSmoke(1, true,
-            $"Could not change launch at sign-in: Simulated partial startup write failure.\r\nReview the status below, then retry.\r\n{on}");
+            $"Could not change launch at sign-in: Simulated partial startup write failure.\r\n{on}");
         Require(_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 5,
             "A partially completed write was not re-read from the backing store.");
         _startupSettings.FailAfterWrite = false;
@@ -453,7 +453,7 @@ internal sealed class NativeSmokeHarness
         _application.VerifySettingsForSmoke(0, true, "");
         _startupSettings.FailRead = true;
         _application.RefreshSettingsForSmoke();
-        const string unknown = "Startup state is unknown. Could not read the sign-in setting: Simulated startup read failure.\r\nSelect Refresh startup status to retry.";
+        const string unknown = "Could not read launch at sign-in: Simulated startup read failure.\r\nClose and reopen Settings to retry.";
         _application.VerifySettingsForSmoke(2, false, unknown);
         _application.CloseSettingsForSmoke();
         Invoke("Settings");
@@ -468,7 +468,7 @@ internal sealed class NativeSmokeHarness
             "Launch at sign-in requires a verified stable native CLI installation; development builds cannot register startup.", 8));
         _application.RefreshSettingsForSmoke();
         _application.VerifySettingsForSmoke(0, false,
-            $"Launch at sign-in is off. Enabling launch at sign-in is unavailable.\r\n{_startupSettings.Detail}");
+            "Launch at sign-in is only available for signed binaries.");
         _startupSettings.Detail = null;
         _startupSettings.CanEnable = true;
         _application.RefreshSettingsForSmoke();

@@ -11,7 +11,6 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
-using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -81,7 +80,11 @@ internal sealed partial class PsCommand : BaseCommand
     private readonly IProcessIdentityProvider _processIdentityProvider;
     private readonly TimeProvider _timeProvider;
     private readonly TrayProtocolOutput _protocolOutput;
-    private static readonly Option<int?> s_protocolVersionOption = new("--protocol-version") { Hidden = true };
+    private static readonly Option<PsOutput> s_outputOption = new("--output")
+    {
+        Description = PsCommandStrings.OutputOptionDescription,
+        DefaultValueFactory = _ => PsOutput.Default
+    };
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
     {
         Description = PsCommandStrings.JsonOptionDescription
@@ -113,11 +116,22 @@ internal sealed partial class PsCommand : BaseCommand
 
         Options.Add(s_formatOption);
         Options.Add(s_followOption);
-        Options.Add(s_protocolVersionOption);
+        Options.Add(s_outputOption);
+
+        Validators.Add(result =>
+        {
+            if (result.GetResult(s_outputOption) is { } outputResult
+                && outputResult.Tokens.Any(token =>
+                    !token.Value.Equals(nameof(PsOutput.Default), StringComparison.OrdinalIgnoreCase)
+                    && !token.Value.Equals(nameof(PsOutput.Snapshot), StringComparison.OrdinalIgnoreCase)))
+            {
+                result.AddError(PsCommandStrings.InvalidOutputMode);
+            }
+        });
     }
 
     protected override bool IsJsonFormatRequested(ParseResult parseResult)
-        => parseResult.GetValue(s_protocolVersionOption) is not null || base.IsJsonFormatRequested(parseResult);
+        => parseResult.GetValue(s_outputOption) == PsOutput.Snapshot || base.IsJsonFormatRequested(parseResult);
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -125,11 +139,11 @@ internal sealed partial class PsCommand : BaseCommand
 
         var format = parseResult.GetValue(s_formatOption);
 
-        if (parseResult.GetValue(s_protocolVersionOption) is { } protocolVersion)
+        if (parseResult.GetValue(s_outputOption) == PsOutput.Snapshot)
         {
-            if (protocolVersion != TrayCliProtocol.Version || !parseResult.GetValue(s_followOption) || format != OutputFormat.Json)
+            if (!parseResult.GetValue(s_followOption) || format != OutputFormat.Json)
             {
-                return CommandResult.Failure(CliExitCodes.InvalidCommand, PsCommandStrings.ProtocolRequiresFollowJson);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, PsCommandStrings.SnapshotRequiresFollowJson);
             }
 
             var stream = new TrayWatchStream(_backchannelMonitor, _processIdentityProvider, _timeProvider, _logger);
@@ -196,6 +210,12 @@ internal sealed partial class PsCommand : BaseCommand
         await _backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
 
         return _backchannelMonitor.Connections.ToList();
+    }
+
+    private enum PsOutput
+    {
+        Default,
+        Snapshot
     }
 
     private abstract record PsFollowUpdate;

@@ -16,8 +16,10 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class TrayProtocolCommandTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task PsProtocolEmitsOnlyJsonIncludingInitialEmptySnapshot()
+    [Theory]
+    [InlineData("--output snapshot")]
+    [InlineData("--output=SNAPSHOT")]
+    public async Task PsProtocolEmitsOnlyJsonIncludingInitialEmptySnapshot(string outputOption)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cancellation = new CancellationTokenSource();
@@ -33,7 +35,7 @@ public class TrayProtocolCommandTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("ps --protocol-version 1 --follow --format json --non-interactive --nologo");
+        var result = command.Parse($"ps {outputOption} --follow --format json --non-interactive --nologo");
         var exitCode = await result.InvokeAsync(cancellationToken: cancellation.Token).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -67,7 +69,7 @@ public class TrayProtocolCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse("ps --protocol-version 1 --follow --format json --non-interactive --nologo")
+            .Parse("ps --output snapshot --follow --format json --non-interactive --nologo")
             .InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -78,10 +80,27 @@ public class TrayProtocolCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("ps --protocol-version 2 --follow --format json")]
-    [InlineData("ps --protocol-version 1 --format json")]
-    [InlineData("ps --protocol-version 1 --follow")]
-    [InlineData("ps --protocol-version 1 --follow --format table")]
+    [InlineData("ps --output invalid --follow --format json")]
+    [InlineData("ps --output 2 --follow --format json")]
+    [InlineData("ps --output 0 --follow --format json")]
+    [InlineData("ps --output 1 --follow --format json")]
+    [InlineData("ps --output --follow --format json")]
+    [InlineData("ps --protocol-version 1 --follow --format json")]
+    public void PsRejectsInvalidOutputOption(string arguments)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(arguments);
+
+        Assert.NotEmpty(result.Errors);
+    }
+
+    [Theory]
+    [InlineData("ps --output snapshot --format json")]
+    [InlineData("ps --output snapshot --follow")]
+    [InlineData("ps --output snapshot --follow --format table")]
     public async Task PsProtocolRejectsInvalidInvocationWithoutDiscovery(string arguments)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -72,7 +71,7 @@ internal sealed partial class MacTrayApplication
         {
             CreateSettingsWindow();
         }
-        AppKit.Set(_settingsWindow, "setTitle:", AppKit.String(_interactiveSmoke ? "Aspire Tray Preview Settings" : "Aspire Tray Settings"));
+        AppKit.Set(_settingsWindow, "setTitle:", AppKit.String(_interactiveSmoke ? TraySettingsText.PreviewTitle : TraySettingsText.Title));
         AppKit.Set(_settingsAbout, "setStringValue:", AppKit.String(SettingsAboutText));
         ReloadStartupSettings();
         AppKit.Set(_settingsWindow, "makeKeyAndOrderFront:", 0);
@@ -100,15 +99,15 @@ internal sealed partial class MacTrayApplication
         }
         AppKit.SendBool(_settingsWindow, AppKit.Selector("setReleasedWhenClosed:"), 0);
         var content = AppKit.Get(_settingsWindow, "contentView");
-        _settingsGeneral = AddSettingsLabel(content, "General", new(new(24, 200), new(492, 26)), heading: true);
+        _settingsGeneral = AddSettingsLabel(content, TraySettingsText.General, new(new(24, 200), new(492, 26)), heading: true);
         _startupCheckbox = AppKit.SendThreePointers(AppKit.Class("NSButton"),
             AppKit.Selector("checkboxWithTitle:target:action:"),
-            AppKit.String("Launch Aspire Tray when I sign in"), _target, AppKit.Selector("changeStartup:"));
+            AppKit.String(TraySettingsText.StartupOption), _target, AppKit.Selector("changeStartup:"));
         AppKit.SetRect(_startupCheckbox, AppKit.Selector("setFrame:"), new(new(24, 166), new(492, 26)));
         AppKit.Set(content, "addSubview:", _startupCheckbox);
         _startupStatus = AddSettingsLabel(content, "", new(new(44, 160), new(472, 142)));
         AppKit.SendBool(_startupStatus, AppKit.Selector("setSelectable:"), 1);
-        AddSettingsLabel(content, "About", new(new(24, 120), new(492, 26)), heading: true);
+        AddSettingsLabel(content, TraySettingsText.About, new(new(24, 120), new(492, 26)), heading: true);
         _settingsAbout = AddSettingsLabel(content, SettingsAboutText, new(new(24, 24), new(492, 90)));
         AppKit.SendBool(_settingsAbout, AppKit.Selector("setSelectable:"), 1);
         AppKit.SendVoid(_settingsWindow, AppKit.Selector("center"));
@@ -126,18 +125,7 @@ internal sealed partial class MacTrayApplication
         return label;
     }
 
-    private string SettingsAboutText
-    {
-        get
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-            var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "Development";
-            var build = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version
-                ?? assembly.GetName().Version?.ToString() ?? "Development build";
-            return $"Aspire Tray\nVersion {version}\nBuild {build}\n"
-                + (_interactiveSmoke ? "Preview: fake AppHosts and startup settings only." : "An experimental companion for Aspire.");
-        }
-    }
+    private string SettingsAboutText => TraySettingsText.GetAboutText(_interactiveSmoke);
 
     private void ReloadStartupSettings(string? error = null)
     {
@@ -147,17 +135,7 @@ internal sealed partial class MacTrayApplication
             AppKit.SendBool(_startupCheckbox, AppKit.Selector("setAllowsMixedState:"), 0);
             AppKit.Set(_startupCheckbox, "setState:", state.Enabled ? 1 : 0);
             SetEnabled(_startupCheckbox, state.Enabled || state.CanEnable);
-            if (state.CanEnable && error is null)
-            {
-                SetStartupStatus("");
-                return;
-            }
-            var status = state.Enabled ? "Launch at sign-in is on." : "Launch at sign-in is off.";
-            if (!state.CanEnable)
-            {
-                status += " Enabling is unavailable.";
-            }
-            SetStartupStatus(string.Join("\n", new[] { error, status, state.Detail }.Where(text => !string.IsNullOrWhiteSpace(text))));
+            SetStartupStatus(TraySettingsText.GetStartupStatus(state, error));
         }
         catch (Exception ex)
         {
@@ -166,8 +144,7 @@ internal sealed partial class MacTrayApplication
             AppKit.SendBool(_startupCheckbox, AppKit.Selector("setAllowsMixedState:"), 1);
             AppKit.Set(_startupCheckbox, "setState:", -1);
             SetEnabled(_startupCheckbox, false);
-            SetStartupStatus(string.Join("\n", new[] { error, $"Launch-at-sign-in status is unavailable: {ex.Message}", "Close and reopen Settings to retry." }
-                .Where(text => text is not null)));
+            SetStartupStatus(TraySettingsText.GetReadError(ex, error));
         }
     }
 
@@ -176,8 +153,10 @@ internal sealed partial class MacTrayApplication
         AppKit.Set(_startupStatus, "setStringValue:", AppKit.String(text));
         var showDetails = text.Length != 0;
         AppKit.SendBool(_startupStatus, AppKit.Selector("setHidden:"), showDetails ? (byte)0 : (byte)1);
-        var height = showDetails ? 410 : 250;
+        var detailHeight = text == TraySettingsText.SignedBinariesOnly ? 42 : 142;
+        var height = showDetails ? 268 + detailHeight : 250;
         AppKit.SendSize(_settingsWindow, AppKit.Selector("setContentSize:"), new(540, height));
+        AppKit.SetRect(_startupStatus, AppKit.Selector("setFrame:"), new(new(44, 160), new(472, detailHeight)));
         AppKit.SetRect(_settingsGeneral, AppKit.Selector("setFrame:"), new(new(24, height - 50), new(492, 26)));
         AppKit.SetRect(_startupCheckbox, AppKit.Selector("setFrame:"), new(new(24, height - 84), new(492, 26)));
     }
@@ -197,7 +176,7 @@ internal sealed partial class MacTrayApplication
             var current = _startupSettings.Read();
             if (enabled && !current.CanEnable)
             {
-                error = "Unable to enable launch at sign-in. Enabling is unavailable.";
+                error = TraySettingsText.SignedBinariesOnly;
             }
             else
             {
@@ -210,7 +189,7 @@ internal sealed partial class MacTrayApplication
         catch (Exception ex)
         {
             LogFailure("Unable to change launch-at-sign-in settings", ex);
-            error = $"Unable to change launch at sign-in: {ex.Message}";
+            error = TraySettingsText.GetWriteError(ex);
         }
         ReloadStartupSettings(error);
     }

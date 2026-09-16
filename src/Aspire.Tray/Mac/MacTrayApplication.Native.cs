@@ -424,7 +424,7 @@ internal sealed partial class MacTrayApplication
             SetSymbol(finder, "folder", "Show in Finder");
             AttachPath(finder, host.Id.AppHostPath);
             var copyPath = AddItem(submenu, "Copy Path", "copyPath:", enabled: true);
-            SetSymbol(copyPath, "doc.on.doc", "Copy AppHost path");
+            SetSymbol(copyPath, "doc.on.doc", "Copy AppHost folder path");
             AttachPath(copyPath, host.Id.AppHostPath);
             AppKit.Set(item, "setSubmenu:", submenu);
             AttachAppHostIdentity(host.Id, dashboard, stop);

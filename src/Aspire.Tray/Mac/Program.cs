@@ -58,7 +58,8 @@ internal static class Program
             using var lease = options.BundleRoot is null
                 ? null : BundleVersionLease.Acquire(options.BundleRoot, "tray", "tray");
             var controller = new TrayController(new CliAppHostClient(options.CliPath),
-                new FileTraySavedStateStore(Path.Combine(SingleInstance.DirectoryPath, "apphosts.json")),
+                FileTraySavedStateStore.CreateWithLegacyMigration(
+                    TrayConfiguration.GetSavedStatePath(options.CliPath), SingleInstance.LegacyStateDirectoryPath),
                 TrayConfiguration.LoadRecentAppHostLimit(TrayConfiguration.GetSettingsPath(options.CliPath)));
             var startupSettings = new MacTrayStartupSettings(options, !RuntimeFeature.IsDynamicCodeSupported,
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "LaunchAgents"));

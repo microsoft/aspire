@@ -176,13 +176,27 @@ Before upgrading from an older preview, quit its running companion using its
 **Quit** menu action. Preview single-instance identifiers have changed, so
 `aspire tray stop` in this version does not manage an older preview's instance.
 
-### Experimental native tray protocol
+### AppHost snapshot output
 
-The hidden `--protocol-version 1` opt-in provides complete discovery snapshots,
-heartbeats, and typed, lifetime-guarded stop results for the experimental native tray companion:
+`aspire ps --output <default|snapshot>` selects the output mode. The default
+preserves existing output. Monitoring tools, including the native tray, can use
+`snapshot` with `--follow --format json` for complete AppHost lists, process
+identities, aggregate resource health, heartbeats, and typed errors:
 
 ```bash
-aspire ps --protocol-version 1 --follow --format json --non-interactive --nologo
+aspire ps --output snapshot --follow --format json --non-interactive --nologo
+```
+
+Snapshot discovery is read-only and emits only NDJSON on stdout. Messages include
+`version: 1` for compatibility; callers do not select a protocol version.
+See the [snapshot output contract](../../docs/specs/cli-output-formats.md#snapshot-output)
+for fields, empty snapshots, health values, heartbeats, errors, and limits.
+
+### Experimental native tray stop protocol
+
+The tray's separate, hidden stop mode provides typed, lifetime-guarded results:
+
+```bash
 aspire stop --protocol-version 1 --format json --apphost /absolute/path/AppHost.csproj --pid 12345 --started-at 1789250000000 --non-interactive --nologo
 ```
 
@@ -190,8 +204,8 @@ Pass `--started-at` from the selected row's `processStartTimeUnixMilliseconds`;
 do not enable Stop if that value is unavailable. `--started-at` requires
 `--protocol-version 1 --format json`; incomplete requests are rejected rather
 than falling back to legacy PID-only stopping. This experimental mode uses
-protocol-only stdout and read-only discovery. It does not change the existing
-unversioned JSON formats. See the [protocol schema, limits, and outcomes](../../docs/specs/cli-output-formats.md#experimental-native-tray-protocol-version-1).
+protocol-only stdout and does not change ordinary stop behavior. See the
+[exact stop contract and outcomes](../../docs/specs/cli-output-formats.md#experimental-exact-stop-response).
 
 ## Additional documentation
 

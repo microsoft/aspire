@@ -221,16 +221,19 @@ internal sealed partial class MacTrayApplication
             var count = AppKit.Get(row.Submenu, "numberOfItems");
             var finder = AppKit.Get(row.Submenu, "itemAtIndex:", count - 2);
             var copy = AppKit.Get(row.Submenu, "itemAtIndex:", count - 1);
+            // AppKit disables a stale row's descendants while its menu is retained.
             if (AppKit.Text(AppKit.Get(finder, "title")) != "Show in Finder"
                 || AppKit.Get(finder, "action") != AppKit.Selector("showInFinder:")
                 || copy != row.CopyPath || AppKit.Text(AppKit.Get(copy, "title")) != "Copy Path"
                 || AppKit.Get(copy, "action") != AppKit.Selector("copyPath:")
-                || !Enabled(copy) || SelectedPath(copy) != row.Id.AppHostPath
+                || Enabled(copy) != Enabled(row.Item) || SelectedPath(copy) != row.Id.AppHostPath
                 || !Path.IsPathFullyQualified(SelectedPath(copy)))
             {
-                throw new InvalidOperationException("Copy Path must immediately follow Finder and retain the exact absolute AppHost path.");
+                throw new InvalidOperationException($"Copy Path must immediately follow Finder and retain the exact absolute AppHost path. "
+                    + $"Finder: {AppKit.Text(AppKit.Get(finder, "title"))}; Copy: {AppKit.Text(AppKit.Get(copy, "title"))}; "
+                    + $"enabled: {Enabled(copy)}; target matches: {SelectedPath(copy) == row.Id.AppHostPath}.");
             }
-            VerifySymbolForSmoke(AppKit.Get(copy, "image"), "doc.on.doc", "Copy AppHost path");
+            VerifySymbolForSmoke(AppKit.Get(copy, "image"), "doc.on.doc", "Copy AppHost folder path");
         }
     }
 
@@ -414,6 +417,18 @@ internal sealed partial class MacTrayApplication
         OpenFromStatusMenu();
         VerifyState(true);
         AppKit.Set(_startupCheckbox, "performClick:", 0);
+        VerifyState(false);
+
+        startupSettings.CanEnable = false;
+        OpenFromStatusMenu();
+        if (Enabled(_startupCheckbox)
+            || AppKit.Text(AppKit.Get(_startupStatus, "stringValue")) != "Launch at sign-in is only available for signed binaries."
+            || AppKit.GetBool(_startupStatus, AppKit.Selector("isHidden")) != 0)
+        {
+            throw new InvalidOperationException("Unavailable startup must show only the short signed-binaries note.");
+        }
+        startupSettings.CanEnable = true;
+        OpenFromStatusMenu();
         VerifyState(false);
 
         // Deliver an app-local key event through AppKit, not a system-wide hotkey.

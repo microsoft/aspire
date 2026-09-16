@@ -76,8 +76,11 @@ public sealed class PsCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
     }
 
-    [Fact]
-    public async Task PsFormatJsonOutputsOnlyJsonToStdout()
+    [Theory]
+    [InlineData("", "[]")]
+    [InlineData("--output default", "[]")]
+    [InlineData("--output snapshot --follow", """{"version":1,"type":"snapshot","appHosts":[]}""")]
+    public async Task PsFormatJsonOutputsOnlyJsonToStdout(string outputOptions, string expectedOutput)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -96,17 +99,13 @@ public sealed class PsCommandTests(ITestOutputHelper output)
         var outputFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "ps-output.json");
         var containerOutputFilePath = CliE2ETestHelpers.ToContainerPath(outputFilePath, workspace);
 
-        // Run aspire ps --format json with stdout redirected to a file.
-        // Status messages go to stderr (Spectre.Console spinner, cleared on completion),
-        // JSON output goes to stdout (redirected to the file).
-        // We only wait for the success prompt since the Spectre status spinner is
-        // transient and erased before WaitUntil polling can observe it.
-        await auto.TypeAsync($"aspire ps --format json > {containerOutputFilePath}");
+        // Reading one line closes the snapshot consumer; the next heartbeat must
+        // detect the closed pipe and exit successfully, without stopping AppHosts.
+        await auto.TypeAsync($"(set -o pipefail; timeout 45s aspire ps --format json {outputOptions} | head -n 1 > {containerOutputFilePath})");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Verify the file contains only the expected JSON output (empty array).
         var content = File.ReadAllText(outputFilePath).Trim();
-        Assert.Equal("[]", content);
+        Assert.Equal(expectedOutput, content);
     }
 }

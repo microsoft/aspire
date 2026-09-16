@@ -11,12 +11,14 @@ public class MacSingleInstanceTests
 
     [Fact(Skip = "The state directory is macOS-specific.", SkipUnless = nameof(SupportsMac))]
     [SupportedOSPlatform("macos")]
-    public void ControlEndpointUsesTheProductStateDirectory()
+    public void ControlEndpointUsesTheUserProfileRuntimeDirectory()
     {
         var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Library", "Application Support", "Aspire", "Tray");
+            ".aspire", "tray", "runtime");
         Assert.Equal(directory, SingleInstance.DirectoryPath);
         Assert.Equal(Path.Combine(directory, "control-v1.sock"), SingleInstance.ActivationPipeName);
+        Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Library", "Application Support", "Aspire", "Tray"), SingleInstance.LegacyStateDirectoryPath);
     }
 
     [Theory(Skip = "The lock uses Darwin flock.", SkipUnless = nameof(SupportsMac))]

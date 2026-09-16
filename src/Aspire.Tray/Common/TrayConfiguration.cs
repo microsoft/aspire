@@ -18,6 +18,16 @@ internal static class TrayConfiguration
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
     public static string GetSettingsPath(string cliPath, string? configuredAspireHome, string userProfileDirectory)
+        => Path.Combine(GetAspireHome(cliPath, configuredAspireHome, userProfileDirectory), "aspire.config.json");
+
+    public static string GetSavedStatePath(string cliPath)
+        => GetSavedStatePath(cliPath, Environment.GetEnvironmentVariable("ASPIRE_HOME"),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+
+    public static string GetSavedStatePath(string cliPath, string? configuredAspireHome, string userProfileDirectory)
+        => Path.Combine(GetAspireHome(cliPath, configuredAspireHome, userProfileDirectory), "tray", "apphosts.json");
+
+    private static string GetAspireHome(string cliPath, string? configuredAspireHome, string userProfileDirectory)
     {
         // Match CLI Program.GetGlobalSettingsPath and CliPathHelper.GetAspireHomeDirectory:
         // script/localhive: <home>/bin/aspire; PR: <home>/dogfood/pr-123/bin/aspire.
@@ -25,7 +35,7 @@ internal static class TrayConfiguration
         // legacy project-local file, not the user configuration written by config --global.
         var home = TryGetInstalledHome(cliPath) ?? (string.IsNullOrWhiteSpace(configuredAspireHome)
             ? Path.Combine(userProfileDirectory, ".aspire") : configuredAspireHome);
-        return Path.Combine(TrayAppHostPath.Normalize(home), "aspire.config.json");
+        return TrayAppHostPath.Normalize(home);
     }
 
     /// <summary>

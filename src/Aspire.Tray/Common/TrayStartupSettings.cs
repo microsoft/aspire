@@ -23,11 +23,16 @@ internal interface ITrayStartupSettings
 internal sealed class MemoryTrayStartupSettings : ITrayStartupSettings
 {
     private bool _enabled;
+    internal bool CanEnable { get; set; } = true;
 
-    public TrayStartupState Read() => new(_enabled, true, "Isolated smoke setting; no startup registration is changed.");
+    public TrayStartupState Read() => new(_enabled, CanEnable, "Isolated smoke setting; no startup registration is changed.");
 
     public TrayStartupState SetEnabled(bool enabled)
     {
+        if (enabled && !CanEnable)
+        {
+            throw new InvalidOperationException("The isolated startup setting cannot be enabled.");
+        }
         _enabled = enabled;
         return Read();
     }

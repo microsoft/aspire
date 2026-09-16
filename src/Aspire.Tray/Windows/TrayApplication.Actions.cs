@@ -51,7 +51,7 @@ internal sealed partial class TrayApplication
                     break;
                 case ActionKind.CopyPath:
                     RequireCurrentRow(target.Id);
-                    CopyPath(target.Id.AppHostPath);
+                    CopyPath(Path.GetDirectoryName(target.Id.AppHostPath)!);
                     break;
                 case ActionKind.Explorer:
                 case ActionKind.OpenIn:

@@ -300,7 +300,7 @@ internal sealed partial class MacTrayApplication
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnCopyPath(nint self, nint selector, nint sender)
-        => Route(self, sender, static (app, item) => app.RunAction(() => app._copyPath(SelectedPath(item))));
+        => Route(self, sender, static (app, item) => app.RunAction(() => app._copyPath(Path.GetDirectoryName(SelectedPath(item))!)));
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnOpenDocumentation(nint self, nint selector, nint sender)

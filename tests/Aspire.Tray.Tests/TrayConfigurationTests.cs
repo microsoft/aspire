@@ -140,6 +140,8 @@ public class TrayConfigurationTests
 
         Assert.Equal(Path.Combine(root, expectedHome, "aspire.config.json"),
             TrayConfiguration.GetSettingsPath(binary, Path.Combine(root, "configured"), Path.Combine(root, "user")));
+        Assert.Equal(Path.Combine(root, expectedHome, "tray", "apphosts.json"),
+            TrayConfiguration.GetSavedStatePath(binary, Path.Combine(root, "configured"), Path.Combine(root, "user")));
     }
 
     [Fact]
@@ -151,6 +153,10 @@ public class TrayConfigurationTests
 
         Assert.Equal(Path.Combine(user, ".aspire", "aspire.config.json"),
             TrayConfiguration.GetSettingsPath(binary, null, user));
+        Assert.Equal(Path.Combine(user, ".aspire", "tray", "apphosts.json"),
+            TrayConfiguration.GetSavedStatePath(binary, null, user));
+        Assert.Equal(Path.Combine(user, "custom-home", "tray", "apphosts.json"),
+            TrayConfiguration.GetSavedStatePath(binary, Path.Combine(user, "custom-home"), user));
     }
 
     private static void AssertConfigurationError(string path)

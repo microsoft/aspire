@@ -21,6 +21,10 @@ internal static partial class SingleInstance
 
     public static string DirectoryPath
         => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".aspire", "tray", "runtime");
+
+    public static string LegacyStateDirectoryPath
+        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Library", "Application Support", "Aspire", "Tray");
 
     public static FileStream? TryAcquire()

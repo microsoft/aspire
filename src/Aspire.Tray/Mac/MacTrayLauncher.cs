@@ -36,7 +36,8 @@ internal static class MacTrayLauncher
             return;
         }
 
-        var logPath = Path.Combine(SingleInstance.DirectoryPath, "aspire-tray.log");
+        DirectoryHelper.CreateWithOwnerOnlyPermissions(SingleInstance.LegacyStateDirectoryPath);
+        var logPath = Path.Combine(SingleInstance.LegacyStateDirectoryPath, "aspire-tray.log");
         using (var log = new FileStream(logPath, new FileStreamOptions
         {
             Mode = FileMode.Append,

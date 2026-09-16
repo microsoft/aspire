@@ -99,7 +99,7 @@ internal sealed class CliAppHostClient : IAppHostClient
 
     internal static ProcessStartInfo CreateWatchStartInfo(string executable)
         => CliProcess.CreateStartInfo(executable, "ps", "--follow", "--format", "json",
-            "--protocol-version", "1", "--non-interactive", "--nologo");
+            "--output", "snapshot", "--non-interactive", "--nologo");
 
     private async IAsyncEnumerable<AppHostSnapshot> WatchConnectionAsync(Action onHealthyConnection, [EnumeratorCancellation] CancellationToken cancellationToken)
     {

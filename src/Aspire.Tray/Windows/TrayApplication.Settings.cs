@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -35,16 +34,7 @@ internal sealed unsafe partial class TrayApplication
     private bool _settingsInitializing;
     private bool _settingsShortcutPending;
 
-    private static string AboutVersionText
-    {
-        get
-        {
-            var assembly = typeof(TrayApplication).Assembly;
-            var version = assembly.GetName().Version?.ToString() ?? "Development build";
-            var build = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? version;
-            return $"Aspire Tray\r\nVersion: {build}\r\nAssembly version: {version}";
-        }
-    }
+    private string AboutVersionText => TraySettingsText.GetAboutText(_interactiveSmoke);
 
     private void ShowSettings()
     {
@@ -58,7 +48,7 @@ internal sealed unsafe partial class TrayApplication
         _settingsInitializing = true;
         try
         {
-            var template = CreateDialogTemplate(_interactiveSmoke ? "Aspire Tray Preview Settings" : "Aspire Settings", 380, 292, 10);
+            var template = CreateDialogTemplate(_interactiveSmoke ? TraySettingsText.PreviewTitle : TraySettingsText.Title, 380, 292, 10);
             fixed (byte* pointer = template)
             {
                 var window = NativeMethods.CreateDialogIndirectParam(_module, pointer, _window, &SettingsDialogProcedure, 0);
@@ -71,15 +61,15 @@ internal sealed unsafe partial class TrayApplication
             NativeMethods.SendMessage(_settingsWindow, 0x80, 1, _settingsIcon);
 
             _settingsTitle = AddSettingsControl("STATIC", "Settings", 0x80, SettingsTitleId, 20, 16, 340, 30);
-            _settingsGeneral = AddSettingsControl("STATIC", "General", 0x80, SettingsGeneralId, 32, 56, 316, 14);
+            _settingsGeneral = AddSettingsControl("STATIC", TraySettingsText.General, 0x80, SettingsGeneralId, 32, 56, 316, 14);
             // BS_3STATE (not AUTO3STATE) exposes an accessible checkbox, but only confirmed
             // backend state changes its check mark. A failed write never looks successful.
-            _settingsCheckbox = AddSettingsControl("BUTTON", "&Launch Aspire Tray when I sign in",
+            _settingsCheckbox = AddSettingsControl("BUTTON", "&" + TraySettingsText.StartupOption,
                 0x10000 | 0x5, StartupCheckboxId, 20, 50, 340, 18);
             _settingsStatus = AddSettingsControl("STATIC", "", 0x80, 0, 20, 105, 340, 60);
             _settingsRefresh = AddSettingsControl("BUTTON", "&Refresh startup status", 0x10000,
                 StartupRefreshId, 20, 175, 120, 24);
-            _settingsAbout = AddSettingsControl("STATIC", "About", 0x80, SettingsAboutId, 20, 218, 340, 24);
+            _settingsAbout = AddSettingsControl("STATIC", TraySettingsText.About, 0x80, SettingsAboutId, 20, 218, 340, 24);
             _settingsVersion = AddSettingsControl("STATIC", AboutVersionText, 0x80, 0, 20, 244, 340, 48);
             if (_interactiveSmoke)
             {
@@ -176,8 +166,7 @@ internal sealed unsafe partial class TrayApplication
             _startupState = null;
             NativeMethods.SendMessage(_settingsCheckbox, NativeMethods.BmSetCheck, 2, 0);
             EnableStartupCheckbox(false);
-            var message = $"Startup state is unknown. Could not read the sign-in setting: {ex.Message}\r\nSelect Refresh startup status to retry.";
-            SetSettingsStatus(writeError is null ? message : $"{writeError}\r\n{message}");
+            SetSettingsStatus(TraySettingsText.GetReadError(ex, writeError));
             Program.Log($"Reading tray startup settings failed ({ex.GetType().Name}): {ex.Message}");
             return;
         }
@@ -189,21 +178,7 @@ internal sealed unsafe partial class TrayApplication
         _startupState = state;
         NativeMethods.SendMessage(_settingsCheckbox, NativeMethods.BmSetCheck, state.Enabled ? 1u : 0u, 0);
         EnableStartupCheckbox(state.Enabled || state.CanEnable);
-        if (state.CanEnable && error is null)
-        {
-            SetSettingsStatus("");
-            return;
-        }
-        var status = state.Enabled ? "Launch at sign-in is on." : "Launch at sign-in is off.";
-        if (!state.CanEnable)
-        {
-            status += " Enabling launch at sign-in is unavailable.";
-        }
-        if (!string.IsNullOrWhiteSpace(state.Detail))
-        {
-            status += $"\r\n{state.Detail}";
-        }
-        SetSettingsStatus(error is null ? status : $"{error}\r\n{status}");
+        SetSettingsStatus(TraySettingsText.GetStartupStatus(state, error));
     }
 
     private void SetSettingsStatus(string message)
@@ -249,7 +224,7 @@ internal sealed unsafe partial class TrayApplication
         }
         catch (Exception ex)
         {
-            var message = $"Could not change launch at sign-in: {ex.Message}\r\nReview the status below, then retry.";
+            var message = TraySettingsText.GetWriteError(ex);
             Program.Log($"Changing tray startup settings failed ({ex.GetType().Name}): {ex.Message}");
             // SetEnabled may have partially completed before failing. Re-read reality instead
             // of restoring the old checkbox or treating the requested value as successful.

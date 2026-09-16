@@ -81,7 +81,8 @@ internal static class Program
             using var lease = options.BundleRoot is null
                 ? null : BundleVersionLease.Acquire(options.BundleRoot, "tray", "tray");
             var controller = new TrayController(new CliAppHostClient(options.CliPath),
-                new FileTraySavedStateStore(Path.Combine(WindowsSingleInstance.DirectoryPath, "apphosts.json")),
+                FileTraySavedStateStore.CreateWithLegacyMigration(
+                    TrayConfiguration.GetSavedStatePath(options.CliPath), WindowsSingleInstance.DirectoryPath),
                 TrayConfiguration.LoadRecentAppHostLimit(TrayConfiguration.GetSettingsPath(options.CliPath)));
             TrayApplication? tray = null;
             TrayActivation? activation = null;

@@ -51,8 +51,10 @@ The companion uses the absolute invoking CLI path for discovery and actions,
 not a copied or independently pinned CLI.
 
 The macOS same-user control endpoint is
-`~/Library/Application Support/Aspire/Tray/control-v1.sock`.
-Launch diagnostics go to `aspire-tray.log` in the same directory, with
+`~/.aspire/tray/runtime/control-v1.sock`. The socket and singleton lock use the
+user profile directly, independent of `ASPIRE_HOME` and CLI installation, so all
+launchers can find the same per-user tray.
+Launch diagnostics remain at `~/Library/Application Support/Aspire/Tray/aspire-tray.log`, with
 user-only creation permissions and no raw discovery payloads or dashboard URLs.
 Quit the tray using its original CLI or **Quit Aspire** before upgrading from an
 earlier preview. The state directory has been renamed; a still-running older
@@ -90,8 +92,8 @@ payload archive before embedding.
 Quit the running tray before replacing its `.app` or republishing the CLI
 executable it uses. A running NativeAOT executable must not be overwritten.
 
-Build the CLI from this checkout so it includes the experimental versioned
-discovery and exact-instance stop protocol. On Apple Silicon, run:
+Build the CLI from this checkout so it includes public snapshot discovery and
+the experimental exact-instance stop protocol. On Apple Silicon, run:
 
 ```sh
 dotnet build src/Aspire.Cli/Aspire.Cli.csproj
@@ -102,7 +104,7 @@ DOTNET_ROOT="$PWD/.dotnet" \
 ```
 
 `DOTNET_ROOT` is needed by the managed development CLI, not by the NativeAOT tray.
-With a published CLI that supports protocol version 1, pass its absolute
+With a published CLI that supports `ps --output snapshot` and the exact-stop protocol, pass its absolute
 executable path instead; a NativeAOT CLI does not need this runtime setting.
 
 The foreground development entrypoint's `--cli` argument must be an existing
@@ -163,13 +165,13 @@ Services, rather than assuming applications live in `/Applications`. Supported
 editors/terminals include VS Code, VS Code Insiders, Terminal, Ghostty, iTerm,
 Rider, and Xcode; only installed applications appear. The selected app opens the
 AppHost's directory without starting the AppHost. **Show in Finder** reveals the
-project file. **Copy Path**, directly below it, copies the full AppHost file path
+project file. **Copy Path**, directly below it, copies the AppHost's containing folder path
 without requiring the file to exist. These actions are available for running,
 pinned, and recent AppHosts. This intentionally uses a tray-owned menu: Finder's Services menu
 requires a document selection/responder contract that a status-menu row does not
 provide. **Documentation** opens [aspire.dev](https://aspire.dev). **Settings...**
 replaces the top-level About action and opens General and About information,
-including the build version. Documentation remains in the tray menu, and a divider
+including the same version and build text on both platforms. Documentation remains in the tray menu, and a divider
 separates **Quit Aspire** from the other utility actions. The Settings shortcut is Command-comma
 on macOS or Control-comma on Windows while the tray's menu or window has focus;
 it is not a system-wide hotkey.
@@ -188,7 +190,7 @@ during development); normal launches retain the user's placement. This recovery 
 not a guarantee against every crowded menu-bar/display configuration.
 Open tray menus or confirmation dialogs defer restoration until they close.
 Single-instance ownership uses an OS file lock under
-`~/Library/Application Support/Aspire/Tray/instance.lock`; the empty file
+`~/.aspire/tray/runtime/instance.lock`; the empty file
 remains after exit, but its lock is released automatically. NativeAOT's Unix
 named mutex implementation does not provide cross-process exclusion.
 Before opening the lock, the state directory's owner-only permissions are
@@ -229,17 +231,23 @@ editing the configuration. An invalid value is reported rather than silently
 replaced by the default.
 
 The **Don't ask again** preference is stored as `confirmStop: false` in the tray's
-existing `apphosts.json`, separately from sign-in registration. To restore the
+per-user `~/.aspire/tray/apphosts.json` (`%USERPROFILE%\.aspire\tray\apphosts.json`
+on Windows), separately from sign-in registration. Like the CLI's global
+configuration, this uses the installation's Aspire home when defined, otherwise
+`ASPIRE_HOME` when set, then `~/.aspire`. The filename is `tray/apphosts.json`
+under that home, outside the versioned bundle cache. To restore the
 warning, quit the tray, set `confirmStop` to `true` (or remove that property), then
-restart it. On macOS the file is under `~/Library/Application Support/Aspire/Tray`;
-on Windows it is under `%LocalAppData%\Aspire\Tray`. Quit before editing that state
+restart it. History, pins, and Stop-confirmation preferences from the former OS
+application-data location are imported when the new file does not exist. The old
+file is left intact; an existing new file always takes precedence. Quit before editing that state
 file: the tray refuses to overwrite changes made by another writer while running.
 
 ## Launch at sign-in
 
 The General section in **Settings...** offers **Launch Aspire Tray when I sign in**.
-Normally, only the checkbox is shown. Diagnostic details appear when configuration is
-unavailable or a read/write fails; Windows also shows **Refresh startup status** in
+Normally, only the checkbox is shown. When unavailable, the optional note reads
+"Launch at sign-in is only available for signed binaries." Read/write failures
+still show their error messages; Windows also shows **Refresh startup status** in
 that state. Reopening Settings re-reads the registration on either platform. Availability
 depends on a supported, verified native CLI installation, not just executable signing.
 It is off by default. Opening Settings, reading the preference, and closing the
@@ -298,7 +306,7 @@ over this final entry shows its full, untruncated value in a native tooltip, whi
 can wrap long text. Parent AppHost rows and action items have no tooltips.
 Displayed and copied paths retain their original casing;
 Windows identity matching remains case-insensitive and still requires the exact PID
-and process start time. **Copy Path** copies the complete original path. The final
+and process start time. **Copy Path** copies the complete original containing folder path. The final
 details entry and its tooltip refresh when status changes, including while the menu is open.
 Only the notification-area icon and window icons use artwork.
 
@@ -321,8 +329,9 @@ If Explorer's notification area is still initializing at startup, icon creation
 retries on the UI timer using the bounded Explorer recovery attempts. Startup is acknowledged only after
 the icon has been added; an unavailable notification area still fails explicitly.
 
-State and timestamped diagnostics are stored in
-`%LocalAppData%\Aspire\Tray\apphosts.json` and `aspire-tray.log`. The current-user
+Preferences are stored in `<Aspire home>\tray\apphosts.json`, normally
+`%USERPROFILE%\.aspire\tray\apphosts.json`.
+Timestamped diagnostics remain in `%LocalAppData%\Aspire\Tray\aspire-tray.log`. The current-user
 secured mutex and named pipe are shared across that user's desktop sessions.
 The icon stays in the session where the companion first started; another session
 restores or stops that instance. Stop and start again to move it to the launching
@@ -376,7 +385,7 @@ installed.
 
 - One global companion per OS user, independent of the launch directory.
 - One long-lived child process:
-  `aspire ps --follow --format json --protocol-version 1 --non-interactive --nologo`.
+  `aspire ps --follow --format json --output snapshot --non-interactive --nologo`.
 - `IAppHostClient` is the only backend interface: watch snapshots, explicitly start
   a project, and stop an exact instance. `CliAppHostClient` owns subprocesses and protocol validation.
   No shell, per-AppHost watchers, or direct backchannel access from the tray.
@@ -419,7 +428,7 @@ installed.
   already-running project. History/pinning and start state are shared,
   platform-independent code used by both native frontends.
 
-The experimental wire contract is defined once in
+The snapshot and experimental stop wire contracts are defined once in
 `src/Shared/TrayCliProtocol.cs`, source-linked into the CLI, tray, and tests.
 It uses source-generated JSON and complete NDJSON snapshots, including
 `{"version":1,"type":"snapshot","appHosts":[]}`. A heartbeat is emitted every

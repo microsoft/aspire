@@ -660,16 +660,16 @@ internal sealed class NativeSmokeHarness
     {
         var count = _copiedPaths.Count;
         _application.PerformCopyForSmoke(path);
-        Require(_copiedPaths.Count == count + 1 && _copiedPaths[^1] == path,
-            "Copy Path changed the exact AppHost filename or skipped its native callback.");
+        Require(_copiedPaths.Count == count + 1 && _copiedPaths[^1] == Path.GetDirectoryName(path),
+            "Copy Path did not copy the exact containing folder through its native callback.");
     }
 
     private void VerifyRetainedCopy()
     {
         var count = _copiedPaths.Count;
         _application.PerformRetainedCopyForSmoke();
-        Require(_copiedPaths.Count == count + 1 && _copiedPaths[^1] == _savedHost.AppHostPath,
-            "A retained Copy Path sender lost its original Unicode/tab-containing target.");
+        Require(_copiedPaths.Count == count + 1 && _copiedPaths[^1] == Path.GetDirectoryName(_savedHost.AppHostPath),
+            "A retained Copy Path sender lost its original containing folder.");
     }
 
     private bool ConfirmAction(TrayConfirmation confirmation)

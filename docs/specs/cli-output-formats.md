@@ -110,6 +110,12 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 
 ### `aspire ps`
 
+`--output <default|snapshot>` selects the output mode; `--format` selects the
+encoding. Omitting `--output` is equivalent to `--output default` and preserves
+the existing table, JSON array, and follow-mode delta output described below.
+`--output snapshot` requires `--follow --format json` and selects the
+[full snapshot stream](#snapshot-output) for monitoring tools.
+
 `aspire ps --format json` lists running AppHosts:
 
 ```json
@@ -134,26 +140,31 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 {"appHostPath":"/path/to/MyApp.AppHost/MyApp.AppHost.csproj","appHostPid":12345,"status":"stopped"}
 ```
 
-### Experimental native tray protocol (version 1)
+#### Snapshot output
 
-This hidden, opt-in protocol is for the experimental native tray companion, not a replacement for
-the existing `ps` snapshot or delta formats. It is experimental and may change.
-Its shared DTOs, source-generated JSON context, and limits are defined in
-`src/Shared/TrayCliProtocol.cs`.
+`--output snapshot` is a public, opt-in stream for tools that need complete
+AppHost lists, process identities, aggregate resource health, and liveness
+notifications. The native tray companion is one consumer; the mode is not
+tray-specific. It does not change the default output formats.
 
 ```bash
-aspire ps --protocol-version 1 --follow --format json --non-interactive --nologo
-aspire stop --protocol-version 1 --format json --apphost /absolute/path/apphost.cs --pid 12345 --started-at 1789250000000 --non-interactive --nologo
+aspire ps --output snapshot --follow --format json --non-interactive --nologo
 ```
+
+Messages retain an in-band `version` field (currently `1`); no command-line
+protocol version is needed. Consumers should reject unsupported versions and
+ignore additional fields in supported versions. The shared DTOs,
+source-generated JSON context, and limits are defined in
+`src/Shared/TrayCliProtocol.cs`.
 
 Only protocol messages appear on stdout, as compact newline-delimited JSON.
 Diagnostics go to stderr; progress, banners, and update notifications do not
-appear on stdout. Unsupported versions and invalid arguments exit nonzero.
+appear on stdout. Unknown output modes and invalid arguments exit nonzero.
 Help and parser failures, and invalid `ps` invocations, may produce no protocol
 message. Consumers must reject missing or malformed responses rather than parse
 diagnostic text.
 
-#### Discovery stream
+##### Discovery stream
 
 `ps` requires both `--follow` and `--format json`. Discovery is read-only: it
 does not collect orphaned AppHosts, prune sockets, or create discovery directories.
@@ -229,8 +240,18 @@ list has not changed. Consumer disconnect is normal completion (exit code 0), no
 a discovery error; it does not emit an error message or the failure-log notice.
 An already-detected discovery or limit failure still exits nonzero if writing its
 terminal error encounters a closed pipe.
+End-of-file ends the stream; there is no `complete` message. If monitoring must
+continue, restart discovery and replace state with the next initial snapshot.
+Treat a stream without an initial snapshot as unavailable, not as an empty list.
 
-#### Exact stop response
+### Experimental exact stop response
+
+The native tray's lifetime-guarded stop mode remains a separate experimental,
+hidden protocol. `--output` is a `ps` option, not a `stop` option.
+
+```bash
+aspire stop --protocol-version 1 --format json --apphost /absolute/path/apphost.cs --pid 12345 --started-at 1789250000000 --non-interactive --nologo
+```
 
 The protocol requires `--apphost` with an absolute file path, a positive AppHost
 `--pid`, and a positive `--started-at` Unix-millisecond value copied from the
@@ -267,7 +288,7 @@ to the process exit code:
 | `invalid_request` | Required arguments are missing/invalid, incompatible flags were supplied, or the version is unsupported. |
 
 Every outcome other than `stopped` has a nonzero exit code. Without
-`--protocol-version`, existing `ps` and `stop --pid` behavior is unchanged.
+`--protocol-version`, existing `stop --pid` behavior is unchanged.
 
 ### `aspire describe`
 

@@ -379,7 +379,7 @@ internal sealed unsafe partial class TrayApplication
             "The modeless Settings window, icon, or local shortcut hook is missing.");
         NativeSmokeHarness.Require(NativeMethods.IsThemeActive() == 0 || NativeMethods.IsAppThemed() != 0,
             "The native executable did not activate Common Controls v6 visual styles.");
-        NativeSmokeHarness.Require(ReadControlText(_settingsWindow) == "Aspire Settings"
+        NativeSmokeHarness.Require(ReadControlText(_settingsWindow) == "Aspire Tray Settings"
             && ReadControlText(NativeMethods.GetDlgItem(_settingsWindow, SettingsTitleId)) == "Settings"
             && ReadControlText(NativeMethods.GetDlgItem(_settingsWindow, SettingsGeneralId)) == "General"
             && ReadControlText(NativeMethods.GetDlgItem(_settingsWindow, SettingsAboutId)) == "About",

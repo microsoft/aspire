@@ -8,6 +8,9 @@ internal sealed class TestTrayStateDirectory : IDisposable
     private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("aspire-tray-state-");
 
     public string StatePath => Path.Combine(_directory.FullName, "state", "history.json");
+    public string UserProfilePath => Path.Combine(_directory.FullName, "user");
+    public string LegacyDirectory => Path.Combine(_directory.FullName, "legacy");
+    public string UserStatePath => Path.Combine(UserProfilePath, ".aspire", "tray", "apphosts.json");
 
     public string CreateAppHost(string relativePath)
     {
