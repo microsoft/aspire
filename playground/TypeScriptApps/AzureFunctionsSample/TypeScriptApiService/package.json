@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@azure/event-hubs": "^6.0.3",
-    "@azure/storage-blob": "^12.33.0",
-    "@azure/storage-queue": "^12.31.0",
+    "@azure/storage-blob": "12.31.0",
+    "@azure/storage-queue": "12.29.0",
     "express": "^5.2.1"
   },
   "devDependencies": {
@@ -21,7 +21,9 @@
     "typescript": "^5.9.3"
   },
   "overrides": {
+    "@azure/core-rest-pipeline": "1.23.0",
+    "@azure/storage-common": "12.3.0",
     "fast-xml-parser": "5.11.1",
-    "body-parser": "1.20.6"
+    "body-parser@<2": "1.20.6"
   }
 }
