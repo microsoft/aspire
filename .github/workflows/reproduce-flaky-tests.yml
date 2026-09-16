@@ -6,7 +6,9 @@
 # artifact is the E2E-bridge-enabled VSIX packaged by extension-unit-tests.yml, not the
 # shipping VSIX. No production workflow, test, timeout, skip, or advisory is changed.
 # PR CI built the merge, not the head: reproduce from that immutable complete source.
-# The production setup, Deno action, global.json, and four fix files are identical there.
+# The copied production setup, Deno action and global.json remain unchanged there.
+# The investigation tree stays at the original fix; only the test checkout includes
+# the published source diagnostics. API base metadata is not the tested merge's parent.
 #
 # Dispatch only after all six pinned source-run artifacts exist:
 # gh workflow run reproduce-flaky-tests.yml --repo microsoft/aspire --ref <investigation-branch>
@@ -22,11 +24,13 @@ permissions:
   actions: read
 
 env:
-  SOURCE_RUN_ID: '34871161876'
-  FIX_HEAD_SHA: '221026c4a730f6c891de65359d594722584f2071'
-  SOURCE_BASE_SHA: '867c9ea4be9454d5e05bd41bf69da0ed07261c9c'
-  TESTED_SOURCE_SHA: 'bc0e9ab1d2f4014d786963f3c7a30541f43d0495'
-  SOURCE_CHECKOUT_JOB_ID: '104071477103'
+  INVESTIGATION_BASE_SHA: '221026c4a730f6c891de65359d594722584f2071'
+  SOURCE_RUN_ID: '35035916145'
+  FIX_HEAD_SHA: '851fa2bc9b6f3da436aeb6574e2a15924c506340'
+  SOURCE_API_BASE_SHA: '867c9ea4be9454d5e05bd41bf69da0ed07261c9c'
+  TESTED_MAIN_PARENT_SHA: '3014db793ac9ea215db590ed44de84d99dc2dbb4'
+  TESTED_SOURCE_SHA: '7def9b11da6f94c2a7b3cf8508056aa144f21855'
+  SOURCE_CHECKOUT_JOB_ID: '104607719797'
   ITERATIONS_PER_RUNNER: '3'
   EXPECTED_TESTS: '3'
   NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -56,11 +60,11 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           New-Item -ItemType Directory -Path repro-source | Out-Null
           try {
-            git merge-base --is-ancestor $env:FIX_HEAD_SHA HEAD
+            git merge-base --is-ancestor $env:INVESTIGATION_BASE_SHA HEAD
             # Compare trees, not a merge-base diff: every tracked byte other than this
-            # temporary workflow on the investigation branch must still match the fix head.
-            # The actual test checkout below separately pins the merge used by PR CI.
-            git diff --exit-code $env:FIX_HEAD_SHA HEAD -- . ':(exclude).github/workflows/reproduce-flaky-tests.yml'
+            # temporary workflow must still match the original investigation base, not
+            # the newer diagnostic head. Test jobs separately pin its complete CI merge.
+            git diff --exit-code $env:INVESTIGATION_BASE_SHA HEAD -- . ':(exclude).github/workflows/reproduce-flaky-tests.yml'
             $checkout = (git rev-parse HEAD).Trim()
 
             $runJson = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN_ID"
@@ -68,15 +72,17 @@ jobs:
             $run = $runJson | ConvertFrom-Json
             if ($run.head_sha -cne $env:FIX_HEAD_SHA -or $run.path -cne '.github/workflows/ci.yml' -or $run.event -cne 'pull_request' -or
                 @($run.pull_requests).Count -ne 1 -or $run.pull_requests[0].number -ne 20118 -or
-                $run.pull_requests[0].head.sha -cne $env:FIX_HEAD_SHA -or $run.pull_requests[0].base.sha -cne $env:SOURCE_BASE_SHA) {
-              throw "Source run $env:SOURCE_RUN_ID is not PR #20118 CI for the pinned head/base."
+                $run.pull_requests[0].head.sha -cne $env:FIX_HEAD_SHA -or $run.pull_requests[0].base.sha -cne $env:SOURCE_API_BASE_SHA) {
+              throw "Source run $env:SOURCE_RUN_ID is not PR #20118 CI for the pinned head/API base metadata."
             }
 
+            # PR API base.sha remains 867c9ea... although the tested merge's first parent
+            # is 3014db7.... Validate both independently; never substitute one for the other.
             $commitJson = gh api "repos/$env:GITHUB_REPOSITORY/git/commits/$env:TESTED_SOURCE_SHA"
             $commitJson | Set-Content repro-source/tested-commit.json -Encoding utf8
             $commit = $commitJson | ConvertFrom-Json
             if ($commit.sha -cne $env:TESTED_SOURCE_SHA -or @($commit.parents).Count -ne 2 -or
-                $commit.parents[0].sha -cne $env:SOURCE_BASE_SHA -or $commit.parents[1].sha -cne $env:FIX_HEAD_SHA) {
+                $commit.parents[0].sha -cne $env:TESTED_MAIN_PARENT_SHA -or $commit.parents[1].sha -cne $env:FIX_HEAD_SHA) {
               throw 'The tested source is not the expected immutable PR merge.'
             }
             $jobJson = gh api "repos/$env:GITHUB_REPOSITORY/actions/jobs/$env:SOURCE_CHECKOUT_JOB_ID"
@@ -88,8 +94,8 @@ jobs:
             $checkoutLog = gh api "repos/$env:GITHUB_REPOSITORY/actions/jobs/$env:SOURCE_CHECKOUT_JOB_ID/logs" --allow-escape-sequences
             $checkoutLog = ($checkoutLog -join "`n") -replace '\x1b\[[0-?]*[ -/]*[@-~]', ''
             # actions/checkout emits, for example:
-            # 2026-09-14T17:05:02Z [command]"...\git.exe" log -1 --format=%H
-            # 2026-09-14T17:05:02Z bc0e9ab1d2f4014d786963f3c7a30541f43d0495
+            # 2026-09-15T21:05:02Z [command]"...\git.exe" log -1 --format=%H
+            # 2026-09-15T21:05:02Z 7def9b11da6f94c2a7b3cf8508056aa144f21855
             # Run/artifact head_sha instead names the PR head, so require this checkout proof.
             $proof = [regex]::Match($checkoutLog, '(?m)^.*\blog -1 --format=%H\r?\n[^\r\n]*\b(?<sha>[0-9a-f]{40})\r?$')
             if (-not $proof.Success -or $proof.Groups['sha'].Value -cne $env:TESTED_SOURCE_SHA) {
@@ -119,14 +125,18 @@ jobs:
             }
             @{
               investigationCheckout = $checkout
+              investigationBaseSha = $env:INVESTIGATION_BASE_SHA
               sourceRunId = $env:SOURCE_RUN_ID
               fixHeadSha = $env:FIX_HEAD_SHA
-              sourceBaseSha = $env:SOURCE_BASE_SHA
+              sourceApiBaseSha = $env:SOURCE_API_BASE_SHA
+              testedMainParentSha = $env:TESTED_MAIN_PARENT_SHA
               testedSourceSha = $env:TESTED_SOURCE_SHA
               checkoutProofJobId = $env:SOURCE_CHECKOUT_JOB_ID
               artifacts = @($selected)
             } | ConvertTo-Json -Depth 20 | Set-Content repro-source/provenance.json -Encoding utf8
             "Verified PR head $env:FIX_HEAD_SHA, actual tested merge $env:TESTED_SOURCE_SHA, and all six artifacts from run $env:SOURCE_RUN_ID." |
+              Add-Content $env:GITHUB_STEP_SUMMARY -Encoding utf8
+            "API base metadata: $env:SOURCE_API_BASE_SHA; tested merge main parent: $env:TESTED_MAIN_PARENT_SHA; investigation base: $env:INVESTIGATION_BASE_SHA." |
               Add-Content $env:GITHUB_STEP_SUMMARY -Encoding utf8
           }
           catch {
@@ -188,7 +198,7 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
-      - name: Verify tested checkout and all four fix files
+      - name: Verify tested checkout and unchanged fix and diagnostic files
         id: tested_source
         run: |
           $ErrorActionPreference = 'Stop'
@@ -202,7 +212,11 @@ jobs:
             'extension/src/test-e2e/launchProfiles.e2e.test.ts'
             'extension/src/test/launchProfilesFixture.test.ts'
             'extension/src/test/processArguments.test.ts'
+            'extension/scripts/get-windows-file-lock-owners.ps1'
+            'extension/src/test/windowsFileLockOwners.test.ts'
           )
+          # run-e2e.js and e2eLaunchProfile.test.ts include unrelated main-merge edits.
+          # Execute their exact tested merge versions rather than asserting head equality.
           git diff --exit-code $env:FIX_HEAD_SHA HEAD -- @fixFiles
           New-Item -ItemType Directory -Path $env:REPRO_RESULTS_ROOT -Force | Out-Null
           @{
@@ -1033,12 +1047,14 @@ jobs:
         with:
           name: launch-profiles-repro-${{ matrix.rid }}-runner-${{ matrix.index }}-attempt${{ github.run_attempt }}
           # Preserve the production diagnostic allowlist, under each unique iteration.
+          # Explicitly retain the runner's windows-file-locks.json beside workflow diagnostics.
           # The original paths are included only as a fallback after an archive failure;
           # later iterations then remain not-run so those originals cannot be overwritten.
           path: |
             repro-results/**/result.json
             repro-results/**/runner.log
             repro-results/**/lock-owners.json
+            repro-results/**/extension/.test-results/e2e/launch-profiles/windows-file-locks.json
             repro-results/**/cli-version.txt
             repro-results/**/tested-source.json
             repro-results/**/job-steps.json
@@ -1053,6 +1069,7 @@ jobs:
             repro-results/**/extension/.test-workspaces/**/*.log
             repro-results/**/extension/.test-recordings/**
             extension/.test-results/**
+            extension/.test-results/e2e/launch-profiles/windows-file-locks.json
             extension/.test-storage/**/settings/User/**
             extension/.test-storage/**/settings/logs/**
             extension/.test-storage/**/screenshots/**
