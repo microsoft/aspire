@@ -153,7 +153,8 @@ internal static class SqliteRepositoryTestHelpers
         IKnownPropertyLookup knownPropertyLookup,
         bool readOnly = false,
         bool pooling = false,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        int? maxConsoleLogCount = null)
     {
         var database = new DashboardSqliteDatabase(databasePath, readOnly, pooling);
         try
@@ -163,10 +164,13 @@ internal static class SqliteRepositoryTestHelpers
                 database.InitializeSchemaAsync(cancellationToken: CancellationToken.None).GetAwaiter().GetResult();
             }
 
+            var dashboardOptions = new DashboardOptions();
+            dashboardOptions.Frontend.MaxConsoleLogCount = maxConsoleLogCount ?? dashboardOptions.Frontend.MaxConsoleLogCount;
             var repository = new SqliteResourceRepository(
                 database,
                 knownPropertyLookup,
-                loggerFactory ?? NullLoggerFactory.Instance);
+                loggerFactory ?? NullLoggerFactory.Instance,
+                Options.Create(dashboardOptions));
             return new SqliteRepositoryTestContext<SqliteResourceRepository>(database, repository);
         }
         catch

@@ -243,10 +243,11 @@ public sealed class FrontendOptions
     public string? PublicUrl { get; set; }
 
     /// <summary>
-    /// Gets and sets an optional limit on the number of console log messages to be retained in the viewer.
+    /// Gets and sets the limit on the number of console log messages retained in the viewer and database.
     /// </summary>
     /// <remarks>
-    /// The viewer will retain at most this number of log messages. When the limit is reached, the oldest messages will be removed.
+    /// The viewer retains at most this many messages. The database limit is shared across resources.
+    /// When either limit is exceeded, the oldest messages are removed.
     /// Defaults to 100,000.
     /// </remarks>
     public int MaxConsoleLogCount { get; set; } = 100_000;

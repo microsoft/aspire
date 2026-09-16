@@ -102,6 +102,19 @@ public sealed partial class SqliteResourceRepository
             });
     }
 
+    private static void TrimConsoleLogs(SqliteConnection connection, IDbTransaction transaction, int maxConsoleLogCount)
+    {
+        connection.Execute("""
+            DELETE FROM console_logs
+            WHERE console_log_id IN (
+                SELECT console_log_id
+                FROM console_logs
+                ORDER BY console_log_id
+                LIMIT MAX((SELECT COUNT(*) FROM console_logs) - @MaxConsoleLogCount, 0)
+            );
+            """, new { MaxConsoleLogCount = maxConsoleLogCount }, transaction);
+    }
+
     private static void InsertEnvironment(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
         var rows = resources
