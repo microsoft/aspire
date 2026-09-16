@@ -748,6 +748,7 @@ internal sealed class CapabilityInfo
     public string QualifiedMethodName { get; set; } = "";
     public string? Description { get; set; }
     public DocumentationInfo? Documentation { get; set; }
+    public bool IsExperimental { get; set; }
     public string CapabilityKind { get; set; } = "";
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }

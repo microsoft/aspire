@@ -17,6 +17,9 @@
     <PackageProjectUrl>https://github.com/microsoft/aspire</PackageProjectUrl>
     <WarnOnPackingNonPackableProject>false</WarnOnPackingNonPackableProject>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Keep NuGet Audit warnings visible without failing developer/CI builds.
+         Remove after upgrading to Arcade 11, which supplies this exemption. -->
+    <WarningsNotAsErrors Condition="'$(TreatNuGetAuditWarningsAsErrors)' != 'true'">$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>

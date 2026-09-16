@@ -731,6 +731,7 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('builder.AddProject<Projects.HostedGlobal>("hosted-global")'));
         assert.ok(runner.includes('builder.AddProject<Projects.HostedPerPage>("hosted-per-page")'));
         assert.ok(runner.includes('ASPIRE_EXTENSION_E2E_BROWSER: e2eBrowser'));
+        assert.ok(compactRunner.includes("...(enableBrowserDebuggerE2E && isWindows ? { __COMPAT_LAYER: 'DetectorsAppHealth' } : {}),"));
     });
 
     for (const enableBrowserDebuggerE2E of [false, true]) {

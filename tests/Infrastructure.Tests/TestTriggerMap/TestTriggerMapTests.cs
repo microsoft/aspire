@@ -43,6 +43,23 @@ public sealed class TestTriggerMapTests
         Assert.Equal(1, s_map.Version);
     }
 
+    [Theory]
+    [InlineData("eng/WarningPolicy.proj")]
+    [InlineData("eng/build.ps1")]
+    [InlineData("eng/build.sh")]
+    [InlineData("build.sh")]
+    [InlineData("restore.sh")]
+    public void WarningPolicyChangesSelectAllTests(string path)
+    {
+        var targets = s_map.PathRules
+            .Where(rule => rule.Paths.Any(glob => TestTriggerMap.GlobMatches(glob, path)))
+            .SelectMany(rule => rule.Targets)
+            .Distinct()
+            .ToArray();
+
+        Assert.Equal(["ALL"], targets);
+    }
+
     [Fact]
     public void ExtensionUnitWorkflowChangesSelectUnitAndE2eJobs()
     {
@@ -225,6 +242,27 @@ public sealed class TestTriggerMapTests
         Assert.True(missing.Count == 0,
             $"test projects not in Aspire.slnx (Layer 1 cannot select them, so a production-dependency " +
             $"change would silently skip their tests): {string.Join(", ", missing)}");
+    }
+
+    [Fact]
+    public void ProvisioningProjectsSelectPolyglotJob()
+    {
+        var projects = LoadSolutionProjectPaths()
+            .Where(path => path.StartsWith("src/Aspire.Hosting.Azure.Provisioning", StringComparison.Ordinal))
+            .Select(path => Path.GetFileNameWithoutExtension(path))
+            .ToArray();
+
+        Assert.NotEmpty(projects);
+        Assert.All(projects, project =>
+        {
+            var targets = s_map.AffectedProjectRules
+                .Where(rule => rule.Projects.Any(pattern =>
+                    System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern, project, ignoreCase: false)))
+                .SelectMany(rule => rule.Targets)
+                .ToHashSet(StringComparer.Ordinal);
+
+            Assert.Contains("job:polyglot", targets);
+        });
     }
 
     [Fact]
@@ -640,6 +678,7 @@ public sealed class TestTriggerMapTests
 
         Assert.False(result.SelectsAll);
         Assert.Contains("job:cli-starter-validation", result.Jobs);
+        Assert.Contains(result.JobCauses["job:cli-starter-validation"], cause => cause.Kind == CauseKind.AffectedProject);
     }
 
     [Theory]
@@ -674,6 +713,9 @@ public sealed class TestTriggerMapTests
 
         Assert.False(result.SelectsAll);
         Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains(
+            result.TestCauses["Aspire.Cli.EndToEnd.Tests"],
+            cause => cause.Kind == CauseKind.AffectedProject);
         Assert.Equal(
             ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:winget-installer"],
             result.Jobs.Order(StringComparer.Ordinal));
@@ -757,9 +799,7 @@ public sealed class TestTriggerMapTests
             "Aspire.Hosting.Sdk.Tests");
 
         Assert.False(result.SelectsAll);
-        Assert.Equal(
-            ["job:typescript-api-compat"],
-            result.Jobs.Order(StringComparer.Ordinal));
+        Assert.Empty(result.Jobs);
     }
 
     [Fact]
@@ -1116,11 +1156,20 @@ public sealed class TestTriggerMapTests
             .Select(projectPath => Path.GetFileNameWithoutExtension(projectPath)!)
             .Where(name => name.EndsWith(".Tests", StringComparison.Ordinal))
             .ToHashSet(StringComparer.Ordinal);
+        var testProjectNames = Directory.EnumerateFiles(
+                Path.Combine(RepoRoot.Path, "tests"), "*.csproj", SearchOption.AllDirectories)
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(name => name is not null)
+            .Select(name => name!)
+            .ToHashSet(StringComparer.Ordinal);
+        var affectedTestProjectNames = layer1Affected
+            .Where(testProjectNames.Contains)
+            .ToHashSet(StringComparer.Ordinal);
         var projectDirectories = projectPaths
             .Select(projectPath => Path.GetDirectoryName(projectPath)!.Replace('\\', '/'))
             .ToHashSet(StringComparer.Ordinal);
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, testProjects, projectDirectories);
+        var selector = new TestSelector(mapPath, testProjects, projectDirectories, affectedTestProjectNames);
 
         return selector.Select([path], layer1Affected, new SelectorOptions());
     }

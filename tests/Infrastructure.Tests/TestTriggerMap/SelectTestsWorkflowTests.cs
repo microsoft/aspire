@@ -9,8 +9,8 @@ namespace Infrastructure.Tests.TestTriggerMap;
 /// <summary>
 /// Guards on the CI wiring that surrounds the SelectTests engine but lives in YAML rather than C#:
 /// the <c>run-full-ci</c> label kill switch (computed in <c>.github/workflows/tests.yml</c>, consumed by
-/// <c>.github/actions/select-tests/action.yml</c>) and the selection-comment posting in
-/// <c>tests.yml</c>. Neither is exercised by the CLI tests, yet both are easy to silently regress
+/// <c>.github/actions/select-tests/action.yml</c>), the top-level changed-file skip gate, and the
+/// selection-comment posting in <c>tests.yml</c>. These are not exercised by the CLI tests, yet are easy to silently regress
 /// (loosen the kill switch, or revert the comment to update-in-place), so they are pinned here.
 /// </summary>
 public sealed class SelectTestsWorkflowTests
@@ -153,8 +153,25 @@ public sealed class SelectTestsWorkflowTests
         Assert.DoesNotContain("exit", mergeBaseRegion);
     }
 
+    // The top-level skip gate runs before SelectTests. Git's default rename detection can report only
+    // the destination, so moving compiled source into a skippable baseline-shaped path could otherwise
+    // hide the deleted source and skip the entire CI workflow. Keep both rename sides visible, matching
+    // the selector's own changed-file resolution.
+    [Fact]
+    public void CheckChangedFilesActionDisablesRenameDetection()
+    {
+        var action = File.ReadAllText(CheckChangedFilesActionPath);
+
+        Assert.Contains(
+            "git diff --name-only --no-renames \"$BASE_REF\"...\"$HEAD_REF\"",
+            action);
+    }
+
     private static string SelectTestsActionPath
         => Path.Combine(RepoRoot.Path, ".github", "actions", "select-tests", "action.yml");
+
+    private static string CheckChangedFilesActionPath
+        => Path.Combine(RepoRoot.Path, ".github", "actions", "check-changed-files", "action.yml");
 
     private static string TestsWorkflowPath
         => Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml");
