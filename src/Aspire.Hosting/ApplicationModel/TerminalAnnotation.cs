@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Hosting.Terminals;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -93,7 +94,7 @@ internal sealed class TerminalAnnotation : IResourceAnnotation
 /// <summary>
 /// Options for configuring a terminal session.
 /// </summary>
-[Experimental("ASPIRETERMINAL001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public sealed class TerminalOptions
 {
     private int _columns = 132;

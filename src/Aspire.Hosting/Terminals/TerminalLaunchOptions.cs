@@ -18,7 +18,7 @@ namespace Aspire.Hosting.Terminals;
 /// };
 /// </code>
 /// </example>
-[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public sealed class TerminalLaunchOptions
 {
     // Start wider than 80x24 so output is not wrapped before a viewer negotiates its size.

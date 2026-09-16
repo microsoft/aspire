@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Utils;
@@ -25,13 +26,39 @@ public class WithTerminalTests : IAsyncLifetime
         Assert.True(typeof(TerminalHostLayout).IsNotPublic);
     }
 
-    [Fact]
-    public void TerminalOptionsIsExperimental()
+    [Theory]
+    [InlineData(typeof(TerminalOptions))]
+    [InlineData(typeof(TerminalService))]
+    [InlineData(typeof(AspireTerminal))]
+    [InlineData(typeof(AspireTerminalKey))]
+    [InlineData(typeof(TerminalLaunchOptions))]
+    [InlineData(typeof(TerminalOwner))]
+    [InlineData(typeof(TerminalPlacement))]
+    [InlineData(typeof(TerminalInteractionOptions))]
+    [InlineData(typeof(TerminalContext))]
+    public void TerminalTypesUseSharedExperimentalDiagnostic(Type terminalType)
     {
-        var attribute = Assert.Single(typeof(TerminalOptions).GetCustomAttributes<ExperimentalAttribute>());
+        var attribute = Assert.Single(terminalType.GetCustomAttributes<ExperimentalAttribute>());
 
         Assert.Equal("ASPIRETERMINAL001", attribute.DiagnosticId);
         Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+    }
+
+    [Theory]
+    [InlineData(typeof(TerminalResourceBuilderExtensions), nameof(TerminalResourceBuilderExtensions.WithTerminal))]
+    [InlineData(typeof(IInteractionService), nameof(IInteractionService.PromptTerminalAsync))]
+    public void TerminalMethodsUseSharedExperimentalDiagnostic(Type declaringType, string methodName)
+    {
+        var methods = declaringType.GetMethods().Where(method => method.Name == methodName).ToArray();
+        Assert.NotEmpty(methods);
+
+        foreach (var method in methods)
+        {
+            var attribute = Assert.Single(method.GetCustomAttributes<ExperimentalAttribute>());
+
+            Assert.Equal("ASPIRETERMINAL001", attribute.DiagnosticId);
+            Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+        }
     }
 
     [Fact]

@@ -13,7 +13,7 @@ namespace Aspire.Hosting.Terminals;
 /// <see cref="TerminalPlacement"/>, which describes where the terminal is currently displayed and can change
 /// over the terminal's life.
 /// </remarks>
-[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public enum TerminalOwner
 {
     /// <summary>

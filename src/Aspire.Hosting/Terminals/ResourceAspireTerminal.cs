@@ -6,7 +6,7 @@ using Hex1b.Automation;
 using Hex1b.Reflow;
 using Microsoft.Extensions.Logging;
 
-#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Terminals;
 

@@ -31,7 +31,7 @@ using DashboardServiceImpl = Aspire.Hosting.Dashboard.DashboardService;
 using Resource = Aspire.Hosting.ApplicationModel.Resource;
 using WriteContext = Microsoft.Extensions.Logging.Testing.WriteContext;
 
-#pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIRETERMINAL001 // Test consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Tests.Dashboard;
 

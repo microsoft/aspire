@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net.Sockets;
 
-#pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIRETERMINAL001 // Test consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Tests.Terminals;
 

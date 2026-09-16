@@ -184,7 +184,7 @@ public interface IInteractionService
     ///     }, cancellationToken);
     /// </code>
     /// </example>
-    [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+    [Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
     Task<InteractionResult<bool>> PromptTerminalAsync(string message, AspireTerminal terminal, TerminalInteractionOptions? options = null, CancellationToken cancellationToken = default);
 }
 
@@ -1018,7 +1018,7 @@ public sealed class ProgressContext
 /// Set <see cref="InteractionOptions.PrimaryButtonText"/> to show a cancel button; by default there is no button.
 /// Secondary and dismiss buttons are not shown. The terminal's lifetime is independent of these options.
 /// </remarks>
-[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public class TerminalInteractionOptions : InteractionOptions
 {
     /// <summary>
@@ -1042,7 +1042,7 @@ public class TerminalInteractionOptions : InteractionOptions
 /// <summary>
 /// Provides cancellation to the work callback of a terminal interaction.
 /// </summary>
-[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public sealed class TerminalContext
 {
     /// <summary>

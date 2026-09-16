@@ -4,20 +4,14 @@
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
-/// Diagnostic ids for the experimental AppHost-owned terminal API.
+/// Diagnostic metadata for the experimental terminal APIs.
 /// </summary>
 internal static class TerminalDiagnostics
 {
     /// <summary>
-    /// Terminals owned by the AppHost process — <see cref="TerminalService"/>, <see cref="AspireTerminal"/>
-    /// and the types they take.
+    /// Shared diagnostic ID for resource terminals, AppHost-owned terminals, and terminal interactions.
     /// </summary>
-    /// <remarks>
-    /// Distinct from <c>ASPIRETERMINAL001</c>, which covers <c>WithTerminal</c> — terminals for DCP-owned
-    /// resource processes. The two are separate features with separate lifetimes and separate transports, so
-    /// suppressing one should not silently opt into the other.
-    /// </remarks>
-    public const string AppHostTerminals = "ASPIRETERMINAL002";
+    public const string DiagnosticId = "ASPIRETERMINAL001";
 
     /// <summary>
     /// The documentation link format shared by Aspire's experimental diagnostics.

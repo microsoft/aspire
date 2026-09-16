@@ -20,7 +20,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
-#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Backchannel;
 

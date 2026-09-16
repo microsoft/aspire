@@ -18,10 +18,13 @@ builder.AddProject<Projects.MyAgent>("agent")
 The dashboard then renders a Hex1b web terminal per replica, and the CLI
 exposes the same session as `aspire terminal agent --replica 0`.
 
+All terminal APIs share the experimental diagnostic `ASPIRETERMINAL001`,
+including `WithTerminal()`, AppHost-owned terminals, and terminal interactions.
+
 ## AppHost-owned terminals
 
 For processes that the AppHost launches directly rather than as resources, use
-the experimental `TerminalService` API (`ASPIRETERMINAL002`).
+the experimental `TerminalService` API (`ASPIRETERMINAL001`).
 `TerminalLaunchOptions` holds the executable, arguments, working directory,
 environment variables, initial grid dimensions, title, and dashboard placement:
 
@@ -29,7 +32,7 @@ environment variables, initial grid dimensions, title, and dashboard placement:
 using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.DependencyInjection;
 
-#pragma warning disable ASPIRETERMINAL002
+#pragma warning disable ASPIRETERMINAL001
 
 var terminalService = app.Services.GetRequiredService<TerminalService>();
 var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
@@ -66,7 +69,7 @@ closing the interaction alone does not dispose the terminal.
 
 `IInteractionService.PromptTerminalAsync` displays one caller-owned terminal in
 a dedicated dialog, following progress-interaction completion and cancellation
-semantics. It is experimental under the same `ASPIRETERMINAL002` diagnostic.
+semantics. It is experimental under the same `ASPIRETERMINAL001` diagnostic.
 The public API uses only Aspire types, not Hex1b types.
 
 ```csharp

@@ -7,7 +7,7 @@ using Hex1b.Automation;
 using Hex1b.Reflow;
 using Microsoft.AspNetCore.InternalTesting;
 
-#pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIRETERMINAL001 // Test consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Tests.Utils;
 

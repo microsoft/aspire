@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 // AppHost-owned terminals and terminal interactions are experimental.
-#pragma warning disable ASPIRETERMINAL002
+#pragma warning disable ASPIRETERMINAL001
 
 namespace Terminals.AppHost;
 

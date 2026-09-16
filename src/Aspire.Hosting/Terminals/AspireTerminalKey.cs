@@ -3,7 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 
-#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Terminals;
 
@@ -16,7 +16,7 @@ namespace Aspire.Hosting.Terminals;
 /// which keeps the mapping under Aspire's control and avoids leaking a third-party enum through
 /// <see cref="AspireTerminal"/>.
 /// </remarks>
-[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public enum AspireTerminalKey
 {
     /// <summary>The Enter key — sends a carriage return.</summary>

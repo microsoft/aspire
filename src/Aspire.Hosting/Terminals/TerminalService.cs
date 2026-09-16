@@ -10,7 +10,7 @@ using Hex1b;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Terminals;
 
@@ -40,7 +40,7 @@ namespace Aspire.Hosting.Terminals;
 /// snapshot while preserving the latest pending request to show the dock.
 /// </para>
 /// </remarks>
-[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public sealed class TerminalService : IAsyncDisposable
 {
     internal const int DefaultDockUpdateBufferCapacity = 64;

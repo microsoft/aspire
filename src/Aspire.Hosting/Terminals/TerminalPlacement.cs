@@ -13,7 +13,7 @@ namespace Aspire.Hosting.Terminals;
 /// <see cref="TerminalOwner"/> values can share a placement, and a terminal can in principle move between
 /// placements without its workload being affected.
 /// </remarks>
-[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public enum TerminalPlacement
 {
     /// <summary>

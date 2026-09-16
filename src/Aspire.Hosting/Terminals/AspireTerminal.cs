@@ -27,7 +27,7 @@ namespace Aspire.Hosting.Terminals;
 /// accepts input or automation. Reopening an ended terminal displays its ended state rather than replaying output.
 /// </para>
 /// </remarks>
-[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public sealed class AspireTerminal : IAsyncDisposable
 {
     internal AspireTerminal(ITerminalBackend backend)

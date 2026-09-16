@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Terminals;
 using Aspire.Shared;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Configuration;
@@ -21,8 +22,6 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class TerminalResourceBuilderExtensions
 {
-    private const string TerminalExperimentalDiagnosticId = "ASPIRETERMINAL001";
-
     /// <summary>
     /// Configures a resource to expose an interactive terminal session.
     /// </summary>
@@ -65,7 +64,7 @@ public static class TerminalResourceBuilderExtensions
     ///     });
     /// </code>
     /// </example>
-    [Experimental(TerminalExperimentalDiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the parameterless withTerminal dispatcher export.")]
     public static IResourceBuilder<T> WithTerminal<T>(this IResourceBuilder<T> builder, Action<TerminalOptions>? configure = null)
         where T : IResource

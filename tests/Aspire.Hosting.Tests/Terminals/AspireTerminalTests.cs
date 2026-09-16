@@ -5,7 +5,7 @@ using System.Reflection;
 using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Utils;
 
-#pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIRETERMINAL001 // Test consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Tests.Terminals;
 
