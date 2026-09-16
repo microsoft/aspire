@@ -6,6 +6,22 @@ public class IntegrationTest1
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
 
+#if (WithAppHostReference)
+    [Fact]
+    public async Task AppHostBuilds()
+    {
+#if (XUnitVersion == "v2")
+        using var cancellationTokenSource = new CancellationTokenSource(DefaultTimeout);
+#else // XunitVersion v3 or v3mtp
+        using var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cancellationTokenSource.CancelAfter(DefaultTimeout);
+#endif
+        var cancellationToken = cancellationTokenSource.Token;
+        var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.GeneratedAppHostProjectType>(cancellationToken);
+
+        await using var app = await appHost.BuildAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
+    }
+#else
     // Instructions:
     // 1. Add a project reference to the target AppHost project, e.g.:
     //
@@ -49,4 +65,5 @@ public class IntegrationTest1
     //     // Assert
     //     Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     // }
+#endif
 }

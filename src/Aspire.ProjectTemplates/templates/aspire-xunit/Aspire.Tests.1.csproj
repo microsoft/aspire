@@ -20,6 +20,12 @@
     <PackageReference Include="xunit.v3" Version="3.0.1" Condition=" $(XUnitVersion) == 'v3mtp' " />
   </ItemGroup>
 
+  <!--#if (WithAppHostReference) -->
+  <ItemGroup>
+    <ProjectReference Include="XmlEncodedAppHostProjectPath" />
+  </ItemGroup>
+
+  <!--#endif -->
   <ItemGroup>
     <Using Include="System.Net" />
     <Using Include="Microsoft.Extensions.DependencyInjection" />

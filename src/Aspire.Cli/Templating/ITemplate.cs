@@ -73,4 +73,4 @@ internal interface ITemplate
     Task<TemplateResult> ApplyTemplateAsync(TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken);
 }
 
-internal sealed record TemplateResult(int ExitCode, string? OutputPath = null);
+internal sealed record TemplateResult(int ExitCode, string? OutputPath = null, string? EditorPath = null);
