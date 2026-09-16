@@ -18,5 +18,10 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "tsx": "^4.21.0"
+  },
+  "overrides": {
+    "qs": "6.16.0",
+    "@opentelemetry/propagator-jaeger": "2.9.0",
+    "@opentelemetry/core": "2.8.0"
   }
 }
