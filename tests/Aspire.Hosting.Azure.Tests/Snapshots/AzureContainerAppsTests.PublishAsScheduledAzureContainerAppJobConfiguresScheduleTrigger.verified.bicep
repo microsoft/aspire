@@ -5,10 +5,14 @@ param env_outputs_azure_container_apps_environment_default_domain string
 
 param env_outputs_azure_container_apps_environment_id string
 
-resource scheduled_job 'Microsoft.App/jobs@2025-07-01' = {
+resource scheduled_job 'Microsoft.App/jobs@2026-07-01' = {
   name: 'scheduled-job'
+  tags: {
+    metadata: 'metadata-value'
+  }
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       triggerType: 'Schedule'
       replicaTimeout: 1800
@@ -16,7 +20,6 @@ resource scheduled_job 'Microsoft.App/jobs@2025-07-01' = {
         cronExpression: '0 0 * * *'
       }
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
@@ -25,8 +28,5 @@ resource scheduled_job 'Microsoft.App/jobs@2025-07-01' = {
         }
       ]
     }
-  }
-  tags: {
-    metadata: 'metadata-value'
   }
 }

@@ -54,6 +54,7 @@ resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'api'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       secrets: [
         {
@@ -110,7 +111,6 @@ resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
         }
       }
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
