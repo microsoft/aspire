@@ -8,7 +8,8 @@
 # PR CI built the merge, not the head: reproduce from that immutable complete source.
 # The copied production setup, Deno action and global.json remain unchanged there.
 # The investigation tree stays at the original fix; only the test checkout includes
-# the published source diagnostics. API base metadata is not the tested merge's parent.
+# the published diagnostics and doctor DCP monitor fix. API base metadata is not the
+# tested merge's parent.
 #
 # Dispatch only after all six pinned source-run artifacts exist:
 # gh workflow run reproduce-flaky-tests.yml --repo microsoft/aspire --ref <investigation-branch>
@@ -25,12 +26,12 @@ permissions:
 
 env:
   INVESTIGATION_BASE_SHA: '221026c4a730f6c891de65359d594722584f2071'
-  SOURCE_RUN_ID: '35035916145'
-  FIX_HEAD_SHA: '851fa2bc9b6f3da436aeb6574e2a15924c506340'
+  SOURCE_RUN_ID: '35134725366'
+  FIX_HEAD_SHA: 'dc0894f1ce06edc7476ab17f7d2a5bc2c3f73089'
   SOURCE_API_BASE_SHA: '867c9ea4be9454d5e05bd41bf69da0ed07261c9c'
-  TESTED_MAIN_PARENT_SHA: '3014db793ac9ea215db590ed44de84d99dc2dbb4'
-  TESTED_SOURCE_SHA: '7def9b11da6f94c2a7b3cf8508056aa144f21855'
-  SOURCE_CHECKOUT_JOB_ID: '104607719797'
+  TESTED_MAIN_PARENT_SHA: '6755259f92a7b1d4107c808aa270583f3f021842'
+  TESTED_SOURCE_SHA: 'ebf8b4be54857fa7975ebed3a0f693cb10b0e57f'
+  SOURCE_CHECKOUT_JOB_ID: '104928405966'
   ITERATIONS_PER_RUNNER: '3'
   EXPECTED_TESTS: '3'
   NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -63,7 +64,7 @@ jobs:
             git merge-base --is-ancestor $env:INVESTIGATION_BASE_SHA HEAD
             # Compare trees, not a merge-base diff: every tracked byte other than this
             # temporary workflow must still match the original investigation base, not
-            # the newer diagnostic head. Test jobs separately pin its complete CI merge.
+            # the newer fix head. Test jobs separately pin its complete CI merge.
             git diff --exit-code $env:INVESTIGATION_BASE_SHA HEAD -- . ':(exclude).github/workflows/reproduce-flaky-tests.yml'
             $checkout = (git rev-parse HEAD).Trim()
 
@@ -77,7 +78,7 @@ jobs:
             }
 
             # PR API base.sha remains 867c9ea... although the tested merge's first parent
-            # is 3014db7.... Validate both independently; never substitute one for the other.
+            # is 6755259.... Validate both independently; never substitute one for the other.
             $commitJson = gh api "repos/$env:GITHUB_REPOSITORY/git/commits/$env:TESTED_SOURCE_SHA"
             $commitJson | Set-Content repro-source/tested-commit.json -Encoding utf8
             $commit = $commitJson | ConvertFrom-Json
@@ -94,8 +95,8 @@ jobs:
             $checkoutLog = gh api "repos/$env:GITHUB_REPOSITORY/actions/jobs/$env:SOURCE_CHECKOUT_JOB_ID/logs" --allow-escape-sequences
             $checkoutLog = ($checkoutLog -join "`n") -replace '\x1b\[[0-?]*[ -/]*[@-~]', ''
             # actions/checkout emits, for example:
-            # 2026-09-15T21:05:02Z [command]"...\git.exe" log -1 --format=%H
-            # 2026-09-15T21:05:02Z 7def9b11da6f94c2a7b3cf8508056aa144f21855
+            # 2026-09-16T18:42:12Z [command]"...\git.exe" log -1 --format=%H
+            # 2026-09-16T18:42:12Z ebf8b4be54857fa7975ebed3a0f693cb10b0e57f
             # Run/artifact head_sha instead names the PR head, so require this checkout proof.
             $proof = [regex]::Match($checkoutLog, '(?m)^.*\blog -1 --format=%H\r?\n[^\r\n]*\b(?<sha>[0-9a-f]{40})\r?$')
             if (-not $proof.Success -or $proof.Groups['sha'].Value -cne $env:TESTED_SOURCE_SHA) {
@@ -214,6 +215,8 @@ jobs:
             'extension/src/test/processArguments.test.ts'
             'extension/scripts/get-windows-file-lock-owners.ps1'
             'extension/src/test/windowsFileLockOwners.test.ts'
+            'src/Aspire.Cli/Utils/EnvironmentChecker/DcpConnectionChecker.cs'
+            'tests/Aspire.Cli.Tests/Utils/DcpConnectionHealthCheckTests.cs'
           )
           # run-e2e.js and e2eLaunchProfile.test.ts include unrelated main-merge edits.
           # Execute their exact tested merge versions rather than asserting head equality.
