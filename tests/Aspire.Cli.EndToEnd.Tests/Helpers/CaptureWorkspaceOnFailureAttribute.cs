@@ -26,45 +26,45 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
 internal sealed class CaptureWorkspaceOnFailureAttribute : BeforeAfterTestAttribute
 {
+    private const string PreserveWorkspaceOnFailureKey = "PreserveWorkspaceOnFailure";
+    private const string WorkspacePathKey = "WorkspacePath";
+
     public override void Before(MethodInfo methodUnderTest, IXunitTest test)
     {
         _ = methodUnderTest;
         _ = test;
 
-        TestContext.Current?.KeyValueStorage["PreserveWorkspaceOnFailure"] = true;
+        TestContext.Current?.KeyValueStorage[PreserveWorkspaceOnFailureKey] = true;
     }
 
     public override void After(MethodInfo methodUnderTest, IXunitTest test)
     {
+        var keyValueStorage = TestContext.Current.KeyValueStorage;
         var workspacePath =
-            TestContext.Current.KeyValueStorage.TryGetValue("WorkspacePath", out var workspaceValue) &&
+            keyValueStorage.TryGetValue(WorkspacePathKey, out var workspaceValue) &&
             workspaceValue is string registeredWorkspacePath
                 ? registeredWorkspacePath
                 : null;
-
-        if (TestContext.Current.TestState?.Result is not TestResult.Failed)
-        {
-            if (workspacePath is not null)
-            {
-                TemporaryWorkspace.ReleasePreservation(workspacePath);
-            }
-
-            return;
-        }
-
-        var testName = $"{test.TestCase.TestClassName}.{methodUnderTest.Name}";
+        var deleteWorkspace = true;
 
         try
         {
+            if (TestContext.Current.TestState?.Result is not TestResult.Failed)
+            {
+                return;
+            }
+
+            var testName = $"{test.TestCase.TestClassName}.{methodUnderTest.Name}";
+
             if (!CliE2ETestHelpers.IsRunningInCI)
             {
                 if (workspacePath is not null)
                 {
                     Console.WriteLine($"Failed test workspace preserved at: {workspacePath}");
-                    TemporaryWorkspace.ReleasePreservation(workspacePath, deleteDirectory: false);
+                    deleteWorkspace = false;
                 }
 
-                foreach (var kvp in TestContext.Current.KeyValueStorage)
+                foreach (var kvp in keyValueStorage)
                 {
                     if (kvp.Key.StartsWith("CapturePath:", StringComparison.Ordinal) &&
                         kvp.Value is string path &&
@@ -95,7 +95,7 @@ internal sealed class CaptureWorkspaceOnFailureAttribute : BeforeAfterTestAttrib
             }
 
             // Capture additional registered paths (e.g., "CapturePath:aspire-home" → ~/.aspire)
-            foreach (var kvp in TestContext.Current.KeyValueStorage)
+            foreach (var kvp in keyValueStorage)
             {
                 if (kvp.Key.StartsWith("CapturePath:", StringComparison.Ordinal) &&
                     kvp.Value is string path &&
@@ -122,10 +122,13 @@ internal sealed class CaptureWorkspaceOnFailureAttribute : BeforeAfterTestAttrib
         }
         finally
         {
-            if (CliE2ETestHelpers.IsRunningInCI && workspacePath is not null)
+            if (workspacePath is not null)
             {
-                TemporaryWorkspace.ReleasePreservation(workspacePath);
+                TemporaryWorkspace.ReleasePreservation(workspacePath, deleteWorkspace);
             }
+
+            keyValueStorage.TryRemove(PreserveWorkspaceOnFailureKey, out _);
+            keyValueStorage.TryRemove(WorkspacePathKey, out _);
         }
     }
 }

@@ -8,7 +8,9 @@ public class TemporaryWorkspaceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Create_PreservesWorkspaceWhenFailureCaptureRequested()
     {
-        TestContext.Current.KeyValueStorage["PreserveWorkspaceOnFailure"] = true;
+        const string preserveWorkspaceOnFailureKey = "PreserveWorkspaceOnFailure";
+        var keyValueStorage = TestContext.Current.KeyValueStorage;
+        keyValueStorage[preserveWorkspaceOnFailureKey] = true;
         var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var workspacePath = workspace.WorkspaceRoot.FullName;
 
@@ -24,8 +26,16 @@ public class TemporaryWorkspaceTests(ITestOutputHelper outputHelper)
         }
         finally
         {
+            keyValueStorage.TryRemove(preserveWorkspaceOnFailureKey, out _);
             TemporaryWorkspace.ReleasePreservation(workspacePath);
         }
+
+        var disposableWorkspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var disposableWorkspacePath = disposableWorkspace.WorkspaceRoot.FullName;
+
+        disposableWorkspace.Dispose();
+
+        Assert.False(Directory.Exists(disposableWorkspacePath));
     }
 
     [Fact]
