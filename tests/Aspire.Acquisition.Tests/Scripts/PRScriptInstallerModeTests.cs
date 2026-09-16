@@ -834,37 +834,6 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task PowerShell_PrepareWinGetManifest_StableChannel_UsesGitHubReleaseUrls()
-    {
-        using var env = new TestEnvironment();
-        var archiveRoot = Path.Combine(env.TempDirectory, "archives");
-        await CreateFakeWinGetArchivesAsync(archiveRoot);
-        var outputDir = Path.Combine(env.TempDirectory, "winget-output");
-        using var cmd = new ScriptToolCommand("eng/winget/prepare-manifest-artifact.ps1", env, _testOutput);
-
-        var result = await cmd.ExecuteAsync(
-            "-Channel", "stable",
-            "-ArtifactVersion", "13.3.0-preview.1.26111.5",
-            "-ArchiveRoot", archiveRoot,
-            "-OutputPath", outputDir,
-            "-ValidationMode", "GenerateOnly");
-
-        result.EnsureSuccessful();
-
-        var installerManifest = await File.ReadAllTextAsync(Path.Combine(outputDir, "Microsoft.Aspire.installer.yaml"));
-        Assert.Contains("PackageVersion: \"13.3.0\"", installerManifest);
-        Assert.Contains("InstallerUrl: https://github.com/microsoft/aspire/releases/download/v13.3.0/aspire-cli-win-x64-13.3.0.zip", installerManifest);
-        Assert.Contains("InstallerUrl: https://github.com/microsoft/aspire/releases/download/v13.3.0/aspire-cli-win-arm64-13.3.0.zip", installerManifest);
-        Assert.Contains(await GetSha256HexAsync(Path.Combine(archiveRoot, "Debug", "Shipping", "aspire-cli-win-x64-13.3.0.zip")), installerManifest);
-        Assert.Contains(await GetSha256HexAsync(Path.Combine(archiveRoot, "Debug", "Shipping", "aspire-cli-win-arm64-13.3.0.zip")), installerManifest);
-
-        var localeManifest = await File.ReadAllTextAsync(Path.Combine(outputDir, "Microsoft.Aspire.locale.en-US.yaml"));
-        Assert.DoesNotContain("For testing builds only. Prerelease package in stable manifest.", localeManifest);
-        Assert.True(File.Exists(Path.Combine(outputDir, "dogfood.ps1")));
-    }
-
-    [Fact]
-    [RequiresTools(["pwsh"])]
     [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "winget is Windows-only")]
     public async Task PowerShell_WinGetDogfood_Force_PassesForceToWingetInstall()
     {

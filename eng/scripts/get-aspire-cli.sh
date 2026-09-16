@@ -804,22 +804,19 @@ normalize_stable_version() {
 }
 
 get_latest_stable_version() {
-    local release_url="https://api.github.com/repos/microsoft/aspire/releases/latest"
-    local release_json
-    release_json=$(mktemp -t aspire-cli-latest-release-XXXXXXXX)
+    local release_url="https://github.com/microsoft/aspire/releases/latest"
+    local headers
 
-    if ! secure_curl "$release_url" "$release_json" 60 "$USER_AGENT" 3 "GET" >/dev/null; then
-        rm -f "$release_json"
-        say_error "Failed to resolve the latest stable Aspire release from $release_url"
+    if ! headers=$(secure_curl "$release_url" /dev/null 60 "$USER_AGENT" 3 "HEAD"); then
         return 1
     fi
 
     local tag_name
-    tag_name=$(sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$release_json" | head -n 1)
-    rm -f "$release_json"
+    tag_name=$(printf "%s\n" "$headers" | awk 'tolower($1) == "location:" { url = $2 } END { sub(/\r$/, "", url); print url }')
+    tag_name="${tag_name##*/}"
 
     if [[ -z "$tag_name" ]] || ! is_stable_version "$tag_name"; then
-        say_error "GitHub latest release did not contain a stable Aspire version."
+        say_error "GitHub latest release redirect did not contain a stable Aspire version."
         return 1
     fi
 
@@ -1012,7 +1009,8 @@ download_and_install_archive() {
 
     if [[ -z "$effective_version" && "$QUALITY" == "release" && "$DRY_RUN" != true ]]; then
         if ! effective_version=$(get_latest_stable_version); then
-            return 1
+            say_warn "Failed to resolve the latest stable Aspire release. Falling back to the stable channel URL."
+            effective_version=""
         fi
     fi
 

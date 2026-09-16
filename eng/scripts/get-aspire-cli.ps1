@@ -1115,22 +1115,16 @@ function Get-LatestStableVersion {
     [OutputType([string])]
     param()
 
-    $releaseUrl = "https://api.github.com/repos/microsoft/aspire/releases/latest"
-    $response = Invoke-SecureWebRequest -Uri $releaseUrl -TimeoutSec 60 -OperationTimeoutSec 30 -MaxRetries 3
-    $content = if ($response -is [string]) {
-        $response
-    }
-    elseif ($response.PSObject.Properties.Name -contains "Content") {
-        $response.Content
-    }
-    else {
-        $response | ConvertTo-Json -Compress
+    $releaseUrl = "https://github.com/microsoft/aspire/releases/latest"
+    $response = Invoke-SecureWebRequest -Uri $releaseUrl -Method "Head" -TimeoutSec 60 -OperationTimeoutSec 30 -MaxRetries 3
+    $releaseUri = $response.BaseResponse.ResponseUri
+    if ($null -eq $releaseUri) {
+        throw "GitHub latest release redirect did not provide a destination URL."
     }
 
-    $release = $content | ConvertFrom-Json
-    $tagName = $release.tag_name
+    $tagName = $releaseUri.Segments[-1]
     if ([string]::IsNullOrWhiteSpace($tagName) -or -not (Test-StableVersion -Version $tagName)) {
-        throw "GitHub latest release did not contain a stable Aspire version."
+        throw "GitHub latest release redirect did not contain a stable Aspire version."
     }
 
     return ConvertTo-StableVersion -Version $tagName
@@ -1291,7 +1285,12 @@ function Install-AspireCli {
         $extension = if ($targetOS -eq "win") { "zip" } else { "tar.gz" }
         $effectiveVersion = $Version
         if ([string]::IsNullOrWhiteSpace($effectiveVersion) -and $Quality -eq "release" -and -not $WhatIfPreference) {
-            $effectiveVersion = Get-LatestStableVersion
+            try {
+                $effectiveVersion = Get-LatestStableVersion
+            }
+            catch {
+                Write-Message "Failed to resolve the latest stable Aspire release. Falling back to the stable channel URL." -Level Warning
+            }
         }
         $urls = Get-AspireCliUrl -Version $effectiveVersion -Quality $Quality -RuntimeIdentifier $runtimeIdentifier -Extension $extension
         $downloadSource = $null

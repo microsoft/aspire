@@ -120,6 +120,54 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task DefaultReleaseInstall_FallsBackToStableChannelWhenReleaseResolutionFails()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            function Get-LatestStableVersion { throw 'Release resolution failed.' }
+            function Invoke-FileDownload {
+                param(
+                    [string]$Uri,
+                    [string]$OutputPath,
+                    [int]$TimeoutSec,
+                    [int]$OperationTimeoutSec,
+                    [int]$MaxRetries
+                )
+                Add-Content -Path '{{capturePath}}' -Value $Uri
+                Set-Content -Path $OutputPath -Value 'fake'
+            }
+            function Test-FileChecksum {}
+            function Expand-AspireCliArchive {
+                param(
+                    [string]$ArchiveFile,
+                    [string]$DestinationPath,
+                    [string]$OS
+                )
+                New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
+                Set-Content -Path (Join-Path $DestinationPath 'aspire') -Value ''
+            }
+            Install-AspireCli -InstallPath '{{installPath}}' -Quality 'release' -OS 'linux' -Architecture 'x64' | Out-Null
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz",
+                "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
+    [Fact]
     public async Task AllMainParameters_ShownInHelp()
     {
         using var env = new TestEnvironment();

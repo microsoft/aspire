@@ -145,7 +145,9 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
             s_releaseScript,
             """
             secure_curl() {
-                printf '{"tag_name":"v13.5.4"}' > "$2"
+                [[ "$1" == "https://github.com/microsoft/aspire/releases/latest" ]]
+                [[ "$6" == "HEAD" ]]
+                printf 'HTTP/2 302\r\nlocation: https://github.com/microsoft/aspire/releases/tag/v13.5.4\r\n\r\nHTTP/2 200\r\n'
             }
             get_latest_stable_version
             """,

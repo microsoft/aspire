@@ -144,7 +144,18 @@ public class ReleaseScriptPSFunctionTests(ITestOutputHelper testOutput)
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
             """
-            function Invoke-SecureWebRequest { '{"tag_name":"v13.5.4"}' }
+            function Invoke-SecureWebRequest {
+                param([string]$Uri, [string]$Method)
+                if ($Uri -ne 'https://github.com/microsoft/aspire/releases/latest' -or $Method -ne 'Head') {
+                    throw 'Unexpected release request.'
+                }
+
+                [PSCustomObject]@{
+                    BaseResponse = [PSCustomObject]@{
+                        ResponseUri = [Uri]'https://github.com/microsoft/aspire/releases/tag/v13.5.4'
+                    }
+                }
+            }
             Get-LatestStableVersion
             """,
             env,
