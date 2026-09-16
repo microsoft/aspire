@@ -25,6 +25,31 @@ aspire --help
 
 The npm package installs a small JavaScript `aspire` launcher. The native platform packages are installed through npm optional dependencies. The launcher selects the package that matches your OS, CPU, and Linux libc. Do not install this package with optional dependencies disabled, or installation fails because the launcher cannot find the native CLI binary.
 
+## Shell completion
+
+After a global install, the `aspire` command can generate Bash, Zsh, Fish, or
+PowerShell 7+ completion scripts. For example, enable completion in the current
+PowerShell session:
+
+```powershell
+aspire completions script pwsh | Out-String | Invoke-Expression
+```
+
+See [shell completion setup and removal](https://github.com/microsoft/aspire/blob/main/src/Aspire.Cli/README.md#shell-completion)
+for every supported shell and persistent registration.
+
+npm installation deliberately does not edit shell profiles. Its postinstall hook
+only checks the native package; completion setup also works with lifecycle scripts
+disabled. Hooks query `aspire` on PATH rather than pinning a versioned npm cache
+path, so they follow the active global install when it is updated.
+
+Local installs and `npx`/`npm exec` do not put `aspire` permanently on the parent
+shell's PATH. These scripts do not complete the outer `npx` or `npm exec` command.
+Use a global install for persistent `aspire` completion, or keep a local setup
+scoped to a session where the intended `node_modules/.bin` is on PATH.
+Remove your completion registration separately when uninstalling; npm does not
+provide an uninstall lifecycle hook.
+
 ## Release notes
 
 This package contains Aspire CLI version `__VERSION__`.
