@@ -1,4 +1,5 @@
-﻿[  
+﻿[
+  
 PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 =====================================
 
