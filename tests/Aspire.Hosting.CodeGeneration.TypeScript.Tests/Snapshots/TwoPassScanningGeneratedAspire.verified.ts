@@ -57340,3 +57340,4 @@ registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hos
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource', (handle, client) => new TestPromiseCollisionResourceImpl(handle as ITestPromiseCollisionResourceHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise', (handle, client) => new TestPromiseCollisionResourcePromiseImpl(handle as ITestPromiseCollisionResourcePromiseHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource', (handle, client) => new TestVaultResourceImpl(handle as TestVaultResourceHandle, client));
+
