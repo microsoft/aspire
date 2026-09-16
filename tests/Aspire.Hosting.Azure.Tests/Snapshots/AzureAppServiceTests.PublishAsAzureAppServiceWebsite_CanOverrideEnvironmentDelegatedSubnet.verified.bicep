@@ -36,7 +36,7 @@ resource mainContainer 'Microsoft.Web/sites/sitecontainers@2025-03-01' = {
 
 @onlyIfNotExists()
 resource webapp 'Microsoft.Web/sites@2025-03-01' = {
-  name: take('${toLower('api')}-${uniqueString(resourceGroup().id)}', 60)
+  name: '${take(toLower('api'), 46)}-${uniqueString(toLower('api'), resourceGroup().id)}'
   location: location
   properties: {
     serverFarmId: env_outputs_planid
@@ -219,3 +219,5 @@ resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
   }
   parent: webapp
 }
+
+output name string = '${take(toLower('api'), 46)}-${uniqueString(toLower('api'), resourceGroup().id)}'

@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param userPrincipalId string = ''
@@ -44,8 +44,6 @@ resource env_asplan 'Microsoft.Web/serverfarms@2025-03-01' = {
 output name string = env_asplan.name
 
 output planId string = env_asplan.id
-
-output webSiteSuffix string = uniqueString(resourceGroup().id)
 
 output AZURE_CONTAINER_REGISTRY_NAME string = env_acr.name
 
