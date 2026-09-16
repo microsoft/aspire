@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The scroll-to-bottom button on console logs, structured logs, and traces no longer flashes during initial scroll restoration, hides immediately on click, and reliably reaches the latest content even while native smooth scrolling is still animating.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖱️",
+  "firstMergedAt": "2026-09-16T01:09:20Z",
+  "lastMergedAt": "2026-09-16T01:09:20Z",
+  "name": "Improved dashboard scroll-to-bottom behavior",
+  "owner": "JamesNK",
+  "prs": [
+    20139
+  ]
+}

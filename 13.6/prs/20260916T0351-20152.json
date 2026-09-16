@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Fixed Edge __COMPAT_LAYER env var breaking browser debugging (copilot-swe-agent exception)",
+  "mergedAt": "2026-09-16T03:51:53Z",
+  "number": 20152,
+  "runDate": "2026-09-16T06:07:36Z",
+  "status": "included",
+  "title": "Prevent Edge compatibility relaunch from breaking browser debugging"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Show incompatible dashboard runs as disabled instead of hidden",
+  "mergedAt": "2026-09-16T04:26:39Z",
+  "number": 20082,
+  "runDate": "2026-09-16T06:07:36Z",
+  "status": "included",
+  "title": "Show incompatible dashboard runs as disabled"
+}

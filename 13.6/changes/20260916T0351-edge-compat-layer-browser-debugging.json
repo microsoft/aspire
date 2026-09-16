@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a VS Code issue where an inherited __COMPAT_LAYER environment variable could cause Edge to replace its initial process during Debug in Browser, leaving the browser stuck at about:blank instead of launching correctly.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-09-16T03:51:53Z",
+  "lastMergedAt": "2026-09-16T03:51:53Z",
+  "name": "Fixed Edge compatibility layer breaking browser debugging",
+  "owner": "adamint",
+  "prs": [
+    20152
+  ]
+}

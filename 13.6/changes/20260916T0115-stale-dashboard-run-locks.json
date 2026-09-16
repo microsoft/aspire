@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The dashboard now cleans up abandoned run lock files left behind by an interrupted process, preventing stale locks from lingering indefinitely while active locks and unrelated files remain untouched.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-09-16T01:15:29Z",
+  "lastMergedAt": "2026-09-16T01:15:29Z",
+  "name": "Clean up stale dashboard run locks",
+  "owner": "JamesNK",
+  "prs": [
+    20140
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site static-host infra fix (YouTube WebSub subscription); not related to an Aspire product feature",
+  "mergedAt": "2026-09-16T04:20:34Z",
+  "number": 1674,
+  "runDate": "2026-09-16T06:07:36Z",
+  "status": "excluded",
+  "title": "Fix YouTube WebSub topic and back off subscription failures"
+}

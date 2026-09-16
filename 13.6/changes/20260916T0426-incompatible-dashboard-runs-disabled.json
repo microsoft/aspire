@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard run selector now shows runs with an incompatible schema version as disabled items instead of hiding them, with a tooltip explaining why and the ability to pin them before retention removes them.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚫",
+  "firstMergedAt": "2026-09-16T04:26:39Z",
+  "lastMergedAt": "2026-09-16T04:26:39Z",
+  "name": "Show incompatible dashboard runs as disabled",
+  "owner": "JamesNK",
+  "prs": [
+    20082
+  ]
+}

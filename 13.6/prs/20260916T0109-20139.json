@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improved dashboard scroll-to-bottom button behavior",
+  "mergedAt": "2026-09-16T01:09:20Z",
+  "number": 20139,
+  "runDate": "2026-09-16T06:07:36Z",
+  "status": "included",
+  "title": "Improve dashboard scroll-to-bottom behavior and lifecycle"
+}
