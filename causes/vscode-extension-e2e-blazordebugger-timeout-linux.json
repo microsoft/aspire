@@ -1,0 +1,20 @@
+{
+  "id": "vscode-extension-e2e-blazordebugger-timeout-linux",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension Blazor browser debugger E2E tests fail with websocket proxy launch failure and WASM root session timeouts on Linux",
+  "test_name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone / hosted-global / hosted-per-page",
+  "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+  "error_pattern": "Error: Blazor debugger launch failed: ... \"Unable to launch browser: \\\"Could not open ws://localhost:43999/_framework/debug/ws-proxy?browser=ws%3A%2F%2F127.0.0.1...\\\"\"; and Error: Timed out after ~299600ms waiting for Blazor WASM root session for resource 'hosted-global'/'hosted-per-page'. Last error: <none>.",
+  "analysis": "The PR only modifies Aspire.Dashboard Razor/CSS files and Directory.Packages.props; it does not touch the VS Code extension, Blazor debug adapter, or the WASM debugging proxy code exercised by these tests. All three failures in this job are timing/connectivity issues establishing the Chrome DevTools websocket proxy or waiting (up to 5 minutes) for a WASM debug session to attach, consistent with flaky CI environment/browser-launch timing rather than a functional regression caused by the PR.",
+  "failure_details": "Failed to apply E2E control revision 1789583483915: Error: Blazor debugger launch failed: {\"seq\":11,\"type\":\"response\",\"request_seq\":2,\"command\":\"launch\",\"success\":false,\"body\":{\"error\":{\"id\":9240,\"format\":\"Unable to launch browser: \\\"Could not open ws://localhost:43999/_framework/debug/ws-proxy?browser=ws%3A%2F%2F127.0.0.1%3A41015%2Fdevtools%2Fbrowser%2F6b0247f0-58bb-4258-92c6-4665d94a07cc\\\"\",\"showUser\":true}}}\n\nFailed to apply E2E control revision 1789583483918: Error: Timed out after 299646ms waiting for Blazor WASM root session for resource 'hosted-global'. Last error: <none>.\n\nFailed to apply E2E control revision 1789583483921: Error: Timed out after 299592ms waiting for Blazor WASM root session for resource 'hosted-per-page'. Last error: <none>.\n\nStack frames reference out/test-e2e/test-e2e/browserDebugger.e2e.test.js:170, helpers.js:52 (proveBlazorScenario), fixtures.js:167 (executeE2eControlCommand), assertions.js:355 (applyE2eControl).",
+  "occurrences": [
+    {
+      "run_id": 35132956836,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35132956836",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "pr_number": 20176,
+      "observed_at": "2026-09-16T18:52:33Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20184"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "vscode-extension-e2e-dynamicdebug-ebusy-teardown-windows",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension dynamic debug configuration E2E teardown fails with EBUSY resource busy/locked on Windows",
+  "test_name": "Aspire dynamic debug configuration E2E \"after each\" hook for \"re-resolves the selected AppHost by dynamic configuration name in duplicate-alias workspaces\"",
+  "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+  "error_pattern": "AggregateError: Dynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-YUBZdw\\workspace\\.e2e-dynamic-debug\\first'\n    at runE2eTeardown (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:217:15)",
+  "analysis": "The PR only modifies Aspire.Dashboard Razor/CSS files and Directory.Packages.props; it does not touch the VS Code extension or its E2E test fixtures/teardown code. The failure is a Windows-specific file-locking race condition (EBUSY on rmdir) during test fixture teardown, a known class of flaky/environmental issue on Windows where antivirus/file-indexing or a lingering child process briefly holds a handle on the temp workspace directory being removed. This is unrelated to the PR's Dashboard UI changes.",
+  "failure_details": "AggregateError: Dynamic debug configuration E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-YUBZdw\\workspace\\.e2e-dynamic-debug\\first'\n    at runE2eTeardown (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:217:15)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\dynamicDebugConfiguration.e2e.test.js:62:9)\n\nAnnotation: failure: Process completed with exit code 1.",
+  "occurrences": [
+    {
+      "run_id": 35132956836,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35132956836",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 20176,
+      "observed_at": "2026-09-16T18:52:33Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20185"
+}
