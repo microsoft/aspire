@@ -1,0 +1,350 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+#pragma warning disable ASPIREINTERACTION001 // IInteractionService is experimental.
+#pragma warning disable ASPIREPERSISTENCE001 // Persistence annotations are used to reject unsupported persistent implicit target selection.
+
+using System.Collections.Concurrent;
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Maui.Annotations;
+using Aspire.Hosting.Maui.Utilities;
+using Microsoft.Extensions.Logging;
+
+namespace Aspire.Hosting.Maui.Lifecycle;
+
+/// <summary>
+/// Selects a MAUI Android emulator or iOS simulator before the resource starts.
+/// </summary>
+internal sealed class MauiEmulatorSelectionEventSubscriber(
+    IInteractionService interactionService,
+    ResourceNotificationService notificationService,
+    ResourceLoggerService loggerService,
+    ILogger<MauiEmulatorSelectionEventSubscriber> logger) : IDistributedApplicationEventingSubscriber
+{
+    private static readonly ResourceStateSnapshot s_canceledState = new(KnownResourceStates.Exited, KnownResourceStateStyles.Warn);
+
+    internal Func<ILogger, CancellationToken, Task<IReadOnlyList<EmulatorOption>>>? AndroidEnumeratorOverride { get; set; }
+    internal Func<ILogger, CancellationToken, Task<IReadOnlyList<EmulatorOption>>>? IOSSimulatorEnumeratorOverride { get; set; }
+    internal Func<string, ILogger, CancellationToken, Task<string>>? EnsureAndroidEmulatorRunningOverride { get; set; }
+
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _androidEmulatorStartLocks = new(StringComparer.Ordinal);
+
+    public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
+    {
+        if (executionContext.IsRunMode)
+        {
+            eventing.Subscribe<BeforeResourceStartedEvent>(OnBeforeResourceStartedAsync);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task OnBeforeResourceStartedAsync(BeforeResourceStartedEvent @event, CancellationToken cancellationToken)
+    {
+        if (!@event.Resource.TryGetLastAnnotation<SelectedEmulatorAnnotation>(out var selection))
+        {
+            return;
+        }
+
+        var attemptId = unchecked(selection.AttemptId + 1);
+        selection.AttemptId = attemptId;
+        selection.SelectedId = null;
+
+        var resource = @event.Resource;
+        var resourceLogger = loggerService.GetLogger(resource);
+
+        try
+        {
+            if (HasPersistentLifetime(resource))
+            {
+                ThrowPersistentImplicitSelectionNotSupported(selection.TargetKind);
+            }
+
+            var options = await EnumerateTargetsAsync(selection.TargetKind, cancellationToken).ConfigureAwait(false);
+
+            if (options.Count == 0)
+            {
+                ThrowNoTargetsFound(selection.TargetKind, resourceLogger);
+            }
+
+            var selectedId = options.Count == 1
+                ? options[0].Id
+                : await PromptForTargetAsync(selection, options, cancellationToken).ConfigureAwait(false);
+
+            var selectedOption = options.First(option => string.Equals(option.Id, selectedId, StringComparison.Ordinal));
+            resourceLogger.LogInformation("Selected {DisplayName}.", selectedOption.DisplayName);
+
+            selection.SelectedId = selection.TargetKind switch
+            {
+                MauiTargetSelectionKind.AndroidEmulator => await EnsureAndroidEmulatorRunningAsync(selectedId, resourceLogger, cancellationToken).ConfigureAwait(false),
+                MauiTargetSelectionKind.IOSSimulator => selectedId,
+                _ => selectedId
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            resourceLogger.LogInformation("{TargetName} selection was canceled.", GetTargetName(selection.TargetKind));
+            _ = OverrideCanceledSelectionStateAsync(resource, selection, attemptId, resourceLogger, CancellationToken.None);
+            throw;
+        }
+    }
+
+    private async Task<IReadOnlyList<EmulatorOption>> EnumerateTargetsAsync(MauiTargetSelectionKind targetKind, CancellationToken cancellationToken)
+    {
+        return targetKind switch
+        {
+            MauiTargetSelectionKind.AndroidEmulator => AndroidEnumeratorOverride is not null
+                ? await AndroidEnumeratorOverride(logger, cancellationToken).ConfigureAwait(false)
+                : await AndroidEmulatorEnumerator.GetAvailableEmulatorsAsync(logger, cancellationToken).ConfigureAwait(false),
+
+            MauiTargetSelectionKind.IOSSimulator => IOSSimulatorEnumeratorOverride is not null
+                ? await IOSSimulatorEnumeratorOverride(logger, cancellationToken).ConfigureAwait(false)
+                : await IOSSimulatorEnumerator.GetAvailableSimulatorsAsync(logger, cancellationToken).ConfigureAwait(false),
+
+            _ => []
+        };
+    }
+
+    private async Task<string> PromptForTargetAsync(
+        SelectedEmulatorAnnotation selection,
+        IReadOnlyList<EmulatorOption> options,
+        CancellationToken cancellationToken)
+    {
+        var targetKind = selection.TargetKind;
+        if (!interactionService.IsAvailable)
+        {
+            throw new DistributedApplicationException(GetNonInteractiveSelectionMessage(targetKind, options));
+        }
+
+        var (title, message, label) = GetPromptStrings(targetKind);
+        var result = await interactionService.PromptInputAsync(
+            title,
+            message,
+            new InteractionInput
+            {
+                Name = "target",
+                InputType = InputType.Choice,
+                Label = label,
+                Required = true,
+                Options = options.Select(option => KeyValuePair.Create(option.Id, option.DisplayName)).ToArray(),
+                Placeholder = "Select a target"
+            },
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (result.Canceled)
+        {
+            throw new OperationCanceledException($"{GetTargetName(targetKind)} selection was canceled.", cancellationToken);
+        }
+
+        var selectedId = result.Data.Value;
+        if (string.IsNullOrWhiteSpace(selectedId) || !options.Any(option => string.Equals(option.Id, selectedId, StringComparison.Ordinal)))
+        {
+            throw new DistributedApplicationException(
+                $"The selected {GetTargetName(targetKind)} value '{selectedId}' is not one of the available targets.");
+        }
+
+        return selectedId;
+    }
+
+    private async Task<string> EnsureAndroidEmulatorRunningAsync(string avdName, ILogger resourceLogger, CancellationToken cancellationToken)
+    {
+        var startLock = _androidEmulatorStartLocks.GetOrAdd(avdName, static _ => new SemaphoreSlim(1, 1));
+        await startLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return EnsureAndroidEmulatorRunningOverride is not null
+                ? await EnsureAndroidEmulatorRunningOverride(avdName, resourceLogger, cancellationToken).ConfigureAwait(false)
+                : await AndroidEmulatorEnumerator.EnsureEmulatorRunningAsync(avdName, resourceLogger, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            startLock.Release();
+        }
+    }
+
+    private static void ThrowPersistentImplicitSelectionNotSupported(MauiTargetSelectionKind targetKind)
+    {
+        var (targetName, explicitTarget) = targetKind switch
+        {
+            MauiTargetSelectionKind.AndroidEmulator => ("Android emulator", "adb serial from 'adb devices'"),
+            MauiTargetSelectionKind.IOSSimulator => ("iOS simulator", "simulator UDID"),
+            _ => ("target", "target identifier")
+        };
+
+        throw new DistributedApplicationException(
+            $"Automatic or interactive {targetName} selection is not supported for persistent resources because the DCP launch specification is created before the resource starts. " +
+            $"Specify the {explicitTarget} explicitly in the AppHost instead.");
+    }
+
+    private static bool HasPersistentLifetime(IResource resource)
+    {
+        return HasPersistentLifetime(resource, []);
+    }
+
+    private static bool HasPersistentLifetime(IResource resource, HashSet<IResource> visitedResources)
+    {
+        if (!visitedResources.Add(resource))
+        {
+            throw new InvalidOperationException($"A circular lifetime reference was detected for resource '{resource.Name}'.");
+        }
+
+        if (resource.TryGetLastAnnotation<PersistenceAnnotation>(out var persistenceAnnotation))
+        {
+            return persistenceAnnotation.Mode switch
+            {
+                PersistenceMode.Persistent or PersistenceMode.ParentProcess => true,
+                PersistenceMode.Resource => persistenceAnnotation.SourceResource is not null && HasPersistentLifetime(persistenceAnnotation.SourceResource, visitedResources),
+                PersistenceMode.Session => false,
+                _ => throw new InvalidOperationException($"Unknown persistence mode '{Enum.GetName(typeof(PersistenceMode), persistenceAnnotation.Mode)}'.")
+            };
+        }
+
+        if (resource.TryGetLastAnnotation<ContainerLifetimeAnnotation>(out var containerLifetimeAnnotation))
+        {
+            return containerLifetimeAnnotation.Lifetime switch
+            {
+                ContainerLifetime.Persistent => true,
+                ContainerLifetime.Session => false,
+                _ => throw new InvalidOperationException($"Unknown container lifetime '{Enum.GetName(typeof(ContainerLifetime), containerLifetimeAnnotation.Lifetime)}'.")
+            };
+        }
+
+        return false;
+    }
+
+    private static void ThrowNoTargetsFound(MauiTargetSelectionKind targetKind, ILogger resourceLogger)
+    {
+        var (targetName, instructions) = targetKind switch
+        {
+            MauiTargetSelectionKind.AndroidEmulator => (
+                "Android emulators",
+                "Create an Android Virtual Device with Android Studio Device Manager or avdmanager, then start the Aspire resource again. See https://developer.android.com/studio/run/managing-avds."),
+
+            MauiTargetSelectionKind.IOSSimulator => (
+                "iOS simulators",
+                "Install Xcode and an iOS Simulator runtime, then create a simulator in Xcode's Devices and Simulators window. See https://developer.apple.com/documentation/xcode/installing-additional-simulator-runtimes."),
+
+            _ => ("emulators or simulators", "Install the required platform tooling.")
+        };
+
+        resourceLogger.LogError("No {TargetName} found. {Instructions}", targetName, instructions);
+        throw new DistributedApplicationException($"No {targetName} found. {instructions}");
+    }
+
+    private static (string Title, string Message, string Label) GetPromptStrings(MauiTargetSelectionKind targetKind)
+    {
+        return targetKind switch
+        {
+            MauiTargetSelectionKind.AndroidEmulator => (
+                "Select Android Emulator",
+                "Choose which Android emulator to start and run the application on.",
+                "Android emulator"),
+
+            MauiTargetSelectionKind.IOSSimulator => (
+                "Select iOS Simulator",
+                "Choose which iOS simulator to run the application on.",
+                "iOS Simulator"),
+
+            _ => ("Select Target", "Choose which target to use.", "Target")
+        };
+    }
+
+    private static string GetTargetName(MauiTargetSelectionKind targetKind)
+    {
+        return targetKind switch
+        {
+            MauiTargetSelectionKind.AndroidEmulator => "Android emulator",
+            MauiTargetSelectionKind.IOSSimulator => "iOS simulator",
+            _ => "target"
+        };
+    }
+
+    private static string GetNonInteractiveSelectionMessage(MauiTargetSelectionKind targetKind, IReadOnlyList<EmulatorOption> options)
+    {
+        var availableTargets = string.Join(", ", options.Select(option => $"{option.DisplayName} ({option.Id})"));
+        return targetKind switch
+        {
+            MauiTargetSelectionKind.AndroidEmulator =>
+                "Multiple Android emulators are available, but interactive selection is not available. " +
+                "Start the resource from the Aspire Dashboard to choose an Android Virtual Device, or start the desired emulator manually and pass its adb serial from 'adb devices' to AddAndroidEmulator(...). " +
+                $"Available Android Virtual Devices: {availableTargets}",
+
+            MauiTargetSelectionKind.IOSSimulator =>
+                "Multiple iOS simulators are available, but interactive selection is not available. " +
+                "Specify the simulator UDID explicitly in the AppHost. " +
+                $"Available iOS simulators: {availableTargets}",
+
+            _ =>
+                "Multiple targets are available, but interactive selection is not available. " +
+                $"Available targets: {availableTargets}"
+        };
+    }
+
+    private async Task OverrideCanceledSelectionStateAsync(
+        IResource resource,
+        SelectedEmulatorAnnotation selection,
+        int attemptId,
+        ILogger resourceLogger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await PublishCanceledSelectionStateAsync(resource, selection, attemptId).ConfigureAwait(false);
+
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(10));
+                await notificationService.WaitForResourceAsync(
+                    resource.Name,
+                    e => string.Equals(e.Snapshot.State?.Text, KnownResourceStates.FailedToStart, StringComparison.Ordinal),
+                    cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // DCP can race with the cancellation path. If FailedToStart is not observed,
+                // publish the canceled state anyway so prompt dismissal does not look like a crash.
+            }
+
+            await PublishCanceledSelectionStateAsync(resource, selection, attemptId).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            resourceLogger.LogDebug(ex, "Failed to override state to Exited for canceled target selection on resource '{ResourceName}'.", resource.Name);
+        }
+    }
+
+    private Task PublishCanceledSelectionStateAsync(IResource resource, SelectedEmulatorAnnotation selection, int attemptId)
+    {
+        return notificationService.PublishUpdateAsync(resource, s =>
+        {
+            if (selection.AttemptId != attemptId || selection.SelectedId is not null)
+            {
+                return s;
+            }
+
+            if (!IsCanceledSelectionState(s.State?.Text))
+            {
+                return s;
+            }
+
+            return s with
+            {
+                State = s_canceledState,
+                StartTimeStamp = null,
+                StopTimeStamp = null,
+                ExitCode = null
+            };
+        });
+    }
+
+    private static bool IsCanceledSelectionState(string? state)
+    {
+        return state is null ||
+            string.Equals(state, KnownResourceStates.Starting, StringComparison.Ordinal) ||
+            string.Equals(state, KnownResourceStates.FailedToStart, StringComparison.Ordinal);
+    }
+}
