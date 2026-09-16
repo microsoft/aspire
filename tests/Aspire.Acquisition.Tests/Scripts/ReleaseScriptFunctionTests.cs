@@ -145,8 +145,8 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
             s_releaseScript,
             """
             secure_curl() {
-                [[ "$1" == "https://github.com/microsoft/aspire/releases/latest" ]]
-                [[ "$6" == "HEAD" ]]
+                [[ "$1" == "https://github.com/microsoft/aspire/releases/latest" ]] || { echo "unexpected url: $1" >&2; return 1; }
+                [[ "$6" == "HEAD" ]] || { echo "unexpected method: $6" >&2; return 1; }
                 printf 'HTTP/2 302\r\nlocation: https://github.com/microsoft/aspire/releases/tag/v13.5.4\r\n\r\nHTTP/2 200\r\n'
             }
             get_latest_stable_version
@@ -158,6 +158,50 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Equal("13.5.4", result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task GetLatestStableVersion_NoRedirect_ReturnsFailure()
+    {
+        // GitHub responding 200 without a Location header (no redirect at all) must fail cleanly
+        // so the caller can fall back to the stable channel URL, rather than misparsing garbage.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            secure_curl() {
+                printf 'HTTP/2 200\r\n\r\n'
+            }
+            get_latest_stable_version
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task GetLatestStableVersion_PrereleaseRedirectTarget_ReturnsFailure()
+    {
+        // A "latest release" redirect that unexpectedly points at a prerelease tag must be rejected,
+        // not passed through as a stable version.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            secure_curl() {
+                printf 'HTTP/2 302\r\nlocation: https://github.com/microsoft/aspire/releases/tag/v13.6.0-preview.1\r\n\r\n'
+            }
+            get_latest_stable_version
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
     }
 
     [Theory]

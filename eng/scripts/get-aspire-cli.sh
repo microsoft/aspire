@@ -807,7 +807,11 @@ get_latest_stable_version() {
     local release_url="https://github.com/microsoft/aspire/releases/latest"
     local headers
 
-    if ! headers=$(secure_curl "$release_url" /dev/null 60 "$USER_AGENT" 3 "HEAD"); then
+    # Resolution failures here are always non-fatal (the caller falls back to the existing
+    # aka.ms stable-channel URL), so suppress curl's own error output and only surface a
+    # verbose-level message instead of a user-visible "Error:" line.
+    if ! headers=$(secure_curl "$release_url" /dev/null 15 "$USER_AGENT" 1 "HEAD" 2>/dev/null); then
+        say_verbose "GitHub latest release redirect could not be resolved."
         return 1
     fi
 
@@ -816,7 +820,7 @@ get_latest_stable_version() {
     tag_name="${tag_name##*/}"
 
     if [[ -z "$tag_name" ]] || ! is_stable_version "$tag_name"; then
-        say_error "GitHub latest release redirect did not contain a stable Aspire version."
+        say_verbose "GitHub latest release redirect did not contain a stable Aspire version."
         return 1
     fi
 

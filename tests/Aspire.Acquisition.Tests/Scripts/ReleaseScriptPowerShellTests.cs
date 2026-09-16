@@ -168,6 +168,81 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task ExplicitVersionInstall_DoesNotCallReleaseResolution()
+    {
+        // Supplying an explicit -Version must be hermetic: it must never trigger the GitHub
+        // "latest release" network resolution, even though Quality stays 'release'.
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            function Get-LatestStableVersion { throw 'should not be called' }
+            function Invoke-FileDownload {
+                param(
+                    [string]$Uri,
+                    [string]$OutputPath,
+                    [int]$TimeoutSec,
+                    [int]$OperationTimeoutSec,
+                    [int]$MaxRetries
+                )
+                Add-Content -Path '{{capturePath}}' -Value $Uri
+                Set-Content -Path $OutputPath -Value 'fake'
+            }
+            function Test-FileChecksum {}
+            function Expand-AspireCliArchive {
+                param(
+                    [string]$ArchiveFile,
+                    [string]$DestinationPath,
+                    [string]$OS
+                )
+                New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
+                Set-Content -Path (Join-Path $DestinationPath 'aspire') -Value ''
+            }
+            Install-AspireCli -InstallPath '{{installPath}}' -Version '13.5.3' -Quality 'release' -OS 'linux' -Architecture 'x64' | Out-Null
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("should not be called", result.Output);
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                "https://github.com/microsoft/aspire/releases/download/v13.5.3/aspire-cli-linux-x64-13.5.3.tar.gz",
+                "https://github.com/microsoft/aspire/releases/download/v13.5.3/aspire-cli-linux-x64-13.5.3.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
+    [Fact]
+    public async Task WhatIf_DoesNotCallReleaseResolution()
+    {
+        // -WhatIf intentionally skips the live "latest release" HEAD request so it stays usable
+        // without network access; it shows the pre-resolution unversioned channel filename
+        // instead of resolving to a specific GitHub release version.
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            function Get-LatestStableVersion { throw 'should not be called' }
+            Install-AspireCli -InstallPath '{{installPath}}' -Quality 'release' -OS 'linux' -Architecture 'x64' -WhatIf
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("should not be called", result.Output);
+        Assert.Contains("aspire-cli-linux-x64.tar.gz", result.Output);
+    }
+
+    [Fact]
     public async Task AllMainParameters_ShownInHelp()
     {
         using var env = new TestEnvironment();

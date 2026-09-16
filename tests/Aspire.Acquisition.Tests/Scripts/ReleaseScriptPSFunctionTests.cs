@@ -138,8 +138,10 @@ public class ReleaseScriptPSFunctionTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
-    public async Task GetLatestStableVersion_ReturnsNormalizedGitHubLatestReleaseTag()
+    public async Task GetLatestStableVersion_ReturnsNormalizedGitHubLatestReleaseTag_WindowsPowerShellResponseShape()
     {
+        // Windows PowerShell 5.1's Invoke-WebRequest wraps System.Net.HttpWebResponse, which exposes
+        // the final (post-redirect) URL via BaseResponse.ResponseUri.
         using var env = new TestEnvironment();
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
@@ -165,6 +167,94 @@ public class ReleaseScriptPSFunctionTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Equal("13.5.4", result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task GetLatestStableVersion_ReturnsNormalizedGitHubLatestReleaseTag_ModernPowerShellResponseShape()
+    {
+        // PowerShell 7+'s Invoke-WebRequest wraps System.Net.Http.HttpResponseMessage, which has no
+        // ResponseUri member at all; the final (post-redirect) URL is only available via
+        // BaseResponse.RequestMessage.RequestUri. Regression test for the PS7 path being dead
+        // (BaseResponse.ResponseUri silently resolving to $null and throwing).
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            function Invoke-SecureWebRequest {
+                param([string]$Uri, [string]$Method)
+                if ($Uri -ne 'https://github.com/microsoft/aspire/releases/latest' -or $Method -ne 'Head') {
+                    throw 'Unexpected release request.'
+                }
+
+                [PSCustomObject]@{
+                    BaseResponse = [PSCustomObject]@{
+                        RequestMessage = [PSCustomObject]@{
+                            RequestUri = [Uri]'https://github.com/microsoft/aspire/releases/tag/v13.5.4'
+                        }
+                    }
+                }
+            }
+            Get-LatestStableVersion
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("13.5.4", result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task GetLatestStableVersion_NoRedirect_Throws()
+    {
+        // A response that never redirected (no ResponseUri, no RequestMessage.RequestUri) must
+        // fail cleanly so the caller can fall back to the stable channel URL.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            function Invoke-SecureWebRequest {
+                param([string]$Uri, [string]$Method)
+                [PSCustomObject]@{
+                    BaseResponse = [PSCustomObject]@{}
+                }
+            }
+            Get-LatestStableVersion
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task GetLatestStableVersion_PrereleaseRedirectTarget_Throws()
+    {
+        // A "latest release" redirect that unexpectedly points at a prerelease tag must be
+        // rejected, not passed through as a stable version.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            function Invoke-SecureWebRequest {
+                param([string]$Uri, [string]$Method)
+                [PSCustomObject]@{
+                    BaseResponse = [PSCustomObject]@{
+                        ResponseUri = [Uri]'https://github.com/microsoft/aspire/releases/tag/v13.6.0-preview.1'
+                    }
+                }
+            }
+            Get-LatestStableVersion
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
     }
 
     [Theory]

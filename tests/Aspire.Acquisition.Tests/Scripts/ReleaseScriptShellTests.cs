@@ -170,6 +170,91 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
             downloads);
     }
 
+    [Fact]
+    public async Task ExplicitVersionInstall_DoesNotCallReleaseResolution()
+    {
+        // Supplying an explicit --version must be hermetic: it must never trigger the
+        // GitHub "latest release" network resolution, even though QUALITY stays 'release'.
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var tempDir = Path.Combine(env.TempDirectory, "download");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        Directory.CreateDirectory(tempDir);
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            INSTALL_PATH='{{installPath}}'
+            VERSION='13.5.3'
+            QUALITY='release'
+            OS='linux'
+            ARCH='x64'
+            DRY_RUN=false
+            get_latest_stable_version() { echo "should not be called" >&2; return 1; }
+            download_file() { printf '%s\n' "$1" >> '{{capturePath}}'; return 0; }
+            validate_checksum() { return 0; }
+            install_archive() {
+                mkdir -p "$2"
+                printf '#!/bin/sh\nexit 0\n' > "$2/aspire"
+                chmod +x "$2/aspire"
+            }
+            download_and_install_archive '{{tempDir}}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("should not be called", result.Output);
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                "https://github.com/microsoft/aspire/releases/download/v13.5.3/aspire-cli-linux-x64-13.5.3.tar.gz",
+                "https://github.com/microsoft/aspire/releases/download/v13.5.3/aspire-cli-linux-x64-13.5.3.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
+    [Fact]
+    public async Task DryRun_DoesNotCallReleaseResolution()
+    {
+        // Dry-run intentionally skips the live "latest release" HEAD request so it stays usable
+        // without network access (e.g. offline previews, corporate proxies); it shows the
+        // pre-resolution aka.ms channel URL instead of the resolved GitHub release URL.
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var tempDir = Path.Combine(env.TempDirectory, "download");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        Directory.CreateDirectory(tempDir);
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            INSTALL_PATH='{{installPath}}'
+            VERSION=''
+            QUALITY='release'
+            OS='linux'
+            ARCH='x64'
+            DRY_RUN=true
+            get_latest_stable_version() { echo "should not be called" >&2; return 1; }
+            download_file() { printf '%s\n' "$1" >> '{{capturePath}}'; return 0; }
+            download_and_install_archive '{{tempDir}}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("should not be called", result.Output);
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz",
+                "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
     [Theory]
     [InlineData("--verbose")]
     [InlineData("-v")]

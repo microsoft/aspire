@@ -1115,9 +1115,21 @@ function Get-LatestStableVersion {
     [OutputType([string])]
     param()
 
+    # This resolution failure is always non-fatal (the caller falls back to the existing aka.ms
+    # stable-channel URL), so keep the timeout/retry budget short rather than adding up to a minute
+    # of dead air in front of a fallback that always succeeds.
     $releaseUrl = "https://github.com/microsoft/aspire/releases/latest"
-    $response = Invoke-SecureWebRequest -Uri $releaseUrl -Method "Head" -TimeoutSec 60 -OperationTimeoutSec 30 -MaxRetries 3
+    $response = Invoke-SecureWebRequest -Uri $releaseUrl -Method "Head" -TimeoutSec 15 -OperationTimeoutSec 10 -MaxRetries 1
+
+    # Invoke-WebRequest exposes the final (post-redirect) URL differently depending on the underlying
+    # HTTP stack: Windows PowerShell 5.1 uses System.Net.HttpWebRequest, whose response type
+    # (HttpWebResponse) exposes it via BaseResponse.ResponseUri. PowerShell 7+ uses
+    # System.Net.Http.HttpClient, whose response type (HttpResponseMessage) has no ResponseUri member
+    # at all, but does expose the final request via BaseResponse.RequestMessage.RequestUri.
     $releaseUri = $response.BaseResponse.ResponseUri
+    if ($null -eq $releaseUri) {
+        $releaseUri = $response.BaseResponse.RequestMessage.RequestUri
+    }
     if ($null -eq $releaseUri) {
         throw "GitHub latest release redirect did not provide a destination URL."
     }
@@ -1289,7 +1301,7 @@ function Install-AspireCli {
                 $effectiveVersion = Get-LatestStableVersion
             }
             catch {
-                Write-Message "Failed to resolve the latest stable Aspire release. Falling back to the stable channel URL." -Level Warning
+                Write-Message "Failed to resolve the latest stable Aspire release ($($_.Exception.Message)). Falling back to the stable channel URL." -Level Warning
             }
         }
         $urls = Get-AspireCliUrl -Version $effectiveVersion -Quality $Quality -RuntimeIdentifier $runtimeIdentifier -Extension $extension
