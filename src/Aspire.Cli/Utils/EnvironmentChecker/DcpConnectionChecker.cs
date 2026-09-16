@@ -8,6 +8,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Shared;
 using Microsoft.AspNetCore.Certificates.Generation;
@@ -234,9 +235,15 @@ internal sealed class DcpConnectionChecker(
 
             try
             {
+                // An editor reload can terminate doctor before its cleanup runs. Bind the probe
+                // to this process identity so DCP still shuts down without relying on disposal.
                 var arguments = new List<string>
                 {
                     "start-apiserver",
+                    "--monitor",
+                    Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
+                    "--monitor-identity-time",
+                    ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(IsolatedProcess.GetCurrentProcessDcpMonitorStartTime()),
                     "--kubeconfig",
                     kubeconfigPath
                 };
