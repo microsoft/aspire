@@ -455,8 +455,7 @@ public class AzureContainerAppEnvironmentResource :
 
         // Create and add new resource if it doesn't exist
         // Even though it's a compound resource, we'll only expose the managed environment
-        var cae = ContainerAppManagedEnvironment.FromExisting(bicepIdentifier,
-            IsExpress ? AzureContainerAppExpressSupport.ResourceVersion : null);
+        var cae = ContainerAppManagedEnvironment.FromExisting(bicepIdentifier);
 
         if (!TryApplyExistingResourceAnnotation(
             this,
