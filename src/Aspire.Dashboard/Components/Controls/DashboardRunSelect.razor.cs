@@ -51,7 +51,7 @@ public partial class DashboardRunSelect : ComponentBase
     {
         var runs = GetSortedRuns(RunStore.GetRuns());
 
-        var menuItems = new List<MenuButtonItem>(runs.Count + 1);
+        var menuItems = new List<MenuButtonItem>();
         foreach (var run in runs)
         {
             var isCompatible = run.IsCompatible;
