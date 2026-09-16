@@ -2,10 +2,10 @@
   "id": "setup-dotnet-core-econnreset",
   "type": "infra-failure",
   "title": "Set up .NET Core step fails with 'read ECONNRESET' network error",
-  "job_name": "Tests / Package tests - Linux (class, Aspire.Templates.Tests, Templates-NUnit_NewUpAndBuildSupportProject... / Templates-NUnit_NewUpAndBuildSupportProjectTemplatesTests (ubuntu-latest)",
+  "job_name": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-NUnit_NewUpAndBuildSupportProje... / Templates-NUnit_NewUpAndBuildSupportProjectTemplatesTests (windows-latest)",
   "error_pattern": "read ECONNRESET (occurs during 'Set up .NET Core' step, likely while downloading the SDK/runtime; transient network reset unrelated to PR content)",
-  "analysis": "Job failed at the 'Set up .NET Core' step with a 'read ECONNRESET' failure annotation, a classic transient network connection reset that occurs while downloading the .NET SDK/runtime. This is unrelated to PR #20140's dashboard-only changes and matches a previously observed recurring infra issue.",
-  "failure_details": "### Annotations: Tests / Package tests - Linux (class, Aspire.Templates.Tests, Templates-NUnit_NewUpAndBuildSupportProject... / Templates-NUnit_NewUpAndBuildSupportProjectTemplatesTests (ubuntu-latest) (104629473630)\n- warning: No files were found with the provided path: **/*.binlog\ntestresults/**\nartifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**\nartifacts/log/test-logs/**. No artifacts will be uploaded.\n- failure: read ECONNRESET\n\nFailed step: Set up .NET Core. Job logs were unavailable: 'Failed to fetch logs for job'.",
+  "analysis": "The failure occurred entirely within the 'Set up .NET Core' setup step, before any test code from the PR could execute. The PR only modifies dashboard CSS/Razor files unrelated to .NET SDK acquisition or Windows template tests. ECONNRESET is a well-known transient network error matching the documented transient failure patterns list.",
+  "failure_details": "Failed Steps: Set up .NET Core\nJob log: (Failed to fetch logs for job 104913419410)\nAnnotations:\n- warning: No files were found with the provided path: **/*.binlog\ntestresults/**\nartifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**\nartifacts/log/test-logs/**. No artifacts will be uploaded.\n- failure: read ECONNRESET",
   "occurrences": [
     {
       "run_id": 34432786645,
@@ -27,6 +27,13 @@
       "job": "Tests / Package tests - Linux (class, Aspire.Templates.Tests, Templates-NUnit_NewUpAndBuildSupportProject... / Templates-NUnit_NewUpAndBuildSupportProjectTemplatesTests (ubuntu-latest)",
       "pr_number": 20140,
       "observed_at": "2026-09-16T02:17:11Z"
+    },
+    {
+      "run_id": 35125246087,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35125246087",
+      "job": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-NUnit_NewUpAndBuildSupportProje... / Templates-NUnit_NewUpAndBuildSupportProjectTemplatesTests (windows-latest)",
+      "pr_number": 20171,
+      "observed_at": "2026-09-16T18:19:25Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20028"
