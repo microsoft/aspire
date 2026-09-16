@@ -285,8 +285,8 @@ The Dashboard applies these default ingestion limits:
 
 | Configuration key | Default | Scope and behavior |
 |-------------------|---------|--------------------|
-| `Dashboard:TelemetryLimits:MaxLogCount` | 10,000 | Structured logs per database |
-| `Dashboard:TelemetryLimits:MaxTraceCount` | 10,000 | Traces per database |
+| `Dashboard:TelemetryLimits:MaxLogCount` | 100,000 | Structured logs per database |
+| `Dashboard:TelemetryLimits:MaxTraceCount` | 100,000 | Traces per database |
 | `Dashboard:TelemetryLimits:MaxMetricsCount` | 50,000 | Metric points per dimension |
 | `Dashboard:TelemetryLimits:MaxAttributeCount` | 128 | Attributes per telemetry item |
 | `Dashboard:TelemetryLimits:MaxAttributeLength` | Unlimited | Attribute value length |
@@ -295,7 +295,7 @@ The Dashboard applies these default ingestion limits:
 
 The oldest logs, traces, and metric points are removed when their limits are exceeded. Fixed limits of 10,000 also apply to resource views per resource, scopes per database, instruments per resource, and dimensions per instrument; additional identities are rejected.
 
-Console logs are persisted only after their stream is viewed or exported. The frontend keeps up to `Dashboard:Frontend:MaxConsoleLogCount` entries in memory, which defaults to 10,000, but persisted console logs are unbounded. Historical runs can therefore omit uncaptured logs or contain many captured logs.
+Console logs are persisted only after their stream is viewed or exported. The frontend keeps up to `Dashboard:Frontend:MaxConsoleLogCount` entries in memory, which defaults to 100,000, but persisted console logs are unbounded. Historical runs can therefore omit uncaptured logs or contain many captured logs.
 
 ### Database file size
 
