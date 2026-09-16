@@ -1154,6 +1154,7 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
+        FluentUISetupHelpers.SetupFluentKeyCode(this);
 
         _messageBarProvider = RenderComponent<FluentMessageBarProvider>(builder =>
         {

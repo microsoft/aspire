@@ -424,7 +424,7 @@
         var trace = _trace;
         Debug.Assert(trace is not null, "Trace should be available here");
 
-        return @<FluentOverflow Class="trace-header-details">
+        return @<FluentOverflow TItem="object" Class="trace-header-details">
             <ChildContent>
                 <div>
                     @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)] <strong title="@FormatHelpers.FormatDateTime(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Full)">@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Truncated)</strong>

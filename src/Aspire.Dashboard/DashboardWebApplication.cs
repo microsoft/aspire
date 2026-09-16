@@ -346,9 +346,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, DashboardSqliteOutgoingPeerResolver>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, BrowserLinkOutgoingPeerResolver>());
 
-        // Temporarily disable the global overlay to prevent its spinner from flashing when dialogs open.
-        // Remove this workaround when https://github.com/microsoft/fluentui-blazor/issues/5282 is fixed.
-        builder.Services.AddFluentUIComponents(configuration => configuration.UseGlobalOverlay = false);
+        builder.Services.AddFluentUIComponents();
         builder.Services.AddScoped<NavigationDialogService>();
         builder.Services.AddScoped<IDialogService>(services => services.GetRequiredService<NavigationDialogService>());
 

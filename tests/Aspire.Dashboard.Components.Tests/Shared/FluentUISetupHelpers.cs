@@ -91,8 +91,8 @@ internal static class FluentUISetupHelpers
 
     public static void SetupFluentKeyCode(TestContext context)
     {
-        var keycodeModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/KeyCode/FluentKeyCode.razor.js"));
-        keycodeModule.Setup<string>("RegisterKeyCode", _ => true);
+        context.JSInterop.Setup<string>("Microsoft.FluentUI.Blazor.Components.KeyCode.RegisterKeyCode", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.KeyCode.UnregisterKeyCode", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentToolbar(TestContext context)

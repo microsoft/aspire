@@ -1,3 +1,7 @@
+fluent-overflow::part(items) {
+    flex-grow: 0;
+}
+
 fluent-button {
     --aspire-button-background: var(--colorNeutralBackground1);
     --aspire-button-foreground: var(--colorNeutralForeground1);
