@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Internal build/CI infrastructure change (NuGet audit configuration), no user-facing effect",
+  "mergedAt": "2026-09-15T21:07:41Z",
+  "number": 20052,
+  "runDate": "2026-09-16T00:12:33Z",
+  "status": "excluded",
+  "title": "Configure NuGet audit sources and non-fatal vulnerability warnings"
+}

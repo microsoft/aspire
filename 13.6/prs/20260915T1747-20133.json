@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Fixed WithProjectDefaults overwriting explicit Kestrel certificate configuration",
+  "mergedAt": "2026-09-15T17:47:00Z",
+  "number": 20133,
+  "runDate": "2026-09-16T00:12:33Z",
+  "status": "included",
+  "title": "Preserve explicit Kestrel certificate configuration"
+}

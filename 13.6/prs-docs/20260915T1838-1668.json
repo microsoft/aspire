@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Release branch sync/merge maintenance, not a documentation content change tied to a product PR",
+  "mergedAt": "2026-09-15T18:38:23Z",
+  "number": 1668,
+  "runDate": "2026-09-16T00:12:33Z",
+  "status": "excluded",
+  "title": "Repair release/13.6 sync with main and published package constants"
+}

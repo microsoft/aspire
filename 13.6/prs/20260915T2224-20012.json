@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal refactoring to thread execution context through Bicep value providers, no observable behavior change",
+  "mergedAt": "2026-09-15T22:24:26Z",
+  "number": 20012,
+  "runDate": "2026-09-16T00:12:33Z",
+  "status": "excluded",
+  "title": "Pass execution context to Bicep parameter value providers"
+}

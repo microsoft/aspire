@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixed SQLite cancellation error surfacing during dashboard metrics read",
+  "mergedAt": "2026-09-15T12:51:04Z",
+  "number": 20007,
+  "runDate": "2026-09-16T00:12:33Z",
+  "status": "included",
+  "title": "Handle SQLite errors during dashboard read cancellation"
+}

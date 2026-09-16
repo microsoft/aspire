@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Internal telemetry CI-detection alignment, not user-facing",
+  "mergedAt": "2026-09-15T22:13:51Z",
+  "number": 20150,
+  "runDate": "2026-09-16T00:12:33Z",
+  "status": "excluded",
+  "title": "Align telemetry CI detection with dotnet CLI"
+}

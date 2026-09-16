@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Docs cleanup for already-shipped pipeline-step APIs; no matching unreleased changelog entry found",
+  "mergedAt": "2026-09-15T16:27:15Z",
+  "number": 1158,
+  "runDate": "2026-09-16T00:12:33Z",
+  "status": "excluded",
+  "title": "Update deployment docs to pipeline-step APIs and remove legacy callback annotation references"
+}

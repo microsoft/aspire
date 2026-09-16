@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents dashboard persistence directory layout change (#20006)",
+  "mergedAt": "2026-09-15T14:54:13Z",
+  "number": 1665,
+  "runDate": "2026-09-16T00:12:33Z",
+  "status": "included",
+  "title": "Update dashboard data persistence documentation"
+}

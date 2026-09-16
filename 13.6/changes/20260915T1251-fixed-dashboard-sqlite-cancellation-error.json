@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Cancelling a dashboard metrics read while a SQLite statement was preparing could surface an unrelated SQLite error instead of a normal cancellation, causing intermittent dashboard metrics failures. Any SQLite failure is now treated as cancellation when the caller's token is already canceled.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛑",
+  "firstMergedAt": "2026-09-15T12:51:04Z",
+  "lastMergedAt": "2026-09-15T12:51:04Z",
+  "name": "Fixed dashboard SQLite cancellation error",
+  "owner": "JamesNK",
+  "prs": [
+    20007
+  ]
+}

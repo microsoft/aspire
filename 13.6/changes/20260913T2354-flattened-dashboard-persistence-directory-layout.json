@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Dashboard persistence now stores all run snapshots directly under a shared `runs` directory instead of nesting them under an application-specific directory, and resume-mode databases move to a shared `resumes` directory. No configuration changes are required, and existing retention, pinning, locking, and run-selection behavior is preserved.",
-  "docsPrs": [],
+  "docsPrs": [
+    1665
+  ],
   "docsRequired": false,
   "emoji": "🗂️",
   "firstMergedAt": "2026-09-13T23:54:13Z",

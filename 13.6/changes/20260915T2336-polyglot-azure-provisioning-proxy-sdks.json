@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Polyglot AppHosts written in TypeScript, Python, Go, and Java can now customize generated Azure infrastructure the same way C# AppHosts do, using new opt-in, integration-specific Azure provisioning proxy packages (Application Insights, Cognitive Services, Container Registry, Cosmos DB, Event Hubs, Key Vault, Operational Insights, Search, Service Bus, SQL, Storage, and Web PubSub). Each `ConfigureInfrastructure` callback exposes Bicep literals, expressions, secure values, and resource references through a bounded, source-generated ATS surface.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧬",
+  "firstMergedAt": "2026-09-15T23:36:21Z",
+  "lastMergedAt": "2026-09-15T23:36:21Z",
+  "name": "Polyglot Azure provisioning proxy SDKs",
+  "owner": "sebastienros",
+  "prs": [
+    19675
+  ]
+}

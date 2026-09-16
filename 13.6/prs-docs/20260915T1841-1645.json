@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Frontend npm dependency security remediation for aspire.dev site, not a product changelog match",
+  "mergedAt": "2026-09-15T18:41:20Z",
+  "number": 1645,
+  "runDate": "2026-09-16T00:12:33Z",
+  "status": "excluded",
+  "title": "[auto-sec] aspire.dev: remediate 12 frontend npm security alerts"
+}
