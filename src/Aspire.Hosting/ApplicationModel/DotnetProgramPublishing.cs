@@ -40,6 +40,8 @@ internal static class DotnetProgramPublishing
                 .ToArray();
             var steps = new List<PipelineStep>();
 
+            ValidatePrebuiltContainerImageConfiguration(stepResource);
+
             if (!stepResource.RequiresImageBuild())
             {
                 return steps;
@@ -98,6 +100,20 @@ internal static class DotnetProgramPublishing
             pushSteps.DependsOn(projectBuildSteps);
             pushSteps.DependsOn(WellKnownPipelineSteps.PushPrereq);
         }));
+    }
+
+    internal static void ValidatePrebuiltContainerImageConfiguration(IResource resource)
+    {
+        if (!resource.IsExcludedFromPublish() &&
+            resource.SupportsDotnetProgramPublishing() &&
+            resource.HasPrebuiltContainerImage() &&
+            resource.HasAnnotationOfType<ContainerFilesDestinationAnnotation>())
+        {
+            throw new DistributedApplicationException(
+                $"The .NET program resource '{resource.Name}' cannot use PublishWithContainerFiles with a prebuilt container image. " +
+                "Prebuilt images are treated as final artifacts and are not rebuilt. Remove the prebuilt image to let Aspire build " +
+                "and layer the resource, or include the requested files in the prebuilt image before publishing.");
+        }
     }
 
     private static async Task BuildImageAsync(

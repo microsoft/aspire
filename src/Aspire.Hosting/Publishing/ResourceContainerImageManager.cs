@@ -302,7 +302,13 @@ internal sealed class ResourceContainerImageManager(
         cancellationToken.ThrowIfCancellationRequested();
         logger.LogInformation("Starting to build container images");
 
-        var resourcesToBuild = resources
+        var resourceList = resources.ToList();
+        foreach (var resource in resourceList)
+        {
+            DotnetProgramPublishing.ValidatePrebuiltContainerImageConfiguration(resource);
+        }
+
+        var resourcesToBuild = resourceList
             .Where(static resource => !resource.HasPrebuiltContainerImage())
             .ToList();
         if (resourcesToBuild.Count == 0)
@@ -341,6 +347,8 @@ internal sealed class ResourceContainerImageManager(
     public async Task BuildImageAsync(IResource resource, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        DotnetProgramPublishing.ValidatePrebuiltContainerImageConfiguration(resource);
 
         if (resource.HasPrebuiltContainerImage())
         {

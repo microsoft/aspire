@@ -237,6 +237,55 @@ public class DotnetProgramPublishingTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrebuiltProgramWithContainerFilesIsRejectedWithoutBuildWork()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var processRunner = new TestProcessRunner();
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        var runtime = new FakeContainerRuntime
+        {
+            ResolveAsyncCallback = _ => throw new InvalidOperationException("Invalid prebuilt image configuration must not resolve a container runtime.")
+        };
+        builder.Services.AddFakeContainerRuntime(runtime);
+        var source = builder.AddContainer("assets", "assets-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
+        var resource = builder.AddResource(new TestDotnetProgramResource("program"))
+            .WithAnnotation(new TestProjectMetadata("program.csproj"))
+            .WithDotnetProgramPublishing()
+            .WithAnnotation(new ContainerImageAnnotation
+            {
+                Registry = "example.com",
+                Image = "program",
+                Tag = "v1"
+            })
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source.Resource,
+                DestinationPath = "/app/assets"
+            });
+        using var app = builder.Build();
+        const string expectedMessage =
+            "The .NET program resource 'program' cannot use PublishWithContainerFiles with a prebuilt container image. " +
+            "Prebuilt images are treated as final artifacts and are not rebuilt. Remove the prebuilt image to let Aspire build " +
+            "and layer the resource, or include the requested files in the prebuilt image before publishing.";
+
+        var pipelineException = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecuteBuildPipelineAsync(app, WellKnownPipelineSteps.Build)).DefaultTimeout();
+
+        var imageManager = app.Services.GetRequiredService<IResourceContainerImageManager>();
+        var directException = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => imageManager.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken));
+        var batchException = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => imageManager.BuildImagesAsync([resource.Resource], TestContext.Current.CancellationToken));
+
+        Assert.Equal(expectedMessage, pipelineException.Message);
+        Assert.Equal(expectedMessage, directException.Message);
+        Assert.Equal(expectedMessage, batchException.Message);
+        Assert.Empty(processRunner.ProcessSpecs);
+        Assert.Equal(0, runtime.ResolveAsyncCallCount);
+    }
+
+    [Fact]
     public void DotnetProgramReplicasProduceDistinctDcpInstances()
     {
         var resource = new TestDotnetProgramResource("program");

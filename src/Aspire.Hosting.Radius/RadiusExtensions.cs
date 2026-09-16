@@ -127,6 +127,10 @@ public static partial class RadiusExtensions
     /// The reference is stored as a <see cref="ContainerImageAnnotation"/>, which is also
     /// what container resources use, so the publisher's existing
     /// <c>Registry</c>/<c>Image</c>/<c>Tag</c> assembly path applies uniformly.
+    ///
+    /// The attached image is treated as a final artifact and is not modified by Aspire.
+    /// Include any files required by <c>PublishWithContainerFiles</c> when building the image
+    /// instead of combining that method with <c>WithContainerImage</c>.
     /// </remarks>
     [Experimental("ASPIRERADIUS057", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
@@ -142,6 +146,11 @@ public static partial class RadiusExtensions
     /// <param name="builder">The .NET program resource builder.</param>
     /// <param name="image">A fully-qualified image reference in <c>[registry/]image[:tag]</c> form.</param>
     /// <returns>The same resource builder for chaining.</returns>
+    /// <remarks>
+    /// The attached image is treated as a final artifact and is not modified by Aspire.
+    /// Include any files required by <c>PublishWithContainerFiles</c> when building the image
+    /// instead of combining that method with <c>WithContainerImage</c>.
+    /// </remarks>
     [Experimental("ASPIRERADIUS057", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withDotnetProgramContainerImage", MethodName = "withContainerImage")]
     public static IResourceBuilder<T> WithContainerImage<T>(
