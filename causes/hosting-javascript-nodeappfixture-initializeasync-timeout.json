@@ -1,9 +1,12 @@
 {
   "id": "hosting-javascript-nodeappfixture-initializeasync-timeout",
   "type": "flaky-test",
-  "title": "Flaky: Node/Deno app functional tests fail with 1-minute InitializeAsync timeout on windows-latest",
+  "title": "Flaky: Node/Deno app functional tests fail with InitializeAsync timeout on windows-latest",
   "test_name": "Aspire.Hosting.JavaScript.Tests.NodeFunctionalTests.VerifyNodeAppWorks",
-  "error_pattern": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.NodeAppFixture' (or DenoTelemetryFixture) threw in InitializeAsync\n---- Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:01:00'.\n-------- System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+  "error_pattern": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.NodeAppFixture' (or DenoTelemetryFixture) threw in InitializeAsync\n---- System.Threading.Tasks.TaskCanceledException : A task was canceled.\n   at Aspire.Hosting.Dcp.DcpExecutor.CreateRenderedResourcesAsync[TDcpResource,TContext](...) in DcpExecutor.cs:line 966",
+  "analysis": "Both VerifyNodeAppWorks and VerifyNpmAppWorks fail identically with NodeAppFixture.InitializeAsync throwing TaskCanceledException from DcpExecutor.CreateRenderedResourcesAsync on windows-latest. The PR under analysis (#20152) only modifies VS Code extension files and has no relation to Aspire.Hosting.JavaScript.Tests or the DCP executor, confirming this is unrelated startup timing flakiness rather than a code regression.",
+  "failure_details": "Test: Aspire.Hosting.JavaScript.Tests.NodeFunctionalTests.VerifyNodeAppWorks / VerifyNpmAppWorks\nError: Class fixture type 'Aspire.Hosting.JavaScript.Tests.NodeAppFixture' threw in InitializeAsync\n---- System.Threading.Tasks.TaskCanceledException : A task was canceled.\nStack Trace:\n----- Inner Stack Trace -----\n   at Aspire.Hosting.Dcp.DcpExecutor.CreateRenderedResourcesAsync[TDcpResource,TContext](IObjectCreator`2 creator, IEnumerable`1 resources, TContext context, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpExecutor.cs:line 966\n   at Aspire.Hosting.Dcp.DcpExecutor.RunApplicationAsync(CancellationToken ct) in /_/src/Aspire.Hosting/Dcp/DcpExecutor.cs:line 266\n   at Aspire.Hosting.Orchestrator.ApplicationOrchestrator.RunApplicationAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/ApplicationOrchestrator.cs:line 636\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 41\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 485\n   at Aspire.Hosting.JavaScript.Tests.NodeAppFixture.InitializeAsync() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.JavaScript.Tests\\NodeAppFixture.cs:line 43",
   "occurrences": [
     {
       "run_id": 33802459402,
@@ -11,6 +14,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
       "pr_number": 19673,
       "observed_at": "2026-09-03T21:24:16Z"
+    },
+    {
+      "run_id": 35053406342,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35053406342",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "pr_number": 20152,
+      "observed_at": "2026-09-16T04:53:34Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19917"
