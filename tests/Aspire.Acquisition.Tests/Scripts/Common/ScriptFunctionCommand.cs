@@ -116,7 +116,7 @@ public class ScriptFunctionCommand : ToolCommand
 
             {{_functionExpression}}
             """;
-        File.WriteAllText(tempScript, wrapperContent);
+        File.WriteAllText(tempScript, wrapperContent.ReplaceLineEndings("\n"));
 
         // Make executable on Unix
         FileHelper.MakeExecutable(tempScript);

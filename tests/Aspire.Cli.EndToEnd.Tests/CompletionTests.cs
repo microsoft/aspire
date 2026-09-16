@@ -30,8 +30,17 @@ public sealed class CompletionTests(ITestOutputHelper output)
         // genuinely fresh state. This still executes the packaged binary through Main, not a
         // command object, and does not depend on the installer's existing first-use sentinel.
         var home = workspace.CreateDirectory("completion-home");
-        const string legacyConfig = "{}";
+        const string legacyConfig = "{ \"features:terminalCommandsEnabled\": true }";
         await File.WriteAllTextAsync(Path.Combine(home.FullName, "globalsettings.json"), legacyConfig);
+        const string localConfig = """
+            {
+              // Completion must preserve this file, including comments and flat keys.
+              "features:terminalCommandsEnabled": true,
+              "features": { "terminalCommandsEnabled": false }
+            }
+            """;
+        var localConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        await File.WriteAllTextAsync(localConfigPath, localConfig);
         await auto.RunCommandAsync("mkdir -p completion-bin && cp \"$(command -v aspire)\" completion-bin/aspire && test -x completion-bin/aspire", counter);
 
         const string environment =
@@ -55,6 +64,7 @@ public sealed class CompletionTests(ITestOutputHelper output)
         Assert.Equal(["globalsettings.json"], Directory.GetFiles(home.FullName, "*", SearchOption.AllDirectories).Select(Path.GetFileName));
         Assert.Empty(Directory.GetDirectories(home.FullName));
         Assert.Equal(legacyConfig, await File.ReadAllTextAsync(Path.Combine(home.FullName, "globalsettings.json")));
+        Assert.Equal(localConfig, await File.ReadAllTextAsync(localConfigPath));
     }
 
     [Fact]
@@ -78,7 +88,7 @@ public sealed class CompletionTests(ITestOutputHelper output)
         var fakeBin = workspace.CreateDirectory("completion-source");
         await File.WriteAllTextAsync(Path.Combine(fakeBin.FullName, "aspire"), ("""
             #!/bin/bash
-            if [[ "$1" == '[suggest]' ]]; then
+            if [[ "$1" == '[suggest:tokens]' ]]; then
                 printf '%s\n' "$COMPLETION_TEST_VALUE"
             else
                 printf '%s\0' "$@" > completion-arguments.bin
@@ -86,17 +96,20 @@ public sealed class CompletionTests(ITestOutputHelper output)
             """ + "\n").ReplaceLineEndings("\n"));
         await auto.RunCommandAsync("chmod +x completion-source/aspire && export PATH=\"$PWD/completion-source:$PATH\"", counter);
 
-        foreach (var candidate in new[] { "name with space", "name'quote", "name$(touch completion-executed)" })
+        foreach (var candidate in new[] { "name with space", "name'quote", "name\"quote", "name\\tail", "name$(touch completion-executed)", "name`touch completion-executed`" })
         {
             await auto.RunCommandAsync($"export COMPLETION_TEST_VALUE={AspireCliShellCommandHelpers.QuoteBashArg(candidate)}", counter);
-            await auto.TypeAsync("aspire na");
-            await auto.KeyAsync(Hex1bKey.Tab);
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+            foreach (var quote in new[] { "", "'", "\"" })
+            {
+                await auto.TypeAsync($"echo 'ignored; separator'; aspire {quote}na");
+                await auto.KeyAsync(Hex1bKey.Tab);
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            Assert.Equal(Encoding.UTF8.GetBytes(candidate + "\0"),
-                await File.ReadAllBytesAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "completion-arguments.bin")));
-            Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "completion-executed")));
+                Assert.Equal(Encoding.UTF8.GetBytes(candidate + "\0"),
+                    await File.ReadAllBytesAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "completion-arguments.bin")));
+                Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "completion-executed")));
+            }
         }
 
         await auto.RunCommandAsync("export COMPLETION_TEST_VALUE=--apphost", counter);

@@ -110,6 +110,92 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal("daily", config["channel"]);
     }
 
+    [Theory]
+    [InlineData("local")]
+    [InlineData("legacy-local")]
+    [InlineData("global")]
+    public void RegisterSettingsFiles_ReadOnlyNormalizesInMemory(string location)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var globalDirectory = workspace.CreateDirectory("global-aspire");
+        var globalSettingsFile = new FileInfo(Path.Combine(globalDirectory.FullName, AspireConfigFile.FileName));
+        File.WriteAllText(globalSettingsFile.FullName, """
+            {
+              "appHost:path": "Global.csproj",
+              "globalOnly:enabled": true
+            }
+            """);
+        var settingsPath = location switch
+        {
+            "global" => globalSettingsFile.FullName,
+            "legacy-local" => ConfigurationHelper.BuildPathToSettingsJsonFile(workspace.Path),
+            _ => Path.Combine(workspace.Path, AspireConfigFile.FileName)
+        };
+        File.WriteAllText(settingsPath, """
+            {
+              // Flat keys must not overwrite existing nested values.
+              "appHost:path": "Flat.csproj",
+              "appHost": { "path": "Nested.csproj" },
+              "features:enabled": true,
+              "features:disabled": false,
+              "settings:count": 42,
+              "settings:nullable": null,
+              "settings:values": [1, 2],
+              "settings:object": { "enabled": true },
+              "blocked:child": "ignored",
+              "blocked": "existing",
+              "empty:child": "filled",
+              "empty": null,
+              "replace:child": true,
+              "replace": { "child": null },
+              "settings.dot": "literal",
+            }
+            """);
+        var originalFiles = Directory.GetFiles(workspace.Path, "*", SearchOption.AllDirectories)
+            .ToDictionary(path => path, File.ReadAllBytes);
+
+        var builder = new ConfigurationBuilder();
+        ConfigurationHelper.RegisterSettingsFiles(builder, workspace.WorkspaceRoot, globalSettingsFile, persistNormalization: false);
+        var config = builder.Build();
+
+        Assert.Equal("Nested.csproj", config["appHost:path"]);
+        Assert.True(config.GetValue<bool>("features:enabled"));
+        Assert.False(config.GetValue<bool>("features:disabled"));
+        Assert.Equal(42, config.GetValue<int>("settings:count"));
+        Assert.Null(config["settings:nullable"]);
+        Assert.Equal(["1", "2"], config.GetSection("settings:values").GetChildren().Select(child => child.Value));
+        Assert.True(config.GetValue<bool>("settings:object:enabled"));
+        Assert.Equal("existing", config["blocked"]);
+        Assert.Empty(config.GetSection("blocked").GetChildren());
+        Assert.Equal("filled", config["empty:child"]);
+        Assert.True(config.GetValue<bool>("replace:child"));
+        Assert.Equal("literal", config["settings.dot"]);
+        if (location != "global")
+        {
+            Assert.True(config.GetValue<bool>("globalOnly:enabled"));
+        }
+
+        Assert.Equal(originalFiles.Keys.Order(), Directory.GetFiles(workspace.Path, "*", SearchOption.AllDirectories).Order());
+        foreach (var (path, bytes) in originalFiles)
+        {
+            Assert.Equal(bytes, File.ReadAllBytes(path));
+        }
+
+        // Ordinary startup still persists normalization and loads the same values.
+        var normalBuilder = new ConfigurationBuilder();
+        ConfigurationHelper.RegisterSettingsFiles(normalBuilder, workspace.WorkspaceRoot, globalSettingsFile);
+        var normalConfig = normalBuilder.Build();
+        Assert.Equal(config.AsEnumerable().OrderBy(pair => pair.Key), normalConfig.AsEnumerable().OrderBy(pair => pair.Key));
+        var normalized = JsonNode.Parse(File.ReadAllText(settingsPath))!.AsObject();
+        Assert.False(normalized.ContainsKey("features:enabled"));
+        Assert.Equal(JsonValueKind.True, normalized["features"]!["enabled"]!.GetValueKind());
+        Assert.Equal(JsonValueKind.False, normalized["features"]!["disabled"]!.GetValueKind());
+        Assert.Equal(JsonValueKind.Number, normalized["settings"]!["count"]!.GetValueKind());
+        Assert.Equal(JsonValueKind.Array, normalized["settings"]!["values"]!.GetValueKind());
+        Assert.Equal(JsonValueKind.Object, normalized["settings"]!["object"]!.GetValueKind());
+        Assert.Null(normalized["settings"]!["nullable"]);
+    }
+
     [Fact]
     public void TryNormalizeSettingsFile_PreservesBooleanTypes()
     {

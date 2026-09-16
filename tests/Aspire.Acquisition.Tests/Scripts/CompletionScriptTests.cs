@@ -55,20 +55,28 @@ public class CompletionPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Theory]
-    [InlineData(false, "fail")]
-    [InlineData(false, "empty")]
-    [InlineData(false, "skip")]
-    [InlineData(false, "whatif")]
-    [InlineData(true, "fail")]
-    [InlineData(true, "empty")]
-    [InlineData(true, "skip")]
-    [InlineData(true, "whatif")]
-    public async Task InstallCompletions_UnsuccessfulOrOptedOut_PreservesExistingFiles(bool dogfood, string mode)
+    [InlineData(false, "fail", false)]
+    [InlineData(false, "empty", false)]
+    [InlineData(false, "skip", false)]
+    [InlineData(false, "whatif", false)]
+    [InlineData(true, "fail", false)]
+    [InlineData(true, "empty", false)]
+    [InlineData(true, "skip", false)]
+    [InlineData(true, "whatif", false)]
+    [InlineData(false, "fail", true)]
+    [InlineData(false, "empty", true)]
+    [InlineData(false, "skip", true)]
+    [InlineData(false, "whatif", true)]
+    [InlineData(true, "fail", true)]
+    [InlineData(true, "empty", true)]
+    [InlineData(true, "skip", true)]
+    [InlineData(true, "whatif", true)]
+    public async Task InstallCompletions_UnsuccessfulOrOptedOut_PreservesExistingFiles(bool dogfood, string mode, bool outsideHome)
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(env.MockHome);
+        var cli = CreateFakeCli(outsideHome ? Path.Combine(env.TempDirectory, "custom install") : env.MockHome);
         var profile = Path.Combine(env.MockHome, "profile.ps1");
-        var completion = CompletionPath(env.MockHome, cli, dogfood);
+        var completion = CompletionPath(env.MockHome, cli, dogfood || outsideHome);
         Directory.CreateDirectory(Path.GetDirectoryName(completion)!);
         File.WriteAllText(completion, "# working completions");
         File.WriteAllText(profile, "# existing profile");
@@ -77,6 +85,7 @@ public class CompletionPowerShellTests(ITestOutputHelper testOutput)
             $$"""
             Set-Variable HOME '{{Quote(env.MockHome)}}' -Force
             $PROFILE = @{ CurrentUserAllHosts = '{{Quote(profile)}}' }
+            $SkipPath = ${{(outsideHome ? "true" : "false")}}
             $SkipCompletions = ${{(mode == "skip" ? "true" : "false")}}
             $env:FAKE_COMPLETION_MODE = '{{mode}}'
             Install-AspireCliCompletions -CliPath '{{Quote(cli)}}' {{(dogfood ? "" : "-Persist $true")}} {{(mode == "whatif" ? "-WhatIf" : "")}}
@@ -103,8 +112,8 @@ public class CompletionPowerShellTests(ITestOutputHelper testOutput)
     public async Task InstallCompletions_ProfileOutsideHome_IsNotModified()
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(env.MockHome);
-        var profile = Path.Combine(env.TempDirectory, "outside-profile.ps1");
+        var cli = CreateFakeCli(Path.Combine(env.TempDirectory, "custom install"));
+        var profile = Path.Combine(Path.GetDirectoryName(cli)!, "outside-profile.ps1");
         File.WriteAllText(profile, "# outside home");
         using var cmd = new ScriptFunctionCommand(
             ScriptPaths.ReleasePowerShell,
@@ -120,7 +129,127 @@ public class CompletionPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Equal("# outside home", File.ReadAllText(profile));
+        Assert.True(File.Exists(CompletionPath(env.MockHome, cli, dogfood: false)));
+        Assert.False(Directory.Exists(Path.Combine(Path.GetDirectoryName(cli)!, "completions")));
         Assert.Contains("CurrentUserAllHosts", result.Output);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task InstallCompletions_OutsideHomeInstall_GeneratesArtifactWithoutProfileMutation(bool dogfood, bool skipPath)
+    {
+        using var env = new TestEnvironment();
+        var cli = CreateFakeCli(Path.Combine(env.TempDirectory, "it's $install ` [test]"));
+        var profile = Path.Combine(env.MockHome, "profile.ps1");
+        File.WriteAllText(profile, "# existing profile");
+        var completion = CompletionPath(env.MockHome, cli, dogfood: true);
+        var invocation = $"Install-AspireCliCompletions -CliPath '{Quote(cli)}'" + (dogfood ? "" : " -Persist $true");
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRPowerShell : ScriptPaths.ReleasePowerShell,
+            $$"""
+            Set-Variable HOME '{{Quote(env.MockHome)}}' -Force
+            $PROFILE = @{ CurrentUserAllHosts = '{{Quote(profile)}}' }
+            $SkipPath = ${{(skipPath ? "true" : "false")}}
+            {{invocation}}
+            $env:FAKE_COMPLETION_GENERATION = 'upgraded'
+            {{invocation}}
+            . '{{Quote(completion)}}'
+            if ($global:AspireCompletionLoaded -ne 'upgraded') { throw 'Updated completion not sourced' }
+            """,
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("# existing profile", File.ReadAllText(profile));
+        Assert.True(File.Exists(completion));
+        Assert.False(Directory.Exists(Path.Combine(env.MockHome, ".aspire")));
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(completion)!, ".aspire-completions-*"));
+        Assert.Contains("activate completions manually", result.Output);
+    }
+
+    [Theory]
+    [InlineData(false, "directory-link")]
+    [InlineData(false, "leaf-junction")]
+    [InlineData(false, "directory")]
+    [InlineData(true, "directory-link")]
+    [InlineData(true, "leaf-junction")]
+    [InlineData(true, "directory")]
+    public async Task InstallCompletions_OutsideHomeInstall_UnsafeDestinationIsNotModified(bool dogfood, string destination)
+    {
+        using var env = new TestEnvironment();
+        var installRoot = Path.Combine(env.TempDirectory, "custom install");
+        var cli = CreateFakeCli(installRoot);
+        var profile = Path.Combine(env.MockHome, "profile.ps1");
+        File.WriteAllText(profile, "# existing profile");
+        // A sibling with the same prefix must not be mistaken for a child of the install root.
+        var outside = Path.Combine(env.TempDirectory, "custom install-other");
+        Directory.CreateDirectory(outside);
+        var sentinel = Path.Combine(outside, "aspire.ps1");
+        File.WriteAllText(sentinel, "# outside completions");
+        var completion = CompletionPath(env.MockHome, cli, dogfood: true);
+        var link = destination == "directory-link" ? Path.GetDirectoryName(completion)! : completion;
+        Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRPowerShell : ScriptPaths.ReleasePowerShell,
+            $$"""
+            Set-Variable HOME '{{Quote(env.MockHome)}}' -Force
+            $PROFILE = @{ CurrentUserAllHosts = '{{Quote(profile)}}' }
+            $SkipPath = $true
+            if ('{{destination}}' -eq 'directory') {
+                [IO.Directory]::CreateDirectory('{{Quote(link)}}') | Out-Null
+            } else {
+                # Junction creation does not require the Windows symbolic-link privilege.
+                $linkType = if ($IsWindows) { 'Junction' } else { 'SymbolicLink' }
+                New-Item -ItemType $linkType -Path '{{Quote(link)}}' -Target '{{Quote(outside)}}' -ErrorAction Stop | Out-Null
+            }
+            Install-AspireCliCompletions -CliPath '{{Quote(cli)}}' {{(dogfood ? "" : "-Persist $true")}}
+            """,
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("# existing profile", File.ReadAllText(profile));
+        Assert.Equal("# outside completions", File.ReadAllText(sentinel));
+        Assert.Equal([sentinel], Directory.GetFiles(outside));
+        Assert.Empty(Directory.GetDirectories(outside));
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(completion)!, ".aspire-completions-*"));
+        if (destination != "directory")
+        {
+            Assert.False(File.Exists(Path.Combine(env.MockHome, "called")));
+        }
+        Assert.Contains("CLI installation is unaffected", result.Output);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallCompletions_OutsideHomeInstall_WhatIfDoesNotCreateDirectories(bool dogfood)
+    {
+        using var env = new TestEnvironment();
+        var installRoot = Path.Combine(env.TempDirectory, "not yet installed", "bin");
+        var cli = Path.Combine(installRoot, "aspire.ps1");
+        var profile = Path.Combine(env.MockHome, "profile.ps1");
+        File.WriteAllText(profile, "# existing profile");
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRPowerShell : ScriptPaths.ReleasePowerShell,
+            $$"""
+            Set-Variable HOME '{{Quote(env.MockHome)}}' -Force
+            $PROFILE = @{ CurrentUserAllHosts = '{{Quote(profile)}}' }
+            $SkipPath = $true
+            Install-AspireCliCompletions -CliPath '{{Quote(cli)}}' {{(dogfood ? "" : "-Persist $true")}} -WhatIf
+            """,
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("# existing profile", File.ReadAllText(profile));
+        Assert.False(Directory.Exists(Path.GetDirectoryName(installRoot)));
+        Assert.Contains("Generate PowerShell completions", result.Output);
     }
 
     [Theory]
@@ -350,23 +479,35 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     }
 
     [Theory]
-    [InlineData(false, "fail")]
-    [InlineData(false, "empty")]
-    [InlineData(false, "skip")]
-    [InlineData(false, "dryrun")]
-    [InlineData(false, "unsupported")]
-    [InlineData(false, "unset")]
-    [InlineData(true, "fail")]
-    [InlineData(true, "empty")]
-    [InlineData(true, "skip")]
-    [InlineData(true, "dryrun")]
-    [InlineData(true, "unsupported")]
-    [InlineData(true, "unset")]
-    public async Task InstallCompletions_UnsuccessfulOrOptedOut_PreservesExistingFiles(bool dogfood, string mode)
+    [InlineData(false, "fail", false)]
+    [InlineData(false, "empty", false)]
+    [InlineData(false, "skip", false)]
+    [InlineData(false, "dryrun", false)]
+    [InlineData(false, "unsupported", false)]
+    [InlineData(false, "unset", false)]
+    [InlineData(true, "fail", false)]
+    [InlineData(true, "empty", false)]
+    [InlineData(true, "skip", false)]
+    [InlineData(true, "dryrun", false)]
+    [InlineData(true, "unsupported", false)]
+    [InlineData(true, "unset", false)]
+    [InlineData(false, "fail", true)]
+    [InlineData(false, "empty", true)]
+    [InlineData(false, "skip", true)]
+    [InlineData(false, "dryrun", true)]
+    [InlineData(false, "unsupported", true)]
+    [InlineData(false, "unset", true)]
+    [InlineData(true, "fail", true)]
+    [InlineData(true, "empty", true)]
+    [InlineData(true, "skip", true)]
+    [InlineData(true, "dryrun", true)]
+    [InlineData(true, "unsupported", true)]
+    [InlineData(true, "unset", true)]
+    public async Task InstallCompletions_UnsuccessfulOrOptedOut_PreservesExistingFiles(bool dogfood, string mode, bool outsideHome)
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(env.MockHome);
-        var completion = Path.Combine(dogfood ? env.MockHome : Path.Combine(env.MockHome, ".aspire"), "completions", "aspire.bash");
+        var cli = CreateFakeCli(outsideHome ? Path.Combine(env.TempDirectory, "custom install") : env.MockHome);
+        var completion = Path.Combine(dogfood || outsideHome ? Path.GetDirectoryName(cli)! : Path.Combine(env.MockHome, ".aspire"), "completions", "aspire.bash");
         Directory.CreateDirectory(Path.GetDirectoryName(completion)!);
         File.WriteAllText(completion, "# working completions");
         var profile = Path.Combine(env.MockHome, ".bashrc");
@@ -376,6 +517,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
             $$"""
             set -euo pipefail
             SHELL='{{(mode == "unsupported" ? "/bin/tcsh" : mode == "unset" ? "" : "/bin/bash")}}'
+            SKIP_PATH={{(outsideHome ? "true" : "false")}}
             SKIP_COMPLETIONS={{(mode == "skip" ? "true" : "false")}}
             DRY_RUN={{(mode == "dryrun" ? "true" : "false")}}
             export FAKE_COMPLETION_MODE='{{mode}}'
@@ -401,8 +543,9 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
     public async Task InstallCompletions_OutsideHomeProfileOrSymlink_IsNotModified(bool symlink)
     {
         using var env = new TestEnvironment();
-        var cli = CreateFakeCli(env.MockHome);
-        var outside = Path.Combine(env.TempDirectory, ".zshrc");
+        var installRoot = Path.Combine(env.TempDirectory, "custom install");
+        var cli = CreateFakeCli(installRoot);
+        var outside = Path.Combine(installRoot, ".zshrc");
         File.WriteAllText(outside, "# outside profile");
         if (symlink)
         {
@@ -413,7 +556,7 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
             $$"""
             set -euo pipefail
             SHELL=/bin/zsh
-            ZDOTDIR='{{Quote(symlink ? env.MockHome : env.TempDirectory)}}'
+            ZDOTDIR='{{Quote(symlink ? env.MockHome : installRoot)}}'
             install_completions '{{Quote(cli)}}' true
             """,
             env, testOutput);
@@ -422,7 +565,147 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Equal("# outside profile", File.ReadAllText(outside));
+        Assert.True(File.Exists(Path.Combine(env.MockHome, ".aspire", "completions", "aspire.zsh")));
+        Assert.False(Directory.Exists(Path.Combine(installRoot, "completions")));
         Assert.Contains("CLI installation is unaffected", result.Output);
+    }
+
+    [Theory]
+    [InlineData(false, true, "bash")]
+    [InlineData(false, true, "zsh")]
+    [InlineData(false, true, "fish")]
+    [InlineData(true, false, "bash")]
+    [InlineData(true, false, "zsh")]
+    [InlineData(true, false, "fish")]
+    [InlineData(true, true, "bash")]
+    public async Task InstallCompletions_OutsideHomeInstall_GeneratesArtifactWithoutProfileMutation(bool dogfood, bool skipPath, string shell)
+    {
+        using var env = new TestEnvironment();
+        var installRoot = Path.Combine(env.TempDirectory, "it's $install ` [test]");
+        var cli = CreateFakeCli(installRoot);
+        var profile = shell switch
+        {
+            "zsh" => Path.Combine(env.MockHome, ".zshrc"),
+            "fish" => Path.Combine(env.MockHome, ".config", "fish", "conf.d", "aspire-completions.fish"),
+            _ => Path.Combine(env.MockHome, ".bashrc")
+        };
+        Directory.CreateDirectory(Path.GetDirectoryName(profile)!);
+        File.WriteAllText(profile, "# existing profile");
+        var completion = Path.Combine(installRoot, "completions", $"aspire.{shell}");
+        var invocation = $"install_completions '{Quote(cli)}'" + (dogfood ? "" : " true");
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRShell : ScriptPaths.ReleaseShell,
+            $$"""
+            set -euo pipefail
+            SHELL='/bin/{{shell}}'
+            SKIP_PATH={{(skipPath ? "true" : "false")}}
+            {{invocation}}
+            export FAKE_COMPLETION_GENERATION=upgraded
+            {{invocation}}
+            source '{{Quote(completion)}}'
+            test "$ASPIRE_COMPLETION_LOADED" = upgraded
+            """,
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("# existing profile", File.ReadAllText(profile));
+        Assert.True(File.Exists(completion));
+        Assert.False(Directory.Exists(Path.Combine(env.MockHome, ".aspire")));
+        Assert.False(File.Exists(Path.Combine(env.MockHome, ".bash_profile")));
+        Assert.Empty(Directory.GetDirectories(Path.GetDirectoryName(completion)!, ".aspire-completions-*"));
+        Assert.Contains("activate completions manually", result.Output);
+    }
+
+    [Theory]
+    [InlineData(false, "directory-link")]
+    [InlineData(false, "file-link")]
+    [InlineData(false, "dangling-link")]
+    [InlineData(false, "directory")]
+    [InlineData(true, "directory-link")]
+    [InlineData(true, "file-link")]
+    [InlineData(true, "dangling-link")]
+    [InlineData(true, "directory")]
+    public async Task InstallCompletions_OutsideHomeInstall_UnsafeDestinationIsNotModified(bool dogfood, string destination)
+    {
+        using var env = new TestEnvironment();
+        var installRoot = Path.Combine(env.TempDirectory, "custom install");
+        var cli = CreateFakeCli(installRoot);
+        var profile = Path.Combine(env.MockHome, ".bashrc");
+        File.WriteAllText(profile, "# existing profile");
+        // A sibling with the same prefix must not be mistaken for a child of the install root.
+        var outside = Path.Combine(env.TempDirectory, "custom install-other");
+        Directory.CreateDirectory(outside);
+        var sentinel = Path.Combine(outside, "aspire.bash");
+        File.WriteAllText(sentinel, "# outside completions");
+        var completionDirectory = Path.Combine(installRoot, "completions");
+        var completion = Path.Combine(completionDirectory, "aspire.bash");
+        if (destination == "directory-link")
+        {
+            Directory.CreateSymbolicLink(completionDirectory, outside);
+        }
+        else
+        {
+            Directory.CreateDirectory(completionDirectory);
+            if (destination == "directory")
+            {
+                Directory.CreateDirectory(completion);
+            }
+            else
+            {
+                File.CreateSymbolicLink(completion, destination == "file-link" ? sentinel : Path.Combine(outside, "missing"));
+            }
+        }
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRShell : ScriptPaths.ReleaseShell,
+            $$"""
+            set -euo pipefail
+            SHELL=/bin/bash
+            SKIP_PATH=true
+            install_completions '{{Quote(cli)}}' {{(dogfood ? "" : "true")}}
+            """,
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("# existing profile", File.ReadAllText(profile));
+        Assert.Equal("# outside completions", File.ReadAllText(sentinel));
+        Assert.Equal([sentinel], Directory.GetFiles(outside));
+        Assert.Empty(Directory.GetDirectories(outside));
+        Assert.Empty(Directory.GetDirectories(completionDirectory, ".aspire-completions-*"));
+        Assert.False(File.Exists(Path.Combine(env.MockHome, "called")));
+        Assert.Contains("CLI installation is unaffected", result.Output);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallCompletions_OutsideHomeInstall_DryRunDoesNotCreateDirectories(bool dogfood)
+    {
+        using var env = new TestEnvironment();
+        var installRoot = Path.Combine(env.TempDirectory, "not yet installed", "bin");
+        var cli = Path.Combine(installRoot, "aspire");
+        var profile = Path.Combine(env.MockHome, ".bashrc");
+        File.WriteAllText(profile, "# existing profile");
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRShell : ScriptPaths.ReleaseShell,
+            $$"""
+            set -euo pipefail
+            SHELL=/bin/bash
+            SKIP_PATH=true
+            DRY_RUN=true
+            install_completions '{{Quote(cli)}}' {{(dogfood ? "" : "true")}}
+            """,
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("# existing profile", File.ReadAllText(profile));
+        Assert.False(Directory.Exists(Path.GetDirectoryName(installRoot)));
+        Assert.Contains("[DRY RUN] Would generate shell completions", result.Output);
     }
 
     [Theory]
@@ -536,15 +819,16 @@ public class CompletionShellTests(ITestOutputHelper testOutput)
 
     private static string CreateFakeCli(string home)
     {
+        Directory.CreateDirectory(home);
         var cli = Path.Combine(home, "fake aspire");
-        File.WriteAllText(cli, """
+        File.WriteAllText(cli, ("""
             #!/usr/bin/env bash
             [[ "$1 $2" == "completions script" ]] || exit 2
             printf called > "$HOME/called"
             if [[ "${FAKE_COMPLETION_MODE:-}" == fail ]]; then echo 'error output is not a script'; exit 1; fi
             if [[ "${FAKE_COMPLETION_MODE:-}" == empty ]]; then exit 0; fi
             echo "ASPIRE_COMPLETION_LOADED=${FAKE_COMPLETION_GENERATION:-loaded}"
-            """);
+            """ + "\n").ReplaceLineEndings("\n"));
         FileHelper.MakeExecutable(cli);
         return cli;
     }

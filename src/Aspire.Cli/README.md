@@ -127,6 +127,12 @@ and values with completion sources (including enum values). They do not need
 packages, collect telemetry, or write CLI logs or first-use state. Suggestions do
 not query running resources or search package feeds.
 
+Bash and Zsh complete the current command after separators and preserve literal
+arguments inside single or double quotes. Input is decoded without evaluating
+shell substitutions; accepting a suggestion must not execute its contents.
+Settings used for completion are normalized in memory without rewriting the
+configuration files.
+
 The examples below assume `aspire` is on PATH. They resolve the active command
 on every request, so upgrades and switching install routes do not pin completion
 to an old binary. Do not replace it with a versioned npm cache, tool store, or
@@ -240,9 +246,11 @@ also sources `.bashrc`. Zsh registration uses `${ZDOTDIR:-$HOME}/.zshrc`, Fish u
 uses `$PROFILE.CurrentUserAllHosts`. Entries are marked `Aspire CLI completions`.
 
 `--skip-path` / `-SkipPath` and archive dogfood installs only generate an artifact
-under `<CLI-directory>/completions`, with manual activation instructions. Package-manager
-dogfood modes do not register profiles. Automatic writes are limited to user-home
-locations; redirected/symlinked profiles, elevated installs, unsupported shells,
+under `<CLI-directory>/completions`, with manual activation instructions. The explicitly
+selected CLI directory can be outside the user home; artifact writes remain confined
+to that directory and reject redirection outside it. Package-manager dogfood modes
+do not register profiles. Automatic profile writes and persistent user completion
+files remain home-confined; redirected/symlinked profiles, elevated installs, unsupported shells,
 older PowerShell engines, and signed profiles can require manual setup. `AllSigned`
 policy leaves generated PowerShell files untouched as well. Installers report the
 reason and do not change execution policy. Older CLIs without the generation command

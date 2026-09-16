@@ -174,6 +174,13 @@ public class Program
         // The old file is intentionally kept so older CLI versions continue to work during
         // the transition period. Tracked by https://github.com/microsoft/aspire/issues/15239
         var legacyPath = Path.Combine(usersAspirePath, "globalsettings.json");
+        if (!migrate && !File.Exists(newPath) && File.Exists(legacyPath))
+        {
+            // Read-only completion still needs legacy feature settings before the user's
+            // first normal invocation performs migration.
+            return legacyPath;
+        }
+
         if (migrate && !File.Exists(newPath) && File.Exists(legacyPath))
         {
             try
@@ -312,7 +319,7 @@ public class Program
         var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger, migrate: !isCompletion);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile);
+        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !isCompletion);
 
         if (!isCompletion)
         {
@@ -1373,6 +1380,10 @@ public class Program
         {
             return CompletionInvocation.WriteSuggestions(command, args, output, error);
         }
+
+        // Accept extension-provided debug switches for script generation without enabling
+        // the extension backchannel or exposing them on ordinary non-extension commands.
+        command.Options.Add(RootCommand.StartDebugSessionOption);
 
         return await command.Parse(args).InvokeAsync(new InvocationConfiguration
         {

@@ -895,18 +895,18 @@ function Get-InstallPath {
     return [System.IO.Path]::GetFullPath($defaultPath)
 }
 
-# Reject paths outside HOME and reparse points that could redirect a write to a shared profile.
-function Test-UserCompletionPath {
-    param([string]$Path)
+# Reject paths outside the selected boundary and reparse points that could redirect a write.
+function Test-CompletionPathWithinRoot {
+    param([string]$Path, [string]$Root)
 
-    $homePath = [IO.Path]::GetFullPath($HOME).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $rootPath = [IO.Path]::GetFullPath($Root).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
     $fullPath = [IO.Path]::GetFullPath($Path)
     $comparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
-    if (-not $fullPath.StartsWith($homePath + [IO.Path]::DirectorySeparatorChar, $comparison)) {
+    if (-not $fullPath.StartsWith($rootPath + [IO.Path]::DirectorySeparatorChar, $comparison)) {
         return $false
     }
     $current = $fullPath
-    while (-not $current.Equals($homePath, $comparison)) {
+    while (-not $current.Equals($rootPath, $comparison)) {
         $item = Get-Item -LiteralPath $current -Force -ErrorAction SilentlyContinue
         if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
             return $false
@@ -914,6 +914,13 @@ function Test-UserCompletionPath {
         $current = [IO.Path]::GetDirectoryName($current)
     }
     return $true
+}
+
+# Profiles stay home-confined even when the CLI is installed elsewhere.
+function Test-UserCompletionPath {
+    param([string]$Path)
+
+    return Test-CompletionPathWithinRoot -Path $Path -Root $HOME
 }
 
 function Test-ElevatedCompletionSession {
@@ -961,13 +968,18 @@ function Install-AspireCliCompletions {
             Write-Message "AllSigned execution policy: leaving completion files and profiles untouched. Generate and sign 'aspire completions script pwsh' output manually before activation." -Level Warning
             return
         }
-        $completionDir = if ($Persist) { Join-Path $HOME '.aspire/completions' } else { Join-Path ([IO.Path]::GetDirectoryName($CliPath)) 'completions' }
+        # Session-only artifacts belong to the explicitly selected CLI directory, not HOME.
+        $completionRoot = if ($Persist) { $HOME } else { [IO.Path]::GetDirectoryName($CliPath) }
+        $completionDir = Join-Path $completionRoot $(if ($Persist) { '.aspire/completions' } else { 'completions' })
         $completionFile = Join-Path $completionDir 'aspire.ps1'
         # A single-quoted PowerShell literal doubles apostrophes; $, backticks and spaces stay literal.
         $quotedFile = "'" + $completionFile.Replace("'", "''") + "'"
         $registration = "if (Test-Path -LiteralPath $quotedFile -PathType Leaf) { . $quotedFile } # Aspire CLI completions"
-        if (-not (Test-UserCompletionPath $completionFile)) {
-            throw "Completion files must be inside your home without symlink redirection."
+        if (-not (Test-CompletionPathWithinRoot -Path $completionFile -Root $completionRoot)) {
+            if ($Persist) {
+                throw "Completion files must be inside your home without symlink redirection."
+            }
+            throw "Completion files must be inside '$completionRoot' without symlink redirection."
         }
         if (-not $PSCmdlet.ShouldProcess($completionFile, "Generate PowerShell completions using '$CliPath completions script pwsh'")) {
             if ($Persist -and $WhatIfPreference) {

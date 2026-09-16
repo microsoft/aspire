@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.CommandLine.Completions;
+using System.CommandLine.Parsing;
 using System.Globalization;
 using Aspire.Cli.Resources;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -31,20 +33,24 @@ internal static class CompletionInvocation
         for (var i = 0; i < args.Length; i++)
         {
             var token = args[i];
+            var separator = token.IndexOfAny(['=', ':']);
+            var name = separator < 0 ? token : token[..separator];
+            if (name is CommonOptionNames.Version or CommonOptionNames.VersionShort or
+                CommonOptionNames.Help or CommonOptionNames.HelpShort or CommonOptionNames.HelpAlt or
+                CommonOptionNames.HelpSlash or CommonOptionNames.HelpAltSlash)
+            {
+                continue;
+            }
+
             if (!token.StartsWith('-'))
             {
                 return token == "completions";
             }
 
-            var separator = token.IndexOfAny(['=', ':']);
-            var name = separator < 0 ? token : token[..separator];
-            if (name is CommonOptionNames.Version or CommonOptionNames.VersionShort or
-                CommonOptionNames.Help or CommonOptionNames.HelpShort or CommonOptionNames.HelpAlt)
-            {
-                continue;
-            }
-
-            var option = RootCommand.GlobalOptions.FirstOrDefault(o => o.Name == name || o.Aliases.Contains(name));
+            // This option is normally registered only by extension hosts, but it must
+            // still select the completion path before any extension connection is made.
+            var option = RootCommand.GlobalOptions.Append(RootCommand.StartDebugSessionOption)
+                .FirstOrDefault(o => o.Name == name || o.Aliases.Contains(name));
             if (option is null)
             {
                 return false;
@@ -62,6 +68,14 @@ internal static class CompletionInvocation
 
     internal static int WriteSuggestions(System.CommandLine.RootCommand command, string[] args, TextWriter output, TextWriter error)
     {
+        if (args is ["[suggest:tokens]", .. var tokens])
+        {
+            // Native shell adapters send argv directly, e.g. ["run", "--project",
+            // "My App.csproj", ""]. Preserve spaces, literal quotes, and a final empty
+            // token (the start of a new word) instead of rebuilding a raw command line.
+            return WriteCompletions(GetTokenCompletions(command.Parse(tokens)), output);
+        }
+
         // Shell hooks send: [suggest] "aspire run --apph", or [suggest:17] "aspire run --apph".
         // The line is data, never an action to invoke (even if it includes --help, --banner,
         // a debugger option, another directive, or a complete executable command).
@@ -77,7 +91,35 @@ internal static class CompletionInvocation
             return CliExitCodes.InvalidCommand;
         }
 
-        foreach (var completion in command.Parse(args[1]).GetCompletions(position))
+        return WriteCompletions(command.Parse(args[1]).GetCompletions(position), output);
+    }
+
+    private static IEnumerable<CompletionItem> GetTokenCompletions(ParseResult parseResult)
+    {
+        // System.CommandLine 2.0's argv completion path stops suggesting option values once
+        // their arity is filled, even when that final token is still being completed.
+        // Resolve the owning option explicitly (including recursive options on ancestors).
+        // https://github.com/dotnet/command-line-api/blob/v2.0.8/src/System.CommandLine/ParseResult.cs
+        if (parseResult.Tokens.Count > 0 && parseResult.Tokens[^1] is { Type: TokenType.Argument } lastToken)
+        {
+            for (var commandResult = parseResult.CommandResult; commandResult is not null; commandResult = commandResult.Parent as System.CommandLine.Parsing.CommandResult)
+            {
+                foreach (var optionResult in commandResult.Children.OfType<OptionResult>())
+                {
+                    if (optionResult.Tokens.Contains(lastToken))
+                    {
+                        return optionResult.Option.GetCompletions(parseResult.GetCompletionContext());
+                    }
+                }
+            }
+        }
+
+        return parseResult.GetCompletions();
+    }
+
+    private static int WriteCompletions(IEnumerable<CompletionItem> completions, TextWriter output)
+    {
+        foreach (var completion in completions)
         {
             // Git Bash also queries the Windows binary; CRLF would leave a literal '\r'
             // in each candidate when Bash reads the newline-delimited protocol.

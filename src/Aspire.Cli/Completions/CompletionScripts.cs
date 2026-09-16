@@ -22,32 +22,85 @@ internal static class CompletionScripts
     {
         // Resolve aspire through PATH on every request. In particular, npm and bundle installs
         // run a versioned native binary whose ProcessPath must not be pinned in a shell profile.
-        // Send only the text before the cursor. [suggest] uses its UTF-16 length in the CLI,
-        // avoiding the different byte/code-point cursor units used by the supported shells.
+        // Bash/Zsh send decoded argument tokens, not shell syntax. The other hooks send only
+        // text before the cursor so the CLI can use its UTF-16 length rather than shell offsets.
         var script = shell switch
         {
             "bash" => """
                 # Bash completion for Aspire. Source this file from ~/.bashrc.
                 _aspire_complete()
                 {
-                    local line suggestion word
+                    local line suggestion word='' quote='' character escaped=false started=false i text
+                    local -a arguments=()
                     local LC_ALL=C
                     COMPREPLY=()
                     line="${COMP_LINE:0:COMP_POINT}"
-                    word="${COMP_WORDS[COMP_CWORD]}"
-                    # COMP_WORDS keeps the suffix after the cursor (for example, --app|XYZ).
-                    # Match only the token prefix at the end of the truncated command line.
-                    while [[ "$line" != *"$word" ]]; do
-                        word="${word%?}"
+
+                    # Decode literal shell words without eval or expansion. For example:
+                    #   echo "a;b"; aspire run --apphost 'path with spaces' --log-level "De
+                    # Separators inside quotes are data. Older Bash versions include preceding
+                    # commands in COMP_LINE; COMP_WORDS also splits option values at '=' and ':'.
+                    for ((i = 0; i < ${#line}; i++)); do
+                        character="${line:i:1}"
+                        if [[ "$escaped" == true ]]; then
+                            if [[ "$quote" == '"' && "$character" != '$' && "$character" != '`' &&
+                                  "$character" != '"' && "$character" != '\' && "$character" != $'\n' ]]; then
+                                word+='\'
+                            fi
+                            [[ "$character" == $'\n' ]] || word+="$character"
+                            escaped=false
+                        elif [[ "$character" == '\' && "$quote" != "'" ]]; then
+                            escaped=true
+                            started=true
+                        elif [[ -n "$quote" ]]; then
+                            if [[ "$character" == "$quote" ]]; then
+                                quote=''
+                            else
+                                word+="$character"
+                            fi
+                        else
+                            case "$character" in
+                                "'"|'"') quote="$character"; started=true ;;
+                                ' '|$'\t'|$'\r')
+                                    if [[ "$started" == true ]]; then arguments+=("$word"); fi
+                                    word=''
+                                    started=false
+                                    ;;
+                                ';'|'|'|'&'|'('|')'|$'\n')
+                                    arguments=()
+                                    word=''
+                                    started=false
+                                    ;;
+                                *) word+="$character"; started=true ;;
+                            esac
+                        fi
                     done
+                    [[ "$escaped" == false ]] || word+='\'
+                    arguments+=("$word")
+
                     while IFS= read -r suggestion; do
                         [[ -n "$suggestion" ]] || continue
-                        [[ "$suggestion" == "$word"* ]] || continue
                         # Without -o filenames, Readline inserts custom candidates verbatim.
-                        # Quote here to preserve argument boundaries and prevent shell expansion.
-                        printf -v suggestion '%q' "$suggestion"
-                        COMPREPLY+=("$suggestion")
-                    done < <(command aspire '[suggest]' "$line" 2>/dev/null)
+                        # Inside an open quote, escape for that quote; Readline closes it.
+                        if [[ -z "$quote" ]]; then
+                            printf -v text '%q' "$suggestion"
+                        else
+                            text=''
+                            for ((i = 0; i < ${#suggestion}; i++)); do
+                                character="${suggestion:i:1}"
+                                if [[ "$quote" == "'" && "$character" == "'" ]]; then
+                                    text+="'\''"
+                                else
+                                    if [[ "$quote" == '"' && ( "$character" == '\' || "$character" == '"' ||
+                                          "$character" == '$' || "$character" == '`' ) ]]; then
+                                        text+='\'
+                                    fi
+                                    text+="$character"
+                                fi
+                            done
+                        fi
+                        COMPREPLY+=("$text")
+                    done < <(command aspire '[suggest:tokens]' "${arguments[@]:1}" 2>/dev/null)
                 }
                 complete -o default -F _aspire_complete aspire
                 """,
@@ -56,8 +109,12 @@ internal static class CompletionScripts
                 _aspire()
                 {
                     local suggestions
-                    local -a values
-                    suggestions=$(command aspire '[suggest]' "${BUFFER:0:$CURSOR}" 2>/dev/null)
+                    local -a arguments values
+                    # Zsh supplies only this command's words, even after a pipeline or ';'.
+                    # Q removes quoting without evaluating substitutions; PREFIX excludes the
+                    # suffix after the cursor and the opening quote of an unfinished argument.
+                    arguments=("${(@Q)words[2,CURRENT-1]}")
+                    suggestions=$(command aspire '[suggest:tokens]' "${arguments[@]}" "$PREFIX" 2>/dev/null)
                     values=("${(@f)suggestions}")
                     if [[ -n "$suggestions" ]]; then
                         compadd -- "${values[@]}"

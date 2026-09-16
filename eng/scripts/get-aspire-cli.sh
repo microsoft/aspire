@@ -628,19 +628,31 @@ quote_shell_literal() {
     printf "'"
 }
 
-# Never follow a profile/file symlink or a directory symlink outside the user's home.
-# ZDOTDIR and XDG_CONFIG_HOME can point to shared/system locations.
-is_user_completion_path() {
-    local path="$1" home="${HOME%/}" parent
-    [[ -n "$home" && "$path" == "$home/"* && "$path" != *"/../"* && "$path" != *"/./"* && ! -L "$path" && ! -d "$path" ]] || return 1
+# Never follow a file symlink or a directory symlink outside the selected boundary.
+is_completion_path_within_root() {
+    local path="$1" root="${2%/}" parent
+    [[ -n "$root" && "$path" == "$root/"* && "$path" != *"/../"* && "$path" != *"/./"* && ! -L "$path" && ! -d "$path" ]] || return 1
     parent=$(dirname "$path")
     while [[ ! -d "$parent" ]]; do
         [[ ! -L "$parent" ]] || return 1
         parent=$(dirname "$parent")
     done
-    home=$(cd "$home" && pwd -P) || return 1
+    # Dry runs can select a CLI directory that does not exist yet. Its existing
+    # ancestor is safe to resolve; the lexical check above still confines the destination.
+    while [[ ! -d "$root" ]]; do
+        [[ ! -L "$root" ]] || return 1
+        root=$(dirname "$root")
+    done
+    root=$(cd "$root" && pwd -P) || return 1
     parent=$(cd "$parent" && pwd -P) || return 1
-    [[ "$parent" == "$home" || "$parent" == "$home/"* ]]
+    [[ "$parent" == "$root" || "$parent" == "$root/"* ]]
+}
+
+# Profiles stay home-confined even when the CLI is installed elsewhere.
+# ZDOTDIR and XDG_CONFIG_HOME can point to shared/system locations.
+is_user_completion_path() {
+    [[ -d "$HOME" ]] || return 1
+    is_completion_path_within_root "$1" "$HOME"
 }
 
 is_elevated_install() {
@@ -666,7 +678,7 @@ install_completions() {
 install_completions_core() {
     local cli="$1" persist="$2" shell_name="${SHELL:-}"
     shell_name="${shell_name##*/}"
-    local completion_dir="$HOME/.aspire/completions" profile="" registration
+    local completion_root="$HOME" completion_dir="$HOME/.aspire/completions" profile="" registration
     case "$shell_name" in
         bash) profile="$HOME/.bashrc" ;;
         zsh) profile="${ZDOTDIR:-$HOME}/.zshrc" ;;
@@ -674,7 +686,9 @@ install_completions_core() {
         *) say_warn "Cannot detect a supported completion shell from SHELL=${SHELL:-unset}."; return 1 ;;
     esac
     if [[ "$persist" != true ]]; then
-        completion_dir="$(dirname "$cli")/completions"
+        # Session-only artifacts belong to the explicitly selected CLI directory, not HOME.
+        completion_root="$(dirname "$cli")"
+        completion_dir="$completion_root/completions"
     fi
     local completion_file="$completion_dir/aspire.$shell_name" quoted_file
     quoted_file=$(quote_shell_literal "$completion_file" "$shell_name")
@@ -701,7 +715,11 @@ install_completions_core() {
         # .profile can also be read by non-bash shells.
         registration="if [ -n \"\${BASH_VERSION:-}\" ] && [ -f $quoted_file ]; then . $quoted_file; fi # Aspire CLI completions"
     fi
-    is_user_completion_path "$completion_file" || return 1
+    if [[ "$persist" == true ]]; then
+        is_user_completion_path "$completion_file" || return 1
+    else
+        is_completion_path_within_root "$completion_file" "$completion_root" || return 1
+    fi
     if [[ "$DRY_RUN" == true ]]; then
         say_info "[DRY RUN] Would generate shell completions: $cli completions script $shell_name -> $completion_file"
         if [[ "$persist" == true ]]; then

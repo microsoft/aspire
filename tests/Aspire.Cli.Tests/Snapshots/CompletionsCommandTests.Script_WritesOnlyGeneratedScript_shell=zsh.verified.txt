@@ -2,8 +2,12 @@
 _aspire()
 {
     local suggestions
-    local -a values
-    suggestions=$(command aspire '[suggest]' "${BUFFER:0:$CURSOR}" 2>/dev/null)
+    local -a arguments values
+    # Zsh supplies only this command's words, even after a pipeline or ';'.
+    # Q removes quoting without evaluating substitutions; PREFIX excludes the
+    # suffix after the cursor and the opening quote of an unfinished argument.
+    arguments=("${(@Q)words[2,CURRENT-1]}")
+    suggestions=$(command aspire '[suggest:tokens]' "${arguments[@]}" "$PREFIX" 2>/dev/null)
     values=("${(@f)suggestions}")
     if [[ -n "$suggestions" ]]; then
         compadd -- "${values[@]}"

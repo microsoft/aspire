@@ -2,9 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.CommandLine.Completions;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Completions;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.DependencyInjection;
@@ -58,17 +61,41 @@ public class CompletionsCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("--banner completions script bash", true)]
     [InlineData("--help completions script bash", true)]
+    [InlineData("-h completions script bash", true)]
+    [InlineData("-? completions script bash", true)]
+    [InlineData("/h completions script bash", true)]
+    [InlineData("/? completions script bash", true)]
     [InlineData("-v completions script bash", true)]
     [InlineData("--log-level Debug completions script bash", true)]
     [InlineData("--log-level=Debug completions script bash", true)]
     [InlineData("--log-level:Debug completions script bash", true)]
     [InlineData("--non-interactive true completions script bash", true)]
+    [InlineData("--start-debug-session completions script bash", true)]
+    [InlineData("--start-debug-session true completions script bash", true)]
+    [InlineData("--start-debug-session false completions script bash", true)]
+    [InlineData("--start-debug-session=true completions script bash", true)]
+    [InlineData("--start-debug-session:false completions script bash", true)]
+    [InlineData("--start-debug-session=invalid completions script bash", true)]
+    [InlineData("--start-debug-session invalid completions script bash", false)]
+    [InlineData("--start-debug-session true run -- completions script bash", false)]
+    [InlineData("--start-debug-session --log-file completions run", false)]
     [InlineData("--log-file completions run", false)]
     [InlineData("run -- completions script bash", false)]
     [InlineData("-- completions script bash", false)]
     public void CompletionDetection_UsesGlobalOptionArity(string arguments, bool expected)
     {
         Assert.Equal(expected, CompletionInvocation.Matches(arguments.Split(' ')));
+    }
+
+    [Fact]
+    public void OrdinaryCommands_DoNotExposeExtensionDebugOption()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        Assert.False(command.Options.Contains(RootCommand.StartDebugSessionOption));
+        Assert.NotEmpty(command.Parse(["--start-debug-session", "run"]).Errors);
     }
 
     [Theory]
@@ -131,6 +158,63 @@ public class CompletionsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("My Project.csproj", "destination with spaces", "destination with spaces suffix")]
+    [InlineData("My \"Quoted\" Project.csproj", "destination \"quoted", "destination \"quoted\"")]
+    [InlineData("My 'Quoted' Project.csproj", "destination 'quoted", "destination 'quoted'")]
+    [InlineData("My Project.csproj", "", "destination")]
+    public void Suggestions_TokensPreserveArgumentsAndNeverInvokeCommand(string projectPath, string word, string expected)
+    {
+        var command = new System.CommandLine.RootCommand();
+        command.Options.Clear();
+        command.SetAction(int (ParseResult _) => throw new InvalidOperationException("Completion must not run a command."));
+        var run = new Command("run");
+        run.SetAction(int (ParseResult _) => throw new InvalidOperationException("Completion must not run a command."));
+        var project = new Option<string>("--project");
+        var destination = new Argument<string>("destination");
+        var completionRequested = false;
+        destination.CompletionSources.Add(context =>
+        {
+            completionRequested = true;
+            Assert.Equal(projectPath, context.ParseResult.GetValue(project));
+            Assert.Equal(word, context.WordToComplete);
+            return [new CompletionItem(expected)];
+        });
+        run.Options.Add(project);
+        run.Arguments.Add(destination);
+        command.Subcommands.Add(run);
+        var output = new StringWriter();
+        var error = new StringWriter();
+        string[] args = ["[suggest:tokens]", "run", "--project", projectPath, word];
+
+        Assert.True(CompletionInvocation.Matches(args));
+        var result = CompletionInvocation.WriteSuggestions(command, args, output, error);
+
+        Assert.Equal(0, result);
+        Assert.True(completionRequested);
+        Assert.Equal(expected + "\n", output.ToString());
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Theory]
+    [InlineData("--log-level Deb")]
+    [InlineData("run --log-level Deb")]
+    [InlineData("run --log-level=Deb")]
+    public void Suggestions_TokensCompleteOptionValues(string arguments)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = CompletionInvocation.WriteSuggestions(command, ["[suggest:tokens]", .. arguments.Split(' ')], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("Debug\n", output.ToString());
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Theory]
     [InlineData("[suggest:bad]", "aspire run")]
     [InlineData("[suggest:-1]", "aspire run")]
     [InlineData("[suggest:100]", "aspire run")]
@@ -150,16 +234,49 @@ public class CompletionsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("suggest")]
-    [InlineData("script")]
-    public void CompletionStartup_DoesNotWriteUserState(string request)
+    [InlineData("suggest", "local", "")]
+    [InlineData("suggest", "legacy-local", "")]
+    [InlineData("suggest", "global", "")]
+    [InlineData("suggest", "legacy-global", "")]
+    [InlineData("script", "local", "")]
+    [InlineData("script", "legacy-local", "")]
+    [InlineData("script", "global", "")]
+    [InlineData("script", "legacy-global", "")]
+    [InlineData("script", "global", "--start-debug-session")]
+    [InlineData("script", "global", "--start-debug-session true")]
+    [InlineData("script", "global", "--start-debug-session false")]
+    [InlineData("script", "global", "--start-debug-session=true")]
+    [InlineData("script", "global", "--start-debug-session:false")]
+    [InlineData("script", "global", "--start-debug-session=invalid")]
+    public void CompletionStartup_DoesNotWriteUserState(string request, string location, string extensionArguments)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("aspire-home");
         var legacyConfig = Path.Combine(home.FullName, "globalsettings.json");
-        File.WriteAllText(legacyConfig, "{}");
+        File.WriteAllText(legacyConfig, """
+            { "features:terminalCommandsEnabled": false }
+            """);
+        var settingsPath = location switch
+        {
+            "global" => Path.Combine(home.FullName, AspireConfigFile.FileName),
+            "legacy-global" => legacyConfig,
+            "legacy-local" => ConfigurationHelper.BuildPathToSettingsJsonFile(workspace.Path),
+            _ => Path.Combine(workspace.Path, AspireConfigFile.FileName)
+        };
+        File.WriteAllText(settingsPath, """
+            {
+              // Preserve the nested value and leave this file byte-for-byte unchanged.
+              "features:terminalCommandsEnabled": false,
+              "features": { "terminalCommandsEnabled": true },
+            }
+            """);
+        var originalFiles = Directory.GetFiles(workspace.Path, "*", SearchOption.AllDirectories)
+            .ToDictionary(path => path, File.ReadAllBytes);
+        var originalDirectories = Directory.GetDirectories(workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.WorkingDirectory = workspace.Path;
 
-        using var remote = RemoteExecutor.Invoke(async (homePath, requestKind) =>
+        using (RemoteExecutor.Invoke(static async (homePath, requestKind, extensionOptions) =>
         {
             Environment.SetEnvironmentVariable("ASPIRE_HOME", homePath);
             // This must not connect to an inherited editor, start profiling, wait for a debugger,
@@ -169,15 +286,41 @@ public class CompletionsCommandTests(ITestOutputHelper outputHelper)
             var output = new StringWriter();
             var error = new StringWriter();
             string[] args = requestKind == "script"
-                ? ["--banner", "--log-level", "Debug", "--cli-wait-for-debugger", "completions", "script", "bash"]
-                : ["[suggest]", System.CommandLine.RootCommand.ExecutableName + " run --apphost"];
+                ? ["--banner", "--log-level", "Debug", "--cli-wait-for-debugger",
+                    .. extensionOptions.Split(' ', StringSplitOptions.RemoveEmptyEntries), "completions", "script", "bash"]
+                : ["[suggest]", System.CommandLine.RootCommand.ExecutableName + " term"];
 
+            Assert.True(CompletionInvocation.Matches(args));
             var result = await Program.InvokeCompletionAsync(args, output, error).DefaultTimeout();
 
-            Assert.Equal(0, result);
-            Assert.Equal(string.Empty, error.ToString());
-            Assert.Equal(["globalsettings.json"], Directory.GetFiles(homePath, "*", SearchOption.AllDirectories).Select(Path.GetFileName));
-            Assert.Empty(Directory.GetDirectories(homePath));
-        }, home.FullName, request);
+            if (extensionOptions == "--start-debug-session=invalid")
+            {
+                Assert.NotEqual(0, result);
+                Assert.NotEmpty(error.ToString());
+            }
+            else
+            {
+                Assert.Equal(0, result);
+                Assert.Equal(string.Empty, error.ToString());
+                if (requestKind == "suggest")
+                {
+                    // This command is feature-gated, proving normalized settings were loaded.
+                    Assert.Equal("terminal\n", output.ToString());
+                }
+                else
+                {
+                    Assert.NotEmpty(output.ToString());
+                }
+            }
+        }, home.FullName, request, extensionArguments, options))
+        {
+        }
+
+        Assert.Equal(originalFiles.Keys.Order(), Directory.GetFiles(workspace.Path, "*", SearchOption.AllDirectories).Order());
+        Assert.Equal(originalDirectories, Directory.GetDirectories(workspace.Path, "*", SearchOption.AllDirectories).Order());
+        foreach (var (path, bytes) in originalFiles)
+        {
+            Assert.Equal(bytes, File.ReadAllBytes(path));
+        }
     }
 }
