@@ -495,7 +495,7 @@ fluent-dropdown fluent-option[selected]::part(content) {
 
 fluent-dropdown fluent-option[selected]::before {
     position: absolute;
-    top: 5px;
+    top: 7px;
     left: 1px;
     width: 3px;
     height: 14px;
