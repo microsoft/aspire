@@ -571,7 +571,7 @@ fluent-dialog-body::part(content) {
 }
 
 fluent-dialog-body .fluent-message-box {
-    margin-top: 0;
+    margin-top: 0 !important;
 }
 
 .dialog-format fluent-dropdown {
