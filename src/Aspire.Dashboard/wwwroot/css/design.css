@@ -250,6 +250,7 @@
     --colorNeutralBackground2: var(--aspire-page-background);
     --colorNeutralBackground3: #312e3c;
     --colorNeutralBackground4: var(--aspire-shell-background);
+    --colorNeutralBackgroundDisabled: var(--colorNeutralBackground1);
     --datagrid-hover-color: var(--colorNeutralBackground1);
     --datagrid-border-color: #363241;
     --colorNeutralForeground1: #ffffff;

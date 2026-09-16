@@ -193,6 +193,12 @@ fluent-dialog-body {
     max-height: calc(100dvh - 48px) !important;
 }
 
+fluent-dialog-body::part(content) {
+    /* Browser scaling can round the content's client height below its scroll height. Let an
+       unconstrained dialog absorb that rounding while preserving scrolling at max-height. */
+    padding-block-end: 1px;
+}
+
 fluent-dialog-body fluent-dropdown,
 fluent-dialog-body fluent-text-input {
     --colorNeutralBackground1: var(--dialog-control-background);
@@ -523,7 +529,6 @@ fluent-dialog-body.toolbar-panel-body > [slot="action"] .mobile-toolbar {
 }
 
 fluent-dialog-body::part(content) {
-    min-height: 80px;
     align-content: center;
 }
 
@@ -563,6 +568,10 @@ fluent-dialog-body::part(content) {
         overflow: auto;
         align-content: normal;
     }
+}
+
+fluent-dialog-body .fluent-message-box {
+    margin-top: 0;
 }
 
 .dialog-format fluent-dropdown {
