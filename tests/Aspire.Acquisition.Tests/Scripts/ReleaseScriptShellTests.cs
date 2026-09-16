@@ -215,6 +215,54 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
             downloads);
     }
 
+    [Theory]
+    [InlineData("dev", "https://aka.ms/dotnet/9/aspire/daily")]
+    [InlineData("staging", "https://aka.ms/dotnet/9/aspire/rc/daily")]
+    public async Task NonReleaseQuality_DoesNotCallReleaseResolution(string quality, string expectedBaseUrl)
+    {
+        // GitHub release resolution (and therefore the github.com/.../releases/download URL) is
+        // reserved for the stable 'release' quality. dev/staging installs must always use their
+        // aka.ms channel URL and never resolve or land on a GitHub release asset.
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var tempDir = Path.Combine(env.TempDirectory, "download");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        Directory.CreateDirectory(tempDir);
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            INSTALL_PATH='{{installPath}}'
+            VERSION=''
+            QUALITY='{{quality}}'
+            OS='linux'
+            ARCH='x64'
+            DRY_RUN=false
+            get_latest_stable_version() { echo "should not be called" >&2; return 1; }
+            download_file() { printf '%s\n' "$1" >> '{{capturePath}}'; return 0; }
+            validate_checksum() { return 0; }
+            install_archive() {
+                mkdir -p "$2"
+                printf '#!/bin/sh\nexit 0\n' > "$2/aspire"
+                chmod +x "$2/aspire"
+            }
+            download_and_install_archive '{{tempDir}}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("should not be called", result.Output);
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                $"{expectedBaseUrl}/aspire-cli-linux-x64.tar.gz",
+                $"{expectedBaseUrl}/aspire-cli-linux-x64.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
     [Fact]
     public async Task DryRun_DoesNotCallReleaseResolution()
     {

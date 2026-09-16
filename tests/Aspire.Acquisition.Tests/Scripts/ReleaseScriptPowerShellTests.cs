@@ -218,6 +218,60 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
             downloads);
     }
 
+    [Theory]
+    [InlineData("dev", "https://aka.ms/dotnet/9/aspire/daily")]
+    [InlineData("staging", "https://aka.ms/dotnet/9/aspire/rc/daily")]
+    public async Task NonReleaseQuality_DoesNotCallReleaseResolution(string quality, string expectedBaseUrl)
+    {
+        // GitHub release resolution (and therefore the github.com/.../releases/download URL) is
+        // reserved for the stable 'release' quality. dev/staging installs must always use their
+        // aka.ms channel URL and never resolve or land on a GitHub release asset.
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            function Get-LatestStableVersion { throw 'should not be called' }
+            function Invoke-FileDownload {
+                param(
+                    [string]$Uri,
+                    [string]$OutputPath,
+                    [int]$TimeoutSec,
+                    [int]$OperationTimeoutSec,
+                    [int]$MaxRetries
+                )
+                Add-Content -Path '{{capturePath}}' -Value $Uri
+                Set-Content -Path $OutputPath -Value 'fake'
+            }
+            function Test-FileChecksum {}
+            function Expand-AspireCliArchive {
+                param(
+                    [string]$ArchiveFile,
+                    [string]$DestinationPath,
+                    [string]$OS
+                )
+                New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
+                Set-Content -Path (Join-Path $DestinationPath 'aspire') -Value ''
+            }
+            Install-AspireCli -InstallPath '{{installPath}}' -Quality '{{quality}}' -OS 'linux' -Architecture 'x64' | Out-Null
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("should not be called", result.Output);
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                $"{expectedBaseUrl}/aspire-cli-linux-x64.tar.gz",
+                $"{expectedBaseUrl}/aspire-cli-linux-x64.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
     [Fact]
     public async Task WhatIf_DoesNotCallReleaseResolution()
     {
