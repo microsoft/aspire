@@ -40,6 +40,10 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         Assert.Equal("ellipsis", overflowItems[0].GetAttribute("behavior"));
         Assert.All(overflowItems.Skip(1), item => Assert.Null(item.GetAttribute("behavior")));
         Assert.Equal(20, overflowItems.Count);
+        Assert.Equal("+10", cut.Find(".fluent-overflow-more fluent-button").TextContent.Trim());
+
+        var popupItems = cut.FindAll(".url-overflow-popover .url-link");
+        Assert.Equal(displayedUrls.Skip(20).Select(url => url.Text), popupItems.Select(item => item.TextContent.Trim()));
     }
 
     [Fact]
