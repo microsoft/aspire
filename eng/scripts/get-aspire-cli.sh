@@ -803,6 +803,29 @@ normalize_stable_version() {
     printf "%s" "${version#[vV]}"
 }
 
+get_latest_stable_version() {
+    local release_url="https://api.github.com/repos/microsoft/aspire/releases/latest"
+    local release_json
+    release_json=$(mktemp -t aspire-cli-latest-release-XXXXXXXX)
+
+    if ! secure_curl "$release_url" "$release_json" 60 "$USER_AGENT" 3 "GET" >/dev/null; then
+        rm -f "$release_json"
+        say_error "Failed to resolve the latest stable Aspire release from $release_url"
+        return 1
+    fi
+
+    local tag_name
+    tag_name=$(sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$release_json" | head -n 1)
+    rm -f "$release_json"
+
+    if [[ -z "$tag_name" ]] || ! is_stable_version "$tag_name"; then
+        say_error "GitHub latest release did not contain a stable Aspire version."
+        return 1
+    fi
+
+    normalize_stable_version "$tag_name"
+}
+
 # Function to construct the base URL for the Aspire CLI download
 construct_aspire_cli_url() {
     local version="$1"
@@ -955,6 +978,7 @@ download_and_install_archive() {
     local os arch runtimeIdentifier url filename checksum_url checksum_filename extension
     local cli_exe cli_path
     local download_source=""
+    local effective_version="$VERSION"
 
     # Detect OS and architecture if not provided
     if [[ -z "$OS" ]]; then
@@ -986,11 +1010,17 @@ download_and_install_archive() {
         extension="tar.gz"
     fi
 
+    if [[ -z "$effective_version" && "$QUALITY" == "release" && "$DRY_RUN" != true ]]; then
+        if ! effective_version=$(get_latest_stable_version); then
+            return 1
+        fi
+    fi
+
     # Construct the URLs using the new function
-    if ! url=$(construct_aspire_cli_url "$VERSION" "$QUALITY" "$runtimeIdentifier" "$extension"); then
+    if ! url=$(construct_aspire_cli_url "$effective_version" "$QUALITY" "$runtimeIdentifier" "$extension"); then
         return 1
     fi
-    if ! checksum_url=$(construct_aspire_cli_url "$VERSION" "$QUALITY" "$runtimeIdentifier" "$extension" "true"); then
+    if ! checksum_url=$(construct_aspire_cli_url "$effective_version" "$QUALITY" "$runtimeIdentifier" "$extension" "true"); then
         return 1
     fi
 

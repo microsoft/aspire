@@ -86,6 +86,48 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains(customPath, result.Output);
     }
 
+    [Fact]
+    public async Task DefaultReleaseInstall_DownloadsFromLatestGitHubRelease()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var tempDir = Path.Combine(env.TempDirectory, "download");
+        var capturePath = Path.Combine(env.TempDirectory, "downloads.txt");
+        Directory.CreateDirectory(tempDir);
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            INSTALL_PATH='{{installPath}}'
+            VERSION=''
+            QUALITY='release'
+            OS='linux'
+            ARCH='x64'
+            DRY_RUN=false
+            get_latest_stable_version() { printf '13.5.4'; }
+            download_file() { printf '%s\n' "$1" >> '{{capturePath}}'; return 0; }
+            validate_checksum() { return 0; }
+            install_archive() {
+                mkdir -p "$2"
+                printf '#!/bin/sh\nexit 0\n' > "$2/aspire"
+                chmod +x "$2/aspire"
+            }
+            download_and_install_archive '{{tempDir}}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var downloads = await File.ReadAllLinesAsync(capturePath);
+        Assert.Equal(
+            [
+                "https://github.com/microsoft/aspire/releases/download/v13.5.4/aspire-cli-linux-x64-13.5.4.tar.gz",
+                "https://github.com/microsoft/aspire/releases/download/v13.5.4/aspire-cli-linux-x64-13.5.4.tar.gz.sha512"
+            ],
+            downloads);
+    }
+
     [Theory]
     [InlineData("--verbose")]
     [InlineData("-v")]

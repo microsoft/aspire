@@ -137,6 +137,27 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         Assert.Equal(expectedUrl, result.Output.Trim());
     }
 
+    [Fact]
+    public async Task GetLatestStableVersion_ReturnsNormalizedGitHubLatestReleaseTag()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            secure_curl() {
+                printf '{"tag_name":"v13.5.4"}' > "$2"
+            }
+            get_latest_stable_version
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("13.5.4", result.Output.Trim());
+    }
+
     [Theory]
     [InlineData("13.3.0-dev")]
     [InlineData("13.3.0-preview.1.25366.3")]

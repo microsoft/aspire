@@ -1110,6 +1110,32 @@ function ConvertTo-StableVersion {
     return $Version
 }
 
+function Get-LatestStableVersion {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param()
+
+    $releaseUrl = "https://api.github.com/repos/microsoft/aspire/releases/latest"
+    $response = Invoke-SecureWebRequest -Uri $releaseUrl -TimeoutSec 60 -OperationTimeoutSec 30 -MaxRetries 3
+    $content = if ($response -is [string]) {
+        $response
+    }
+    elseif ($response.PSObject.Properties.Name -contains "Content") {
+        $response.Content
+    }
+    else {
+        $response | ConvertTo-Json -Compress
+    }
+
+    $release = $content | ConvertFrom-Json
+    $tagName = $release.tag_name
+    if ([string]::IsNullOrWhiteSpace($tagName) -or -not (Test-StableVersion -Version $tagName)) {
+        throw "GitHub latest release did not contain a stable Aspire version."
+    }
+
+    return ConvertTo-StableVersion -Version $tagName
+}
+
 # Enhanced URL construction function with configuration-based URLs
 function Get-AspireCliUrl {
     [CmdletBinding()]
@@ -1263,7 +1289,11 @@ function Install-AspireCli {
         # Construct the runtime identifier and URLs
         $runtimeIdentifier = "$targetOS-$targetArch"
         $extension = if ($targetOS -eq "win") { "zip" } else { "tar.gz" }
-        $urls = Get-AspireCliUrl -Version $Version -Quality $Quality -RuntimeIdentifier $runtimeIdentifier -Extension $extension
+        $effectiveVersion = $Version
+        if ([string]::IsNullOrWhiteSpace($effectiveVersion) -and $Quality -eq "release" -and -not $WhatIfPreference) {
+            $effectiveVersion = Get-LatestStableVersion
+        }
+        $urls = Get-AspireCliUrl -Version $effectiveVersion -Quality $Quality -RuntimeIdentifier $runtimeIdentifier -Extension $extension
         $downloadSource = $null
         if ([string]::IsNullOrWhiteSpace($Version) -and -not [string]::IsNullOrWhiteSpace($Quality)) {
             $downloadSource = "the $(ConvertTo-ChannelName -Quality $Quality) channel"
