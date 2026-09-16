@@ -20,6 +20,15 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureFrontDoorExtensions
 {
+    // Azure.Provisioning.Cdn beta.3 regressed the beta.2 name templates and length limits for Front Door resources.
+    // Preserve the beta.2 Azure names here so dependency upgrades do not rename deployed profiles, endpoints,
+    // origin groups, origins, or routes and trigger avoidable infrastructure replacement.
+    private const int FrontDoorProfileNameMaxLength = 260;
+    private const int FrontDoorEndpointNameMaxLength = 46;
+    private const int FrontDoorOriginGroupNameMaxLength = 90;
+    private const int FrontDoorOriginNameMaxLength = 90;
+    private const int FrontDoorRouteNameMaxLength = 90;
+
     /// <summary>
     /// Adds an Azure Front Door resource to the application model.
     /// </summary>
@@ -70,6 +79,9 @@ public static class AzureFrontDoorExtensions
             // Create the CDN profile (Front Door)
             var profile = new CdnProfile(infrastructure.AspireResource.GetBicepIdentifier())
             {
+                Name = BicepFunction.Take(
+                    BicepFunction.Interpolate($"{infrastructure.AspireResource.Name}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
+                    FrontDoorProfileNameMaxLength),
                 SkuName = CdnSkuName.StandardAzureFrontDoor,
                 Location = new AzureLocation("Global"),
                 Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
@@ -97,6 +109,9 @@ public static class AzureFrontDoorExtensions
                 // Endpoint
                 var endpoint = new FrontDoorEndpoint($"{originBicepId}Endpoint")
                 {
+                    Name = BicepFunction.Take(
+                        BicepFunction.Interpolate($"{originBicepId.Replace("_", string.Empty)}Endpoint-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
+                        FrontDoorEndpointNameMaxLength),
                     Parent = profile,
                     Location = new AzureLocation("Global")
                 };
@@ -105,6 +120,9 @@ public static class AzureFrontDoorExtensions
                 // Origin group — LoadBalancingSettings is required by ARM even with a single origin.
                 var originGroup = new FrontDoorOriginGroup($"{originBicepId}OriginGroup")
                 {
+                    Name = BicepFunction.Take(
+                        BicepFunction.Interpolate($"{originBicepId.Replace("_", string.Empty)}OriginGroup-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
+                        FrontDoorOriginGroupNameMaxLength),
                     Parent = profile,
                     HealthProbeSettings = new HealthProbeSettings
                     {
@@ -131,12 +149,15 @@ public static class AzureFrontDoorExtensions
                 // origin instead of reusing the existing origin's Azure identity.
                 origin.Name = BicepFunction.Take(
                     BicepFunction.Interpolate($"{originBicepId.Replace('_', '-')}Origin-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id, hostParam)}"),
-                    origin.GetResourceNameRequirements().MaxLength);
+                    FrontDoorOriginNameMaxLength);
                 infrastructure.Add(origin);
 
                 // Route
                 var route = new FrontDoorRoute($"{originBicepId}Route")
                 {
+                    Name = BicepFunction.Take(
+                        BicepFunction.Interpolate($"{originBicepId.Replace("_", string.Empty)}Route-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
+                        FrontDoorRouteNameMaxLength),
                     Parent = endpoint,
                     OriginGroupId = originGroup.Id,
                     PatternsToMatch = ["/*"],

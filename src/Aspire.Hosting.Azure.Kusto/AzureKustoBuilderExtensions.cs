@@ -7,6 +7,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Azure.Provisioning;
 using Azure.Provisioning.Kusto;
+using Azure.Provisioning.Expressions;
 using Kusto.Data;
 using Kusto.Data.Common;
 using Kusto.Data.Net.Client;
@@ -61,6 +62,12 @@ public static class AzureKustoBuilderExtensions
                 },
                 (infrastructure) => new KustoCluster(infrastructure.AspireResource.GetBicepIdentifier())
                 {
+                    // Azure.Provisioning.Kusto beta.3 switched the default generated name from
+                    // "kusto${uniqueString(resourceGroup().id)}" to "kusto-${uniqueString(...)}".
+                    // Keep the previous name stable so existing clusters are updated in place.
+                    Name = BicepFunction.Take(
+                        BicepFunction.Interpolate($"kusto{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
+                        24),
                     // Basic cluster configuration - can be enhanced in the future
                     Sku = new KustoSku()
                     {
