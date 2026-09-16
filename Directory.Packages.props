@@ -126,7 +126,9 @@
          2.5.302 combines the security fixes in 2.5.205 and 2.5.301:
          https://github.com/MessagePack-CSharp/MessagePack-CSharp/releases/tag/v2.5.302 -->
     <PackageVersion Include="MessagePack" Version="2.5.302" />
-    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="2.0.1" />
+    <!-- 2.0.1's transitive runtime targets set RuntimeIdentifier after restore, breaking
+         RID-independent library and AppHost builds with NETSDK1047. Retain 1.1.0 until fixed upstream. -->
+    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="1.1.0" />
     <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.20.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
