@@ -339,7 +339,16 @@ internal static class DotnetProjectBuildCoordinator
                 .Select(registration => registration.Resource)
                 .ToArray();
 
+            // A resource substitution helper (e.g. RunAsTool/RunAsContainer in the ResourceSubstitution playground)
+            // can strip DotnetProjectMetadata from a resource after it was registered here but before this step
+            // runs, converting it away from being a .NET project. Treat it like an inactive resource rather than
+            // asserting it still carries exactly one metadata annotation.
+            var substitutedResources = activeRegistrations
+                .Where(registration => registration.Resource.Annotations.OfType<DotnetProjectMetadata>().SingleOrDefault() is null)
+                .Select(registration => registration.Resource)
+                .ToArray();
             var resourceEntries = activeRegistrations
+                .Where(registration => registration.Resource.Annotations.OfType<DotnetProjectMetadata>().SingleOrDefault() is not null)
                 .Select(registration => new ProjectEntry(
                     registration,
                     registration.Resource.Annotations.OfType<DotnetProjectMetadata>().Single()))
@@ -519,6 +528,7 @@ internal static class DotnetProjectBuildCoordinator
                 }
 
                 RemoveEagerBuildDependencies(inactiveResources);
+                RemoveEagerBuildDependencies(substitutedResources);
                 RemoveEagerBuildDependencies(missingBuildEntries.Select(entry => entry.Registration.Resource));
                 _materialized = true;
             }
