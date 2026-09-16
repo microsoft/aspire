@@ -4,8 +4,8 @@
   "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard) fail with generic exit code 1",
   "job_name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
   "error_pattern": "Process completed with exit code 1. (Build test project step failed across multiple unrelated jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job').",
-  "analysis": "The job failed at a generic 'Build test project' step with only 'Process completed with exit code 1' reported and no underlying compiler errors, test failures, or job log content available (log fetch itself failed). The PR under analysis (#20143) only edits csproj InternalsVisibleTo declarations in Aspire.Hosting and Aspire.Hosting.Radius, and does not touch Aspire.Hosting.RemoteHost, Aspire.Hosting.RemoteHost.Tests, or any code path that RemoteHost's build depends on. This is the same signature seen recurring across many unrelated PRs and jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard), indicating a transient CI/runner infrastructure problem (e.g. build agent contention, disk/network flakiness) rather than a code issue.",
-  "failure_details": "Job: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)\nFailed Steps: Build test project\nAnnotation: failure - Process completed with exit code 1.\nJob log fetch failed: '(Failed to fetch logs for job 104478657168)'\nNo test failures were extracted from result artifacts for this job.",
+  "analysis": "Job failed at the 'Build test project' step with a generic exit code 1 and no fetchable job logs, matching a recurring pattern of widespread unrelated 'Build test project' failures. PR #20140 only modifies Aspire.Dashboard source and tests, unrelated to the Hosting.RemoteHost build.",
+  "failure_details": "### Annotations: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest) (104628488998)\n- warning: No files were found with the provided path: **/*.binlog\ntestresults/**\nartifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**\nartifacts/log/test-logs/**. No artifacts will be uploaded.\n- failure: Process completed with exit code 1.\n\nJob logs were unavailable: 'Failed to fetch logs for job'.",
   "occurrences": [
     {
       "run_id": 33494022725,
@@ -76,6 +76,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
       "pr_number": 20143,
       "observed_at": "2026-09-15T17:26:53Z"
+    },
+    {
+      "run_id": 35043367059,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35043367059",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "pr_number": 20140,
+      "observed_at": "2026-09-16T02:17:11Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"
