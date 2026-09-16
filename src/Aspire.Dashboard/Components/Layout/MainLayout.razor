@@ -4,7 +4,7 @@
 @inject IStringLocalizer<Dialogs> DialogsLoc
 @inherits LayoutComponentBase
 
-<div class="layout @(_isNavMenuExpanded ? "nav-expanded" : "nav-collapsed")" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
+<div class="layout @(_isNavMenuExpanded ? "nav-expanded" : "nav-collapsed") @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     @if (ViewportInformation.IsDesktop)
     {
         @* Full-width top header. The Aspire logo leads the header so the logo, app name, and page
