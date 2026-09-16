@@ -66,7 +66,8 @@ public class NewUpAndBuildStandaloneTemplateTests(ITestOutputHelper testOutput) 
     private static void AssertStarterTestFrameworkPackages(string testProjectDir, string extraArgs)
     {
         var projectPath = Directory.EnumerateFiles(testProjectDir, "*.csproj").Single();
-        var packageReferences = XDocument.Load(projectPath)
+        var project = XDocument.Load(projectPath);
+        var packageReferences = project
             .Descendants("PackageReference")
             .Where(element => element.Attribute("Include")?.Value != "Aspire.Hosting.Testing")
             .Select(element => $"{element.Attribute("Include")?.Value}/{element.Attribute("Version")?.Value}")
@@ -108,6 +109,11 @@ public class NewUpAndBuildStandaloneTemplateTests(ITestOutputHelper testOutput) 
         };
 
         Assert.Equal(expectedPackageReferences.OrderBy(packageReference => packageReference), packageReferences);
+
+        if (extraArgs is "--test-framework xUnit.net --xunit-version v3" or "--test-framework xUnit.net --xunit-version v3mtp")
+        {
+            Assert.Equal("Exe", project.Descendants("OutputType").Single().Value);
+        }
     }
 
     private static async Task AssertStarterAspNetCoreTemplateContentAsync(AspireProject project, TestTargetFramework tfm)

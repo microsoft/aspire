@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <OutputType Condition=" $(XUnitVersion) != 'v2' ">Exe</OutputType>
     <UseMicrosoftTestingPlatformRunner Condition=" $(XUnitVersion) == 'v3mtp' ">true</UseMicrosoftTestingPlatformRunner>
     <TestingPlatformDotnetTestSupport Condition=" $(XUnitVersion) == 'v3mtp' ">true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>

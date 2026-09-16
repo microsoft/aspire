@@ -325,17 +325,31 @@ public partial class TemplateTestsBase
                                     .WithWorkingDirectory(testProjectDirectory)
                                     .WithTimeout(TimeSpan.FromSeconds(testRunTimeoutSecs));
 
-            (await buildCmd.ExecuteAsync($"test -c {config}")).EnsureSuccessful();
+            (await buildCmd.ExecuteAsync($"build -c {config}")).EnsureSuccessful();
 
             // .. then test with --no-build
             using var testCmd = new DotNetCommand(testOutput, label: $"test-{testType}")
                                     .WithWorkingDirectory(testProjectDirectory)
                                     .WithTimeout(TimeSpan.FromSeconds(testRunTimeoutSecs));
 
-            var testRes = (await testCmd.ExecuteAsync($"test -c {config} --no-build"))
+            // MSTest uses an MTP executable. Run it directly to support SDKs 8 and 9 as well as
+            // SDK 10+, where MTP 2 no longer supports the VSTest-based dotnet test entry point.
+            // This also avoids imposing a global.json runner selection on generated projects.
+            // See https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-integration-dotnet-test.
+            var command = testType == "mstest" ? "run" : "test";
+            var testRes = (await testCmd.ExecuteAsync($"{command} -c {config} --no-build"))
                                 .EnsureSuccessful();
 
-            Assert.Matches("Passed! * - Failed: *0, Passed: *1, Skipped: *0, Total: *1", testRes.Output);
+            if (testType == "mstest")
+            {
+                // Native MTP reports a multiline summary: "total: 1", "failed: 0",
+                // "succeeded: 1", "skipped: 0", unlike VSTest's single-line summary.
+                Assert.Matches(@"Test run summary: Passed![^\r\n]*\r?\n\s+total: 1\r?\n\s+failed: 0\r?\n\s+succeeded: 1\r?\n\s+skipped: 0", testRes.Output);
+            }
+            else
+            {
+                Assert.Matches("Passed! * - Failed: *0, Passed: *1, Skipped: *0, Total: *1", testRes.Output);
+            }
             return testRes;
         }
     }

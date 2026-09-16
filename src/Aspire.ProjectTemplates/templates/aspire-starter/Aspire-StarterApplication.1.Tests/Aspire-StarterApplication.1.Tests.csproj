@@ -7,6 +7,7 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <!--#if (IsXunit) -->
+    <OutputType Condition=" $(XUnitVersion) != 'v2' ">Exe</OutputType>
     <UseMicrosoftTestingPlatformRunner Condition=" $(XUnitVersion) == 'v3mtp' ">true</UseMicrosoftTestingPlatformRunner>
     <TestingPlatformDotnetTestSupport Condition=" $(XUnitVersion) == 'v3mtp' ">true</TestingPlatformDotnetTestSupport>
     <!--#endif-->

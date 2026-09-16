@@ -65,7 +65,8 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
     private static void AssertTestFrameworkPackages(string testProjectDir, string templateName, string extraTestCreationArgs)
     {
         var projectPath = Directory.EnumerateFiles(testProjectDir, "*.csproj").Single();
-        var packageReferences = XDocument.Load(projectPath)
+        var project = XDocument.Load(projectPath);
+        var packageReferences = project
             .Descendants("PackageReference")
             .Where(element => element.Attribute("Include")?.Value != "Aspire.Hosting.Testing")
             .Select(element => $"{element.Attribute("Include")?.Value}/{element.Attribute("Version")?.Value}")
@@ -108,6 +109,11 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
         };
 
         Assert.Equal(expectedPackageReferences.OrderBy(packageReference => packageReference), packageReferences);
+
+        if (templateName == "aspire-xunit" && extraTestCreationArgs is "--xunit-version v3" or "--xunit-version v3mtp")
+        {
+            Assert.Equal("Exe", project.Descendants("OutputType").Single().Value);
+        }
     }
 }
 
