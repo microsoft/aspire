@@ -709,6 +709,36 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public void DashboardRunSelect_GetSortedRuns_FiltersAndSortsRuns()
+    {
+        var startedAtUtc = new DateTimeOffset(2025, 1, 2, 12, 0, 0, TimeSpan.Zero);
+        var currentRun = new DashboardRunDescriptor("current", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, null, false, "TestApp", string.Empty, IsCurrent: true);
+        var pinnedRunB = new DashboardRunDescriptor("pinned-b", DashboardRunStore.SchemaVersion, startedAtUtc, null, true, "TestApp", string.Empty, IsCurrent: false) { IsPinned = true };
+        var pinnedRunA = new DashboardRunDescriptor("pinned-a", DashboardRunStore.SchemaVersion, startedAtUtc, null, true, "TestApp", string.Empty, IsCurrent: false) { IsPinned = true };
+        var olderPinnedRun = new DashboardRunDescriptor("pinned-older", DashboardRunStore.SchemaVersion, startedAtUtc.AddDays(-1), null, true, "TestApp", string.Empty, IsCurrent: false) { IsPinned = true };
+        var unpinnedRun = new DashboardRunDescriptor("unpinned", DashboardRunStore.SchemaVersion, startedAtUtc.AddDays(1), null, true, "TestApp", string.Empty, IsCurrent: false);
+        var incompatibleRun = new DashboardRunDescriptor("incompatible", DashboardRunStore.SchemaVersion - 1, startedAtUtc.AddDays(2), null, true, "TestApp", string.Empty, IsCurrent: false) { IsSelectable = false };
+        var unavailableRun = new DashboardRunDescriptor("unavailable", DashboardRunStore.SchemaVersion, startedAtUtc.AddDays(3), null, true, "TestApp", string.Empty, IsCurrent: false) { IsSelectable = false };
+        var prunedRun = new DashboardRunDescriptor("pruned", DashboardRunStore.SchemaVersion, startedAtUtc.AddDays(4), null, true, "TestApp", string.Empty, IsCurrent: false) { IsPruned = true };
+
+        var runs = DashboardRunSelect.GetSortedRuns(
+        [
+            unavailableRun,
+            pinnedRunB,
+            unpinnedRun,
+            prunedRun,
+            olderPinnedRun,
+            incompatibleRun,
+            currentRun,
+            pinnedRunA
+        ]);
+
+        Assert.Equal(
+            ["current", "pinned-a", "pinned-b", "pinned-older", "incompatible", "unpinned"],
+            runs.Select(run => run.RunId));
+    }
+
+    [Fact]
     public void DashboardRunSelect_SortsHistoricalRunsByPinnedThenDateDescendingAndUpdatesOrderWhenPinned()
     {
         var currentRun = new DashboardRunDescriptor(

@@ -49,13 +49,9 @@ public partial class DashboardRunSelect : ComponentBase
 
     private IList<MenuButtonItem> LoadRuns()
     {
-        var runs = RunStore.GetRuns()
-            .Where(run => !run.IsPruned && (run.IsSelectable || !run.IsCompatible))
-            .OrderByDescending(run => run.IsCurrent)
-            .ThenByDescending(run => run.IsPinned)
-            .ThenByDescending(run => run.StartedAtUtc)
-            .ToArray();
-        var menuItems = new List<MenuButtonItem>();
+        var runs = GetSortedRuns(RunStore.GetRuns());
+
+        var menuItems = new List<MenuButtonItem>(runs.Count + 1);
         foreach (var run in runs)
         {
             var isCompatible = run.IsCompatible;
@@ -81,13 +77,47 @@ public partial class DashboardRunSelect : ComponentBase
             };
             menuItems.Add(menuItem);
 
-            if (run.IsCurrent && runs.Any(candidate => !candidate.IsCurrent))
+            if (run.IsCurrent && runs.Count > 1)
             {
                 menuItems.Add(new MenuButtonItem { IsDivider = true });
             }
         }
 
         return menuItems;
+    }
+
+    internal static List<DashboardRunDescriptor> GetSortedRuns(IReadOnlyList<DashboardRunDescriptor> storedRuns)
+    {
+        var runs = new List<DashboardRunDescriptor>(storedRuns.Count);
+        foreach (var run in storedRuns)
+        {
+            if (!run.IsPruned && (run.IsSelectable || !run.IsCompatible))
+            {
+                runs.Add(run);
+            }
+        }
+        runs.Sort(CompareRuns);
+
+        return runs;
+    }
+
+    private static int CompareRuns(DashboardRunDescriptor left, DashboardRunDescriptor right)
+    {
+        var result = right.IsCurrent.CompareTo(left.IsCurrent);
+        if (result == 0)
+        {
+            result = right.IsPinned.CompareTo(left.IsPinned);
+        }
+        if (result == 0)
+        {
+            result = right.StartedAtUtc.CompareTo(left.StartedAtUtc);
+        }
+        if (result == 0)
+        {
+            result = string.Compare(left.RunId, right.RunId, StringComparison.Ordinal);
+        }
+
+        return result;
     }
 
     private void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
