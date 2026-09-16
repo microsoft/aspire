@@ -73,7 +73,7 @@ Browser token authentication works by asking for a token. The token can either b
 |--------|-------------|
 | `Dashboard:Frontend:AuthMode`<br/>Default: `BrowserToken` | Can be set to `BrowserToken`, `OpenIdConnect`, or `Unsecured`. `Unsecured` should only be used during local development. It's not recommended when hosting the dashboard publicly or in other settings. |
 | `Dashboard:Frontend:BrowserToken`<br/>Default: `null` | Specifies the browser token. If it isn't specified, the dashboard generates one. Tooling that automates login can specify a token and open a browser with the token in the query string. A new token should be generated each time the dashboard is launched. |
-| `Dashboard:Frontend:MaxConsoleLogCount`<br/>Default: `10,000` | An optional limit on the number of console log messages retained in the viewer. When the limit is reached, the oldest messages are removed. |
+| `Dashboard:Frontend:MaxConsoleLogCount`<br/>Default: `100,000` | An optional limit on the number of console log messages retained in the viewer. When the limit is reached, the oldest messages are removed. |
 | `Dashboard:Frontend:PublicUrl`<br/>Default: `null` | Specifies the public URL used to access the dashboard frontend and construct links to it. If a public URL isn't specified, the frontend endpoint is used instead. This setting is important when the dashboard is accessed through a proxy and its endpoint isn't directly reachable. |
 | `Dashboard:Frontend:OpenIdConnect:NameClaimType`<br/>Default: `name` | Specifies one or more claim types used to display the authenticated user's full name. Can be a single claim type or a comma-delimited list. |
 | `Dashboard:Frontend:OpenIdConnect:UsernameClaimType`<br/>Default: `preferred_username` | Specifies one or more claim types used to display the authenticated user's username. Can be a single claim type or a comma-delimited list. |
@@ -174,8 +174,8 @@ Telemetry limits have different scopes depending on the telemetry type:
 
 | Option | Description |
 |--------|-------------|
-| `Dashboard:TelemetryLimits:MaxLogCount`<br/>Default: `10,000` | The maximum number of log entries. The limit is shared across resources. |
-| `Dashboard:TelemetryLimits:MaxTraceCount`<br/>Default: `10,000` | The maximum number of traces. The limit is shared across resources. |
+| `Dashboard:TelemetryLimits:MaxLogCount`<br/>Default: `100,000` | The maximum number of log entries. The limit is shared across resources. |
+| `Dashboard:TelemetryLimits:MaxTraceCount`<br/>Default: `100,000` | The maximum number of traces. The limit is shared across resources. |
 | `Dashboard:TelemetryLimits:MaxMetricsCount`<br/>Default: `50,000` | The maximum number of metric data points. The limit is per dimension. |
 | `Dashboard:TelemetryLimits:MaxAttributeCount`<br/>Default: `128` | The maximum number of attributes on telemetry. |
 | `Dashboard:TelemetryLimits:MaxAttributeLength`<br/>Default: `null` | The maximum length of attributes. |
