@@ -12,6 +12,65 @@ namespace Aspire.Acquisition.Tests.Scripts;
 public class CompletionPowerShellTests(ITestOutputHelper testOutput)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompletionBoundary_AcceptsVolumeRootWithoutWritingToIt(bool dogfood)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRPowerShell : ScriptPaths.ReleasePowerShell,
+            """
+            $root = [IO.Path]::GetPathRoot($HOME)
+            $destination = Join-Path $root ('aspire-boundary-' + [Guid]::NewGuid().ToString('N') + '/aspire.ps1')
+            if (-not (Test-CompletionPathWithinRoot -Path $destination -Root $root)) {
+                throw 'Filesystem root was rejected.'
+            }
+            'accepted'
+            """,
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("accepted", result.Output.Trim());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompletionBoundary_SelectedRootAliasIsAnchorButChildRedirectIsRejected(bool dogfood)
+    {
+        using var env = new TestEnvironment();
+        var target = Path.Combine(env.TempDirectory, "actual");
+        var selected = Path.Combine(env.TempDirectory, "selected");
+        var outside = Path.Combine(env.TempDirectory, "outside");
+        Directory.CreateDirectory(target);
+        Directory.CreateDirectory(outside);
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRPowerShell : ScriptPaths.ReleasePowerShell,
+            $$"""
+            $linkType = if ($IsWindows) { 'Junction' } else { 'SymbolicLink' }
+            New-Item -ItemType $linkType -Path '{{Quote(selected)}}' -Target '{{Quote(target)}}' -ErrorAction Stop | Out-Null
+            $destination = '{{Quote(Path.Combine(selected, "completions", "aspire.ps1"))}}'
+            if (-not (Test-CompletionPathWithinRoot -Path $destination -Root '{{Quote(selected)}}')) {
+                throw 'The selected root alias was not accepted.'
+            }
+            New-Item -ItemType $linkType -Path '{{Quote(Path.Combine(target, "completions"))}}' -Target '{{Quote(outside)}}' -ErrorAction Stop | Out-Null
+            if (Test-CompletionPathWithinRoot -Path $destination -Root '{{Quote(selected)}}') {
+                throw 'A descendant link escaped the selected root.'
+            }
+            'bounded'
+            """,
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("bounded", result.Output.Trim());
+        Assert.Empty(Directory.EnumerateFileSystemEntries(outside));
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -403,6 +462,53 @@ public class CompletionPowerShellTests(ITestOutputHelper testOutput)
 [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
 public class CompletionShellTests(ITestOutputHelper testOutput)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompletionBoundary_AcceptsFilesystemRootWithoutWritingToIt(bool dogfood)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRShell : ScriptPaths.ReleaseShell,
+            "is_completion_path_within_root /aspire-boundary-probe/completions/aspire.bash /",
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompletionBoundary_SelectedRootAliasIsAnchorButChildRedirectIsRejected(bool dogfood)
+    {
+        using var env = new TestEnvironment();
+        var target = Path.Combine(env.TempDirectory, "actual");
+        var selected = Path.Combine(env.TempDirectory, "selected");
+        var outside = Path.Combine(env.TempDirectory, "outside");
+        Directory.CreateDirectory(target);
+        Directory.CreateDirectory(outside);
+        Directory.CreateSymbolicLink(selected, target);
+        using var cmd = new ScriptFunctionCommand(
+            dogfood ? ScriptPaths.PRShell : ScriptPaths.ReleaseShell,
+            $$"""
+            set -euo pipefail
+            is_completion_path_within_root '{{Quote(Path.Combine(selected, "completions", "aspire.bash"))}}' '{{Quote(selected)}}'
+            ln -s '{{Quote(outside)}}' '{{Quote(Path.Combine(target, "completions"))}}'
+            if is_completion_path_within_root '{{Quote(Path.Combine(selected, "completions", "aspire.bash"))}}' '{{Quote(selected)}}'; then
+                echo 'A descendant link escaped the selected root.' >&2
+                exit 1
+            fi
+            """,
+            env, testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Empty(Directory.EnumerateFileSystemEntries(outside));
+    }
+
     [Theory]
     [InlineData(false, "bash")]
     [InlineData(false, "zsh")]

@@ -630,8 +630,10 @@ quote_shell_literal() {
 
 # Never follow a file symlink or a directory symlink outside the selected boundary.
 is_completion_path_within_root() {
-    local path="$1" root="${2%/}" parent
-    [[ -n "$root" && "$path" == "$root/"* && "$path" != *"/../"* && "$path" != *"/./"* && ! -L "$path" && ! -d "$path" ]] || return 1
+    local path="$1" root="$2" parent
+    [[ -n "$root" ]] || return 1
+    while [[ "$root" != / && "$root" == */ ]]; do root="${root%/}"; done
+    [[ "$path" == "${root%/}/"* && "$path" != *"/../"* && "$path" != *"/./"* && ! -L "$path" && ! -d "$path" ]] || return 1
     parent=$(dirname "$path")
     while [[ ! -d "$parent" ]]; do
         [[ ! -L "$parent" ]] || return 1
@@ -643,9 +645,11 @@ is_completion_path_within_root() {
         [[ ! -L "$root" ]] || return 1
         root=$(dirname "$root")
     done
+    # The explicitly selected root may be an intentional alias. Its physical target
+    # is the boundary; descendant links must not redirect outside that target.
     root=$(cd "$root" && pwd -P) || return 1
     parent=$(cd "$parent" && pwd -P) || return 1
-    [[ "$parent" == "$root" || "$parent" == "$root/"* ]]
+    [[ "$parent" == "$root" || "$parent" == "${root%/}/"* ]]
 }
 
 # Profiles stay home-confined even when the CLI is installed elsewhere.
@@ -688,7 +692,7 @@ install_completions_core() {
     if [[ "$persist" != true ]]; then
         # Session-only artifacts belong to the explicitly selected CLI directory, not HOME.
         completion_root="$(dirname "$cli")"
-        completion_dir="$completion_root/completions"
+        completion_dir="${completion_root%/}/completions"
     fi
     local completion_file="$completion_dir/aspire.$shell_name" quoted_file
     quoted_file=$(quote_shell_literal "$completion_file" "$shell_name")

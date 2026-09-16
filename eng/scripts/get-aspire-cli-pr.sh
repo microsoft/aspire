@@ -572,8 +572,10 @@ quote_shell_literal() {
 
 # Never follow a file symlink or a directory symlink outside the selected CLI directory.
 is_completion_path_within_root() {
-    local path="$1" root="${2%/}" parent
-    [[ -n "$root" && "$path" == "$root/"* && "$path" != *"/../"* && "$path" != *"/./"* && ! -L "$path" && ! -d "$path" ]] || return 1
+    local path="$1" root="$2" parent
+    [[ -n "$root" ]] || return 1
+    while [[ "$root" != / && "$root" == */ ]]; do root="${root%/}"; done
+    [[ "$path" == "${root%/}/"* && "$path" != *"/../"* && "$path" != *"/./"* && ! -L "$path" && ! -d "$path" ]] || return 1
     parent=$(dirname "$path")
     while [[ ! -d "$parent" ]]; do
         [[ ! -L "$parent" ]] || return 1
@@ -585,9 +587,11 @@ is_completion_path_within_root() {
         [[ ! -L "$root" ]] || return 1
         root=$(dirname "$root")
     done
+    # The explicitly selected root may be an intentional alias. Its physical target
+    # is the boundary; descendant links must not redirect outside that target.
     root=$(cd "$root" && pwd -P) || return 1
     parent=$(cd "$parent" && pwd -P) || return 1
-    [[ "$parent" == "$root" || "$parent" == "$root/"* ]]
+    [[ "$parent" == "$root" || "$parent" == "${root%/}/"* ]]
 }
 
 install_completions() {
@@ -611,7 +615,7 @@ install_completions_core() {
     esac
     # Dogfood artifacts stay beside the CLI even when its selected directory is outside HOME.
     local completion_root="$(dirname "$cli")"
-    local completion_dir="$completion_root/completions"
+    local completion_dir="${completion_root%/}/completions"
     local completion_file="$completion_dir/aspire.$shell_name" quoted_file registration
     quoted_file=$(quote_shell_literal "$completion_file" "$shell_name")
     if [[ "$shell_name" == fish ]]; then

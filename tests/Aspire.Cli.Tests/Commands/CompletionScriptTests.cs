@@ -179,11 +179,16 @@ public class CompletionScriptTests(ITestOutputHelper outputHelper)
             source "$COMPLETION_SCRIPT"
             source "$COMPLETION_SCRIPT"
             complete --command aspire | count
+            complete --erase --command aspire
+            complete --command aspire --arguments custom
+            source "$COMPLETION_SCRIPT"
+            source "$COMPLETION_SCRIPT"
+            complete --command aspire | count
             """;
         var output = await RunShellAsync("fish", ["--no-config", "-c", script.ReplaceLineEndings("\n")],
             new Dictionary<string, string> { ["COMPLETION_SCRIPT"] = completionPath });
 
-        Assert.Equal("2", output.Trim());
+        Assert.Equal("2\n2\n", output.ReplaceLineEndings("\n"));
     }
 
     [Fact]

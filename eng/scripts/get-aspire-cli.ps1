@@ -899,13 +899,18 @@ function Get-InstallPath {
 function Test-CompletionPathWithinRoot {
     param([string]$Path, [string]$Root)
 
-    $rootPath = [IO.Path]::GetFullPath($Root).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $rootPath = [IO.Path]::GetFullPath($Root)
+    $volumeRoot = [IO.Path]::GetPathRoot($rootPath)
+    $rootPrefix = $rootPath.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    $rootPath = if ($rootPrefix.Length -eq $volumeRoot.Length) { $volumeRoot } else { $rootPrefix.TrimEnd([IO.Path]::DirectorySeparatorChar) }
     $fullPath = [IO.Path]::GetFullPath($Path)
     $comparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
-    if (-not $fullPath.StartsWith($rootPath + [IO.Path]::DirectorySeparatorChar, $comparison)) {
+    if (-not $fullPath.StartsWith($rootPrefix, $comparison)) {
         return $false
     }
     $current = $fullPath
+    # The chosen root is the trust anchor, including an intentional junction/alias.
+    # Reject reparse points below it, not the user's choice of install location.
     while (-not $current.Equals($rootPath, $comparison)) {
         $item = Get-Item -LiteralPath $current -Force -ErrorAction SilentlyContinue
         if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {

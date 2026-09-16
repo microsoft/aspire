@@ -323,4 +323,59 @@ public class CompletionsCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal(bytes, File.ReadAllBytes(path));
         }
     }
+
+    [Theory]
+    [InlineData("suggest")]
+    [InlineData("script")]
+    public void CompletionStartup_InvalidConfigurationReturnsStartupFailure(string request)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var settingsPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string invalidJson = "{ broken";
+        File.WriteAllText(settingsPath, invalidJson);
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.WorkingDirectory = workspace.Path;
+
+        using (RemoteExecutor.Invoke(static async (homePath, requestKind) =>
+        {
+            Environment.SetEnvironmentVariable("ASPIRE_HOME", homePath);
+            var output = new StringWriter();
+            var error = new StringWriter();
+            string[] args = requestKind == "script"
+                ? ["completions", "script", "bash"]
+                : ["[suggest]", "aspire comp"];
+
+            var result = await Program.InvokeCompletionAsync(args, output, error).DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.FailedToStartCli, result);
+            Assert.Equal(string.Empty, output.ToString());
+            Assert.Contains(AspireConfigFile.FileName, error.ToString());
+        }, home.FullName, request, options))
+        {
+        }
+
+        Assert.Equal(invalidJson, File.ReadAllText(settingsPath));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(home.FullName));
+    }
+
+    [Fact]
+    public async Task CompletionHelp_MatchesOrdinaryNonExtensionHelp()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var expected = new StringWriter();
+        var actual = new StringWriter();
+        var error = new StringWriter();
+        string[] args = ["completions", "script", "--help"];
+
+        var expectedExitCode = await command.Parse(args).InvokeAsync(new InvocationConfiguration { Output = expected, Error = error }).DefaultTimeout();
+        var actualExitCode = await Program.InvokeCompletionAsync(args, actual, error).DefaultTimeout();
+
+        Assert.Equal(0, expectedExitCode);
+        Assert.Equal(0, actualExitCode);
+        Assert.Equal(expected.ToString(), actual.ToString());
+        Assert.Equal(string.Empty, error.ToString());
+    }
 }

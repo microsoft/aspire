@@ -138,8 +138,9 @@ internal static class CompletionScripts
                 """,
             "fish" => """
                 # Fish completion for Aspire. Save as ~/.config/fish/completions/aspire.fish.
-                # Reload the implementation without accumulating completion registrations.
-                if not functions --query __aspire_complete
+                # `complete` prints registrations as: complete aspire -a '(__aspire_complete)'.
+                # Inspect the registration, not the function: `complete --erase` leaves functions.
+                if not complete --command aspire | string match --quiet -- "* -a '(__aspire_complete)'"
                     complete --command aspire --arguments '(__aspire_complete)'
                 end
                 function __aspire_complete

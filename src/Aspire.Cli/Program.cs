@@ -1361,36 +1361,50 @@ public class Program
 
     internal static async Task<int> InvokeCompletionAsync(string[] args, TextWriter output, TextWriter error)
     {
-        // Reuse the live command model without starting hosted services, connecting to the
-        // extension, consuming the first-run notice, migrating config, or collecting telemetry.
-        var loggingOptions = ParseLoggingOptions([]);
-        using var cancellationManager = new ConsoleCancellationManager(finalDrainBudget: TimeSpan.Zero);
-        using var startupContext = new CliStartupContext(
-            loggingOptions,
-            new StartupErrorWriter(loggingOptions.LogFilePath),
-            NullLoggerFactory.Instance,
-            FileLoggerProvider.CreateDisabled(loggingOptions.LogFilePath),
-            new ConsoleLogBufferContext(),
-            NullLogger.Instance,
-            cancellationManager,
-            new IdentityChannelReader(typeof(Program).Assembly));
-        using var app = await BuildApplicationAsync(args, startupContext).ConfigureAwait(false);
-        var command = app.Services.GetRequiredService<RootCommand>();
-        if (CompletionInvocation.IsSuggestionRequest(args))
+        try
         {
-            return CompletionInvocation.WriteSuggestions(command, args, output, error);
+            // Reuse the live command model without starting hosted services, connecting to the
+            // extension, consuming the first-run notice, migrating config, or collecting telemetry.
+            var loggingOptions = ParseLoggingOptions([]);
+            using var cancellationManager = new ConsoleCancellationManager(finalDrainBudget: TimeSpan.Zero);
+            using var startupContext = new CliStartupContext(
+                loggingOptions,
+                new StartupErrorWriter(loggingOptions.LogFilePath),
+                NullLoggerFactory.Instance,
+                FileLoggerProvider.CreateDisabled(loggingOptions.LogFilePath),
+                new ConsoleLogBufferContext(),
+                NullLogger.Instance,
+                cancellationManager,
+                new IdentityChannelReader(typeof(Program).Assembly));
+            using var app = await BuildApplicationAsync(args, startupContext).ConfigureAwait(false);
+            var command = app.Services.GetRequiredService<RootCommand>();
+            if (CompletionInvocation.IsSuggestionRequest(args))
+            {
+                return CompletionInvocation.WriteSuggestions(command, args, output, error);
+            }
+
+            // A hidden completion-only copy accepts extension-provided switches without
+            // changing the shared option's visibility on actual extension-host commands.
+            command.Options.Add(new Option<bool>(CommonOptionNames.StartDebugSession)
+            {
+                Hidden = true,
+                Recursive = true
+            });
+
+            return await command.Parse(args).InvokeAsync(new InvocationConfiguration
+            {
+                Output = output,
+                Error = error,
+                ProcessTerminationTimeout = null
+            }).ConfigureAwait(false);
         }
-
-        // Accept extension-provided debug switches for script generation without enabling
-        // the extension backchannel or exposing them on ordinary non-extension commands.
-        command.Options.Add(RootCommand.StartDebugSessionOption);
-
-        return await command.Parse(args).InvokeAsync(new InvocationConfiguration
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or JsonException or FormatException)
         {
-            Output = output,
-            Error = error,
-            ProcessTerminationTimeout = null
-        }).ConfigureAwait(false);
+            // Bad configuration/path input should fail like normal startup, without creating
+            // logs or an unhandled-exception dump on every Tab request.
+            error.WriteLine(ex.Message);
+            return CliExitCodes.FailedToStartCli;
+        }
     }
 
     private static void AddInteractionServices(HostApplicationBuilder builder, bool enableExtension)

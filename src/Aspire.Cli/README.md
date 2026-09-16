@@ -248,7 +248,9 @@ uses `$PROFILE.CurrentUserAllHosts`. Entries are marked `Aspire CLI completions`
 `--skip-path` / `-SkipPath` and archive dogfood installs only generate an artifact
 under `<CLI-directory>/completions`, with manual activation instructions. The explicitly
 selected CLI directory can be outside the user home; artifact writes remain confined
-to that directory and reject redirection outside it. Package-manager dogfood modes
+to that directory and reject redirection outside it. A link explicitly selected as
+the installation root anchors the boundary at its target; links below that root
+cannot redirect artifact writes elsewhere. Package-manager dogfood modes
 do not register profiles. Automatic profile writes and persistent user completion
 files remain home-confined; redirected/symlinked profiles, elevated installs, unsupported shells,
 older PowerShell engines, and signed profiles can require manual setup. `AllSigned`
