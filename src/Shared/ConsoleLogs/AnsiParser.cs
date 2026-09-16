@@ -8,7 +8,7 @@ namespace Aspire.Shared.ConsoleLogs;
 #if ASPIRE_DASHBOARD
 public class AnsiParser
 #else
-internal class AnsiParser
+internal sealed class AnsiParser
 #endif
 {
     private const char EscapeChar = '\x1B';

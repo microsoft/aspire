@@ -342,9 +342,7 @@ public partial class TemplateTestsBase
 
             if (testType == "mstest")
             {
-                // Native MTP reports a multiline summary: "total: 1", "failed: 0",
-                // "succeeded: 1", "skipped: 0", unlike VSTest's single-line summary.
-                Assert.Matches(@"Test run summary: Passed![^\r\n]*\r?\n\s+total: 1\r?\n\s+failed: 0\r?\n\s+succeeded: 1\r?\n\s+skipped: 0", testRes.Output);
+                TestRunOutput.AssertSinglePassedMtpTest(testRes.Output);
             }
             else
             {
