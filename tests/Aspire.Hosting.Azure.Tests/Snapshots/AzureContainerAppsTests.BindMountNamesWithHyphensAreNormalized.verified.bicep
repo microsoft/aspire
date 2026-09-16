@@ -13,10 +13,11 @@ param with_bind_mount_containerimage string
 
 param env_outputs_bindmounts_with_bind_mount_0 string
 
-resource with_bind_mount 'Microsoft.App/containerApps@2025-07-01' = {
+resource with_bind_mount 'Microsoft.App/containerApps@2026-07-01' = {
   name: 'with-bind-mount'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       registries: [
@@ -26,7 +27,6 @@ resource with_bind_mount 'Microsoft.App/containerApps@2025-07-01' = {
         }
       ]
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
