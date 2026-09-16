@@ -37,11 +37,11 @@ await environment.configureInfrastructure(async infrastructure => {
 });
 ```
 
-The plan's Bicep identifier has an `_asplan` suffix, so the no-argument root lookup is not appropriate here. Website customizations belong in the website publish callback, not the environment callback.
+Plans and websites use identifier-based lookup. The plan's Bicep identifier has an `_asplan` suffix; the website uses `webapp`. Website customizations belong in the website publish callback, not the environment callback.
 
 ## Scope and limitations
 
-`AppServicePlan` and `WebSite` are the selected roots. Compatible SDK models are projected, not every member. Supported `BicepValue<T>` properties accept the corresponding language value or a shared Bicep expression.
+`AppServicePlan` and `WebSite` are selected SDK models, not no-argument infrastructure roots: their Bicep identifiers differ from the callback's hosting resource identifier. Compatible SDK models are projected, not every member. Supported `BicepValue<T>` properties accept the corresponding language value or a shared Bicep expression.
 
 `IPAddresses`, `ExternalInboundIPAddresses`, `InternalInboundIPAddresses`, `LinuxOutboundIPAddresses`, and `WindowsOutboundIPAddresses` are exposed as IP address collection proxies. Writable lists accept IPv4/IPv6 strings or Bicep value handles for add, insert, and set operations. Element getters preserve literals, expressions, and references as Bicep value handles; invalid address strings fail validation rather than being silently dropped. Azure SDK read-only output restrictions still apply.
 

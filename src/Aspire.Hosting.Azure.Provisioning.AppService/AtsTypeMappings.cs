@@ -6,5 +6,7 @@ using Azure.Provisioning.AppService;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(AppServicePlan),
+    // Plans use an _asplan suffix; sites use webapp, not the callback's hosting resource identifier.
+    IsInfrastructureRoot = false,
     IncludeContainingAssemblyTypes = true)]
-[assembly: GenerateAspireProvisioningProxy(typeof(WebSite))]
+[assembly: GenerateAspireProvisioningProxy(typeof(WebSite), IsInfrastructureRoot = false)]
