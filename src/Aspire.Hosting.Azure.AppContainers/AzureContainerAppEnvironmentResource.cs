@@ -258,6 +258,11 @@ public class AzureContainerAppEnvironmentResource :
     internal bool PreserveHttpEndpoints { get; set; }
 
     /// <summary>
+    /// Gets or sets the virtual network linked to the private DNS zone for an internal environment.
+    /// </summary>
+    internal AzureVirtualNetworkResource? InternalLoadBalancerVirtualNetwork { get; set; }
+
+    /// <summary>
     /// Gets the unique identifier of the Container App Environment.
     /// </summary>
     internal BicepOutputReference ContainerAppEnvironmentId => new("AZURE_CONTAINER_APPS_ENVIRONMENT_ID", this);
@@ -266,6 +271,11 @@ public class AzureContainerAppEnvironmentResource :
     /// Gets the default domain associated with the Container App Environment.
     /// </summary>
     internal BicepOutputReference ContainerAppDomain => new("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", this);
+
+    /// <summary>
+    /// Gets the private static IP address associated with an internal Container App Environment.
+    /// </summary>
+    internal BicepOutputReference ContainerAppStaticIp => new("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", this);
 
     /// <summary>
     /// Gets the name of the associated Azure Container Registry.

@@ -446,6 +446,7 @@ affected_project_rules:
       - Aspire.Hosting.Rust
       - Aspire.Hosting
       - Aspire.Hosting.Azure
+      - Aspire.Hosting.Azure.ApiManagement
       - Aspire.Hosting.Azure.AppConfiguration
       - Aspire.Hosting.Azure.AppContainers
       - Aspire.Hosting.Azure.AppService
