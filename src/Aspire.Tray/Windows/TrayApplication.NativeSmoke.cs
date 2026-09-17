@@ -153,7 +153,7 @@ internal sealed unsafe partial class TrayApplication
         NativeSmokeHarness.Require(bounds.Right > bounds.Left && bounds.Bottom > bounds.Top
             && bounds.Left >= monitor.Work.Left && bounds.Right <= monitor.Work.Right
             && bounds.Top >= monitor.Work.Top && bounds.Bottom <= monitor.Work.Bottom,
-            "The tooltip must remain within the monitor work area.");
+            $"The tooltip must remain within the monitor work area. Tooltip: ({bounds.Left}, {bounds.Top})-({bounds.Right}, {bounds.Bottom}); work area: ({monitor.Work.Left}, {monitor.Work.Top})-({monitor.Work.Right}, {monitor.Work.Bottom}).");
     }
 
     internal void VerifyNoTooltipForSmoke()

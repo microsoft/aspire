@@ -303,7 +303,9 @@ status text. Each AppHost submenu ends with a divider followed by a disabled ent
 containing its path and status or directory/PID details together on one line.
 This entire entry is limited to 45 text elements with a middle ellipsis. Hovering
 over this final entry shows its full, untruncated value in a native tooltip, which
-can wrap long text. Parent AppHost rows and action items have no tooltips.
+can wrap long text. The tooltip's final native window bounds are constrained to
+the monitor work area without moving keyboard focus out of the menu.
+Parent AppHost rows and action items have no tooltips.
 Displayed and copied paths retain their original casing;
 Windows identity matching remains case-insensitive and still requires the exact PID
 and process start time. **Copy Path** copies the complete original containing folder path. The final

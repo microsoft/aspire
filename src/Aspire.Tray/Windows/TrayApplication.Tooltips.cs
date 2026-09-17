@@ -94,6 +94,23 @@ internal sealed unsafe partial class TrayApplication
             NativeMethods.SendMessage(_menuTooltipWindow, NativeMethods.TtmTrackActivate, 1, (nint)(&tool));
             _menuTooltipVisible = true;
         }
+        ConstrainMenuTooltip();
+    }
+
+    private void ConstrainMenuTooltip()
+    {
+        // TTM_GETBUBBLESIZE measures the bubble, not necessarily the themed window's
+        // final bounds. Activation and text updates can also reposition the control.
+        // Clamp the actual window after those messages, without taking menu focus.
+        NativeCallException.Require(NativeMethods.GetWindowRect(_menuTooltipWindow, out var bounds) != 0,
+            "GetWindowRect(menu tooltip)");
+        var monitor = new NativeMethods.MonitorInfo { Size = (uint)sizeof(NativeMethods.MonitorInfo) };
+        NativeCallException.Require(NativeMethods.GetMonitorInfo(NativeMethods.MonitorFromWindow(_window, 2), ref monitor) != 0,
+            "GetMonitorInfoW(menu tooltip bounds)");
+        var x = Math.Clamp(bounds.Left, monitor.Work.Left, Math.Max(monitor.Work.Left, monitor.Work.Right - (bounds.Right - bounds.Left)));
+        var y = Math.Clamp(bounds.Top, monitor.Work.Top, Math.Max(monitor.Work.Top, monitor.Work.Bottom - (bounds.Bottom - bounds.Top)));
+        NativeCallException.Require(NativeMethods.SetWindowPos(_menuTooltipWindow, 0, x, y, 0, 0,
+            0x1 | 0x4 | 0x10) != 0, "SetWindowPos(menu tooltip)"); // NOSIZE | NOZORDER | NOACTIVATE.
     }
 
     private void PositionMenuTooltip(HostRow row, ref NativeMethods.ToolInfo tool)

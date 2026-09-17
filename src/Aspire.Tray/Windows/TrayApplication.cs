@@ -226,6 +226,10 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
         // Shell_NotifyIcon does not promise a last-error value.
         if (NativeMethods.ShellNotifyIcon(NativeMethods.NimAdd, ref _iconData) == 0)
         {
+            if (smokeSeconds is not null && _restoreAttempts is 0 or 49)
+            {
+                Program.Log($"Shell_NotifyIconW(NIM_ADD) rejected the smoke icon: architecture={RuntimeInformation.ProcessArchitecture}, size={_iconData.Size}, attempt={_restoreAttempts + 1}.");
+            }
             return false;
         }
         _iconAdded = true;

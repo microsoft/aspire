@@ -206,7 +206,9 @@ public class WindowsTrayStartupSettingsTests
     {
         using var installation = new TestTrayStartupInstallation();
         var store = new TestTrayStartupRegistrationStore();
-        var bootstrap = Path.Combine(installation.Root, new string('a', 150), "aspire-tray-login.exe");
+        // The root is much shorter on Linux runners than on macOS. Make the command
+        // exceed the Run key limit independently of the machine's temporary path.
+        var bootstrap = Path.Combine(installation.Root, new string('a', 150), new string('b', 150), "aspire-tray-login.exe");
         var settings = new WindowsTrayStartupSettings(installation.Options(windows: true), true, installation.SourceGui, bootstrap, store);
 
         Assert.False(settings.Read().CanEnable);
