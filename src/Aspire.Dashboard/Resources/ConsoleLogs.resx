@@ -217,6 +217,10 @@
   <data name="TerminalRetry" xml:space="preserve">
     <value>Reconnect terminal</value>
   </data>
+  <data name="TerminalDismissError" xml:space="preserve">
+    <value>Dismiss</value>
+    <comment>Dismisses a terminal input, clipboard, or sizing error without reconnecting.</comment>
+  </data>
   <data name="TerminalToolbarIncreaseFontSize" xml:space="preserve">
     <value>Increase font size</value>
   </data>

@@ -28,6 +28,28 @@ function isVisible(state) {
     return state.element.clientWidth > 0 && state.element.clientHeight > 0;
 }
 
+function requestFocus(state) {
+    state.focusPending = !state.readOnly && !state.ended;
+    state.focusOrigin = document.activeElement;
+}
+
+function applyPendingFocus(state) {
+    // Inactive dock panes retain their dimensions for rendering, but must not take keyboard focus.
+    if (!state.focusPending || !state.client?.connected || state.readOnly || state.ended ||
+        !isVisible(state) || state.element.closest("[inert]") ||
+        getComputedStyle(state.element).visibility !== "visible") {
+        return;
+    }
+    state.focusPending = false;
+    const activeElement = document.activeElement;
+    // Mounting can take time. Honor a user who moved to another control while awaiting the first frame.
+    if (!activeElement || activeElement === document.body || activeElement === state.focusOrigin ||
+        state.element.contains(activeElement)) {
+        state.client.focus();
+    }
+    state.focusOrigin = null;
+}
+
 function notifyToolbar(state) {
     if (state.disposed || state.toolbarFrame !== null) {
         return;
@@ -67,7 +89,9 @@ function cancelReconnect(state) {
 }
 
 function releaseClient(state) {
-    state.restoreFocus ||= !!state.client?.element.contains(document.activeElement);
+    if (state.client?.element.contains(document.activeElement)) {
+        requestFocus(state);
+    }
     const controller = state.controller;
     const client = state.client;
     state.controller = null;
@@ -133,9 +157,48 @@ function connectionClosed(state, generation, details) {
 }
 
 function inputFailed(state, error) {
-    console.warn("Dashboard terminal input failed.", error);
-    state.error = "input-failed";
-    notifyToolbar(state);
+    // Selection resolution, clipboard permissions and focus changes can all reject a local action
+    // without breaking the terminal. Record context, never clipboard/selection text or a reconnect banner.
+    const policy = document.permissionsPolicy ?? document.featurePolicy;
+    console.log("Dashboard terminal input failed.", error, {
+        selectionStatus: state.client?.selection?.status ?? null,
+        viewportPending: state.client?.viewport?.pending ?? null,
+        secureContext: window.isSecureContext,
+        documentFocused: document.hasFocus(),
+        visibilityState: document.visibilityState,
+        userActivation: navigator.userActivation?.isActive ?? null,
+        clipboardReadAvailable: typeof navigator.clipboard?.readText === "function",
+        clipboardWriteAvailable: typeof navigator.clipboard?.write === "function",
+        clipboardReadAllowedByPolicy: policy?.allowsFeature("clipboard-read") ?? null,
+        clipboardWriteAllowedByPolicy: policy?.allowsFeature("clipboard-write") ?? null,
+    });
+}
+
+function focusAfterMouseControl(state, event) {
+    // Keyboard/assistive activation has detail 0; keep focus for repeated keyboard adjustments.
+    // https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event#usage_notes
+    if (event.detail === 0 || event.button !== 0 || (event.pointerType && event.pointerType !== "mouse")) {
+        return;
+    }
+    const path = event.composedPath();
+    const control = path.find(element => element.matches?.(
+        ".terminal-font-minus, .terminal-font-plus, .terminal-fit, .terminal-size-select"));
+    if (!control || control.disabled ||
+        (control.matches(".terminal-size-select") && !path.some(element => element.matches?.("fluent-option")))) {
+        return;
+    }
+    const generation = state.generation;
+    const focusOrigin = document.activeElement;
+    // Let Fluent finish updating focus after selection. A picker trigger click alone never reaches here.
+    requestAnimationFrame(() => {
+        if (!isCurrent(state, generation) ||
+            (document.activeElement !== focusOrigin && document.activeElement !== document.body &&
+                !control.contains(document.activeElement))) {
+            return;
+        }
+        requestFocus(state);
+        applyPendingFocus(state);
+    });
 }
 
 function selectionCopyPosition(rects, canvasSize, width, height) {
@@ -208,10 +271,6 @@ function createSelectionUI(state, current) {
                     actions.hidden = true;
                     state.client.clearSelection();
                     state.client.focus();
-                    if (state.error === "input-failed") {
-                        state.error = null;
-                        notifyToolbar(state);
-                    }
                 }).catch(error => {
                     if (current() && !signal.aborted && detail.selection.requestId === requestId) {
                         inputFailed(state, error);
@@ -331,7 +390,9 @@ async function mountClient(state, generation, controller) {
                     return;
                 }
                 if (state.client?.connected) {
-                    inputFailed(state, message);
+                    console.warn("Dashboard terminal status error.", message);
+                    state.error = "input-failed";
+                    notifyToolbar(state);
                 } else {
                     connectionFailed(state, generation, message);
                 }
@@ -380,11 +441,7 @@ async function mountClient(state, generation, controller) {
         state.sizing = client.sizing;
         state.error = null;
         state.attempts = 0;
-        if (state.restoreFocus && isVisible(state) &&
-            (!document.activeElement || document.activeElement === document.body || state.element.contains(document.activeElement))) {
-            client.focus();
-        }
-        state.restoreFocus = false;
+        applyPendingFocus(state);
         applyAutoFit(state);
         applyPendingSizing(state);
         notifyToolbar(state);
@@ -466,10 +523,13 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         toolbarFrame: null,
         lastToolbarJson: null,
         waitingForVisibility: false,
-        restoreFocus: false,
+        focusPending: !options.readOnly,
+        focusOrigin: document.activeElement,
         failurePending: false,
         listeners: new AbortController(),
     };
+    footer.addEventListener("click", event => focusAfterMouseControl(state, event),
+        { signal: state.listeners.signal });
     footer.addEventListener("keydown", event => {
         if (event.key === "F6" && !event.ctrlKey && !event.altKey && !event.metaKey) {
             event.preventDefault();
@@ -482,6 +542,7 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
             connectClient(state);
         } else if (!state.disposed) {
             applyAutoFit(state);
+            applyPendingFocus(state);
         }
     });
     state.observer.observe(element);
@@ -499,6 +560,7 @@ export function reconnectTerminal(id, wsUrl) {
     state.ended = false;
     state.attempts = 0;
     state.error = null;
+    requestFocus(state);
     connectClient(state);
     return state.generation;
 }
@@ -550,8 +612,24 @@ export function setAutoFit(id, autoFit) {
     state.autoFitPending = autoFit;
     if (!autoFit) {
         state.pendingSizing = null;
+        state.focusPending = false;
+    } else {
+        requestFocus(state);
     }
     applyAutoFit(state);
+    applyPendingFocus(state);
+}
+
+export function dismissError(id) {
+    const state = terminals.get(id);
+    if (!state || (state.error !== "input-failed" && state.error !== "sizing-failed")) {
+        return;
+    }
+    // Clipboard/input and sizing failures are local actions, not transport failures.
+    state.error = null;
+    requestFocus(state);
+    applyPendingFocus(state);
+    notifyToolbar(state);
 }
 
 export function fitToContainer(id) {
@@ -662,11 +740,13 @@ export function refreshLayout(id) {
     if (!state || state.ended || !isVisible(state)) {
         return;
     }
+    requestFocus(state);
     if (state.waitingForVisibility) {
         connectClient(state);
     } else {
         applyAutoFit(state);
         // The package observes this container; revealing a view must not reconnect or discard its history.
         state.client?.refreshSelectionUI();
+        applyPendingFocus(state);
     }
 }

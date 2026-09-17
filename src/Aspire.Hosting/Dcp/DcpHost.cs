@@ -387,7 +387,11 @@ internal sealed class DcpHost
             return;
         }
 
-        if (TryGetBundledConPtyPath(_dcpOptions.TerminalHostPath, RuntimeInformation.OSArchitecture, out var conPtyPath))
+        if (TryGetBundledConPtyPath(
+            _dcpOptions.TerminalHostPath,
+            RuntimeInformation.ProcessArchitecture,
+            RuntimeInformation.OSArchitecture,
+            out var conPtyPath))
         {
             environmentVariables[DcpConPtyPathEnvironmentVariable] = conPtyPath;
             _logger.LogDebug("Configured DCP to use the bundled ConPTY provider at '{ConPtyPath}'.", conPtyPath);
@@ -401,7 +405,11 @@ internal sealed class DcpHost
         }
     }
 
-    internal static bool TryGetBundledConPtyPath(string? terminalHostPath, Architecture osArchitecture, [NotNullWhen(true)] out string? conPtyPath)
+    internal static bool TryGetBundledConPtyPath(
+        string? terminalHostPath,
+        Architecture processArchitecture,
+        Architecture osArchitecture,
+        [NotNullWhen(true)] out string? conPtyPath)
     {
         conPtyPath = null;
         if (string.IsNullOrWhiteSpace(terminalHostPath) ||
@@ -410,22 +418,46 @@ internal sealed class DcpHost
             return false;
         }
 
-        var architectureDirectory = osArchitecture switch
+        var nativeHostDirectory = osArchitecture switch
         {
             Architecture.X64 => "x64",
             Architecture.Arm64 => "arm64",
             _ => null
         };
 
-        if (architectureDirectory is null ||
-            !File.Exists(Path.Combine(directory, "conpty.dll")) ||
-            !File.Exists(Path.Combine(directory, architectureDirectory, "OpenConsole.exe")))
+        var runtimeIdentifier = processArchitecture switch
+        {
+            Architecture.X64 => "win-x64",
+            Architecture.Arm64 => "win-arm64",
+            _ => null
+        };
+
+        if (nativeHostDirectory is null || runtimeIdentifier is null)
         {
             return false;
         }
 
-        conPtyPath = directory;
-        return true;
+        // Shipped CLI bundles flatten the selected RID's native assets into managed/. Repo-local portable builds
+        // keep every RID under runtimes/<rid>/native. In both layouts conpty.dll must match the DCP/AppHost process
+        // architecture, while OpenConsole.exe must match the native Windows architecture (for example, an x64
+        // process running under emulation on ARM64 Windows uses win-x64/conpty.dll with arm64/OpenConsole.exe).
+        string[] candidates =
+        [
+            directory,
+            Path.Combine(directory, "runtimes", runtimeIdentifier, "native")
+        ];
+
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(Path.Combine(candidate, "conpty.dll")) &&
+                File.Exists(Path.Combine(candidate, nativeHostDirectory, "OpenConsole.exe")))
+            {
+                conPtyPath = candidate;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void SetDcpProfilingEnvironment(IDictionary<string, string> environmentVariables)

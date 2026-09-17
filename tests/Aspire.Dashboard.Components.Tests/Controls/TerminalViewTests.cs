@@ -214,7 +214,35 @@ public class TerminalViewTests : DashboardTestContext
         }));
         var loc = Services.GetRequiredService<IStringLocalizer<Resources.ConsoleLogs>>();
         Assert.Equal(loc[resourceKey].Value, cut.Find("[role=alert]").TextContent);
-        Assert.Single(cut.FindAll(".terminal-error fluent-button"));
+        var button = Assert.Single(cut.FindAll(".terminal-error fluent-button"));
+        Assert.Equal(error is "input-failed" or "sizing-failed"
+            ? Resources.ConsoleLogs.TerminalDismissError
+            : Resources.ConsoleLogs.TerminalRetry, button.TextContent.Trim());
+    }
+
+    [Theory]
+    [InlineData("input-failed")]
+    [InlineData("sizing-failed")]
+    public async Task DismissActionError_PreservesTheConnection(string error)
+    {
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true, Error = error
+        }));
+
+        cut.Find(".terminal-error fluent-button").Click();
+
+        Assert.Equal(new object?[] { 1 }, Assert.Single(module.Invocations, i => i.Identifier == "dismissError").Arguments);
+        Assert.Equal(["initTerminal", "getSizePresets", "dismissError"], module.Invocations.Select(i => i.Identifier));
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true
+        }));
+        Assert.Empty(cut.FindAll(".terminal-error"));
     }
 
     [Theory]

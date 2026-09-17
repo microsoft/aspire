@@ -84,6 +84,23 @@ only this view, never the server-side producer. Sizing changes explicitly reques
 primary when necessary and wait for role confirmation; normal input does not
 take resize ownership. Public font-size limits are 8–32 pixels.
 
+Opening an interactive terminal or activating its view focuses its keyboard input
+once it is ready. Inactive dock panes do not take focus, and an asynchronous mount
+does not take focus back from a control the user selected while it was loading.
+Mouse clicks on the font stepper, Fit button, or a dimensions option return focus
+to terminal input; keyboard activation keeps focus on the control for repeated
+adjustments. Opening the dimensions picker keeps focus until an option is chosen.
+Input and clipboard action failures are logged with `console.log` without an Aspire
+banner. Diagnostics include the exception, selection status, document focus, and
+clipboard permissions policy, never clipboard or selected text. These failures can
+include pending selection resolution before the browser clipboard API is called;
+they do not necessarily mean clipboard permission was denied.
+Hex1b 0.168.0 also displays its own inspection status inside its shadow root.
+Its public API does not currently expose an option to suppress that native message.
+Other terminal status and sizing errors offer **Dismiss**, which clears the local
+error and returns focus without reconnecting or discarding terminal history.
+Only connection/initialization failures offer **Reconnect terminal**.
+
 Native `onClose` reports transport closure even before mounting completes.
 Aspire reserves WebSocket close code `4000` for authoritative AppHost producer
 completion; normal closure, abnormal disconnects, close reasons and `wasClean`

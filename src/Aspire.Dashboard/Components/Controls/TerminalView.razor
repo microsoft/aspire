@@ -33,7 +33,14 @@
             {
                 <div class="terminal-error">
                     <span role="alert">@GetErrorMessage()</span>
-                    <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.ConsoleLogs.TerminalRetry)]</FluentButton>
+                    @if (_terminalError is "input-failed" or "sizing-failed")
+                    {
+                        <FluentButton OnClick="DismissErrorAsync">@Loc[nameof(Resources.ConsoleLogs.TerminalDismissError)]</FluentButton>
+                    }
+                    else
+                    {
+                        <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.ConsoleLogs.TerminalRetry)]</FluentButton>
+                    }
                 </div>
             }
         </div>

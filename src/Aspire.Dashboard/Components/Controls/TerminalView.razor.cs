@@ -388,7 +388,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>Requests a fresh state notification even if the state has not changed.</summary>
     public Task RefreshToolbarStateAsync() => InvokeTerminalAsync("refreshToolbarState");
 
-    /// <summary>Starts a deferred mount or refreshes a view that became visible without reconnecting.</summary>
+    /// <summary>Starts or refreshes a view that became visible and focuses its input without reconnecting.</summary>
     public Task RefreshLayoutAsync() => InvokeTerminalAsync("refreshLayout");
 
     private async Task InvokeTerminalAsync(string method, params object?[] arguments)
@@ -422,6 +422,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         "sizing-failed" => nameof(Resources.ConsoleLogs.TerminalSizingFailed),
         _ => nameof(Resources.ConsoleLogs.TerminalMountFailed)
     }];
+
+    private Task DismissErrorAsync() => InvokeTerminalAsync("dismissError");
 
     private async Task RetryAsync()
     {

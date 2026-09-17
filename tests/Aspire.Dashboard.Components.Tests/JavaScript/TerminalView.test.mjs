@@ -32,6 +32,7 @@ function setGlobal(name, value) {
 
 beforeEach(() => {
     mock.method(console, "warn", () => {});
+    mock.method(console, "log", () => {});
     attempts = [];
     observers = [];
     timers = new Map();
@@ -41,7 +42,8 @@ beforeEach(() => {
     serial = 0;
     setGlobal("window", { isSecureContext: true });
     setGlobal("navigator", { gpu: {} });
-    setGlobal("document", { activeElement: null, body: {} });
+    setGlobal("document", { activeElement: null, body: {}, hasFocus: () => true, visibilityState: "visible" });
+    setGlobal("getComputedStyle", element => ({ visibility: element.visibility ?? "visible" }));
     setGlobal("requestAnimationFrame", callback => {
         frames.set(++serial, callback);
         return serial;
@@ -65,7 +67,7 @@ beforeEach(() => {
     WebTerminal.mount = (element, options) => {
         const ready = Promise.withResolvers();
         const client = {
-            element: { contains: value => value === client.element },
+            element: { parentElement: element, contains: value => value === client.element },
             connected: true,
             peer: { id: "browser-1", primaryId: "cli-1", isPrimary: false },
             geometry: { columns: 100, rows: 30 },
@@ -174,7 +176,8 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
     const element = {
         clientWidth: visible ? 800 : 0,
         clientHeight: visible ? 600 : 0,
-        contains: value => value === element,
+        contains: value => value === element || value?.parentElement === element,
+        closest: () => null,
     };
     const controls = [];
     const template = { firstElementChild: { cloneNode() {
@@ -182,8 +185,10 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
         controls.push(control);
         return control.actions;
     } } };
-    const footerControls = [0, 1, 2].map(() => ({
+    const footerControls = ["terminal-font-minus", "terminal-font-plus", "terminal-fit", "terminal-size-select"].map(className => ({
         disabled: false, tabIndex: 0,
+        matches: selector => selector.split(", ").includes(`.${className}`),
+        contains(element) { return element === this; },
         focus() { document.activeElement = this; },
     }));
     const footer = Object.assign(new EventTarget(), {
@@ -277,7 +282,7 @@ test("selection controls update in place and hide when no selected text is visib
         },
     });
     selectionEvent(attempts[0], { selection: { status: "none" } });
-    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(attempts[0].client.focusCalls, 2);
     assert.equal(controls.length, 1);
 });
 
@@ -301,7 +306,7 @@ test("copy dismisses the copied selection and returns focus for immediate termin
     assert.equal(button.attributes.get("aria-busy"), "true");
     assert.equal(attempts[0].client.primaryRequests, 0);
     assert.equal(attempts[0].client.selectionClears, 0);
-    assert.equal(attempts[0].client.focusCalls, 0);
+    assert.equal(attempts[0].client.focusCalls, 1);
     assert.equal(actions.hidden, false);
     copy.resolve("<untrusted selected text>");
     await settle();
@@ -310,7 +315,7 @@ test("copy dismisses the copied selection and returns focus for immediate termin
     assert.equal(button.attributes.get("aria-busy"), "false");
     assert.equal(actions.hidden, true);
     assert.equal(attempts[0].client.selectionClears, 1);
-    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(attempts[0].client.focusCalls, 2);
     assert.equal(document.activeElement, attempts[0].client.element);
     selectionEvent(attempts[0], { selection: { requestId: 2 } });
     assert.equal(actions.hidden, false);
@@ -331,18 +336,20 @@ test("selection controls clamp within a small canvas and follow updated CSS-pixe
     assert.equal(controls.length, 1);
 });
 
-test("copy failures remain local and a successful retry clears the error", async () => {
+test("copy failures are console-only and leave the selection available for retry", async () => {
     const { id, controls } = mount();
     attempts[0].resolve();
     await settle();
-    selectionEvent(attempts[0], { runAction: () => Promise.reject(new Error("Clipboard denied")) });
+    const error = new Error("Clipboard unavailable");
+    selectionEvent(attempts[0], { runAction: () => Promise.reject(error) });
     controls[0].button.dispatchEvent(new Event("click"));
     await settle();
-    assert.equal(terminal.getToolbarState(id).error, "input-failed");
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(console.log.mock.calls.at(-1).arguments[1], error);
     assert.equal(controls[0].button.disabled, false);
     assert.equal(controls[0].actions.hidden, false);
     assert.equal(attempts[0].client.selectionClears, 0);
-    assert.equal(attempts[0].client.focusCalls, 0);
+    assert.equal(attempts[0].client.focusCalls, 1);
     assert.equal(attempts.length, 1);
     assert.equal(timers.size, 0);
     selectionEvent(attempts[0]);
@@ -351,7 +358,7 @@ test("copy failures remain local and a successful retry clears the error", async
     assert.equal(terminal.getToolbarState(id).error, null);
     assert.equal(controls[0].actions.hidden, true);
     assert.equal(attempts[0].client.selectionClears, 1);
-    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(attempts[0].client.focusCalls, 2);
 });
 
 test("changing selection while copying does not dismiss the new selection or steal focus", async () => {
@@ -413,6 +420,100 @@ test("init returns an id while mount waits for its first connected frame", async
     assert.equal(attempts[0].options.inputBindings, undefined);
     assert.equal(attempts[0].options.actions, undefined);
     assert.equal(attempts[0].options.readOnly, false);
+});
+
+test("opening a terminal focuses input after the first frame without taking primary", async () => {
+    document.activeElement = { tagName: "BUTTON" };
+    mount();
+    assert.equal(attempts[0].client.focusCalls, 0);
+    attempts[0].resolve();
+    await settle();
+    assert.equal(document.activeElement, attempts[0].client.element);
+    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(attempts[0].client.primaryRequests, 0);
+
+    const otherControl = { tagName: "INPUT" };
+    document.activeElement = otherControl;
+    observers[0].callback();
+    attempts[0].role(true);
+    await settle();
+    assert.equal(document.activeElement, otherControl);
+    assert.equal(attempts[0].client.focusCalls, 1);
+});
+
+test("a delayed mount does not steal focus from a newly selected control", async () => {
+    document.activeElement = { tagName: "BUTTON" };
+    mount();
+    const otherControl = { tagName: "INPUT" };
+    document.activeElement = otherControl;
+    attempts[0].resolve();
+    await settle();
+    observers[0].callback();
+    assert.equal(document.activeElement, otherControl);
+    assert.equal(attempts[0].client.focusCalls, 0);
+});
+
+test("a mount becoming ready after another terminal does not steal its focus", async () => {
+    mount();
+    mount();
+    attempts[1].resolve();
+    await settle();
+    attempts[0].resolve();
+    await settle();
+    assert.equal(document.activeElement, attempts[1].client.element);
+    assert.equal(attempts[0].client.focusCalls, 0);
+});
+
+test("inactive dock panes wait for activation before focusing and do not remount", async () => {
+    const { id, element } = mount({ options: { showDimensions: false } });
+    const pane = {};
+    element.closest = selector => selector === "[inert]" ? pane : null;
+    attempts[0].resolve();
+    await settle();
+    assert.equal(attempts[0].client.focusCalls, 0);
+
+    element.closest = () => null;
+    document.activeElement = { tagName: "BUTTON" };
+    terminal.setAutoFit(id, true);
+    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(document.activeElement, attempts[0].client.element);
+    terminal.setAutoFit(id, true);
+    observers[0].callback();
+    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(attempts.length, 1);
+});
+
+test("hidden and read-only terminals do not take focus", async () => {
+    const hidden = mount();
+    hidden.element.visibility = "hidden";
+    const readOnly = mount({ options: { readOnly: true } });
+    attempts[0].resolve();
+    attempts[1].resolve();
+    await settle();
+    assert.equal(attempts[0].client.focusCalls, 0);
+    assert.equal(attempts[1].client.focusCalls, 0);
+    terminal.refreshLayout(readOnly.id);
+    assert.equal(attempts[1].client.focusCalls, 0);
+
+    hidden.element.visibility = "visible";
+    terminal.refreshLayout(hidden.id);
+    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(attempts.length, 2);
+});
+
+test("returning to the terminal view restores focus without replacing its client", async () => {
+    const { id, element } = mount();
+    attempts[0].resolve();
+    await settle();
+    element.clientWidth = 0;
+    document.activeElement = { tagName: "BUTTON" };
+    terminal.refreshLayout(id);
+    assert.equal(attempts[0].client.focusCalls, 1);
+    element.clientWidth = 800;
+    terminal.refreshLayout(id);
+    assert.equal(document.activeElement, attempts[0].client.element);
+    assert.equal(attempts[0].client.focusCalls, 2);
+    assert.equal(attempts.length, 1);
 });
 
 test("missing WebGPU and ordinary HTTP leave renderer selection to the package", async () => {
@@ -530,15 +631,146 @@ test("sizing requests primary, waits for confirmation, and clamps to the public 
     assert.equal(terminal.getToolbarState(id).fontControlsEnabled, false);
 });
 
-test("clipboard errors remain visible without discarding the mounted history", async () => {
+for (const error of [
+    new DOMException("Read permission denied.", "NotAllowedError"),
+    new Error("Resolving selection\u2026"),
+    new Error("Timed out resolving selection. Copy again."),
+    new Error("Clipboard unavailable"),
+    new Error("Terminal input, selection, focus, or buffer changed while reading the clipboard. Paste again."),
+]) {
+    test(`input failure is console-only: ${error.message}`, async () => {
+        const { element } = mount();
+        attempts[0].resolve();
+        await settle();
+        const client = attempts[0].client;
+        client.selection = { status: "pending", text: "Private selected text" };
+        client.viewport = { pending: false };
+        const before = terminal.getTerminalSnapshot(element);
+        attempts[0].options.onInputError(error);
+        await settle();
+        assert.deepEqual(terminal.getTerminalSnapshot(element), before);
+        assert.equal(snapshots.at(-1).error, null);
+        assert.deepEqual(console.log.mock.calls.at(-1).arguments, ["Dashboard terminal input failed.", error, {
+            selectionStatus: "pending",
+            viewportPending: false,
+            secureContext: true,
+            documentFocused: true,
+            visibilityState: "visible",
+            userActivation: null,
+            clipboardReadAvailable: false,
+            clipboardWriteAvailable: false,
+            clipboardReadAllowedByPolicy: null,
+            clipboardWriteAllowedByPolicy: null,
+        }]);
+        assert.equal(client.disposed, false);
+        assert.equal(client.focusCalls, 1);
+        assert.equal(client.selectionClears, 0);
+        assert.equal(client.primaryRequests, 0);
+        assert.equal(timers.size, 0);
+    });
+}
+
+test("input diagnostics distinguish browser policy and focus without reading the clipboard", async () => {
     const { id } = mount();
     attempts[0].resolve();
     await settle();
-    attempts[0].options.onInputError(new Error("Clipboard denied"));
+    document.hasFocus = () => false;
+    document.visibilityState = "hidden";
+    document.featurePolicy = { allowsFeature: feature => feature === "clipboard-write" };
+    navigator.userActivation = { isActive: false };
+    navigator.clipboard = {
+        readText() { assert.fail("Diagnostics must not read the clipboard"); },
+        write() { assert.fail("Diagnostics must not change the clipboard"); },
+    };
+    attempts[0].options.onInputError(new DOMException("Read permission denied.", "NotAllowedError"));
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.deepEqual(console.log.mock.calls.at(-1).arguments[2], {
+        selectionStatus: null,
+        viewportPending: null,
+        secureContext: true,
+        documentFocused: false,
+        visibilityState: "hidden",
+        userActivation: false,
+        clipboardReadAvailable: true,
+        clipboardWriteAvailable: true,
+        clipboardReadAllowedByPolicy: false,
+        clipboardWriteAllowedByPolicy: true,
+    });
+});
+
+test("selection copy permission denial is logged without covering the terminal", async () => {
+    const { controls, element } = mount();
+    attempts[0].resolve();
     await settle();
-    assert.equal(terminal.getToolbarState(id).error, "input-failed");
-    assert.equal(attempts[0].client.disposed, false);
+    const error = new DOMException("Write permission denied.", "NotAllowedError");
+    selectionEvent(attempts[0], { runAction: () => Promise.reject(error) });
+    controls[0].button.dispatchEvent(new Event("click"));
+    await settle();
+    assert.equal(terminal.getTerminalSnapshot(element).error, null);
+    assert.equal(controls[0].actions.hidden, false);
+    assert.equal(attempts[0].client.selectionClears, 0);
+    assert.deepEqual(console.log.mock.calls.at(-1).arguments.slice(0, 2), ["Dashboard terminal input failed.", error]);
+});
+
+test("clipboard permission denial does not clear an existing sizing error", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    attempts[0].client.requestPrimary = () => { throw new Error("Resize failed"); };
+    terminal.fitToContainer(id);
+    attempts[0].options.onInputError(new DOMException("Read permission denied.", "NotAllowedError"));
+    assert.equal(terminal.getToolbarState(id).error, "sizing-failed");
+});
+
+test("terminal status errors remain visible and dismiss without replacing the client", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    const client = attempts[0].client;
+    client.screenText = "Retained terminal output";
+    attempts[0].options.onStatus("Selection UI failed: invalid control", "error");
+    await settle();
+    const before = terminal.getTerminalSnapshot(attempts[0].element);
+    assert.equal(before.error, "input-failed");
+    document.activeElement = { tagName: "BUTTON" };
+
+    terminal.dismissError(id);
+    await settle();
+
+    assert.deepEqual(terminal.getTerminalSnapshot(attempts[0].element), { ...before, error: null });
+    assert.equal(snapshots.at(-1).error, null);
+    assert.equal(document.activeElement, client.element);
+    assert.equal(client.disposed, false);
+    assert.equal(client.selectionClears, 0);
+    assert.equal(client.primaryRequests, 0);
+    assert.equal(attempts.length, 1);
     assert.equal(timers.size, 0);
+});
+
+test("dismissing a sizing error keeps the existing connection", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    attempts[0].client.requestPrimary = () => { throw new Error("Resize failed"); };
+    terminal.fitToContainer(id);
+    assert.equal(terminal.getToolbarState(id).error, "sizing-failed");
+    terminal.dismissError(id);
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(attempts[0].client.disposed, false);
+    assert.equal(attempts.length, 1);
+});
+
+test("a delayed dismiss cannot hide a connection failure or cancel its retry", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    attempts[0].options.onInputError(new Error("Clipboard unavailable"));
+    attempts[0].close(1006);
+    await settle();
+    terminal.dismissError(id);
+    assert.equal(terminal.getToolbarState(id).error, "mount-failed");
+    assert.equal(timers.size, 1);
+    assert.equal(attempts[0].client.disposed, true);
 });
 
 test("remote role changes authoritatively switch primary, viewer and unclaimed states", async () => {
@@ -620,6 +852,92 @@ test("automatic retries are bounded and explicit reconnect resets the exhausted 
     assert.equal(retry(), 500);
 });
 
+function clickFooter(footer, control, { selectOption = false, ...options } = {}) {
+    const option = { matches: selector => selector === "fluent-option" };
+    const event = Object.assign(new Event("click"), {
+        button: 0, detail: 1, pointerType: "mouse",
+        composedPath: () => selectOption ? [option, control, footer] : [control, footer],
+        ...options,
+    });
+    footer.dispatchEvent(event);
+}
+
+for (const [name, index] of [["font decrease", 0], ["font increase", 1], ["Fit", 2], ["dimensions", 3]]) {
+    test(`mouse activation of ${name} returns focus while keyboard activation leaves it in place`, async () => {
+        const { footer, footerControls } = mount();
+        attempts[0].resolve();
+        await settle();
+        const control = footerControls[index];
+        control.focus();
+        clickFooter(footer, control, { selectOption: index === 3 });
+        await settle();
+        assert.equal(document.activeElement, attempts[0].client.element);
+        assert.equal(attempts[0].client.focusCalls, 2);
+
+        for (let i = 0; i < 2; i++) {
+            control.focus();
+            clickFooter(footer, control, { selectOption: index === 3, detail: 0, pointerType: "" });
+            await settle();
+            assert.equal(document.activeElement, control);
+        }
+        assert.equal(attempts[0].client.focusCalls, 2);
+    });
+}
+
+test("the dimensions picker keeps focus while open and returns it after mouse selection", async () => {
+    const { footer, footerControls } = mount();
+    attempts[0].resolve();
+    await settle();
+    const select = footerControls[3];
+    select.focus();
+    clickFooter(footer, select);
+    await settle();
+    assert.equal(document.activeElement, select);
+    clickFooter(footer, select, { selectOption: true });
+    await settle();
+    assert.equal(document.activeElement, attempts[0].client.element);
+});
+
+test("mouse focus restoration respects read-only, inactive and disabled controls", async () => {
+    const { id, footer, footerControls, element } = mount();
+    attempts[0].resolve();
+    await settle();
+    const control = footerControls[0];
+    control.focus();
+    control.disabled = true;
+    clickFooter(footer, control);
+    await settle();
+    assert.equal(document.activeElement, control);
+    control.disabled = false;
+    terminal.setReadOnly(id, true);
+    clickFooter(footer, control);
+    await settle();
+    assert.equal(document.activeElement, control);
+    terminal.setReadOnly(id, false);
+    element.closest = () => ({ inert: true });
+    clickFooter(footer, control);
+    await settle();
+    assert.equal(document.activeElement, control);
+});
+
+test("a mouse click cannot steal focus after another control is selected or the view is disposed", async () => {
+    const { id, footer, footerControls } = mount();
+    attempts[0].resolve();
+    await settle();
+    footerControls[0].focus();
+    clickFooter(footer, footerControls[0]);
+    footerControls[1].focus();
+    await settle();
+    assert.equal(document.activeElement, footerControls[1]);
+    clickFooter(footer, footerControls[1]);
+    terminal.disposeTerminal(id);
+    await settle();
+    assert.equal(document.activeElement, footerControls[1]);
+    clickFooter(footer, footerControls[1]);
+    await settle();
+    assert.equal(document.activeElement, footerControls[1]);
+});
+
 test("F6 focuses the footer and Shift+F6 focuses the preceding dashboard control", async () => {
     const { element, footer, footerControls } = mount();
     const previous = {
@@ -632,7 +950,6 @@ test("F6 focuses the footer and Shift+F6 focuses the preceding dashboard control
     element.closest = () => null;
     document.querySelectorAll = () => [previous];
     setGlobal("Node", { DOCUMENT_POSITION_FOLLOWING: 4 });
-    setGlobal("getComputedStyle", () => ({ visibility: "visible" }));
     attempts[0].resolve();
     await settle();
     const onInput = attempts[0].options.onInput;
@@ -669,7 +986,7 @@ test("disposing unregisters the footer focus listener", async () => {
     const event = Object.assign(new Event("keydown", { cancelable: true }), { key: "F6" });
     footer.dispatchEvent(event);
     assert.equal(event.defaultPrevented, false);
-    assert.equal(attempts[0].client.focusCalls, 0);
+    assert.equal(attempts[0].client.focusCalls, 1);
 });
 
 test("font preference follows its surface across remounts but not another surface", async () => {

@@ -41,6 +41,7 @@ internal static class TerminalSetupHelpers
         var module = context.JSInterop.SetupModule(modulePath);
         module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);
         module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
+        module.SetupVoid("dismissError", _ => true).SetVoidResult();
         module.SetupVoid("refreshLayout", _ => true).SetVoidResult();
         module.SetupVoid("setAutoFit", _ => true).SetVoidResult();
         module.SetupVoid("fitToContainer", _ => true).SetVoidResult();

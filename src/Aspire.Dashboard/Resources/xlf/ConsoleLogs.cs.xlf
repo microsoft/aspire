@@ -142,6 +142,11 @@
         <target state="new">The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalDismissError">
+        <source>Dismiss</source>
+        <target state="new">Dismiss</target>
+        <note>Dismisses a terminal input, clipboard, or sizing error without reconnecting.</note>
+      </trans-unit>
       <trans-unit id="TerminalFocusControlsHint">
         <source>F6: Focus terminal controls</source>
         <target state="new">F6: Focus terminal controls</target>

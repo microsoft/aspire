@@ -86,6 +86,12 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TerminalRetry", resourceCulture);
             }
         }
+
+        public static string TerminalDismissError {
+            get {
+                return ResourceManager.GetString("TerminalDismissError", resourceCulture);
+            }
+        }
         
         public static string ConsoleLogsSelectResourceToolbar {
             get {
