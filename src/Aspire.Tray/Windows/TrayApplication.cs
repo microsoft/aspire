@@ -183,6 +183,10 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
             controller.ReportActionError(message);
         });
         RefreshMenu();
+        if (smokeSeconds is not null)
+        {
+            ProbeRegistrationForSmoke();
+        }
         if (!TryAddIcon())
         {
             // An Explorer window can exist before its notification area accepts icons.

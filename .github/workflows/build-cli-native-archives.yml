@@ -187,6 +187,7 @@ jobs:
           }
           $scratch = [IO.Directory]::CreateTempSubdirectory('aspire-tray-ci-').FullName
           try {
+            eng/scripts/tray-registration-control/run.ps1 -Architecture ($rid -replace '^win-', '')
             Expand-Archive -LiteralPath $archive[0].FullName -DestinationPath (Join-Path $scratch 'cli')
             $cli = Join-Path $scratch 'cli/aspire.exe'
             & tar -xzf "artifacts/bundle/aspire-ci-bundlepayload-$rid.tar.gz" -C $scratch "$rid/tray"

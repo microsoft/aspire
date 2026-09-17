@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 namespace Aspire.Tray;
 
@@ -19,6 +20,34 @@ internal sealed unsafe partial class TrayApplication
     internal Func<bool>? DialogReadyForSmoke { get; set; }
     internal int IconAddFailuresForSmoke { get; set; }
     internal bool SuppressStopForSmoke { get; set; }
+
+    private void ProbeRegistrationForSmoke()
+    {
+        var data = new NativeMethods.NotifyIconData
+        {
+            Size = (uint)sizeof(NativeMethods.NotifyIconData),
+            Window = _window,
+            Id = 2,
+            Flags = _iconData.Flags,
+            CallbackMessage = _iconData.CallbackMessage,
+            // IDI_APPLICATION is shared system artwork; it must not be destroyed.
+            Icon = NativeMethods.LoadIcon(0, 32512)
+        };
+        NativeCallException.Require(data.Icon != 0, "LoadIconW(smoke control)");
+        Program.Log($"C# NOTIFYICONDATAW architecture={RuntimeInformation.ProcessArchitecture} size={sizeof(NativeMethods.NotifyIconData)} "
+            + $"hwnd={Offset(nameof(data.Window))} id={Offset(nameof(data.Id))} flags={Offset(nameof(data.Flags))} callback={Offset(nameof(data.CallbackMessage))} "
+            + $"icon={Offset(nameof(data.Icon))} tip={Offset(nameof(data.Tip))} state={Offset(nameof(data.State))} stateMask={Offset(nameof(data.StateMask))} "
+            + $"info={Offset(nameof(data.Info))} version={Offset(nameof(data.Version))} title={Offset(nameof(data.InfoTitle))} "
+            + $"infoFlags={Offset(nameof(data.InfoFlags))} guid={Offset(nameof(data.ItemGuid))} balloon={Offset(nameof(data.BalloonIcon))}.");
+        var added = NativeMethods.ShellNotifyIcon(NativeMethods.NimAdd, ref data);
+        Program.Log($"C# stock icon NIM_ADD={added} flags=0x{data.Flags:x}.");
+        if (added != 0)
+        {
+            NativeCallException.Require(NativeMethods.ShellNotifyIcon(NativeMethods.NimDelete, ref data) != 0, "Shell_NotifyIconW(smoke control delete)");
+        }
+
+        static nint Offset(string field) => Marshal.OffsetOf<NativeMethods.NotifyIconData>(field);
+    }
 
     internal void BeginInteractivePreviewForSmoke()
     {

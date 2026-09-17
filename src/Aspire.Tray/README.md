@@ -374,6 +374,12 @@ CI checks for an interactive session, Explorer notification area, and an accessi
 input desktop before running native UI smoke. Runners without those capabilities
 emit an explicit warning and summary instead of claiming UI coverage; native
 publishing and payload verification still run.
+On desktop-capable runners, an SDK-compiled stock-icon registration control logs
+the native structure layout and process/Explorer sessions and integrity levels.
+The native tray smoke also tries the same stock icon through its C# interop before
+exercising the real artwork. These diagnostics distinguish layout, artwork, and
+runner-shell failures; registration rejection never changes the desktop gate or
+replaces the mandatory native smoke.
 
 Use `win-arm64` and the matching native C++ toolchain for ARM64. The CLI bundle
 includes the published executable and its adjacent `Aspire.ico`; copying only

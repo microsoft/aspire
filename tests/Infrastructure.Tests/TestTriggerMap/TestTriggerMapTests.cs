@@ -43,6 +43,14 @@ public sealed class TestTriggerMapTests
         Assert.Equal(1, s_map.Version);
     }
 
+    [Theory]
+    [InlineData("eng/scripts/tray-registration-control/control.cpp")]
+    [InlineData("eng/scripts/tray-registration-control/run.ps1")]
+    public void TrayRegistrationControlRunsInUnconditionalNativeArchiveJobs(string path)
+    {
+        Assert.Contains(s_map.Ignore, pattern => TestTriggerMap.GlobMatches(pattern, path));
+    }
+
     [Fact]
     public void ExtensionUnitWorkflowChangesSelectUnitAndE2eJobs()
     {

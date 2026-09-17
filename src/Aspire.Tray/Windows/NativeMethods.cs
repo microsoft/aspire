@@ -303,6 +303,9 @@ internal static unsafe partial class NativeMethods
     [LibraryImport("user32.dll", EntryPoint = "LoadImageW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
     internal static partial nint LoadImage(nint instance, string name, uint type, int width, int height, uint flags);
 
+    [LibraryImport("user32.dll", EntryPoint = "LoadIconW", SetLastError = true)]
+    internal static partial nint LoadIcon(nint instance, nint name);
+
     [LibraryImport("user32.dll", SetLastError = true)]
     internal static partial int DestroyIcon(nint icon);
 
