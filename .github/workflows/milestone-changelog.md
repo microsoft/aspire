@@ -28,8 +28,8 @@ max-daily-ai-credits: -1
 #      ensures the companion feedback issue exists.
 #
 # Data flows fetch-data → agent via the changelog-data
-# artifact. Agent → publish uses the framework's built-in
-# safe-output artifact passing.
+# artifact. Agent → publish uses an explicit changelog-output
+# artifact for the generated body and memory files.
 #
 # ──────────────────────────────────────────────────────────
 # To change the target milestone, update the MILESTONE value
@@ -312,7 +312,7 @@ jobs:
           rm -rf "$WIKI_TMP"
 
           echo "has_work=$HAS_WORK" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4.6.2
+      - uses: actions/upload-artifact@v7.0.1
         if: steps.fetch.outputs.has_work == 'true'
         with:
           name: changelog-data
@@ -349,7 +349,15 @@ safe-outputs:
       env:
         GH_TOKEN: ${{ github.token }}
       steps:
+        - name: Download changelog files
+          id: download-changelog
+          uses: actions/download-artifact@v8.0.1
+          with:
+            name: changelog-output
+            path: ${{ runner.temp }}/changelog-output
         - name: Publish changelog and update memory branch
+          env:
+            CHANGELOG_DIR: ${{ steps.download-changelog.outputs.download-path }}
           run: |
             set -euo pipefail
 
@@ -359,8 +367,7 @@ safe-outputs:
               exit 1
             fi
 
-            ARTIFACT_DIR=$(dirname "$OUTPUT_FILE")
-            BODY_FILE="$ARTIFACT_DIR/agent/new-body.md"
+            BODY_FILE="$CHANGELOG_DIR/new-body.md"
             if [ ! -f "$BODY_FILE" ]; then
               echo "::error::Changelog body not found at $BODY_FILE"
               exit 1
@@ -436,7 +443,7 @@ safe-outputs:
             fi
 
             # ── 2. Push state to memory branch ──
-            MEMORY_DIR="$ARTIFACT_DIR/agent/memory/$MILESTONE"
+            MEMORY_DIR="$CHANGELOG_DIR/memory/$MILESTONE"
             if [ -d "$MEMORY_DIR" ]; then
               if ! git clone --depth 1 --branch "$MEMORY_BRANCH" \
                   "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
@@ -487,10 +494,21 @@ safe-outputs:
 timeout-minutes: 30
 
 steps:
-  - uses: actions/download-artifact@v4.3.0
+  - uses: actions/download-artifact@v8.0.1
     with:
       name: changelog-data
       path: /tmp/gh-aw/
+
+# Custom agent files are not included in gh-aw's diagnostic agent artifact.
+post-steps:
+  - name: Upload changelog files
+    uses: actions/upload-artifact@v7.0.1
+    with:
+      name: changelog-output
+      path: |
+        /tmp/gh-aw/agent/new-body.md
+        /tmp/gh-aw/agent/memory/${{ env.MILESTONE }}/
+      if-no-files-found: error
 
 ---
 
