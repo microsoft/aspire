@@ -1,6 +1,6 @@
 @namespace Aspire.Dashboard.Components.Controls
 
-<div class="terminal-view @(Chromeless ? "terminal-chromeless" : null)">
+<div class="terminal-view @(Chromeless ? "terminal-chromeless" : null)" data-theme="dark">
     <div hidden @ref="_selectionTemplateElement">
         <div class="terminal-selection-actions">
             <FluentButton Class="terminal-selection-copy"
@@ -47,22 +47,22 @@
         <div class="terminal-footer" tabindex="-1" @ref="_footerElement">
             <span class="terminal-focus-hint">@(FocusControlsHintLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalFocusControlsHint)])</span>
             <div class="terminal-controls">
-                <FluentButton Class="terminal-font-minus" Disabled="@(!_state.CanDecreaseFontSize || ReadOnly)"
+                <FluentButton Class="terminal-font-minus aspire-icon-button" Disabled="@(!_state.CanDecreaseFontSize || ReadOnly)"
                               Title="@(DecreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)])"
                               aria-label="@(DecreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)])"
                               OnClick="@(() => SetFontSizeAsync(_state.FontPx - 1))">−</FluentButton>
                 <span class="terminal-font-size">@(_state.FontPx > 0 ? $"{_state.FontPx}px" : null)</span>
-                <FluentButton Class="terminal-font-plus" Disabled="@(!_state.CanIncreaseFontSize || ReadOnly)"
+                <FluentButton Class="terminal-font-plus aspire-icon-button" Disabled="@(!_state.CanIncreaseFontSize || ReadOnly)"
                               Title="@(IncreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)])"
                               aria-label="@(IncreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)])"
                               OnClick="@(() => SetFontSizeAsync(_state.FontPx + 1))">+</FluentButton>
                 @if (ShowDimensionsPicker)
                 {
-                    <FluentButton Class="terminal-fit" Disabled="@(!_state.FitEnabled || ReadOnly)"
+                    <FluentButton Class="terminal-fit aspire-icon-button" Disabled="@(!_state.FitEnabled || ReadOnly)"
                                   Title="@(FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)])"
                                   aria-label="@(FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)])"
                                   OnClick="FitToContainerAsync">@(FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)])</FluentButton>
-                    <FluentSelect TOption="TerminalSizePreset" TValue="string" Class="terminal-size-select" Items="@DisplayedSizePresets"
+                    <FluentSelect TOption="TerminalSizePreset" TValue="string" Class="terminal-size-select aspire-input" Items="@DisplayedSizePresets"
                                   OptionValue="@(p => p.Value)"
                                   OptionText="@(p => p.Label)"
                                   Value="@_state.SizeKey" ValueChanged="@(value => SetSizeModeAsync(value ?? string.Empty))"

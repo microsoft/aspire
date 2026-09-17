@@ -5,7 +5,11 @@
     min-height: 0;
     padding: 0 8px 8px;
     box-sizing: border-box;
-    background: var(--colorNeutralBackground2);
+    --colorNeutralForeground2: var(--colorNeutralForeground3);
+    --colorNeutralForeground1Hover: var(--colorNeutralForeground1);
+    --colorNeutralForeground1Pressed: var(--colorNeutralForeground3);
+    --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
+    --colorNeutralBackground1Pressed: var(--colorNeutralBackground1);
 }
 
 .terminal-frame {
@@ -42,7 +46,7 @@
     flex: 0 0 auto;
     gap: 8px;
     min-height: 34px;
-    padding: 2px 8px;
+    padding: 4px 8px;
     background: var(--colorNeutralBackground2);
     color: var(--colorNeutralForeground2);
     font-size: var(--fontSizeBase200);
@@ -55,8 +59,14 @@
 .terminal-controls {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     margin-inline-start: auto;
+}
+
+.terminal-size-select {
+    width: auto;
+    height: var(--aspire-control-height);
+    min-height: var(--aspire-control-height);
 }
 
 .terminal-font-size {
