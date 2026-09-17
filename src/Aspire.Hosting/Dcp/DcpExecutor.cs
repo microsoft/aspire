@@ -155,6 +155,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         try
         {
             _containerCreator.PrepareContainerNetworks();
+            var containerVolumes = _containerCreator.PrepareContainerVolumes();
 
             using (var prepareServicesActivity = ProfilingTelemetry.StartDcpPrepareServices(_configuration))
             {
@@ -207,6 +208,17 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
             var createContainerNetworks = Task.Run(() => CreateAllDcpObjectsAsync<ContainerNetwork>(ct), ct);
 
+            var createContainerVolumes = Task.Run(async () =>
+            {
+                await CreateDcpObjectsAsync(containerVolumes, ct).ConfigureAwait(false);
+                await WaitForStateAsync(
+                    containerVolumes,
+                    volume => volume.Status?.State,
+                    [ContainerVolumeState.Ready],
+                    TimeSpan.FromMinutes(1),
+                    ct).ConfigureAwait(false);
+            }, ct);
+
             var createWorkloadEndpoints = Task.Run(async () =>
             {
                 await Task.WhenAll([getProxyAddresses, createContainerNetworks]).WaitAsync(ct).ConfigureAwait(false);
@@ -257,7 +269,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
             var createContainers = Task.Run(async () =>
             {
-                await createWorkloadEndpoints.ConfigureAwait(false);
+                await Task.WhenAll(createWorkloadEndpoints, createContainerVolumes).ConfigureAwait(false);
 
                 await CreateRenderedResourcesAsync(_containerCreator, containers, cctx, ct).ConfigureAwait(false);
             }, ct);

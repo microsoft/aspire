@@ -465,8 +465,10 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(SharedCommandStrings.AppHostNotRunning, displayedMessage.Message);
     }
 
-    [Fact]
-    public async Task StopCommand_ForceInvokesDcpCleanupForResolvedAppHost()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StopCommand_ForceInvokesDcpCleanupForResolvedAppHost(bool deleteVolumes)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -489,12 +491,13 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+        var volumesOption = deleteVolumes ? " --volumes" : string.Empty;
+        var result = command.Parse($"stop --force{volumesOption} --apphost \"{appHostFile.FullName}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
+        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId, deleteVolumes);
         Assert.Contains(interactionService.DisplayedMessages, message => message.Message == string.Format(SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("AppHost", "AppHost.csproj")));
         Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.PersistentResourcesCleaned, appHostFile.Name));
     }
@@ -725,8 +728,13 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("cleanup failed", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task StopCommand_ForceWarnsAndCleansUpForUnsupportedNonBundleAppHost()
+    [Theory]
+    [InlineData(false, "13.4.0", "persistent resource cleanup")]
+    [InlineData(true, "13.5.0", "persistent volume cleanup")]
+    public async Task StopCommand_ForceWarnsAndCleansUpForUnsupportedNonBundleAppHost(
+        bool deleteVolumes,
+        string aspireHostingVersion,
+        string expectedWarning)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -748,21 +756,22 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
                 GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) =>
-                    (0, CreateAppHostInfoJson(aspireHostingVersion: "13.4.0", isUsingCliBundle: false))
+                    (0, CreateAppHostInfoJson(aspireHostingVersion, isUsingCliBundle: false))
             };
         });
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+        var volumesOption = deleteVolumes ? " --volumes" : string.Empty;
+        var result = command.Parse($"stop --force{volumesOption} --apphost \"{appHostFile.FullName}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
+        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId, deleteVolumes);
         Assert.Contains(interactionService.DisplayedMessages, message =>
             message.Emoji.Equals(KnownEmojis.Warning) &&
-            message.Message.Contains("might not support persistent resource cleanup", StringComparison.Ordinal));
+            message.Message.Contains(expectedWarning, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1177,6 +1186,28 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_VolumesRequiresForce()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop --volumes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(
+            string.Format(CultureInfo.InvariantCulture, StopCommandStrings.VolumesRequiresForce, "--volumes", "--force"),
+            Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Fact]
     public async Task StopCommand_DeletesSocketFile_AfterSuccessfulStop()
     {
         // Regression test for https://github.com/microsoft/aspire/issues/17587: 'aspire stop' is the command
@@ -1252,13 +1283,19 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         });
     }
 
-    private static void AssertDcpCleanupInvocation(TestProcessExecutionFactory processFactory, string expectedWorkloadId)
+    private static void AssertDcpCleanupInvocation(
+        TestProcessExecutionFactory processFactory,
+        string expectedWorkloadId,
+        bool deleteVolumes = false)
     {
+        string[] expectedArguments = deleteVolumes
+            ? ["cleanup", "--volumes", expectedWorkloadId]
+            : ["cleanup", expectedWorkloadId];
         var execution = Assert.Single(processFactory.CreatedExecutions.OfType<TestProcessExecution>(), execution =>
-            execution.Arguments.Count == 2 &&
-            execution.Arguments[0] == "cleanup" &&
-            execution.Arguments[1] == expectedWorkloadId);
+            execution.Arguments.Count > 0 &&
+            execution.Arguments[0] == "cleanup");
 
+        Assert.Equal(expectedArguments, execution.Arguments);
         Assert.EndsWith(BundleDiscovery.GetDcpExecutableName(), execution.FileName, StringComparison.Ordinal);
     }
 

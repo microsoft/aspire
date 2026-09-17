@@ -4,7 +4,7 @@
 #pragma warning disable ASPIREPERSISTENCE001
 
 using Aspire.Hosting.Ats;
-using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -190,25 +190,27 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void NamedContainerVolumeIdentityAndPersistenceAreIndependentOfContainerLifetime()
+    public void NamedContainerVolumesArePreparedOnceAndPersistIndependentOfContainerLifetime()
     {
-        using var sessionBuilder = TestDistributedApplicationBuilder.Create();
-        var sessionContainer = sessionBuilder.AddContainer("session", "image")
+        const string volumeName = "Shared_Data.Volume";
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("session", "image")
             .WithSessionLifetime()
-            .WithVolume("shared-data", "/srv/data");
-
-        using var persistentBuilder = TestDistributedApplicationBuilder.Create();
-        var persistentContainer = persistentBuilder.AddContainer("persistent", "image")
+            .WithVolume(volumeName, "/srv/data")
+            .WithVolume("/srv/anonymous")
+            .WithBindMount(Path.GetFullPath("bind-source"), "/srv/bind");
+        builder.AddContainer("persistent", "image")
             .WithPersistentLifetime()
-            .WithVolume("shared-data", "/srv/data");
+            .WithVolume(volumeName, "/srv/data");
 
-        var sessionMount = Assert.Single(sessionContainer.Resource.Annotations.OfType<ContainerMountAnnotation>());
-        var persistentMount = Assert.Single(persistentContainer.Resource.Annotations.OfType<ContainerMountAnnotation>());
-        Assert.Equal("shared-data", sessionMount.Source);
-        Assert.Equal(sessionMount.Source, persistentMount.Source);
+        using var app = builder.Build();
+        var creator = app.Services.GetRequiredService<ContainerCreator>();
+        var volumes = creator.PrepareContainerVolumes();
 
-        var dcpVolume = ContainerVolume.Create("shared-data-resource", sessionMount.Source!);
-        Assert.True(dcpVolume.Spec.Persistent);
+        var volume = Assert.Single(volumes);
+        Assert.Equal(volumeName, volume.Spec.Name);
+        Assert.True(volume.Spec.Persistent);
+        Assert.Matches("^volume-[0-9a-f]{32}$", volume.Metadata.Name);
     }
 
     [Fact]
