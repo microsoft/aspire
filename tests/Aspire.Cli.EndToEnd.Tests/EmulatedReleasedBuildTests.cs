@@ -188,7 +188,7 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
         // Searching for just "redis" also matches azure-provisioning-redis from the PR hive.
         // Wait for the intended row to be selected before accepting the interactive search.
         const string integrationLabel = "redis (Aspire.Hosting.Redis)";
-        await auto.TypeAsync(integrationLabel);
+        await auto.TypeAsync("Aspire.Hosting.Redis");
         await auto.WaitUntilTextAsync($"> {integrationLabel}", timeout: TimeSpan.FromMinutes(1));
         await auto.EnterAsync();
 
