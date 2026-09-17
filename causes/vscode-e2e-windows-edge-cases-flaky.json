@@ -2,8 +2,11 @@
   "id": "vscode-e2e-windows-edge-cases-flaky",
   "type": "flaky-test",
   "title": "Flaky: VS Code extension E2E (Windows, edge-cases) shard fails with generic exit code, unrelated to PR changes",
-  "test_name": "VS Code extension E2E (Windows, edge-cases)",
-  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted.",
+  "test_name": "Aspire extension edge case E2E keeps CLI-independent settings commands available when the CLI is unavailable",
+  "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+  "error_pattern": "Timed out after 10000ms waiting for E2E control revision <timestamp>. at waitForExtensionState (out\\test-e2e\\test-e2e\\helpers\\assertions.js:276:11) at async applyE2eControl (out\\test-e2e\\test-e2e\\helpers\\assertions.js:353:23) at async executeE2eControlCommand (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:167:12)",
+  "analysis": "This run adds a specific test failure and stack trace to a previously logs-unavailable version of this recurring shard flake: the edge-cases E2E test times out waiting for the extension host to apply an E2E control revision, an environment/timing issue unrelated to the PR's Azure ARM client provisioning changes.",
+  "failure_details": "Timed out after 10000ms waiting for E2E control revision 1789682081579.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"10aedc8e-f452-401b-a814-9de6ad245465\",\n  \"updatedAt\": \"2026-09-17T21:55:17.499Z\",\n  \"runId\": \"8032-1789682020389\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSessions\": []\n  },\n  \"control\": {\n    \"revision\": 1789682081579,\n    \"status\": \"started\",\n    \"startedObserved\": true\n  }\n}\n    at waitForExtensionState (out\\test-e2e\\test-e2e\\helpers\\assertions.js:276:11)\n    at async applyE2eControl (out\\test-e2e\\test-e2e\\helpers\\assertions.js:353:23)\n    at async executeE2eControlCommand (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:167:12)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\edgeCases.e2e.test.js:90:9)",
   "occurrences": [
     {
       "run_id": 32403422458,
@@ -193,6 +196,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
       "pr_number": 19698,
       "observed_at": "2026-08-26T14:44:59Z"
+    },
+    {
+      "run_id": 35275989131,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35275989131",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "pr_number": 20203,
+      "observed_at": "2026-09-17T22:15:10Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19547"
