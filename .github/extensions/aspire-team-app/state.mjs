@@ -8,7 +8,8 @@
 // account watches its own set and any number of accounts can be active at once.
 // Results from every active account are interleaved into the same tabs.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_REPOS, DEFAULT_EMU_REPOS, CURRENT_RELEASE } from "./github.mjs";
@@ -17,6 +18,7 @@ import { isEmuAccountId } from "./accounts.mjs";
 const COPILOT_HOME = process.env.COPILOT_HOME || join(homedir(), ".copilot");
 const ARTIFACT_DIR = join(COPILOT_HOME, "extensions", "aspire-team-app", "artifacts");
 const PREFS_FILE = join(ARTIFACT_DIR, "preferences.json");
+const MIRROR_FILE = join(ARTIFACT_DIR, "mirror-main.json");
 let prefsUpdate = Promise.resolve();
 
 export const DEFAULT_NOTIFICATIONS = {
@@ -24,6 +26,7 @@ export const DEFAULT_NOTIFICATIONS = {
   readyToMerge: true,
   changesRequested: true,
   ciFailing: true,
+  mirrorLag: true,
 };
 
 export const DEFAULT_PREFS = {
@@ -98,6 +101,30 @@ export async function savePrefs(prefs) {
   await mkdir(ARTIFACT_DIR, { recursive: true });
   await writeFile(PREFS_FILE, JSON.stringify(prefs, null, 2) + "\n", "utf8");
   return prefs;
+}
+
+export async function loadMirrorState() {
+  try {
+    const state = JSON.parse(await readFile(MIRROR_FILE, "utf8"));
+    if (!state || typeof state !== "object" || Array.isArray(state)) {
+      throw new Error("Invalid mirror monitor state.");
+    }
+    return state;
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw new Error("Could not read mirror monitor state. Check mirror-main.json in the extension artifacts directory.");
+  }
+}
+
+export async function saveMirrorState(state) {
+  await mkdir(ARTIFACT_DIR, { recursive: true });
+  const temporary = `${MIRROR_FILE}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });
+    await rename(temporary, MIRROR_FILE);
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
 
 // Every canvas instance shares this preference file. Serialize read-modify-write operations so

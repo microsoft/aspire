@@ -1524,6 +1524,7 @@ function captureSettingsDraft() {
       readyToMerge: readyToMerge.checked,
       changesRequested: changesRequested.checked,
       ciFailing: ciFailing.checked,
+      mirrorLag: document.getElementById("n-mirror")?.checked ?? true,
     },
   };
 }
@@ -1542,6 +1543,8 @@ function restoreSettingsDraft(draft) {
   if (readyToMerge) readyToMerge.checked = draft.notifications.readyToMerge;
   if (changesRequested) changesRequested.checked = draft.notifications.changesRequested;
   if (ciFailing) ciFailing.checked = draft.notifications.ciFailing;
+  const mirrorLag = document.getElementById("n-mirror");
+  if (mirrorLag) mirrorLag.checked = draft.notifications.mirrorLag;
 }
 
 async function mutateAzurePipeline(path, body, clearDraft) {
@@ -2034,6 +2037,7 @@ async function saveSettings() {
     readyToMerge: document.getElementById("n-ready").checked,
     changesRequested: document.getElementById("n-changes").checked,
     ciFailing: document.getElementById("n-ci").checked,
+    mirrorLag: document.getElementById("n-mirror").checked,
   };
   goView("queue", true);
   await withRefresh(() => postJSON("api/prefs", { release, showDrafts, notifications }));
@@ -2640,7 +2644,8 @@ const HEALTH_STATUS = {
 };
 
 function healthMeta(item) {
-  return HEALTH_STATUS[item && item.state] || HEALTH_STATUS.unknown;
+  const meta = HEALTH_STATUS[item && item.state] || HEALTH_STATUS.unknown;
+  return item?.provider === "mirror" ? { ...meta, label: item.statusLabel || "Unknown" } : meta;
 }
 
 function healthRelativeTime(value) {
@@ -2668,6 +2673,13 @@ function healthActionBtn(item, kind, label, target) {
 }
 
 function healthLatest(item) {
+  if (item.provider === "mirror") {
+    const mirror = item.mirror || {};
+    return '<div class="health-latest"><b>GitHub ' + esc((mirror.sourceSha || "not read").slice(0, 12)) +
+      ' / internal ' + esc((mirror.mirrorSha || "not read").slice(0, 12)) +
+      '</b><div>Last successful check: ' + esc(mirror.lastSuccessAt || "never") +
+      (mirror.stale ? " (stale)" : "") + "</div></div>";
+  }
   if (!item.latest) return '<div class="health-latest">No recent validation signal is available.</div>';
   const latest = item.latest;
   const ago = healthRelativeTime(latest.at);
@@ -2725,7 +2737,7 @@ function healthEvidence(item) {
 
 function healthCard(item, index, total, options = {}) {
   const meta = healthMeta(item);
-  const provider = item.provider === "azure-devops" ? "Azure DevOps" : "GitHub";
+  const provider = item.provider === "mirror" ? "GitHub to Azure DevOps" : item.provider === "azure-devops" ? "Azure DevOps" : "GitHub";
   const providerIcon = item.provider === "azure-devops" ? ICONS.building : ICONS.pulse;
   const branch = String(item.branch || "Unknown").replace(/^refs\/heads\//, "");
   const grouped = !!options.grouped;
@@ -2767,6 +2779,14 @@ function healthCard(item, index, total, options = {}) {
   const orderStatus = showHandle
     ? '<span class="health-order-status" aria-hidden="true">' + (index + 1) + " of " + total + "</span>"
     : "";
+  const metrics = item.provider === "mirror"
+    ? '<div class="health-metrics"><div class="health-metric"><span class="k">Oldest outstanding</span><span class="v">' +
+      esc(item.mirror?.ageText || "Unknown") + '</span></div><div class="health-metric"><span class="k">Missing commits</span><span class="v">' +
+      esc(item.mirror?.missingCount ?? "Unknown") + '</span></div><div class="health-metric"><span class="k">Branch</span><span class="v">main</span></div></div>'
+    : '<div class="health-metrics"><div class="health-metric"><span class="k">Last success</span><span class="v">' +
+      esc(healthLastSuccess(item)) + '</span></div><div class="health-metric"><span class="k">Failure streak</span><span class="v">' +
+      esc(streak) + '</span></div><div class="health-metric"><span class="k">Branch</span><span class="v" title="' +
+      esc(branch) + '">' + esc(branch) + "</span></div></div>";
 
   return '<article class="health-card ' + esc(item.state || "unknown") + (grouped ? " grouped-source" : "") +
     '" data-health-id="' + esc(item.id) + '">' +
@@ -2776,13 +2796,10 @@ function healthCard(item, index, total, options = {}) {
     esc(meta.label) + "</span></div><div class=\"health-card-body\">" +
     healthLatest(item) +
     healthReasons(item) +
-    '<div class="health-metrics"><div class="health-metric"><span class="k">Last success</span><span class="v">' +
-    esc(healthLastSuccess(item)) + '</span></div><div class="health-metric"><span class="k">Failure streak</span><span class="v">' +
-    esc(streak) + '</span></div><div class="health-metric"><span class="k">Branch</span><span class="v" title="' +
-    esc(branch) + '">' + esc(branch) + "</span></div></div>" +
+    metrics +
     healthEvidence(item) + "</div>" +
     '<div class="health-actions">' + healthActionBtn(item, "diagnose-health", "Diagnose here", "current-session") +
-    healthActionBtn(item, "fix-health", fixLabel, actionTarget) +
+    (item.provider === "mirror" ? "" : healthActionBtn(item, "fix-health", fixLabel, actionTarget)) +
     orderStatus + "</div></article>";
 }
 
@@ -2998,6 +3015,7 @@ function settingsView() {
       toggle("n-ready", "Your PR is ready to merge", "Approved with passing checks", n.readyToMerge) +
       toggle("n-changes", "Changes requested on your PR", "A reviewer wants edits", n.changesRequested) +
       toggle("n-ci", "CI failing on your PR", "A required check is red", n.ciFailing) +
+      toggle("n-mirror", "Internal mirror lag", "Warn at 6h, escalate at 24h, and notify on recovery. Checks run every 15 minutes while this session runs.", n.mirrorLag !== false) +
     "</div>" +
     '<div class="row-actions">' +
       '<button class="btn ghost" id="cancel-settings">Cancel <kbd>Esc</kbd></button>' +
@@ -3109,7 +3127,8 @@ function notificationsView() {
         '<span class="ndot bg-' + (n.tone || "muted") + '"></span>' +
         '<a class="nbody" href="' + esc(n.url) + '" target="_blank" rel="noreferrer">' +
           '<span class="ntitle">' + esc(n.title) + "</span>" +
-          '<span class="ndetail">' + esc(n.detail) + ' \u00b7 <span class="repo">' + esc(shortRepo(n.repository)) + " #" + n.number + "</span></span>" +
+          '<span class="ndetail">' + esc(n.detail) + ' \u00b7 <span class="repo">' + esc(shortRepo(n.repository)) +
+          (n.kind === "mirror" ? " main" : " #" + n.number) + "</span></span>" +
         "</a>" +
         '<button class="dismiss" data-dismiss="' + esc(n.id) + '" title="Dismiss" aria-label="Dismiss">' + ICONS.x + "</button>" +
       "</div>"
@@ -3174,7 +3193,12 @@ function render(forward) {
       '<button class="errbar-x" id="load-errbar-dismiss" type="button" title="Dismiss" aria-label="Dismiss">' + ICONS.x + "</button></div>"
     : "";
   const motionClass = healthOrderSaving ? " no-motion" : "";
-  app.innerHTML = topbarHtml() + banner + '<div class="viewport"><div class="view ' + dir + motionClass + '">' + inner + "</div></div>";
+  const mirrorBanner = state.mirror && ["degraded", "failing", "unknown"].includes(state.mirror.state)
+    ? '<div class="errbar" role="status"><a href="' + safeHref(state.mirror.url) +
+      '" target="_blank" rel="noreferrer">Internal mirror: ' + esc(state.mirror.statusLabel) + "</a> &mdash; " +
+      esc(state.mirror.reasons?.[0]?.summary || "") + "</div>"
+    : "";
+  app.innerHTML = topbarHtml() + banner + mirrorBanner + '<div class="viewport"><div class="view ' + dir + motionClass + '">' + inner + "</div></div>";
   if (banner) {
     const bx = document.getElementById("load-errbar-dismiss");
     if (bx) bx.addEventListener("click", function () { loadError = null; render(); });
@@ -3609,8 +3633,30 @@ function wireAccounts() {
 // Live updates over Server-Sent Events. Progress drives the deterministic top bar. State events
 // contain complete dashboards and apply atomically; when auto-apply is disabled, update-available
 // changes only the toolbar until the user chooses to swap to the completed snapshot.
+function onMirrorUpdate(payload) {
+  if (!state) return;
+  state.mirror = payload.mirror;
+  state.notifications = (state.notifications || []).filter((item) => item.kind !== "mirror").concat(payload.notifications || []);
+  if (state.mode === "health" && state.health) {
+    const items = state.health.items.filter((item) => item.provider !== "mirror");
+    if (payload.mirror) items.push(payload.mirror);
+    state.health.items = items;
+    const counts = { total: items.length, healthy: 0, running: 0, degraded: 0, failing: 0, unavailable: 0, unknown: 0 };
+    for (const item of items) counts[Object.hasOwn(counts, item.state) ? item.state : "unknown"]++;
+    state.health.counts = counts;
+    state.counts = counts;
+  }
+  const draft = view === "settings" ? captureSettingsDraft() : null;
+  render();
+  restoreSettingsDraft(draft);
+}
+
 try {
   const es = new EventSource("events");
+  es.addEventListener("mirror", (e) => {
+    try { onMirrorUpdate(JSON.parse(e.data)); }
+    catch { loadError = "Could not apply the mirror status update. Refresh to retry."; render(); }
+  });
   es.addEventListener("progress", (e) => {
     try { const p = JSON.parse(e.data); setProgress(p.done, p.total); } catch {}
   });
