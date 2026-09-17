@@ -339,7 +339,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals = Array.Empty<TerminalSummary>()
+                    ResourceTerminals = [],
+                    AppHostTerminals = []
                 };
             });
         using (provider)
@@ -362,7 +363,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals =
+                    AppHostTerminals = [],
+                    ResourceTerminals =
                     [
                         new TerminalSummary
                         {
@@ -414,7 +416,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals = Array.Empty<TerminalSummary>()
+                    ResourceTerminals = [],
+                    AppHostTerminals = []
                 };
             },
             options =>
@@ -465,7 +468,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals =
+                    AppHostTerminals = [],
+                    ResourceTerminals =
                     [
                         new TerminalSummary
                         {
@@ -631,7 +635,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals = [],
+                    ResourceTerminals = [],
                     AppHostTerminals =
                     [
                         new AppHostTerminalSummary
@@ -684,10 +688,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TerminalPsCommand_WhenAppHostPredatesAppHostTerminals_StillListsResourceTerminals()
+    public async Task TerminalPsCommand_WhenNoAppHostTerminals_StillListsResourceTerminals()
     {
-        // An AppHost built before AppHost-owned terminals sends no AppHostTerminals at all. That is distinct
-        // from having none, and neither case may fault the listing.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var capturedOutput = new TestOutputTextWriter(outputHelper);
 
@@ -697,7 +699,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals =
+                    ResourceTerminals =
                     [
                         new TerminalSummary
                         {
@@ -720,7 +722,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
                             ]
                         }
                     ],
-                    AppHostTerminals = null,
+                    AppHostTerminals = [],
                 };
             },
             options =>
@@ -759,7 +761,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals = [],
+                    ResourceTerminals = [],
                     AppHostTerminals = [],
                 };
             },

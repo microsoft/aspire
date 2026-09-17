@@ -677,18 +677,23 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void TerminalInteractionProtocol_UsesDedicatedFieldsAndReservesRemovedInputIdentifiers()
+    public void TerminalInteractionProtocol_UsesDedicatedMessages()
     {
         Assert.Equal(8, WatchInteractionsRequestUpdate.Descriptor.FindFieldByName("prompt_terminal").FieldNumber);
         Assert.Equal(21, WatchInteractionsResponseUpdate.Descriptor.FindFieldByName("prompt_terminal").FieldNumber);
         var input = Aspire.DashboardService.Proto.V1.InteractionInput.Descriptor.ToProto();
-        Assert.Contains("terminal_id", input.ReservedName);
-        Assert.Contains(input.ReservedRange, range => range.Start == 19 && range.End == 20);
+        Assert.Empty(input.ReservedName);
+        Assert.Empty(input.ReservedRange);
         Assert.Null(Aspire.DashboardService.Proto.V1.InteractionInput.Descriptor.FindFieldByName("terminal_id"));
         var inputType = DashboardServiceReflection.Descriptor.EnumTypes.Single(type => type.Name == "InputType");
-        Assert.Contains("INPUT_TYPE_TERMINAL", inputType.ToProto().ReservedName);
-        Assert.Contains(inputType.ToProto().ReservedRange, range => range.Start == 7 && range.End == 7);
-        Assert.Null(inputType.FindValueByNumber(7));
+        Assert.Empty(inputType.ToProto().ReservedName);
+        Assert.Empty(inputType.ToProto().ReservedRange);
+        Assert.Null(inputType.FindValueByName("INPUT_TYPE_TERMINAL"));
+        var clientFrame = TerminalClientFrame.Descriptor.ToProto();
+        Assert.Empty(clientFrame.ReservedName);
+        Assert.Empty(clientFrame.ReservedRange);
+        Assert.Equal(3, TerminalClientFrame.Descriptor.FindFieldByName("data").FieldNumber);
+        Assert.Equal(4, TerminalClientFrame.Descriptor.FindFieldByName("terminal_id").FieldNumber);
     }
 
     [Fact]

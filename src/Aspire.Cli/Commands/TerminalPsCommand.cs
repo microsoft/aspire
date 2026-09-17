@@ -125,7 +125,7 @@ internal sealed class TerminalPsCommand : BaseCommand
             "Listing terminal sessions...",
             async () => await connection.ListTerminalsAsync(cancellationToken).ConfigureAwait(false));
 
-        if (response.Terminals.Length == 0 && (response.AppHostTerminals is null || response.AppHostTerminals.Length == 0))
+        if (response.ResourceTerminals.Length == 0 && response.AppHostTerminals.Length == 0)
         {
             if (format == OutputFormat.Json)
             {
@@ -141,9 +141,9 @@ internal sealed class TerminalPsCommand : BaseCommand
 
         _logger.LogDebug(
             "ListTerminalsAsync returned {ResourceCount} resource terminal(s) (reachable={Reachable}) and {AppHostCount} AppHost terminal(s)",
-            response.Terminals.Length,
-            response.Terminals.Count(t => t.IsHostReachable),
-            response.AppHostTerminals?.Length ?? 0);
+            response.ResourceTerminals.Length,
+            response.ResourceTerminals.Count(t => t.IsHostReachable),
+            response.AppHostTerminals.Length);
 
         if (format == OutputFormat.Json)
         {
@@ -159,8 +159,8 @@ internal sealed class TerminalPsCommand : BaseCommand
 
     private void EmitJson(Aspire.Cli.Backchannel.ListTerminalsResponse response, bool verbose)
     {
-        var dtos = new List<TerminalPsJsonEntry>(response.Terminals.Length);
-        foreach (var terminal in response.Terminals)
+        var dtos = new List<TerminalPsJsonEntry>(response.ResourceTerminals.Length + response.AppHostTerminals.Length);
+        foreach (var terminal in response.ResourceTerminals)
         {
             var replicas = new List<TerminalPsJsonReplica>(terminal.Replicas?.Length ?? 0);
             if (terminal.Replicas is not null)
@@ -200,7 +200,7 @@ internal sealed class TerminalPsCommand : BaseCommand
             });
         }
 
-        foreach (var terminal in response.AppHostTerminals ?? [])
+        foreach (var terminal in response.AppHostTerminals)
         {
             dtos.Add(new TerminalPsJsonEntry
             {
@@ -217,14 +217,14 @@ internal sealed class TerminalPsCommand : BaseCommand
 
     private void DisplayTable(Aspire.Cli.Backchannel.ListTerminalsResponse response, bool verbose)
     {
-        if (response.Terminals.Length > 0)
+        if (response.ResourceTerminals.Length > 0)
         {
             DisplayResourceTerminals(response);
         }
 
-        if (response.AppHostTerminals is { Length: > 0 } appHostTerminals)
+        if (response.AppHostTerminals.Length > 0)
         {
-            DisplayAppHostTerminals(appHostTerminals);
+            DisplayAppHostTerminals(response.AppHostTerminals);
         }
 
         if (verbose)
@@ -290,7 +290,7 @@ internal sealed class TerminalPsCommand : BaseCommand
         table.AddBoldColumn("Peers");
         table.AddBoldColumn("Restarts");
 
-        foreach (var terminal in response.Terminals)
+        foreach (var terminal in response.ResourceTerminals)
         {
             // Host-unreachable terminals get one row with a placeholder so users understand why
             // detail is missing rather than silently omitting them.
@@ -335,7 +335,7 @@ internal sealed class TerminalPsCommand : BaseCommand
 
     private void DisplayPeerDetails(Aspire.Cli.Backchannel.ListTerminalsResponse response)
     {
-        var hasAnyPeer = response.Terminals
+        var hasAnyPeer = response.ResourceTerminals
             .Any(t => t.Replicas is not null && t.Replicas.Any(r => r.Peers is { Length: > 0 }));
         if (!hasAnyPeer)
         {
@@ -348,7 +348,7 @@ internal sealed class TerminalPsCommand : BaseCommand
         peers.AddBoldColumn("Peer Id");
         peers.AddBoldColumn("Display Name");
 
-        foreach (var terminal in response.Terminals)
+        foreach (var terminal in response.ResourceTerminals)
         {
             if (terminal.Replicas is null)
             {

@@ -1745,7 +1745,7 @@ internal sealed class ListTerminalsRequest : BackchannelRequest
 
 /// <summary>
 /// One entry per <c>WithTerminal</c>-enabled resource. Returned inside
-/// <see cref="ListTerminalsResponse.Terminals"/>. Replica details (current size, attached peers)
+/// <see cref="ListTerminalsResponse.ResourceTerminals"/>. Replica details (current size, attached peers)
 /// are only populated when the host process is reachable; otherwise <see cref="IsHostReachable"/>
 /// is false and the per-replica entries are degraded (<see cref="TerminalReplicaInfo.IsAlive"/> =
 /// false, AppHost-known <see cref="TerminalReplicaInfo.ConsumerUdsPath"/>), but the array shape
@@ -1803,18 +1803,17 @@ internal sealed class ListTerminalsResponse
     /// <summary>
     /// Gets the per-resource summaries. Empty (not null) when there are no terminal-enabled resources.
     /// </summary>
-    public required TerminalSummary[] Terminals { get; init; }
+    public required TerminalSummary[] ResourceTerminals { get; init; }
 
     /// <summary>
     /// Gets the terminals owned by the AppHost process rather than by a resource.
+    /// Empty when there are no AppHost-owned terminals.
     /// </summary>
     /// <remarks>
-    /// Carried separately from <see cref="Terminals"/> rather than folded into it because the resource
+    /// Carried separately from <see cref="ResourceTerminals"/> rather than folded into it because the resource
     /// summaries are shaped around replicas and terminal hosts, neither of which an AppHost terminal has.
-    /// Null when the AppHost predates AppHost-owned terminals, which is distinct from an AppHost that has
-    /// none right now.
     /// </remarks>
-    public AppHostTerminalSummary[]? AppHostTerminals { get; init; }
+    public required AppHostTerminalSummary[] AppHostTerminals { get; init; }
 }
 
 /// <summary>

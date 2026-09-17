@@ -627,7 +627,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return new ListTerminalsResponse
         {
-            Terminals = [.. terminals],
+            ResourceTerminals = [.. terminals],
             AppHostTerminals = CollectAppHostTerminals(),
         };
     }

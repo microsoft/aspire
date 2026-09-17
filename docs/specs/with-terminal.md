@@ -398,6 +398,14 @@ renders frames into the host terminal via Hex1b's `Hex1bTerminal`. When the
 resource has more than one replica and the CLI is interactive, it prompts
 for a selection; in non-interactive mode the `--replica` flag is required.
 
+`aspire terminal ps` lists both resource-owned and AppHost-owned terminals. Its
+backchannel response has required `resourceTerminals` and `appHostTerminals`
+arrays, each empty when there are no terminals of that kind. Resource entries
+group their replicas; AppHost entries carry a terminal ID, title, and placement.
+The CLI's `--format json` output combines both into one array with an `owner`
+discriminator. Terminal commands are gated by `features.terminalCommandsEnabled`;
+their experimental backchannel contract can change between builds.
+
 ### Tape playback
 
 `aspire terminal tape play <resource> --tape-file <path>` uses Hex1b's

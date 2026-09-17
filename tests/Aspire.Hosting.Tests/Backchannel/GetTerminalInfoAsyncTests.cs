@@ -211,7 +211,8 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         var result = await target.ListTerminalsAsync(
             new ListTerminalsRequest()).DefaultTimeout(TimeSpan.FromSeconds(15));
 
-        var summary = Assert.Single(result.Terminals);
+        var summary = Assert.Single(result.ResourceTerminals);
+        Assert.Empty(result.AppHostTerminals);
         Assert.False(summary.IsHostReachable);
         Assert.NotNull(summary.Replicas);
         Assert.Equal(2, summary.Replicas!.Length);
@@ -246,7 +247,8 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         var result = await target.ListTerminalsAsync(
             new ListTerminalsRequest()).DefaultTimeout(TimeSpan.FromSeconds(15));
 
-        var summary = Assert.Single(result.Terminals);
+        var summary = Assert.Single(result.ResourceTerminals);
+        Assert.Empty(result.AppHostTerminals);
         Assert.True(summary.IsHostReachable);
         Assert.NotNull(summary.Replicas);
         Assert.Equal(2, summary.Replicas!.Length);

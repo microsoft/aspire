@@ -370,7 +370,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the response returned by ListTerminalsAsync. Defaults to an empty list so
     /// existing tests that don't care about the new RPC don't have to set anything.
     /// </summary>
-    public ListTerminalsResponse ListTerminalsResponse { get; set; } = new ListTerminalsResponse { Terminals = Array.Empty<TerminalSummary>() };
+    public ListTerminalsResponse ListTerminalsResponse { get; set; } = new ListTerminalsResponse { ResourceTerminals = [], AppHostTerminals = [] };
 
     public Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
     {

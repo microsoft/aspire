@@ -428,9 +428,6 @@ message InteractionInputsDialog {
 }
 // Represents an input item in an interaction dialog.
 message InteractionInput {
-    reserved 19;
-    reserved "terminal_id";
-
     string label = 1;
     string placeholder = 2;
     InputType input_type = 3;
@@ -459,9 +456,6 @@ enum MessageIntent {
     MESSAGE_INTENT_CONFIRMATION = 5;
 }
 enum InputType {
-    reserved 7;
-    reserved "INPUT_TYPE_TERMINAL";
-
     INPUT_TYPE_UNSPECIFIED = 0;
     INPUT_TYPE_TEXT = 1;
     INPUT_TYPE_SECRET_TEXT = 2;
@@ -498,12 +492,6 @@ message UploadFileResponse {
 // dashboard nor this service interprets `data`; both sides are byte-level relays
 // between the browser's HMP1 client and the AppHost's HMP1 server.
 message TerminalClientFrame {
-    // Formerly interaction_id/input_name. Terminals are now addressed by an opaque id
-    // issued by the AppHost's TerminalService, which lets one tunnel serve both
-    // terminal interactions and dashboard terminal dock tabs.
-    reserved 1, 2;
-    reserved "interaction_id", "input_name";
-
     // A chunk of the HMP1 byte stream flowing from the browser to the AppHost.
     // Empty on the first frame, which only carries the session selector.
     bytes data = 3;
