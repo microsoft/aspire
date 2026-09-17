@@ -10159,6 +10159,32 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedTimestamp, executableSpec.MonitorTimestamp);
     }
 
+    [Theory]
+    [InlineData(null, "(unknown)")]
+    [InlineData(ContainerVolumeState.Pending, ContainerVolumeState.Pending)]
+    [InlineData(ContainerVolumeState.RuntimeUnhealthy, ContainerVolumeState.RuntimeUnhealthy)]
+    public void EnsureContainerVolumesReady_ThrowsWhenVolumeIsNotReady(string? state, string expectedState)
+    {
+        var volume = ContainerVolume.Create("volume-resource", "physical-volume");
+        volume.Status = new ContainerVolumeStatus { State = state };
+
+        var exception = Assert.Throws<DistributedApplicationException>(
+            () => DcpExecutor.EnsureContainerVolumesReady([volume]));
+
+        Assert.Equal(
+            $"One or more container volumes did not become ready: 'physical-volume': current state is '{expectedState}'",
+            exception.Message);
+    }
+
+    [Fact]
+    public void EnsureContainerVolumesReady_AllowsReadyVolumes()
+    {
+        var volume = ContainerVolume.Create("volume-resource", "physical-volume");
+        volume.Status = new ContainerVolumeStatus { State = ContainerVolumeState.Ready };
+
+        DcpExecutor.EnsureContainerVolumesReady([volume]);
+    }
+
     private static DcpExecutor CreateAppExecutor(
         DistributedApplicationModel distributedAppModel,
         IHostEnvironment? hostEnvironment = null,

@@ -211,12 +211,13 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             var createContainerVolumes = Task.Run(async () =>
             {
                 await CreateDcpObjectsAsync(containerVolumes, ct).ConfigureAwait(false);
-                await WaitForStateAsync(
+                var observedVolumes = await WaitForStateAsync(
                     containerVolumes,
                     volume => volume.Status?.State,
                     [ContainerVolumeState.Ready],
                     TimeSpan.FromMinutes(1),
                     ct).ConfigureAwait(false);
+                EnsureContainerVolumesReady(observedVolumes);
             }, ct);
 
             var createWorkloadEndpoints = Task.Run(async () =>
@@ -554,6 +555,23 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         {
             activity.SetDcpServiceAllocatedCount(initialServiceCount - stillPending.Count);
         }
+    }
+
+    internal static void EnsureContainerVolumesReady(IEnumerable<ContainerVolume> volumes)
+    {
+        var unreadyVolumes = volumes
+            .Where(volume => !string.Equals(volume.Status?.State, ContainerVolumeState.Ready, StringComparison.Ordinal))
+            .ToArray();
+        if (unreadyVolumes.Length == 0)
+        {
+            return;
+        }
+
+        var details = string.Join(
+            ", ",
+            unreadyVolumes.Select(volume =>
+                $"'{volume.Spec.Name ?? volume.Metadata.Name}': current state is '{volume.Status?.State ?? "(unknown)"}'"));
+        throw new DistributedApplicationException($"One or more container volumes did not become ready: {details}");
     }
 
     // Waits until each provided object reports a state that is in finalStates, or until timeout elapses.
