@@ -10,7 +10,8 @@ using Azure.ResourceManager;
 using Azure.ResourceManager.Authorization;
 using Azure.ResourceManager.KeyVault;
 using Azure.ResourceManager.Resources;
-using Azure.ResourceManager.Resources.Models;
+using Azure.ResourceManager.Resources.Deployments;
+using Azure.ResourceManager.Resources.Deployments.Models;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
 
@@ -236,7 +237,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
 
         public async Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
         {
-            var deployment = armClient.GetArmDeploymentResource(new ResourceIdentifier(deploymentId));
+            var deployment = ResourcesDeploymentsExtensions.GetArmDeploymentResource(armClient, new ResourceIdentifier(deploymentId));
             await deployment.CancelAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -333,7 +334,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
 
         public async Task<AzureDeploymentState?> GetDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
         {
-            var deployment = armClient.GetArmDeploymentResource(new ResourceIdentifier(deploymentId));
+            var deployment = ResourcesDeploymentsExtensions.GetArmDeploymentResource(armClient, new ResourceIdentifier(deploymentId));
             try
             {
                 var response = await deployment.GetAsync(cancellationToken).ConfigureAwait(false);
@@ -415,7 +416,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
         private async Task<AzureDeploymentOperationDetails[]> GetDeploymentOperationsForDeploymentAsync(ResourceIdentifier deploymentId, CancellationToken cancellationToken)
         {
             var operations = new List<AzureDeploymentOperationDetails>();
-            var deployment = armClient.GetArmDeploymentResource(deploymentId);
+            var deployment = ResourcesDeploymentsExtensions.GetArmDeploymentResource(armClient, deploymentId);
             await foreach (var operation in deployment.GetDeploymentOperationsAsync(top: null, cancellationToken).ConfigureAwait(false))
             {
                 operations.Add(CreateDeploymentOperationDetails(operation, deploymentId.ToString()));
@@ -528,7 +529,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
 
             public IArmDeploymentCollection GetArmDeployments()
             {
-                return new DefaultArmDeploymentCollection(tenantResource.GetArmDeployments());
+                return new DefaultArmDeploymentCollection(ResourcesDeploymentsExtensions.GetArmDeployments(tenantResource));
             }
         }
     }

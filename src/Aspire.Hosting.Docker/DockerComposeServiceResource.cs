@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECONTAINERRUNTIME001
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Globalization;
 using System.Text;
@@ -133,11 +134,8 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
 
     private bool TryGetContainerImageName(IResource resourceInstance, out string? containerImageName)
     {
-        // Projects normally require an SDK image build, but a selected projection can instead supply a
-        // prebuilt image. Dockerfile annotations remain authoritative because their image is produced later.
-        var requiresImageBuild = resourceInstance.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _) ||
-            resourceInstance is ProjectResource && resourceInstance.AsContainer() is null;
-        if (requiresImageBuild)
+        // SDK and Dockerfile builds supply the image name later, while prebuilt images can be used directly.
+        if (resourceInstance.RequiresImageBuild())
         {
             containerImageName = this.AsContainerImagePlaceholder();
             return true;
@@ -190,7 +188,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
             foreach (var waitAnnotation in waitAnnotations)
             {
                 // We can only wait on other compose services
-                if (waitAnnotation.Resource is ProjectResource || waitAnnotation.Resource.IsContainer())
+                if (waitAnnotation.Resource.SupportsDotnetProgramPublishing() || waitAnnotation.Resource.IsContainer())
                 {
                     // https://docs.docker.com/compose/how-tos/startup-order/#control-startup
                     composeService.DependsOn[waitAnnotation.Resource.Name.ToLowerInvariant()] = new()

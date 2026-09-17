@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001, ASPIREFILESYSTEM001
+#pragma warning disable ASPIREEXTENSION001, ASPIREFILESYSTEM001, ASPIREDOTNETPROJECT001, ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.JavaScript;
@@ -31,6 +31,25 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("cluster-weatherapi", env["ReverseProxy__Routes__route-weatherapi__ClusterId"]);
         Assert.Equal("/_api/weatherapi/{**catch-all}", env["ReverseProxy__Routes__route-weatherapi__Match__Path"]);
         Assert.Equal("/_api/weatherapi", env["ReverseProxy__Routes__route-weatherapi__Transforms__0__PathRemovePrefix"]);
+        Assert.Equal("https+http://weatherapi", env["ReverseProxy__Clusters__cluster-weatherapi__Destinations__d1__Address"]);
+    }
+
+    [Fact]
+    public async Task ProxyService_DotnetProjectHost_EmitsYarpRoutes()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
+
+        var blazorApp = builder.AddDotnetProject(
+                "blazorapp",
+                "blazorapp.csproj",
+                options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .ProxyBlazorService(weatherApi);
+
+        var env = await GetEnvironmentVariables(blazorApp.Resource, builder);
+
+        Assert.Equal("cluster-weatherapi", env["ReverseProxy__Routes__route-weatherapi__ClusterId"]);
         Assert.Equal("https+http://weatherapi", env["ReverseProxy__Clusters__cluster-weatherapi__Destinations__d1__Address"]);
     }
 
@@ -195,6 +214,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         using var fileSystemService = new TestFileSystemService();
         using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
         var (serverProjectPath, clientProjectPath) = CreateBlazorHostedProjects(tempDirectory);
+        await RestoreProjectAsync(serverProjectPath);
 
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         ConfigureBrowserDebugging(builder);
@@ -224,6 +244,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         using var fileSystemService = new TestFileSystemService();
         using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
         var serverProjectPath = CreateBlazorHostedServerWithoutClient(tempDirectory);
+        await RestoreProjectAsync(serverProjectPath);
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         ConfigureBrowserDebugging(builder);
 
@@ -562,6 +583,20 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             """{"protocols_supported":["2024-03-03"],"supported_launch_configurations":["browser"]}""";
     }
 
+    private static async Task RestoreProjectAsync(string projectPath)
+    {
+        var result = await BlazorDotNetCliRunner.RunAsync(
+            projectPath,
+            "restore",
+            ["--ignore-failed-sources", "-nologo"],
+            machineReadableOutput: false,
+            CancellationToken.None);
+
+        Assert.True(
+            result.Started && result.ExitCode == 0,
+            $"Failed to restore '{projectPath}'.{Environment.NewLine}{result.StandardOutput}{Environment.NewLine}{result.StandardError}");
+    }
+
     private static (string ServerProjectPath, string ClientProjectPath) CreateBlazorHostedProjects(TempDirectory tempDirectory)
     {
         var serverDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "Server"));
@@ -571,27 +606,15 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 
         File.WriteAllText(serverProjectPath, """
             <Project Sdk="Microsoft.NET.Sdk.Web">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="../Client/Client.csproj" />
               </ItemGroup>
-              <Target Name="ResolveWebAssemblyProjectReferences">
-                <MSBuild Projects="@(ProjectReference)"
-                         Targets="GetWebAssemblyProjectReference"
-                         BuildInParallel="true"
-                         SkipNonexistentTargets="true">
-                  <Output TaskParameter="TargetOutputs" ItemName="WebAssemblyProjectReference" />
-                </MSBuild>
-              </Target>
             </Project>
             """);
         File.WriteAllText(clientProjectPath, """
             <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
-              <Target Name="GetWebAssemblyProjectReference"
-                      Returns="@(_WebAssemblyProjectReference)">
-                <ItemGroup>
-                  <_WebAssemblyProjectReference Include="$(MSBuildProjectFullPath)" />
-                </ItemGroup>
-              </Target>
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
             </Project>
             """);
 
@@ -603,7 +626,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var serverProjectPath = Path.Combine(tempDirectory.Path, "Server.csproj");
         File.WriteAllText(serverProjectPath, """
             <Project Sdk="Microsoft.NET.Sdk.Web">
-              <Target Name="ResolveWebAssemblyProjectReferences" />
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
             </Project>
             """);
         return serverProjectPath;

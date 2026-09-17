@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Extensions;
@@ -13,6 +15,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -40,7 +43,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private readonly List<string> _collapsedSpanIds = [];
     private string? _elementIdBeforeDetailsViewOpened;
     private string? _pendingFocusElementId;
-    private FluentDataGrid<SpanWaterfallViewModel> _dataGrid = null!;
+    private AspireFluentDataGrid<SpanWaterfallViewModel> _dataGrid = null!;
     private GridColumnManager _manager = null!;
     private IList<GridColumn> _gridColumns = null!;
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];
@@ -188,6 +191,29 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         return $"{GetResourceName(headerSpan.Source)}: {headerSpan.Name}";
     }
 
+    private TraceDetailItem[] GetTraceDetailItems(OtlpTrace trace)
+    {
+        return
+        [
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)],
+                FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Truncated),
+                FormatHelpers.FormatDateTime(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Full)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailDurationHeader)],
+                DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourcesHeader)],
+                _resourceCount.ToString(CultureInfo.CurrentCulture)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailDepthHeader)],
+                _maxDepth.ToString(CultureInfo.CurrentCulture)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTotalSpansHeader)],
+                trace.Spans.Count.ToString(CultureInfo.CurrentCulture))
+        ];
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (TraceId != _trace?.TraceId)
@@ -230,6 +256,10 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
         if (firstRender)
         {
+            // OnParametersSetAsync runs before the grid reference is assigned, so its initial
+            // refresh is a no-op. Refresh now to ensure client-side navigation displays the spans.
+            await _dataGrid.SafeRefreshDataAsync();
+
             // Focus the scroll container without showing the focus ring. The container is a large
             // content area where a visible focus indicator would be visually noisy on initial load.
             await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
@@ -407,9 +437,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         await UpdateDetailViewDataAsync();
         UpdateTraceActionsMenu();
-        await _dataGrid.SafeRefreshDataAsync();
-
         await InvokeAsync(StateHasChanged);
+        await _dataGrid.SafeRefreshDataAsync();
 
         // Close mobile toolbar if open, as the content has changed.
         Debug.Assert(_layout is not null);
@@ -573,7 +602,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task HandleFilterDialog(DialogResult result)
     {
-        if (result.Data is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
+        if (result.Value is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
         {
             if (filterResult.Delete)
             {
@@ -927,4 +956,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
 
     }
+
+    private sealed record TraceDetailItem(string Name, string Value, string? Tooltip = null);
 }

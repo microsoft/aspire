@@ -86,6 +86,33 @@ suite('utils/strings tests', () => {
         }
     });
 
+    test('managed browser debugging loc strings are present in runtime exports, package.nls.json, and the generated XLF catalog', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+
+        const expectedStrings = {
+            csharpExtensionMissingForBlazorDebugging: 'Debugging this Blazor client requires {0} version {1} or later. Install the C# extension, then start debugging again.',
+            csharpExtensionOutdatedForBlazorDebugging: 'Debugging this Blazor client requires {0} version {2} or later. Installed version: {1}. Update the C# extension, then start debugging again.',
+            missingBlazorClientProject: "The Blazor client project '{0}' does not exist. Restore or rebuild the AppHost, then start debugging again.",
+        };
+
+        assert.strictEqual(
+            locStrings.csharpExtensionMissingForBlazorDebugging('ms-dotnettools.csharp', '2.145.15-prerelease'),
+            'Debugging this Blazor client requires ms-dotnettools.csharp version 2.145.15-prerelease or later. Install the C# extension, then start debugging again.');
+        assert.strictEqual(
+            locStrings.csharpExtensionOutdatedForBlazorDebugging('ms-dotnettools.csharp', '2.145.14', '2.145.15-prerelease'),
+            'Debugging this Blazor client requires ms-dotnettools.csharp version 2.145.15-prerelease or later. Installed version: 2.145.14. Update the C# extension, then start debugging again.');
+        assert.strictEqual(
+            locStrings.missingBlazorClientProject('/workspace/Client.csproj'),
+            "The Blazor client project '/workspace/Client.csproj' does not exist. Restore or rebuild the AppHost, then start debugging again.");
+
+        for (const [name, value] of Object.entries(expectedStrings)) {
+            assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], value);
+            assert.ok(xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`), `Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding ${name}.`);
+        }
+    });
+
     test('Set up Aspire loc strings are present in runtime exports, package.nls.json, and the generated XLF catalog', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;

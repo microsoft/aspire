@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
@@ -934,14 +935,14 @@ public static class ResourceExtensions
 
                 // Check whether the project views this endpoint as Default (for its scheme).
                 // If so, we don't specify the target port, as it will get one from the deployment tool.
-                (ProjectResource, string uriScheme, null, _) when IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme) => ResolvedPort.None(),
+                (IDotnetProgramResource, string uriScheme, null, _) when resource.AsContainer() is null && IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme) => ResolvedPort.None(),
 
                 // Allocate a dynamic port
                 _ => ResolvedPort.Allocated(portAllocator.AllocatePort())
             };
 
-            // Track HTTP schemes encountered for ProjectResources
-            if (resource is ProjectResource &&
+            // Track HTTP schemes encountered for .NET programs that are not projected as containers.
+            if (resource is IDotnetProgramResource &&
                 resource.AsContainer() is null &&
                 IsHttpScheme(endpoint.UriScheme))
             {
@@ -1067,38 +1068,30 @@ public static class ResourceExtensions
     /// Determines whether the specified resource requires image building.
     /// </summary>
     /// <remarks>
-    /// Resources require an image build if they provide their own Dockerfile or are a project.
+    /// Resources require an image build if they provide their own Dockerfile or are configured for .NET SDK publishing.
+    /// A selected container projection uses its container build configuration instead of .NET SDK publishing.
     /// Resources that are excluded from publishing are not considered to require image building.
+    /// Resources with a prebuilt container image and no Dockerfile build annotation do not require a build.
     /// </remarks>
     /// <param name="resource">The resource to evaluate for image build requirements.</param>
     /// <returns>True if the resource requires image building; otherwise, false.</returns>
     [AspireExportIgnore(Reason = "Publishing inspection helper — not part of the ATS surface.")]
     public static bool RequiresImageBuild(this IResource resource)
     {
-        if (resource.IsExcludedFromPublish())
+        if (resource.IsExcludedFromPublish() || resource.HasPrebuiltContainerImage())
         {
             return false;
         }
 
-        // A selected projection is authoritative for shape, so a projected resource is built only when the
-        // projection itself describes a build. Without this a project published from a prebuilt image would still
-        // be classified as build-and-push — requiring a container registry and a deploy tag — even though its
-        // step factory emits no build step, because the classic rule below keys off the owner's CLR type.
-        // The annotation lookup is the same either way: a projection shares the owner's annotation collection,
-        // so WithDockerfile on the projection is visible here.
-        if (resource.AsContainer() is not null)
-        {
-            return resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
-        }
-
-        return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
+        return resource.SupportsDotnetProgramPublishing() ||
+            resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
     /// <summary>
     /// Determines whether the specified resource requires image building and pushing.
     /// </summary>
     /// <remarks>
     /// Resources require an image build and a push to a container registry if they provide
-    /// their own Dockerfile or are a project.
+    /// their own Dockerfile or are configured for .NET SDK publishing.
     /// Resources that are excluded from publishing are not considered to require image building and pushing.
     /// </remarks>
     /// <param name="resource">The resource to evaluate for image push requirements.</param>
@@ -1113,6 +1106,12 @@ public static class ResourceExtensions
     {
         return resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuild) &&
             !dockerfileBuild.HasEntrypoint;
+    }
+
+    internal static bool HasPrebuiltContainerImage(this IResource resource)
+    {
+        return resource.TryGetLastAnnotation<ContainerImageAnnotation>(out _) &&
+            !resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>

@@ -598,7 +598,8 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new ExtensionRpcTarget(configuration, executionContext);
+        var cancellationManager = serviceProvider.GetRequiredService<ConsoleCancellationManager>();
+        return new ExtensionRpcTarget(configuration, executionContext, cancellationManager);
     };
 
     public Func<IServiceProvider, IExtensionBackchannel> ExtensionBackchannelFactory { get; set; } = serviceProvider =>

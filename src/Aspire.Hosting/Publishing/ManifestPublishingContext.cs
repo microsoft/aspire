@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001
+
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
@@ -125,9 +127,15 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
             // container shape. Explicit manifest callbacks above remain authoritative for specialized publishers.
             await WriteResourceObjectAsync(resource, () => WriteContainerAsync(container)).ConfigureAwait(false);
         }
-        else if (resource is ProjectResource project)
+        else if (resource.SupportsDotnetProgramPublishing())
         {
-            await WriteResourceObjectAsync(project, () => WriteProjectAsync(project)).ConfigureAwait(false);
+            await WriteResourceObjectAsync(resource, () => WriteProjectAsync(resource)).ConfigureAwait(false);
+        }
+        else if (resource is IDotnetProgramResource)
+        {
+            await WriteResourceObjectAsync(resource, () => throw new DistributedApplicationException(
+                $"The .NET program resource '{resource.Name}' is not configured for publishing. " +
+                $"Create it with a supported builder API or call WithDotnetProgramPublishing() after attaching project metadata.")).ConfigureAwait(false);
         }
         else if (resource is ExecutableResource executable)
         {
@@ -174,7 +182,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         return Task.CompletedTask;
     }
 
-    private async Task WriteProjectAsync(ProjectResource project)
+    private async Task WriteProjectAsync(IResource project)
     {
         if (!project.TryGetProjectMetadata(out var metadata))
         {

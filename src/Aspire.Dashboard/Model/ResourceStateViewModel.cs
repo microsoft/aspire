@@ -78,7 +78,7 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
                 "error" => (new Icons.Filled.Size16.ErrorCircle(), Color.Error),
                 "success" => (new Icons.Filled.Size16.CheckmarkCircle(), Color.Success),
                 "info" => (new Icons.Filled.Size16.Info(), Color.Info),
-                _ => (new Icons.Filled.Size16.Circle(), Color.Neutral)
+                _ => (new Icons.Filled.Size16.Circle(), Color.Default)
             };
         }
         else if (resource.HealthStatus is HealthStatus.Unhealthy or HealthStatus.Degraded)

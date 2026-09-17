@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -164,7 +166,20 @@ public static class ExecutableResourceBuilderExtensions
                 if (!resource.HasAnnotationOfType<DockerfileBuildAnnotation>())
                 {
                     container.WithImage(resource.Name);
-                    container.WithDockerfile(contextPath: resource.WorkingDirectory);
+                    var dockerfileContextPath = resource.WorkingDirectory;
+                    if (resource is IDotnetProgramResource &&
+                        resource.TryGetProjectMetadata(out var projectMetadata))
+                    {
+                        dockerfileContextPath = Path.GetDirectoryName(projectMetadata.ProjectPath) ?? dockerfileContextPath;
+                    }
+
+                    container.WithDockerfile(contextPath: dockerfileContextPath);
+
+                    if (resource is IDotnetProgramResource)
+                    {
+                        container.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+                        container.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+                    }
                 }
 
                 // Preserve the existing PublishAsDockerFile behavior: executable conversion appends a clear on

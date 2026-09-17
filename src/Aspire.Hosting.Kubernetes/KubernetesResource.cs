@@ -197,11 +197,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     internal string GetContainerImageName(IResource resourceInstance)
     {
-        // Projects normally require an SDK image build, but a selected projection can instead supply a
-        // prebuilt image. Dockerfile annotations remain authoritative because their image is produced later.
-        var requiresImageBuild = resourceInstance.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _) ||
-            resourceInstance is ProjectResource && resourceInstance.AsContainer() is null;
-        if (!requiresImageBuild)
+        if (!resourceInstance.RequiresImageBuild())
         {
             if (resourceInstance.TryGetContainerImageName(out var containerImageName))
             {
@@ -819,7 +815,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             IsEmbeddedParameter = isEmbedded
         };
     }
-    
+
     private static HelmValue ResolveUnknownValue(IManifestExpressionProvider parameter, IResource resource)
     {
         var formattedName = parameter.ValueExpression.Replace(HelmExtensions.StartDelimiter, string.Empty)

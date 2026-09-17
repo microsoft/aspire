@@ -129,18 +129,59 @@ Flag concrete selection gaps:
 - Route Layer 2 inputs to their precise consumer, to `ALL` for broad impact, or
   explicitly outside the selector. Do not allow `ignore` or prefilter entries
   to hide a real PR-CI consumer.
+- Inspect runtime-only package and fixture consumption in E2E tests, including
+  `aspire add`, generated AppHost package sets, package filters, templates, and
+  workspace copies. If a PR adds or removes one of these consumers, require the
+  corresponding exact `affected_project_rules` or `path_rules` entry to change
+  in the same PR.
+- Inspect changes to `QuarantinedTest`, `ActiveIssue`, and `OuterloopTest` on
+  runtime-consuming E2E scenarios. Regular-PR targets must include only
+  consumers eligible for regular PR CI; require the exact map edge and focused
+  regression coverage to change when eligibility changes.
+- Project-name patterns are globs, not regular expressions. For expensive or
+  class-sharded selector-gated targets, flag family globs that include projects
+  the target does not exercise. Use a family glob only when every current and
+  future matching project should select the target; otherwise keep an audited
+  exact consumer list. For smaller unsharded jobs, accept safe broad routing
+  when an exhaustive consumer list would add fragility for little CI savings.
+  Do not expand or refine advisory targets that gate no PR jobs in an unrelated
+  PR focused on PR-gated work; audit them when their workflow or routing is
+  intentionally in scope.
+- For a dedicated package-input directory in `path_rules`, prefer one stable
+  directory glob when enumerating individual files or RIDs would let a new
+  input silently miss its consumers. Accept cross-RID over-selection when that
+  is the explicit resilience tradeoff, and do not flag that over-selection as a
+  routing defect. Require focused exclusions only when a split has material
+  savings and can be maintained safely.
+- Keep each trigger-map `reason` concise: it should state what the rule covers
+  or why the target consumes the input. Request more detail only for a
+  non-obvious relationship or constraint. Do not turn `reason` into PR prose,
+  repeat the full rule, or preserve investigation history there. The `targets`
+  field owns the target list, so do not request those names again in `reason`.
+  Accept a category-level description; do not require the reason to explain
+  every target or make the rule self-contained. Selection-design rationale,
+  such as why paths are split or broadened, belongs in the PR or maintenance
+  documentation.
 - Require `run_*` wiring for gated `job:` targets, advisory classification for
   targets outside the regular PR matrix or job gates, and routing from reusable
   workflow implementations to the jobs they implement.
 
 Selector behavior changes must keep the action, workflow gates, tool, map,
 tests, and canonical documentation synchronized. Require real-map tests for
-curated routing changes and focused synthetic-map tests for engine or CLI
-behavior. See `docs/ci/test-trigger-map.md` for the complete contract.
+curated routing changes: a representative positive per distinct routing
+boundary, focused negatives for deliberately excluded consumers, and a
+structural assertion for consumer lists duplicated across rule types. Do not
+request an acceptance case per consumer; instead audit the complete curated
+list against the consuming workflow. Treat a widened or relaxed negative
+expectation as a finding until the workflow's artifacts and execution lane
+justify it. Require focused synthetic-map tests for engine or CLI behavior.
+See `docs/ci/test-trigger-map.md` for the complete contract.
 
 ### Test Coverage Review
 
 Every review must evaluate whether the PR has appropriate tests for the type of behavior being changed. Do not require tests for purely mechanical refactors, comments, or documentation-only changes, but do flag missing or insufficient coverage when production behavior changes and there is no explicit, convincing justification in the PR. Regression coverage is especially important: bug fixes and behavior changes should include tests that would have failed before the fix, not just broad happy-path coverage or regenerated snapshots.
+
+Do not require tests for visual-only styling changes, including CSS selectors, colors, opacity, cursors, hover/focus/active appearance, or theme tokens. In particular, do not request Playwright assertions for computed styles or exact color values. Tests remain appropriate when styling changes also affect functional interaction, DOM or accessibility semantics, state transitions, or whether a user can complete a workflow.
 
 Use this mapping when deciding whether coverage is appropriate:
 
@@ -148,7 +189,8 @@ Use this mapping when deciding whether coverage is appropriate:
 |-------------|-------------------------------|
 | Core logic, resource model, integrations, parsers, validation, error handling, public API behavior | Unit or integration tests in the matching `tests/*.*Tests/` project |
 | User-visible Aspire CLI commands, prompts, terminal workflows, install/update behavior, or command output contracts | CLI end-to-end coverage under `tests/Aspire.Cli.EndToEnd.Tests/`, in addition to focused unit tests where practical |
-| Dashboard UI, browser-only behavior, authentication flows, layout, or interactions that bUnit cannot realistically exercise | Dashboard Playwright coverage under `tests/Aspire.Dashboard.Tests/Integration/Playwright/`, in addition to `tests/Aspire.Dashboard.Tests/` or `tests/Aspire.Dashboard.Components.Tests/` coverage for logic/components |
+| Dashboard UI logic, browser-only functional behavior, authentication flows, or interactions that bUnit cannot realistically exercise | Dashboard Playwright coverage under `tests/Aspire.Dashboard.Tests/Integration/Playwright/`, in addition to `tests/Aspire.Dashboard.Tests/` or `tests/Aspire.Dashboard.Components.Tests/` coverage for logic/components |
+| Visual-only CSS, theme, color, opacity, cursor, or interaction-state appearance changes | No automated coverage required; do not request computed-style, exact-color, or screenshot assertions solely for these changes |
 | Deployment, publish, provisioning, generated Kubernetes/Helm/Bicep/Docker artifacts, Azure resource wiring, or deployed endpoint behavior | Deployment end-to-end coverage under `tests/Aspire.Deployment.EndToEnd.Tests/` when the behavior depends on actual deployment; generated artifact snapshot tests alone are not sufficient for deployment behavior changes |
 | VS Code extension commands, tree views, debugger flows, RPC/DCP/MCP integration, extension UI, or CLI integration visible through VS Code | VS Code extension E2E coverage under `extension/src/test-e2e/`, in addition to Mocha unit tests under `extension/src/test/` where practical |
 
@@ -188,6 +230,7 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 - Suggestions for refactoring unrelated code
 - Missing API file regeneration (this is expected during development)
 - Missing tests for documentation-only changes, comment-only changes, mechanical renames, or refactors that demonstrably preserve behavior
+- Missing tests for visual-only styling changes, including computed styles, exact colors, and hover/focus/active appearance, unless the change also affects functional interaction or accessibility semantics
 - Standard C# API review concerns such as naming, namespaces, framework design guidance, and general .NET/C# API breaking changes. These are handled by the dedicated `api-review` skill; this generic review only checks the stable ATS surface used for polyglot SDK generation.
 - ATS breaking changes when the affected package or project contains `<SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>`, or when the affected exported API has `[Experimental]` or ATS experimental metadata.
 - The initial placeholder entry in `extension/CHANGELOG.md` created by `extension-release.yml` for bot-authored `extension-release/*` PRs. It is expected, asynchronously replaced by `extension-changelog.md`, and merge-gated by `extension-changelog-finalized.yml`. Continue to flag unrelated placeholders or incomplete release notes outside this exact release flow.

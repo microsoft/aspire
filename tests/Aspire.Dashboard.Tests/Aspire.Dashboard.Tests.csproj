@@ -19,6 +19,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" NoWarn="NU3018;NU3027;NU3042" Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'" />
     <!-- axe-core accessibility scanning for the Playwright integration tests (AccessibilityTests). -->
     <PackageReference Include="Deque.AxeCore.Playwright" />
   </ItemGroup>

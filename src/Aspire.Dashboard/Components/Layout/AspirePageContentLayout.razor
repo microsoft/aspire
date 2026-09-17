@@ -22,15 +22,15 @@
             <header class="content-header" style="@HeaderStyle" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
                 @if (AddNewlineOnToolbar)
                 {
-                    <FluentToolbar Class="main-toolbar" Orientation="Orientation.Horizontal">
+                    <div class="main-toolbar filter-toolbar" role="toolbar">
                         @ToolbarSection
-                    </FluentToolbar>
+                    </div>
                 }
                 else
                 {
-                    <FluentToolbar Class="title-toolbar-inline" Orientation="Orientation.Horizontal">
+                    <div class="title-toolbar-inline" role="toolbar">
                         @ToolbarSection
-                    </FluentToolbar>
+                    </div>
                 }
             </header>
         }
@@ -38,18 +38,18 @@
     else if (!IsSummaryDetailsViewOpen)
     {
         <header class="content-header">
-            <FluentToolbar Orientation="Orientation.Horizontal" Style="@HeaderStyle">
+            <div role="toolbar" style="@HeaderStyle">
                 @PageTitleSection
 
                 @if (!AddNewlineOnToolbar)
                 {
                     @MobilePageTitleToolbarSection
                 }
-            </FluentToolbar>
+            </div>
 
             @if (AddNewlineOnToolbar)
             {
-                <div style="padding-left: calc(var(--design-unit) * 4.5px)">@MobilePageTitleToolbarSection</div>
+                <div style="padding-left: 18px">@MobilePageTitleToolbarSection</div>
             }
         </header>
     }
@@ -80,7 +80,7 @@
                 @if (ToolbarSection is not null)
                 {
                     <FluentButton Class="mobile-toolbar"
-                                  Appearance="@Appearance.Accent"
+                                  Appearance="@ButtonAppearance.Primary"
                                   OnClick="@OpenMobileToolbarAsync">
                         @(MobileToolbarButtonText ?? LayoutLoc[nameof(Layout.PageLayoutViewFilters)])
                     </FluentButton>

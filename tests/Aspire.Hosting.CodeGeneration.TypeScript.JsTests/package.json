@@ -8,14 +8,14 @@
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "eslint": "^10.0.3",
-    "typescript": "^5.8.2",
-    "typescript-eslint": "^8.57.1",
-    "vitest": "^4.1.0",
-    "vscode-jsonrpc": "^8.2.0"
+    "@types/node": "^22.20.1",
+    "eslint": "^10.9.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^5.0.0",
+    "vscode-jsonrpc": "^8.2.1"
   },
   "overrides": {
-    "postcss": "8.5.23"
+    "postcss": "8.5.28"
   }
 }

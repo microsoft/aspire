@@ -42,6 +42,11 @@
         <target state="translated">Logowanie do aplikacji {0}</target>
         <note>{0} is an application name</note>
       </trans-unit>
+      <trans-unit id="SignOut">
+        <source>Sign out</source>
+        <target state="new">Sign out</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TextFieldPlaceholder">
         <source>Enter token to log in...</source>
         <target state="translated">Wprowadź token, aby się zalogować...</target>

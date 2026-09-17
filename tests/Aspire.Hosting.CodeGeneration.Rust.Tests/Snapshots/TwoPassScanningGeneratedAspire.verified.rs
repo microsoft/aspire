@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -12004,6 +12004,32 @@ impl HasHandle for IDistributedApplicationResourceEvent {
 }
 
 impl IDistributedApplicationResourceEvent {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IDotnetProgramResource
+pub struct IDotnetProgramResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for IDotnetProgramResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl IDotnetProgramResource {
     pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
         Self { handle, client }
     }

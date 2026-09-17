@@ -604,6 +604,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>(KnownContainerRuntimes.Docker);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>(KnownContainerRuntimes.Podman);
         _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
+        _innerBuilder.Services.AddSingleton<ContainerRuntimeReadiness>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
         _innerBuilder.Services.AddSingleton<IPipelineActivityReporter, PipelineActivityReporter>(sp => sp.GetRequiredService<PipelineActivityReporter>());

@@ -19,6 +19,7 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 using MenuItemRole = Microsoft.FluentUI.AspNetCore.Components.MenuItemRole;
@@ -27,6 +28,7 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry, IAsyncDisposable, IPageWithSessionAndUrlState<ConsoleLogs.ConsoleLogsViewModel, ConsoleLogs.ConsoleLogsPageState>
 {
+    private static readonly Icon s_checkmarkIcon = new Icons.Regular.Size16.Checkmark();
     private static readonly TimeSpan s_noLogsMessageDelay = TimeSpan.FromSeconds(1.5);
 
     [DebuggerDisplay("Resource = {Resource.Name}, IsCancellationRequested = {CancellationToken.IsCancellationRequested}")]
@@ -318,7 +320,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         // (selected resource modified, or resources added/removed). Frequent property
                         // updates on non-selected resources (health checks, state transitions) don't
                         // require a full page re-render. Avoiding unnecessary re-renders prevents
-                        // FluentSearch's ImmediateDelay input buffer from being clobbered by stale
+                        // FluentTextInput's ImmediateDelay input buffer from being clobbered by stale
                         // parameter values pushed during the debounce window.
                         if (changeType == ResourceViewModelChangeType.Delete ||
                             isNewResource ||
@@ -642,12 +644,15 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             // the reflected aria-checked state (which screen readers announce) when
             // the item carries a checkable Role; a leading icon alone conveys the
             // selection visually but is silent to a screen reader. The checkbox role
-            // also renders a checkmark indicator on the checked item.
+            // also controls whether the explicit checkmark indicator is displayed.
+            // Supplying the icon places it in the dashboard's start column and applies
+            // the accent color instead of using Fluent's neutral fallback indicator.
             _logsMenuItems.Add(new()
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Console)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)],
-                Role = MenuItemRole.MenuItemCheckbox,
+                Icon = s_checkmarkIcon,
+                Role = MenuItemRole.Checkbox,
                 Checked = _activeView == ConsoleLogsView.Console,
             });
 
@@ -655,7 +660,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Terminal)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)],
-                Role = MenuItemRole.MenuItemCheckbox,
+                Icon = s_checkmarkIcon,
+                Role = MenuItemRole.Checkbox,
                 Checked = _activeView == ConsoleLogsView.Terminal,
             });
 

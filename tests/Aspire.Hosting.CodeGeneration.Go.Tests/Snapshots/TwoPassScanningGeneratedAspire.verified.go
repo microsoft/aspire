@@ -1,4 +1,4 @@
-﻿// aspire.go - Capability-based Aspire SDK
+// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -1190,6 +1190,12 @@ type DistributedApplicationEvent interface {
 // DistributedApplicationResourceEvent marks types implementing IDistributedApplicationResourceEvent.
 // Marker interface.
 type DistributedApplicationResourceEvent interface {
+	handleReference
+}
+
+// DotnetProgramResource marks types implementing IDotnetProgramResource.
+// Marker interface.
+type DotnetProgramResource interface {
 	handleReference
 }
 

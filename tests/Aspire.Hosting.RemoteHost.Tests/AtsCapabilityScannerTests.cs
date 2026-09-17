@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text.Json.Nodes;
@@ -237,6 +238,18 @@ public class AtsCapabilityScannerTests
         Assert.Contains(parameter.Type!.UnionTypes!, type => type.ClrType == typeof(TestUnionEnum));
         Assert.Contains(parameter.Type.UnionTypes!, type => type.TypeId == AtsConstants.String);
         Assert.Contains(result.EnumTypes, type => type.ClrType == typeof(TestUnionEnum));
+    }
+
+    [Fact]
+    public void ScanAssemblies_EnumSimpleNameCollisions_GetUniqueNames()
+    {
+        var first = CreateEnumExportAssembly("First", "Enabled");
+        var second = CreateEnumExportAssembly("Second", "Disabled");
+
+        var result = AtsCapabilityScanner.ScanAssemblies([first.Assembly, second.Assembly]);
+
+        Assert.Equal("FirstCollisionState", Assert.Single(result.EnumTypes, type => type.ClrType == first.EnumType).Name);
+        Assert.Equal("SecondCollisionState", Assert.Single(result.EnumTypes, type => type.ClrType == second.EnumType).Name);
     }
 
     #endregion
@@ -543,6 +556,82 @@ public class AtsCapabilityScannerTests
         Assert.Equal(AtsConstants.Number, requiredNumber.Type.TypeId);
         Assert.NotEqual(true, requiredNumber.Type.IsNullable);
         Assert.False(requiredNumber.IsOptional);
+    }
+
+    [Theory]
+    [InlineData("none", false)]
+    [InlineData("none", true)]
+    [InlineData("assembly", false)]
+    [InlineData("assembly", true)]
+    [InlineData("type", false)]
+    [InlineData("type", true)]
+    [InlineData("property", false)]
+    [InlineData("property", true)]
+    public void ScanAssembly_PropertyCapabilities_InheritExperimentalScope(string scope, bool exposeProperties)
+    {
+        var assemblyName = new AssemblyName($"ExperimentalProperty_{Guid.NewGuid():N}");
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.RunAndCollect);
+        var module = assembly.DefineDynamicModule(assemblyName.Name!);
+        var type = module.DefineType("Generated.PropertyContext", TypeAttributes.NotPublic);
+        type.SetCustomAttribute(new CustomAttributeBuilder(
+            typeof(AspireExportAttribute).GetConstructor(Type.EmptyTypes)!,
+            [],
+            [typeof(AspireExportAttribute).GetProperty(nameof(AspireExportAttribute.ExposeProperties))!],
+            [exposeProperties]));
+
+        var property = type.DefineProperty("Name", PropertyAttributes.None, typeof(string), Type.EmptyTypes);
+        if (!exposeProperties)
+        {
+            property.SetCustomAttribute(new CustomAttributeBuilder(
+                typeof(AspireExportAttribute).GetConstructor(Type.EmptyTypes)!, []));
+        }
+
+        var visibility = exposeProperties ? MethodAttributes.Public : MethodAttributes.Assembly;
+        var getter = type.DefineMethod(
+            "get_Name", visibility | MethodAttributes.SpecialName | MethodAttributes.HideBySig, typeof(string), Type.EmptyTypes);
+        getter.GetILGenerator().Emit(OpCodes.Ldstr, "name");
+        getter.GetILGenerator().Emit(OpCodes.Ret);
+        property.SetGetMethod(getter);
+
+        var setter = type.DefineMethod(
+            "set_Name", visibility | MethodAttributes.SpecialName | MethodAttributes.HideBySig, typeof(void), [typeof(string)]);
+        setter.DefineParameter(1, ParameterAttributes.None, "value");
+        setter.GetILGenerator().Emit(OpCodes.Ret);
+        property.SetSetMethod(setter);
+
+        var experimental = new CustomAttributeBuilder(
+            typeof(ExperimentalAttribute).GetConstructor([typeof(string)])!, ["TESTPROPERTY001"]);
+        switch (scope)
+        {
+            case "assembly":
+                assembly.SetCustomAttribute(experimental);
+                break;
+            case "type":
+                type.SetCustomAttribute(experimental);
+                break;
+            case "property":
+                property.SetCustomAttribute(experimental);
+                break;
+        }
+
+        _ = type.CreateType();
+        var result = AtsCapabilityScanner.ScanAssembly(assembly);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Collection(
+            result.Capabilities.OrderBy(static capability => capability.CapabilityKind),
+            capability =>
+            {
+                Assert.Equal(AtsCapabilityKind.PropertyGetter, capability.CapabilityKind);
+                Assert.Equal("Generated/PropertyContext.name", capability.CapabilityId);
+                Assert.Equal(scope != "none", capability.IsExperimental);
+            },
+            capability =>
+            {
+                Assert.Equal(AtsCapabilityKind.PropertySetter, capability.CapabilityKind);
+                Assert.Equal("Generated/PropertyContext.setName", capability.CapabilityId);
+                Assert.Equal(scope != "none", capability.IsExperimental);
+            });
     }
 
     [Fact]
@@ -1187,6 +1276,38 @@ public class AtsCapabilityScannerTests
         _ = exportsTypeBuilder.CreateType();
 
         return assemblyBuilder;
+    }
+
+    private static (Assembly Assembly, Type EnumType) CreateEnumExportAssembly(string assemblySuffix, string enumValue)
+    {
+        var assemblyName = new AssemblyName($"EnumCollision.{assemblySuffix}");
+        var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+        var moduleBuilder = assemblyBuilder.DefineDynamicModule(assemblyName.Name!);
+        var enumBuilder = moduleBuilder.DefineEnum(
+            $"Generated.{assemblySuffix}.CollisionState",
+            TypeAttributes.Public,
+            typeof(int));
+        enumBuilder.DefineLiteral(enumValue, 0);
+        var enumType = enumBuilder.CreateTypeInfo()!.AsType();
+        var exportsTypeBuilder = moduleBuilder.DefineType(
+            $"Generated.{assemblySuffix}.Exports",
+            TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
+        var methodBuilder = exportsTypeBuilder.DefineMethod(
+            $"Use{assemblySuffix}CollisionState",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            [typeof(IDistributedApplicationBuilder), enumType]);
+        methodBuilder.DefineParameter(1, ParameterAttributes.None, "builder");
+        methodBuilder.DefineParameter(2, ParameterAttributes.None, "value");
+        methodBuilder.SetCustomAttribute(
+            new CustomAttributeBuilder(
+                typeof(AspireExportAttribute).GetConstructor([typeof(string)])!,
+                [$"use{assemblySuffix}CollisionState"]));
+        methodBuilder.GetILGenerator().Emit(OpCodes.Ret);
+
+        _ = exportsTypeBuilder.CreateType();
+
+        return (assemblyBuilder, enumType);
     }
 
     private static Assembly CreateAssemblyLevelExportAssembly(Type exportedType)

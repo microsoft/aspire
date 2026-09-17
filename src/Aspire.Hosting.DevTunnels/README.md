@@ -123,6 +123,35 @@ var tunnel = builder.AddDevTunnel(name: "devtunnel", options: options)
              
 ```
 
+### Configure idle expiration
+
+Set an idle expiration period to clean up tunnels that are no longer used:
+
+**C#**
+
+```csharp
+var tunnel = builder.AddDevTunnel("mytunnel")
+                    .WithExpiration(24)
+                    .WithReference(web);
+```
+
+Alternatively, set `ExpirationHours` on `DevTunnelOptions` when calling `AddDevTunnel`.
+
+**TypeScript**
+
+```typescript
+const tunnel = await builder.addDevTunnel("mytunnel")
+                    .withExpiration(24)
+                    .withTunnelReferenceAll(web, false);
+```
+
+Expiration is expressed as a whole number of hours, from one hour through 30 days, inclusive.
+The setting applies to both new tunnels and existing tunnels reused by the AppHost.
+If omitted, new tunnels use the service default and existing tunnels keep their configured expiration period.
+
+This is the time a tunnel can remain unused or unmodified before it expires, not a limit on hosting
+duration or an access-token lifetime. See the [devtunnel CLI expiration documentation](https://learn.microsoft.com/azure/developer/dev-tunnels/cli-commands#advanced-manage-dev-tunnels).
+
 ### Multiple tunnels for different audiences
 
 ```csharp

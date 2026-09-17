@@ -12,7 +12,6 @@ using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Trace.V1;
-using SQLitePCL;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
@@ -153,9 +152,9 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     /// Runs a cancellable database read on the thread pool.
     /// </summary>
     /// <remarks>
-    /// The read registers <c>sqlite3_interrupt</c> for <paramref name="cancellationToken"/>, which surfaces as
-    /// a <see cref="SqliteException"/> with <c>SQLITE_INTERRUPT</c> rather than an <see cref="OperationCanceledException"/>.
-    /// Translate it here so callers see normal cancellation semantics.
+    /// The read registers <c>sqlite3_interrupt</c> for <paramref name="cancellationToken"/>, which usually surfaces as
+    /// a <see cref="SqliteException"/> with <c>SQLITE_INTERRUPT</c>. Cancellation during statement preparation can
+    /// surface as a different SQLite error, so translate any SQLite failure after cancellation was requested.
     /// </remarks>
     internal static Task<T> RunReadAsync<T>(Func<CancellationToken, T> read, CancellationToken cancellationToken) =>
         Task.Run(() =>
@@ -164,7 +163,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
             {
                 return read(cancellationToken);
             }
-            catch (SqliteException ex) when (ex.SqliteErrorCode == raw.SQLITE_INTERRUPT)
+            catch (SqliteException)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 throw;

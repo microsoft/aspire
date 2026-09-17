@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001
+
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
@@ -111,7 +113,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         containerApp.Configuration = configuration;
 
         // default autoConfigureDataProtection to true for .NET projects
-        if (Resource is ProjectResource && Resource.AsContainer() is null)
+        if (Resource is IDotnetProgramResource && Resource.AsContainer() is null)
         {
             const string latestPreview = "2025-10-02-preview"; // this property is currently only available in preview
             containerApp.ResourceVersion = latestPreview;
@@ -215,7 +217,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
             endpointsByTargetPort.Remove(httpIngress);
 
             var targetPort = httpIngress.Port ??
-                (Resource is ProjectResource && Resource.AsContainer() is null ? null : 80);
+                (Resource is IDotnetProgramResource && Resource.AsContainer() is null ? null : 80);
 
             _httpIngress = (targetPort, httpIngress.AnyH2, httpIngress.External);
 
