@@ -7,6 +7,7 @@
     "experimentalPolyglot:python": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.ServiceBus": ""
+    "Aspire.Hosting.Azure.ServiceBus": "",
+    "Aspire.Hosting.Azure.Provisioning.ServiceBus": ""
   }
 }

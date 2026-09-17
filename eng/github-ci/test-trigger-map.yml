@@ -391,6 +391,10 @@ path_rules:
     targets: [test:QuarantineTools.Tests]
     reason: QuarantineTools.Tests exercises the quarantine/disable source-rewriting logic
   - paths:
+      - tools/CreateFailingTestIssue/**
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests/CreateFailingTestIssue builds and invokes the tool dynamically, without a ProjectReference edge in the solution graph
+  - paths:
       - tools/SelectTests/**
       - eng/github-ci/test-trigger-map.yml
       - eng/github-ci/ci-skip-entirely-patterns.txt
@@ -477,7 +481,6 @@ affected_project_rules:
       - Aspire.Hosting.EntityFrameworkCore
       - Aspire.Hosting.Foundry
       - Aspire.Hosting.Garnet
-      - Aspire.Hosting.GitHub.Models
       - Aspire.Hosting.Kafka
       - Aspire.Hosting.Keycloak
       - Aspire.Hosting.Kubernetes
@@ -502,6 +505,9 @@ affected_project_rules:
   - projects: [Aspire.Hosting.CodeGeneration.TypeScript]
     targets: [job:typescript-sdk]
     reason: vitest unit tests over generated TS SDK (@aspire/transport, @aspire/base)
+  - projects: [Aspire.Hosting.Azure.Provisioning*]
+    targets: [job:polyglot]
+    reason: opt-in provisioning packages and their source generator are consumed by the per-language AppHost fixtures
   - projects: [Aspire.Hosting*, Aspire.Cli]
     targets: [job:typescript-api-compat]
     reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`
@@ -526,9 +532,9 @@ affected_project_rules:
       - Aspire.Managed
     targets: [job:extension-e2e]
     reason: direct runtime and build dependencies of extension e2e
-  - projects: [Aspire.Hosting.Azure*, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
+  - projects: [Aspire.Hosting.Azure*, Aspire.Hosting.Dotnet, Aspire.Hosting.Foundry, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
     targets: [job:deployment-e2e]
-    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
+    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps with packages added dynamically by tests
   - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
     targets: [test:Aspire.EndToEnd.Tests]
     reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets

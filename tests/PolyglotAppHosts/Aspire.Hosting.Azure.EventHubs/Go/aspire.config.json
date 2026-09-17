@@ -7,6 +7,7 @@
     "experimentalPolyglot:go": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.EventHubs": ""
+    "Aspire.Hosting.Azure.EventHubs": "",
+    "Aspire.Hosting.Azure.Provisioning.EventHubs": ""
   }
 }

@@ -1,0 +1,27 @@
+﻿{
+  "manifest.json": [
+    {
+      "Config": "config.json",
+      "RepoTags": [
+        "registry.example.com:5443/team/widget:release-2026.09",
+        "registry.example.com:5443/team/widget:stable",
+        "registry.example.com:5443/team/other:aspire-layered-0123456789abcdef"
+      ],
+      "Layers": [
+        "layer.tar"
+      ],
+      "x-unknown": {
+        "enabled": true
+      }
+    }
+  ],
+  "repositories": {
+    "registry.example.com:5443/team/widget": {
+      "release-2026.09": "owned-layer-id",
+      "stable": "stable-layer-id"
+    },
+    "registry.example.com:5443/team/other": {
+      "aspire-layered-0123456789abcdef": "unrelated-layer-id"
+    }
+  }
+}

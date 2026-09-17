@@ -412,9 +412,87 @@ suite('Browser Debugger Tests', () => {
                 projectPath: BLAZOR_PROJECT_PATH,
                 url: BROWSER_RESOURCE_URL,
                 browser: expectedBrowser,
+                ...(process.platform === 'win32' && browser === 'msedge' ? { env: { __COMPAT_LAYER: null } } : {}),
             });
         });
     }
+
+    for (const webRoot of [undefined, BLAZOR_PROJECT_PATH]) {
+        const target = webRoot ? 'Blazor' : 'generic';
+
+        test(`explicitly unsets the Windows Edge compatibility layer without an environment for ${target} debugging`, async () => {
+            sinon.stub(process, 'platform').value('win32');
+            const provider = useCsharpExtensionVersionProviderForTests(() => minimumCsharpBlazorWasmDebuggingVersion);
+            try {
+                const configuration = await createConfiguration({
+                    type: 'browser',
+                    url: BROWSER_RESOURCE_URL,
+                    web_root: webRoot,
+                });
+
+                assert.deepStrictEqual(configuration.env, { __COMPAT_LAYER: null });
+            }
+            finally {
+                provider.dispose();
+            }
+        });
+
+        const cases = [
+            { platform: 'win32', browser: 'msedge', clearCompatLayer: true },
+            { platform: 'win32', browser: undefined, clearCompatLayer: true },
+            { platform: 'win32', browser: 'chrome', clearCompatLayer: false },
+            { platform: 'linux', browser: 'msedge', clearCompatLayer: false },
+            { platform: 'darwin', browser: 'msedge', clearCompatLayer: false },
+        ] as const;
+
+        for (const { platform, browser, clearCompatLayer } of cases) {
+            test(`preserves unrelated ${target} browser environment settings for ${browser ?? 'default Edge'} on ${platform}`, async () => {
+                sinon.stub(process, 'platform').value(platform);
+                const environment = {
+                    __COMPAT_LAYER: 'DetectorsAppHealth',
+                    __compat_layer: 'DetectorsAppHealth',
+                    __Compat_Layer: 'DetectorsAppHealth',
+                    PRESERVED: 'value',
+                    REMOVED: null,
+                };
+                const originalEnvironment = { ...environment };
+                const provider = useCsharpExtensionVersionProviderForTests(() => minimumCsharpBlazorWasmDebuggingVersion);
+                try {
+                    const configuration = await createBrowserConfiguration(
+                        { env: environment },
+                        { type: 'browser', url: BROWSER_RESOURCE_URL, browser, web_root: webRoot });
+
+                    assert.deepStrictEqual(configuration.env, clearCompatLayer
+                        ? { __COMPAT_LAYER: null, PRESERVED: 'value', REMOVED: null }
+                        : originalEnvironment);
+                    assert.deepStrictEqual(environment, originalEnvironment);
+                }
+                finally {
+                    provider.dispose();
+                }
+            });
+        }
+    }
+
+    test('removes the inherited compatibility layer only from the Windows Edge browser configuration', async () => {
+        sinon.stub(process, 'platform').value('win32');
+        const environment = { __COMPAT_LAYER: 'DetectorsAppHealth', PRESERVED: 'value' };
+        sinon.stub(process, 'env').value(environment);
+        const provider = useCsharpExtensionVersionProviderForTests(() => minimumCsharpBlazorWasmDebuggingVersion);
+        try {
+            const configuration = await createBrowserConfiguration({}, {
+                type: 'browser',
+                url: BROWSER_RESOURCE_URL,
+                web_root: BLAZOR_PROJECT_PATH,
+            });
+
+            assert.deepStrictEqual(configuration.env, { __COMPAT_LAYER: null, PRESERVED: 'value' });
+            assert.deepStrictEqual(process.env, { __COMPAT_LAYER: 'DetectorsAppHealth', PRESERVED: 'value' });
+        }
+        finally {
+            provider.dispose();
+        }
+    });
 
     test('detects Blazor client project extensions case-insensitively', async () => {
         const upperCaseProjectPath = path.join(path.dirname(BLAZOR_PROJECT_PATH), 'Missing.Client.CSPROJ');

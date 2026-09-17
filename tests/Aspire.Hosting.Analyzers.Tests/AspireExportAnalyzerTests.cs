@@ -2649,6 +2649,29 @@ public class AspireExportAnalyzerTests
     }
 
     [Fact]
+    public async Task GeneratedExportProviderWithoutHandwrittenExports_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            [assembly: GeneratedExports]
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            #pragma warning disable ASPIREEXPORT018
+            [AspireExportProvider]
+            #pragma warning restore ASPIREEXPORT018
+            [System.AttributeUsage(System.AttributeTargets.Assembly)]
+            internal sealed class GeneratedExportsAttribute : System.Attribute;
+            """,
+            [],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: null);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task NoExportsWithoutMarker_ReportsASPIREEXPORT017()
     {
         var diagnostic = AspireExportAnalyzer.Diagnostics.s_missingPolyglotCompatibleMarker;

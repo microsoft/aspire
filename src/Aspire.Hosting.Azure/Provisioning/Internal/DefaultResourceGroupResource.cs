@@ -5,6 +5,7 @@ using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.Resources.Deployments;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
 
@@ -18,7 +19,7 @@ internal sealed class DefaultResourceGroupResource(ResourceGroupResource resourc
 
     public IArmDeploymentCollection GetArmDeployments()
     {
-        return new DefaultArmDeploymentCollection(resourceGroupResource.GetArmDeployments());
+        return new DefaultArmDeploymentCollection(ResourcesDeploymentsExtensions.GetArmDeployments(resourceGroupResource));
     }
 
     public Task<ArmOperation> DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default) =>

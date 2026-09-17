@@ -1,4 +1,4 @@
-﻿// ===== aspire/AddContainerOptions.java =====
+// ===== aspire/AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1895,6 +1895,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString", (h, c) -> new IResourceWithConnectionString(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport", (h, c) -> new IResourceWithWaitSupport(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithParent", (h, c) -> new IResourceWithParent(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IDotnetProgramResource", (h, c) -> new IDotnetProgramResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource", (h, c) -> new ContainerResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource", (h, c) -> new ExecutableResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", (h, c) -> new ProjectResource(h, c));
@@ -15956,6 +15957,20 @@ package aspire;
 @SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationResourceEvent extends HandleWrapperBase {
     IDistributedApplicationResourceEvent(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== aspire/IDotnetProgramResource.java =====
+// IDotnetProgramResource.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IDotnetProgramResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class IDotnetProgramResource extends ResourceBuilderBase {
+    IDotnetProgramResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
 
@@ -30535,6 +30550,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/IDistributedApplicationEventing.java
 .aspire/modules/aspire/IDistributedApplicationPipeline.java
 .aspire/modules/aspire/IDistributedApplicationResourceEvent.java
+.aspire/modules/aspire/IDotnetProgramResource.java
 .aspire/modules/aspire/IExecutionConfigurationBuilder.java
 .aspire/modules/aspire/IExecutionConfigurationResult.java
 .aspire/modules/aspire/IExpressionValue.java
