@@ -506,10 +506,13 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            // In Radius v0.60.2, `rad resource list` cannot resolve an application created from
-            // Radius.Core UDTs even though the preview graph and Kubernetes resources are present.
-            // The graph above verifies the application and both containers; the checks below prove
-            // their workloads, services, and HTTP endpoints are actually usable.
+            // Like the graph command, resource list needs --preview to resolve the Radius.Core
+            // application instead of the legacy Applications.Core application. Assert both names
+            // because an empty resource list also exits successfully.
+            // https://github.com/radius-project/radius/blob/v0.60.2/pkg/cli/cmd/resource/list/list.go
+            await auto.TypeAsync("R=$(rad resource list Radius.Compute/containers -a app --preview) && echo \"$R\" && echo \"$R\" | grep -q apiservice && echo \"$R\" | grep -q webfrontend");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Radius labels every workload with radapp.io/application; wait for all app pods ready.
             output.WriteLine("Step 24: Waiting for application pods to be ready...");
